@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Osmium Sound — Privacy policy</title>
+  <meta name="description" content="How Osmium Sound handles your data: the Android app collects nothing, your music and settings stay on your own player, and this website counts visits without cookies.">
+  <link rel="canonical" href="https://osmiumsound.it/privacy.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Osmium Sound">
+  <meta property="og:url" content="https://osmiumsound.it/privacy.html">
+  <meta property="og:title" content="Osmium Sound — Privacy policy">
+  <meta property="og:description" content="How Osmium Sound handles your data: the Android app collects nothing, your music and settings stay on your own player, and this website counts visits without cookies.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0a; --bg-card: #141414; --bg-card2: #1c1c1c;
+      --border: #2a2a2a; --accent: #f5b820; --accent-dim: rgba(245,184,32,0.12);
+      --text: #e8e8e8; --muted: #999; --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      line-height: 1.7;
+    }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 1rem;
+      padding: 0 clamp(1.25rem, 5vw, 4rem); height: 58px;
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(10,10,10,0.92); backdrop-filter: blur(10px);
+    }
+    nav a.back { color: var(--muted); text-decoration: none; font-size: 0.88rem; font-weight: 500; }
+    nav a.back:hover { color: var(--text); }
+    .lang-switch {
+      display: inline-flex; align-items: center;
+      border: 1px solid var(--border); border-radius: 6px;
+      overflow: hidden; background: var(--bg-card);
+    }
+    .lang-switch button {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-family: inherit;
+      font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em;
+      padding: 5px 9px;
+    }
+    .lang-switch button + button { border-left: 1px solid var(--border); }
+    .lang-switch button.active { color: #000; background: var(--accent); }
+    main { max-width: 720px; margin: 0 auto; padding: 3rem clamp(1.25rem, 5vw, 2rem) 4rem; }
+    h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 800; margin-bottom: 0.4rem; }
+    .updated { color: var(--muted); font-size: 0.85rem; margin-bottom: 2rem; }
+    h2 {
+      font-size: 1.1rem; font-weight: 700; color: var(--accent);
+      margin: 2.25rem 0 0.75rem;
+    }
+    h3 { font-size: 0.95rem; font-weight: 700; margin: 1.5rem 0 0.5rem; }
+    p { margin-bottom: 0.85rem; font-size: 0.94rem; }
+    ul { margin: 0.5rem 0 0.85rem 1.4rem; font-size: 0.94rem; }
+    li { margin-bottom: 0.5rem; }
+    strong { color: #fff; }
+    a { color: var(--accent); }
+    .summary {
+      background: var(--accent-dim); border: 1px solid rgba(245,184,32,0.35);
+      border-radius: var(--radius); padding: 1.1rem 1.3rem; margin-bottom: 0.5rem;
+      font-size: 0.95rem;
+    }
+    .summary p:last-child { margin-bottom: 0; }
+    .box {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.1rem 1.3rem; margin: 1rem 0;
+      font-size: 0.92rem;
+    }
+    .box p:last-child { margin-bottom: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; font-size: 0.88rem; }
+    th, td { text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+    th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    td:first-child { width: 38%; }
+    footer {
+      border-top: 1px solid var(--border); color: var(--muted);
+      font-size: 0.82rem; text-align: center;
+      padding: 1.75rem clamp(1.25rem, 5vw, 2rem) 2.5rem;
+    }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+    #lang-it { display: none; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="back" href="index.html" id="backLink">&larr; Osmium Sound</a>
+  <div class="lang-switch" role="group" aria-label="Language">
+    <button type="button" data-lang="en">EN</button>
+    <button type="button" data-lang="it">IT</button>
+  </div>
+</nav>
+
+<main>
+
+<div id="lang-en">
+  <h1>Privacy policy</h1>
+  <p class="updated">Last updated: 16 September 2026 · Covers the Osmium Sound Companion app for Android, the Osmium Sound player and this website</p>
+
+  <div class="summary">
+    <p><strong>The short version.</strong> Osmium Sound has no user accounts and no advertising. The Android app collects nothing about you: it talks to the player you own, on your own network. Your music, your library and your settings stay on the player and on your phone. This website counts visits without cookies and without keeping your IP address.</p>
+  </div>
+
+  <h2>1. Who is responsible</h2>
+  <p><strong>Adriano Frongillo</strong>, sole developer of Osmium Sound, Italy — the data controller for the purposes of the GDPR.</p>
+  <ul>
+    <li>Privacy questions: <a href="mailto:info@osmiumsound.it">info@osmiumsound.it</a></li>
+    <li>Help with the product: <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a></li>
+  </ul>
+
+  <h2>2. The Android app (Osmium Sound Companion)</h2>
+  <p>The app is a remote control for a player you own. <strong>It sends nothing to us.</strong> There is no sign-up, no profile, no advertising, and no analytics or crash-reporting kit inside it.</p>
+  <ul>
+    <li><strong>Where your data is.</strong> The address of your player, your preferences and the players you have used are saved on the phone. Uninstalling the app removes them.</li>
+    <li><strong>Who it talks to.</strong> Only the Osmium Sound player you point it at, over your home network — or over the remote connection you set up yourself. Track details and cover art come from that same player.</li>
+    <li><strong>Downloads.</strong> A track you ask the app to download is saved on your phone and stays there.</li>
+    <li><strong>Scrobbling.</strong> Off unless you switch it on. When it is on, the app hands the artist, album and track being played to a scrobbling app installed on the same phone; what that app does with it is covered by its own policy.</li>
+  </ul>
+
+  <h3>Permissions, and what each one is for</h3>
+  <table>
+    <tr><th>Permission</th><th>What it is for</th></tr>
+    <tr><td>Internet, network and Wi-Fi state</td><td>Reach your player and notice when the connection changes</td></tr>
+    <tr><td>Camera</td><td>Only to read the pairing code shown by the player. Nothing is photographed, saved or sent.</td></tr>
+    <tr><td>Notifications</td><td>Show the playback notification with the play, pause and skip buttons</td></tr>
+    <tr><td>Phone state</td><td>Pause the music when a call comes in. You can refuse it and everything else keeps working.</td></tr>
+    <tr><td>Storage (Android 9 and older)</td><td>Save the tracks you choose to download</td></tr>
+    <tr><td>Alarms, vibration, keep awake</td><td>Ring the alarms you set on the player and keep playing while the screen is off</td></tr>
+  </table>
+
+  <h2>3. The Osmium Sound player</h2>
+  <ul>
+    <li><strong>Your music stays home.</strong> Files, the library index, cover art and settings live on the player, on your network. We have no access to them.</li>
+    <li><strong>Streaming services.</strong> If you connect a music service, that login is stored on the player and the traffic goes straight from the player to the service. What the service collects is described in its own policy.</li>
+    <li><strong>Update checks.</strong> To see whether a new version exists, the player asks GitHub and our download server (<strong>file.osmiumsound.it</strong>). Those servers see the request the way they see any download, and nothing about how you use the player is sent.</li>
+    <li><strong>Usage reports to the Lyrion project</strong> — the music server that runs inside the player — are switched off, and the setup wizard never turns them on unless you tick that box yourself.</li>
+    <li><strong>Listening from outside the house</strong> happens only if you set it up, through the service you choose. We are not in the middle of that connection.</li>
+    <li><strong>Support files.</strong> The player can save a file with logs and settings to help us with a problem. It is created only when you ask for it, and it reaches us only if you send it. You can open it and see what is inside before you do.</li>
+  </ul>
+
+  <h2>4. This website</h2>
+  <p><strong>Visits are counted without cookies.</strong> Nothing is stored in your browser and your IP address is never saved. Each visitor becomes a one-way code made from the address, the browser description and a secret that changes every day and is then thrown away — so today's visit cannot be tied to yesterday's, or to you.</p>
+  <p>What a visit record holds: the pages seen and how long they were on screen, the site or search engine you arrived from, the browser, the operating system, whether it is a phone or a computer, the screen width, the browser language, the country, region and city that Cloudflare works out from the address, the network provider, and clicks on downloads and on links to other sites.</p>
+  <p>We do this to know whether the project is of interest and which pages are worth improving — a legitimate interest under Art. 6(1)(f) GDPR. It is never used for advertising or profiling, and it is not shared. The daily secret is deleted after a day; the visit records are kept only as long as they are useful for that purpose.</p>
+  <p>To not be counted at all, use a browser with JavaScript turned off, or open the browser console on this site and run <strong>localStorage.setItem('osmium_ignore', '1')</strong>.</p>
+  <p>Other parties involved in this site:</p>
+  <ul>
+    <li>The pages are hosted by <strong>Cloudflare Pages</strong> and the downloads come from <strong>GitHub</strong> and from file.osmiumsound.it; like any web server, these see the request and your address.</li>
+    <li>The page font is loaded from <strong>Google Fonts</strong>, which sees the request your browser makes to it.</li>
+    <li>The review form on the home page is by <strong>Tally</strong> and loads only when you open it. Links to GitHub, Ko-fi and Facebook lead to those sites, each with its own policy.</li>
+  </ul>
+
+  <h2>5. What we never do</h2>
+  <p>No advertising, no profiling, no selling or sharing of data, no third-party tracking kits in the app or in the player.</p>
+
+  <h2>6. Children</h2>
+  <p>Osmium Sound is not aimed at children, and nothing is knowingly collected about them.</p>
+
+  <h2>7. Your rights</h2>
+  <p>Under the GDPR you can ask what data we hold about you, get a copy, have it corrected or deleted, and object to how it is used. Write to <a href="mailto:info@osmiumsound.it">info@osmiumsound.it</a>.</p>
+  <p>Two honest notes about what this means here. For the app and the player, the answer is almost always that we hold nothing, because nothing ever reaches us. For the website counter, records cannot be traced back to a person even by us, so there is no way to pick out yours — which also means there is nothing in there to identify you.</p>
+  <p>If you think your data has been mishandled you can also complain to the Italian data protection authority, the <a href="https://www.garanteprivacy.it/" target="_blank" rel="noopener">Garante per la protezione dei dati personali</a>.</p>
+
+  <h2>8. Changes to this page</h2>
+  <p>If this policy changes, the date at the top changes with it, and anything that matters to you will be said plainly here.</p>
+</div>
+
+<div id="lang-it">
+  <h1>Informativa sulla privacy</h1>
+  <p class="updated">Ultimo aggiornamento: 16 settembre 2026 · Riguarda l'app Osmium Sound Companion per Android, il lettore Osmium Sound e questo sito</p>
+
+  <div class="summary">
+    <p><strong>In breve.</strong> Osmium Sound non ha account utente e non ha pubblicità. L'app Android non raccoglie nulla su di te: parla con il lettore che possiedi, sulla tua rete. La tua musica, la tua libreria e le tue impostazioni restano sul lettore e sul telefono. Questo sito conta le visite senza cookie e senza conservare il tuo indirizzo IP.</p>
+  </div>
+
+  <h2>1. Chi è il responsabile</h2>
+  <p><strong>Adriano Frongillo</strong>, unico sviluppatore di Osmium Sound, Italia — titolare del trattamento ai fini del GDPR.</p>
+  <ul>
+    <li>Domande sulla privacy: <a href="mailto:info@osmiumsound.it">info@osmiumsound.it</a></li>
+    <li>Assistenza sul prodotto: <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a></li>
+  </ul>
+
+  <h2>2. L'app Android (Osmium Sound Companion)</h2>
+  <p>L'app è un telecomando per un lettore che è tuo. <strong>Non ci manda nulla.</strong> Non c'è registrazione, non c'è un profilo, non c'è pubblicità e dentro non c'è nessun kit di statistiche o di segnalazione degli errori.</p>
+  <ul>
+    <li><strong>Dove stanno i tuoi dati.</strong> L'indirizzo del lettore, le preferenze e i lettori che hai usato sono salvati sul telefono. Disinstallando l'app spariscono.</li>
+    <li><strong>Con chi parla.</strong> Solo con il lettore Osmium Sound che le indichi, sulla tua rete di casa — o attraverso il collegamento a distanza che hai configurato tu. I dati dei brani e le copertine arrivano dallo stesso lettore.</li>
+    <li><strong>Download.</strong> Un brano che chiedi di scaricare viene salvato sul telefono e lì resta.</li>
+    <li><strong>Scrobbling.</strong> Spento, se non lo accendi tu. Quando è acceso, l'app passa artista, album e brano in ascolto a un'app di scrobbling installata sullo stesso telefono; quello che ne fa quell'app è regolato dalla sua informativa.</li>
+  </ul>
+
+  <h3>I permessi, e a cosa serve ciascuno</h3>
+  <table>
+    <tr><th>Permesso</th><th>A cosa serve</th></tr>
+    <tr><td>Internet, stato della rete e del Wi-Fi</td><td>Raggiungere il lettore e accorgersi quando la connessione cambia</td></tr>
+    <tr><td>Fotocamera</td><td>Solo per leggere il codice di abbinamento mostrato dal lettore. Non viene fotografato, salvato né inviato nulla.</td></tr>
+    <tr><td>Notifiche</td><td>Mostrare la notifica di riproduzione con i tasti play, pausa e avanti</td></tr>
+    <tr><td>Stato del telefono</td><td>Mettere in pausa la musica quando arriva una chiamata. Puoi negarlo: tutto il resto continua a funzionare.</td></tr>
+    <tr><td>Memoria (Android 9 e precedenti)</td><td>Salvare i brani che scegli di scaricare</td></tr>
+    <tr><td>Sveglie, vibrazione, schermo attivo</td><td>Far suonare le sveglie impostate sul lettore e continuare a suonare a schermo spento</td></tr>
+  </table>
+
+  <h2>3. Il lettore Osmium Sound</h2>
+  <ul>
+    <li><strong>La tua musica resta a casa tua.</strong> I file, l'indice della libreria, le copertine e le impostazioni stanno sul lettore, sulla tua rete. Noi non vi abbiamo accesso.</li>
+    <li><strong>Servizi di streaming.</strong> Se colleghi un servizio musicale, quell'accesso viene salvato sul lettore e il traffico va dal lettore al servizio, senza passare da noi. Quello che raccoglie il servizio è descritto nella sua informativa.</li>
+    <li><strong>Controllo aggiornamenti.</strong> Per vedere se esiste una versione nuova, il lettore chiede a GitHub e al nostro server dei download (<strong>file.osmiumsound.it</strong>). Quei server vedono la richiesta come vedono qualsiasi altro download, e non viene inviato nulla su come usi il lettore.</li>
+    <li><strong>Le statistiche d'uso del progetto Lyrion</strong> — il server musicale che gira dentro il lettore — sono spente, e la procedura di primo avvio non le accende mai se non sei tu a spuntare quella casella.</li>
+    <li><strong>Ascoltare fuori casa</strong> succede solo se lo configuri tu, attraverso il servizio che scegli. Noi non siamo in mezzo a quel collegamento.</li>
+    <li><strong>File di assistenza.</strong> Il lettore può salvare un file con registri e impostazioni per aiutarci con un problema. Viene creato solo se lo chiedi tu e arriva a noi solo se ce lo mandi. Puoi aprirlo e vedere cosa contiene prima di farlo.</li>
+  </ul>
+
+  <h2>4. Questo sito</h2>
+  <p><strong>Le visite si contano senza cookie.</strong> Nel tuo browser non viene salvato nulla e il tuo indirizzo IP non viene mai conservato. Ogni visitatore diventa un codice a senso unico ricavato dall'indirizzo, dalla descrizione del browser e da un segreto che cambia ogni giorno e poi viene buttato — così la visita di oggi non si può collegare a quella di ieri, né a te.</p>
+  <p>Cosa contiene il record di una visita: le pagine viste e quanto sono rimaste a schermo, il sito o il motore di ricerca da cui sei arrivato, il browser, il sistema operativo, se è un telefono o un computer, la larghezza dello schermo, la lingua del browser, il Paese, la regione e la città che Cloudflare ricava dall'indirizzo, l'operatore di rete, e i clic sui download e sui link verso altri siti.</p>
+  <p>Lo facciamo per capire se il progetto interessa e quali pagine vale la pena migliorare — un legittimo interesse ai sensi dell'art. 6(1)(f) GDPR. Non viene mai usato per pubblicità o profilazione e non viene condiviso. Il segreto giornaliero viene cancellato dopo un giorno; i record delle visite si conservano solo finché servono a questo scopo.</p>
+  <p>Per non essere contato affatto, usa un browser con JavaScript disattivato, oppure apri la console del browser su questo sito ed esegui <strong>localStorage.setItem('osmium_ignore', '1')</strong>.</p>
+  <p>Altri soggetti coinvolti in questo sito:</p>
+  <ul>
+    <li>Le pagine sono ospitate da <strong>Cloudflare Pages</strong> e i download arrivano da <strong>GitHub</strong> e da file.osmiumsound.it; come qualsiasi server web, vedono la richiesta e il tuo indirizzo.</li>
+    <li>Il carattere tipografico della pagina viene caricato da <strong>Google Fonts</strong>, che vede la richiesta fatta dal tuo browser.</li>
+    <li>Il modulo delle recensioni in home page è di <strong>Tally</strong> e si carica solo quando lo apri. I link a GitHub, Ko-fi e Facebook portano a quei siti, ognuno con la propria informativa.</li>
+  </ul>
+
+  <h2>5. Quello che non facciamo mai</h2>
+  <p>Niente pubblicità, niente profilazione, nessuna vendita o cessione di dati, nessun kit di tracciamento di terze parti nell'app o nel lettore.</p>
+
+  <h2>6. Bambini</h2>
+  <p>Osmium Sound non si rivolge ai bambini e non raccoglie consapevolmente nulla che li riguardi.</p>
+
+  <h2>7. I tuoi diritti</h2>
+  <p>In base al GDPR puoi chiedere quali dati abbiamo su di te, ottenerne una copia, farli correggere o cancellare e opporti al loro uso. Scrivi a <a href="mailto:info@osmiumsound.it">info@osmiumsound.it</a>.</p>
+  <p>Due precisazioni oneste su cosa significa qui. Per l'app e per il lettore la risposta è quasi sempre che non abbiamo nulla, perché nulla ci arriva mai. Per il contatore del sito i record non sono riconducibili a una persona nemmeno da noi, quindi non c'è modo di individuare i tuoi — il che vuol dire anche che lì dentro non c'è niente che ti identifichi.</p>
+  <p>Se ritieni che i tuoi dati siano stati trattati male puoi anche rivolgerti al <a href="https://www.garanteprivacy.it/" target="_blank" rel="noopener">Garante per la protezione dei dati personali</a>.</p>
+
+  <h2>8. Modifiche a questa pagina</h2>
+  <p>Se questa informativa cambia, cambia con lei la data in alto, e qui viene detto chiaramente tutto ciò che ti riguarda.</p>
+</div>
+
+</main>
+
+<footer>
+  <span id="footerBack"><a href="index.html">&larr; Osmium Sound</a></span>
+  &nbsp;·&nbsp; &copy; 2025–2026 Adriano Frongillo
+  &nbsp;·&nbsp; <a href="mailto:info@osmiumsound.it">info@osmiumsound.it</a>
+</footer>
+
+<script>
+  function applyLang(lang) {
+    document.getElementById('lang-en').style.display = (lang === 'it') ? 'none' : 'block';
+    document.getElementById('lang-it').style.display = (lang === 'it') ? 'block' : 'none';
+    document.querySelectorAll('.lang-switch button').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.lang === lang);
+    });
+    document.getElementById('backLink').innerHTML = (lang === 'it') ? '&larr; Torna al sito' : '&larr; Osmium Sound';
+    document.documentElement.lang = lang;
+    try { localStorage.setItem('lang', lang); } catch (e) {}
+  }
+  document.querySelectorAll('.lang-switch button').forEach(function (b) {
+    b.addEventListener('click', function () { applyLang(b.dataset.lang); });
+  });
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem('lang'); } catch (e) {}
+    var browserIt = (navigator.languages || [navigator.language || '']).some(function (l) {
+      return l.toLowerCase().indexOf('it') === 0;
+    });
+    applyLang(saved || (browserIt ? 'it' : 'en'));
+  })();
+</script>
+<script defer src="/o.js"></script>
+</body>
+</html>
