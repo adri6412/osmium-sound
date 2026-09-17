@@ -11,7 +11,8 @@ hash — and are gone when the request ends. What reaches D1:
 | `downloads_daily` | day, file, kind | hits, and unique downloaders as a sketch. `kind` is `served` (the file went out) or `click` (a download button was pressed) |
 | `site_breakdown` | day, dim, value | one count per page view (`country`, `browser`, `os`, `source`, `channel`) or per download (`dl_country`, `dl_browser`, `dl_os`, `dl_network`) |
 | `site_drops` | day, reason, asn | how much was filtered out, by reason and network |
-| `site_salts` | day | the random salt of the day, deleted the day after (unchanged) |
+| `appliances_live` | slot | one sketch per quarter of an hour: how many appliances are on now. Slots older than an hour are deleted on every write |
+| `site_salts` | day | the random salt of the day, deleted the day after; plus one per week (`week-YYYY-MM-DD`) used only for the appliance count |
 
 Written by [`functions/api/o.js`](../functions/api/o.js) (the browser beacon)
 and [`functions/_middleware.js`](../functions/_middleware.js) (the `.apk` and
@@ -22,6 +23,13 @@ hash in [`functions/_lib/visitor.js`](../functions/_lib/visitor.js).
 
 Days are **UTC**, because the visitor hash is salted per UTC day: a stored day
 that spanned two salts would count the same person twice inside it.
+
+Appliances are salted per **week** instead (`weeklySalt` in `_lib/visitor.js`).
+An appliance asks for the update manifest every fifteen minutes, so with a
+daily salt the same box would be a new box every morning. Merging the days of
+one week gives how many boxes; merging across weeks gives the sum of the
+weeks, not distinct boxes — which is why the dashboard answers a week at a
+time, with the per-day numbers beside it.
 
 Reading the sketches needs the same `hll.js`: `merge()` the rows in the period,
 then `count()`. Unique visitors for a day are the union of that day's rows

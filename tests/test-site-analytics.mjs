@@ -21,7 +21,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { add, count, empty, merge, serialize, deserialize } from "../website/functions/_lib/hll.js";
 import { classify, parseUA } from "../website/functions/_lib/traffic.js";
-import { CHECK, CLICK, DOWNLOADS_DAILY, SERVED, SITE_DAILY } from "../website/functions/_lib/counters.js";
+import { CHECK, CLICK, DOWNLOADS_DAILY, LIVE_SLOT_MS, SERVED, SITE_DAILY, liveSlot } from "../website/functions/_lib/counters.js";
 import { utcDay, weekStart } from "../website/functions/_lib/visitor.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -177,12 +177,34 @@ section("The weekly salt key");
   );
 }
 
+// ----------------------------------------------------- 2c. the live window
+
+section("The live window");
+
+{
+  const at = Date.UTC(2026, 8, 17, 13, 7, 42);
+  check("a time falls into its quarter of an hour", liveSlot(at) === "2026-09-17T13:00", liveSlot(at));
+  check("the next quarter is its own slot", liveSlot(at + 8 * 60 * 1000) === "2026-09-17T13:15");
+  check(
+    "slots sort in time order, so deleting the old ones is a range",
+    liveSlot(at) < liveSlot(at + LIVE_SLOT_MS) &&
+      liveSlot(Date.UTC(2026, 11, 31, 23, 45)) < liveSlot(Date.UTC(2027, 0, 1, 0, 0))
+  );
+  check("an hour back is four slots", liveSlot(at - 4 * LIVE_SLOT_MS) === "2026-09-17T12:00", liveSlot(at - 4 * LIVE_SLOT_MS));
+  // Boxes ask every 15 minutes: the same box lands in the same slot whatever
+  // it does in between, so the live number counts boxes, not requests.
+  check(
+    "a box asking twice inside a quarter stays in one slot",
+    liveSlot(at) === liveSlot(at + 6 * 60 * 1000)
+  );
+}
+
 // --------------------------------------- 3. no personal column in any INSERT
 
 section("What the functions write");
 
 const FORBIDDEN = ["ip", "user_agent", "visitor_id", "referrer", "city", "region", "screen_w", "http_proto"];
-const ALLOWED_TABLES = ["site_daily", "downloads_daily", "site_breakdown", "site_drops", "site_salts"];
+const ALLOWED_TABLES = ["site_daily", "downloads_daily", "site_breakdown", "site_drops", "site_salts", "appliances_live"];
 
 function jsFiles(dir) {
   const out = [];

@@ -124,6 +124,47 @@ async function sketchStatement(db, spec, { day, key, hash }) {
     .bind(day, ...key, serialize(sketch));
 }
 
+// ---------------------------------------------------------------- live
+//
+// How many appliances are on right now. The daily counters have no clock in
+// them, so "now" needs its own place: one sketch per quarter of an hour, and
+// the old ones are deleted within the hour. An appliance asks for the manifest
+// every fifteen minutes, so merging the last two slots catches every box that
+// is on, and a box switched off drops out of the number inside half an hour.
+//
+// Nothing here outlives the hour, and it is the same unreadable sketch as
+// everywhere else: it says how many, never which.
+export const LIVE_SLOT_MS = 15 * 60 * 1000;
+const LIVE_KEEP_SLOTS = 4;
+
+export function liveSlot(now) {
+  return new Date(Math.floor(now / LIVE_SLOT_MS) * LIVE_SLOT_MS).toISOString().slice(0, 16);
+}
+
+export async function liveStatements(db, { now, hash }) {
+  const slot = liveSlot(now);
+  const row = await db
+    .prepare("SELECT boxes_hll AS sketch FROM appliances_live WHERE slot = ?")
+    .bind(slot)
+    .first();
+
+  const statements = [
+    db.prepare("DELETE FROM appliances_live WHERE slot < ?").bind(liveSlot(now - LIVE_KEEP_SLOTS * LIVE_SLOT_MS)),
+  ];
+  const sketch = row ? deserialize(row.sketch) : empty();
+  // Already in this quarter of an hour: nothing to write but the cleanup.
+  if (!add(sketch, hash)) return statements;
+  statements.push(
+    db
+      .prepare(
+        `INSERT INTO appliances_live (slot, boxes_hll) VALUES (?, ?)
+         ON CONFLICT(slot) DO UPDATE SET boxes_hll = excluded.boxes_hll`
+      )
+      .bind(slot, serialize(sketch))
+  );
+  return statements;
+}
+
 export function breakdownStatement(db, { day, dim, value }) {
   return db
     .prepare(
