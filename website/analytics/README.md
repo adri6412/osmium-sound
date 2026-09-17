@@ -7,7 +7,7 @@ hash — and are gone when the request ends. What reaches D1:
 
 | table | key | what it holds |
 | --- | --- | --- |
-| `site_daily` | day, path | views, and unique visitors as a HyperLogLog sketch |
+| `site_daily` | day, path | views, and unique visitors as a HyperLogLog sketch. The `*` row of a day holds that day's sketch merged across pages, with its counter left at 0 |
 | `downloads_daily` | day, file, kind | hits, and unique downloaders as a sketch. `kind` is `served` (the file went out) or `click` (a download button was pressed) |
 | `site_breakdown` | day, dim, value | one count per page view (`country`, `browser`, `os`, `source`, `channel`) or per download (`dl_country`, `dl_browser`, `dl_os`, `dl_network`) |
 | `site_drops` | day, reason, asn | how much was filtered out, by reason and network |

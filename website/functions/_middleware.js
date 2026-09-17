@@ -28,7 +28,7 @@ import {
   DOWNLOADS_DAILY,
   SERVED,
   breakdownStatement,
-  dailyStatement,
+  dailyStatements,
   dropStatement,
   networkValue,
 } from "./_lib/counters.js";
@@ -58,14 +58,15 @@ function isExcluded(ip, env) {
 // A download is judged by the network only. People fetch files with curl, with
 // wget, with a download manager and with the F-Droid client, all of which the
 // user-agent rules call programs; a hosting network asking for an APK is not
-// somebody installing it.
+// somebody installing it. The reason carries the dl_ prefix so a download left
+// out never gets added to the pages left out.
 function downloadReason(asn, asOrg) {
-  return isDatacenter(asn, asOrg) ? "datacenter" : null;
+  return isDatacenter(asn, asOrg) ? "dl_datacenter" : null;
 }
 
 async function countDownload(db, { day, file, now, ip, userAgent, country, asn, asOrg }) {
   const hash = await visitorHash(db, now, ip, userAgent);
-  const daily = await dailyStatement(db, DOWNLOADS_DAILY, { day, key: [file, SERVED], hash });
+  const daily = await dailyStatements(db, DOWNLOADS_DAILY, { day, key: [file, SERVED], hash });
   const { browser, os } = parseUA(userAgent);
   // dl_ dimensions are counted per download, and kept apart from the ones
   // counted per page view so the two can never be added up by mistake.
@@ -76,7 +77,7 @@ async function countDownload(db, { day, file, now, ip, userAgent, country, asn, 
     dl_network: networkValue(asn, asOrg),
   };
   await db.batch([
-    daily,
+    ...daily,
     ...Object.entries(dims).map(([dim, value]) => breakdownStatement(db, { day, dim, value })),
   ]);
 }

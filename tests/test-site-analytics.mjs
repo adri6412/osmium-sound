@@ -342,7 +342,7 @@ const generated = execFileSync(
 );
 db.exec(generated);
 
-const sketchRows = rows("SELECT path, visitors_hll FROM site_daily WHERE day = '2026-09-10' ORDER BY path");
+const sketchRows = rows("SELECT path, views, visitors_hll FROM site_daily WHERE day = '2026-09-10' ORDER BY path");
 check("every counted day gets a sketch", sketchRows.every((r) => r.visitors_hll), `${sketchRows.length} rows`);
 check(
   "the home page had two unique visitors that day",
@@ -350,8 +350,15 @@ check(
   `counted ${count(sketchRows.find((r) => r.path === "/").visitors_hll)}`
 );
 check(
-  "the day's unique visitors are the union of its paths",
-  count(sketchRows.map((r) => deserialize(r.visitors_hll)).reduce((a, b) => merge(a, b))) === 2
+  "the day's total row holds the union of its paths",
+  count(sketchRows.find((r) => r.path === "*").visitors_hll) ===
+    count(sketchRows.filter((r) => r.path !== "*").map((r) => deserialize(r.visitors_hll)).reduce((a, b) => merge(a, b))),
+  `total row counts ${count(sketchRows.find((r) => r.path === "*").visitors_hll)}`
+);
+check(
+  "the total row does not add to the page views",
+  sketchRows.find((r) => r.path === "*").views === 0 &&
+    one("SELECT SUM(views) AS n FROM site_daily WHERE day = '2026-09-10'").n === 3
 );
 
 // Step 3

@@ -21,7 +21,7 @@ import {
   DOWNLOADS_DAILY,
   SITE_DAILY,
   breakdownStatement,
-  dailyStatement,
+  dailyStatements,
   dropStatement,
 } from "../_lib/counters.js";
 import { utcDay, visitorHash } from "../_lib/visitor.js";
@@ -147,8 +147,7 @@ export async function onRequestPost({ request, env }) {
       }
       // A click, not a file going out: the worker that serves the file counts
       // that one, and the two must not add up.
-      const statement = await dailyStatement(db, DOWNLOADS_DAILY, { day, key: [file, CLICK], hash });
-      await statement.run();
+      await db.batch(await dailyStatements(db, DOWNLOADS_DAILY, { day, key: [file, CLICK], hash }));
       return reply(202);
     }
 
@@ -169,9 +168,9 @@ export async function onRequestPost({ request, env }) {
       channel: channelOf({ refHost, utmMedium, utmSource }),
     };
 
-    const daily = await dailyStatement(db, SITE_DAILY, { day, key: path, hash });
+    const daily = await dailyStatements(db, SITE_DAILY, { day, key: path, hash });
     await db.batch([
-      daily,
+      ...daily,
       ...Object.entries(dims).map(([dim, value]) => breakdownStatement(db, { day, dim, value })),
     ]);
     return reply(202);

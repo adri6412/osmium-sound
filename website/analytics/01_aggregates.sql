@@ -13,7 +13,11 @@
 -- Page views and unique visitors per UTC day. The sketch is a HyperLogLog
 -- (website/functions/_lib/hll.js): unique visitors for a month are the union
 -- of the daily sketches, so nothing raw has to be kept to answer that later.
--- Unique visitors for one day are the union of that day's rows across paths.
+--
+-- The row of a day whose path is '*' holds that day's sketch already merged
+-- across every page, so the dashboard reads one 4 KB blob per day instead of
+-- one per page. Its views stay 0, so SUM(views) is right either way; only a
+-- list of pages has to say path <> '*'.
 CREATE TABLE IF NOT EXISTS site_daily (
   day TEXT NOT NULL,
   path TEXT NOT NULL,
@@ -104,6 +108,8 @@ GROUP BY 1, 2, 3
 ON CONFLICT(day, file, kind) DO UPDATE SET hits = downloads_daily.hits + excluded.hits;
 
 -- Files the site served itself before the beacon: the F-Droid repository.
+-- No sketch: the log only ever knew addresses, and turning those into unique
+-- downloaders after the fact would be a different number wearing the same name.
 -- Judged by network only, as the middleware now does — the F-Droid client and
 -- curl are people fetching a file, a hosting network is not.
 INSERT INTO downloads_daily (day, file, kind, hits)
@@ -185,10 +191,15 @@ ON CONFLICT(day, reason, asn) DO UPDATE SET count = site_drops.count + excluded.
 -- which is what that flag meant. The F-Droid files are downloads, not drops.
 INSERT INTO site_drops (day, reason, asn, as_org, count)
 SELECT strftime('%Y-%m-%d', first_seen / 1000, 'unixepoch') AS day,
-       CASE WHEN is_dc = 1 THEN 'datacenter' ELSE 'ua_bot' END AS reason,
+       CASE
+         WHEN path LIKE '%.apk' OR path LIKE '%.jar' THEN 'dl_datacenter'
+         WHEN is_dc = 1 THEN 'datacenter'
+         ELSE 'ua_bot'
+       END AS reason,
        COALESCE(asn, 0) AS asn, MIN(as_org) AS as_org, COUNT(*) AS count
 FROM page_views
-WHERE (is_bot = 1 OR is_dc = 1) AND path NOT LIKE '%.apk' AND path NOT LIKE '%.jar'
+WHERE (is_bot = 1 OR is_dc = 1)
+  AND (is_dc = 1 OR (path NOT LIKE '%.apk' AND path NOT LIKE '%.jar'))
   AND strftime('%Y-%m-%d', first_seen / 1000, 'unixepoch') <
       (SELECT COALESCE(MIN(strftime('%Y-%m-%d', ts / 1000, 'unixepoch')), '9999-12-31') FROM site_events)
 GROUP BY 1, 2, 3

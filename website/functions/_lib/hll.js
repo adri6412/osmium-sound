@@ -8,7 +8,9 @@
 // nothing raw has to be kept to answer that question later.
 //
 // Standalone on purpose: Workers have no packages at runtime, and the backfill
-// script and the tests import this same file.
+// script and the tests import this same file. The same file lives in
+// osmium-iso-tracker/src/hll.js, which reads these sketches back for the
+// dashboard: keep the two copies identical.
 //
 // Accuracy at 12 bits of precision is about 1.6% on large sets; below the
 // canonical 2.5 * m threshold the estimate comes from linear counting instead,

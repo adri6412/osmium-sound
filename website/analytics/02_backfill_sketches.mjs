@@ -34,10 +34,24 @@ import { readFileSync } from "node:fs";
 import { add, empty, serialize } from "../functions/_lib/hll.js";
 
 const TABLES = {
-  site_daily: { keyCol: "path", sketchCol: "visitors_hll", extra: "" },
+  site_daily: {
+    keyCol: "path",
+    sketchCol: "visitors_hll",
+    countCol: "views",
+    extra: "",
+    columns: "path",
+    totalKey: "'*'",
+  },
   // Only the click half of downloads_daily comes from the beacon; the files
   // served by the worker never had a visitor hash to rebuild from.
-  downloads_daily: { keyCol: "file", sketchCol: "downloaders_hll", extra: " AND kind = 'click'" },
+  downloads_daily: {
+    keyCol: "file",
+    sketchCol: "downloaders_hll",
+    countCol: "hits",
+    extra: " AND kind = 'click'",
+    columns: "file, kind",
+    totalKey: "'*', 'click'",
+  },
 };
 
 function fail(message) {
@@ -71,6 +85,7 @@ if (!input) fail("missing the JSON file with the exported rows");
 
 const rows = rowsOf(JSON.parse(readFileSync(input, "utf8")));
 const sketches = new Map();
+const totals = new Map(); // one sketch per day, merged across keys: the "*" row
 let skipped = 0;
 
 for (const row of rows) {
@@ -89,10 +104,21 @@ for (const row of rows) {
   }
   // The first four bytes of the visitor hash, the same ones the live code
   // folds in. parseInt of eight hex digits is always a 32-bit value.
-  add(sketch, parseInt(visitor.slice(0, 8), 16));
+  const hash = parseInt(visitor.slice(0, 8), 16);
+  add(sketch, hash);
+
+  let total = totals.get(day);
+  if (!total) {
+    total = empty();
+    totals.set(day, total);
+  }
+  add(total, hash);
 }
 
-const out = [`-- ${sketches.size} sketches for ${table}, built from ${rows.length - skipped} distinct visitor-days`];
+const out = [
+  `-- ${sketches.size} sketches for ${table}, built from ${rows.length - skipped} distinct visitor-days`,
+  `-- plus ${totals.size} day totals, the "*" rows the dashboard reads`,
+];
 for (const [id, sketch] of sketches) {
   const [day, key] = JSON.parse(id);
   const quoted = key.replace(/'/g, "''");
@@ -101,5 +127,13 @@ for (const [id, sketch] of sketches) {
       `WHERE day = '${day}' AND ${spec.keyCol} = '${quoted}'${spec.extra};`
   );
 }
+// The "*" rows do not exist yet: step 1 only wrote the keys that had counts.
+for (const [day, sketch] of totals) {
+  out.push(
+    `INSERT INTO ${table} (day, ${spec.columns}, ${spec.countCol}, ${spec.sketchCol}) ` +
+      `VALUES ('${day}', ${spec.totalKey}, 0, X'${hexBlob(serialize(sketch))}') ` +
+      `ON CONFLICT(day, ${spec.columns}) DO UPDATE SET ${spec.sketchCol} = excluded.${spec.sketchCol};`
+  );
+}
 process.stdout.write(`${out.join("\n")}\n`);
-process.stderr.write(`${sketches.size} sketches, ${skipped} rows skipped\n`);
+process.stderr.write(`${sketches.size} sketches and ${totals.size} day totals, ${skipped} rows skipped\n`);

@@ -36,6 +36,13 @@ export const DOWNLOADS_DAILY = {
 export const SERVED = "served";
 export const CLICK = "click";
 
+// The row of a day whose key is "*" holds that day's sketch merged across
+// every key, so "how many different people came that day" is one 4 KB read
+// instead of one per page. Its counter stays at zero on purpose: a SUM over
+// the table is still the right total, with or without this row. Paths always
+// start with "/" and file keys with a host name, so "*" cannot collide.
+export const TOTAL_KEY = "*";
+
 // Bumps the counter and folds the visitor into the sketch. One read, and a
 // write the caller batches with the rest.
 //
@@ -75,6 +82,42 @@ export async function dailyStatement(db, spec, { day, key, hash }) {
          ${sketchCol} = excluded.${sketchCol}`
     )
     .bind(day, ...keys, serialize(sketch));
+}
+
+// The keyed row and the day's total row, ready to batch. The total is written
+// only when this visitor is new to the day, so a second page view costs one
+// counter bump and nothing more.
+export async function dailyStatements(db, spec, { day, key, hash }) {
+  const keys = Array.isArray(key) ? key : [key];
+  const totalKeys = [TOTAL_KEY, ...keys.slice(1)];
+  const statements = [await dailyStatement(db, spec, { day, key: keys, hash })];
+  const total = await sketchStatement(db, spec, { day, key: totalKeys, hash });
+  if (total) statements.push(total);
+  return statements;
+}
+
+// Folds the visitor into a sketch without touching the counter. Returns null
+// when the sketch already knew this visitor: then there is nothing to write.
+async function sketchStatement(db, spec, { day, key, hash }) {
+  const { table, keyCols, countCol, sketchCol } = spec;
+  const match = keyCols.map((col) => `${col} = ?`).join(" AND ");
+  const row = await db
+    .prepare(`SELECT ${sketchCol} AS sketch FROM ${table} WHERE day = ? AND ${match}`)
+    .bind(day, ...key)
+    .first();
+
+  const sketch = row ? deserialize(row.sketch) : empty();
+  if (!add(sketch, hash)) return null;
+
+  const columns = ["day", ...keyCols];
+  const placeholders = columns.map(() => "?").join(", ");
+  const conflict = columns.join(", ");
+  return db
+    .prepare(
+      `INSERT INTO ${table} (${conflict}, ${countCol}, ${sketchCol}) VALUES (${placeholders}, 0, ?)
+       ON CONFLICT(${conflict}) DO UPDATE SET ${sketchCol} = excluded.${sketchCol}`
+    )
+    .bind(day, ...key, serialize(sketch));
 }
 
 export function breakdownStatement(db, { day, dim, value }) {

@@ -4,6 +4,10 @@
 // into a HyperLogLog sketch and is never written to a column, returned or
 // logged. The daily salt is what keeps it from being reversed or matched
 // across days, and it is deleted the day after (site_salts).
+//
+// The same file lives in osmium-iso-tracker/src/visitor.js, so a download and
+// a page view from the same person on the same day share one hash. Keep the
+// two copies identical.
 
 function hex(bytes) {
   return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
