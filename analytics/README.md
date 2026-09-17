@@ -11,7 +11,6 @@ hash — and are gone when the request ends. What reaches D1:
 | `downloads_daily` | day, file, kind | hits, and unique downloaders as a sketch. `kind` is `served` (the file went out) or `click` (a download button was pressed) |
 | `site_breakdown` | day, dim, value | one count per page view (`country`, `browser`, `os`, `source`, `channel`) or per download (`dl_country`, `dl_browser`, `dl_os`, `dl_network`) |
 | `site_drops` | day, reason, asn | how much was filtered out, by reason and network |
-| `appliances_live` | slot | one sketch per quarter of an hour: how many appliances are on now. Slots older than an hour are deleted on every write |
 | `site_salts` | day | the random salt of the day, deleted the day after; plus one per week (`week-YYYY-MM-DD`) used only for the appliance count |
 
 Written by [`functions/api/o.js`](../functions/api/o.js) (the browser beacon)
