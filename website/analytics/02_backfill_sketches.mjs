@@ -34,8 +34,10 @@ import { readFileSync } from "node:fs";
 import { add, empty, serialize } from "../functions/_lib/hll.js";
 
 const TABLES = {
-  site_daily: { keyCol: "path", sketchCol: "visitors_hll" },
-  downloads_daily: { keyCol: "file", sketchCol: "downloaders_hll" },
+  site_daily: { keyCol: "path", sketchCol: "visitors_hll", extra: "" },
+  // Only the click half of downloads_daily comes from the beacon; the files
+  // served by the worker never had a visitor hash to rebuild from.
+  downloads_daily: { keyCol: "file", sketchCol: "downloaders_hll", extra: " AND kind = 'click'" },
 };
 
 function fail(message) {
@@ -96,7 +98,7 @@ for (const [id, sketch] of sketches) {
   const quoted = key.replace(/'/g, "''");
   out.push(
     `UPDATE ${table} SET ${spec.sketchCol} = X'${hexBlob(serialize(sketch))}' ` +
-      `WHERE day = '${day}' AND ${spec.keyCol} = '${quoted}';`
+      `WHERE day = '${day}' AND ${spec.keyCol} = '${quoted}'${spec.extra};`
   );
 }
 process.stdout.write(`${out.join("\n")}\n`);

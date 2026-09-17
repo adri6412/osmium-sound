@@ -17,6 +17,7 @@
 
 import { classify, parseUA } from "../_lib/traffic.js";
 import {
+  CLICK,
   DOWNLOADS_DAILY,
   SITE_DAILY,
   breakdownStatement,
@@ -144,7 +145,9 @@ export async function onRequestPost({ request, env }) {
       } catch {
         return reply(400);
       }
-      const statement = await dailyStatement(db, DOWNLOADS_DAILY, { day, key: file, hash });
+      // A click, not a file going out: the worker that serves the file counts
+      // that one, and the two must not add up.
+      const statement = await dailyStatement(db, DOWNLOADS_DAILY, { day, key: [file, CLICK], hash });
       await statement.run();
       return reply(202);
     }

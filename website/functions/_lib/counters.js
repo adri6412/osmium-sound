@@ -7,23 +7,34 @@
 //   site_breakdown  counts per country / browser / OS / source / channel
 //   site_drops      what was filtered out, by reason and network
 //
+// The same file lives in osmium-iso-tracker/src/counters.js, which writes
+// downloads_daily and site_drops for the files served from
+// file.osmiumsound.it. Keep the two copies identical.
+//
 // Table and column names come from the constants below, never from a request.
 
 import { add, deserialize, empty, serialize } from "./hll.js";
 
 export const SITE_DAILY = {
   table: "site_daily",
-  keyCol: "path",
+  keyCols: ["path"],
   countCol: "views",
   sketchCol: "visitors_hll",
 };
 
+// kind tells the two halves of a download apart: SERVED is a file that
+// actually went out, CLICK is a download button somebody pressed on the site.
+// Keeping them in one table with a different kind is what stops a click and
+// the download it starts from being counted as two downloads of the same file.
 export const DOWNLOADS_DAILY = {
   table: "downloads_daily",
-  keyCol: "file",
+  keyCols: ["file", "kind"],
   countCol: "hits",
   sketchCol: "downloaders_hll",
 };
+
+export const SERVED = "served";
+export const CLICK = "click";
 
 // Bumps the counter and folds the visitor into the sketch. One read, and a
 // write the caller batches with the rest.
@@ -35,35 +46,42 @@ export const DOWNLOADS_DAILY = {
 // from a day, which is well inside the sketch's own error, and it is the reason
 // this stays a counter and never becomes a list of who was here.
 export async function dailyStatement(db, spec, { day, key, hash }) {
-  const { table, keyCol, countCol, sketchCol } = spec;
+  const { table, keyCols, countCol, sketchCol } = spec;
+  const keys = Array.isArray(key) ? key : [key];
+  const match = keyCols.map((col) => `${col} = ?`).join(" AND ");
   const row = await db
-    .prepare(`SELECT ${sketchCol} AS sketch FROM ${table} WHERE day = ? AND ${keyCol} = ?`)
-    .bind(day, key)
+    .prepare(`SELECT ${sketchCol} AS sketch FROM ${table} WHERE day = ? AND ${match}`)
+    .bind(day, ...keys)
     .first();
+
+  const columns = ["day", ...keyCols];
+  const placeholders = columns.map(() => "?").join(", ");
+  const conflict = columns.join(", ");
 
   // On an empty sketch every rank is at least 1, so a new row always writes.
   const sketch = row ? deserialize(row.sketch) : empty();
   if (!add(sketch, hash)) {
     return db
       .prepare(
-        `INSERT INTO ${table} (day, ${keyCol}, ${countCol}) VALUES (?, ?, 1)
-         ON CONFLICT(day, ${keyCol}) DO UPDATE SET ${countCol} = ${countCol} + 1`
+        `INSERT INTO ${table} (${conflict}, ${countCol}) VALUES (${placeholders}, 1)
+         ON CONFLICT(${conflict}) DO UPDATE SET ${countCol} = ${table}.${countCol} + 1`
       )
-      .bind(day, key);
+      .bind(day, ...keys);
   }
   return db
     .prepare(
-      `INSERT INTO ${table} (day, ${keyCol}, ${countCol}, ${sketchCol}) VALUES (?, ?, 1, ?)
-       ON CONFLICT(day, ${keyCol}) DO UPDATE SET ${countCol} = ${countCol} + 1, ${sketchCol} = excluded.${sketchCol}`
+      `INSERT INTO ${table} (${conflict}, ${countCol}, ${sketchCol}) VALUES (${placeholders}, 1, ?)
+       ON CONFLICT(${conflict}) DO UPDATE SET ${countCol} = ${table}.${countCol} + 1,
+         ${sketchCol} = excluded.${sketchCol}`
     )
-    .bind(day, key, serialize(sketch));
+    .bind(day, ...keys, serialize(sketch));
 }
 
 export function breakdownStatement(db, { day, dim, value }) {
   return db
     .prepare(
       `INSERT INTO site_breakdown (day, dim, value, count) VALUES (?, ?, ?, 1)
-       ON CONFLICT(day, dim, value) DO UPDATE SET count = count + 1`
+       ON CONFLICT(day, dim, value) DO UPDATE SET count = site_breakdown.count + 1`
     )
     .bind(day, dim, String(value).slice(0, 120));
 }
@@ -76,8 +94,15 @@ export function dropStatement(db, { day, reason, asn, asOrg }) {
   return db
     .prepare(
       `INSERT INTO site_drops (day, reason, asn, as_org, count) VALUES (?, ?, ?, ?, 1)
-       ON CONFLICT(day, reason, asn) DO UPDATE SET count = count + 1,
+       ON CONFLICT(day, reason, asn) DO UPDATE SET count = site_drops.count + 1,
          as_org = COALESCE(site_drops.as_org, excluded.as_org)`
     )
     .bind(day, reason, asn ?? 0, asOrg ? String(asOrg).slice(0, 120) : null);
+}
+
+// Networks that were NOT filtered out, so the dashboard can still show where
+// downloads come from. An organisation, never a person; the value carries the
+// number and the name because site_breakdown holds one string per row.
+export function networkValue(asn, asOrg) {
+  return `${asn ?? 0}|${(asOrg || "").slice(0, 100)}`;
 }

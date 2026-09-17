@@ -22,19 +22,26 @@ CREATE TABLE IF NOT EXISTS site_daily (
   PRIMARY KEY (day, path)
 );
 
--- The same, for files: clicks on a download link (from the beacon) and the
--- .apk / .jar the site serves itself (from the middleware).
+-- The same, for files. kind keeps the two halves of a download apart:
+--   'served' the file actually went out — the .apk / .jar this site serves,
+--            and everything on file.osmiumsound.it (written by the worker in
+--            the osmium-iso-tracker repo, into this same table);
+--   'click'  somebody pressed a download button on the site (the beacon).
+-- Without it a click and the download it starts would be two downloads.
 CREATE TABLE IF NOT EXISTS downloads_daily (
   day TEXT NOT NULL,
   file TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'served',
   hits INTEGER NOT NULL DEFAULT 0,
   downloaders_hll BLOB,
-  PRIMARY KEY (day, file)
+  PRIMARY KEY (day, file, kind)
 );
 
--- Counts per page view, one row per value. dim is country, browser, os,
--- source or channel. Held apart from each other and from the visit they came
--- from, these values single nobody out.
+-- Counts per page view, one row per value: dim is country, browser, os,
+-- source or channel. The dl_ dimensions (dl_country, dl_browser, dl_os,
+-- dl_network) are counted per download instead, and are named apart so the
+-- two can never be added together by mistake. Held apart from each other and
+-- from the visit they came from, these values single nobody out.
 CREATE TABLE IF NOT EXISTS site_breakdown (
   day TEXT NOT NULL,
   dim TEXT NOT NULL,
@@ -88,25 +95,26 @@ GROUP BY 1, 2
 ON CONFLICT(day, path) DO UPDATE SET views = site_daily.views + excluded.views;
 
 -- Download clicks, beacon era.
-INSERT INTO downloads_daily (day, file, hits)
-SELECT strftime('%Y-%m-%d', e.ts / 1000, 'unixepoch') AS day, e.target AS file, COUNT(*) AS hits
+INSERT INTO downloads_daily (day, file, kind, hits)
+SELECT strftime('%Y-%m-%d', e.ts / 1000, 'unixepoch') AS day, e.target AS file,
+       'click' AS kind, COUNT(*) AS hits
 FROM site_events e JOIN site_sessions s ON s.id = e.session_id
 WHERE e.name = 'download' AND s.reason IS NULL AND e.target IS NOT NULL
-GROUP BY 1, 2
-ON CONFLICT(day, file) DO UPDATE SET hits = downloads_daily.hits + excluded.hits;
+GROUP BY 1, 2, 3
+ON CONFLICT(day, file, kind) DO UPDATE SET hits = downloads_daily.hits + excluded.hits;
 
 -- Files the site served itself before the beacon: the F-Droid repository.
 -- Judged by network only, as the middleware now does — the F-Droid client and
 -- curl are people fetching a file, a hosting network is not.
-INSERT INTO downloads_daily (day, file, hits)
+INSERT INTO downloads_daily (day, file, kind, hits)
 SELECT strftime('%Y-%m-%d', first_seen / 1000, 'unixepoch') AS day,
-       'osmiumsound.it' || path AS file, COUNT(*) AS hits
+       'osmiumsound.it' || path AS file, 'served' AS kind, COUNT(*) AS hits
 FROM page_views
 WHERE is_dc = 0 AND (path LIKE '%.apk' OR path LIKE '%.jar')
   AND strftime('%Y-%m-%d', first_seen / 1000, 'unixepoch') <
       (SELECT COALESCE(MIN(strftime('%Y-%m-%d', ts / 1000, 'unixepoch')), '9999-12-31') FROM site_events)
-GROUP BY 1, 2
-ON CONFLICT(day, file) DO UPDATE SET hits = downloads_daily.hits + excluded.hits;
+GROUP BY 1, 2, 3
+ON CONFLICT(day, file, kind) DO UPDATE SET hits = downloads_daily.hits + excluded.hits;
 
 -- Breakdowns, beacon era. Counted per page view, which is how they are counted
 -- from now on: the old rows counted them once per visit, so the shape of the

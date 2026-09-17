@@ -192,11 +192,14 @@ check(
   named.join(", ")
 );
 for (const spec of [SITE_DAILY, DOWNLOADS_DAILY]) {
-  const columns = [spec.keyCol, spec.countCol, spec.sketchCol];
+  const columns = [...spec.keyCols, spec.countCol, spec.sketchCol];
   check(
     `the ${spec.table} counter is keyed on ${columns.join(", ")}`,
     ALLOWED_TABLES.includes(spec.table) && !columns.some((c) => FORBIDDEN.includes(c))
   );
+}
+for (const spec of [SITE_DAILY, DOWNLOADS_DAILY]) {
+  const columns = [...spec.keyCols, spec.countCol, spec.sketchCol];
 }
 
 // --------------------------------------------------- 4. the migration itself
@@ -280,9 +283,26 @@ check(
   one("SELECT COUNT(*) AS n FROM site_daily WHERE day = '2026-09-10' AND path = '/'").n === 1
 );
 check(
-  "downloads come from both eras",
-  one("SELECT SUM(hits) AS n FROM downloads_daily").n === 2,
-  JSON.stringify(rows("SELECT day, file, hits FROM downloads_daily ORDER BY day"))
+  "downloads come from both eras, each with its own kind",
+  JSON.stringify(rows("SELECT file, kind, hits FROM downloads_daily ORDER BY day")) ===
+    JSON.stringify([
+      { file: "osmiumsound.it/fdroid/repo/app.apk", kind: "served", hits: 1 },
+      { file: "file.osmiumsound.it/osmium.iso", kind: "click", hits: 1 },
+    ]),
+  JSON.stringify(rows("SELECT day, file, kind, hits FROM downloads_daily ORDER BY day"))
+);
+
+// A click and the file it starts are the same name on the same day: they must
+// stay two rows, or every download would be counted twice.
+db.prepare(
+  `INSERT INTO downloads_daily (day, file, kind, hits) VALUES ('2026-09-10', 'file.osmiumsound.it/osmium.iso', 'served', 1)
+   ON CONFLICT(day, file, kind) DO UPDATE SET hits = downloads_daily.hits + 1`
+).run();
+check(
+  "a click and the file going out are two rows, not one",
+  JSON.stringify(rows("SELECT kind, hits FROM downloads_daily WHERE file = 'file.osmiumsound.it/osmium.iso' ORDER BY kind")) ===
+    JSON.stringify([{ kind: "click", hits: 1 }, { kind: "served", hits: 1 }]),
+  JSON.stringify(rows("SELECT kind, hits FROM downloads_daily WHERE file = 'file.osmiumsound.it/osmium.iso'"))
 );
 check(
   "breakdowns are counted per page view",

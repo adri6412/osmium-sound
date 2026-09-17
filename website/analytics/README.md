@@ -8,8 +8,8 @@ hash — and are gone when the request ends. What reaches D1:
 | table | key | what it holds |
 | --- | --- | --- |
 | `site_daily` | day, path | views, and unique visitors as a HyperLogLog sketch |
-| `downloads_daily` | day, file | hits, and unique downloaders as a sketch |
-| `site_breakdown` | day, dim, value | one count per page view; dim is `country`, `browser`, `os`, `source` or `channel` |
+| `downloads_daily` | day, file, kind | hits, and unique downloaders as a sketch. `kind` is `served` (the file went out) or `click` (a download button was pressed) |
+| `site_breakdown` | day, dim, value | one count per page view (`country`, `browser`, `os`, `source`, `channel`) or per download (`dl_country`, `dl_browser`, `dl_os`, `dl_network`) |
 | `site_drops` | day, reason, asn | how much was filtered out, by reason and network |
 | `site_salts` | day | the random salt of the day, deleted the day after (unchanged) |
 

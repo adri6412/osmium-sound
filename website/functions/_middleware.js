@@ -23,8 +23,15 @@
 // Optional environment variable EXCLUDE_IPS: comma-separated IPs that are
 // never counted (your own, so you don't count yourself).
 
-import { classify, isDatacenter, PROBE_PATHS } from "./_lib/traffic.js";
-import { DOWNLOADS_DAILY, dailyStatement, dropStatement } from "./_lib/counters.js";
+import { classify, isDatacenter, parseUA, PROBE_PATHS } from "./_lib/traffic.js";
+import {
+  DOWNLOADS_DAILY,
+  SERVED,
+  breakdownStatement,
+  dailyStatement,
+  dropStatement,
+  networkValue,
+} from "./_lib/counters.js";
 import { utcDay, visitorHash } from "./_lib/visitor.js";
 
 // Files served from the site itself and worth counting: the F-Droid repository
@@ -56,10 +63,22 @@ function downloadReason(asn, asOrg) {
   return isDatacenter(asn, asOrg) ? "datacenter" : null;
 }
 
-async function countDownload(db, { day, file, now, ip, userAgent }) {
+async function countDownload(db, { day, file, now, ip, userAgent, country, asn, asOrg }) {
   const hash = await visitorHash(db, now, ip, userAgent);
-  const statement = await dailyStatement(db, DOWNLOADS_DAILY, { day, key: file, hash });
-  await statement.run();
+  const daily = await dailyStatement(db, DOWNLOADS_DAILY, { day, key: [file, SERVED], hash });
+  const { browser, os } = parseUA(userAgent);
+  // dl_ dimensions are counted per download, and kept apart from the ones
+  // counted per page view so the two can never be added up by mistake.
+  const dims = {
+    dl_country: country,
+    dl_browser: browser,
+    dl_os: os,
+    dl_network: networkValue(asn, asOrg),
+  };
+  await db.batch([
+    daily,
+    ...Object.entries(dims).map(([dim, value]) => breakdownStatement(db, { day, dim, value })),
+  ]);
 }
 
 function logError(label) {
@@ -103,7 +122,11 @@ export async function onRequest(context) {
       // who run without JavaScript.
       if (isDownload) {
         const file = `${url.host}${url.pathname}`;
-        waitUntil(countDownload(env.DB, { day, file, now, ip, userAgent }).catch(logError("downloads_daily")));
+        const country = request.cf?.country || "XX";
+        waitUntil(
+          countDownload(env.DB, { day, file, now, ip, userAgent, country, asn, asOrg })
+            .catch(logError("downloads_daily"))
+        );
       }
     }
   } catch (err) {
