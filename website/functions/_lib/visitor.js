@@ -19,26 +19,6 @@ export function utcDay(now) {
   return new Date(now).toISOString().slice(0, 10);
 }
 
-const saltCache = new Map();
-
-export async function dailySalt(db, now) {
-  const day = utcDay(now);
-  const cached = saltCache.get(day);
-  if (cached) return cached;
-  const fresh = hex(crypto.getRandomValues(new Uint8Array(16)));
-  const yesterday = utcDay(now - 24 * 60 * 60 * 1000);
-  const [, row] = await db.batch([
-    db.prepare("INSERT OR IGNORE INTO site_salts (day, salt) VALUES (?, ?)").bind(day, fresh),
-    db.prepare("SELECT salt FROM site_salts WHERE day = ?").bind(day),
-    db.prepare("DELETE FROM site_salts WHERE day < ?").bind(yesterday),
-  ]);
-  const salt = row.results[0].salt;
-  // Yesterday's entry is dead weight, but the week's is not: drop only days.
-  for (const key of [...saltCache.keys()]) if (!key.startsWith("week-")) saltCache.delete(key);
-  saltCache.set(day, salt);
-  return salt;
-}
-
 // The Monday of the UTC week, as a salt key: "week-2026-09-14". It sorts like
 // a date, and no date string can collide with it.
 export function weekStart(now) {
@@ -49,15 +29,20 @@ export function weekStart(now) {
   return `week-${utcDay(now - back * 24 * 60 * 60 * 1000)}`;
 }
 
-// A salt that lasts a week, used only for counting appliances.
+const saltCache = new Map();
+
+// One salt, and it lasts a week.
 //
-// An appliance asks for the update manifest every fifteen minutes, so with a
-// salt that changes at midnight the same box is a new box every morning, and
-// one home connection that reconnects at night is two boxes on the same day.
-// A week-long salt answers the question actually being asked — how many boxes
-// are out there — instead of seven noisy versions of it. Site visitors keep
-// the daily salt: a person browsing and an appliance checking in are not the
-// same thing, and the stored sketch is unreadable either way.
+// It used to turn over at midnight, which made every count a count of
+// visitor-days: the same person tomorrow is a different code, so "how many
+// different people this month" could only ever be answered with the sum of
+// its days. A week-long salt answers it once, for a week.
+//
+// The cost is stated plainly rather than hidden: two requests from the same
+// address can be recognised as the same for seven days instead of one. What
+// is stored does not change — a sketch that cannot be read back, and nothing
+// else — and the salt is deleted the moment its week is over, which is what
+// makes everything made with it unlinkable from then on.
 export async function weeklySalt(db, now) {
   const key = weekStart(now);
   const cached = saltCache.get(key);
@@ -66,11 +51,12 @@ export async function weeklySalt(db, now) {
   const [, row] = await db.batch([
     db.prepare("INSERT OR IGNORE INTO site_salts (day, salt) VALUES (?, ?)").bind(key, fresh),
     db.prepare("SELECT salt FROM site_salts WHERE day = ?").bind(key),
-    // Last week's salt is deleted the moment this week starts. Nothing reads
-    // an expired one, and while it exists the hashes made with it could in
-    // principle be recomputed from a guessed address — so it does not outlive
-    // its week by a day.
-    db.prepare("DELETE FROM site_salts WHERE day LIKE 'week-%' AND day < ?").bind(key),
+    // Only this week's salt is ever needed, so nothing else is kept: last
+    // week's goes the moment this one starts, and so do the day-keyed rows
+    // left over from when the salt turned over at midnight. While a salt
+    // exists the hashes made with it could in principle be recomputed from a
+    // guessed address, which is the whole reason they are thrown away.
+    db.prepare("DELETE FROM site_salts WHERE day <> ?").bind(key),
   ]);
   const salt = row.results[0].salt;
   saltCache.set(key, salt);
@@ -84,9 +70,10 @@ async function hash32(salt, ip, userAgent) {
 
 // 32 bits of SHA-256(salt | ip | user-agent): all a HyperLogLog register needs.
 export async function visitorHash(db, now, ip, userAgent) {
-  return hash32(await dailySalt(db, now), ip, userAgent);
-}
-
-export async function applianceHash(db, now, ip, userAgent) {
   return hash32(await weeklySalt(db, now), ip, userAgent);
 }
+
+// Same hash, different name at the call site: an appliance checking in is not
+// a person browsing, and the code should not pretend they are the same thing
+// just because the arithmetic is.
+export const applianceHash = visitorHash;

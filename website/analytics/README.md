@@ -20,15 +20,18 @@ helpers are in [`functions/_lib/counters.js`](../functions/_lib/counters.js),
 the sketch in [`functions/_lib/hll.js`](../functions/_lib/hll.js), the daily
 hash in [`functions/_lib/visitor.js`](../functions/_lib/visitor.js).
 
-Days are **UTC**, because the visitor hash is salted per UTC day: a stored day
-that spanned two salts would count the same person twice inside it.
+Days are **UTC**, and there is **one salt, per UTC week** (`weeklySalt` in
+`_lib/visitor.js`, key `week-YYYY-MM-DD` = the Monday). It used to turn over at
+midnight, which made every count a count of visitor-days: the same person
+tomorrow was a different code. Now:
 
-Appliances are salted per **week** instead (`weeklySalt` in `_lib/visitor.js`).
-An appliance asks for the update manifest every fifteen minutes, so with a
-daily salt the same box would be a new box every morning. Merging the days of
-one week gives how many boxes; merging across weeks gives the sum of the
-weeks, not distinct boxes — which is why the dashboard answers a week at a
-time, with the per-day numbers beside it.
+- merging the days of **one week** gives distinct visitors, or distinct
+  appliances, in that week;
+- merging **across weeks** gives the sum of the weeks, not distinct anything —
+  so the dashboard answers a week at a time.
+
+Only the current week's salt is kept; every other row of `site_salts` is
+deleted on the first write of a new week.
 
 Reading the sketches needs the same `hll.js`: `merge()` the rows in the period,
 then `count()`. Unique visitors for a day are the union of that day's rows

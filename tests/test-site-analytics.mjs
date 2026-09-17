@@ -168,12 +168,13 @@ section("The weekly salt key");
     weekStart(Date.UTC(2026, 11, 28)) < weekStart(Date.UTC(2027, 0, 4)),
     `${weekStart(Date.UTC(2026, 11, 28))} < ${weekStart(Date.UTC(2027, 0, 4))}`
   );
-  // The daily cleanup runs DELETE ... WHERE day < '<a date>'. If a week key
-  // ever sorted below a date it would be swept away with the old days.
+  // One salt at a time now: the cleanup keeps the current week's key and
+  // deletes every other row, day-keyed leftovers included.
   check(
-    "the daily cleanup can never delete a week key",
-    weekStart(Date.UTC(2020, 0, 1)) > utcDay(Date.UTC(2999, 0, 1)),
-    `${weekStart(Date.UTC(2020, 0, 1))} > ${utcDay(Date.UTC(2999, 0, 1))}`
+    "a week key never looks like a day key",
+    weekStart(Date.UTC(2020, 0, 1)) !== utcDay(Date.UTC(2020, 0, 1)) &&
+      weekStart(Date.UTC(2020, 0, 1)).startsWith("week-"),
+    weekStart(Date.UTC(2020, 0, 1))
   );
 }
 
