@@ -31,6 +31,7 @@ import {
   breakdownStatement,
   dailyStatements,
   dropStatement,
+  liveStatements,
   networkValue,
 } from "./_lib/counters.js";
 import { applianceHash, utcDay, visitorHash } from "./_lib/visitor.js";
@@ -77,7 +78,11 @@ function downloadReason(asn, asOrg) {
 // think about.
 async function countCheck(db, { day, file, now, ip, userAgent }) {
   const hash = await applianceHash(db, now, ip, userAgent);
-  await db.batch(await dailyStatements(db, DOWNLOADS_DAILY, { day, key: [file, CHECK], hash }));
+  const [daily, live] = await Promise.all([
+    dailyStatements(db, DOWNLOADS_DAILY, { day, key: [file, CHECK], hash }),
+    liveStatements(db, { now, hash }),
+  ]);
+  await db.batch([...daily, ...live]);
 }
 
 async function countDownload(db, { day, file, now, ip, userAgent, country, asn, asOrg }) {
