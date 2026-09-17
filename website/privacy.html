@@ -140,7 +140,7 @@
   <ul>
     <li><strong>Your music stays home.</strong> Files, the library index, cover art and settings live on the player, on your network. We have no access to them.</li>
     <li><strong>Streaming services.</strong> If you connect a music service, that login is stored on the player and the traffic goes straight from the player to the service. What the service collects is described in its own policy.</li>
-    <li><strong>Update checks.</strong> To see whether a new version exists, the player asks GitHub and our download server (<strong>file.osmiumsound.it</strong>). Those servers see the request the way they see any download, and nothing about how you use the player is sent.</li>
+    <li><strong>Update checks.</strong> To see whether a new version exists, the player asks this website, and falls back to our download server (<strong>file.osmiumsound.it</strong>) and to GitHub if it cannot reach it. Nothing about how you use the player is sent. We do count those checks, to know roughly how many players are out there: the address and the name of the program become a short code, made with a secret that changes every week and is then thrown away, and the code goes into a counting summary and is gone. Nothing is written to your player, and nothing kept can be traced back to it.</li>
     <li><strong>Usage reports to the Lyrion project</strong> — the music server that runs inside the player — are switched off, and the setup wizard never turns them on unless you tick that box yourself.</li>
     <li><strong>Listening from outside the house</strong> happens only if you set it up, through the service you choose. We are not in the middle of that connection.</li>
     <li><strong>Support files.</strong> The player can save a file with logs and settings to help us with a problem. It is created only when you ask for it, and it reaches us only if you send it. You can open it and see what is inside before you do.</li>
@@ -155,7 +155,8 @@
     <li>how many times each page was opened, and by how many different people;</li>
     <li>how many times each file was downloaded — from here and from our download server — and by how many different people;</li>
     <li>how many of those openings came from each country, browser, operating system and site you arrived from;</li>
-    <li>how much traffic was left out of the counts, for what reason, and from which network.</li>
+    <li>how much traffic was left out of the counts, for what reason, and from which network;</li>
+    <li>how many different Osmium Sound players asked whether there is a new version, week by week.</li>
   </ul>
 
   <h3>How “how many different people” is counted without keeping anyone</h3>
@@ -234,7 +235,7 @@
   <ul>
     <li><strong>La tua musica resta a casa tua.</strong> I file, l'indice della libreria, le copertine e le impostazioni stanno sul lettore, sulla tua rete. Noi non vi abbiamo accesso.</li>
     <li><strong>Servizi di streaming.</strong> Se colleghi un servizio musicale, quell'accesso viene salvato sul lettore e il traffico va dal lettore al servizio, senza passare da noi. Quello che raccoglie il servizio è descritto nella sua informativa.</li>
-    <li><strong>Controllo aggiornamenti.</strong> Per vedere se esiste una versione nuova, il lettore chiede a GitHub e al nostro server dei download (<strong>file.osmiumsound.it</strong>). Quei server vedono la richiesta come vedono qualsiasi altro download, e non viene inviato nulla su come usi il lettore.</li>
+    <li><strong>Controllo aggiornamenti.</strong> Per vedere se esiste una versione nuova, il lettore chiede a questo sito, e ripiega sul nostro server dei download (<strong>file.osmiumsound.it</strong>) e su GitHub se non riesce a raggiungerlo. Non viene inviato nulla su come usi il lettore. Quei controlli li contiamo, per sapere all'incirca quanti lettori ci sono in giro: l'indirizzo e il nome del programma diventano un codice breve, fatto con un segreto che cambia ogni settimana e poi viene buttato, e il codice entra in un riassunto che conta e sparisce. Sul tuo lettore non viene scritto niente, e da quello che resta non si risale a lui.</li>
     <li><strong>Le statistiche d'uso del progetto Lyrion</strong> — il server musicale che gira dentro il lettore — sono spente, e la procedura di primo avvio non le accende mai se non sei tu a spuntare quella casella.</li>
     <li><strong>Ascoltare fuori casa</strong> succede solo se lo configuri tu, attraverso il servizio che scegli. Noi non siamo in mezzo a quel collegamento.</li>
     <li><strong>File di assistenza.</strong> Il lettore può salvare un file con registri e impostazioni per aiutarci con un problema. Viene creato solo se lo chiedi tu e arriva a noi solo se ce lo mandi. Puoi aprirlo e vedere cosa contiene prima di farlo.</li>
@@ -249,7 +250,8 @@
     <li>quante volte è stata aperta ogni pagina, e da quante persone diverse;</li>
     <li>quante volte è stato scaricato ogni file — da qui e dal nostro server dei download — e da quante persone diverse;</li>
     <li>quante di quelle aperture sono arrivate da ogni Paese, browser, sistema operativo e sito di provenienza;</li>
-    <li>quanto traffico è stato lasciato fuori dai conteggi, per quale motivo e da quale rete.</li>
+    <li>quanto traffico è stato lasciato fuori dai conteggi, per quale motivo e da quale rete;</li>
+    <li>quanti lettori Osmium Sound diversi hanno chiesto se c'è una versione nuova, settimana per settimana.</li>
   </ul>
 
   <h3>Come si contano “quante persone diverse” senza tenere nessuno</h3>

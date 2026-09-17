@@ -25,6 +25,7 @@
 
 import { classify, isDatacenter, parseUA, PROBE_PATHS } from "./_lib/traffic.js";
 import {
+  CHECK,
   DOWNLOADS_DAILY,
   SERVED,
   breakdownStatement,
@@ -32,12 +33,19 @@ import {
   dropStatement,
   networkValue,
 } from "./_lib/counters.js";
-import { utcDay, visitorHash } from "./_lib/visitor.js";
+import { applianceHash, utcDay, visitorHash } from "./_lib/visitor.js";
 
 // Files served from the site itself and worth counting: the F-Droid repository
 // index and the APKs. Everything else on file.osmiumsound.it is counted by the
 // worker that serves it.
 const DOWNLOAD_EXTENSIONS = /\.(apk|jar)$/i;
+
+// The update manifest an appliance reads (api_server.py: OTA_MANIFEST_BASE).
+// Every powered-on box asks for it every fifteen minutes, so counting how many
+// different ones asked in a week is how many boxes are out there — without the
+// box having to say who it is, or remember anything.
+const OTA_MANIFEST = /^\/ota\/latest-[a-z0-9]+\.json$/i;
+const APPLIANCE_UA = /^hifi-player-ota\b/i;
 
 // Static files that are neither a page nor a download
 const ASSET_EXTENSIONS = /\.(png|jpe?g|gif|svg|webp|avif|ico|css|js|mjs|map|json|woff2?|ttf|eot|otf|mp4|webm|pdf|xml|txt|zip)$/i;
@@ -62,6 +70,14 @@ function isExcluded(ip, env) {
 // out never gets added to the pages left out.
 function downloadReason(asn, asOrg) {
   return isDatacenter(asn, asOrg) ? "dl_datacenter" : null;
+}
+
+// One appliance checking in. No breakdowns: the question is how many, not
+// which kind — and the fewer things counted per box, the less there is to
+// think about.
+async function countCheck(db, { day, file, now, ip, userAgent }) {
+  const hash = await applianceHash(db, now, ip, userAgent);
+  await db.batch(await dailyStatements(db, DOWNLOADS_DAILY, { day, key: [file, CHECK], hash }));
 }
 
 async function countDownload(db, { day, file, now, ip, userAgent, country, asn, asOrg }) {
@@ -98,14 +114,30 @@ export async function onRequest(context) {
       const ip = getIP(request);
       if (isExcluded(ip, env)) return response;
 
-      const isDownload = DOWNLOAD_EXTENSIONS.test(url.pathname);
-      if (!isDownload && ASSET_EXTENSIONS.test(url.pathname)) return response;
-
       const userAgent = request.headers.get("user-agent") || "";
       const asn = request.cf?.asn ?? null;
       const asOrg = request.cf?.asOrganization || null;
       const now = Date.now();
       const day = utcDay(now);
+
+      // An appliance checking for updates. Anything else asking for the same
+      // file is not a box, and is left alone rather than counted as one.
+      if (OTA_MANIFEST.test(url.pathname)) {
+        if (!APPLIANCE_UA.test(userAgent)) return response;
+        const file = `${url.host}${url.pathname}`;
+        if (isDatacenter(asn, asOrg)) {
+          waitUntil(
+            dropStatement(env.DB, { day, reason: "check_datacenter", asn, asOrg })
+              .run().catch(logError("site_drops"))
+          );
+          return response;
+        }
+        waitUntil(countCheck(env.DB, { day, file, now, ip, userAgent }).catch(logError("appliance check")));
+        return response;
+      }
+
+      const isDownload = DOWNLOAD_EXTENSIONS.test(url.pathname);
+      if (!isDownload && ASSET_EXTENSIONS.test(url.pathname)) return response;
 
       const reason = isDownload
         ? downloadReason(asn, asOrg)

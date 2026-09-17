@@ -21,7 +21,8 @@ import { DatabaseSync } from "node:sqlite";
 
 import { add, count, empty, merge, serialize, deserialize } from "../website/functions/_lib/hll.js";
 import { classify, parseUA } from "../website/functions/_lib/traffic.js";
-import { DOWNLOADS_DAILY, SITE_DAILY } from "../website/functions/_lib/counters.js";
+import { CHECK, CLICK, DOWNLOADS_DAILY, SERVED, SITE_DAILY } from "../website/functions/_lib/counters.js";
+import { utcDay, weekStart } from "../website/functions/_lib/visitor.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 let failures = 0;
@@ -146,6 +147,35 @@ for (const [input, expected, label] of CASES) {
 
 check("parseUA still answers in Italian", parseUA("curl/8.5.0").browser === "Programma" && parseUA("").browser === "Altro");
 check("the appliance keeps its own name", parseUA("osmiumsound/2.5.25").browser === "Apparecchio Osmium");
+
+// ------------------------------------------------ 2b. the week-long salt key
+
+section("The weekly salt key");
+
+{
+  // 2026-09-17 is a Thursday; its week began on Monday the 14th.
+  const thursday = Date.UTC(2026, 8, 17, 9, 0, 0);
+  check("a Thursday belongs to its Monday", weekStart(thursday) === "week-2026-09-14", weekStart(thursday));
+  check("the Monday itself is its own start", weekStart(Date.UTC(2026, 8, 14, 0, 0, 1)) === "week-2026-09-14");
+  check(
+    "Sunday belongs to the week that has just ended, not the next one",
+    weekStart(Date.UTC(2026, 8, 20, 23, 59, 0)) === "week-2026-09-14",
+    weekStart(Date.UTC(2026, 8, 20, 23, 59, 0))
+  );
+  check("the next Monday starts a new week", weekStart(Date.UTC(2026, 8, 21, 0, 0, 1)) === "week-2026-09-21");
+  check(
+    "week keys sort in time order, across a year boundary too",
+    weekStart(Date.UTC(2026, 11, 28)) < weekStart(Date.UTC(2027, 0, 4)),
+    `${weekStart(Date.UTC(2026, 11, 28))} < ${weekStart(Date.UTC(2027, 0, 4))}`
+  );
+  // The daily cleanup runs DELETE ... WHERE day < '<a date>'. If a week key
+  // ever sorted below a date it would be swept away with the old days.
+  check(
+    "the daily cleanup can never delete a week key",
+    weekStart(Date.UTC(2020, 0, 1)) > utcDay(Date.UTC(2999, 0, 1)),
+    `${weekStart(Date.UTC(2020, 0, 1))} > ${utcDay(Date.UTC(2999, 0, 1))}`
+  );
+}
 
 // --------------------------------------- 3. no personal column in any INSERT
 
@@ -304,6 +334,21 @@ check(
     JSON.stringify([{ kind: "click", hits: 1 }, { kind: "served", hits: 1 }]),
   JSON.stringify(rows("SELECT kind, hits FROM downloads_daily WHERE file = 'file.osmiumsound.it/osmium.iso'"))
 );
+
+// A third kind on the same file: an appliance checking for updates. It must
+// not land in either of the download numbers. At this point the table holds
+// one served row from the F-Droid backfill plus the ISO one just inserted.
+db.prepare(
+  `INSERT INTO downloads_daily (day, file, kind, hits) VALUES ('2026-09-10', 'osmiumsound.it/ota/latest-prod.json', 'check', 96)`
+).run();
+check(
+  "an update check is neither a download nor a click",
+  one("SELECT COALESCE(SUM(hits),0) AS n FROM downloads_daily WHERE kind = 'served'").n === 2 &&
+    one("SELECT COALESCE(SUM(hits),0) AS n FROM downloads_daily WHERE kind = 'click'").n === 1 &&
+    one("SELECT COALESCE(SUM(hits),0) AS n FROM downloads_daily WHERE kind = 'check'").n === 96,
+  JSON.stringify(rows("SELECT kind, SUM(hits) AS hits FROM downloads_daily GROUP BY kind ORDER BY kind"))
+);
+check("the three kinds are the constants the code uses", [SERVED, CLICK, CHECK].join(",") === "served,click,check");
 check(
   "breakdowns are counted per page view",
   one("SELECT count FROM site_breakdown WHERE day = '2026-09-10' AND dim = 'country' AND value = 'IT'").count === 2

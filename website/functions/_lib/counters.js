@@ -35,6 +35,10 @@ export const DOWNLOADS_DAILY = {
 
 export const SERVED = "served";
 export const CLICK = "click";
+// An appliance asking whether there is a new version. It is a fetch of a file
+// like any other, so it lives in the same table under its own kind; its sketch
+// is salted by the week, not by the day (see _lib/visitor.js).
+export const CHECK = "check";
 
 // The row of a day whose key is "*" holds that day's sketch merged across
 // every key, so "how many different people came that day" is one 4 KB read
