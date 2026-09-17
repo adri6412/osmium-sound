@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Osmium Sound — Beta Privacy Notice</title>
+  <title>Osmium Sound — Beta Privacy Notice (closed)</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" type="image/svg+xml" href="../favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -90,22 +90,22 @@
 <main>
 
 <div id="lang-en">
-  <h1>Osmium Sound — Private Beta Privacy Notice</h1>
-  <p class="updated">Last updated: 17 August 2026 · Applies only to devices running a private beta / dev-channel build</p>
+  <h1>Osmium Sound — Private Beta Privacy Notice (closed)</h1>
+  <p class="updated">Last updated: 17 September 2026 · A record of a data collection that has ended</p>
 
   <div class="callout">
-    <strong>Scope of this notice:</strong> this page describes data collection that runs <strong>only</strong> on appliances installed from this <code>/beta</code> page or otherwise switched to the Dev/Alpha OTA channel, for the duration of the private beta test. Stable production releases (the main download on <a href="../index.html">osmiumsound.it</a>) do not currently run this feature. Once the private beta ends, this data-collection feature and all data already collected through it will be removed/deleted. For what this website itself keeps about visitors and downloads, see the <a href="/privacy">site privacy policy</a>.
+    <strong>This is over.</strong> The private beta data collection described below <strong>no longer happens</strong>. The collector was switched off in the software on 22 August 2026 and is removed from each appliance by an ordinary update; the server that received the data, <code>telemetry.osmiumsound.it</code>, has been shut down, its address no longer exists, and <strong>the data collected through it has been deleted</strong>. This page stays so that anyone who ran a beta build can still read what was collected while it ran, and what became of it. Stable production releases never ran any of this. For what this website itself keeps about visitors and downloads, see the <a href="/privacy">site privacy policy</a>.
   </div>
 
   <h2>1. Data controller</h2>
   <p><strong>Adriano Frongillo</strong>, sole developer of Osmium Sound.<br>
   Contact: <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a></p>
 
-  <h2>2. What is collected</h2>
-  <p>A background agent (<code>hifi-beta-agent</code>) runs on the appliance for the duration of the private beta and sends the following to our server (<code>telemetry.osmiumsound.it</code>) over HTTPS:</p>
+  <h2>2. What was collected</h2>
+  <p>While the private beta ran, a background agent (<code>hifi-beta-agent</code>) on the appliance sent the following to <code>telemetry.osmiumsound.it</code> over HTTPS. It applied only to appliances installed from the <code>/beta</code> page or otherwise switched to the Dev/Alpha OTA channel.</p>
 
   <h3>a) Periodic device snapshot</h3>
-  <p>Sent automatically (by default every 10 minutes; we can remotely change this interval for the whole beta fleet):</p>
+  <p>Sent automatically (by default every 10 minutes; the interval could be changed remotely for the whole beta fleet):</p>
   <table>
     <tr><th>Field</th><th>Example</th></tr>
     <tr><td>Hostname / device label</td><td>a name given to the device</td></tr>
@@ -117,63 +117,54 @@
   </table>
 
   <h3>b) Diagnostic network captures (HAR)</h3>
-  <p>Only during short capture windows that <strong>we schedule remotely</strong> (this is not continuous, and there is currently no on-device switch to trigger or block it yourself), the appliance records the network requests made by <strong>its own on-screen interface</strong> — not system-wide network traffic, and not requests from any other device on your network. Authentication and session information (streaming-service logins, cookies, API tokens, and any header matching a token/secret/session pattern) is <strong>automatically stripped before the capture file is even written</strong>, so it never leaves the device. <strong>Response bodies are also never captured</strong> — no page content, images or audio. What remains is request/response URLs, HTTP method, status codes, and timing; URLs can still include things like track/album identifiers or search terms typed into the interface. Access to these captures is restricted to the data controller.</p>
+  <p>Only during short capture windows scheduled remotely — not continuous, and with no on-device switch to trigger or block it — the appliance recorded the network requests made by <strong>its own on-screen interface</strong>: not system-wide network traffic, and not requests from any other device on the network. Authentication and session information (streaming-service logins, cookies, API tokens, and any header matching a token/secret/session pattern) was <strong>stripped before the capture file was written</strong>, so it never left the device. <strong>Response bodies were never captured</strong> — no page content, images or audio. What remained was request/response URLs, HTTP method, status codes and timing; URLs could still include things like track/album identifiers or search terms typed into the interface. Access was restricted to the data controller.</p>
 
   <h3>c) Performance captures</h3>
-  <p>During the same capture windows, CPU and memory usage per interface screen/tab is logged, to help diagnose slowdowns.</p>
+  <p>During the same capture windows, CPU and memory usage per interface screen/tab was logged, to help diagnose slowdowns.</p>
 
   <h3>d) Device identifier</h3>
-  <p>A technical identifier derived from the appliance's machine ID, plus an access token used only to authenticate uploads from that specific device. Neither is tied to your name unless you chose to put your name in the device's hostname/label.</p>
+  <p>A technical identifier derived from the appliance's machine ID, plus an access token used only to authenticate uploads from that specific device. Neither was tied to a name, unless a name had been put in the device's hostname/label.</p>
 
-  <h2>3. Why we collect it</h2>
-  <p>Solely to find and fix bugs and performance problems, and improve the software during the private beta. It is <strong>never</strong> used for advertising or profiling, and is not sold or shared with third parties.</p>
+  <h2>3. Why it was collected</h2>
+  <p>Solely to find and fix bugs and performance problems during the private beta. It was <strong>never</strong> used for advertising or profiling, and was not sold or shared with third parties.</p>
 
   <h2>4. Legal basis</h2>
   <p>Consent (Art. 6(1)(a) GDPR), given by choosing to install and run a beta/dev-channel build after being informed by the notice on the download page and this document.</p>
 
-  <h2>5. Who can access it</h2>
-  <p>Only the data controller, through a password-protected dashboard. <code>telemetry.osmiumsound.it</code> runs on the data controller's own personal infrastructure (a self-hosted homelab server) — no third-party processor is involved in hosting the telemetry itself. Cloudflare Pages / GitHub host this website and the software downloads, and do not receive appliance telemetry.</p>
+  <h2>5. Who could access it</h2>
+  <p>Only the data controller, through a password-protected dashboard. <code>telemetry.osmiumsound.it</code> ran on the data controller's own personal infrastructure — a self-hosted server — so no third-party processor was involved in hosting the telemetry. Cloudflare Pages and GitHub host this website and the software downloads, and never received appliance telemetry.</p>
 
-  <h2>6. Retention</h2>
-  <p>Captures are deleted from your device automatically right after a successful upload — nothing accumulates on the appliance itself. On the server, data is kept only for the duration of the private beta. <strong>When the beta ends, this feature is switched off and the data collected through it is deleted.</strong></p>
-
-  <div class="callout">
-    <strong>No in-app opt-out yet.</strong> During the beta there is no Settings toggle to disable this data collection on a device that is already running it, and switching to a different OTA channel does not remove the agent already installed. The only way to guarantee no data is shared is to not install a beta/dev-channel build in the first place — or, if you already have, to wipe the device and not run Osmium Sound again for the rest of the private beta. The first production release after the private beta ends will ship an update that removes the data collector entirely.
-  </div>
+  <h2>6. What happened to it</h2>
+  <p>Captures were deleted from the device automatically right after a successful upload, so nothing accumulated on the appliance itself. On the server side, <strong>the collected data has been deleted and the server has been shut down</strong>: its address no longer resolves, and there is nothing left to log in to.</p>
+  <p>On the device side, the collector was removed from the software on 22 August 2026, and an update removes the agent, its service and its stored state from any appliance that installs it. An appliance that has never taken that update has nothing left to talk to: the address it used no longer exists.</p>
 
   <h2>7. Your rights</h2>
-  <p>Under GDPR you can, at any time, contact us at <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a> to:</p>
-  <ul>
-    <li>ask whether we hold data about your device, and get a copy of it;</li>
-    <li>withdraw your consent (equivalent to switching the device off the Dev/Alpha channel or uninstalling the beta);</li>
-    <li>receive it in a portable format.</li>
-  </ul>
-  <p>To identify your device for one of these requests, tell us its hostname/label or approximate registration date.</p>
+  <p>Under the GDPR you can write to <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a> to ask what we hold about your device, get a copy, have it corrected or deleted, and object to how it is used. For this collection the honest answer is now that there is nothing left to give you or to delete, because it is gone. If you want to check for yourself, ask: you will get that answer in writing.</p>
 
   <h2>8. Security</h2>
-  <p>All uploads are made over HTTPS. The dashboard used to view this data is protected by a password known only to the data controller. No third-party advertising or analytics SDKs are involved in this data collection.</p>
+  <p>All uploads were made over HTTPS. The dashboard was protected by a password known only to the data controller. No third-party advertising or analytics SDK was ever involved in this collection.</p>
 
   <h2>9. Changes</h2>
-  <p>This notice may be updated as the beta evolves; check the date at the top. Material changes will also be reflected on the <a href="index.html">beta download page</a>.</p>
+  <p>This page is kept as a record. If anything stated here turns out to be wrong, it will be corrected here and the date at the top will change with it.</p>
 </div>
 
 <div id="lang-it">
-  <h1>Osmium Sound — Informativa Privacy Beta Privata</h1>
-  <p class="updated">Ultimo aggiornamento: 17 agosto 2026 · Si applica solo ai dispositivi con una build della beta privata / canale dev</p>
+  <h1>Osmium Sound — Informativa Privacy Beta Privata (conclusa)</h1>
+  <p class="updated">Ultimo aggiornamento: 17 settembre 2026 · Il resoconto di una raccolta dati che è finita</p>
 
   <div class="callout">
-    <strong>Ambito di questa informativa:</strong> questa pagina descrive la raccolta dati che gira <strong>solo</strong> sui dispositivi installati da questa pagina <code>/beta</code> o comunque passati al canale OTA Dev/Alpha, per la durata della beta privata. Le versioni stabili di produzione (il download principale su <a href="../index.html">osmiumsound.it</a>) al momento non eseguono questa funzione. Al termine della beta privata, questa funzione di raccolta dati e tutti i dati già raccolti tramite essa verranno rimossi/eliminati. Per quello che questo sito conserva sui visitatori e sui download, vedi l'<a href="/privacy">informativa privacy del sito</a>.
+    <strong>Questa raccolta è finita.</strong> Quello che è descritto qui sotto <strong>non avviene più</strong>. Il collettore è stato tolto dal software il 22 agosto 2026 e viene rimosso da ogni apparecchio con un normale aggiornamento; il server che riceveva i dati, <code>telemetry.osmiumsound.it</code>, è stato spento, il suo indirizzo non esiste più, e <strong>i dati raccolti tramite esso sono stati eliminati</strong>. Questa pagina resta perché chi ha usato una build beta possa comunque leggere che cosa veniva raccolto mentre era attiva, e che fine ha fatto. Le versioni stabili di produzione non hanno mai eseguito nulla di tutto questo. Per quello che questo sito conserva sui visitatori e sui download, vedi l'<a href="/privacy">informativa privacy del sito</a>.
   </div>
 
   <h2>1. Titolare del trattamento</h2>
   <p><strong>Adriano Frongillo</strong>, unico sviluppatore di Osmium Sound.<br>
   Contatto: <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a></p>
 
-  <h2>2. Cosa viene raccolto</h2>
-  <p>Un agente in background (<code>hifi-beta-agent</code>) gira sul dispositivo per la durata della beta privata e invia quanto segue al nostro server (<code>telemetry.osmiumsound.it</code>) via HTTPS:</p>
+  <h2>2. Cosa veniva raccolto</h2>
+  <p>Mentre la beta privata era attiva, un agente in background (<code>hifi-beta-agent</code>) sull'apparecchio inviava quanto segue a <code>telemetry.osmiumsound.it</code> via HTTPS. Riguardava solo gli apparecchi installati dalla pagina <code>/beta</code> o comunque passati al canale OTA Dev/Alpha.</p>
 
   <h3>a) Snapshot periodico del dispositivo</h3>
-  <p>Inviato automaticamente (di default ogni 10 minuti; possiamo cambiare questo intervallo da remoto per l'intera flotta beta):</p>
+  <p>Inviato automaticamente (di default ogni 10 minuti; l'intervallo si poteva cambiare da remoto per l'intera flotta beta):</p>
   <table>
     <tr><th>Campo</th><th>Esempio</th></tr>
     <tr><td>Hostname / etichetta dispositivo</td><td>un nome dato al dispositivo</td></tr>
@@ -185,44 +176,35 @@
   </table>
 
   <h3>b) Catture diagnostiche di rete (HAR)</h3>
-  <p>Solo durante brevi finestre di cattura che <strong>attiviamo da remoto</strong> (non è continuo, e al momento non esiste un interruttore sul dispositivo per attivarlo o bloccarlo autonomamente), il dispositivo registra le richieste di rete effettuate <strong>dalla sua interfaccia a schermo</strong> — non il traffico dell'intero dispositivo, e non le richieste di altri dispositivi sulla tua rete. Le informazioni di autenticazione e sessione (login dei servizi di streaming, cookie, token API e qualsiasi header che corrisponda a un pattern token/secret/session) vengono <strong>rimosse automaticamente prima ancora che il file di cattura venga scritto</strong>, quindi non lasciano mai il dispositivo. <strong>I corpi delle risposte non vengono mai catturati</strong> — nessun contenuto di pagina, immagine o audio. Quello che resta sono URL di richiesta/risposta, metodo HTTP, codici di stato e tempistiche; gli URL possono comunque includere elementi come identificativi di brani/album o termini di ricerca digitati nell'interfaccia. L'accesso a queste catture è riservato al titolare del trattamento.</p>
+  <p>Solo durante brevi finestre di cattura attivate da remoto — non in continuo, e senza un interruttore sul dispositivo per attivarlo o bloccarlo — l'apparecchio registrava le richieste di rete fatte <strong>dalla sua interfaccia a schermo</strong>: non il traffico dell'intero dispositivo, e non le richieste di altri dispositivi sulla rete. Le informazioni di autenticazione e sessione (login dei servizi di streaming, cookie, token API e qualsiasi header che corrispondesse a un pattern token/secret/session) venivano <strong>rimosse prima che il file di cattura venisse scritto</strong>, quindi non lasciavano mai il dispositivo. <strong>I corpi delle risposte non venivano mai catturati</strong> — nessun contenuto di pagina, immagine o audio. Restavano URL di richiesta/risposta, metodo HTTP, codici di stato e tempistiche; gli URL potevano comunque includere identificativi di brani/album o termini di ricerca digitati nell'interfaccia. L'accesso era riservato al titolare del trattamento.</p>
 
   <h3>c) Catture di performance</h3>
-  <p>Durante le stesse finestre di cattura, viene registrato l'utilizzo di CPU e memoria per ogni schermata/tab dell'interfaccia, per aiutarci a diagnosticare rallentamenti.</p>
+  <p>Durante le stesse finestre di cattura veniva registrato l'utilizzo di CPU e memoria per ogni schermata/tab dell'interfaccia, per aiutare a diagnosticare i rallentamenti.</p>
 
   <h3>d) Identificativo del dispositivo</h3>
-  <p>Un identificativo tecnico derivato dal machine ID del dispositivo, più un token di accesso usato solo per autenticare i caricamenti da quel dispositivo specifico. Nessuno dei due è collegato al tuo nome, a meno che tu non abbia scelto di inserire il tuo nome nell'hostname/etichetta del dispositivo.</p>
+  <p>Un identificativo tecnico ricavato dal machine ID dell'apparecchio, più un token di accesso usato solo per autenticare i caricamenti da quel dispositivo. Nessuno dei due era collegato a un nome, a meno che un nome non fosse stato messo nell'hostname/etichetta del dispositivo.</p>
 
-  <h2>3. Perché lo raccogliamo</h2>
-  <p>Esclusivamente per trovare e correggere bug e problemi di performance, e migliorare il software durante la beta privata. Non viene <strong>mai</strong> usato per pubblicità o profilazione, né venduto o condiviso con terze parti.</p>
+  <h2>3. Perché veniva raccolto</h2>
+  <p>Esclusivamente per trovare e correggere bug e problemi di performance durante la beta privata. Non è <strong>mai</strong> stato usato per pubblicità o profilazione, né venduto o ceduto a terze parti.</p>
 
   <h2>4. Base giuridica</h2>
-  <p>Consenso (art. 6(1)(a) GDPR), dato scegliendo di installare ed eseguire una build beta/canale dev dopo essere stati informati tramite l'avviso nella pagina di download e questo documento.</p>
+  <p>Consenso (art. 6(1)(a) GDPR), dato scegliendo di installare ed eseguire una build beta/canale dev dopo essere stati informati dall'avviso nella pagina di download e da questo documento.</p>
 
-  <h2>5. Chi può accedervi</h2>
-  <p>Solo il titolare del trattamento, tramite una dashboard protetta da password. <code>telemetry.osmiumsound.it</code> gira su infrastruttura personale del titolare del trattamento (un server homelab autogestito) — nessun fornitore terzo è coinvolto nell'hosting della telemetria stessa. Cloudflare Pages / GitHub ospitano questo sito e i download del software, e non ricevono la telemetria del dispositivo.</p>
+  <h2>5. Chi poteva accedervi</h2>
+  <p>Solo il titolare del trattamento, tramite una dashboard protetta da password. <code>telemetry.osmiumsound.it</code> girava su infrastruttura personale del titolare — un server autogestito — quindi nessun fornitore terzo era coinvolto nell'hosting della telemetria. Cloudflare Pages e GitHub ospitano questo sito e i download del software, e non hanno mai ricevuto la telemetria degli apparecchi.</p>
 
-  <h2>6. Conservazione</h2>
-  <p>Le catture vengono eliminate automaticamente dal dispositivo subito dopo un caricamento riuscito — nulla si accumula sul dispositivo stesso. Sul server, i dati vengono conservati solo per la durata della beta privata. <strong>Al termine della beta, questa funzione viene disattivata e i dati raccolti tramite essa vengono eliminati.</strong></p>
-
-  <div class="callout">
-    <strong>Nessuna disattivazione in-app per ora.</strong> Durante la beta non esiste un interruttore nelle Impostazioni per disattivare questa raccolta dati su un dispositivo che la sta già eseguendo, e cambiare canale OTA non rimuove l'agente già installato. L'unico modo per avere la certezza di non condividere alcun dato è non installare affatto una build beta/canale dev — oppure, se l'hai già fatto, formattare il dispositivo e non usare più Osmium Sound per il resto della beta privata. La prima release di produzione successiva alla fine della beta privata includerà un aggiornamento che rimuove del tutto il collettore dei dati.
-  </div>
+  <h2>6. Che fine hanno fatto</h2>
+  <p>Le catture venivano eliminate automaticamente dal dispositivo subito dopo un caricamento riuscito, quindi sull'apparecchio non si accumulava nulla. Lato server, <strong>i dati raccolti sono stati eliminati e il server è stato spento</strong>: il suo indirizzo non risolve più, e non c'è più niente a cui accedere.</p>
+  <p>Lato dispositivo, il collettore è stato tolto dal software il 22 agosto 2026, e un aggiornamento rimuove l'agente, il suo servizio e lo stato salvato da ogni apparecchio che lo installa. Un apparecchio che non abbia mai preso quell'aggiornamento non ha più nessuno con cui parlare: l'indirizzo che usava non esiste più.</p>
 
   <h2>7. I tuoi diritti</h2>
-  <p>Ai sensi del GDPR puoi, in qualsiasi momento, scriverci a <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a> per:</p>
-  <ul>
-    <li>chiedere se conserviamo dati relativi al tuo dispositivo, e ottenerne una copia;</li>
-    <li>revocare il consenso (equivalente a riportare il dispositivo fuori dal canale Dev/Alpha o disinstallare la beta);</li>
-    <li>riceverli in un formato portabile.</li>
-  </ul>
-  <p>Per identificare il tuo dispositivo ai fini di una di queste richieste, indicaci il suo hostname/etichetta o la data approssimativa di registrazione.</p>
+  <p>Ai sensi del GDPR puoi scrivere a <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a> per chiedere quali dati abbiamo sul tuo dispositivo, ottenerne una copia, farli correggere o cancellare e opporti al loro uso. Per questa raccolta la risposta onesta oggi è che non c'è più niente da darti né da cancellare, perché non c'è più. Se vuoi verificarlo, chiedilo: quella risposta te la diamo per iscritto.</p>
 
   <h2>8. Sicurezza</h2>
-  <p>Tutti i caricamenti avvengono via HTTPS. La dashboard usata per consultare questi dati è protetta da una password nota solo al titolare del trattamento. Nessun SDK pubblicitario o di analytics di terze parti è coinvolto in questa raccolta dati.</p>
+  <p>Tutti i caricamenti avvenivano via HTTPS. La dashboard era protetta da una password nota solo al titolare del trattamento. Nessun SDK pubblicitario o di analytics di terze parti è mai stato coinvolto in questa raccolta.</p>
 
   <h2>9. Modifiche</h2>
-  <p>Questa informativa può essere aggiornata con l'evolversi della beta; controlla la data in alto. Le modifiche rilevanti saranno riportate anche nella <a href="index.html">pagina di download della beta</a>.</p>
+  <p>Questa pagina resta come resoconto. Se qualcosa di quanto è scritto qui risultasse sbagliato, verrà corretto qui e la data in alto cambierà con esso.</p>
 </div>
 
 </main>
