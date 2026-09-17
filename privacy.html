@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Osmium Sound — Privacy policy</title>
-  <meta name="description" content="How Osmium Sound handles your data: the Android app collects nothing, your music and settings stay on your own player, and this website uses no cookies.">
+  <meta name="description" content="How Osmium Sound handles your data: the Android app collects nothing, your music and settings stay on your own player, and this website keeps no record of your visit.">
   <link rel="canonical" href="https://osmiumsound.it/privacy">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Osmium Sound">
   <meta property="og:url" content="https://osmiumsound.it/privacy">
   <meta property="og:title" content="Osmium Sound — Privacy policy">
-  <meta property="og:description" content="How Osmium Sound handles your data: the Android app collects nothing, your music and settings stay on your own player, and this website uses no cookies.">
+  <meta property="og:description" content="How Osmium Sound handles your data: the Android app collects nothing, your music and settings stay on your own player, and this website keeps no record of your visit.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -103,10 +103,10 @@
 
 <div id="lang-en">
   <h1>Privacy policy</h1>
-  <p class="updated">Last updated: 16 September 2026 · Covers the Osmium Sound Companion app for Android, the Osmium Sound player and this website</p>
+  <p class="updated">Last updated: 17 September 2026 · Covers the Osmium Sound Companion app for Android, the Osmium Sound player and this website</p>
 
   <div class="summary">
-    <p><strong>The short version.</strong> Osmium Sound has no user accounts and no advertising. The Android app collects nothing about you: it talks to the player you own, on your own network. Your music, your library and your settings stay on the player and on your phone. This website sets no cookies: it counts visits with a code that cannot be traced back to you, next to the request log that any web server keeps.</p>
+    <p><strong>The short version.</strong> Osmium Sound has no user accounts and no advertising. The Android app collects nothing about you: it talks to the player you own, on your own network. Your music, your library and your settings stay on the player and on your phone. This website sets no cookies and keeps no record of your visit: your address is read to tell people from scanners and then dropped, and what stays behind is a count per day.</p>
   </div>
 
   <h2>1. Who is responsible</h2>
@@ -147,18 +147,34 @@
   </ul>
 
   <h2>4. This website</h2>
-  <p>Two records are kept when you open a page here, for the same reason: to know whether the project interests anyone and which pages are worth improving. That is a legitimate interest under Art. 6(1)(f) GDPR. Neither uses cookies — nothing is stored in your browser — and neither is used for advertising or profiling, or shared with anyone.</p>
 
-  <h3>The server log</h3>
-  <p>As any web server does, ours notes each request: the address your connection comes from (your IP address), the browser description, the page asked for, the country Cloudflare works out from the address, and the network provider. One line per page, per address, per half hour. We read it to tell people apart from the scanners that crawl any public site, and to look into problems. It is kept while it is useful for that and deleted when it is not.</p>
+  <h3>What passes through, and what stays</h3>
+  <p>Opening a page here sends your IP address and your browser's description to the server, as every request on the web does. They are used for one thing while the request lasts — telling a person from the scanners that go through any public site — and then they go with it. <strong>Neither one is written down.</strong> There is no visit log on this site: nothing kept here says that you were on it.</p>
+  <p>What stays is counts, day by day:</p>
+  <ul>
+    <li>how many times each page was opened, and by how many different people;</li>
+    <li>how many times each file was downloaded — from here and from our download server — and by how many different people;</li>
+    <li>how many of those openings came from each country, browser, operating system and site you arrived from;</li>
+    <li>how much traffic was left out of the counts, for what reason, and from which network.</li>
+  </ul>
 
-  <h3>The visit counter</h3>
-  <p><strong>The counter itself never stores your address.</strong> Each visitor becomes a one-way code made from the address, the browser description and a secret that changes every day and is then thrown away — so today's visit cannot be tied to yesterday's, or to you.</p>
-  <p>What a visit record holds: the pages seen and how long they were on screen, the site or search engine you arrived from, the browser, the operating system, whether it is a phone or a computer, the screen width, the browser language, the country, region and city that Cloudflare works out from the address, the network provider, and clicks on downloads and on links to other sites.</p>
-  <p>To stay out of the counter, use a browser with JavaScript turned off, or open the browser console on this site and run <strong>localStorage.setItem('osmium_ignore', '1')</strong>. The server log above is written by the server itself, so that one cannot be switched off from your side.</p>
+  <h3>How “how many different people” is counted without keeping anyone</h3>
+  <p>Your address and your browser's description, mixed with a secret that changes every day, become a short code. The code goes into that day's summary and is then gone. The summary does not hold the codes: it holds just enough trace of them to say how many different ones went in. It cannot be read backwards, it cannot be matched to you, and it cannot be lined up against another day's. The daily secret is deleted the day after, so not even we can tell that yesterday's visitor came back today.</p>
+  <p>Networks are noted by name and number — the number that identifies an internet provider or a hosting company, never a person. It is the only way to notice that a whole provider has been left out of the counts by mistake.</p>
+
+  <h3>Why, and on what basis</h3>
+  <p>To know whether the project interests anyone and which pages are worth improving. That is a legitimate interest under Art. 6(1)(f) GDPR: your address and your browser's description are handled only while the request lasts and are never stored, and what stays behind counts pages, not people. No cookies — nothing is stored in your browser. No advertising, no profiling, nothing shared or sold.</p>
+
+  <h3>Who can see it, and for how long</h3>
+  <p>Only the data controller, through a password-protected dashboard. The counts sit in <strong>Cloudflare D1</strong>, Cloudflare's database service: for this, Cloudflare is a processor under Art. 28 GDPR and acts on our instructions. Cloudflare also delivers this site, and as the operator of that network it keeps logs of its own, addresses included, for its own purposes and its own periods — that part is its doing, not ours, and it is described in its <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">privacy policy</a>.</p>
+  <p>The daily counts stay while the site exists: there is nothing in them left to expire. The daily secret lasts one day. Nothing else is kept.</p>
+
+  <h3>Staying out of the count</h3>
+  <p>Use a browser with JavaScript turned off, or open the browser console on this site and run <strong>localStorage.setItem('osmium_ignore', '1')</strong>.</p>
+
   <p>Other parties involved in this site:</p>
   <ul>
-    <li>The pages are hosted by <strong>Cloudflare Pages</strong> and the downloads come from <strong>GitHub</strong> and from file.osmiumsound.it; like any web server, these see the request and your address.</li>
+    <li>The pages are served by <strong>Cloudflare Pages</strong> and the downloads come from <strong>GitHub</strong> and from file.osmiumsound.it; like any web server, these see the request and your address. Our download server counts the file and forgets the address, exactly as the pages do; what GitHub and Cloudflare keep is theirs.</li>
     <li>The page font is loaded from <strong>Google Fonts</strong>, which sees the request your browser makes to it.</li>
     <li>The review form on the home page is by <strong>Tally</strong> and loads only when you open it. Links to GitHub, Ko-fi and Facebook lead to those sites, each with its own policy.</li>
   </ul>
@@ -171,7 +187,7 @@
 
   <h2>7. Your rights</h2>
   <p>Under the GDPR you can ask what data we hold about you, get a copy, have it corrected or deleted, and object to how it is used. Write to <a href="mailto:info@osmiumsound.it">info@osmiumsound.it</a>.</p>
-  <p>Two honest notes about what this means here. For the app and the player, the answer is almost always that we hold nothing, because nothing ever reaches us. For the website, the counter's records cannot be traced back to a person even by us, so there is no way to pick out yours; the server log does hold IP addresses, so if you tell us the address you were using and roughly when, we can find those lines and delete them.</p>
+  <p>One honest note about what this means here. For the app, the player and the website, the answer is almost always that we hold nothing about you: the app and the player never send us anything, and the site and the download server keep only counts, in which there is nothing of yours to find, correct or delete — not because we will not look, but because there is no line with your name, your address or your device on it. If that answer ever stops being true, this page changes with it.</p>
   <p>If you think your data has been mishandled you can also complain to the Italian data protection authority, the <a href="https://www.garanteprivacy.it/" target="_blank" rel="noopener">Garante per la protezione dei dati personali</a>.</p>
 
   <h2>8. Changes to this page</h2>
@@ -180,10 +196,10 @@
 
 <div id="lang-it">
   <h1>Informativa sulla privacy</h1>
-  <p class="updated">Ultimo aggiornamento: 16 settembre 2026 · Riguarda l'app Osmium Sound Companion per Android, il lettore Osmium Sound e questo sito</p>
+  <p class="updated">Ultimo aggiornamento: 17 settembre 2026 · Riguarda l'app Osmium Sound Companion per Android, il lettore Osmium Sound e questo sito</p>
 
   <div class="summary">
-    <p><strong>In breve.</strong> Osmium Sound non ha account utente e non ha pubblicità. L'app Android non raccoglie nulla su di te: parla con il lettore che possiedi, sulla tua rete. La tua musica, la tua libreria e le tue impostazioni restano sul lettore e sul telefono. Questo sito non usa cookie: conta le visite con un codice che non è riconducibile a te, accanto al registro delle richieste che tiene qualsiasi server web.</p>
+    <p><strong>In breve.</strong> Osmium Sound non ha account utente e non ha pubblicità. L'app Android non raccoglie nulla su di te: parla con il lettore che possiedi, sulla tua rete. La tua musica, la tua libreria e le tue impostazioni restano sul lettore e sul telefono. Questo sito non usa cookie e non conserva traccia della tua visita: il tuo indirizzo viene letto per distinguere le persone dagli scanner e poi lasciato cadere, e quello che resta è un conteggio al giorno.</p>
   </div>
 
   <h2>1. Chi è il responsabile</h2>
@@ -224,18 +240,34 @@
   </ul>
 
   <h2>4. Questo sito</h2>
-  <p>Quando apri una pagina qui restano due registrazioni, per lo stesso motivo: capire se il progetto interessa e quali pagine vale la pena migliorare. È un legittimo interesse ai sensi dell'art. 6(1)(f) GDPR. Nessuna delle due usa cookie — nel tuo browser non viene salvato nulla — e nessuna viene usata per pubblicità o profilazione, né condivisa con altri.</p>
 
-  <h3>Il registro del server</h3>
-  <p>Come fa qualsiasi server web, il nostro annota ogni richiesta: l'indirizzo da cui arriva il collegamento (il tuo indirizzo IP), la descrizione del browser, la pagina richiesta, il Paese che Cloudflare ricava dall'indirizzo e l'operatore di rete. Una riga per pagina, per indirizzo, ogni mezz'ora. Lo leggiamo per distinguere le persone dagli scanner che passano su qualsiasi sito pubblico e per capire i problemi. Si conserva finché serve a questo e si cancella quando non serve più.</p>
+  <h3>Cosa passa e cosa resta</h3>
+  <p>Aprire una pagina qui manda al server il tuo indirizzo IP e la descrizione del tuo browser, come fa qualsiasi richiesta sul web. Servono a una cosa sola, per il tempo della richiesta — distinguere una persona dagli scanner che passano su qualsiasi sito pubblico — e poi se ne vanno con lei. <strong>Né l'uno né l'altra vengono scritti da qualche parte.</strong> Su questo sito non c'è un registro delle visite: niente di quello che resta qui dice che ci sei stato tu.</p>
+  <p>Quello che resta sono conteggi, giorno per giorno:</p>
+  <ul>
+    <li>quante volte è stata aperta ogni pagina, e da quante persone diverse;</li>
+    <li>quante volte è stato scaricato ogni file — da qui e dal nostro server dei download — e da quante persone diverse;</li>
+    <li>quante di quelle aperture sono arrivate da ogni Paese, browser, sistema operativo e sito di provenienza;</li>
+    <li>quanto traffico è stato lasciato fuori dai conteggi, per quale motivo e da quale rete.</li>
+  </ul>
 
-  <h3>Il contatore delle visite</h3>
-  <p><strong>Il contatore, di suo, non conserva mai il tuo indirizzo.</strong> Ogni visitatore diventa un codice a senso unico ricavato dall'indirizzo, dalla descrizione del browser e da un segreto che cambia ogni giorno e poi viene buttato — così la visita di oggi non si può collegare a quella di ieri, né a te.</p>
-  <p>Cosa contiene il record di una visita: le pagine viste e quanto sono rimaste a schermo, il sito o il motore di ricerca da cui sei arrivato, il browser, il sistema operativo, se è un telefono o un computer, la larghezza dello schermo, la lingua del browser, il Paese, la regione e la città che Cloudflare ricava dall'indirizzo, l'operatore di rete, e i clic sui download e sui link verso altri siti.</p>
-  <p>Per restare fuori dal contatore, usa un browser con JavaScript disattivato, oppure apri la console del browser su questo sito ed esegui <strong>localStorage.setItem('osmium_ignore', '1')</strong>. Il registro del server qui sopra lo scrive il server stesso, quindi quello non si può disattivare dal tuo lato.</p>
+  <h3>Come si contano “quante persone diverse” senza tenere nessuno</h3>
+  <p>Il tuo indirizzo e la descrizione del tuo browser, mescolati con un segreto che cambia ogni giorno, diventano un codice breve. Il codice entra nel riassunto di quella giornata e poi sparisce. Il riassunto non contiene i codici: ne contiene giusto la traccia che serve per dire quanti ne sono entrati di diversi. Non si può leggere a ritroso, non si può ricondurre a te e non si può confrontare con quello di un altro giorno. Il segreto del giorno viene cancellato il giorno dopo, quindi nemmeno noi possiamo sapere che il visitatore di ieri è tornato oggi.</p>
+  <p>Le reti vengono annotate per nome e numero — il numero che identifica un operatore internet o una società di hosting, mai una persona. È l'unico modo per accorgersi di aver lasciato fuori dai conteggi un intero operatore per sbaglio.</p>
+
+  <h3>Perché, e su quale base</h3>
+  <p>Per capire se il progetto interessa e quali pagine vale la pena migliorare. È un legittimo interesse ai sensi dell'art. 6(1)(f) GDPR: il tuo indirizzo e la descrizione del browser sono trattati solo per il tempo della richiesta e non vengono mai conservati, e quello che resta conta pagine, non persone. Niente cookie — nel tuo browser non viene salvato nulla. Niente pubblicità, niente profilazione, niente ceduto o venduto.</p>
+
+  <h3>Chi può vederli, e per quanto</h3>
+  <p>Solo il titolare del trattamento, tramite una dashboard protetta da password. I conteggi stanno su <strong>Cloudflare D1</strong>, il servizio di database di Cloudflare: per questo trattamento Cloudflare è responsabile del trattamento ai sensi dell'art. 28 GDPR e agisce su nostra istruzione. Cloudflare consegna anche le pagine di questo sito e, come gestore di quella rete, tiene registri propri, indirizzi compresi, per finalità sue e con tempi suoi — quella parte la fa lei, non noi, ed è descritta nella sua <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">informativa privacy</a>.</p>
+  <p>I conteggi giornalieri restano finché esiste il sito: dentro non c'è più niente che debba scadere. Il segreto del giorno dura un giorno. Nient'altro viene conservato.</p>
+
+  <h3>Restare fuori dal conteggio</h3>
+  <p>Usa un browser con JavaScript disattivato, oppure apri la console del browser su questo sito ed esegui <strong>localStorage.setItem('osmium_ignore', '1')</strong>.</p>
+
   <p>Altri soggetti coinvolti in questo sito:</p>
   <ul>
-    <li>Le pagine sono ospitate da <strong>Cloudflare Pages</strong> e i download arrivano da <strong>GitHub</strong> e da file.osmiumsound.it; come qualsiasi server web, vedono la richiesta e il tuo indirizzo.</li>
+    <li>Le pagine sono consegnate da <strong>Cloudflare Pages</strong> e i download arrivano da <strong>GitHub</strong> e da file.osmiumsound.it; come qualsiasi server web, vedono la richiesta e il tuo indirizzo. Il nostro server dei download conta il file e dimentica l'indirizzo, esattamente come fanno le pagine; quello che tengono GitHub e Cloudflare è loro.</li>
     <li>Il carattere tipografico della pagina viene caricato da <strong>Google Fonts</strong>, che vede la richiesta fatta dal tuo browser.</li>
     <li>Il modulo delle recensioni in home page è di <strong>Tally</strong> e si carica solo quando lo apri. I link a GitHub, Ko-fi e Facebook portano a quei siti, ognuno con la propria informativa.</li>
   </ul>
@@ -248,7 +280,7 @@
 
   <h2>7. I tuoi diritti</h2>
   <p>In base al GDPR puoi chiedere quali dati abbiamo su di te, ottenerne una copia, farli correggere o cancellare e opporti al loro uso. Scrivi a <a href="mailto:info@osmiumsound.it">info@osmiumsound.it</a>.</p>
-  <p>Due precisazioni oneste su cosa significa qui. Per l'app e per il lettore la risposta è quasi sempre che non abbiamo nulla, perché nulla ci arriva mai. Per il sito, i record del contatore non sono riconducibili a una persona nemmeno da noi, quindi non c'è modo di individuare i tuoi; il registro del server contiene invece gli indirizzi IP, quindi se ci dici l'indirizzo che stavi usando e più o meno quando, quelle righe le troviamo e le cancelliamo.</p>
+  <p>Una precisazione onesta su cosa significa qui. Per l'app, per il lettore e per il sito la risposta è quasi sempre che non abbiamo nulla su di te: l'app e il lettore non ci mandano niente, e il sito e il server dei download conservano solo conteggi, dentro i quali non c'è niente di tuo da trovare, correggere o cancellare — non perché non vogliamo guardare, ma perché non esiste una riga con il tuo nome, il tuo indirizzo o il tuo apparecchio. Se questa risposta smettesse di essere vera, cambierebbe questa pagina con lei.</p>
   <p>Se ritieni che i tuoi dati siano stati trattati male puoi anche rivolgerti al <a href="https://www.garanteprivacy.it/" target="_blank" rel="noopener">Garante per la protezione dei dati personali</a>.</p>
 
   <h2>8. Modifiche a questa pagina</h2>
