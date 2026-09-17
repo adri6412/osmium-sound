@@ -63,11 +63,14 @@ export async function weeklySalt(db, now) {
   const cached = saltCache.get(key);
   if (cached) return cached;
   const fresh = hex(crypto.getRandomValues(new Uint8Array(16)));
-  const previous = weekStart(now - 14 * 24 * 60 * 60 * 1000);
   const [, row] = await db.batch([
     db.prepare("INSERT OR IGNORE INTO site_salts (day, salt) VALUES (?, ?)").bind(key, fresh),
     db.prepare("SELECT salt FROM site_salts WHERE day = ?").bind(key),
-    db.prepare("DELETE FROM site_salts WHERE day LIKE 'week-%' AND day < ?").bind(previous),
+    // Last week's salt is deleted the moment this week starts. Nothing reads
+    // an expired one, and while it exists the hashes made with it could in
+    // principle be recomputed from a guessed address — so it does not outlive
+    // its week by a day.
+    db.prepare("DELETE FROM site_salts WHERE day LIKE 'week-%' AND day < ?").bind(key),
   ]);
   const salt = row.results[0].salt;
   saltCache.set(key, salt);
