@@ -117,9 +117,11 @@ Item {
     // position, the time and the repeat / random modes.
     readonly property bool display: loader.item !== null && loader.item.trackIndex !== undefined
     Binding { when: loader.item !== null && loader.item.elapsed !== undefined; target: loader.item; property: "elapsed"; value: root.live ? Player.elapsed : 0 }
-    // the track's length in seconds, 0 unknown (a stream): the cassette winds
-    // just as much tape as the track needs
+    // the track's length in seconds, 0 unknown (a stream): a longer track,
+    // more tape on the cassette
     Binding { when: loader.item !== null && loader.item.duration !== undefined; target: loader.item; property: "duration"; value: root.live ? Math.max(0, Player.duration) : 0 }
+    // which track: the cassette finishes winding one before starting the next
+    Binding { when: loader.item !== null && loader.item.trackId !== undefined; target: loader.item; property: "trackId"; value: root.live ? Player.trackId : "" }
     // the cassette deck's level meters: this device's own audio (Vu is kept
     // running for them by NowPlaying while that scene is on screen)
     Binding { when: loader.item !== null && loader.item.levelL !== undefined; target: loader.item; property: "levelL"; value: root.live ? Vu.left : 0 }

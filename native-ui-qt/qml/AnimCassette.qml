@@ -47,6 +47,7 @@ Item {
     // meters this device's audio.
     property real elapsed: 0
     property real duration: 0            // seconds, 0 unknown (a stream)
+    property string trackId: ""          // changes with the track
     property real levelL: 0
     property real levelR: 0
 
@@ -95,6 +96,11 @@ Item {
     property real packP: 0.5                 // tape on the right reel, 0 .. 1, as drawn
     property real packTarget: 0.5            // ... as the progress says
     property real tapeF: 1                   // the tape on the cassette, 0 .. 1 of a full pack, as drawn
+    // A new track while winding: the packs first finish the old one (all the
+    // tape across: 1 winding forward, 0 back), then move to the new track's
+    // position (wrapNext). -1: no such detour.
+    property real wrapTo: -1
+    property real wrapNext: 0
     property int gapDur: 0
     property int doorDur: 0
     property int holdDur: 0
@@ -107,15 +113,13 @@ Item {
     property real labelA: 1
 
     // tape packs: the tape moves from the left reel to the right one; the
-    // area of the two packs together stays the same.
-    // The cassette holds as much tape as the track lasts at the real 4.76 cm/s,
-    // a full pack being a C90 side (45 minutes; longer tracks fill it): a
-    // short song winds a thin ring round each hub, a long suite nearly fills
-    // a reel. Then the reels, turning at the real tape speed, carry across
-    // exactly the tape the packs show going over. Unknown (a stream): a
-    // full cassette.
-    readonly property real fullPackSec: 45 * 60
-    readonly property real tapeTarget: duration > 0 ? Math.min(1, duration / fullPackSec) : 1
+    // area of the two packs together stays the same. A track is the whole
+    // tape: at its start all of it is on the left reel, at its end all of it
+    // on the right one (fast wind included, see wrapTo).
+    // How much tape there is grows with the track: a short song is a thin
+    // pack (40 % of a full one), from half an hour on the cassette is full.
+    // Unknown (a stream): a full cassette.
+    readonly property real tapeTarget: duration > 0 ? Math.min(1, 0.4 + 0.6 * duration / 1800) : 1
     readonly property real rL: Math.sqrt(hubR * hubR + (1 - packP) * tapeF * (packR * packR - hubR * hubR))
     readonly property real rR: Math.sqrt(hubR * hubR + packP * tapeF * (packR * packR - hubR * hubR))
     // constant tape speed, 47.6 mm/s: a reel turns faster the smaller its
@@ -186,13 +190,19 @@ Item {
         spinF = (u >= 1 && spinTo === 0) ? 0 : f
         // the packs follow the progress smoothly (a new track: a quick glide)
         var g = packTarget - packP
-        if (g !== 0) packP = Math.abs(g) < 0.0005 ? packTarget : packP + g * (1 - Math.exp(-dt / 0.28))
+        if (g !== 0) packP = Math.abs(g) < 0.004 ? packTarget : packP + g * (1 - Math.exp(-dt / 0.28))
+        if (wrapTo >= 0) {
+            if (packP !== wrapTo) return                    // the old track's tape still going across
+            wrapTo = -1
+            packTarget = wrapNext
+        }
         var h = tapeTarget - tapeF
         if (h !== 0) tapeF = Math.abs(h) < 0.0005 ? tapeTarget : tapeF + h * (1 - Math.exp(-dt / 0.28))
     }
     // the reels stopped with the packs not where they should be (a seek while
     // paused, a pause right after a new track): one bounded glide
     function settlePacks() {
+        if (wrapTo >= 0) { wrapTo = -1; packTarget = wrapNext }  // standing still: no detour
         var d = Math.max(Math.abs(packTarget - packP), Math.abs(tapeTarget - tapeF))
         if (!live || !active || phase !== 2 || d < 0.002) {
             packGlide.stop()
@@ -227,6 +237,7 @@ Item {
         packTarget = progress > 0 ? Math.min(1, progress) : 0.5     // unknown (a radio): half and half
         packP = packTarget
         tapeF = tapeTarget
+        wrapTo = -1
     }
     // hidden: back to an empty, closed deck, so the next appearance replays
     // the insertion
@@ -352,8 +363,19 @@ Item {
         if (phase !== 2 || !active) { packGlide.stop(); tapeF = tapeTarget }
         else if (!spinTimer.running) settlePacks()
     }
+    // Winding into another track: first all the old track's tape across.
+    // (Its progress may come before or after the new id: wrapNext takes the
+    // latest one either way.)
+    onTrackIdChanged: {
+        if (!live || phase !== 2 || !active || windDir === 0 || !spinTimer.running) return
+        wrapTo = windDir > 0 ? 1 : 0
+        wrapNext = progress > 0 ? Math.min(1, progress) : packTarget
+        if (windDir > 0 ? wrapNext > 0.5 : wrapNext < 0.5) wrapNext = 1 - wrapTo   // still the old track's
+        packTarget = wrapTo
+    }
     onProgressChanged: {
         if (!live || phase === 3 || !(progress > 0)) return
+        if (wrapTo >= 0) { wrapNext = Math.min(1, progress); return }
         packTarget = Math.min(1, progress)
         if (phase !== 2 || !active) { packGlide.stop(); packP = packTarget }
         else if (!spinTimer.running) settlePacks()

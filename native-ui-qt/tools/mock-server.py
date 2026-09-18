@@ -199,6 +199,7 @@ def rpc(player, params):
         if sub == "index":
             v = params[2]
             STATE["index"] = (STATE["index"] + int(v)) % len(QUEUE) if v[0] in "+-" else int(v)
+            STATE["time"] = 0.0                    # another track starts from the beginning
         elif sub == "shuffle": STATE["shuffle"] = int(params[2])
         elif sub == "repeat": STATE["repeat"] = int(params[2])
         elif sub == "delete": QUEUE.pop(int(params[2]))
