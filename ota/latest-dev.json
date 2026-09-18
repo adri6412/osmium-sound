@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.25-dev.2",
-  "name": "v2.5.25-dev.2",
-  "body": "## What's new in v2.5.25-dev.2\n\n- kiosk: album and artist pages with credits, band members and biographies\n- metadata: album and artist information from MusicBrainz and Wikipedia; CD rips tagged with MusicBrainz ids\n- vu-store: Aluminium v2 (new needles) and Copper v2 (new outer frame)\n",
+  "tag_name": "v2.5.25-dev.3",
+  "name": "v2.5.25-dev.3",
+  "body": "## What's new in v2.5.25-dev.3\n\n- cd player: the drawer comes out in perspective, joined to the player\n- cd player: the inside of the player shows behind the open drawer\n- cd player: a drawer with depth, no level knob, no badge\n- cd player: the drawer comes out with the whole disc, the case fills the scene\n- cd player: a late-80s front loader with a fluorescent display\n- animations: an internet radio shows its station and the song playing\n- ota: read the bundle size from Content-Range when HEAD has none\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.25-dev.2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.2/hifi-qtui-v2.5.25-dev.2.tar.gz",
-      "size": 22087904
+      "name": "hifi-qtui-v2.5.25-dev.3.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.3/hifi-qtui-v2.5.25-dev.3.tar.gz",
+      "size": 23034948
     },
     {
-      "name": "hifi-qtui-v2.5.25-dev.2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.2/hifi-qtui-v2.5.25-dev.2.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.25-dev.3.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.3/hifi-qtui-v2.5.25-dev.3.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-system-v2.5.25-dev.2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.2/hifi-system-v2.5.25-dev.2.tar.gz",
-      "size": 590630
+      "name": "hifi-system-v2.5.25-dev.3.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.3/hifi-system-v2.5.25-dev.3.tar.gz",
+      "size": 755024
     },
     {
-      "name": "hifi-system-v2.5.25-dev.2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.2/hifi-system-v2.5.25-dev.2.tar.gz.sha256",
+      "name": "hifi-system-v2.5.25-dev.3.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.3/hifi-system-v2.5.25-dev.3.tar.gz.sha256",
       "size": 99
     },
     {
-      "name": "hifi-os-v2.5.25-dev.2.tar.gz",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.2/hifi-os-v2.5.25-dev.2.tar.gz",
-      "size": 1403917
+      "name": "hifi-os-v2.5.25-dev.3.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.3/hifi-os-v2.5.25-dev.3.tar.gz",
+      "size": 1403914
     },
     {
-      "name": "hifi-os-v2.5.25-dev.2.tar.gz.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.2/hifi-os-v2.5.25-dev.2.tar.gz.sha256",
+      "name": "hifi-os-v2.5.25-dev.3.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.3/hifi-os-v2.5.25-dev.3.tar.gz.sha256",
       "size": 95
     },
     {
-      "name": "hifi-os-v2.5.25-dev.2.tar.gz.sha256.sig",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.2/hifi-os-v2.5.25-dev.2.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.25-dev.3.tar.gz.sha256.sig",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.3/hifi-os-v2.5.25-dev.3.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.25-dev.2.raucb",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.2/hifi-image-v2.5.25-dev.2.raucb",
-      "size": 1019099797
+      "name": "hifi-image-v2.5.25-dev.3.raucb",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.3/hifi-image-v2.5.25-dev.3.raucb",
+      "size": 1020344981
     },
     {
-      "name": "hifi-image-v2.5.25-dev.2.raucb.sha256",
-      "browser_download_url": "https://github.com/adri6412/osmium-sound/releases/download/v2.5.25-dev.2/hifi-image-v2.5.25-dev.2.raucb.sha256",
+      "name": "hifi-image-v2.5.25-dev.3.raucb.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.3/hifi-image-v2.5.25-dev.3.raucb.sha256",
       "size": 97
     }
   ]
