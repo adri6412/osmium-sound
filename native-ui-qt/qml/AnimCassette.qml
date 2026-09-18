@@ -8,8 +8,8 @@
 // below. The album title and artist on the label are live text.
 //
 // The deck's controls work: the transport keys, eject (the cassette comes
-// out and stays out until PLAY or playback from elsewhere), the left knob
-// (volume) and the power key. The scene only reports them through
+// out and stays out until PLAY or playback from elsewhere), the volume
+// fader and the power key. The scene only reports them through
 // action(name, value); the host (NpAnimation.qml) talks to the player.
 //
 // 🚨 The kiosk runs on a weak iGPU, 24/7: nothing here loops. The reels (and
@@ -36,10 +36,10 @@ Item {
     property string subtitle: ""         // artist
     // the deck's controls (optional: without them the display still works)
     property int volume: -1              // 0..100, -1 unknown
-    property bool volumeFixed: false     // the volume is not ours to change (knob disabled)
+    property bool volumeFixed: false     // the volume is not ours to change (fader disabled)
     property bool power: true            // the player is on
 
-    // A key or the knob was used: "prev", "play", "pause", "stop", "next",
+    // A key or the fader was used: "prev", "play", "pause", "stop", "next",
     // "eject" (value undefined), "volume" (value {level, final}), "power"
     // (value: the wanted state). Never emitted by a still preview.
     signal action(string name, var value)
@@ -83,9 +83,6 @@ Item {
     readonly property real hingeY: doorY + doorH
     readonly property real openAngle: 34               // degrees the door tilts forward
     readonly property real slide: 62                   // points the cassette travels into the holder
-    readonly property real knobX: 378                 // the volume knob
-    readonly property real knobY: 146
-    readonly property real knobTravel: 150            // points of drag from 0 to 100
     readonly property real barX0: 368
     readonly property real barX1: 488
     readonly property real barY: 49
@@ -388,10 +385,6 @@ Item {
         { name: "eject", action: "eject", x0: 276, x1: 322, h0: 273, h1: 330 },
         { name: "power", action: "power", x0: 456, x1: 502, h0: 436, h1: 520 }
     ]
-    readonly property real knobAngle: {
-        var v = knobArea.level >= 0 ? knobArea.level : volume
-        return v < 0 ? -30 : -135 + 2.7 * Math.max(0, Math.min(100, v))
-    }
 
     // ── what the display, the PLAY key and the LED show ────────────────────
     readonly property bool loaded: !live || (phase === 2 && hasTrack && power)
@@ -725,54 +718,13 @@ Item {
             }
         }
 
-        // The volume knob: its gold dot follows the volume (-135 degrees at 0,
-        // +135 at 100); drag up or to the right to turn it up, or use a wheel.
-        Pic {
-            x: root.knobX - 16.5; y: root.knobY - 16.5; width: 33; height: 33
-            file: "knob-dot.png"
-            rotation: root.knobAngle
-            visible: !root.vintage
-            opacity: root.live && root.volumeFixed ? 0.35 : 1
-        }
-        Rectangle {
-            x: root.knobX - 23; y: root.knobY - 23; width: 46; height: 46; radius: 23
-            antialiasing: true
-            color: "#000000"; opacity: 0.4
-            visible: !root.vintage && root.live && root.volumeFixed
-        }
-        MouseArea {
-            id: knobArea
-            x: root.knobX - 42; y: root.knobY - 44; width: 84; height: 90
-            enabled: !root.vintage && root.live && !root.volumeFixed && root.volume >= 0
-            property int level: -1               // being dragged to, -1 not dragging
-            property real fromLevel: 0
-            property real fromX: 0
-            property real fromY: 0
-            onPressed: (m) => { fromLevel = root.volume; fromX = m.x; fromY = m.y; level = -1 }
-            onPositionChanged: (m) => {
-                var v = Math.round(Math.max(0, Math.min(100, fromLevel + ((m.x - fromX) - (m.y - fromY)) * 100 / root.knobTravel)))
-                if (v === (level >= 0 ? level : root.volume)) return
-                level = v
-                root.action("volume", { level: v, final: false })
-            }
-            onReleased: {
-                if (level >= 0) root.action("volume", { level: level, final: true })
-                level = -1
-            }
-            onCanceled: level = -1
-            onWheel: (w) => {
-                var v = Math.max(0, Math.min(100, root.volume + (w.angleDelta.y > 0 ? 2 : -2)))
-                if (v !== root.volume) root.action("volume", { level: v, final: true })
-            }
-        }
-        // The 90s panel: a horizontal volume fader instead of the knobs
-        // (cassette.py FADER: 0 at x 352, 100 at x 488, slot at y 146). Drag
-        // the cap, or touch the slot to send it there; a wheel works too.
+        // The volume fader (cassette.py FADER: 0 at x 352, 100 at x 488, slot
+        // at y 146). Drag the cap, or touch the slot to send it there; a wheel
+        // works too.
         readonly property real faderX0: 352
         readonly property real faderX1: 488
         readonly property real faderLevel: faderArea.level >= 0 ? faderArea.level : Math.max(0, root.volume)
         Pic {
-            visible: root.vintage
             x: stage.faderX0 + (stage.faderX1 - stage.faderX0) * (!root.live ? 0.7 : stage.faderLevel / 100) - 10
             y: 146 - 14; width: 20; height: 28
             file: "fader.png"
@@ -781,7 +733,7 @@ Item {
         MouseArea {
             id: faderArea
             x: stage.faderX0 - 12; y: 146 - 16; width: stage.faderX1 - stage.faderX0 + 24; height: 32
-            enabled: root.vintage && root.live && !root.volumeFixed && root.volume >= 0
+            enabled: root.live && !root.volumeFixed && root.volume >= 0
             property int level: -1               // being dragged to, -1 not dragging
             function at(mx) { return Math.round(Math.max(0, Math.min(100, (mx - 12) * 100 / (stage.faderX1 - stage.faderX0)))) }
             function send(v, fin) {

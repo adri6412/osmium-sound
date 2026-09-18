@@ -3,8 +3,8 @@
 
 The scene is the front of a cassette deck: a dark brushed front panel with the
 cassette bay on the left (a bottom-hinged door with a smoked window), a row of
-transport keys under it, a display, two knobs, a headphone jack and the power
-key on the right. Through the window the cassette: a smoked shell, a graphite
+transport keys under it, a display, a volume fader, a headphone jack and the
+power key on the right. Through the window the cassette: a smoked shell, a graphite
 label (the album title and artist are drawn live by the QML), the tape packs
 and the white toothed hubs behind a clear window, the tape running along the
 bottom between the guide rollers.
@@ -27,15 +27,16 @@ design of AnimCassette.qml; the geometry constants below are mirrored there):
   deck.png          the whole deck without the door: drop shadow, brushed
                     front panel, the bay behind the door (back wall lit by a
                     lamp under the top lip, the two reel spindles), the six
-                    transport keys, display window, knobs, jack, power key
+                    transport keys, display window, the volume fader's slot,
+                    jack, power key
   door.png          the door: brushed frame, cassette holder lip and clips,
                     smoked glass with its reflection (tilts open in the QML)
   door-edge.png     the top face of the door, seen only while it is tilted
   key-play.png      the PLAY key held down while playing, its symbol lit
   key-<k>-down.png  each key pressed (rew, play, ff, stop, pause, eject,
                     power): shown while a finger is on it (over deck.png)
-  knob-dot.png      the volume knob's gold indicator, pointing up (turned
-                    by the QML to follow the volume)
+  fader.png         the volume fader's cap (moved by the QML to follow the
+                    volume)
   disp-play.png     the lit play symbol of the display
   disp-glass.png    reflection of the display glass (over the progress bar)
   led.png           the lit LED next to the power key
@@ -83,13 +84,9 @@ DISPLAY = (336, 17, 502, 81)
 DISPLAY_R = 6
 DISP_PLAY_C = (353, 49)
 BAR = (368, 49, 488)              # x0, y, x1 of the progress track
-KNOBS = ((378, 146, None), (460, 146, -52))   # centre, indicator angle (None: the volume
-                                              # knob, its dot is knob-dot.png)
-VOLUME_SWEEP = 135                            # the volume knob turns +-135 degrees from straight up
-# the full-screen 90s panel (vintage) has no knobs: a horizontal volume fader
+# the volume: a horizontal fader (the 90s panel, vintage, numbers its ticks)
 FADER = (352.0, 488.0, 146.0)                 # x at 0, x at 100, y of the slot
 FADER_CAP = (12.0, 20.0)                      # the cap, centred on its position
-KNOB_R = 23
 JACK_C = (350, 230)
 LED_C = (442, 230)
 POWER = (456, 220, 502, 240)
@@ -439,13 +436,6 @@ def build_deck(out, vintage=False):
     plate = alb * (0.28 + 0.72 * lambert(nx, ny, nz)) + 0.50 * blinn(nx, ny, nz, 60) + 0.05 * blinn(nx, ny, nz, 6)
     plate = gray3(plate, (0.985, 0.995, 1.02))
 
-    knobs = () if vintage else KNOBS
-    # shadows of the knobs on the panel (they stand ~9 points proud)
-    for kx, ky, _ in knobs:
-        off = -LXY * 9.0 * LSLOPE * 0.55
-        plate = plate * (1 - 0.75 * soft(sd_circle(X - off[0], Y - off[1], kx, ky, KNOB_R - 0.5), 3.2))[..., None]
-        plate = plate * (1 - 0.5 * soft(sd_circle(X - 0.6, Y - 1.0, kx, ky, KNOB_R), 1.0))[..., None]
-
     # the keys in their slots
     for i in range(6):
         k = key_rect(i)
@@ -468,44 +458,6 @@ def build_deck(out, vintage=False):
         glass = glass + np.clip(unlit, 0, 1)[..., None] * rgb3((0.010, 0.0075, 0.003))
     plate = mix(plate, glass, cv.cov(sd_disp))
 
-    # knobs: a knurled skirt round a face turned in fine concentric rings
-    phl = math.atan2(LXY[1], LXY[0])
-    for kx, ky, ind in knobs:
-        dx, dy = X - kx, Y - ky
-        rk = np.hypot(dx, dy)
-        phi = np.arctan2(dy, dx)
-        RF = KNOB_R - 3.6
-        hk = np.where(rk < RF, 0.8 * (1 - (rk / RF) ** 2), 0.0)
-        ch = smoothstep(RF + 0.9, RF - 0.1, rk)                         # chamfer to the face
-        knurl = (rk > RF + 0.9)
-        rim = 1.2 * np.sqrt(np.clip(1 - (1 - np.clip((KNOB_R - rk) / 1.2, 0, 1)) ** 2, 0, 1))
-        hk = hk + 1.0 * ch + np.where(knurl, rim - 0.6 + 0.22 * np.cos(phi * 72), 0.0) * (1 - ch)
-        bnx, bny, bnz = normals(hk, n)
-        lam = lambert(bnx, bny, bnz)
-        aniso = np.exp(-(np.sin(phi - phl) ** 2) / 0.02) * smoothstep(1.0, 8.0, rk)
-        rings = radial_noise(rk, rng, 0.08, rmax=30)
-        face = 0.045 * (1 + 0.25 * rings) * (0.45 + 0.55 * lam) + 0.28 * aniso * (1 + 0.35 * rings)
-        side = 0.020 * (0.3 + 0.7 * lam) + 0.9 * blinn(bnx, bny, bnz, 30)
-        chamf = 0.12 * (0.25 + 0.75 * lam) + 1.2 * blinn(bnx, bny, bnz, 40)
-        fm = smoothstep(RF - 0.2, RF - 0.7, rk)
-        km = smoothstep(RF + 0.7, RF + 1.2, rk)
-        cap = face * fm + chamf * (1 - fm) * (1 - km) + side * km + 0.4 * blinn(bnx, bny, bnz, 90) * fm
-        col = gray3(cap, (1.0, 1.0, 1.02))
-        # the indicator: a small gold dot let into the face
-        if ind is not None:
-            ia = math.radians(ind)
-            ix, iy = kx + 13.5 * math.cos(ia), ky + 13.5 * math.sin(ia)
-            rd = np.hypot(X - ix, Y - iy)
-            col = mix(col, gold_dot(X, Y, ix, iy), cv.cov(rd - 1.5))
-        else:
-            # the volume knob: a faint scale of eleven dots round it, 0 to 100
-            for k in range(11):
-                a = math.radians(-90 - VOLUME_SWEEP + k * 2 * VOLUME_SWEEP / 10)
-                tx, ty = kx + 29.0 * math.cos(a), ky + 29.0 * math.sin(a)
-                rt = 0.75 if k in (0, 10) else 0.5
-                tm = cv.cov(np.hypot(X - tx, Y - ty) - rt)
-                plate = plate * (1 - 0.5 * tm)[..., None] + gray3(0.060 * tm)
-        plate = mix(plate, col, cv.cov(rk - KNOB_R))
 
     # headphone jack: chrome ring, gold-plated throat
     ring = cv.cov(rj - 6.4) * (1 - cv.cov(rj - 3.6))
@@ -525,19 +477,19 @@ def build_deck(out, vintage=False):
     bead_c = rgb3((0.022, 0.011, 0.002)) + rgb3((0.5, 0.45, 0.4)) * np.exp(-((X - LED_C[0] + 0.8) ** 2 + (Y - LED_C[1] + 0.9) ** 2) / 0.25)[..., None]
     plate = mix(plate, bead_c, bead)
 
+    # the volume fader's slot (no knobs): a dark cut with rounded ends, its
+    # lower lip catching the light, eleven ticks above it; the cap is fader.png
+    fx0, fx1, fy = FADER
+    sd_slot = sd_rrect(X, Y, fx0 - 3, fy - 1.6, fx1 + 3, fy + 1.6, 1.6)
+    slot = cv.cov(sd_slot)
+    lip = cv.cov(sd_rrect(X, Y, fx0 - 3, fy + 1.6, fx1 + 3, fy + 2.3, 0.4)) * (1 - slot)
+    plate = mix(plate, gray3(0.003 + 0.004 * smoothstep(fy - 1.6, fy + 1.6, Y)), slot)
+    plate = plate * (1 - 0.4 * lip)[..., None] + gray3(0.05 * lip)
+    for k in range(11):
+        tx = fx0 + (fx1 - fx0) * k / 10
+        tm = cv.cov(sd_rrect(X, Y, tx - 0.3, fy - 9.5, tx + 0.3, fy - 6.5 + (1.2 if k % 5 == 0 else 0), 0.1))
+        plate = plate * (1 - tm[..., None]) + 0.40 * tm[..., None]
     if vintage:
-        # the fader's slot: a dark cut with rounded ends, its lower lip catching
-        # the light; eleven ticks and 0-10 above it
-        fx0, fx1, fy = FADER
-        sd_slot = sd_rrect(X, Y, fx0 - 3, fy - 1.6, fx1 + 3, fy + 1.6, 1.6)
-        slot = cv.cov(sd_slot)
-        lip = cv.cov(sd_rrect(X, Y, fx0 - 3, fy + 1.6, fx1 + 3, fy + 2.3, 0.4)) * (1 - slot)
-        plate = mix(plate, gray3(0.003 + 0.004 * smoothstep(fy - 1.6, fy + 1.6, Y)), slot)
-        plate = plate * (1 - 0.4 * lip)[..., None] + gray3(0.05 * lip)
-        for k in range(11):
-            tx = fx0 + (fx1 - fx0) * k / 10
-            tm = cv.cov(sd_rrect(X, Y, tx - 0.3, fy - 9.5, tx + 0.3, fy - 6.5 + (1.2 if k % 5 == 0 else 0), 0.1))
-            plate = plate * (1 - tm[..., None]) + 0.40 * tm[..., None]
         import cdfront
         items = [(name, (key_rect(i)[0] + key_rect(i)[2]) / 2, 214.5, 3.8, True, "m", 0.3)
                  for i, name in enumerate(("REW", "PLAY", "F.FWD", "STOP", "PAUSE", "EJECT"))]
@@ -550,6 +502,7 @@ def build_deck(out, vintage=False):
             ("PHONES", JACK_C[0], 214.5, 3.8, True, "m", 0.3),
             ("POWER", (POWER[0] + POWER[2]) / 2, 214.5, 3.8, True, "m", 0.3),
         ]
+        # the 90s panel numbers the ticks 0-10
         items += [(str(k), FADER[0] + (FADER[1] - FADER[0]) * k / 10, FADER[2] - 14.5, 3.4, True, "m", 0.0)
                   for k in range(11)]
         ink = cdfront.text_mask(cv, items)
@@ -558,7 +511,7 @@ def build_deck(out, vintage=False):
         save(cv.image(), out, "deck-v.png")
         return
 
-    # the only lettering: OSMIUM, lightly engraved between display and knobs
+    # the only lettering: OSMIUM, lightly engraved between display and fader
     m = text_mask(cv, "OSMIUM", (DISPLAY[0] + DISPLAY[2]) / 2, ENGRAVE_Y, 5.0, 2.5)
     if m is not None:
         sh_ = int(round(0.3 * n))
@@ -645,14 +598,6 @@ def build_fader(out):
     rgb = rgb * (1 - line[..., None]) + 0.75 * line[..., None]
     cv.over(srgb(rgb), cv.cov(sd))
     save(cv.image(), out, "fader.png")
-
-
-def build_knob_dot(out):
-    R = 16.5
-    cv = Canvas(-R, -R, 2 * R, 2 * R, PPT_CAS)
-    X, Y = cv.X, cv.Y
-    cv.over(srgb(gold_dot(X, Y, 0.0, -13.5)), cv.cov(np.hypot(X, Y + 13.5) - 1.5))
-    save(cv.image(), out, "knob-dot.png")
 
 
 def build_display_parts(out):
@@ -1036,7 +981,7 @@ def main():
     ap.add_argument("--only", default="", help="comma separated builder names (debug)")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    builders = {"deck": build_deck, "deck-v": lambda o: build_deck(o, vintage=True), "fader": build_fader, "keys": build_keys, "knobdot": build_knob_dot, "display": build_display_parts,
+    builders = {"deck": build_deck, "deck-v": lambda o: build_deck(o, vintage=True), "fader": build_fader, "keys": build_keys, "display": build_display_parts,
                 "door": build_door, "dooredge": build_door_edge, "cassette": build_cassette,
                 "back": build_cassette_back, "shadow": build_cassette_shadow, "pack": build_pack,
                 "hub": build_hub}
