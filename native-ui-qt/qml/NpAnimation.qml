@@ -62,8 +62,19 @@ Item {
                                      : Player.album !== "" ? "a" + Player.album
                                      : Player.remote ? "u" + Player.trackUrl
                                      : "t" + Player.artist
-    readonly property string title: live ? (Player.album || Player.title) : ""
-    readonly property string subtitle: live ? Player.artist : ""
+    // An internet radio has no album: its station takes the album's place
+    // (the cassette's label: the station, then "artist - song"), and the
+    // song keeps the display. A title that is only the station's name again
+    // (no song information yet) is not repeated.
+    readonly property string station: live && Player.remote && Player.album === "" ? Player.stationName : ""
+    readonly property string song: Player.title !== root.station ? Player.title : ""
+    readonly property string title: !live ? "" : Player.album || root.station || Player.title
+    readonly property string subtitle: !live ? "" : root.station !== "" ? [Player.artist, root.song].filter(function(x) { return !!x }).join(" - ")
+                                                                        : Player.artist
+    // the CD-Text: the song and its artist, then the station
+    readonly property string trackTitle: !live ? "" : root.song || root.station
+    readonly property string trackArtist: !live ? "" : root.song !== "" ? [Player.artist, root.station].filter(function(x) { return !!x }).join(" - ")
+                                                                        : Player.artist
 
     function inputs() {
         return {
@@ -130,8 +141,8 @@ Item {
     Binding { when: root.display; target: loader.item; property: "trackTotal"; value: root.live ? Player.total : 0 }
     Binding { when: root.display; target: loader.item; property: "repeatMode"; value: root.live ? Player.repeat : 0 }
     Binding { when: root.display; target: loader.item; property: "shuffleMode"; value: root.live ? Player.shuffle : 0 }
-    Binding { when: root.display; target: loader.item; property: "trackTitle"; value: root.live ? Player.title : "" }
-    Binding { when: root.display; target: loader.item; property: "trackArtist"; value: root.live ? Player.artist : "" }
+    Binding { when: root.display; target: loader.item; property: "trackTitle"; value: root.trackTitle }
+    Binding { when: root.display; target: loader.item; property: "trackArtist"; value: root.trackArtist }
     // Fast wind on the cassette deck: a jump of windStep seconds per call.
     // Past the end it moves on to the next track, before the start to the end
     // of the previous one. After a track change nothing moves until the new

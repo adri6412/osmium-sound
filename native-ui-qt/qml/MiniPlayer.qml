@@ -87,7 +87,7 @@ Item {
         Item { width: 1; height: 2 }
         Text {
             width: parent.width; height: 19; verticalAlignment: Text.AlignVCenter
-            text: Player.artist || Tr.t("player.unknownArtist")
+            text: Player.artist || (Player.stationName !== "" ? "" : Tr.t("player.unknownArtist"))   // a radio with no song yet: nothing
             color: miniArtistTap.pressed ? Theme.white : Theme.gold; font.family: Theme.font; font.pixelSize: 13; elide: Text.ElideRight
             Tap { id: miniArtistTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
                   enabled: Player.artistId !== ""; onClicked: Ui.app.openArtist(Player.artistId, Player.artist) }

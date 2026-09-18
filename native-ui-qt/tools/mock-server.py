@@ -156,6 +156,18 @@ def rpc(player, params):
                  "playlist_cur_index": 0, "playlist_tracks": 1, "playlist repeat": 0, "playlist shuffle": 0, "will_sleep_in": 0,
                  "playlist_loop": [{"id": 2001, "title": o["title"], "artist": o["artist"], "album": o["album"], "coverid": "1001",
                                     "bitrate": "1411kbps", "type": "flc", "samplesize": 16, "samplerate": 44100, "duration": 300.0, "remote": 0}]}
+        elif len(params) > 1 and params[1] == "-" and STATE.get("radio"):
+            # an internet radio, as Lyrion reports one (radio.de stream on the Dell,
+            # 2026-09-18): no album, no duration, the station in remote_title
+            rd = STATE["radio"]
+            owner = next((p["name"] for p in players_now() if p["playerid"] == player), "Osmium")
+            r = {"player_name": owner, "mode": STATE["mode"], "time": STATE["time"], "mixer volume": STATE["volume"],
+                 "power": STATE["power"], "remote": 1, "current_title": " - ".join(x for x in (rd.get("artist"), rd.get("title")) if x),
+                 "playlist_cur_index": "0", "playlist_tracks": 1, "playlist repeat": 0, "playlist shuffle": 0, "will_sleep_in": 0,
+                 "playlist_loop": [{"id": "-94761577295040", "title": rd.get("title", ""), "artist": rd.get("artist", ""),
+                                    "remote_title": rd.get("station", ""), "coverid": "-94761577295040", "type": "mp3",
+                                    "url": rd.get("url", "https://ella.stream46.radiohost.de/ella-piano-trios_mp3-192"),
+                                    "duration": "0", "remote": 1, "bitrate": "192kbps"}]}
         elif len(params) > 1 and params[1] == "-":
             t = QUEUE[STATE["index"] % len(QUEUE)]
             owner = next((p["name"] for p in players_now() if p["playerid"] == player), "Osmium")
@@ -516,6 +528,8 @@ class H(BaseHTTPRequestHandler):
                 threading.Timer(5.0, lambda: STATE.__setitem__("install", {"state": "done", "message": "", "progress": 100})).start()
             if u.path == "/mock/cd": STATE["cd"] = data
             if u.path == "/mock/ota": STATE["ota"] = data
+            if u.path == "/mock/radio":            # {"title","artist","station"} plays a radio, {} goes back
+                STATE["radio"] = data or None
             if u.path == "/mock/track":            # {"duration": s, "time": s}: another track length
                 for k in ("duration", "time"):
                     if k in data: STATE[k] = float(data[k])

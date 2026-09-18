@@ -243,22 +243,26 @@ void Player::pollStatus() {
         int ssize = tr.value("samplesize").toInt();
         double srate = tr.value("samplerate").toDouble();
         bool remote = tr.value("remote").toInt() != 0;
+        // an internet radio names its station here (tag N); the title and
+        // artist are the song playing on it
+        QString station = remote ? S(tr, "remote_title") : QString();
         if (duration == 0) duration = tr.value("duration").toDouble();
-        if (remote && artist.isEmpty()) {                 // "Artista - Titolo" nel solo title
-            int sep = title.indexOf(" - ");
+        if (remote && artist.isEmpty() && title != station) {  // "Artista - Titolo" nel solo title
+            int sep = title.indexOf(" - ");               // (not the station's own name, before a song is known)
             if (sep > 0) { artist = title.left(sep); title = title.mid(sep + 3); }
         }
 
         bool meta = title != m_title || artist != m_artist || album != m_album || type != m_type ||
                     ssize != m_sampleSize || srate != m_sampleRate || id != m_id || coverid != m_coverId ||
-                    remote != m_remote || bitrate != m_bitrate || url != m_url || albumId != m_albumId || artistId != m_artistId;
+                    remote != m_remote || bitrate != m_bitrate || url != m_url || albumId != m_albumId || artistId != m_artistId ||
+                    station != m_stationName;
         bool track = title != m_title || artist != m_artist || album != m_album;
         bool prog = std::fabs(elapsed - m_elapsed) > 0.4 || std::fabs(duration - m_duration) > 0.4;
         bool ctl = playing != m_playing || power != m_power || volume != m_volume || shuffle != m_shuffle || repeat != m_repeat ||
                    sleep != m_sleepSecs || index != m_index || total != m_total;
         m_title = title; m_artist = artist; m_album = album; m_type = type; m_sampleSize = ssize; m_sampleRate = srate;
         m_id = id; m_coverId = coverid; m_artworkUrlLms = aurl; m_remote = remote; m_bitrate = bitrate; m_currentTitle = currentTitle;
-        m_url = url; m_rawTitle = rawTitle; m_albumId = albumId; m_artistId = artistId;
+        m_url = url; m_rawTitle = rawTitle; m_albumId = albumId; m_artistId = artistId; m_stationName = station;
         m_elapsed = elapsed; m_duration = duration;
         m_playing = playing; m_power = power; m_volume = volume; m_shuffle = shuffle; m_repeat = repeat; m_sleepSecs = sleep; m_index = index; m_total = total;
         m_lastElapsedTick = m_clock.elapsed();

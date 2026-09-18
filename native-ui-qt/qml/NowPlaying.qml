@@ -222,7 +222,7 @@ Item {
         Item { width: 1; height: 6 }
         Text {
             width: parent.width; height: 28; verticalAlignment: Text.AlignVCenter
-            text: Player.artist || Tr.t("player.unknownArtist")
+            text: Player.artist || (Player.stationName !== "" ? "" : Tr.t("player.unknownArtist"))   // a radio with no song yet: nothing
             color: npArtistTap.pressed ? Theme.white : Theme.gold; font.family: Theme.font; font.pixelSize: 18; elide: Text.ElideRight
             // the artist's page (library tracks only)
             Tap { id: npArtistTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height

@@ -34,6 +34,7 @@ class Player : public QObject {
     Q_PROPERTY(QString artistId READ artistId NOTIFY metaChanged)
     Q_PROPERTY(QString coverId READ coverId NOTIFY metaChanged)
     Q_PROPERTY(bool remote READ remote NOTIFY metaChanged)
+    Q_PROPERTY(QString stationName READ stationName NOTIFY metaChanged)  // a stream's station (Lyrion's remote_title)
     Q_PROPERTY(QString type READ type NOTIFY metaChanged)
     Q_PROPERTY(int sampleSize READ sampleSize NOTIFY metaChanged)
     Q_PROPERTY(double sampleRate READ sampleRate NOTIFY metaChanged)
@@ -111,6 +112,7 @@ public:
     QString chip() const { return m_chip; }
     QString artworkUrl() const { return m_artworkUrl; }
     QString trackUrl() const { return m_url; }
+    QString stationName() const { return m_stationName; }
     bool isFavorite() const { return m_favorite; }
     bool favoritesAvailable() const { return m_favAvail; }
     bool muted() const { return m_muted; }
@@ -234,7 +236,7 @@ private:
     qint64 m_lookupSince = 0, m_lastFind = 0, m_lastNameFetch = 0;
     QString m_title, m_artist, m_album, m_id, m_coverId, m_artworkUrlLms, m_type, m_bitrate, m_chip, m_currentTitle;
     QString m_artworkUrl, m_artKey;
-    QString m_url, m_rawTitle;      // the track's URL (favourites) and its title as Lyrion gives it
+    QString m_url, m_rawTitle, m_stationName;      // the track's URL (favourites) and its title as Lyrion gives it
     QString m_albumId, m_artistId;
     // favourites: what the last `favorites exists` was about, and its answer
     QString m_favKey, m_favIndex;

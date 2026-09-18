@@ -63,7 +63,9 @@ Item {
             visible: root.mode === "anim"
             x: 80; width: parent.width - 160; y: parent.height - 44; height: 24
             horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-            text: [Player.title, Player.artist].filter(function(x) { return !!x }).join(" · ")
+            // a radio: its station too (Player.stationName is only set for streams)
+            text: [Player.title !== Player.stationName ? Player.title : "", Player.artist,
+                   Player.album === "" ? Player.stationName : ""].filter(function(x) { return !!x }).join(" · ")
             elide: Text.ElideRight
             color: Theme.silverA(0.75); font.family: Theme.font; font.pixelSize: 15
         }
