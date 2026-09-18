@@ -25,7 +25,7 @@ Item {
     property alias settingsTab: settingsTab
     property alias discoverTab: discoverTab
     readonly property var pageItem: pageLoader.item       // the album/artist page on screen, if any
-    x: 341; width: 1024 - 341; height: 600
+    x: 341; width: parent ? parent.width - 341 : 683; height: parent ? parent.height : 600
 
     // ─── "Aggiornamento disponibile" sul tab delle impostazioni ────────────
     // Come nel kiosk Electron: si guardano i tre componenti (interfaccia,
@@ -54,6 +54,7 @@ Item {
         { icon: "app-window", key: "player.tabs.apps" }, { icon: "compass", key: "player.tabs.discover" },
         { icon: "settings", key: "" }]
     readonly property var tiles: [
+        { icon: "heart", key: "player.titles.favorites", view: LibraryModel.PluginItems },
         { icon: "user", key: "player.titles.artists", view: LibraryModel.Artists },
         { icon: "disc", key: "player.titles.albums", view: LibraryModel.Albums },
         { icon: "tag", key: "player.titles.genres", view: LibraryModel.Genres },
@@ -61,8 +62,7 @@ Item {
         { icon: "piano", key: "player.titles.composers", view: LibraryModel.Composers },
         { icon: "sparkles", key: "player.titles.newMusic", view: LibraryModel.NewMusic },
         { icon: "folder", key: "player.titles.folders", view: LibraryModel.Folders },
-        { icon: "list-music", key: "player.titles.playlists", view: LibraryModel.Playlists },
-        { icon: "heart", key: "player.titles.favorites", view: LibraryModel.PluginItems }]
+        { icon: "list-music", key: "player.titles.playlists", view: LibraryModel.Playlists }]
 
     // ─── navigazione ───────────────────────────────────────────────────────
     function loadTop() {
@@ -355,26 +355,28 @@ Item {
         id: tabBar
         width: parent.width; height: 40; color: Theme.panelA(0.5)
         Rectangle { y: 39; width: parent.width; height: 1; color: Theme.border }
-        // the power button and the Osmium Sound mark, top right. The "update
-        // available" badge makes room for them: the full words, the short
-        // one, or just a gold dot on the gear. The words go when the tabs
-        // need their space; the power button always stays.
+        // the Osmium Sound mark and, in the corner, the power button. The
+        // "update available" badge makes room for them: the full words, the
+        // short one, or just a gold dot on the gear. The words go when the
+        // tabs need their space; the power button always stays.
         Item {
             id: brandMark
-            width: 34 + brandText.implicitWidth + 16; height: 40
-            x: parent.width - width
+            width: 16 + brandText.width + 4; height: 40
+            x: powerBtn.x - width
             visible: tabRow.width <= x
-            Text {
+            Row {
                 id: brandText
-                x: 34; anchors.verticalCenter: parent.verticalCenter
-                text: "OSMIUM SOUND"; color: Theme.silverA(0.8)
-                font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2
+                x: 16; anchors.verticalCenter: parent.verticalCenter
+                spacing: 6
+                // two-tone like the status plate: SOUND in gold
+                Text { text: "OSMIUM"; color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
+                Text { text: "SOUND"; color: Theme.gold; font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
             }
         }
         Item {
             id: powerBtn
             width: 40; height: 40
-            x: brandMark.visible ? brandMark.x : parent.width - width
+            x: parent.width - width - 4
             Icon {
                 anchors.centerIn: parent; name: "power"; size: 16
                 color: powerTap.mix(Theme.gold, Theme.white)
@@ -485,7 +487,7 @@ Item {
     // ─── contenuto ─────────────────────────────────────────────────────────
     Item {
         id: content
-        y: root.contentTop; width: parent.width; height: 600 - y
+        y: root.contentTop; width: parent.width; height: root.height - y
         clip: true
         SettingsTab { id: settingsTab; anchors.fill: parent; visible: root.tab === 4; devScale: root.devScale }
         DiscoverTab { id: discoverTab; anchors.fill: parent; visible: root.tab === 3; devScale: root.devScale }
@@ -538,12 +540,14 @@ Item {
                         required property int index
                         readonly property real tw: (root.width - 32 - 24) / 3
                         // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
-                        // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno)
-                        x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (117 + 12)
-                        width: tw; height: 117; radius: 12
+                        // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno).
+                        // A taller canvas (16:10: 640) shares its extra height among the rows.
+                        readonly property real th: 117 + Math.max(0, root.height - 600) / 3
+                        x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (th + 12)
+                        width: tw; height: th; radius: 12
                         color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
-                        Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29; name: modelData.icon; size: 30; color: Theme.silver }
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                        Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
+                        Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
                         Tap {
                             id: tileTap
                             onClicked: {
@@ -632,7 +636,7 @@ Item {
                     id: list
                     x: 12; y: parent.listY + 4
                     width: (root.hasAz ? root.width - 32 - 12 : root.width - 12) - 12
-                    height: 600 - root.contentTop - y - 12
+                    height: root.height - root.contentTop - y - 12
                     visible: Library.state === 2 && Library.count > 0 && !root.isPage
                     onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
                     // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
@@ -653,7 +657,7 @@ Item {
                 // indice A-Z (w-8)
                 AzIndex {
                     visible: root.hasAz
-                    x: root.width - 32; y: parent.listY; width: 32; height: 600 - root.contentTop - y
+                    x: root.width - 32; y: parent.listY; width: 32; height: root.height - root.contentTop - y
                     onLetter: (l) => { var r = Library.letterFirst(l); if (r >= 0) list.scrollToRow(r) }
                 }
             }

@@ -486,7 +486,8 @@
       "updates": "Aggiornamenti",
       "systemControls": "Controlli Sistema",
       "language": "Lingua",
-      "thirdPartyNotices": "Componenti di terze parti"
+      "thirdPartyNotices": "Componenti di terze parti",
+      "netCheck": "Diagnosi rete"
     },
     "language": {
       "help": "Scegli la lingua dell'interfaccia."
@@ -515,14 +516,15 @@
       "chooseAnimation": "Scegli un'animazione"
     },
     "animations": {
-      "help": "Al posto dei VU meter, la schermata \"in riproduzione\" può mostrare un CD, un disco in vinile o una musicassetta che girano con la musica.",
+      "help": "Al posto dei VU meter, la schermata \"in riproduzione\" può mostrare un CD, un disco in vinile o una musicassetta che girano con la musica. Il tasto accanto all'ora la mostra a tutto schermo.",
       "vuOn": "Le animazioni si vedono solo con i VU meter spenti.",
       "turnOffVu": "Spegni i VU meter",
       "none": "Nessuna",
       "noneHelp": "Testi del brano",
-      "cd": "CD",
+      "cd": "CD dall'alto",
       "vinyl": "Vinile",
-      "cassette": "Musicassetta"
+      "cassette": "Musicassetta",
+      "cdfront": "Lettore CD"
     },
     "playback": {
       "help": "Opzioni di riproduzione applicate al player attivo: transizioni tra i brani (crossfade/gapless) e normalizzazione del volume (ReplayGain).",
@@ -943,6 +945,91 @@
       "shuttingDownShort": "Sistema in spegnimento...",
       "shutdownError": "Errore durante lo spegnimento",
       "shutdownSystemError": "Errore durante lo spegnimento del sistema"
+    },
+    "netCheck": {
+      "open": "Controlla la rete",
+      "openHelp": "Trova dove si ferma la connessione: cavo o Wi-Fi, router, internet o server degli aggiornamenti.",
+      "help": "Osmium controlla, un passo alla volta, se riesce a raggiungere il server degli aggiornamenti e ti dice dove si ferma.",
+      "run": "Avvia il controllo",
+      "again": "Ripeti il controllo",
+      "running": "Controllo in corso… ci vuole al massimo mezzo minuto.",
+      "failed": "Il controllo non è partito: il servizio dell'apparecchio non ha risposto.",
+      "lastRun": "Controllato alle {time}",
+      "steps": {
+        "link": "Collegamento (cavo o Wi-Fi)",
+        "router": "Router",
+        "internet": "Internet",
+        "dns": "Risoluzione dei nomi (DNS)",
+        "clock": "Orologio",
+        "ota": "Server degli aggiornamenti",
+        "download": "Scaricamento aggiornamenti"
+      },
+      "status": {
+        "ok": "Funziona",
+        "warn": "Da controllare",
+        "fail": "Non funziona",
+        "skip": "Non provato",
+        "run": "In corso"
+      },
+      "sources": {
+        "pages": "Server principale",
+        "mirror": "Copia di riserva",
+        "github": "GitHub (ultima risorsa)"
+      },
+      "err": {
+        "noLink": "Non è collegato a nessuna rete: controlla il cavo o il Wi-Fi.",
+        "noAddress": "Collegato, ma non ha ancora un indirizzo.",
+        "noDhcp": "Collegato, ma il router non gli ha dato un indirizzo.",
+        "weakSignal": "Segnale Wi-Fi debole: avvicinalo al router o usa il cavo.",
+        "noGateway": "La rete non ha indicato quale router usare.",
+        "noAnswer": "Il router non risponde.",
+        "noPing": "Il router ignora il ping, ma c'è e funziona.",
+        "packetLoss": "Una parte dei messaggi verso il router va persa ({loss}%).",
+        "blockedIps": "Le connessioni dirette sono bloccate, ma il server degli aggiornamenti si raggiunge.",
+        "dns": "I nomi non si risolvono: il server DNS non risponde.",
+        "dnsPartial": "Alcuni nomi non si risolvono.",
+        "clockOff": "L'orologio è sbagliato di {time}: le connessioni sicure possono fallire.",
+        "clockWrong": "L'orologio è sbagliato: le connessioni sicure falliscono.",
+        "fallback": "Il server principale non risponde, ma una riserva sì: gli aggiornamenti funzionano lo stesso.",
+        "otaDown": "Nessun server degli aggiornamenti risponde.",
+        "rateLimited": "GitHub per un po' rifiuta le richieste (troppe).",
+        "badManifest": "Il server ha risposto in modo inatteso.",
+        "timeout": "Nessuna risposta (tempo scaduto).",
+        "refused": "Connessione rifiutata.",
+        "reset": "Connessione interrotta.",
+        "unreachable": "Rete irraggiungibile.",
+        "tls": "La connessione sicura non è riuscita.",
+        "tlsCert": "Certificato di sicurezza rifiutato: controlla l'orologio.",
+        "http": "Il server ha risposto con l'errore {code}.",
+        "other": "Errore imprevisto."
+      },
+      "verdict": {
+        "ok": "Tutto a posto: l'apparecchio raggiunge il server degli aggiornamenti.",
+        "warn": "Funziona, con qualche riserva: guarda i passi in giallo.",
+        "link": "Il problema è il collegamento dell'apparecchio: controlla il cavo o il Wi-Fi.",
+        "router": "Il problema è tra l'apparecchio e il router: riavvia il router e controlla il cavo o il Wi-Fi.",
+        "internet": "Il router risponde ma non arriva a internet: il problema è il router o il tuo fornitore di internet.",
+        "dns": "Internet funziona ma i nomi non si risolvono: riavvia il router, oppure imposta altri server DNS nelle impostazioni di rete.",
+        "clock": "L'orologio è sbagliato e le connessioni sicure falliscono: controlla il fuso orario e riavvia l'apparecchio.",
+        "ota": "La tua connessione a internet funziona: è il server degli aggiornamenti che adesso non risponde. Riprova più tardi; se succede sempre, forse un filtro sulla tua rete lo blocca.",
+        "download": "Il server degli aggiornamenti risponde ma lo scaricamento non parte: riprova più tardi, o controlla eventuali filtri sulla tua rete."
+      },
+      "groups": {
+        "device": "Collegamento dell'apparecchio",
+        "router": "Router di casa",
+        "internet": "Internet",
+        "server": "Server degli aggiornamenti"
+      },
+      "advanced": "Informazioni avanzate",
+      "advancedHide": "Nascondi informazioni avanzate",
+      "verdictWarn": {
+        "link": "Funziona, ma il segnale Wi-Fi è debole: avvicina l'apparecchio al router o usa il cavo.",
+        "router": "Funziona, ma il collegamento col router ogni tanto perde colpi: se la musica si interrompe, controlla il Wi-Fi o il cavo.",
+        "internet": "Funziona: la tua rete blocca alcune connessioni, ma non quelle che servono agli aggiornamenti.",
+        "dns": "Funziona, ma alcuni indirizzi non si trovano: se gli aggiornamenti non vanno, riavvia il router.",
+        "clock": "Funziona, ma l'orologio dell'apparecchio è un po' sbagliato: controlla il fuso orario.",
+        "ota": "Funziona: il server principale non risponde, quindi l'apparecchio usa quello di riserva."
+      }
     }
   },
   "meta": {

@@ -6,6 +6,9 @@ import shutil
 import signal
 import sys
 import socket
+import ssl
+import errno
+import email.utils
 import platform
 import re
 import json
@@ -940,6 +943,349 @@ def get_network_status():
     ssid = _active_ssid() if dtype == 'wifi' else None
     typ = 'wireless' if dtype == 'wifi' else ('wired' if dtype == 'ethernet' else 'none')
     return {'type': typ, 'ip': ip, 'ssid': ssid, 'connected': bool(ip), 'device': device}
+
+# ──────────────────────────────────────────────────────────────────
+#  Network check ("network doctor"): walks the same path an update
+#  check takes — the box's own link, the router, the internet, name
+#  lookup, the clock (TLS needs it), the update server and the host
+#  the download comes from — and says at which hop it breaks, so the
+#  owner can tell "my Wi-Fi" from "my router" from "Osmium's server".
+#  Settings → System info / Updates, on the kiosk and in the web admin.
+#
+#  Every result is language-neutral (ids, codes, addresses, numbers):
+#  the UIs turn them into sentences.
+# ──────────────────────────────────────────────────────────────────
+NETCHECK_STEPS = ('link', 'router', 'internet', 'dns', 'clock', 'ota', 'download')
+# Raw IPs on purpose: this step must not depend on name lookup, which has
+# a step of its own. 443 rather than ICMP, since that is what the update
+# check needs and plenty of networks drop ping to the outside.
+_NETCHECK_IP_TARGETS = (('1.1.1.1', 443), ('8.8.8.8', 443), ('9.9.9.9', 443))
+_NETCHECK_LOCK = threading.Lock()
+_NETCHECK_UA = 'hifi-player-ota'
+
+def _netcheck_error(exc):
+    """(reason code, HTTP status or None) for a failed probe."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return 'http', exc.code
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+    if isinstance(reason, socket.gaierror):
+        return 'dns', None
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        return 'tlsCert', None
+    if isinstance(reason, ssl.SSLError):
+        return 'tls', None
+    if isinstance(reason, TimeoutError) or 'timed out' in str(reason):
+        return 'timeout', None
+    if isinstance(reason, ConnectionRefusedError):
+        return 'refused', None
+    if isinstance(reason, ConnectionResetError):
+        return 'reset', None
+    if isinstance(reason, OSError) and reason.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH):
+        return 'unreachable', None
+    return 'other', None
+
+def _netcheck_parallel(tasks, timeout):
+    """Run {key: fn} side by side and wait at most `timeout` seconds overall.
+    Daemon threads, so a probe stuck in a call without its own timeout
+    (getaddrinfo) can't hold the answer back: it is reported as timed out."""
+    results = {}
+    def run(key, fn):
+        try:
+            results[key] = fn()
+        except Exception as e:
+            results[key] = e
+    threads = [threading.Thread(target=run, args=(k, fn), daemon=True) for k, fn in tasks.items()]
+    for th in threads:
+        th.start()
+    deadline = time.monotonic() + timeout
+    for th in threads:
+        th.join(max(0.0, deadline - time.monotonic()))
+    return {k: results.get(k, TimeoutError('timed out')) for k in tasks}
+
+def _netcheck_link():
+    device, dtype = _active_device()
+    if not device:
+        return {'status': 'fail', 'error': 'noLink'}
+    out = {'device': device, 'type': 'wireless' if dtype == 'wifi' else 'wired',
+           'ip': _device_ip(device), 'status': 'ok'}
+    parts = [device]
+    if dtype == 'wifi':
+        out['ssid'] = _active_ssid()
+        try:
+            r = _run(['nmcli', '-t', '-f', 'IN-USE,SIGNAL', 'device', 'wifi', 'list',
+                      'ifname', device, '--rescan', 'no'], timeout=5)
+            for line in r.stdout.strip().split('\n'):
+                f = _terse_split(line)
+                if len(f) >= 2 and f[0] == '*' and f[1].isdigit():
+                    out['signal'] = int(f[1])
+        except Exception:
+            pass
+        if out.get('ssid'):
+            parts.append(out['ssid'])
+        if out.get('signal') is not None:
+            parts.append(f"{out['signal']}%")
+            if out['signal'] < 35:
+                out.update(status='warn', error='weakSignal')
+    if not out['ip']:
+        out.update(status='fail', error='noAddress')
+    elif out['ip'].startswith('169.254.'):
+        # link-local: the cable/Wi-Fi is up but nobody handed out an address
+        out.update(status='fail', error='noDhcp')
+    if out['ip']:
+        parts.append(out['ip'])
+    out['detail'] = ' · '.join(parts)
+    return out
+
+def _default_gateway():
+    r = _run(['ip', '-4', 'route', 'show', 'default'], timeout=5)
+    for line in r.stdout.splitlines():
+        m = re.search(r'\bvia (\S+)', line)
+        if m:
+            return m.group(1)
+    return None
+
+def _netcheck_router():
+    gw = _default_gateway()
+    if not gw:
+        return {'status': 'fail', 'error': 'noGateway'}
+    out = {'gateway': gw, 'detail': gw}
+    r = _run(['ping', '-n', '-q', '-c', '3', '-i', '0.2', '-W', '1', gw], timeout=8)
+    m = re.search(r'(\d+) packets transmitted, (\d+) received', r.stdout)
+    sent, got = (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+    if got:
+        rtt = re.search(r'= [\d.]+/([\d.]+)/', r.stdout)
+        if rtt:
+            out['ms'] = round(float(rtt.group(1)), 1)
+            out['detail'] = f"{gw} · {out['ms']} ms"
+        out['loss'] = round(100 * (sent - got) / sent) if sent else 0
+        out['status'] = 'warn' if got < sent else 'ok'
+        if got < sent:
+            out['error'] = 'packetLoss'
+        return out
+    # Some routers ignore ping. If it answered ARP it is there all the same.
+    n = _run(['ip', 'neigh', 'show', gw], timeout=5).stdout
+    if 'lladdr' in n and not re.search(r'\b(FAILED|INCOMPLETE)\b', n):
+        out.update(status='ok', error='noPing')
+        return out
+    out.update(status='fail', error='noAnswer')
+    return out
+
+def _netcheck_tcp(host, port, timeout=4):
+    t0 = time.monotonic()
+    with socket.create_connection((host, port), timeout=timeout):
+        pass
+    return round((time.monotonic() - t0) * 1000)
+
+def _netcheck_internet():
+    res = _netcheck_parallel({f'{h}:{p}': (lambda h=h, p=p: _netcheck_tcp(h, p))
+                              for h, p in _NETCHECK_IP_TARGETS}, 6)
+    ok = [(k, v) for k, v in res.items() if isinstance(v, int)]
+    if ok:
+        k, ms = min(ok, key=lambda kv: kv[1])
+        return {'status': 'ok', 'ms': ms, 'detail': f"{k.split(':')[0]} · {ms} ms"}
+    code, _ = _netcheck_error(next(iter(res.values())))
+    return {'status': 'fail', 'error': code,
+            'detail': ' · '.join(h for h, _ in _NETCHECK_IP_TARGETS)}
+
+def _netcheck_hosts():
+    """The hosts an update check and its download talk to."""
+    hosts = [urllib.parse.urlparse(OTA_MANIFEST_BASE).hostname,
+             urllib.parse.urlparse(OTA_PROD_MIRROR_BASE).hostname,
+             'api.github.com', 'github.com']
+    return [h for i, h in enumerate(hosts) if h and h not in hosts[:i]]
+
+def _netcheck_dns():
+    device, _ = _active_device()
+    servers = _device_ipv4_runtime(device)['dns'] if device else []
+    hosts = _netcheck_hosts()
+    res = _netcheck_parallel({h: (lambda h=h: socket.getaddrinfo(h, 443, proto=socket.IPPROTO_TCP))
+                              for h in hosts}, 6)
+    failed = [h for h, v in res.items() if isinstance(v, Exception)]
+    out = {'servers': servers, 'failed': failed, 'detail': ', '.join(servers) if servers else ''}
+    if len(failed) == len(hosts):
+        code, _ = _netcheck_error(res[hosts[0]])
+        out.update(status='fail', error='dns' if code == 'dns' else code)
+    elif failed:
+        out.update(status='warn', error='dnsPartial')
+    else:
+        out['status'] = 'ok'
+    return out
+
+def _netcheck_ntp():
+    try:
+        v = _run(['timedatectl', 'show', '-p', 'NTPSynchronized', '--value'], timeout=5).stdout.strip()
+        return v == 'yes'
+    except Exception:
+        return None
+
+def _netcheck_fetch(url, headers=None, limit=1 << 20, timeout=8):
+    """GET `url`; returns (info dict, body bytes or None). Never raises."""
+    host = urllib.parse.urlparse(url).hostname
+    info = {'host': host, 'url': url}
+    req = urllib.request.Request(url, headers={'User-Agent': _NETCHECK_UA, **(headers or {})})
+    t0 = time.monotonic()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read(limit)
+            info['http'] = resp.status
+            info['date'] = resp.headers.get('Date')
+            final = urllib.parse.urlparse(resp.geturl()).hostname
+            if final and final != host:
+                info['via'] = final
+        info['ms'] = round((time.monotonic() - t0) * 1000)
+        info['bytes'] = len(body)
+        info['status'] = 'ok'
+        return info, body
+    except Exception as e:
+        code, http = _netcheck_error(e)
+        info.update(status='fail', error=code, ms=round((time.monotonic() - t0) * 1000))
+        if http:
+            info['http'] = http
+        return info, None
+
+def _netcheck_ota(channel):
+    """The update check's own sources, in the order the device tries them
+    (see _fetch_release()). Returns (step, first manifest that answered,
+    the Date headers seen — for the clock step)."""
+    sources = {'pages': f'{OTA_MANIFEST_BASE}/latest-{channel}.json'}
+    if channel == 'prod':
+        sources['mirror'] = f'{OTA_PROD_MIRROR_BASE}/latest-prod.json'
+    # /rate_limit tells whether the last-resort fallback would work, and
+    # doesn't count against the 60 requests an hour itself
+    sources['github'] = 'https://api.github.com/rate_limit'
+    res = _netcheck_parallel({k: (lambda u=u: _netcheck_fetch(u)) for k, u in sources.items()}, 12)
+    rows, manifest, dates = [], None, []
+    for key in sources:
+        r = res[key]
+        if isinstance(r, Exception):
+            code, _ = _netcheck_error(r)
+            info, body = {'host': urllib.parse.urlparse(sources[key]).hostname,
+                          'status': 'fail', 'error': code}, None
+        else:
+            info, body = r
+        info['id'] = key
+        if info.get('date'):
+            dates.append(info['date'])
+        if body is not None:
+            try:
+                data = json.loads(body)
+            except Exception:
+                data = None
+            if key == 'github':
+                core = ((data or {}).get('resources') or {}).get('core') or {}
+                info['remaining'] = core.get('remaining')
+                if core.get('remaining') == 0:
+                    info.update(status='warn', error='rateLimited')
+            elif not (isinstance(data, dict) and data.get('tag_name')):
+                info.update(status='fail', error='badManifest')
+            else:
+                info['tag'] = data['tag_name']
+                manifest = manifest or data
+        info.pop('date', None)
+        rows.append(info)
+    by_id = {r['id']: r for r in rows}
+    if by_id['pages']['status'] == 'ok':
+        status, error = 'ok', None
+    elif manifest is not None or by_id['github']['status'] == 'ok':
+        # the device gets there through a fallback: updates still work
+        status, error = 'warn', 'fallback'
+    else:
+        status, error = 'fail', 'otaDown'
+    step = {'status': status, 'channel': channel, 'sources': rows,
+            'detail': by_id['pages'].get('tag') or ''}
+    if error:
+        step['error'] = error
+    return step, manifest, dates
+
+def _netcheck_download(manifest):
+    """First MiB of the payload this device would download: the same host,
+    redirects and speed the real update gets."""
+    if not manifest:
+        return {'status': 'skip'}
+    image = _image_mode() or _ab_ready()
+    wanted = [(IMAGE_PREFIX, '.raucb')] if image else [(p, '.tar.gz') for p in OTA_UI_PREFIX] + [(SYS_PREFIX, '.tar.gz')]
+    assets = manifest.get('assets') or []
+    asset = next((a for pfx, sfx in wanted for a in assets
+                  if str(a.get('name', '')).startswith(pfx) and str(a.get('name', '')).endswith(sfx)
+                  and a.get('browser_download_url')), None)
+    if not asset:
+        return {'status': 'skip'}
+    info, body = _netcheck_fetch(asset['browser_download_url'], headers={'Range': 'bytes=0-1048575'},
+                                 timeout=15)
+    out = {'status': info['status'], 'host': info['host'], 'asset': asset.get('name')}
+    for k in ('via', 'http', 'ms', 'error'):
+        if info.get(k) is not None:
+            out[k] = info[k]
+    if body is not None and info.get('ms'):
+        out['kbps'] = round(len(body) / 1024 / (info['ms'] / 1000))
+    out['detail'] = info.get('via') or info['host']
+    return out
+
+def _netcheck_clock(ntp, dates):
+    """The clock against the Date header of the servers that answered: TLS
+    certificates are refused by a box whose clock is far off. What counts is
+    that measured offset, not the NTP flag: the image may run no NTP client
+    at all and keep good time from the RTC (`ntp` is reported, not judged)."""
+    out = {'ntp': ntp, 'detail': time.strftime('%Y-%m-%d %H:%M'), 'status': 'ok'}
+    skews = []
+    for d in dates:
+        try:
+            skews.append(time.time() - email.utils.parsedate_to_datetime(d).timestamp())
+        except Exception:
+            pass
+    if skews:
+        skew = round(min(skews, key=abs))
+        out['skew'] = skew
+        out['detail'] += f' · {skew:+d} s'
+        if abs(skew) > 3600:
+            out.update(status='fail', error='clockOff')
+        elif abs(skew) > 120:
+            out.update(status='warn', error='clockOff')
+    elif time.gmtime().tm_year < 2025:
+        out.update(status='fail', error='clockOff')
+    return out
+
+def network_check():
+    with _NETCHECK_LOCK:
+        channel = get_ota_channel()
+        steps = {'link': _netcheck_link()}
+        if steps['link']['status'] == 'fail':
+            # no address, nothing further can work: don't list seven failures
+            for k in NETCHECK_STEPS[1:]:
+                steps[k] = {'status': 'skip'}
+        else:
+            res = _netcheck_parallel({'router': _netcheck_router, 'internet': _netcheck_internet,
+                                      'dns': _netcheck_dns, 'ntp': _netcheck_ntp,
+                                      'ota': lambda: _netcheck_ota(channel)}, 20)
+            for k in ('router', 'internet', 'dns'):
+                v = res[k]
+                steps[k] = v if isinstance(v, dict) else {'status': 'fail', 'error': _netcheck_error(v)[0]}
+            ota = res['ota']
+            manifest, dates = None, []
+            if isinstance(ota, tuple):
+                steps['ota'], manifest, dates = ota
+            else:
+                steps['ota'] = {'status': 'fail', 'error': _netcheck_error(ota)[0], 'channel': channel}
+            ntp = res['ntp'] if isinstance(res['ntp'], bool) else None
+            steps['clock'] = _netcheck_clock(ntp, dates)
+            try:
+                steps['download'] = _netcheck_download(manifest)
+            except Exception as e:
+                steps['download'] = {'status': 'fail', 'error': _netcheck_error(e)[0]}
+            # A later hop that works proves the earlier one does too: a router
+            # that ignores ping, or a network that blocks the raw-IP probes
+            # but lets the update server through, is not where the fault is.
+            ota_ok = steps['ota']['status'] != 'fail'
+            if steps['router']['status'] == 'fail' and steps['router'].get('gateway') \
+                    and (steps['internet']['status'] == 'ok' or ota_ok):
+                steps['router'].update(status='ok', error='noPing')
+            if steps['internet']['status'] == 'fail' and ota_ok:
+                steps['internet'].update(status='warn', error='blockedIps')
+        out = [dict(steps[k], id=k) for k in NETCHECK_STEPS]
+        verdict = next((s['id'] for s in out if s['status'] == 'fail'), None)
+        warn = next((s['id'] for s in out if s['status'] == 'warn'), None)
+        return {'success': True, 'channel': channel, 'at': int(time.time()),
+                'verdict': verdict or 'ok', 'warn': warn, 'steps': out}
 
 def wifi_scan():
     try:
@@ -3403,15 +3749,16 @@ def set_vu_style(style):
     return {'success': True, 'style': style}
 
 # ──────────────────────────────────────────────────────────────────
-#  Now-playing animation: a turning CD, vinyl record or cassette the kiosk
-#  draws where the VU meters would be. The interface shows it only while the
+#  Now-playing animation: a turning CD (top-loading, or the 90s front-loading
+#  player 'cdfront'), vinyl record or cassette the kiosk draws where the VU
+#  meters would be. The interface shows it only while the
 #  VU meters are switched off; the two settings stay independent here, so
 #  turning the meters back on and off again brings the chosen animation back.
 #  Persisted like the VU choices above (reachable from the web admin on a
 #  headless unit); ABSENT, unreadable or unknown content means "none".
 # ──────────────────────────────────────────────────────────────────
 NOWPLAYING_ANIMATION_FILE = '/etc/hifi-player/nowplaying-animation'
-NOWPLAYING_ANIMATION_CHOICES = ('none', 'cd', 'vinyl', 'cassette')
+NOWPLAYING_ANIMATION_CHOICES = ('none', 'cd', 'cdfront', 'vinyl', 'cassette')
 NOWPLAYING_ANIMATION_DEFAULT = 'none'
 
 # Error text for a refused id, added to the shared catalogue (hifi_i18n.py)
@@ -7063,6 +7410,10 @@ def api_configure_network():
 @app.route('/network_status', methods=['GET'])
 def api_network_status():
     return jsonify(get_network_status())
+
+@app.route('/network_check', methods=['GET'])
+def api_network_check():
+    return jsonify(network_check())
 
 @app.route('/wifi_scan', methods=['GET'])
 def api_wifi_scan():

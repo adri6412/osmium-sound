@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 
 import api_server  # noqa: E402
 
-CHOICES = ['none', 'cd', 'vinyl', 'cassette']
+CHOICES = ['none', 'cd', 'cdfront', 'vinyl', 'cassette']
 
 
 class NowPlayingAnimationTestCase(unittest.TestCase):

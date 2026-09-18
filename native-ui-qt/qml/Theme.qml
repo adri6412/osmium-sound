@@ -41,8 +41,10 @@ QtObject {
     readonly property var easeInOut: [0.42, 0, 0.58, 1, 1, 1]
     readonly property var easeIn: [0.42, 0, 1, 1, 1, 1]
 
-    readonly property int canvasW: 1024
-    readonly property int canvasH: 600
+    // the logical canvas: 600 points tall (1024 wide at 16:10 and taller),
+    // its long side following the screen's shape (Main.qml)
+    property int canvasW: 1024
+    property int canvasH: 600
 
     // Quanti pixel veri vale un punto della tela: 1 a 1024x600, 1,25 a 720p,
     // 1,875 a 1080p, 3,6 a 4K. La imposta Main.qml appena sa il modo video.

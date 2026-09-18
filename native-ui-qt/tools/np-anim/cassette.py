@@ -86,6 +86,9 @@ BAR = (368, 49, 488)              # x0, y, x1 of the progress track
 KNOBS = ((378, 146, None), (460, 146, -52))   # centre, indicator angle (None: the volume
                                               # knob, its dot is knob-dot.png)
 VOLUME_SWEEP = 135                            # the volume knob turns +-135 degrees from straight up
+# the full-screen 90s panel (vintage) has no knobs: a horizontal volume fader
+FADER = (352.0, 488.0, 146.0)                 # x at 0, x at 100, y of the slot
+FADER_CAP = (12.0, 20.0)                      # the cap, centred on its position
 KNOB_R = 23
 JACK_C = (350, 230)
 LED_C = (442, 230)
@@ -334,7 +337,10 @@ def shade_key(cv, x0, y0, x1, y1, kind, pressed=False, lit=False):
 
 
 # ── the deck ───────────────────────────────────────────────────────────────
-def build_deck(out):
+# the 90s front panel of the full-screen view (vintage): the display window
+# holds the grey-green tape LCD (LcdTape.qml, drawn by the scene), and the
+# panel gets silk-screen prints; everything else is the same deck
+def build_deck(out, vintage=False):
     cv = Canvas(0, 0, CANVAS[0], CANVAS[1], PPT_BIG)
     X, Y, n = cv.X, cv.Y, cv.n
     rng = np.random.default_rng(31)
@@ -433,8 +439,9 @@ def build_deck(out):
     plate = alb * (0.28 + 0.72 * lambert(nx, ny, nz)) + 0.50 * blinn(nx, ny, nz, 60) + 0.05 * blinn(nx, ny, nz, 6)
     plate = gray3(plate, (0.985, 0.995, 1.02))
 
+    knobs = () if vintage else KNOBS
     # shadows of the knobs on the panel (they stand ~9 points proud)
-    for kx, ky, _ in KNOBS:
+    for kx, ky, _ in knobs:
         off = -LXY * 9.0 * LSLOPE * 0.55
         plate = plate * (1 - 0.75 * soft(sd_circle(X - off[0], Y - off[1], kx, ky, KNOB_R - 0.5), 3.2))[..., None]
         plate = plate * (1 - 0.5 * soft(sd_circle(X - 0.6, Y - 1.0, kx, ky, KNOB_R), 1.0))[..., None]
@@ -456,13 +463,14 @@ def build_deck(out):
     glass = 0.0010 + 0.0025 * smoothstep(0, 30, Y - DISPLAY[1])
     glass = glass * (1 - 0.6 * np.exp(-inside / 2.0))
     glass = gray3(glass)
-    unlit = cv.cov(symbol_sd(X, Y, "play", *DISP_PLAY_C)) * 0.8 + cv.cov(sd_rrect(X, Y, BAR[0], BAR[1] - 1.0, BAR[2], BAR[1] + 1.0, 1.0))
-    glass = glass + np.clip(unlit, 0, 1)[..., None] * rgb3((0.010, 0.0075, 0.003))
+    if not vintage:
+        unlit = cv.cov(symbol_sd(X, Y, "play", *DISP_PLAY_C)) * 0.8 + cv.cov(sd_rrect(X, Y, BAR[0], BAR[1] - 1.0, BAR[2], BAR[1] + 1.0, 1.0))
+        glass = glass + np.clip(unlit, 0, 1)[..., None] * rgb3((0.010, 0.0075, 0.003))
     plate = mix(plate, glass, cv.cov(sd_disp))
 
     # knobs: a knurled skirt round a face turned in fine concentric rings
     phl = math.atan2(LXY[1], LXY[0])
-    for kx, ky, ind in KNOBS:
+    for kx, ky, ind in knobs:
         dx, dy = X - kx, Y - ky
         rk = np.hypot(dx, dy)
         phi = np.arctan2(dy, dx)
@@ -516,6 +524,39 @@ def build_deck(out):
     bead = cv.cov(rl - 2.45)
     bead_c = rgb3((0.022, 0.011, 0.002)) + rgb3((0.5, 0.45, 0.4)) * np.exp(-((X - LED_C[0] + 0.8) ** 2 + (Y - LED_C[1] + 0.9) ** 2) / 0.25)[..., None]
     plate = mix(plate, bead_c, bead)
+
+    if vintage:
+        # the fader's slot: a dark cut with rounded ends, its lower lip catching
+        # the light; eleven ticks and 0-10 above it
+        fx0, fx1, fy = FADER
+        sd_slot = sd_rrect(X, Y, fx0 - 3, fy - 1.6, fx1 + 3, fy + 1.6, 1.6)
+        slot = cv.cov(sd_slot)
+        lip = cv.cov(sd_rrect(X, Y, fx0 - 3, fy + 1.6, fx1 + 3, fy + 2.3, 0.4)) * (1 - slot)
+        plate = mix(plate, gray3(0.003 + 0.004 * smoothstep(fy - 1.6, fy + 1.6, Y)), slot)
+        plate = plate * (1 - 0.4 * lip)[..., None] + gray3(0.05 * lip)
+        for k in range(11):
+            tx = fx0 + (fx1 - fx0) * k / 10
+            tm = cv.cov(sd_rrect(X, Y, tx - 0.3, fy - 9.5, tx + 0.3, fy - 6.5 + (1.2 if k % 5 == 0 else 0), 0.1))
+            plate = plate * (1 - tm[..., None]) + 0.40 * tm[..., None]
+        import cdfront
+        items = [(name, (key_rect(i)[0] + key_rect(i)[2]) / 2, 214.5, 3.8, True, "m", 0.3)
+                 for i, name in enumerate(("REW", "PLAY", "F.FWD", "STOP", "PAUSE", "EJECT"))]
+        items += [
+            ("OSMIUM", DISPLAY[0], 92, 8.0, True, "l", 1.9),
+            ("TC-90", DISPLAY[2], 92, 6.2, True, "r", 0.4),
+            ("STEREO CASSETTE DECK", DISPLAY[0], 102, 3.8, False, "l", 0.7),
+            ("AUTO REVERSE  \u00b7  NR", DISPLAY[2], 102, 3.6, False, "r", 0.3),
+            ("VOLUME", (FADER[0] + FADER[1]) / 2, 160, 3.8, True, "m", 0.6),
+            ("PHONES", JACK_C[0], 214.5, 3.8, True, "m", 0.3),
+            ("POWER", (POWER[0] + POWER[2]) / 2, 214.5, 3.8, True, "m", 0.3),
+        ]
+        items += [(str(k), FADER[0] + (FADER[1] - FADER[0]) * k / 10, FADER[2] - 14.5, 3.4, True, "m", 0.0)
+                  for k in range(11)]
+        ink = cdfront.text_mask(cv, items)
+        plate = plate * (1 - ink[..., None]) + 0.50 * ink[..., None]
+        cv.over(srgb(plate), body * (1 - in_bay))
+        save(cv.image(), out, "deck-v.png")
+        return
 
     # the only lettering: OSMIUM, lightly engraved between display and knobs
     m = text_mask(cv, "OSMIUM", (DISPLAY[0] + DISPLAY[2]) / 2, ENGRAVE_Y, 5.0, 2.5)
@@ -584,6 +625,26 @@ def build_keys(out):
     for i, kind in enumerate(KEY_SYMBOLS):
         build_key_image(out, key_rect(i), kind, False, "key-" + kind + "-down.png")
     build_key_image(out, POWER, "power", False, "key-power-down.png")
+
+
+def build_fader(out):
+    """The volume fader's cap of the 90s panel: black ribbed plastic with a
+    white index line, and its shadow on the panel."""
+    w, h = FADER_CAP
+    cv = Canvas(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, PPT_CAS)
+    X, Y, n = cv.X, cv.Y, cv.n
+    sd = sd_rrect(X, Y, -w / 2, -h / 2, w / 2, h / 2, 1.8)
+    cv.over((0, 0, 0), 0.7 * soft(sd_rrect(X - 1.2, Y - 1.8, -w / 2, -h / 2, w / 2, h / 2, 1.8), 1.6))
+    e = np.clip(-sd, 0, None)
+    hh = 1.2 * np.sqrt(1 - (1 - np.clip(e / 1.2, 0, 1)) ** 2)
+    hh = hh + 0.18 * np.cos(Y * 2 * math.pi / 1.6) * smoothstep(1.4, 2.2, e) * (np.abs(Y) > 2.0)
+    nx, ny, nz = normals(hh, n)
+    col = 0.030 * (0.35 + 0.65 * lambert(nx, ny, nz)) + 0.45 * blinn(nx, ny, nz, 40)
+    rgb = gray3(col)
+    line = cv.cov(sd_rrect(X, Y, -w / 2 + 2.2, -0.45, w / 2 - 2.2, 0.45, 0.2))
+    rgb = rgb * (1 - line[..., None]) + 0.75 * line[..., None]
+    cv.over(srgb(rgb), cv.cov(sd))
+    save(cv.image(), out, "fader.png")
 
 
 def build_knob_dot(out):
@@ -975,7 +1036,7 @@ def main():
     ap.add_argument("--only", default="", help="comma separated builder names (debug)")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    builders = {"deck": build_deck, "keys": build_keys, "knobdot": build_knob_dot, "display": build_display_parts,
+    builders = {"deck": build_deck, "deck-v": lambda o: build_deck(o, vintage=True), "fader": build_fader, "keys": build_keys, "knobdot": build_knob_dot, "display": build_display_parts,
                 "door": build_door, "dooredge": build_door_edge, "cassette": build_cassette,
                 "back": build_cassette_back, "shadow": build_cassette_shadow, "pack": build_pack,
                 "hub": build_hub}

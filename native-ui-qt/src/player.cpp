@@ -369,7 +369,7 @@ void Player::toggleFavorite() {
 
 // The Now Playing animations the kiosk knows how to draw (assets/anim/<id>).
 static bool isNpAnimation(const QString &v) {
-    return v == QLatin1String("none") || v == QLatin1String("cd")
+    return v == QLatin1String("none") || v == QLatin1String("cd") || v == QLatin1String("cdfront")
         || v == QLatin1String("vinyl") || v == QLatin1String("cassette");
 }
 

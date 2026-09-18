@@ -49,6 +49,13 @@ Item {
     property bool fmtWatch: false
     property var timezones: []
     property var thirdParty: null
+    // network check (api_server /network_check): the last result, and the
+    // section it was opened from, where the back arrow returns
+    property var nc: null
+    property bool ncBusy: false
+    property bool ncFailed: false
+    property bool ncAdvanced: false      // addresses, timings and sources, for whoever helps the owner
+    property string backTo: ""
 
     // Sections are addressed by id, never by position: a new one moves every
     // index after it (openSection() also takes the id)
@@ -77,7 +84,10 @@ Item {
         { id: "systemInfo", icon: "info", key: "settings.sections.systemInfo" },
         { id: "updates", icon: "download", key: "settings.sections.updates" },
         { id: "systemControls", icon: "power", key: "settings.sections.systemControls" },
-        { id: "thirdPartyNotices", icon: "scroll-text", key: "settings.sections.thirdPartyNotices" }]
+        { id: "thirdPartyNotices", icon: "scroll-text", key: "settings.sections.thirdPartyNotices" },
+        // reached from System info and Updates, not listed on its own
+        { id: "netCheck", icon: "network", key: "settings.sections.netCheck", hidden: true }]
+    readonly property var listedSecs: secs.filter(function(s) { return !s.hidden })
 
     Component.onCompleted: Ui.settings = root
 
@@ -398,12 +408,13 @@ Item {
 
     function enter() { cfg.load(); goRoot() }
     function say(text, err) { msg = text; msgErr = !!err; rebuild() }
-    function goRoot() { active = -1; msg = ""; pendAct = ""; rows = []; page.contentY = 0; appear() }
+    function goRoot() { active = -1; msg = ""; pendAct = ""; backTo = ""; rows = []; page.contentY = 0; appear() }
+    function goBack() { if (backTo) openSection(backTo); else goRoot() }
     function openSection(i, mark) {
         if (typeof i === "string") i = secIndex(i)
         if (i < 0 || i >= secs.length) return
         var id = secs[i].id
-        active = i; msg = ""; pendAct = ""; countdown = 0
+        active = i; msg = ""; pendAct = ""; countdown = 0; backTo = ""
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
         wizReset()
@@ -578,7 +589,7 @@ Item {
 
     function appear() { fadeAnim.restart() }
     NumberAnimation { id: fadeAnim; target: body; property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
-    Keys.onEscapePressed: if (active >= 0) goRoot()
+    Keys.onEscapePressed: if (active >= 0) goBack()
 
     // ─── costruzione delle righe ───────────────────────────────────────────
     property var _stack: []
@@ -662,6 +673,7 @@ Item {
             case "updates": secUpdates(); break
             case "systemControls": secSysctl(); break
             case "thirdPartyNotices": secThirdparty(); break
+            case "netCheck": secNetcheck(); break
             }
             if (msg) note(msg, msgErr ? "red" : "dark")
         }
@@ -1014,12 +1026,14 @@ Item {
             action(Tr.t("settings.animations.turnOffVu"), "anim_vu_off", "accent")
             return
         }
-        var KINDS = ["none", "cd", "vinyl", "cassette"]
+        var KINDS = ["none", "cd", "cdfront", "vinyl", "cassette"]
         for (var i = 0; i < KINDS.length; i += 2) {
             var cards = []
             for (var j = i; j < i + 2; j++)
-                cards.push({ type: "animcard", label: Tr.t("settings.animations." + KINDS[j]), arg: KINDS[j],
-                             sel: Player.npAnimation === KINDS[j], act: "np_anim" })
+                cards.push(j < KINDS.length
+                           ? { type: "animcard", label: Tr.t("settings.animations." + KINDS[j]), arg: KINDS[j],
+                               sel: Player.npAnimation === KINDS[j], act: "np_anim" }
+                           : { type: "help", label: "" })
             grid(cards)
         }
     }
@@ -1255,6 +1269,7 @@ Item {
         info(Tr.t("settings.info.deviceIp"), cfg.deviceIp || cfg.localIp || Tr.t("settings.info.notAvailable")).style = "seg"
         info(Tr.t("settings.info.platform"), cfg.platform + " (" + cfg.arch + ")").style = "seg"
         info(Tr.t("settings.info.apiStatus"), Tr.t(cfg.apiOk ? "settings.info.connected" : "settings.info.disconnected")).style = "seg"
+        netCheckEntry(false)
         sep()
         helpText("Osmium Sound " + cfg.version, 12).center = true
         // ogni interfaccia dice con cosa è fatta: questa è Qt/QML, non Electron
@@ -1287,6 +1302,8 @@ Item {
         if (any) { var up = action(Tr.t("settings.updates.updateNow"), "upd_apply", "gold"); up.bold = true; up.hh = 56; up.icon = "download"; help("settings.updates.orderNote", 12) }
         if (cfg.otaState && cfg.otaState !== "idle") note(cfg.otaPct > 0 ? cfg.otaMsg + " (" + cfg.otaPct + "%)" : cfg.otaMsg, "dark")
         toggle(Tr.t("settings.updates.autoCheck"), "", autoCheck, "upd_autocheck")
+        // a failed check is exactly when the owner needs it: stand it out
+        netCheckEntry(cfg.updCheckFailed && !cfg.updChecking)
     }
     function secSysctl() {
         var rb = action(Tr.t("settings.controls.reboot"), "reboot", "orange"); rb.icon = "rotate-cw"; rb.bold = true; rb.hh = 56
@@ -1295,6 +1312,107 @@ Item {
         sep().tone = "red"                                   // border-t border-red-500/20
         help("settings.factory.help", 12)
         var fr = action(Tr.t("settings.factory.button"), "factory_reset", "darkred"); fr.icon = "alert-triangle"; fr.bold = true; fr.hh = 56
+    }
+    // ─── network check ─────────────────────────────────────────────────────
+    function netCheckEntry(prominent) {
+        var b = action(Tr.t("settings.netCheck.open"), "netcheck_open", prominent ? "accent" : "dark"); b.icon = "network"; b.hh = 48
+        help("settings.netCheck.openHelp", 12)
+    }
+    function openNetCheck() {
+        var from = secs[active].id
+        openSection("netCheck")
+        backTo = from
+        runNetCheck()
+    }
+    function runNetCheck() {
+        if (ncBusy) return
+        ncBusy = true; ncFailed = false
+        rebuild()
+        Api.get(cfg.api("/network_check"), function(ok, d) {
+            ncBusy = false
+            if (ok && d && d.steps) nc = d
+            else ncFailed = true
+            rebuild()
+        }, 45000)
+    }
+    function fmtSkew(sec) {
+        var a = Math.abs(sec)
+        if (a < 3600) return Math.round(a / 60) + " min"
+        if (a < 86400) return Math.round(a / 3600) + " h"
+        return Math.round(a / 86400) + " " + Tr.t("settings.lyrion.days")
+    }
+    // the reason a step or a source failed, in words
+    function ncReason(s) {
+        var e = s.error
+        if (!e) return ""
+        if (e === "http") return Tr.tf("settings.netCheck.err.http", "code", s.http)
+        if (e === "packetLoss") return Tr.tf("settings.netCheck.err.packetLoss", "loss", s.loss)
+        if (e === "clockOff") return s.skew !== undefined ? Tr.tf("settings.netCheck.err.clockOff", "time", fmtSkew(s.skew)) : Tr.t("settings.netCheck.err.clockWrong")
+        if (e === "dnsPartial") return Tr.t("settings.netCheck.err.dnsPartial") + " " + (s.failed || []).join(", ")
+        return Tr.t("settings.netCheck.err." + e)
+    }
+    function ncDetail(s) {
+        var parts = []
+        if (s.detail) parts.push(String(s.detail))
+        if (s.kbps) parts.push(s.kbps >= 1024 ? (s.kbps / 1024).toFixed(1) + " MB/s" : s.kbps + " KB/s")
+        return parts.join(" · ")
+    }
+    // What the owner sees: four plain steps, each the worst of the checks
+    // behind it; the seven checks with their numbers are "advanced".
+    readonly property var ncGroups: [
+        { id: "device", steps: ["link"] }, { id: "router", steps: ["router"] },
+        { id: "internet", steps: ["internet", "dns", "clock"] }, { id: "server", steps: ["ota", "download"] }]
+    function ncStep(res, id) {
+        if (res) for (var j = 0; j < res.steps.length; j++) if (res.steps[j].id === id) return res.steps[j]
+        return { id: id, status: ncBusy ? "run" : "skip" }
+    }
+    function ncWorst(res, ids) {
+        var rank = { run: 5, fail: 4, warn: 3, ok: 2, skip: 1 }, worst = "skip"
+        for (var i = 0; i < ids.length; i++) {
+            var st = ncStep(res, ids[i]).status
+            if ((rank[st] || 0) > rank[worst]) worst = st
+        }
+        return worst
+    }
+    function secNetcheck() {
+        help("settings.netCheck.help")
+        var STEPS = ["link", "router", "internet", "dns", "clock", "ota", "download"]
+        var res = ncBusy ? null : nc
+        if (ncBusy) note(Tr.t("settings.netCheck.running"), "dark")
+        else if (ncFailed) note(Tr.t("settings.netCheck.failed"), "red", "alert-circle")
+        else if (res) {
+            var v = res.verdict === "ok" && res.warn ? "warn" : res.verdict
+            // a caveat has a sentence of its own for the step it comes from
+            var vt = v === "warn" && ["link", "router", "internet", "dns", "clock", "ota"].indexOf(res.warn) >= 0
+                   ? Tr.t("settings.netCheck.verdictWarn." + res.warn) : Tr.t("settings.netCheck.verdict." + v)
+            note(vt, v === "ok" ? "gold" : v === "warn" ? "amber" : "red",
+                 v === "ok" ? "check-circle-2" : v === "warn" ? "alert-triangle" : "alert-circle")
+        }
+        box(function() {
+            for (var g = 0; g < ncGroups.length; g++) {
+                var st = ncWorst(res, ncGroups[g].steps)
+                push({ type: "diag", plain: true, label: Tr.t("settings.netCheck.groups." + ncGroups[g].id), status: st,
+                       value: Tr.t("settings.netCheck.status." + st) })
+            }
+        })
+        var b = action(Tr.t(nc ? "settings.netCheck.again" : "settings.netCheck.run"), "netcheck_run", "accent"); b.icon = "rotate-cw"; b.hh = 48; b.dim = ncBusy
+        var a = action(Tr.t(ncAdvanced ? "settings.netCheck.advancedHide" : "settings.netCheck.advanced"), "netcheck_adv", "dark")
+        a.icon = ncAdvanced ? "chevron-up" : "chevron-down"; a.hh = 40; a.px = 14
+        if (!ncAdvanced) return
+        box(function() {
+            for (var i = 0; i < STEPS.length; i++) {
+                var s = ncStep(res, STEPS[i])
+                push({ type: "diag", label: Tr.t("settings.netCheck.steps." + STEPS[i]), status: s.status,
+                       value: ncDetail(s), extra: s.status === "skip" && res ? Tr.t("settings.netCheck.status.skip") : ncReason(s) })
+                if (STEPS[i] === "ota" && s.sources) for (var k = 0; k < s.sources.length; k++) {
+                    var src = s.sources[k]
+                    push({ type: "diag", sub: true, label: Tr.t("settings.netCheck.sources." + src.id), status: src.status,
+                           value: src.host + (src.ms !== undefined ? " · " + src.ms + " ms" : ""),
+                           extra: src.status === "ok" ? "" : ncReason(src) })
+                }
+            }
+        })
+        if (res) helpText(Tr.tf("settings.netCheck.lastRun", "time", Qt.formatDateTime(new Date(res.at * 1000), "HH:mm:ss")) + " · " + String(res.channel || ""), 12).center = true
     }
     function secThirdparty() {
         if (!thirdParty) { note(Tr.t("common.loading"), "dark"); return }
@@ -1482,6 +1600,9 @@ Item {
             apply(); return
         }
         case "upd_check": msg = ""; cfg.load(); break
+        case "netcheck_open": openNetCheck(); return
+        case "netcheck_run": runNetCheck(); return
+        case "netcheck_adv": ncAdvanced = !ncAdvanced; rebuild(); return
         case "upd_apply": post(A("/update/apply_all"), {}); say(Tr.t("settings.updates.updating")); break
         case "upd_changelog":
             // il titolo porta la versione, come in Settings.jsx
@@ -1683,7 +1804,7 @@ Item {
                 visible: root.atRoot
                 x: 32; y: rootHead.y + rootHead.height + 32; width: parent.width - 64; spacing: 8
                 Repeater {
-                    model: root.secs
+                    model: root.listedSecs
                     Item {
                         id: secRow
                         required property var modelData
@@ -1702,7 +1823,7 @@ Item {
                             Rectangle { visible: secRow.modelData.id === "vuMeters" && cfg.vuStoreNew > 0; x: parent.width - 16 - 22 - 20; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: Theme.gold }
                             Icon { x: parent.width - 16 - 22; anchors.verticalCenter: parent.verticalCenter; name: "chevron-right"; size: 22; color: Theme.silver }
                         }
-                        Tap { id: sTap; onClicked: root.openSection(secRow.index) }
+                        Tap { id: sTap; onClicked: root.openSection(secRow.modelData.id) }
                     }
                 }
             }
@@ -1714,7 +1835,7 @@ Item {
                 Item {
                     width: 44; height: 36
                     Icon { x: 0; anchors.verticalCenter: parent.verticalCenter; name: "chevron-left"; size: 32; color: Theme.gold }
-                    Tap { grow: 8; onClicked: root.goRoot() }
+                    Tap { grow: 8; onClicked: root.goBack() }
                 }
                 Text { x: 44; width: parent.width - 44; height: 36; verticalAlignment: Text.AlignVCenter; text: root.active >= 0 ? Tr.t(root.secs[root.active].key) : ""; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 30; font.bold: true }
             }

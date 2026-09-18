@@ -321,7 +321,14 @@ def build_base(out):
     save(cv.image(), out, "cd-base.png")
 
 
-def build_bridge(out):
+# the 90s front panel of the full-screen view (vintage): a window for the
+# grey-green LCD (LcdCd.qml, 196 x 100) instead of the black display, symbols
+# on the keys and silk-screen prints
+LCD_WIN = (283, 27, 485, 133)
+LCD_AT = (286, 30)
+
+
+def build_bridge(out, vintage=False):
     x0 = BRIDGE[0] - 8
     cv = Canvas(x0, 0, CANVAS[0] - x0, CANVAS[1], PPT_BIG)
     X, Y, n = cv.X, cv.Y, cv.n
@@ -339,7 +346,7 @@ def build_bridge(out):
     B = 2.8
     h = B * np.sqrt(1 - (1 - np.clip(e / B, 0, 1)) ** 2)
 
-    sd_d = sd_rrect(X, Y, *DISPLAY, DISPLAY_R)
+    sd_d = sd_rrect(X, Y, *LCD_WIN, 3.0) if vintage else sd_rrect(X, Y, *DISPLAY, DISPLAY_R)
     h = h - 1.6 * (1 - smoothstep(0.0, 1.8, sd_d))
 
 
@@ -370,9 +377,10 @@ def build_bridge(out):
     glass = 0.0010 + 0.0025 * smoothstep(0, 30, Y - DISPLAY[1])
     glass = glass * (1 - 0.6 * np.exp(-inside / 2.0))
     glass = np.repeat(glass[..., None], 3, axis=2)
-    tri = play_sd(X, Y)
-    unlit = cv.cov(tri) * 0.8 + cv.cov(sd_rrect(X, Y, BAR[0], BAR[1] - 1.0, BAR[2], BAR[1] + 1.0, 1.0))
-    glass = glass + np.clip(unlit, 0, 1)[..., None] * rgb3((0.010, 0.0075, 0.003))
+    if not vintage:
+        tri = play_sd(X, Y)
+        unlit = cv.cov(tri) * 0.8 + cv.cov(sd_rrect(X, Y, BAR[0], BAR[1] - 1.0, BAR[2], BAR[1] + 1.0, 1.0))
+        glass = glass + np.clip(unlit, 0, 1)[..., None] * rgb3((0.010, 0.0075, 0.003))
     dm = cv.cov(sd_d)
     top = top * (1 - dm[..., None]) + glass * dm[..., None]
 
@@ -405,8 +413,30 @@ def build_bridge(out):
     bead_c = rgb3((0.022, 0.011, 0.002)) + rgb3((0.5, 0.45, 0.4)) * np.exp(-((X - LED_C[0] + 0.8) ** 2 + (Y - LED_C[1] + 0.9) ** 2) / 0.25)[..., None]
     top = top * (1 - bead[..., None]) + bead_c * bead[..., None]
 
+    if vintage:
+        from cdfront import symbol_mask, text_mask
+        ink = 0.50
+        # symbols engraved in the caps: play/pause (a small triangle and two
+        # bars side by side), stop, skip back, skip forward
+        marks = [symbol_mask(cv, "play", BUTTONS[0][0] - 2.6, BUTTONS[0][1], 4.0),
+                 symbol_mask(cv, "pause", BUTTONS[0][0] + 3.0, BUTTONS[0][1], 4.0)]
+        marks += [symbol_mask(cv, name, bc[0], bc[1], 5.0) for name, bc in zip(("stop", "prev", "next"), BUTTONS[1:])]
+        for sm in marks:
+            top = top * (1 - sm[..., None]) + 0.012 * sm[..., None]
+        items = [
+            ("PLAY/PAUSE", BUTTONS[0][0], 153, 4.0, True, "m", 0.1),
+            ("STOP", BUTTONS[1][0], 153, 4.0, True, "m", 0.25),
+            ("SKIP", (BUTTONS[2][0] + BUTTONS[3][0]) / 2, 153, 4.0, True, "m", 0.25),
+            ("PLAY", LED_C[0], 153, 4.0, True, "m", 0.25),
+            ("OSMIUM", 290, 206, 9.5, True, "l", 2.2),
+            ("CD-80T", 484, 206, 7.0, True, "r", 0.5),
+            ("COMPACT DISC PLAYER", 290, 218, 4.4, False, "l", 0.8),
+            ("TOP LOADING  \u00b7  1 BIT DAC", 484, 218, 4.0, False, "r", 0.3),
+        ]
+        prints = text_mask(cv, items)
+        top = top * (1 - prints[..., None]) + ink * prints[..., None]
     cv.over(srgb(top), cov_b)
-    save(cv.image(), out, "cd-bridge.png")
+    save(cv.image(), out, "cd-bridge-v.png" if vintage else "cd-bridge.png")
 
 
 def play_sd(X, Y):
@@ -671,7 +701,8 @@ def main():
     ap.add_argument("--only", default="", help="comma separated builder names (debug)")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    builders = {"base": build_base, "bridge": build_bridge, "glass": build_glass, "play": build_play,
+    builders = {"base": build_base, "bridge": build_bridge,
+                "bridge-v": lambda o: build_bridge(o, vintage=True), "glass": build_glass, "play": build_play,
                 "led": build_led, "lid": build_lid, "disc": build_disc, "label": build_label,
                 "sheen": build_sheen, "shadows": build_shadows, "puck": build_puck}
     only = [s for s in args.only.split(",") if s]

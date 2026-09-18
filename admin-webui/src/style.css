@@ -461,3 +461,31 @@ table.du tfoot td { border-bottom: 0; font-weight: 600; }
 .du-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .du-swatch.du-free { border: 1px solid #555; }
 .du-desc { display: block; font-size: 12px; margin: 3px 0 0 18px; line-height: 1.35; }
+
+/* Settings → Network check: one row per step, a sub-row per update source */
+.nc-step { display: flex; gap: 10px; align-items: flex-start; }
+.nc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nc-detail { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 12px; text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.nc-mark { flex: 0 0 18px; width: 18px; height: 18px; border-radius: 50%; font-size: 12px; font-weight: 700; line-height: 18px; text-align: center; color: var(--muted); border: 1px solid var(--border); }
+.nc-mark.ok { color: #111; background: var(--ok); border-color: var(--ok); }
+.nc-mark.warn { color: #111; background: #facc15; border-color: #facc15; }
+.nc-mark.fail { color: #fff; background: var(--danger); border-color: var(--danger); }
+.nc-why { font-size: 12px; color: var(--muted); }
+.nc-why.warn { color: #facc15; }
+.nc-why.fail { color: #f0b4b4; }
+.nc-src { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; font-size: 13px; }
+.nc-src .nc-mark { flex-basis: 14px; width: 14px; height: 14px; line-height: 14px; font-size: 10px; }
+.nc-verdict.ok { border-color: rgba(111, 202, 111, 0.4); color: var(--ok); }
+.nc-verdict.warn { border-color: rgba(250, 204, 21, 0.4); color: #fde68a; }
+.nc-verdict:not(.ok):not(.warn) { background: rgba(224, 90, 90, 0.1); color: #f0b4b4; border-color: rgba(224, 90, 90, 0.35); }
+.nc-plain { align-items: center; }
+.nc-plain .nc-body { flex-direction: row; gap: 12px; }
+/* a long address drops to its own line instead of breaking mid-name */
+.nc-step .between { flex-wrap: wrap; row-gap: 2px; }
+.nc-step .nc-detail { margin-left: auto; }
+.nc-plain .nc-body { flex-wrap: nowrap; }
+.nc-state { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.nc-state.ok { color: var(--ok); }
+.nc-state.warn { color: #facc15; }
+.nc-state.fail { color: #f0b4b4; }
+.nc-advanced { margin-top: 14px; padding-top: 6px; border-top: 1px solid var(--border); }

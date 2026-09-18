@@ -87,7 +87,7 @@ Item {
     Item {
         anchors.fill: parent
         opacity: root.fade
-        readonly property real cy: 300 - 40
+        readonly property real cy: height / 2 - 40
         Row {
             id: clock
             anchors.horizontalCenter: parent.horizontalCenter

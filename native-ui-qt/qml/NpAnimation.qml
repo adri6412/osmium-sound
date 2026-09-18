@@ -18,8 +18,11 @@ Item {
     property real devScale: 1
     property bool live: true
     property bool active: false
+    // full screen (NpStage): the scenes that have one draw their 90s front panel
+    property bool vintage: false
 
     readonly property string file: kind === "cd" ? "AnimCd.qml"
+                                 : kind === "cdfront" ? "AnimCdFront.qml"
                                  : kind === "vinyl" ? "AnimVinyl.qml"
                                  : kind === "cassette" ? "AnimCassette.qml" : ""
 
@@ -83,6 +86,8 @@ Item {
     Binding { when: loader.item !== null; target: loader.item; property: "title"; value: root.title }
     Binding { when: loader.item !== null; target: loader.item; property: "subtitle"; value: root.subtitle }
 
+    Binding { when: loader.item !== null && loader.item.vintage !== undefined; target: loader.item; property: "vintage"; value: root.vintage }
+
     // A scene with working controls (the cassette deck) declares `power`,
     // `volume` and `volumeFixed` and an action(name, value) signal; the
     // others do not get these inputs (no "non-existent property" warnings).
@@ -91,6 +96,43 @@ Item {
     Binding { when: root.controls; target: loader.item; property: "power"; value: !root.live || Player.power }
     Binding { when: root.controls; target: loader.item; property: "volume"; value: root.live ? Player.volume : -1 }
     Binding { when: root.controls; target: loader.item; property: "volumeFixed"; value: root.live && Player.volumeFixed }
+    // A scene with a display (the CD players' LCD) also declares the queue
+    // position, the time and the repeat / random modes.
+    readonly property bool display: loader.item !== null && loader.item.trackIndex !== undefined
+    Binding { when: loader.item !== null && loader.item.elapsed !== undefined; target: loader.item; property: "elapsed"; value: root.live ? Player.elapsed : 0 }
+    // the cassette deck's level meters: this device's own audio (Vu is kept
+    // running for them by NowPlaying while that scene is on screen)
+    Binding { when: loader.item !== null && loader.item.levelL !== undefined; target: loader.item; property: "levelL"; value: root.live ? Vu.left : 0 }
+    Binding { when: loader.item !== null && loader.item.levelR !== undefined; target: loader.item; property: "levelR"; value: root.live ? Vu.right : 0 }
+    Binding { when: root.display; target: loader.item; property: "trackIndex"; value: root.live ? Player.index : -1 }
+    Binding { when: root.display; target: loader.item; property: "trackTotal"; value: root.live ? Player.total : 0 }
+    Binding { when: root.display; target: loader.item; property: "repeatMode"; value: root.live ? Player.repeat : 0 }
+    Binding { when: root.display; target: loader.item; property: "shuffleMode"; value: root.live ? Player.shuffle : 0 }
+    Binding { when: root.display; target: loader.item; property: "trackTitle"; value: root.live ? Player.title : "" }
+    Binding { when: root.display; target: loader.item; property: "trackArtist"; value: root.live ? Player.artist : "" }
+    // Fast wind on the cassette deck: a jump of windStep seconds per call.
+    // Past the end it moves on to the next track, before the start to the end
+    // of the previous one. After a track change nothing moves until the new
+    // track is really there (Player.elapsed is the old one's until then, and
+    // would skip a second track).
+    readonly property real windStep: 8
+    property string windWait: ""
+    property bool windToEnd: false
+    function wind(dir) {
+        if (Player.duration <= 0) return                        // a stream: nothing to wind
+        if (windWait !== "") {
+            if (Player.trackId === windWait) return
+            windWait = ""
+            if (windToEnd) { windToEnd = false; Player.seek(Math.max(0, Player.duration - 6)); return }
+        }
+        var t = Player.elapsed + dir * windStep
+        if (dir > 0 && t >= Player.duration - 1) { windWait = Player.trackId; Player.next(); return }
+        if (dir < 0 && t <= 0) {
+            if (Player.elapsed > 1.5) { Player.seek(0); return }
+            windWait = Player.trackId; windToEnd = true; Player.prev(); return
+        }
+        Player.seek(t)
+    }
     Connections {
         target: root.live ? loader.item : null
         ignoreUnknownSignals: true
@@ -105,6 +147,10 @@ Item {
             else if (name === "stop" || name === "eject") Player.cmd(["stop"])
             else if (name === "volume") Player.setVolume(value.level, value.final)
             else if (name === "power") Player.cmd(["power", value ? "1" : "0"])
+            else if (name === "wind") root.wind(value)
+            else if (name === "windStop") { root.windWait = ""; root.windToEnd = false }
+            else if (name === "repeat") Player.cycleRepeat()
+            else if (name === "random") Player.cycleShuffle()
         }
     }
 }

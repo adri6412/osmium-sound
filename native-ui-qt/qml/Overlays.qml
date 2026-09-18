@@ -79,8 +79,8 @@ Item {
     // ─── coda ──────────────────────────────────────────────────────────────
     QueueDrawer {
         id: queue
-        x: 1024 - 400 + slide.value * 400
-        width: 400; height: 600
+        x: root.width - 400 + slide.value * 400
+        width: 400; height: root.height
         visible: root.active === 1 || root.active === 2
         interactive: root.active === 1 && root.leaving === 0
         onClose: root.close()

@@ -131,8 +131,8 @@ Item {
         id: card
         readonly property real cw: root.kind === 3 ? 512 : root.kind === 4 ? 384 : 448
         readonly property real ipad: root.kind === 4 ? 20 : 24
-        width: Math.min(cw, 1024 - 48)
-        height: Math.min(content.implicitHeight, 600 - 24)
+        width: Math.min(cw, root.width - 48)
+        height: Math.min(content.implicitHeight, root.height - 24)
         anchors.centerIn: parent
         radius: 16
         color: root.kind === 4 ? Theme.dark : Theme.light
@@ -180,7 +180,7 @@ Item {
                 ListView {
                     id: pickList
                     width: parent.width
-                    height: Math.min(root.items.length * 44, 600 - 220)
+                    height: Math.min(root.items.length * 44, root.height - 220)
                     clip: true
                     model: root.items
                     boundsBehavior: Flickable.StopAtBounds
@@ -213,7 +213,7 @@ Item {
                 Text { text: root.title; color: Theme.white; font.family: Theme.font; font.pixelSize: 18; font.bold: true; height: 28; verticalAlignment: Text.AlignVCenter }
                 Item { width: 1; height: 16 }
                 Flickable {
-                    width: parent.width; height: 600 * 3 / 5; clip: true
+                    width: parent.width; height: root.height * 3 / 5; clip: true
                     contentHeight: bodyText.height
                     boundsBehavior: Flickable.StopAtBounds
                     Text { id: bodyText; width: parent.width; text: root.body; wrapMode: Text.Wrap; color: Theme.silver; font.family: Theme.font; font.pixelSize: 14; lineHeight: 20; lineHeightMode: Text.FixedHeight }

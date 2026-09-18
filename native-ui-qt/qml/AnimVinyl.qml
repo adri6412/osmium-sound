@@ -34,6 +34,10 @@ Item {
     property string mediaKey: ""         // a new value swaps the record
     property string title: ""            // unused here (the cassette writes it on its label)
     property string subtitle: ""
+    // Full screen (NpStage): the 90s black plinth with a pitch fader and
+    // prints (plinth-v.png), and START·STOP works (play / pause)
+    property bool vintage: false
+    signal action(string name, var value)
 
     // for tests: true while something moves
     readonly property bool ticking: spinTimer.running
@@ -271,7 +275,7 @@ Item {
     }
 
     Part { source: root.img("plinth_shadow.png"); rx: 56; ry: -4; rw: 408; rh: 276 }
-    Part { source: root.img("plinth.png"); rx: 80; ry: 12; rw: 360; rh: 232 }
+    Part { source: root.img(root.vintage ? "plinth-v.png" : "plinth.png"); rx: 80; ry: 12; rw: 360; rh: 232 }
     Part { source: root.img("platter.png"); rx: 95.5; ry: 23.5; rw: 209; rh: 209 }
     // strobe dots: they turn while the platter is slow; at speed the eye sees
     // a blurred ring (still), and fine dots stepped at 30 Hz would strobe
@@ -393,5 +397,14 @@ Item {
         opacity: !root.live || root.spinTarget > 0 ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { enabled: root.live; NumberAnimation { duration: 250 } }
+    }
+
+    // START·STOP (vinyl.py BTN_START: centre 106, 219, radius 9)
+    MouseArea {
+        enabled: root.vintage && root.live
+        x: root.ox + (106 - 13) * root.s; y: root.oy + (219 - 13) * root.s
+        width: 26 * root.s; height: 26 * root.s
+        onClicked: root.action(root.playing ? "pause" : "play", true)
+        Rectangle { anchors.centerIn: parent; width: 18 * root.s; height: width; radius: width / 2; color: "black"; opacity: parent.pressed ? 0.35 : 0 }
     }
 }

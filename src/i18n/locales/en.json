@@ -486,7 +486,8 @@
       "updates": "Updates",
       "systemControls": "System Controls",
       "language": "Language",
-      "thirdPartyNotices": "Third-Party Notices"
+      "thirdPartyNotices": "Third-Party Notices",
+      "netCheck": "Network check"
     },
     "language": {
       "help": "Choose the interface language."
@@ -515,14 +516,15 @@
       "chooseAnimation": "Choose an animation"
     },
     "animations": {
-      "help": "Instead of the VU meters, Now Playing can show a CD, a vinyl record or a cassette that turns with the music.",
+      "help": "Instead of the VU meters, the Now Playing screen can show a CD, a vinyl record or a cassette turning with the music. The button next to the clock shows it full screen.",
       "vuOn": "Animations are shown only when the VU meters are off.",
       "turnOffVu": "Turn off the VU meters",
       "none": "None",
       "noneHelp": "Song lyrics",
-      "cd": "CD",
+      "cd": "Top-loading CD",
       "vinyl": "Vinyl",
-      "cassette": "Cassette"
+      "cassette": "Cassette",
+      "cdfront": "CD player"
     },
     "playback": {
       "help": "Playback options applied to the active player: track transitions (crossfade/gapless) and volume normalisation (ReplayGain).",
@@ -943,6 +945,91 @@
       "shuttingDownShort": "System shutting down...",
       "shutdownError": "Error during shutdown",
       "shutdownSystemError": "Error during system shutdown"
+    },
+    "netCheck": {
+      "open": "Check the network",
+      "openHelp": "Finds where the connection stops: cable or Wi-Fi, router, internet or the update server.",
+      "help": "Osmium checks, one step at a time, whether it can reach the update server, and tells you where it stops.",
+      "run": "Start the check",
+      "again": "Check again",
+      "running": "Checking… it takes at most half a minute.",
+      "failed": "The check could not start: the device's service did not answer.",
+      "lastRun": "Checked at {time}",
+      "steps": {
+        "link": "Connection (cable or Wi-Fi)",
+        "router": "Router",
+        "internet": "Internet",
+        "dns": "Name lookup (DNS)",
+        "clock": "Clock",
+        "ota": "Update server",
+        "download": "Update download"
+      },
+      "status": {
+        "ok": "Working",
+        "warn": "Check this",
+        "fail": "Not working",
+        "skip": "Not tested",
+        "run": "Checking"
+      },
+      "sources": {
+        "pages": "Main server",
+        "mirror": "Backup copy",
+        "github": "GitHub (last resort)"
+      },
+      "err": {
+        "noLink": "Not connected to any network: check the cable or the Wi-Fi.",
+        "noAddress": "Connected, but it has no address yet.",
+        "noDhcp": "Connected, but the router did not give it an address.",
+        "weakSignal": "Weak Wi-Fi signal: move it closer to the router or use a cable.",
+        "noGateway": "The network did not say which router to use.",
+        "noAnswer": "The router does not answer.",
+        "noPing": "The router ignores ping, but it is there and working.",
+        "packetLoss": "Some messages to the router get lost ({loss}%).",
+        "blockedIps": "Direct connections are blocked, but the update server can be reached.",
+        "dns": "Names cannot be looked up: the DNS server does not answer.",
+        "dnsPartial": "Some names cannot be looked up.",
+        "clockOff": "The clock is off by {time}: secure connections may fail.",
+        "clockWrong": "The clock is wrong: secure connections fail.",
+        "fallback": "The main server does not answer, but a backup does: updates still work.",
+        "otaDown": "No update server answers.",
+        "rateLimited": "GitHub is refusing requests for a while (too many).",
+        "badManifest": "The server answered with something unexpected.",
+        "timeout": "No answer (timed out).",
+        "refused": "Connection refused.",
+        "reset": "Connection cut off.",
+        "unreachable": "Network unreachable.",
+        "tls": "The secure connection failed.",
+        "tlsCert": "Security certificate refused: check the clock.",
+        "http": "The server answered with error {code}.",
+        "other": "Unexpected error."
+      },
+      "verdict": {
+        "ok": "All good: the device reaches the update server.",
+        "warn": "It works, with a caveat: see the steps in yellow.",
+        "link": "The problem is the device's own connection: check the cable or the Wi-Fi.",
+        "router": "The problem is between the device and the router: restart the router and check the cable or the Wi-Fi.",
+        "internet": "The router answers but does not reach the internet: the problem is the router or your internet provider.",
+        "dns": "The internet works but names cannot be looked up: restart the router, or set other DNS servers in the network settings.",
+        "clock": "The clock is wrong and secure connections fail: check the time zone and restart the device.",
+        "ota": "Your internet works: it is the update server that does not answer right now. Try again later; if it keeps happening, a filter on your network may be blocking it.",
+        "download": "The update server answers but the download does not start: try again later, or check for filters on your network."
+      },
+      "groups": {
+        "device": "This device's connection",
+        "router": "Home router",
+        "internet": "Internet",
+        "server": "Update server"
+      },
+      "advanced": "Advanced information",
+      "advancedHide": "Hide advanced information",
+      "verdictWarn": {
+        "link": "It works, but the Wi-Fi signal is weak: move the device closer to the router or use a cable.",
+        "router": "It works, but the link to the router drops now and then: if the music stops, check the Wi-Fi or the cable.",
+        "internet": "It works: your network blocks some connections, but not the ones updates need.",
+        "dns": "It works, but some addresses cannot be found: if updates fail, restart the router.",
+        "clock": "It works, but the device's clock is a little off: check the time zone.",
+        "ota": "It works: the main server does not answer, so the device uses the backup one."
+      }
     }
   },
   "meta": {

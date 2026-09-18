@@ -12,7 +12,7 @@ Item {
     signal openQueue()
     signal openSleep()
     signal openPlayerPicker()
-    width: 340; height: 600
+    width: 340; height: parent ? parent.height : 600
 
     Rectangle { anchors.fill: parent; color: Theme.panel }
 
@@ -57,7 +57,7 @@ Item {
     readonly property real infoH: info.height
     // 270 copertina (8+250+12) + blocco info (tempi e barra compresi) + 64 trasporto + 32 + 32
     readonly property real total: 270 + infoH + 64 + 32 + 32
-    readonly property real y0: 40 + (600 - 40 - total) / 2
+    readonly property real y0: 40 + (root.height - 40 - total) / 2
 
     // copertina 250 con ombra 0 8px 40px rgba(0,0,0,.7)
     Rectangle { id: shadowSrc; x: 45; y: root.y0 + 8 + 8; width: 250; height: 250; radius: 16; color: Qt.rgba(0, 0, 0, 0.7); visible: false; layer.enabled: true }

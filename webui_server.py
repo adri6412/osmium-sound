@@ -920,6 +920,9 @@ _AUTH_ROUTES = {
     ('/api/system/stats', 'GET'): '/system_stats',
     ('/api/system/network_status', 'GET'): '/network_status',
     ('/api/system/network_info', 'GET'): '/network_info',
+    # Settings → System / Updates: where along the way to the update server
+    # the network breaks (router, internet, DNS, clock, OTA host).
+    ('/api/system/network_check', 'GET'): '/network_check',
     ('/api/system/wifi_scan', 'GET'): '/wifi_scan',
     ('/api/system/wifi_connect', 'POST'): '/wifi_connect',
     ('/api/system/wired_dhcp', 'POST'): '/wired_dhcp',
@@ -1852,7 +1855,9 @@ def _handle_proxy(local_path, method):
                           else 90 if 'apply' in api_path or 'dsp' in api_path
                           or 'tailscale' in api_path or 'ssh' in api_path
                           or 'wifi_connect' in api_path or 'wired_dhcp' in api_path
-                          or 'debug_plymouth' in api_path else 15)
+                          or 'debug_plymouth' in api_path
+                          # probes with their own timeouts, up to ~35 s in all
+                          else 45 if api_path == '/network_check' else 15)
     return jsonify(data), status
 
 

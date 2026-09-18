@@ -44,7 +44,10 @@ const sections = computed(() => [
   { key: 'language',  label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
   { key: 'system',    label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
   { key: 'debug',     label: t('settings.sections.debug.label'),     desc: t('settings.sections.debug.desc') },
+  // Reached from System and Updates ("Check the network"), not listed itself.
+  { key: 'netCheck',  label: t('settings.sections.netCheck.label'),  desc: t('settings.sections.netCheck.desc'), hidden: true },
 ]);
+const listedSections = computed(() => sections.value.filter(s => !s.hidden));
 // 'multiroom' was this section's key before it became "Lyrion Music Server";
 // keep old bookmarks and the kiosk's deep links working. 'dsp' is held back
 // (see the sections list above) — redirect a hand-typed ?open=dsp back to the
@@ -53,6 +56,8 @@ const normalizeSection = (k) => (k === 'multiroom' ? 'lyrion' : k === 'dsp' ? ''
 const open = ref(normalizeSection(route.query.open));
 watch(() => route.query.open, (v) => { open.value = normalizeSection(v); });
 function goto(k) { router.replace({ query: k ? { open: k } : {} }); }
+// the network check's back link returns to the section it was opened from
+function goBack() { goto(open.value === 'netCheck' ? normalizeSection(route.query.from) : ''); }
 function title(k) { const s = sections.value.find(x => x.key === k); return s ? s.label : ''; }
 
 const msg = ref(''); const err = ref(false);
@@ -739,7 +744,7 @@ async function setVuStyle(style) {
 // only while they are off. The two settings stay independent on the device,
 // so this just stores the pick. Choices come from the device, limited to the
 // ones this page has a name for.
-const NP_ANIMATION_IDS = ['none', 'cd', 'vinyl', 'cassette'];
+const NP_ANIMATION_IDS = ['none', 'cd', 'cdfront', 'vinyl', 'cassette'];
 const npAnimation = ref('none');
 const npAnimations = ref(NP_ANIMATION_IDS);
 async function loadNpAnimation() {
@@ -891,6 +896,66 @@ const changelog = reactive({ open: false, version: '', notes: '' });
 function changelogAvailable() {
   return Object.keys(kinds).some(k => upd[k] && upd[k].update_available && upd[k].notes);
 }
+// ── network check (api_server /network_check) ────────────────────
+// Walks the way an update check goes — link, router, internet, DNS, clock,
+// update server, download — and says at which step it stops. Reached from
+// System and Updates; the result is language-neutral, the words are here.
+const NC_STEPS = ['link', 'router', 'internet', 'dns', 'clock', 'ota', 'download'];
+const nc = reactive({ busy: false, failed: false, data: null, advanced: false });
+// What the owner sees: four plain steps, each the worst of the checks behind
+// it. The seven checks with addresses and timings are "advanced".
+const NC_GROUPS = [
+  { id: 'device', steps: ['link'] }, { id: 'router', steps: ['router'] },
+  { id: 'internet', steps: ['internet', 'dns', 'clock'] }, { id: 'server', steps: ['ota', 'download'] },
+];
+const NC_WARN_VERDICTS = ['link', 'router', 'internet', 'dns', 'clock', 'ota'];
+function openNetCheck() { router.replace({ query: { open: 'netCheck', from: open.value } }); }
+async function runNetCheck() {
+  if (nc.busy) return;
+  nc.busy = true; nc.failed = false;
+  const r = await api.sys('network_check');
+  nc.busy = false;
+  if (r.ok && r.data && Array.isArray(r.data.steps)) nc.data = r.data;
+  else nc.failed = true;
+}
+watch(open, (v) => { if (v === 'netCheck') runNetCheck(); }, { immediate: true });
+const ncStep = (id) => (nc.busy || !nc.data ? null : nc.data.steps.find(s => s.id === id)) || { status: nc.busy ? 'run' : 'skip' };
+const ncVerdict = () => {
+  if (!nc.data) return '';
+  return nc.data.verdict === 'ok' && nc.data.warn ? 'warn' : nc.data.verdict;
+};
+// a caveat has a sentence of its own for the step it comes from
+const ncVerdictText = () => {
+  const v = ncVerdict();
+  return v === 'warn' && NC_WARN_VERDICTS.includes(nc.data.warn)
+    ? t(`settings.netCheck.verdictWarn.${nc.data.warn}`) : t(`settings.netCheck.verdict.${v}`);
+};
+const NC_RANK = { run: 5, fail: 4, warn: 3, ok: 2, skip: 1 };
+const ncGroup = (g) => g.steps.map(id => ncStep(id).status).reduce((w, st) => (NC_RANK[st] > NC_RANK[w] ? st : w), 'skip');
+const ncMark = { ok: '✓', warn: '!', fail: '✕', skip: '○', run: '…' };
+function ncSkew(sec) {
+  const a = Math.abs(sec);
+  if (a < 3600) return `${Math.round(a / 60)} min`;
+  if (a < 86400) return `${Math.round(a / 3600)} h`;
+  return `${Math.round(a / 86400)} ${t('settings.lyrion.days')}`;
+}
+function ncReason(s) {
+  const e = s.error;
+  if (!e) return '';
+  if (e === 'http') return t('settings.netCheck.err.http', { code: s.http });
+  if (e === 'packetLoss') return t('settings.netCheck.err.packetLoss', { loss: s.loss });
+  if (e === 'clockOff') return s.skew !== undefined ? t('settings.netCheck.err.clockOff', { time: ncSkew(s.skew) }) : t('settings.netCheck.err.clockWrong');
+  if (e === 'dnsPartial') return `${t('settings.netCheck.err.dnsPartial')} ${(s.failed || []).join(', ')}`;
+  return t(`settings.netCheck.err.${e}`);
+}
+function ncDetail(s) {
+  const parts = [];
+  if (s.detail) parts.push(s.detail);
+  if (s.kbps) parts.push(s.kbps >= 1024 ? `${(s.kbps / 1024).toFixed(1)} MB/s` : `${s.kbps} KB/s`);
+  return parts.join(' · ');
+}
+const ncTime = () => (nc.data ? new Date(nc.data.at * 1000).toLocaleTimeString(lang.value === 'it' ? 'it-IT' : 'en-GB') : '');
+
 function showChangelog() {
   const withNotes = Object.keys(kinds).map(k => upd[k]).find(u => u && u.update_available && u.notes);
   if (!withNotes) return;
@@ -1297,7 +1362,7 @@ onUnmounted(() => {
     <h2 class="page">{{ t('settings.title') }}</h2>
     <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
     <div class="card" style="padding: 6px 16px;">
-      <div v-for="s in sections" :key="s.key" class="net between" @click="goto(s.key)">
+      <div v-for="s in listedSections" :key="s.key" class="net between" @click="goto(s.key)">
         <span>
           <span style="display:block;">{{ s.label }}<span v-if="s.key === 'vuMeters' && vuStoreNew" class="dot-new"></span></span>
           <span class="muted">{{ s.desc }}</span>
@@ -1309,7 +1374,7 @@ onUnmounted(() => {
 
   <!-- single open section -->
   <template v-else>
-    <a class="backlink" href="#" @click.prevent="goto('')">← {{ t('settings.backToSettings') }}</a>
+    <a class="backlink" href="#" @click.prevent="goBack()">← {{ open === 'netCheck' && route.query.from ? title(normalizeSection(route.query.from)) : t('settings.backToSettings') }}</a>
     <h2 class="page">{{ title(open) }}</h2>
     <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
 
@@ -1769,6 +1834,55 @@ onUnmounted(() => {
       <div class="row" style="margin-top: 10px;" v-if="changelogAvailable()">
         <button class="ghost" @click="showChangelog">{{ t('settings.updates.whatsNew') }}</button>
       </div>
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.netCheck.openHelp') }}</p>
+        <button class="secondary" style="display: inline-block;" @click="openNetCheck">{{ t('settings.netCheck.open') }}</button>
+      </div>
+    </div>
+
+    <!-- Network check: reached from Updates and System -->
+    <div class="card" v-if="open === 'netCheck'">
+      <p class="sub">{{ t('settings.netCheck.help') }}</p>
+      <div v-if="nc.busy" class="msg">{{ t('settings.netCheck.running') }}</div>
+      <div v-else-if="nc.failed" class="msg err">{{ t('settings.netCheck.failed') }}</div>
+      <div v-else-if="nc.data" class="msg nc-verdict" :class="ncVerdict()">{{ ncVerdictText() }}</div>
+      <div v-for="g in NC_GROUPS" :key="g.id" class="item nc-step nc-plain">
+        <span class="nc-mark" :class="ncGroup(g)">{{ ncMark[ncGroup(g)] }}</span>
+        <span class="nc-body between">
+          <span>{{ t(`settings.netCheck.groups.${g.id}`) }}</span>
+          <span class="nc-state" :class="ncGroup(g)">{{ t(`settings.netCheck.status.${ncGroup(g)}`) }}</span>
+        </span>
+      </div>
+      <div class="row" style="margin-top: 12px;">
+        <button :disabled="nc.busy" @click="runNetCheck">{{ nc.busy ? t('settings.netCheck.running') : (nc.data ? t('settings.netCheck.again') : t('settings.netCheck.run')) }}</button>
+        <button class="ghost" @click="nc.advanced = !nc.advanced">{{ nc.advanced ? t('settings.netCheck.advancedHide') : t('settings.netCheck.advanced') }}</button>
+      </div>
+      <div v-if="nc.advanced" class="nc-advanced">
+      <template v-for="id in NC_STEPS" :key="id">
+        <div class="item nc-step">
+          <span class="nc-mark" :class="ncStep(id).status">{{ ncMark[ncStep(id).status] }}</span>
+          <span class="nc-body">
+            <span class="between">
+              <span>{{ t(`settings.netCheck.steps.${id}`) }}</span>
+              <span class="muted nc-detail">{{ ncDetail(ncStep(id)) }}</span>
+            </span>
+            <span v-if="ncStep(id).error" class="nc-why" :class="ncStep(id).status">{{ ncReason(ncStep(id)) }}</span>
+            <span v-else-if="ncStep(id).status === 'skip' && nc.data" class="nc-why">{{ t('settings.netCheck.status.skip') }}</span>
+            <span v-for="src in (id === 'ota' && ncStep(id).sources) || []" :key="src.id" class="nc-src">
+              <span class="nc-mark" :class="src.status">{{ ncMark[src.status] }}</span>
+              <span class="nc-body">
+                <span class="between">
+                  <span>{{ t(`settings.netCheck.sources.${src.id}`) }}</span>
+                  <span class="muted nc-detail">{{ src.host }}<template v-if="src.ms !== undefined"> · {{ src.ms }} ms</template></span>
+                </span>
+                <span v-if="src.error" class="nc-why" :class="src.status">{{ ncReason(src) }}</span>
+              </span>
+            </span>
+          </span>
+        </div>
+      </template>
+      <p class="muted" v-if="nc.data && !nc.busy" style="margin-top: 10px;">{{ t('settings.netCheck.lastRun', { time: ncTime() }) }} · {{ nc.data.channel }}</p>
+      </div>
     </div>
 
     <!-- Companion -->
@@ -1898,6 +2012,10 @@ onUnmounted(() => {
       <div class="row">
         <button class="secondary" @click="reboot">{{ t('settings.system.reboot') }}</button>
         <button class="secondary" @click="shutdown">{{ t('settings.system.shutdown') }}</button>
+      </div>
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.netCheck.openHelp') }}</p>
+        <button class="secondary" style="display: inline-block;" @click="openNetCheck">{{ t('settings.netCheck.open') }}</button>
       </div>
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
         <p class="sub">{{ t('settings.system.supportBundleHint') }}</p>

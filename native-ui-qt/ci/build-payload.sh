@@ -50,9 +50,10 @@ done
 cp -r native-ui-qt/assets/vu "$QT/assets/"
 test -s "$QT/assets/vu/classic/skin.json" || { echo "::error::VU skins missing"; exit 1; }
 # Now Playing animations shown instead of the VU meters (Settings →
-# Animations): one folder of PNGs per scene, drawn by qml/Anim<Scene>.qml
+# Animations): one folder of PNGs per scene, drawn by qml/Anim<Scene>.qml,
+# plus the 90s LCD shared by the full-screen panels (qml/LcdCd.qml, LcdTape.qml)
 cp -r native-ui-qt/assets/anim "$QT/assets/"
-for scene in cd vinyl cassette; do
+for scene in cd cdfront vinyl cassette lcd; do
   png=$(find "$QT/assets/anim/$scene" -maxdepth 1 -type f -name '*.png' -size +0 -print -quit 2>/dev/null || true)
   test -n "$png" || { echo "::error::Now Playing animation \"$scene\" artwork missing"; exit 1; }
 done

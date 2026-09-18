@@ -26,6 +26,22 @@ Item {
     property string mediaKey: ""
     property string title: ""
     property string subtitle: ""
+    // Full screen (NpStage): a 90s front panel on the right block, with the
+    // grey-green LCD (LcdCd.qml) instead of the black display and working
+    // keys. It needs the queue position, the time and the modes, and the
+    // controls NpAnimation feeds to the scenes that declare them.
+    property bool vintage: false
+    property bool power: true
+    property int volume: -1
+    property bool volumeFixed: false
+    property real elapsed: 0
+    property int trackIndex: -1
+    property int trackTotal: 0
+    property int repeatMode: 0
+    property int shuffleMode: 0
+    property string trackTitle: ""           // CD-Text: the track, not the album
+    property string trackArtist: ""
+    signal action(string name, var value)
 
     // ── design: 520 x 260 points, scaled uniformly and centred ─────────────
     readonly property real s: Math.max(0.01, Math.min(width / 520, height / 260))
@@ -178,8 +194,11 @@ Item {
         NumberAnimation { target: root; property: "puckH"; to: 0; duration: 90; easing.type: Easing.InQuad }
         PauseAnimation { duration: 120 }
         NumberAnimation { target: root; property: "lidOpen"; to: 0; duration: 620; easing.type: Easing.InOutCubic }
-        onFinished: root.phase = 2
+        onFinished: { root.phase = 2; root.reading = true; readTimer.restart() }
     }
+    // the LCD reads the disc for a moment after the lid closes
+    property bool reading: false
+    Timer { id: readTimer; interval: 1100; onTriggered: root.reading = false }
     SequentialAnimation {
         id: removeAnim
         NumberAnimation { target: root; property: "lidOpen"; to: 1; duration: root.lidDur; easing.type: Easing.InOutCubic }
@@ -204,6 +223,9 @@ Item {
     // ── what the display and the LED show ──────────────────────────────────
     readonly property bool loaded: !live || (phase === 2 && hasTrack)
     readonly property bool lit: !live || (loaded && playing)
+    readonly property bool lcdReady: loaded && !reading
+    readonly property int lcdTrack: !live ? 3 : trackIndex >= 0 ? trackIndex + 1 : 1
+    readonly property int lcdTotal: !live ? 12 : Math.max(trackTotal, lcdTrack)
 
     component Pic: Image {
         smooth: true
@@ -367,12 +389,53 @@ Item {
             y: 12
             source: root.assetsBase + "cd-lid.png"
         }
-        Pic { id: bridge; x: 244; y: 0; width: 276; height: 260; source: root.assetsBase + "cd-bridge.png" }
+        Pic { id: bridge; x: 244; y: 0; width: 276; height: 260; source: root.assetsBase + (root.vintage ? "cd-bridge-v.png" : "cd-bridge.png") }
+
+        LcdCd {
+            visible: root.vintage
+            x: 286; y: 30
+            base: root.assetsBase + "../lcd/"
+            texScale: root.texScale
+            on: !root.live || root.power
+            word: !root.live || root.lcdReady ? ""
+                  : root.reading ? "  rEAd"
+                  : root.lidOpen > 0 || root.phase === 1 || root.phase === 3 ? "  OPEn"
+                  : "no dISC"
+            track: root.lcdReady ? root.lcdTrack : 0
+            seconds: !root.live ? 167 : root.elapsed
+            timeShown: root.lcdReady
+            labels: root.lcdReady
+            play: root.lcdReady && (root.playing || !root.live)
+            pause: root.lcdReady && root.live && !root.playing && root.elapsed > 0
+            repeatMode: !root.live ? 2 : root.repeatMode
+            random: root.live && root.shuffleMode > 0
+            calFrom: root.lcdReady ? root.lcdTrack : 0
+            calTo: root.lcdReady ? Math.min(16, root.lcdTotal) : 0
+            over: root.lcdReady && root.lcdTotal > 16
+            // the indicator follows the disc itself: a step every 45 degrees
+            spin: !root.lcdReady ? -1 : root.speed > 0 ? Math.floor(root.angle / 45) % 8 : 8
+            text: (root.lcdReady || !root.live) ? [!root.live ? "Allegro" : root.trackTitle, !root.live ? "Beaux Arts Trio" : root.trackArtist].filter(function(x) { return !!x }).join(" - ") : ""
+            scroll: root.live && root.active && root.playing
+        }
+        // the keys of the front panel: play/pause, stop, skip back, skip forward
+        Repeater {
+            model: root.vintage && root.live ? [[348, "playpause"], [389.33, "stop"], [430.67, "prev"], [472, "next"]] : []
+            MouseArea {
+                required property var modelData
+                x: modelData[0] - 13; y: 157; width: 26; height: 26
+                onClicked: {
+                    var k = modelData[1]
+                    if (k === "playpause") root.action(root.playing ? "pause" : "play", true)
+                    else root.action(k, true)
+                }
+                Rectangle { anchors.centerIn: parent; width: 19; height: 19; radius: 9.5; color: "black"; opacity: parent.pressed ? 0.4 : 0 }
+            }
+        }
 
         // display: progress bar and play symbol, under the glass reflection
         Item {
+            visible: !root.vintage && opacity > 0
             opacity: root.loaded ? 1 : 0
-            visible: opacity > 0
             Behavior on opacity { enabled: root.live; NumberAnimation { duration: 300 } }
             Rectangle {
                 x: root.barX0 - 1; y: root.barY - 2.5
@@ -391,10 +454,10 @@ Item {
             x: 296; y: 65; width: 18; height: 18
             source: root.assetsBase + "cd-play.png"
             opacity: root.lit ? 1 : root.loaded ? 0.3 : 0
-            visible: opacity > 0
+            visible: !root.vintage && opacity > 0
             Behavior on opacity { enabled: root.live; NumberAnimation { duration: 200 } }
         }
-        Pic { x: 286; y: 40; width: 196; height: 68; source: root.assetsBase + "cd-glass.png" }
+        Pic { x: 286; y: 40; width: 196; height: 68; visible: !root.vintage; source: root.assetsBase + "cd-glass.png" }
         Pic {
             x: 291.5; y: 156; width: 28; height: 28
             source: root.assetsBase + "cd-led.png"

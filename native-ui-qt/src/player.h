@@ -77,7 +77,7 @@ class Player : public QObject {
     // the VU meter skin (a folder in assets/vu/), chosen in Settings → Playback
     Q_PROPERTY(QString vuStyle READ vuStyle WRITE setVuStyle NOTIFY settingsChanged)
     // the Now Playing animation shown instead of the VU meters when they are
-    // off: "none", "cd", "vinyl" or "cassette" (Settings → Animations)
+    // off: "none", "cd", "cdfront", "vinyl" or "cassette" (Settings → Animations)
     Q_PROPERTY(QString npAnimation READ npAnimation WRITE setNpAnimation NOTIFY settingsChanged)
     Q_PROPERTY(int autoexpandSecs READ autoexpandSecs NOTIFY settingsChanged)
     // aggiornamento in corso

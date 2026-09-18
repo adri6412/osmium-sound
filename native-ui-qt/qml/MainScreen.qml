@@ -26,7 +26,7 @@ Item {
         onOpenPlayerPicker: root.openPlayerPicker()
     }
     Rectangle {                                     // divisore
-        x: 340; width: 1; height: 600
+        x: 340; width: 1; height: root.height
         gradient: Gradient {
             GradientStop { position: 0; color: Theme.borderA(0) }
             GradientStop { position: 0.15; color: Theme.border }

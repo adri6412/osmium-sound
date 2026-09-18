@@ -43,6 +43,13 @@ Item {
     // "eject" (value undefined), "volume" (value {level, final}), "power"
     // (value: the wanted state). Never emitted by a still preview.
     signal action(string name, var value)
+    // Full screen (NpStage): the 90s front panel, with the grey-green tape
+    // LCD (LcdTape.qml: level meters, counter, indicators) in the display
+    // window and silk-screen prints. The meters follow this device's audio.
+    property bool vintage: false
+    property real elapsed: 0
+    property real levelL: 0
+    property real levelR: 0
 
     // for tests: true while something moves
     readonly property bool ticking: spinTimer.running
@@ -112,7 +119,23 @@ Item {
     // constant tape speed: a reel turns faster the smaller its pack
     function omega(r) { return Math.max(60, Math.min(220, 220 * hubR / r)) }
 
-    readonly property bool wantSpin: live && active && phase === 2 && playing && hasTrack && power
+    // Fast wind: holding ◀◀ or ▶▶ (a tap still skips a track) winds the tape
+    // for as long as the key is held: the reels race (backwards for rewind)
+    // and the scene asks NpAnimation for a jump every 350 ms ("wind", +1/-1),
+    // which crosses into the next or previous track at either end.
+    property int windDir: 0
+    property var windArea: null              // the key being held
+    Timer {
+        interval: 350; repeat: true
+        running: root.live && root.active && root.windDir !== 0
+        // 🚨 never wind on by itself: a release that got lost (a grab taken
+        // away, an interrupted touch) must not leave the tape racing
+        onTriggered: {
+            if (!root.windArea || !root.windArea.pressed) { root.windStop(); return }
+            root.action("wind", root.windDir)
+        }
+    }
+    readonly property bool wantSpin: live && active && phase === 2 && (playing || windDir !== 0) && hasTrack && power
     property real spinFrom: 0
     property real spinTo: 0
     property real spinDur: 800
@@ -146,8 +169,12 @@ Item {
         var e = u * u * (3 - 2 * u)
         var f = spinFrom + (spinTo - spinFrom) * e
         var k = (spinF + f) * 0.5 * dt
-        var a = angL + k * omega(rL)
-        var b = angR + k * omega(rR)
+        // Playing, the tape runs left to right along the open bottom edge,
+        // past the heads: off the left pack, onto the right one. Seen from
+        // the front both reels turn counterclockwise (a negative rotation).
+        var w = windDir > 0 ? 6 : windDir < 0 ? -6 : 1
+        var a = angL - w * k * omega(rL)
+        var b = angR - w * k * omega(rR)
         angL = a - 360 * Math.floor(a / 360)
         angR = b - 360 * Math.floor(b / 360)
         spinF = (u >= 1 && spinTo === 0) ? 0 : f
@@ -263,6 +290,12 @@ Item {
     onEjectedChanged: Qt.callLater(sync)
     // A press is never dropped: during an insertion or a removal the state
     // above changes and sync() takes it from there when the move ends.
+    function windStop() {
+        windArea = null
+        if (windDir === 0) return
+        windDir = 0
+        action("windStop", true)
+    }
     function press(name) {
         if (!live) return
         if (name === "eject") {
@@ -389,7 +422,7 @@ Item {
         // all at once, not piece by piece while the images decode
         visible: deck.status === Image.Ready && door.status === Image.Ready && shell.status === Image.Ready
 
-        Pic { id: deck; width: 520; height: 260; file: "deck.png" }
+        Pic { id: deck; width: 520; height: 260; file: root.vintage ? "deck-v.png" : "deck.png" }
 
         // the door with the holder and the cassette in it, tilting forward on
         // its bottom hinge (Rotation about x projects with a perspective)
@@ -605,10 +638,24 @@ Item {
             Behavior on opacity { enabled: root.live; NumberAnimation { duration: 140 } }
         }
 
+        LcdTape {
+            visible: root.vintage
+            x: 339; y: 20
+            base: root.assetsBase + "../lcd/"
+            texScale: root.decodeScale
+            on: !root.live || root.power
+            counter: !root.live ? 142 : root.loaded ? root.elapsed : 0
+            play: root.lit
+            pause: root.loaded && root.live && !root.playing && root.elapsed > 0
+            forward: root.lit
+            levelL: !root.live ? 68 : root.lit ? root.levelL : 0
+            levelR: !root.live ? 56 : root.lit ? root.levelR : 0
+        }
+
         // display: progress bar and play symbol, under the glass reflection
         Item {
             opacity: root.loaded ? 1 : 0
-            visible: opacity > 0
+            visible: !root.vintage && opacity > 0
             Behavior on opacity { enabled: root.live; NumberAnimation { duration: 300 } }
             Rectangle {
                 x: root.barX0 - 1; y: root.barY - 2.5
@@ -627,10 +674,10 @@ Item {
             x: 344; y: 40; width: 18; height: 18
             file: "disp-play.png"
             opacity: root.lit ? 1 : root.loaded ? 0.3 : 0
-            visible: opacity > 0
+            visible: !root.vintage && opacity > 0
             Behavior on opacity { enabled: root.live; NumberAnimation { duration: 200 } }
         }
-        Pic { x: 336; y: 17; width: 166; height: 64; file: "disp-glass.png" }
+        Pic { x: 336; y: 17; width: 166; height: 64; visible: !root.vintage; file: "disp-glass.png" }
         // the power LED
         Pic {
             x: 430; y: 218; width: 24; height: 24
@@ -661,7 +708,17 @@ Item {
                     x: key.modelData.h0; y: 214
                     width: key.modelData.h1 - key.modelData.h0; height: 48
                     enabled: root.live
-                    onReleased: flash.restart()
+                    // held: ◀◀ / ▶▶ wind instead of skipping (no click follows a hold)
+                    pressAndHoldInterval: 450
+                    onPressAndHold: {
+                        var a = key.modelData.action
+                        if (!root.power || root.phase !== 2 || (a !== "next" && a !== "prev")) return
+                        root.windArea = area
+                        root.windDir = a === "next" ? 1 : -1
+                        root.action("wind", root.windDir)
+                    }
+                    onReleased: { flash.restart(); root.windStop() }
+                    onCanceled: root.windStop()
                     onClicked: root.press(key.modelData.action)
                 }
                 Timer { id: flash; interval: 110 }
@@ -674,18 +731,19 @@ Item {
             x: root.knobX - 16.5; y: root.knobY - 16.5; width: 33; height: 33
             file: "knob-dot.png"
             rotation: root.knobAngle
+            visible: !root.vintage
             opacity: root.live && root.volumeFixed ? 0.35 : 1
         }
         Rectangle {
             x: root.knobX - 23; y: root.knobY - 23; width: 46; height: 46; radius: 23
             antialiasing: true
             color: "#000000"; opacity: 0.4
-            visible: root.live && root.volumeFixed
+            visible: !root.vintage && root.live && root.volumeFixed
         }
         MouseArea {
             id: knobArea
             x: root.knobX - 42; y: root.knobY - 44; width: 84; height: 90
-            enabled: root.live && !root.volumeFixed && root.volume >= 0
+            enabled: !root.vintage && root.live && !root.volumeFixed && root.volume >= 0
             property int level: -1               // being dragged to, -1 not dragging
             property real fromLevel: 0
             property real fromX: 0
@@ -701,6 +759,39 @@ Item {
                 if (level >= 0) root.action("volume", { level: level, final: true })
                 level = -1
             }
+            onCanceled: level = -1
+            onWheel: (w) => {
+                var v = Math.max(0, Math.min(100, root.volume + (w.angleDelta.y > 0 ? 2 : -2)))
+                if (v !== root.volume) root.action("volume", { level: v, final: true })
+            }
+        }
+        // The 90s panel: a horizontal volume fader instead of the knobs
+        // (cassette.py FADER: 0 at x 352, 100 at x 488, slot at y 146). Drag
+        // the cap, or touch the slot to send it there; a wheel works too.
+        readonly property real faderX0: 352
+        readonly property real faderX1: 488
+        readonly property real faderLevel: faderArea.level >= 0 ? faderArea.level : Math.max(0, root.volume)
+        Pic {
+            visible: root.vintage
+            x: stage.faderX0 + (stage.faderX1 - stage.faderX0) * (!root.live ? 0.7 : stage.faderLevel / 100) - 10
+            y: 146 - 14; width: 20; height: 28
+            file: "fader.png"
+            opacity: root.live && root.volumeFixed ? 0.45 : 1
+        }
+        MouseArea {
+            id: faderArea
+            x: stage.faderX0 - 12; y: 146 - 16; width: stage.faderX1 - stage.faderX0 + 24; height: 32
+            enabled: root.vintage && root.live && !root.volumeFixed && root.volume >= 0
+            property int level: -1               // being dragged to, -1 not dragging
+            function at(mx) { return Math.round(Math.max(0, Math.min(100, (mx - 12) * 100 / (stage.faderX1 - stage.faderX0)))) }
+            function send(v, fin) {
+                if (!fin && v === (level >= 0 ? level : root.volume)) return
+                level = v
+                root.action("volume", { level: v, final: fin })
+            }
+            onPressed: (m) => send(at(m.x), false)
+            onPositionChanged: (m) => send(at(m.x), false)
+            onReleased: { if (level >= 0) root.action("volume", { level: level, final: true }); level = -1 }
             onCanceled: level = -1
             onWheel: (w) => {
                 var v = Math.max(0, Math.min(100, root.volume + (w.angleDelta.y > 0 ? 2 : -2)))

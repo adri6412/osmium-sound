@@ -18,6 +18,7 @@ Column {
         switch (r.type) {
         case "option": case "info": case "label": case "src": case "alarm": case "grid": return r.gap !== undefined ? r.gap : 8
         case "dir": return 4
+        case "diag": return r.sub ? 2 : 10
         case "band": return 8
         case "sep": return 16
         default: return r.gap !== undefined ? r.gap : 16
@@ -87,6 +88,7 @@ Column {
                     case "vuskin": return cVuSkin
                     case "vustore": return cVuStore
                     case "animcard": return cAnimCard
+                    case "diag": return cDiag
                     }
                     return cHelp
                 }
@@ -677,6 +679,56 @@ Column {
         }
     }
     // riquadro scuro attorno a un gruppo di righe (bg-hifi-dark p-3)
+    // one step of the network check: status mark, name, detail on the right
+    // and, below, the reason when it isn't simply OK. `sub` = a source of
+    // the step above (the update server's main, backup and GitHub).
+    Component { id: cDiag
+        Item {
+            id: dg
+            property var row: ({})
+            readonly property bool sub: !!row.sub
+            readonly property real lx: sub ? 30 : 0
+            readonly property color tint: row.status === "ok" ? Theme.green500 : row.status === "warn" ? Theme.yellow400
+                                        : row.status === "fail" ? Theme.red400 : Theme.silverA(0.5)
+            width: parent.width
+            height: row.extra ? why.y + why.height + 2 : head.height
+            Item {
+                id: head
+                width: parent.width; height: dg.sub ? 22 : dg.row.plain ? 32 : 26
+                Icon { visible: dg.row.status === "ok" || dg.row.status === "warn" || dg.row.status === "fail"
+                       x: dg.lx; anchors.verticalCenter: parent.verticalCenter; size: dg.sub ? 14 : 18; color: dg.tint
+                       name: dg.row.status === "ok" ? "check-circle-2" : dg.row.status === "warn" ? "alert-triangle" : "alert-circle" }
+                Rectangle { visible: dg.row.status === "skip"; x: dg.lx + 2; anchors.verticalCenter: parent.verticalCenter
+                            width: dg.sub ? 10 : 14; height: width; radius: width / 2; color: "transparent"; border.width: 1.5; border.color: dg.tint }
+                Spinner { visible: dg.row.status === "run"; active: visible && dg.visible; x: dg.lx + 1; anchors.verticalCenter: parent.verticalCenter
+                          radius: dg.sub ? 6 : 8; thickness: 2 }
+                Text {
+                    id: stepName
+                    x: dg.lx + (dg.sub ? 22 : 28); anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, parent.width - x - 12 - Math.min(val.implicitWidth, parent.width * 0.45))
+                    text: dg.row.label || ""; elide: Text.ElideRight
+                    color: dg.sub ? Theme.silver : Theme.white; font.family: Theme.font; font.pixelSize: dg.sub ? 12 : 15
+                }
+                Text {
+                    id: val
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, parent.width - stepName.x - stepName.width - 12)
+                    horizontalAlignment: Text.AlignRight; elide: Text.ElideLeft
+                    // plain: the status in words, in the status colour (the simple view)
+                    text: dg.row.value || ""; color: dg.row.plain && dg.row.status !== "skip" ? dg.tint : Theme.silverA(0.8)
+                    font.family: dg.row.plain ? Theme.font : Theme.mono; font.pixelSize: dg.row.plain ? 14 : dg.sub ? 11 : 12
+                }
+            }
+            Text {
+                id: why
+                visible: !!dg.row.extra
+                x: stepName.x; y: head.height + 2; width: parent.width - x; wrapMode: Text.Wrap
+                text: dg.row.extra || ""
+                color: dg.row.status === "ok" || dg.row.status === "skip" ? Theme.silverA(0.6) : dg.tint
+                font.family: Theme.font; font.pixelSize: dg.sub ? 11 : 12; lineHeight: dg.sub ? 15 : 16; lineHeightMode: Text.FixedHeight
+            }
+        }
+    }
     Component { id: cBox
         Rectangle {
             id: bx

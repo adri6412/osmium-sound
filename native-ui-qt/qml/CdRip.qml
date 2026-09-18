@@ -116,7 +116,7 @@ Item {
     Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, 0.7 * root.fade); MouseArea { anchors.fill: parent; onClicked: if (!root.ripping) root.close() } }
     Rectangle {
         id: card
-        width: Math.min(512, 1024 - 48); height: 600 * 0.85
+        width: Math.min(512, root.width - 48); height: root.height * 0.85
         anchors.centerIn: parent
         radius: 16; color: Theme.panel; border.width: 1; border.color: Theme.border
         opacity: root.fade; scale: sc.value * root.closeScale
