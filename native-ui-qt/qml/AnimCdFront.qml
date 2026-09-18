@@ -59,9 +59,9 @@ Item {
     readonly property real slotTop: 31
     readonly property real slotBottom: 100
     readonly property real travel: 140
-    readonly property real bedH: 124
+    readonly property real bedH: 104
     readonly property real bedDiscX: 100
-    readonly property real bedDiscY: 86
+    readonly property real bedDiscY: 64
     readonly property real discRx: 85
     readonly property real squash: 30 / 88         // the disc seen at a grazing angle
     // name: [x0, y0, x1, y1] (cdfront.py KEYS)
@@ -276,6 +276,13 @@ Item {
             source: root.assetsBase + (root.power || !root.live ? "cdf-led-green.png" : "cdf-led-red.png")
         }
 
+        // the inside of the player, behind the slot: only while the drawer is out
+        Pic {
+            x: 18; y: 30; width: 206; height: 70           // cdfront.py SLOT
+            visible: root.trayOut > 0.001
+            source: root.assetsBase + "cdf-inside.png"
+        }
+
         // the drawer: its bed (with the disc) shows behind the drawer front as
         // it comes out, in front of the panel below the slot and, further
         // back, inside the slot's opening, in the shade of the cabinet
@@ -359,9 +366,9 @@ Item {
             Rectangle {
                 width: parent.width; height: root.slotBottom - root.slotTop
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0.88) }
-                    GradientStop { position: 0.7; color: Qt.rgba(0, 0, 0, 0.55) }
-                    GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.35) }
+                    GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0.60) }
+                    GradientStop { position: 0.7; color: Qt.rgba(0, 0, 0, 0.35) }
+                    GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.15) }
                 }
             }
         }

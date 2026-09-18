@@ -27,6 +27,8 @@ there):
                      (BED_W x BED_H; its front edge meets the drawer front)
   cdf-drawer-sh.png  the shadow the open drawer casts on the front below it
   cdf-drawer-side.png  the drawer's right side, shown as it comes out
+  cdf-inside.png     the inside of the player behind the slot, seen when the
+                     drawer is out (SLOT's box)
   cdf-led-red.png    the standby LED lit
   cdf-led-green.png  the power LED lit
 """
@@ -47,8 +49,8 @@ SPLIT_Y = 120                         # the step down to the lower part
 SLOT = (18, 30, 224, 100)
 DRAWER = (21, 33, 221, 97)
 TRAVEL = 140                          # how far the drawer comes out
-BED_W, BED_H = 200, 124               # its front edge is the drawer front's top
-BED_DISC = (100, 86)                  # disc centre in the bed (middle of what shows when open)
+BED_W, BED_H = 200, 104               # its front edge is the drawer front's top
+BED_DISC = (100, 64)                  # disc centre in the bed (middle of what shows when open)
 BED_DISC_R = (88, 30)                 # the 12 cm recess as seen (rx, ry)
 WIN = (236, 26, 414, 106)             # the smoked window of the display
 VFD_AT = (246.6, 26)                  # the LcdCd panel (196 x 100) at VFD_K
@@ -329,6 +331,90 @@ def build_bed(out):
     save(cv.image(), out, "cdf-bed.png")
 
 
+def build_inside(out):
+    """What shows through the slot behind the tray: the dim inside of the
+    player, lit only by what comes in through the opening (darker towards the
+    back). The back wall with the edge of the main board; the left side wall
+    with the tray's guide; on the floor behind the tray the loading motor with
+    its belt and gear, the spindle motor and the optical pickup on two steel
+    rods, its lens catching a little light; across the top the bridge with the
+    disc clamper."""
+    x0, y0, x1, y1 = SLOT
+    cv = Canvas(x0, y0, x1 - x0, y1 - y0, PPT)
+    X, Y, n = cv.X, cv.Y, cv.n
+    rng = np.random.default_rng(47)
+    depth = smoothstep(y0, y1, Y)                      # 0 at the back .. 1 at the opening
+    BACK_Y = y0 + 9                                    # the back wall's foot
+    wall_x = x0 + 3 + (y1 - Y) * 0.34                  # the left wall's edge on the floor
+    grain = 0.10 * streaks(X.shape, n, rng, 8, 0.3)
+
+    # the floor: a stamped steel deck
+    floor = 0.012 * (1 + grain)
+    col = np.array(floor)
+    # back wall: dark, with the green edge of the main board and two connectors
+    back = Y < BACK_Y
+    col = np.where(back, 0.006 * (1 + grain), col)
+    rgb = np.repeat(col[..., None], 3, axis=2)
+    board = (Y > y0 + 3.5) & (Y < BACK_Y - 1.0) & (X > x0 + 30) & (X < x1 - 20)
+    rgb = np.where(board[..., None], rgb3((0.004, 0.010, 0.006)) * (1 + grain)[..., None], rgb)
+    for cxn, w in ((x0 + 60, 12), (x0 + 142, 18)):
+        conn = cv.cov(sd_rrect(X, Y, cxn, y0 + 4.5, cxn + w, BACK_Y - 2.0, 0.4))
+        rgb = rgb * (1 - conn[..., None]) + rgb3((0.030, 0.030, 0.028)) * conn[..., None]
+    # the left side wall, facing the view
+    lw = cv.cov(X - wall_x) * (Y >= BACK_Y - 0.5)
+    rgb = rgb * (1 - lw[..., None]) + (0.009 * (1 + grain))[..., None] * lw[..., None]
+    guide = np.exp(-((Y - (BACK_Y + 14 + (X - x0) * 1.6)) / 0.4) ** 2) * lw
+    rgb = rgb + (0.03 * guide)[..., None]
+
+    def put(c, a):
+        nonlocal rgb
+        rgb = rgb * (1 - a[..., None]) + c * a[..., None]
+
+    # loading motor, belt and gear, at the back left
+    pul = (x0 + 44, BACK_Y + 5)
+    gear = (x0 + 66, BACK_Y + 9)
+    belt = np.abs(np.abs((Y - pul[1]) - (X - pul[0]) * (gear[1] - pul[1]) / (gear[0] - pul[0])) - 1.6) < 0.35
+    belt = belt & (X > pul[0]) & (X < gear[0])
+    put(rgb3((0.005, 0.005, 0.005)), belt.astype(np.float32))
+    m = cv.cov(np.hypot((X - pul[0]) / 4.0, (Y - pul[1]) / 1.6) - 1)
+    put(rgb3((0.06, 0.06, 0.065)), m)
+    g_r = np.hypot((X - gear[0]) / 7.0, (Y - gear[1]) / 2.6)
+    ang = np.arctan2((Y - gear[1]) / 2.6, (X - gear[0]) / 7.0)
+    teeth = 1 + 0.06 * np.sign(np.sin(ang * 18))
+    put(rgb3((0.035, 0.034, 0.030)), cv.cov((g_r - teeth) * 5))
+    put(rgb3((0.010, 0.010, 0.010)), cv.cov((g_r - 0.35) * 5))
+    # spindle motor: a turned hub on a round can, under where the disc's centre sits
+    sp = (x0 + 103, BACK_Y + 13)
+    can = cv.cov(np.hypot((X - sp[0]) / 9.0, (Y - sp[1]) / 3.2) - 1)
+    put(rgb3((0.050, 0.050, 0.052)), can)
+    hub = np.hypot((X - sp[0]) / 5.0, (Y - sp[1] + 1.5) / 1.8)
+    put(rgb3((0.12, 0.12, 0.125)) * (0.7 + 0.5 * np.clip(1 - hub, 0, 1))[..., None], cv.cov((hub - 1) * 4))
+    put(rgb3((0.45, 0.45, 0.46)), cv.cov(np.hypot(X - sp[0], (Y - sp[1] + 1.8) * 2.2) - 0.7))
+    # the optical pickup on two steel rods, towards the right
+    for ry_ in (BACK_Y + 8.0, BACK_Y + 17.0):
+        rod = np.exp(-((Y - ry_) / 0.35) ** 2) * (X > x0 + 118) * (X < x1 - 14)
+        put(rgb3((0.13, 0.13, 0.135)), np.clip(rod, 0, 1))
+    sled = cv.cov(sd_rrect(X, Y, x0 + 138, BACK_Y + 6.5, x0 + 162, BACK_Y + 18.5, 1.0))
+    put(rgb3((0.022, 0.022, 0.024)), sled)
+    lens = np.hypot((X - (x0 + 150)) / 3.2, (Y - (BACK_Y + 11.5)) / 1.4)
+    put(rgb3((0.004, 0.004, 0.010)), cv.cov((lens - 1) * 3))
+    glint = np.exp(-(np.hypot(X - (x0 + 149), (Y - (BACK_Y + 11.0)) * 2.0) / 0.9) ** 2)
+    rgb = rgb + glint[..., None] * rgb3((0.10, 0.06, 0.22))
+    # the clamper bridge across the top, the clamper hanging from it
+    bridge = cv.cov(sd_rrect(X, Y, x0 + 24, y0 - 2, x1 - 24, y0 + 3.0, 0.8))
+    put(rgb3((0.028, 0.028, 0.030)) * (1 + 0.5 * np.exp(-((Y - (y0 + 2.6)) / 0.35) ** 2))[..., None], bridge)
+    cl = np.hypot((X - (x0 + 103)) / 13.0, (Y - (y0 + 4.2)) / 3.0)
+    put(rgb3((0.040, 0.040, 0.042)) * (0.8 + 0.6 * np.clip(Y - (y0 + 3.0), 0, 3)[..., None] / 3), cv.cov((cl - 1) * 4))
+
+    # light comes in through the opening: stronger near it, and the upper
+    # lip of the slot shades the first few points
+    light = 0.70 + 1.30 * depth ** 1.6
+    light = light * (0.35 + 0.65 * smoothstep(y0, y0 + 5, Y))
+    rgb = rgb * light[..., None]
+    cv.over(srgb(rgb), cv.cov(sd_rrect(X, Y, *SLOT, 1.5)))
+    save(cv.image(), out, "cdf-inside.png")
+
+
 def build_drawer_side(out):
     """The drawer's right-hand side, seen as it comes out (the drawer is left
     of the middle of the view): a dark satin face, lit along its top."""
@@ -373,7 +459,8 @@ def main():
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     builders = {"base": build_base, "drawer": build_drawer, "bed": build_bed,
-                "shadow": build_drawer_shadow, "side": build_drawer_side, "leds": build_leds}
+                "shadow": build_drawer_shadow, "side": build_drawer_side, "inside": build_inside,
+                "leds": build_leds}
     only = [s for s in args.only.split(",") if s]
     for k, f in builders.items():
         if not only or k in only:
