@@ -211,3 +211,78 @@ ab_render() {
     # shellcheck disable=SC2086  # $_sed è un elenco di opzioni costruito qui sopra
     sed $_sed "$_t"
 }
+
+# ── Downloading a bundle before installing it ──────────────────────────────
+# RAUC's streaming install asks the server for one 128 KiB piece per read,
+# ~7,800 HTTP requests per image, and that is bound by the round trip, not by
+# the line: measured on the Dell over four real updates, 1.2-1.5 MiB/s, 11-13
+# minutes per image, and raising the read-ahead (hifi-stream-tune.sh) did not
+# make the requests any larger. One plain download of the same file on the
+# same network takes 43 s from file.osmiumsound.it and ~4 min from GitHub,
+# and installing from the local file is then bound by the eMMC (>100 MB/s).
+# So the bundle is downloaded onto /data first whenever it fits there, and
+# streamed as before when it does not.
+AB_DL_DIR="${AB_DL_DIR:-$AB_DATA_MNT/rauc-download}"
+# Kept free on /data on top of the bundle: the image's first boot and the
+# services writing their state there must not find the partition full.
+AB_DL_MARGIN_MIB="${AB_DL_MARGIN_MIB:-256}"
+AB_DL_UA="hifi-player-ota"
+
+# Size in bytes of a remote file, following redirects (GitHub answers with a
+# 302 whose own Content-Length is 0: the last one is the file's). 0 = unknown.
+ab_url_size() {
+    curl -sfIL --retry 3 --connect-timeout 20 --max-time 60 -A "$AB_DL_UA" "$1" 2>/dev/null \
+        | tr -d '\r' \
+        | awk 'tolower($1) == "content-length:" && $2 ~ /^[0-9]+$/ { n = $2 } END { print n + 0 }'
+}
+
+# ab_dl_room <dir> <bytes still to write>: success when the filesystem holding
+# <dir> has room for them plus the margin.
+ab_dl_room() {
+    _free_k=$(df -Pk "$1" 2>/dev/null | awk 'NR == 2 { print $4 }')
+    case "$_free_k" in ''|*[!0-9]*) return 1 ;; esac
+    [ $(( _free_k / 1024 )) -ge $(( $2 / 1048576 + AB_DL_MARGIN_MIB )) ]
+}
+
+# ab_dl_bytes <file>: its current size, 0 when missing.
+ab_dl_bytes() {
+    [ -f "$1" ] || { echo 0; return 0; }
+    _b=$(wc -c < "$1" 2>/dev/null || echo 0)
+    _b=$(printf '%s' "$_b" | tr -d ' ')
+    case "$_b" in ''|*[!0-9]*) echo 0 ;; *) echo "$_b" ;; esac
+}
+
+# ab_download <url> <part-file> <total-bytes>: fetch into <part-file>,
+# resuming whatever an earlier, interrupted attempt left there, so a cut line
+# or a restart halfway through does not start the gigabyte over. Several
+# attempts, each picking up where the previous one stopped; success only when
+# the file has exactly the expected size.
+ab_download() {
+    _url="$1"; _part="$2"; _total="$3"
+    _try=0
+    while [ "$_try" -lt 6 ]; do
+        _try=$(( _try + 1 ))
+        _have=$(ab_dl_bytes "$_part")
+        [ "$_have" -eq "$_total" ] && return 0
+        if [ "$_have" -gt "$_total" ]; then
+            ab_warn "download: $_part is larger than the bundle, starting over"
+            rm -f "$_part"
+        fi
+        _rc=0
+        curl -fL -C - --connect-timeout 20 --speed-limit 10240 --speed-time 60 \
+            -A "$AB_DL_UA" -o "$_part" -sS "$_url" || _rc=$?
+        [ "$_rc" = 0 ] && [ "$(ab_dl_bytes "$_part")" -eq "$_total" ] && return 0
+        # 33: the server refused the resume. Start from zero next time.
+        [ "$_rc" = 33 ] && rm -f "$_part"
+        ab_warn "download: attempt $_try ended with curl rc=$_rc at $(ab_dl_bytes "$_part")/$_total bytes"
+        sleep "${AB_DL_RETRY_DELAY:-5}"
+    done
+    return 1
+}
+
+# ab_sha256_ok <file> <hex digest>: an empty digest checks nothing (the stage
+# runner of older images does not pass one; RAUC still verifies the signature).
+ab_sha256_ok() {
+    [ -n "$2" ] || return 0
+    [ "$(sha256sum "$1" 2>/dev/null | cut -c1-64)" = "$2" ]
+}

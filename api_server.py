@@ -156,8 +156,9 @@ OS_SCRIPT = '/usr/local/sbin/hifi-os-update.sh'
 OS_STATUS_FILE = '/run/hifi-os-status.json'
 OS_PREFIX = 'hifi-os-'
 # Immagine RAUC (schema A/B): un solo bundle che porta UI + componenti di
-# sistema + OS; lo installa RAUC nello slot inattivo in streaming dall'asset
-# della Release, senza passare dal disco (vedi hifi-image-update.sh).
+# sistema + OS; hifi-image-update.sh lo scarica intero su /data e lo fa
+# installare a RAUC nello slot inattivo, oppure lo fa leggere a RAUC in
+# streaming dall'asset della Release quando su /data non c'è posto.
 IMAGE_PREFIX = 'hifi-image-'
 IMAGE_STATUS_FILE = '/run/hifi-image-status.json'
 IMAGE_SCRIPT = '/usr/local/sbin/hifi-image-update.sh'

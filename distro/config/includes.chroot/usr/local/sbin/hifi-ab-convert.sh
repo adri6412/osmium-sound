@@ -350,6 +350,29 @@ cmd_install() {
     fi
     ab_log "semina di /data dalla root legacy"
     /usr/local/sbin/hifi-ab-seed.sh || die "semina fallita"
+    # Download first when it fits on /data, as hifi-image-update.sh does: one
+    # plain download is several times faster than RAUC's streaming.
+    local_copy=""
+    case "$bundle" in
+        http://*|https://*)
+            total=$(ab_url_size "$bundle")
+            case "$total" in ''|*[!0-9]*) total=0 ;; esac
+            if [ "$total" -gt 0 ] && ab_mount_data && mkdir -p "$AB_DL_DIR" \
+                && ab_dl_room "$AB_DL_DIR" "$total"; then
+                ab_log "download di $total byte in $AB_DL_DIR"
+                if ab_download "$bundle" "$AB_DL_DIR/convert.raucb.part" "$total"; then
+                    local_copy="$AB_DL_DIR/convert.raucb"
+                    mv -f "$AB_DL_DIR/convert.raucb.part" "$local_copy"
+                    trap 'rm -f "$local_copy"' EXIT
+                    bundle=$local_copy
+                else
+                    ab_warn "download fallito: installo in streaming"
+                fi
+            else
+                ab_warn "dimensione ignota o /data senza spazio: installo in streaming"
+            fi
+            ;;
+    esac
     # Same reason as in hifi-image-update.sh: streaming asks the network for
     # one piece per read, and the kernel default (128 KiB) makes that
     # latency-bound. Tune the queues as soon as RAUC creates the devices.
@@ -360,7 +383,10 @@ cmd_install() {
             ;;
     esac
     ab_log "rauc install $bundle (scrive lo slot B, il sistema in uso non cambia)"
-    rauc install "$bundle" || die "rauc install fallito"
+    rc=0
+    rauc install "$bundle" || rc=$?
+    if [ -n "$local_copy" ]; then rm -f "$local_copy"; fi
+    [ "$rc" = 0 ] || die "rauc install fallito"
     if ! grub-editenv "$AB_GRUBENV" list 2>/dev/null | grep -q '^ORDER=B A'; then
         die "dopo l'installazione grubenv non indica B come primario"
     fi

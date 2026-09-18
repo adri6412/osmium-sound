@@ -1393,12 +1393,19 @@ is baked in; the signing certificate carries **no** EKU, because RAUC rejects
 one limited to codeSigning). The install-check hook (`distro/rauc/hook.sh`)
 refuses a bundle for another `compatible` or a device with no `hifi-data`.
 
-`hifi-image-update.sh stage` streams the bundle straight from its HTTPS URL
-(`rauc install` over nbd, no local copy; `hifi-stream-tune.sh` raises
-read-ahead, 1 MiB ranges being five times faster than 128 KiB) into the slot
-that isn't running. Progress is real, not RAUC's own fixed steps: the sectors
-written to the target partition against the image size from the bundle,
-reported through `/run/hifi-image-status.json`. In the update plan `image`
+`hifi-image-update.sh stage` first downloads the whole bundle onto
+`/data/rauc-download/` (`ab_download` in `hifi-ab-lib.sh`: resumable, checked
+against the `.sha256` from the plan) and has RAUC install it from that file
+into the slot that isn't running; the file is removed afterwards. Streaming
+straight from the HTTPS URL (`rauc install` over nbd) is only the fallback
+when `/data` lacks room for the bundle plus 256 MiB, or its size is unknown:
+RAUC asks for one 128 KiB range per read, ~7,800 requests per image, and on
+the Dell that took 11-13 minutes against 43 s for one plain download from
+file.osmiumsound.it (`hifi-stream-tune.sh` did not make the ranges larger).
+Progress is real, not RAUC's own fixed steps: the bytes downloaded (10-60 %),
+then the sectors written to the target partition against the image size from
+the bundle (60-90 %, or 10-90 % when streaming), reported through
+`/run/hifi-image-status.json`. In the update plan `image`
 is the fourth kind (`UPDATE_PLAN_ORDER = system, os, ui, image`); on a device
 that runs an image — or has been converted and is about to — the UI, System
 and OS checks all answer with the image (`kind: image`), so the three existing

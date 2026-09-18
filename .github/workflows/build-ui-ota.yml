@@ -266,6 +266,8 @@ jobs:
           bash tests/test-lyrion-ensure.sh
           echo "== streaming read-ahead (shell) =="
           bash tests/test-stream-tune.sh
+          echo "== image bundle download (shell) =="
+          bash tests/test-bundle-fetch.sh
           echo "== music off the legacy root (shell) =="
           bash tests/test-ab-media.sh
           echo "== second chance at the A/B switch (shell) =="
@@ -355,6 +357,7 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-lyrion-ensure.sh \
             tests/test-ext-guardian.sh tests/test-apt-shim.sh tests/test-factory-reset.sh \
             tests/test-lyrion-ensure.sh tests/test-stream-tune.sh tests/test-ab-media.sh \
+            tests/test-bundle-fetch.sh \
             tests/test-ab-image.sh distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
