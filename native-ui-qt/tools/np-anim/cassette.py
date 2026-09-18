@@ -294,6 +294,32 @@ def symbol_sd(X, Y, kind, cx, cy):
 
 
 KEY_SYMBOLS = ("rew", "play", "ff", "stop", "pause", "eject")
+# each key carries its name at the top, printed in metallic ink, and its
+# engraved symbol below it
+KEY_LABELS = {"rew": "REW", "play": "PLAY", "ff": "F.FWD", "stop": "STOP", "pause": "PAUSE",
+              "eject": "EJECT", "power": "POWER"}
+KEY_LABEL_TOP = 2.7                # the caps' top, below the key's top edge
+KEY_LABEL_SIZE = 4.2
+KEY_SYMBOL_DY = 2.9                # the symbol sits this much below the key's centre
+# metallic inks (linear): champagne gold on the transport keys, red on POWER
+INK_GOLD = (0.62, 0.45, 0.16)
+INK_RED = (0.50, 0.06, 0.04)
+
+
+def metallic_label(cv, kind, x0, y0, x1, dy):
+    """(coverage, rgb) of a key's name in metallic ink: a vertical sheen (a
+    bright band just above the middle of the letters, darker below), a thin
+    specular line at the top and a hairline shadow under the letters."""
+    import cdfront
+    cx = (x0 + x1) / 2
+    top = y0 + KEY_LABEL_TOP + dy
+    m = cdfront.text_mask(cv, [(KEY_LABELS[kind], cx, top, KEY_LABEL_SIZE, True, "m", 0.35)])
+    cap = KEY_LABEL_SIZE * 0.72
+    t = np.clip((cv.Y - top) / cap, 0, 1)
+    ink = np.asarray(INK_RED if kind == "power" else INK_GOLD, dtype=np.float32)
+    sheen = 0.55 + 0.95 * np.exp(-((t - 0.32) / 0.22) ** 2) + 0.25 * (1 - t)
+    rgb = ink.reshape(1, 1, 3) * sheen[..., None] + 0.35 * np.exp(-((t - 0.10) / 0.08) ** 2)[..., None]
+    return m, rgb
 
 
 def shade_key(cv, x0, y0, x1, y1, kind, pressed=False, lit=False):
@@ -307,6 +333,7 @@ def shade_key(cv, x0, y0, x1, y1, kind, pressed=False, lit=False):
     h = B * np.sqrt(1 - (1 - np.clip(e / B, 0, 1)) ** 2)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2 + dy
     h = h + 0.25 * (1 - ((Y - cy) / ((y1 - y0) / 2)) ** 2)        # a slight crown
+    cy = cy + KEY_SYMBOL_DY
     ssd = symbol_sd(X, Y, kind, cx, cy)
     h = h - 0.5 * (1 - smoothstep(-0.25, 0.25, ssd))
     nx, ny, nz = normals(h, n)
@@ -326,6 +353,12 @@ def shade_key(cv, x0, y0, x1, y1, kind, pressed=False, lit=False):
         gold = rgb3((1.0, 0.80, 0.40))
         core = sm * (0.75 + 0.25 * smoothstep(0.0, -1.2, ssd))
         col = mix(col, gold * (0.85 + 0.15 * (1 - t))[..., None], core)
+    # the name, in metallic ink over a hairline shadow
+    lm, lrgb = metallic_label(cv, kind, x0, y0, x1, dy)
+    off = int(round(0.3 * n))
+    shadow = np.roll(np.roll(lm, off, axis=0), off, axis=1)
+    col = col * (1 - 0.55 * shadow)[..., None]
+    col = mix(col, lrgb, lm)
     return col, cv.cov(sd), sd
 
 
@@ -482,16 +515,14 @@ def build_deck(out):
         tm = cv.cov(sd_rrect(X, Y, tx - 0.3, fy - 9.5, tx + 0.3, fy - 6.5 + (1.2 if k % 5 == 0 else 0), 0.1))
         plate = plate * (1 - tm[..., None]) + 0.40 * tm[..., None]
     import cdfront
-    items = [(name, (key_rect(i)[0] + key_rect(i)[2]) / 2, 214.5, 3.8, True, "m", 0.3)
-             for i, name in enumerate(("REW", "PLAY", "F.FWD", "STOP", "PAUSE", "EJECT"))]
-    items += [
+    # the keys carry their own names (shade_key); only the jack is named here
+    items = [
         ("OSMIUM", DISPLAY[0], 92, 8.0, True, "l", 1.9),
         ("TC-90", DISPLAY[2], 92, 6.2, True, "r", 0.4),
         ("STEREO CASSETTE DECK", DISPLAY[0], 102, 3.8, False, "l", 0.7),
         ("AUTO REVERSE  \u00b7  NR", DISPLAY[2], 102, 3.6, False, "r", 0.3),
         ("VOLUME", (FADER[0] + FADER[1]) / 2, 160, 3.8, True, "m", 0.6),
         ("PHONES", JACK_C[0], 214.5, 3.8, True, "m", 0.3),
-        ("POWER", (POWER[0] + POWER[2]) / 2, 214.5, 3.8, True, "m", 0.3),
     ]
     items += [(str(k), FADER[0] + (FADER[1] - FADER[0]) * k / 10, FADER[2] - 14.5, 3.4, True, "m", 0.0)
               for k in range(11)]
@@ -506,7 +537,7 @@ def build_key_image(out, k, kind, lit, name):
     m_ = 7
     cv = Canvas(k[0] - m_, k[1] - m_, k[2] - k[0] + 2 * m_, k[3] - k[1] + 2 * m_, PPT_CAS)
     X, Y = cv.X, cv.Y
-    cx, cy = (k[0] + k[2]) / 2, (k[1] + k[3]) / 2 + 0.45
+    cx, cy = (k[0] + k[2]) / 2, (k[1] + k[3]) / 2 + 0.45 + KEY_SYMBOL_DY
     # the slot round the key: the pressed key shows more of it at the top
     slot_sd = sd_rrect(X, Y, k[0] - 1.1, k[1] - 1.1, k[2] + 1.1, k[3] + 1.1, 3.3)
     cv.over((0.004, 0.004, 0.005), cv.cov(slot_sd))
