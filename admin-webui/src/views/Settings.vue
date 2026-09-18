@@ -8,6 +8,10 @@ import Toggle from '../components/Toggle.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
 import VuSkinPreview from '../components/VuSkinPreview.vue';
+import animCd from '../assets/anim/cd.jpg';
+import animCdfront from '../assets/anim/cdfront.jpg';
+import animVinyl from '../assets/anim/vinyl.jpg';
+import animCassette from '../assets/anim/cassette.jpg';
 
 const host = location.hostname;
 const route = useRoute();
@@ -756,6 +760,15 @@ async function loadNpAnimation() {
   npStoreAnims.value = Array.isArray(r.data.store) ? r.data.store : [];
   const known = (r.data.choices || []).filter((id) => NP_ANIMATION_IDS.includes(id));
   if (known.length) npAnimations.value = known.concat(npStoreAnims.value.map((a) => a.id));
+}
+// the stills of the built-in scenes, as the kiosk draws them on its own
+// cards (NpAnimation with live: false, captured from the kiosk); a store
+// animation shows the preview its catalogue entry carries
+const NP_ANIMATION_PREVIEWS = { cd: animCd, cdfront: animCdfront, vinyl: animVinyl, cassette: animCassette };
+function npAnimPreview(id) {
+  if (NP_ANIMATION_PREVIEWS[id]) return NP_ANIMATION_PREVIEWS[id];
+  const a = animStore.animations.find((x) => x.id === id);
+  return (a && a.preview) || null;
 }
 function npAnimLabel(id) {
   if (NP_ANIMATION_IDS.includes(id)) return t('settings.animations.choice.' + id);
@@ -1756,7 +1769,7 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <!-- Animations: only the pick, text-only; the animations exist on the kiosk alone -->
+    <!-- Animations: only the pick, a still of each; the animations run on the kiosk alone -->
     <div class="card" v-if="open === 'animations'">
       <p class="sub">{{ t('settings.animations.help') }}</p>
       <template v-if="vuMeter">
@@ -1764,13 +1777,19 @@ onUnmounted(() => {
         <button class="secondary" @click="setVuMeter(false)">{{ t('settings.animations.turnOffVu') }}</button>
       </template>
       <template v-else>
-        <span class="seg">
-          <button v-for="a in npAnimations" :key="a"
-                  :class="{ active: npAnimation === a }" @click="setNpAnimation(a)">
-            {{ npAnimLabel(a) }}
+        <div class="vu-grid">
+          <button v-for="a in npAnimations" :key="a" type="button" class="vu-skin" :class="{ sel: npAnimation === a }"
+                  @click="setNpAnimation(a)">
+            <span class="anim-preview">
+              <img v-if="npAnimPreview(a)" :src="npAnimPreview(a)" :alt="npAnimLabel(a)" loading="lazy" />
+              <span v-else-if="a === 'none'" class="muted">{{ t('settings.animations.noneHelp') }}</span>
+            </span>
+            <span class="vu-skin-name">
+              <span>{{ npAnimLabel(a) }}</span>
+              <span v-if="npAnimation === a" class="check">✓</span>
+            </span>
           </button>
-        </span>
-        <p v-if="npAnimation === 'none'" class="muted" style="margin: 0;">{{ t('settings.animations.noneHelp') }}</p>
+        </div>
       </template>
 
       <label style="margin-top: 18px;">{{ t('settings.animations.storeTitle') }}</label>
@@ -1780,7 +1799,7 @@ onUnmounted(() => {
       <p v-else-if="!animStore.animations.length && !animStore.error" class="muted">{{ t('settings.animations.storeEmpty') }}</p>
       <div class="vu-grid">
         <div v-for="a in animStore.animations" :key="a.id" class="vu-card" :class="{ fresh: a.new }">
-          <div class="vu-preview">
+          <div class="vu-preview anim">
             <img v-if="a.preview" :src="a.preview" :alt="animStoreName(a)" />
             <span v-if="a.new" class="pill gold vu-badge">{{ t('settings.vuMeters.badgeNew') }}</span>
             <span v-else-if="a.update" class="pill gold vu-badge">{{ t('settings.vuMeters.badgeUpdate') }}</span>

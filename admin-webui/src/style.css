@@ -442,6 +442,12 @@ h2.page { font-size: 20px; margin: 10px 0 4px; }
 .vu-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vu-preview { position: relative; aspect-ratio: 1280 / 675; max-width: 100%; border-radius: 6px; overflow: hidden; background: rgba(0, 0, 0, 0.3); }
 .vu-preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* Settings → Animations: the stills are 2:1, like the kiosk's cards */
+.vu-preview.anim { aspect-ratio: 2 / 1; }
+.anim-preview { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 2 / 1;
+  border-radius: 6px; overflow: hidden; background: rgba(0, 0, 0, 0.3); padding: 0; text-align: center; font-size: 12px; }
+.anim-preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.anim-preview .muted { padding: 0 10px; }
 .vu-badge { position: absolute; top: 8px; left: 8px; background: var(--gold); color: #111; font-weight: 600; }
 .vu-card button { margin-top: 4px; }
 
