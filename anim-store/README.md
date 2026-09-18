@@ -37,7 +37,8 @@ to the box it is given) and the still of the Settings card.
   `subtitle`;
 - controls: `power`, `volume`, `volumeFixed`, and a `signal action(name,
   value)` with `play`, `pause`, `stop`, `prev`, `next`, `eject`, `volume`
-  (`{level, final}`), `power`, `repeat`, `random`, `wind` (+1/-1), `windStop`;
+  (`{level, final}`), `power`, `repeat`, `random`, `wind` (+1/-1), `windStop`,
+  `track` (a queue position, 1-based);
 - a display: `trackIndex`, `trackTotal`, `elapsed`, `duration` (seconds, 0
   unknown), `trackId`, `repeatMode`, `shuffleMode`, `trackTitle`, `trackArtist`;
 - levels (this device's own audio): `levelL`, `levelR` (0..100).

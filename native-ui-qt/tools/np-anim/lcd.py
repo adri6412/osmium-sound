@@ -7,8 +7,14 @@ each one casts a faint shadow down and to the right; the unlit segments stay
 just visible. The glass in front of it carries a soft reflection.
 
     python3 native-ui-qt/tools/np-anim/lcd.py [--out DIR]
+    python3 native-ui-qt/tools/np-anim/lcd.py --vfd [--out DIR]
 
-DIR defaults to native-ui-qt/assets/anim/lcd/. Everything is laid out in the
+DIR defaults to native-ui-qt/assets/anim/lcd/. With --vfd the same CD panel
+(same files, same layout: LcdCd.qml shows either) is drawn as the blue-green
+vacuum fluorescent display of the 80s/90s hi-fi players instead, into
+assets/anim/vfd/ (no cassette panel): a smoked dark glass with the unlit
+segments barely there and the filament wires across it, the lit segments
+cyan with their glow painted in (nothing is blurred at run time). Everything is laid out in the
 196 x 100 point panel of LcdCd.qml (the layout constants below are mirrored
 there). The bottom row is the CD-Text line: sixteen 14-segment characters.
 
@@ -60,6 +66,12 @@ TEXT_DX = 11.25
 TEXT_N = 16
 
 SEG_ON = (0.075, 0.090, 0.070)
+VFD = False               # --vfd: the fluorescent display instead of the LCD
+VFD_CORE = (0.62, 1.00, 0.93)     # sRGB: the hot middle of a lit segment
+VFD_EDGE = (0.22, 0.93, 0.82)     # ... its edge
+VFD_GLOW = (0.10, 0.80, 0.70)     # ... and the halo round it
+VFD_GLOW_A = 0.42
+VFD_GHOST = (0.032, 0.074, 0.074)
 SHADOW = (0.9, 1.1)        # points, down-right
 GHOST_A = 0.075
 
@@ -260,6 +272,8 @@ class Layer:
 
 def lit(mask, ppt=PPT):
     """A lit element: dark segment over its soft shadow, straight alpha."""
+    if VFD:
+        return lit_vfd(mask, ppt)
     sx, sy = SHADOW[0] * ppt, SHADOW[1] * ppt
     sh = ndimage.shift(mask, (sy, sx), order=1, mode="constant")
     sh = ndimage.gaussian_filter(sh, 0.55 * ppt) * 0.30
@@ -268,6 +282,20 @@ def lit(mask, ppt=PPT):
     rgb[:] = SEG_ON
     # the shadow is a darker ground, not black
     rgb = np.where((mask > 0.01)[..., None], rgb, np.array((0.22, 0.25, 0.19), dtype=np.float32))
+    out = np.concatenate([rgb, a[..., None]], axis=2)
+    return Image.fromarray(np.round(np.clip(out, 0, 1) * 255).astype(np.uint8), "RGBA")
+
+
+def lit_vfd(mask, ppt=PPT):
+    """A lit fluorescent element: a hot cyan core, lighter in its middle,
+    inside a soft halo of the same light. Straight alpha: the halo is a
+    translucent cyan over the dark glass."""
+    glow = ndimage.gaussian_filter(mask, 0.55 * ppt)
+    inner = ndimage.gaussian_filter(mask, 0.18 * ppt) * mask      # 1 in the middle of a stroke, less at its edge
+    a = np.clip(mask + VFD_GLOW_A * glow * (1 - mask), 0, 1)
+    core = np.array(VFD_EDGE, np.float32) + (np.array(VFD_CORE, np.float32) - np.array(VFD_EDGE, np.float32)) * np.clip(inner, 0, 1)[..., None] ** 2
+    w = np.clip(mask / np.maximum(a, 1e-4), 0, 1)[..., None]
+    rgb = core * w + np.array(VFD_GLOW, np.float32) * (1 - w)
     out = np.concatenate([rgb, a[..., None]], axis=2)
     return Image.fromarray(np.round(np.clip(out, 0, 1) * 255).astype(np.uint8), "RGBA")
 
@@ -356,7 +384,33 @@ def all_segments(lay):
         seg14_mask(None, TEXT_X0 + i * TEXT_DX, TEXT_Y, lay, allseg)
 
 
+def build_bg_vfd(out):
+    """The fluorescent display behind its smoked glass: nearly black with a
+    blue-green cast, every segment faintly there, and the thin filament wires
+    running across in front of the segments."""
+    rng = np.random.default_rng(6)
+    Wp, Hp = int(W * PPT), int(H * PPT)
+    y, x = np.mgrid[0:Hp, 0:Wp].astype(np.float32)
+    u, v = x / Wp, y / Hp
+    base = np.array((0.016, 0.030, 0.032), dtype=np.float32)
+    shade = 1.0 + 0.25 * (0.5 - v) - 0.35 * ((2 * u - 1) ** 4 + (2 * v - 1) ** 4)
+    grain = ndimage.gaussian_filter(rng.standard_normal((Hp, Wp)).astype(np.float32), 1.0) * 0.05
+    rgb = base[None, None, :] * np.clip(shade + grain, 0.3, None)[..., None]
+    lay = Layer(0, 0, W, H)
+    all_segments(lay)
+    m = lay.mask()
+    rgb = rgb * (1 - m[..., None]) + np.array(VFD_GHOST, np.float32) * m[..., None]
+    # the filament wires, very fine, across the three rows of the display
+    for wy in (12.5, 57.5, 82.0):
+        wire = np.exp(-((y / PPT - wy) / 0.16) ** 2) * 0.05
+        rgb = rgb + wire[..., None] * np.array((0.6, 0.7, 0.7), np.float32)
+    img = np.concatenate([np.clip(rgb, 0, 1), np.ones((Hp, Wp, 1), np.float32)], axis=2)
+    save(Image.fromarray(np.round(img * 255).astype(np.uint8), "RGBA"), out, "lcd-bg.png")
+
+
 def build_bg(out):
+    if VFD:
+        return build_bg_vfd(out)
     rng = np.random.default_rng(5)
     Wp, Hp = int(W * PPT), int(H * PPT)
     y, x = np.mgrid[0:Hp, 0:Wp].astype(np.float32)
@@ -384,6 +438,8 @@ def build_glass(out):
     d = (u * 0.55 + v) - 0.42
     a = 0.10 * np.exp(-(d / 0.16) ** 2) + 0.05 * np.exp(-((v - 0.035) / 0.02) ** 2)
     a = a + 0.05 * (1 - v) ** 3
+    if VFD:
+        a = a * 0.55                                    # smoked glass: a dimmer reflection
     img = np.zeros((Hp, Wp, 4), np.float32)
     img[..., :3] = 1.0
     img[..., 3] = np.clip(a, 0, 1)
@@ -553,8 +609,13 @@ def build_tape(out):
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--out", default=os.path.normpath(os.path.join(here, "..", "..", "assets", "anim", "lcd")))
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--vfd", action="store_true", help="the fluorescent display (assets/anim/vfd/)")
     args = ap.parse_args()
+    global VFD
+    VFD = args.vfd
+    if args.out is None:
+        args.out = os.path.normpath(os.path.join(here, "..", "..", "assets", "anim", "vfd" if VFD else "lcd"))
     os.makedirs(args.out, exist_ok=True)
     build_bg(args.out)
     build_glass(args.out)
@@ -562,7 +623,8 @@ def main():
     build_indicators(args.out)
     build_calendar(args.out)
     build_text(args.out)
-    build_tape(args.out)
+    if not VFD:
+        build_tape(args.out)
     # the boxes QML needs, printed so they can be checked against LcdCd.qml
     x, y, w, h = digit_box()
     print(f"digit box: offset ({x:.2f}, {y:.2f}) size {w:.2f} x {h:.2f}")

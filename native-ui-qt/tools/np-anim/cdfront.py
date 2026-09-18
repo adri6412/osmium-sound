@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Render the images of the "CD player" (front-loading) animation (qml/AnimCdFront.qml).
 
-A 90s black front-loading CD player seen from the front, a little from
-above: the disc drawer at the top left, the grey-green LCD (tools/np-anim/
-lcd.py) at the top right, a row of keys along the bottom. The drawer slides
-out towards the viewer; from above one sees its bed with the disc on it.
+A late-80s / early-90s black front-loading CD player in the manner of the
+Japanese and European hi-fi of the time, seen from the front: an upper
+fascia with the gold name, the disc drawer at the left with a badge under
+it, the blue-green fluorescent display (tools/np-anim/lcd.py --vfd) behind
+a smoked window in the middle and the framed PLAY / STOP / PAUSE keys at the
+right; a step down to the lower part with the row of slim keys (OPEN, the
+track numbers 1-10, REPEAT, RANDOM) and the square skip / search keys; at the
+bottom POWER, a gold script, the gold headphone jack and its level knob; and
+champagne feet under the case. The drawer slides out towards the viewer;
+from above one sees its bed with the disc on it.
 
-Drawing and lighting come from cd.py (same light, same brushed aluminium).
+Drawing and lighting come from cd.py (same light).
 
     python3 native-ui-qt/tools/np-anim/cdfront.py [--out DIR]
 
@@ -14,12 +20,13 @@ DIR defaults to native-ui-qt/assets/anim/cdfront/. Files, all in the 520 x 260
 point design of AnimCdFront.qml (the geometry constants below are mirrored
 there):
 
-  cdf-base.png       the player: drop shadow, front plate, the drawer slot,
-                     the LCD window (without the LCD), keys, jack, knob, prints
+  cdf-base.png       the player: drop shadow, feet, front, the drawer slot,
+                     the display window (without the display), keys, jack,
+                     knob, prints
   cdf-drawer.png     the drawer front, closed flush in the slot
   cdf-bed.png        the drawer's bed seen from above, disc recess included
                      (BED_W x BED_H; its front edge meets the drawer front)
-  cdf-drawer-sh.png  the shadow the open drawer casts on the plate below it
+  cdf-drawer-sh.png  the shadow the open drawer casts on the front below it
   cdf-led-red.png    the standby LED lit
   cdf-led-green.png  the power LED lit
 """
@@ -34,43 +41,57 @@ from cd import (Canvas, blinn, lambert, normals, radial_noise, rgb3, save, sd_ci
                 smoothstep, soft, srgb, streaks, LXY, LSLOPE)
 
 CANVAS = (520, 260)
-BODY = (4, 14, 516, 226)
-BODY_R = 4
-SPLIT_Y = 148                         # the lower control strip starts here
-SLOT = (22, 30, 268, 60)
-DRAWER = (25, 33, 265, 57)
+BODY = (4, 12, 516, 222)
+BODY_R = 3
+FEET = (70, 260, 450)                 # centres of the three feet under the case
+FOOT_W, FOOT_Y = 50, (222, 234)
+SPLIT_Y = 112                         # the step down to the lower part
+SLOT = (18, 34, 224, 98)
+DRAWER = (21, 37, 221, 95)
 TRAVEL = 106                          # how far the drawer comes out
-BED_W, BED_H = 240, 124               # its front edge is the drawer front's top
-BED_DISC = (120, 86)                  # disc centre in the bed (middle of what shows when open)
-BED_DISC_R = (102, 34)                # the 12 cm recess as seen (rx, ry)
-LCD_BEZEL = (286, 26, 498, 140)
-LCD = (294, 33, 490, 133)             # 196 x 100: the LcdCd panel
-KEY_Y = (184, 202)
-KEYS = {                              # name: x0, x1 (all KEY_Y)
-    "power": (24, 64),
-    "repeat": (176, 204), "random": (212, 240),
-    "eject": (290, 320), "play": (326, 356), "pause": (362, 392),
-    "stop": (398, 428), "prev": (434, 464), "next": (470, 500),
+BED_W, BED_H = 200, 124               # its front edge is the drawer front's top
+BED_DISC = (100, 86)                  # disc centre in the bed (middle of what shows when open)
+BED_DISC_R = (97, 33)                 # the 12 cm recess as seen (rx, ry)
+BADGE = (22, 124, 150, 146)
+WIN = (236, 26, 414, 106)             # the smoked window of the display
+VFD_AT = (246.6, 26)                  # the LcdCd panel (196 x 100) at VFD_K
+VFD_K = 0.8
+FRAME = (425, 35, 511, 67)            # the raised frame round PLAY / STOP / PAUSE
+KEY_Y = (126, 146)                    # the lower row
+BIG_Y = (39, 63)                      # the framed transport keys
+NUM_X0, NUM_DX, NUM_W = 262, 10.5, 6.0
+KEYS = {                              # name: x0, y0, x1, y1
+    "play": (429, 39, 455, 63), "stop": (457, 39, 482, 63), "pause": (484, 39, 508, 63),
+    "eject": (236, 126, 252, 146),
+    "repeat": (378, 126, 384, 146), "random": (396, 126, 402, 146),
+    "prev": (424, 126, 442, 146), "next": (446, 126, 464, 146),
+    "rew": (468, 126, 486, 146), "ff": (490, 126, 508, 146),
+    "power": (22, 170, 44, 192),
 }
-LED = (74, 193)
-JACK = (100, 193)
-KNOB = (140, 193)
+for _i in range(10):
+    KEYS["n%d" % (_i + 1)] = (NUM_X0 + _i * NUM_DX, 126, NUM_X0 + _i * NUM_DX + NUM_W, 146)
+LED = (53, 181)
+JACK = (440, 184)
+KNOB = (484, 182)
 KNOB_R = 10
 
 PPT = 3.6
 FONT = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
 FONT_R = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
-INK = 0.50                            # silk-screen print, light grey (linear)
+FONT_SCRIPT = "/usr/share/fonts/truetype/freefont/FreeSerifBoldItalic.ttf"
+INK = (0.62, 0.60, 0.54)              # the prints: a warm off-white (linear)
+GOLD = (0.62, 0.42, 0.13)             # the name and the script (linear)
 
 
-def text_mask(cv, items):
+def text_mask(cv, items, font=None):
     """Coverage of printed text on the canvas grid. items: (text, x, y, size,
-    bold, anchor) with anchor 'l', 'm' or 'r' on x, y the top of the caps."""
+    bold, anchor, spacing) with anchor 'l', 'm' or 'r' on x, y the top of the
+    caps."""
     img = Image.new("L", (cv.X.shape[1], cv.X.shape[0]), 0)
     d = ImageDraw.Draw(img)
     x0, y0, n = float(cv.X[0, 0]) - 0.5 / cv.n, float(cv.Y[0, 0]) - 0.5 / cv.n, cv.n
     for t, x, y, sz, bold, anchor, spacing in items:
-        f = ImageFont.truetype(FONT if bold else FONT_R, max(1, int(round(sz * n))))
+        f = ImageFont.truetype(font or (FONT if bold else FONT_R), max(1, int(round(sz * n))))
         cap = f.getbbox("E")[1]
         w = sum(f.getlength(c) for c in t) + spacing * n * (len(t) - 1)
         px = (x - x0) * n - {"l": 0, "m": w / 2, "r": w}[anchor]
@@ -79,6 +100,11 @@ def text_mask(cv, items):
             d.text((px, py), c, font=f, fill=255)
             px += f.getlength(c) + spacing * n
     return np.asarray(img, dtype=np.float32) / 255.0
+
+
+def text_width(t, sz, bold=True, spacing=0.0, font=None):
+    f = ImageFont.truetype(font or (FONT if bold else FONT_R), 100)
+    return sum(f.getlength(c) for c in t) * sz / 100 + spacing * (len(t) - 1)
 
 
 def symbol_mask(cv, name, cx, cy, s):
@@ -104,6 +130,10 @@ def symbol_mask(cv, name, cx, cy, s):
         sd = np.minimum(np.minimum(bar(cx - s * 0.85, s * 0.16), tri(cx - s * 0.1, -1)), tri(cx + s * 0.7, -1))
     elif name == "next":
         sd = np.minimum(np.minimum(bar(cx + s * 0.69, s * 0.16), tri(cx + s * 0.1, 1)), tri(cx - s * 0.7, 1))
+    elif name == "rew":
+        sd = np.minimum(tri(cx, -1), tri(cx + s * 0.8, -1))
+    elif name == "ff":
+        sd = np.minimum(tri(cx, 1), tri(cx - s * 0.8, 1))
     elif name == "power":
         r = np.hypot(X - cx, Y - cy)
         ang = np.arctan2(X - cx, -(Y - cy))
@@ -115,77 +145,116 @@ def symbol_mask(cv, name, cx, cy, s):
     return cv.cov(sd)
 
 
-def plate(cv, rng, sd_body, lower):
-    """Brushed black aluminium above, satin black below the split."""
-    X, Y, n = cv.X, cv.Y, cv.n
-    e = np.clip(-sd_body, 0, None)
-    B = 2.4
-    h = B * np.sqrt(1 - (1 - np.clip(e / B, 0, 1)) ** 2)
-    # a V groove along the split
-    h = h - 0.9 * np.exp(-((Y - SPLIT_Y) / 0.6) ** 2)
-    return h
+def slim(name):
+    """The slim keys of the lower row: the numbers, REPEAT, RANDOM (no symbol)."""
+    return name[1:].isdigit() or name in ("repeat", "random")
+
+
+def raised(sd, height, bevel):
+    """Height of a raised shape with a rounded bevel."""
+    return height * np.sqrt(np.clip(1 - (1 - np.clip(-sd / bevel, 0, 1)) ** 2, 0, 1))
 
 
 def build_base(out):
     cv = Canvas(0, 0, CANVAS[0], CANVAS[1], PPT)
     X, Y, n = cv.X, cv.Y, cv.n
     rng = np.random.default_rng(31)
-
     bx0, by0, bx1, by1 = BODY
-    sh = (0.55 * soft(sd_rrect(X, Y - 7, bx0 + 8, by0 + 3, bx1 - 8, by1 - 1, BODY_R), 8.5)
-          + 0.45 * soft(sd_rrect(X, Y - 2, bx0 + 1, by0 + 1, bx1 - 1, by1, BODY_R), 2.2))
+
+    # ── shadow on the shelf, under the case and its feet ──
+    sh = (0.55 * soft(sd_rrect(X, Y - 8, bx0 + 10, by0 + 4, bx1 - 10, FOOT_Y[1], BODY_R), 8.0)
+          + 0.35 * soft(sd_rrect(X, Y - 2, bx0 + 2, by0 + 2, bx1 - 2, FOOT_Y[1] + 1, BODY_R), 2.4))
+    for fx in FEET:
+        sh = sh + 0.6 * soft(sd_rrect(X, Y - 1.5, fx - FOOT_W / 2, FOOT_Y[1] - 3, fx + FOOT_W / 2, FOOT_Y[1] + 1.5, 2), 1.6)
     edge = np.minimum(np.minimum(X, CANVAS[0] - X), np.minimum(Y, CANVAS[1] - Y))
     cv.over((0, 0, 0), np.clip(sh, 0, 0.9) * smoothstep(0, 5, edge))
+
+    # ── champagne feet: turned aluminium cylinders seen from the front ──
+    for fx in FEET:
+        fsd = sd_rrect(X, Y, fx - FOOT_W / 2, FOOT_Y[0] - 2, fx + FOOT_W / 2, FOOT_Y[1], 1.2)
+        u = np.clip((X - fx) / (FOOT_W / 2), -1, 1)
+        nz = np.sqrt(np.clip(1 - u * u, 0, 1))
+        fl = np.clip(-u * LXY[0] * 0.8 + nz * 0.6, 0, None)
+        v = (Y - FOOT_Y[0]) / (FOOT_Y[1] - FOOT_Y[0])
+        band = 0.10 * np.cos(v * 38) * 0.3
+        tone = 0.10 + 0.45 * fl + 0.55 * np.exp(-((u + 0.35) / 0.18) ** 2) + band
+        tone = tone * (0.55 + 0.45 * smoothstep(-0.1, 0.25, v))       # the case's shadow at the top
+        fc = srgb(rgb3((0.78, 0.66, 0.46)) * tone[..., None])
+        cv.over(fc, cv.cov(fsd))
 
     sd_body = sd_rrect(X, Y, *BODY, BODY_R)
     body = cv.cov(sd_body)
     lower = smoothstep(SPLIT_Y - 0.3, SPLIT_Y + 0.3, Y)
 
-    h = plate(cv, rng, sd_body, lower)
-    # recesses: drawer slot, LCD window
-    sd_slot = sd_rrect(X, Y, *SLOT, 2.0)
-    sd_lcd = sd_rrect(X, Y, *LCD_BEZEL, 3.0)
-    h = h - 1.6 * (1 - smoothstep(-1.2, 0.0, sd_slot)) - 1.2 * (1 - smoothstep(-1.0, 0.0, sd_lcd))
-    # raised keys
+    # ── height: case bevel, the step, recesses, frame, keys ──
+    e = np.clip(-sd_body, 0, None)
+    h = 2.0 * np.sqrt(1 - (1 - np.clip(e / 2.0, 0, 1)) ** 2)
+    h = h + 1.4 * (1 - lower)                                     # the upper fascia stands out
+    sd_slot = sd_rrect(X, Y, *SLOT, 1.5)
+    sd_win = sd_rrect(X, Y, *WIN, 2.0)
+    sd_badge = sd_rrect(X, Y, *BADGE, 1.0)
+    sd_frame = sd_rrect(X, Y, *FRAME, 2.5)
+    h = h - 1.6 * (1 - smoothstep(-1.2, 0.0, sd_slot)) - 1.0 * (1 - smoothstep(-0.8, 0.0, sd_win))
+    h = h + 0.5 * cv.cov(sd_badge)
+    h = h + raised(sd_frame, 1.4, 1.2) - 1.0 * cv.cov(sd_rrect(X, Y, FRAME[0] + 2.4, FRAME[1] + 2.4, FRAME[2] - 2.4, FRAME[3] - 2.4, 1.5))
     keys = np.zeros_like(X)
-    for name, (x0, x1) in KEYS.items():
-        sd_k = sd_rrect(X, Y, x0, KEY_Y[0], x1, KEY_Y[1], 2.2)
-        kh = 2.0 * np.sqrt(np.clip(1 - (1 - np.clip(-sd_k / 1.6, 0, 1)) ** 2, 0, 1))
-        h = np.maximum(h, kh * cv.cov(sd_k) + h * (1 - cv.cov(sd_k)))
-        keys = np.maximum(keys, cv.cov(sd_k))
+    for name, (x0, y0, x1, y1) in KEYS.items():
+        r = 1.2 if slim(name) else 1.8
+        sd_k = sd_rrect(X, Y, x0, y0, x1, y1, r)
+        kc = cv.cov(sd_k)
+        base_h = h
+        h = h * (1 - kc) + (base_h + raised(sd_k, 1.8, 1.2)) * kc
+        keys = np.maximum(keys, kc)
     nx, ny, nz = normals(h, n)
 
-    br = 0.07 * streaks(X.shape, n, rng, 60, 0.25) + 0.05 * streaks(X.shape, n, rng, 9, 0.12)
-    sheen = 1 + 0.35 * np.exp(-((X - 160) / 170) ** 2) * (1.1 - 0.6 * Y / CANVAS[1])
-    alb_up = 0.030 * (1 + br) * sheen
-    alb_lo = 0.020 * (1 + 0.35 * br)
-    alb = alb_up * (1 - lower) + alb_lo * lower
-    spec = 0.50 * (1 - lower) + 0.22 * lower
-    col = alb * (0.28 + 0.72 * lambert(nx, ny, nz)) + spec * blinn(nx, ny, nz, 60) + 0.04 * blinn(nx, ny, nz, 6)
-    # keys: satin black plastic, a touch lighter
-    kcol = 0.030 * (0.35 + 0.65 * lambert(nx, ny, nz)) + 0.30 * blinn(nx, ny, nz, 30)
+    # ── finish: satin black, a fine horizontal grain on the fascia ──
+    br = 0.06 * streaks(X.shape, n, rng, 70, 0.2)
+    sheen = 1 + 0.25 * np.exp(-((X - 180) / 190) ** 2) * (1.1 - 0.7 * Y / CANVAS[1])
+    alb = (0.024 * (1 + br) * sheen) * (1 - lower) + 0.017 * (1 + 0.4 * br) * lower
+    spec = 0.30 * (1 - lower) + 0.18 * lower
+    col = alb * (0.30 + 0.70 * lambert(nx, ny, nz)) + spec * blinn(nx, ny, nz, 24) + 0.03 * blinn(nx, ny, nz, 5)
+    # keys: glossy black plastic
+    kcol = 0.022 * (0.35 + 0.65 * lambert(nx, ny, nz)) + 0.45 * blinn(nx, ny, nz, 70) + 0.05 * blinn(nx, ny, nz, 8)
     col = col * (1 - keys) + kcol * keys
 
-    # slot interior: nearly black with an ambient falloff (the drawer front sits in it)
+    # slot interior: nearly black (the drawer front sits in it)
     ins = np.clip(-sd_slot, 0, None)
     slot_in = cv.cov(sd_slot)
-    col = col * (1 - slot_in) + (0.004 + 0.004 * (1 - np.exp(-ins / 1.5))) * slot_in
+    col = col * (1 - slot_in) + (0.003 + 0.004 * (1 - np.exp(-ins / 1.5))) * slot_in
+    rgb = np.repeat(col[..., None], 3, axis=2) * rgb3((0.985, 0.99, 1.02))
 
-    # LCD window: glossy black bezel; the LCD itself is drawn by the scene
-    lcd_in = cv.cov(sd_lcd)
-    bez = 0.010 * (0.4 + 0.6 * lambert(nx, ny, nz)) + 0.9 * blinn(nx, ny, nz, 80)
-    col = col * (1 - lcd_in) + bez * lcd_in
+    # the display window: smoked glass round the display, the same dark
+    # blue-green as the display's own edges
+    win_in = cv.cov(sd_win)
+    glass = rgb3((0.00018, 0.00050, 0.00056)) * (1 + 0.0 * X)[..., None]
+    glass = glass + (0.12 * blinn(nx, ny, nz, 90))[..., None]
+    rgb = rgb * (1 - win_in[..., None]) + glass * win_in[..., None]
 
-    # jack, knob
+    # the badge: a dark plate with a thin light border and its emblem
+    bad = cv.cov(sd_badge)
+    rgb = rgb * (1 - 0.35 * bad[..., None])
+    border = cv.cov(np.abs(sd_rrect(X, Y, BADGE[0] + 1.2, BADGE[1] + 1.2, BADGE[2] - 1.2, BADGE[3] - 1.2, 0.6)) - 0.18)
+    em_x, em_y = BADGE[0] + 9, (BADGE[1] + BADGE[3]) / 2
+    emblem = np.clip(cv.cov(sd_rrect(X, Y, em_x - 5, em_y - 5, em_x + 5, em_y + 5, 0.6))
+                     - cv.cov(sd_rrect(X, Y, em_x - 4.2, em_y - 4.2, em_x + 4.2, em_y + 4.2, 0.4)), 0, 1)
+    # inside the emblem: a single pulse, the one bit
+    wave = cv.cov(np.maximum(np.abs(Y - em_y - 1.2 + 2.6 * (np.abs(X - em_x) < 1.2)) - 0.3, np.abs(X - em_x) - 3.2))
+    emblem = np.clip(emblem + wave, 0, 1)
+
+    # the frame's inner well shows a slightly lighter satin
+    ink_all = np.clip(border * 0.6 + emblem, 0, 1)
+
+    # jack: gold ring, black hole
     jr = np.hypot(X - JACK[0], Y - JACK[1])
-    ring = cv.cov(np.abs(jr - 3.6) - 1.3)
-    rh = np.clip(1 - ((jr - 3.6) / 1.3) ** 2, 0, 1) ** 0.5
-    rnx, rny, rnz = normals(rh * 1.2, n)
-    chrome = 0.12 + 0.35 * lambert(rnx, rny, rnz) + 1.2 * blinn(rnx, rny, rnz, 30)
-    col = col * (1 - ring) + chrome * ring
-    hole = cv.cov(jr - 2.3)
-    col = col * (1 - hole) + 0.002 * hole
+    ring = cv.cov(np.abs(jr - 4.2) - 1.6)
+    rh = np.clip(1 - ((jr - 4.2) / 1.6) ** 2, 0, 1) ** 0.5
+    rnx, rny, rnz = normals(rh * 1.4, n)
+    gold_j = rgb3(GOLD) * (0.25 + 0.55 * lambert(rnx, rny, rnz))[..., None] + (1.1 * blinn(rnx, rny, rnz, 30))[..., None] * rgb3((1.0, 0.85, 0.55))
+    rgb = rgb * (1 - ring[..., None]) + gold_j * ring[..., None]
+    hole = cv.cov(jr - 2.5)
+    rgb = rgb * (1 - hole[..., None]) + 0.002 * hole[..., None]
 
+    # the level knob: black, knurled, a white index
     kr = np.hypot(X - KNOB[0], Y - KNOB[1])
     sd_knob = kr - KNOB_R
     kh = 3.0 * np.sqrt(np.clip(1 - (1 - np.clip(-sd_knob / 1.8, 0, 1)) ** 2, 0, 1))
@@ -193,65 +262,61 @@ def build_base(out):
     knurl = 0.25 * np.cos(ang * 60) * smoothstep(KNOB_R - 2.2, KNOB_R - 1.0, kr)
     knx, kny, knz = normals(kh + knurl, n)
     turned = radial_noise(kr, rng, 0.15, rmax=20)
-    kcol2 = 0.05 * (1 + 0.1 * turned) * (0.3 + 0.7 * lambert(knx, kny, knz)) + 0.55 * blinn(knx, kny, knz, 40)
-    # the index line, at about "11 o'clock"
+    kcol2 = 0.04 * (1 + 0.1 * turned) * (0.3 + 0.7 * lambert(knx, kny, knz)) + 0.50 * blinn(knx, kny, knz, 40)
     a0 = math.radians(-120)
     u = (X - KNOB[0]) * math.cos(a0) + (Y - KNOB[1]) * math.sin(a0)
     v = -(X - KNOB[0]) * math.sin(a0) + (Y - KNOB[1]) * math.cos(a0)
     line = cv.cov(np.maximum(np.abs(v) - 0.45, np.maximum(3.0 - u, u - (KNOB_R - 2.4))))
     kcol2 = kcol2 * (1 - line) + 0.55 * line
     kn = cv.cov(sd_knob)
-    col = col * (1 - kn) + kcol2 * kn
-    # the knob's shadow on the plate
     ksh = soft(np.hypot(X - KNOB[0] - LXY[0] * -3 * LSLOPE, Y - KNOB[1] - LXY[1] * -3 * LSLOPE) - KNOB_R, 1.8)
-    col = col * (1 - 0.6 * ksh * (1 - kn))
+    rgb = rgb * (1 - 0.6 * ksh * (1 - kn))[..., None]
+    rgb = rgb * (1 - kn[..., None]) + kcol2[..., None] * kn[..., None]
 
     # LED socket (unlit)
-    lr = np.hypot(X - LED[0], Y - LED[1])
-    led = cv.cov(lr - 1.9)
-    col = col * (1 - led) + 0.012 * led
+    led = cv.cov(np.hypot(X - LED[0], Y - LED[1]) - 1.7)
+    rgb = rgb * (1 - led[..., None]) + 0.010 * led[..., None]
 
-    rgb = np.repeat(col[..., None], 3, axis=2) * rgb3((0.985, 0.99, 1.02))
-
-    # prints
+    # ── prints ──
+    name_w = text_width("OSMIUM", 8.5, True, 1.6)
     items = [
-        ("OSMIUM", 24, 76, 11.5, True, "l", 2.6),
-        ("CD-90", 268, 76, 9.0, True, "r", 0.6),
-        ("COMPACT DISC PLAYER", 24, 92, 5.2, False, "l", 0.9),
-        ("1 BIT DAC  ·  8x OVERSAMPLING DIGITAL FILTER", 24, 103, 4.2, False, "l", 0.35),
-        ("POWER", 44, 176, 4.4, True, "m", 0.3),
-        ("PHONES", 100, 176, 4.4, True, "m", 0.3),
-        ("LEVEL", KNOB[0], 176, 4.4, True, "m", 0.3),
-        ("REPEAT", 190, 176, 4.4, True, "m", 0.3),
-        ("RANDOM", 226, 176, 4.4, True, "m", 0.3),
-        ("OPEN/CLOSE", 305, 176, 4.0, True, "m", 0.1),
-        ("PLAY", 341, 176, 4.4, True, "m", 0.3),
-        ("PAUSE", 377, 176, 4.4, True, "m", 0.3),
-        ("STOP", 413, 176, 4.4, True, "m", 0.3),
-        ("SKIP", 467, 176, 4.4, True, "m", 0.3),
-        ("DIGITAL AUDIO", 392, 161, 5.0, True, "m", 1.4),
+        ("COMPACT DISC PLAYER  CD-90", 22 + name_w + 6, 21.5, 3.6, True, "l", 0.35),
+        ("1-BIT DAC", BADGE[0] + 18, BADGE[1] + 5.5, 4.2, True, "l", 0.6),
+        ("DIGITAL CONVERSION", BADGE[0] + 18, BADGE[1] + 13.5, 3.0, False, "l", 0.4),
+        ("REMOTE SENSOR", WIN[0] + 2, 109.5, 2.4, False, "l", 0.3),
+        ("PLAY", 442, 29, 3.8, True, "m", 0.4),
+        ("STOP", 469.5, 29, 3.8, True, "m", 0.4),
+        ("PAUSE", 496, 29, 3.8, True, "m", 0.4),
+        ("OPEN", 244, 119.5, 3.0, True, "m", 0.2),
+        ("REPEAT", 381, 119.5, 3.0, True, "m", 0.1),
+        ("RANDOM", 399, 119.5, 3.0, True, "m", 0.0),
+        ("POWER", 33, 163.5, 3.2, True, "m", 0.3),
+        ("PHONES", JACK[0], 194, 3.2, True, "m", 0.3),
+        ("PHONE", KNOB[0] + 14, 190, 2.8, True, "l", 0.2),
+        ("LEVEL", KNOB[0] + 14, 194.5, 2.8, True, "l", 0.2),
+        ("0", KNOB[0] - 10, 194.5, 2.8, True, "m", 0.0),
+        ("10", KNOB[0] + 9, 194.5, 2.8, True, "m", 0.0),
     ]
-    ink = text_mask(cv, items)
-    rgb = rgb * (1 - ink[..., None]) + INK * ink[..., None]
-    # the thin rule under OSMIUM and the bracket of SKIP
-    # the rule runs between OSMIUM and CD-90, at half the height of the capitals
-    def width(t, sz, bold, spacing):
-        f = ImageFont.truetype(FONT if bold else FONT_R, 100)
-        return sum(f.getlength(c) for c in t) * sz / 100 + spacing * (len(t) - 1)
-    fb = ImageFont.truetype(FONT, 100).getbbox("E")
-    mid = 76 + (fb[3] - fb[1]) * 11.5 / 100 / 2
-    r0 = 24 + width("OSMIUM", 11.5, True, 2.6) + 6
-    r1 = 268 - width("CD-90", 9.0, True, 0.6) - 6
-    rule = cv.cov(sd_rrect(X, Y, r0, mid - 0.3, r1, mid + 0.3, 0.1))
-    skip = cv.cov(sd_rrect(X, Y, 437, 177.5, 458, 178.1, 0.1)) + cv.cov(sd_rrect(X, Y, 476, 177.5, 497, 178.1, 0.1))
-    extra = np.clip(rule * 0.55 + skip, 0, 1)
-    rgb = rgb * (1 - extra[..., None]) + INK * extra[..., None]
+    for i in range(10):
+        x0 = NUM_X0 + i * NUM_DX
+        items.append((str(i + 1), x0 + NUM_W / 2, 119.5, 3.0, True, "m", 0.0))
+    ink = np.clip(text_mask(cv, items) + ink_all, 0, 1)
+    rgb = rgb * (1 - ink[..., None]) + rgb3(INK) * ink[..., None]
     # symbols on the key caps
-    for name, (x0, x1) in KEYS.items():
-        if name in ("repeat", "random"):
+    for name, (x0, y0, x1, y1) in KEYS.items():
+        if slim(name):
             continue
-        sm = symbol_mask(cv, name, (x0 + x1) / 2, (KEY_Y[0] + KEY_Y[1]) / 2, 6.0)
-        rgb = rgb * (1 - sm[..., None]) + 0.60 * sm[..., None]
+        size = 7.0 if name in ("play", "stop", "pause") else 5.5
+        sm = symbol_mask(cv, name, (x0 + x1) / 2, (y0 + y1) / 2, size)
+        rgb = rgb * (1 - sm[..., None]) + rgb3(INK) * 0.95 * sm[..., None]
+
+    # ── gold: the name and the script, a metallic gradient ──
+    gold_items = text_mask(cv, [("OSMIUM", 22, 19.5, 8.5, True, "l", 1.6)])
+    script = text_mask(cv, [("Reference", 170, 178, 13.0, True, "m", 0.0)], font=FONT_SCRIPT)
+    g = np.clip(gold_items + script, 0, 1)
+    tg = np.clip(((Y - 12) % 14) / 14, 0, 1)
+    gshade = 0.75 + 0.55 * np.exp(-((tg - 0.35) / 0.2) ** 2)
+    rgb = rgb * (1 - g[..., None]) + rgb3(GOLD) * gshade[..., None] * g[..., None]
 
     cv.over(srgb(rgb), body)
     save(cv.image(), out, "cdf-base.png")
@@ -265,13 +330,20 @@ def build_drawer(out):
     sd = sd_rrect(X, Y, x0, y0, x1, y1, 1.5)
     e = np.clip(-sd, 0, None)
     h = 1.2 * np.sqrt(1 - (1 - np.clip(e / 1.2, 0, 1)) ** 2)
-    # a shallow finger recess in the middle of the lower edge
+    # the tall flap of the period: a flat face, then a lip standing out a
+    # little along the bottom third, with a shallow finger recess in it
+    lip_y = y0 + 0.66 * (y1 - y0)
+    h = h + 0.7 * smoothstep(lip_y - 0.4, lip_y + 0.4, Y)
     h = h - 0.6 * np.exp(-(((X - (x0 + x1) / 2) / 18) ** 2 + ((Y - y1 + 3) / 2.2) ** 2))
     nx, ny, nz = normals(h, n)
     br = 0.05 * streaks(X.shape, n, rng, 50, 0.2)
     col = 0.026 * (1 + br) * (0.3 + 0.7 * lambert(nx, ny, nz)) + 0.40 * blinn(nx, ny, nz, 50)
     col = col + 0.015 * np.exp(-((Y - y0 - 1.2) / 0.5) ** 2)
-    cv.over(srgb(np.repeat(col[..., None], 3, axis=2)), cv.cov(sd))
+    rgb = np.repeat(col[..., None], 3, axis=2)
+    # a hairline of blue light along the drawer, from end to end
+    line = np.exp(-((Y - (lip_y - 1.2)) / 0.28) ** 2) * smoothstep(x0 + 14, x0 + 34, X) * smoothstep(x1 - 14, x1 - 34, X)
+    rgb = rgb + line[..., None] * rgb3((0.05, 0.10, 0.45))
+    cv.over(srgb(rgb), cv.cov(sd))
     save(cv.image(), out, "cdf-drawer.png")
 
 

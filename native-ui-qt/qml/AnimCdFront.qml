@@ -1,14 +1,16 @@
-// Now Playing animation "CD player": a 90s black front-loading CD player seen
-// from the front, a little from above. A new album opens the drawer, the old
-// disc comes out, the new one (the album artwork printed on it) goes in, the
-// drawer closes and the LCD reads the disc, then shows track and time, the
-// music calendar and the turning-disc indicator. The keys work: open/close,
-// play, pause, stop, skip, repeat, random, power.
+// Now Playing animation "CD player": a late-80s / early-90s black front-loading
+// CD player in the manner of the hi-fi of the time, seen from the front. A new
+// album opens the drawer, the old disc comes out, the new one (the album
+// artwork printed on it) goes in, the drawer closes and the fluorescent
+// display reads the disc, then shows track and time, the music calendar and
+// the turning-disc indicator. The keys work: open/close, play, pause, stop,
+// skip, search (held: it winds through the track and on into the next),
+// the track numbers 1-10, repeat, random, power.
 //
 // A pure scene (no Hifi imports) driven by NpAnimation.qml; the images are
-// built by tools/np-anim/cdfront.py (the player) and lcd.py (the LCD), whose
-// geometry constants are mirrored below. The disc is the one of the CD scene
-// (assets/anim/cd/).
+// built by tools/np-anim/cdfront.py (the player) and lcd.py --vfd (the
+// display), whose geometry constants are mirrored below. The disc is the one
+// of the CD scene (assets/anim/cd/).
 //
 // 🚨 Weak iGPU, 24/7: nothing here runs at frame rate. While playing only the
 // seconds and the disc indicator change (4 steps a second); the drawer moves
@@ -50,24 +52,31 @@ Item {
     readonly property real texScale: devScale * (s > 0.9 ? 0.9 + 0.15 * Math.ceil((s - 0.9) / 0.15) : Math.ceil(s * 8) / 8)
     function px(v) { return Math.max(1, Math.round(v * root.texScale)) }
 
-    readonly property real drawerX: 25
-    readonly property real drawerY: 33
-    readonly property real drawerW: 240
-    readonly property real drawerH: 24
-    readonly property real slotBottom: 60
+    readonly property real drawerX: 21
+    readonly property real drawerY: 37
+    readonly property real drawerW: 200
+    readonly property real drawerH: 58
+    readonly property real slotBottom: 98
     readonly property real travel: 106
     readonly property real bedH: 124
-    readonly property real bedDiscX: 120
+    readonly property real bedDiscX: 100
     readonly property real bedDiscY: 86
-    readonly property real discRx: 98
-    readonly property real squash: 34 / 102        // the disc seen at a grazing angle
-    readonly property var keys: ({
-        power: [24, 64], repeat: [176, 204], random: [212, 240],
-        eject: [290, 320], play: [326, 356], pause: [362, 392],
-        stop: [398, 428], prev: [434, 464], next: [470, 500]
-    })
-    readonly property real keyY0: 184
-    readonly property real keyY1: 202
+    readonly property real discRx: 93
+    readonly property real squash: 33 / 97         // the disc seen at a grazing angle
+    // name: [x0, y0, x1, y1] (cdfront.py KEYS)
+    readonly property var keys: {
+        var k = {
+            play: [429, 39, 455, 63], stop: [457, 39, 482, 63], pause: [484, 39, 508, 63],
+            eject: [236, 126, 252, 146], repeat: [378, 126, 384, 146], random: [396, 126, 402, 146],
+            prev: [424, 126, 442, 146], next: [446, 126, 464, 146],
+            rew: [468, 126, 486, 146], ff: [490, 126, 508, 146],
+            power: [22, 170, 44, 192]
+        }
+        for (var i = 0; i < 10; i++) k["n" + (i + 1)] = [262 + i * 10.5, 126, 268 + i * 10.5, 146]
+        return k
+    }
+    readonly property var keyNames: ["play", "stop", "pause", "eject", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8",
+                                     "n9", "n10", "repeat", "random", "prev", "next", "rew", "ff", "power"]
 
     // ── choreography ───────────────────────────────────────────────────────
     // phase: 0 empty and closed, 1 loading, 2 loaded, 3 unloading, 4 open with
@@ -236,10 +245,13 @@ Item {
 
         Pic { id: base; width: 520; height: 260; source: root.assetsBase + "cdf-base.png" }
 
+        // the fluorescent display: LcdCd's panel with the VFD pictures, at 0.8
         LcdCd {
-            x: 294; y: 33
-            base: root.assetsBase + "../lcd/"
-            texScale: root.texScale
+            x: 246.6; y: 26
+            scale: 0.8
+            transformOrigin: Item.TopLeft
+            base: root.assetsBase + "../vfd/"
+            texScale: root.texScale * 0.8
             on: !root.live || root.power
             word: root.lcdWord
             track: root.ready ? root.lcdTrack : 0
@@ -259,7 +271,7 @@ Item {
         }
 
         Pic {
-            x: 67; y: 186; width: 14; height: 14
+            x: 46; y: 174; width: 14; height: 14
             source: root.assetsBase + (root.power || !root.live ? "cdf-led-green.png" : "cdf-led-red.png")
         }
 
@@ -343,8 +355,8 @@ Item {
             }
         }
         Pic {
-            x: root.drawerX - 8; y: stage.frontY + 20       // cdfront.py: DRAWER y1 - 4 - y0
-            width: 256; height: 24
+            x: root.drawerX - 8; y: stage.frontY + 54       // cdfront.py: DRAWER y1 - 4 - y0
+            width: 216; height: 24
             visible: root.trayOut > 0.001
             opacity: Math.min(1, root.trayOut * 3)
             source: root.assetsBase + "cdf-drawer-sh.png"
@@ -356,22 +368,52 @@ Item {
             source: root.assetsBase + "cdf-drawer.png"
         }
 
-        // the keys: a press darkens the cap for a moment
+        // the keys: a press darkens the cap for a moment. ◀◀ / ▶▶ search:
+        // a tap jumps a few seconds, held they wind on (NpAnimation's "wind",
+        // which crosses into the next or previous track) until released
         Repeater {
-            model: ["power", "repeat", "random", "eject", "play", "pause", "stop", "prev", "next"]
+            model: root.keyNames
             Item {
                 id: key
                 required property string modelData
                 readonly property var r: root.keys[modelData]
-                x: r[0]; y: root.keyY0; width: r[1] - r[0]; height: root.keyY1 - root.keyY0
-                Rectangle { anchors.fill: parent; radius: 2.2; color: "black"; opacity: kArea.pressed ? 0.45 : 0 }
+                readonly property bool slim: /^n[0-9]+$/.test(modelData) || modelData === "repeat" || modelData === "random"
+                x: r[0]; y: r[1]; width: r[2] - r[0]; height: r[3] - r[1]
+                Rectangle { anchors.fill: parent; radius: key.slim ? 1.2 : 1.8; color: "black"; opacity: kArea.pressed ? 0.45 : 0 }
                 MouseArea {
                     id: kArea
-                    anchors.fill: parent; anchors.margins: -3
+                    anchors.fill: parent
+                    anchors.margins: key.slim ? -2 : -3
                     enabled: root.live
-                    onClicked: root.press(key.modelData)
+                    onPressed: if (key.modelData === "rew" || key.modelData === "ff") root.searchStart(key.modelData === "ff" ? 1 : -1, kArea)
+                    onReleased: if (key.modelData === "rew" || key.modelData === "ff") root.searchStop()
+                    onCanceled: if (key.modelData === "rew" || key.modelData === "ff") root.searchStop()
+                    onClicked: if (key.modelData !== "rew" && key.modelData !== "ff") root.press(key.modelData)
                 }
             }
+        }
+    }
+
+    // search: the first step at once, then one every 350 ms while held
+    property int searchDir: 0
+    property var searchArea: null
+    function searchStart(dir, area) {
+        if (!power || phase !== 2) return
+        searchDir = dir; searchArea = area
+        root.action("wind", dir)
+    }
+    function searchStop() {
+        if (searchDir === 0) return
+        searchDir = 0; searchArea = null
+        root.action("windStop", true)
+    }
+    Timer {
+        interval: 350; repeat: true
+        running: root.live && root.active && root.searchDir !== 0
+        // 🚨 never on by itself: a release that got lost stops it here
+        onTriggered: {
+            if (!root.searchArea || !root.searchArea.pressed) { root.searchStop(); return }
+            root.action("wind", root.searchDir)
         }
     }
 
@@ -386,5 +428,10 @@ Item {
         else if (k === "next") root.action("next", true)
         else if (k === "repeat") root.action("repeat", true)
         else if (k === "random") root.action("random", true)
+        else if (/^n[0-9]+$/.test(k)) {
+            // a track number: that track of the queue, when there is one
+            var t = parseInt(k.slice(1))
+            if (t <= trackTotal) { if (phase === 4) closeTray(); root.action("track", t) }
+        }
     }
 }

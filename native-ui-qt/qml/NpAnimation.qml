@@ -181,6 +181,7 @@ Item {
             else if (name === "volume") Player.setVolume(value.level, value.final)
             else if (name === "power") Player.cmd(["power", value ? "1" : "0"])
             else if (name === "wind") root.wind(value)
+            else if (name === "track") Player.cmd(["playlist", "index", String(value - 1)])
             else if (name === "windStop") { root.windWait = ""; root.windToEnd = false }
             else if (name === "repeat") Player.cycleRepeat()
             else if (name === "random") Player.cycleShuffle()

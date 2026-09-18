@@ -1,8 +1,10 @@
-// The grey-green reflective LCD of the 90s CD players (AnimCdFront.qml and
-// the top loader's front panel). A 196 x 100 point panel: the ground with
-// every segment faintly visible is one picture, the lit segments are small
-// pictures laid on it (tools/np-anim/lcd.py, assets/anim/lcd/; the layout
-// below mirrors that tool's constants).
+// The display of the 90s CD players: the grey-green reflective LCD of the
+// top loader (assets/anim/lcd/) or, with `base` on assets/anim/vfd/, the
+// blue-green fluorescent display of the front-loading player (AnimCdFront.qml).
+// A 196 x 100 point panel: the ground with every segment faintly visible is
+// one picture, the lit segments are small pictures laid on it
+// (tools/np-anim/lcd.py [--vfd]; the layout below mirrors that tool's
+// constants, the same for both).
 //
 // The bottom row is the CD-Text line: sixteen 14-segment characters with the
 // track's title and artist, upper case like the real displays, scrolling
