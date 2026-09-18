@@ -1,7 +1,9 @@
 // Now Playing animation "CD": a top-loading CD player seen from above. The
 // smoked lid slides open under the raised right block, the disc (the album
 // artwork printed on it) is lowered onto the turntable, the magnetic clamp
-// drops on it, the lid closes and the disc spins while playing.
+// drops on it, the lid closes and the disc spins while playing. The right
+// block is a 90s front panel: the grey-green LCD (LcdCd.qml: track, time,
+// music calendar, CD-Text) and four working keys.
 //
 // A pure scene (no Hifi imports) driven by NpAnimation.qml; the images are
 // built by tools/np-anim/cd.py, whose geometry constants are mirrored below.
@@ -26,11 +28,8 @@ Item {
     property string mediaKey: ""
     property string title: ""
     property string subtitle: ""
-    // Full screen (NpStage): a 90s front panel on the right block, with the
-    // grey-green LCD (LcdCd.qml) instead of the black display and working
-    // keys. It needs the queue position, the time and the modes, and the
-    // controls NpAnimation feeds to the scenes that declare them.
-    property bool vintage: false
+    // The LCD and the keys need the queue position, the time and the modes,
+    // and the controls NpAnimation feeds to the scenes that declare them.
     property bool power: true
     property int volume: -1
     property bool volumeFixed: false
@@ -57,9 +56,6 @@ Item {
     readonly property real discR: 92
     readonly property real lidX: 17          // lid image (3 points of margin round the lid)
     readonly property real lidTravel: 238
-    readonly property real barX0: 324
-    readonly property real barX1: 464
-    readonly property real barY: 74
 
     // ── choreography state ─────────────────────────────────────────────────
     // phase: 0 empty (lid closed or closing), 1 inserting, 2 loaded, 3 removing
@@ -389,10 +385,9 @@ Item {
             y: 12
             source: root.assetsBase + "cd-lid.png"
         }
-        Pic { id: bridge; x: 244; y: 0; width: 276; height: 260; source: root.assetsBase + (root.vintage ? "cd-bridge-v.png" : "cd-bridge.png") }
+        Pic { id: bridge; x: 244; y: 0; width: 276; height: 260; source: root.assetsBase + "cd-bridge.png" }
 
         LcdCd {
-            visible: root.vintage
             x: 286; y: 30
             base: root.assetsBase + "../lcd/"
             texScale: root.texScale
@@ -419,7 +414,7 @@ Item {
         }
         // the keys of the front panel: play/pause, stop, skip back, skip forward
         Repeater {
-            model: root.vintage && root.live ? [[348, "playpause"], [389.33, "stop"], [430.67, "prev"], [472, "next"]] : []
+            model: root.live ? [[348, "playpause"], [389.33, "stop"], [430.67, "prev"], [472, "next"]] : []
             MouseArea {
                 required property var modelData
                 x: modelData[0] - 13; y: 157; width: 26; height: 26
@@ -432,32 +427,6 @@ Item {
             }
         }
 
-        // display: progress bar and play symbol, under the glass reflection
-        Item {
-            visible: !root.vintage && opacity > 0
-            opacity: root.loaded ? 1 : 0
-            Behavior on opacity { enabled: root.live; NumberAnimation { duration: 300 } }
-            Rectangle {
-                x: root.barX0 - 1; y: root.barY - 2.5
-                width: Math.max(0, (root.barX1 - root.barX0) * Math.max(0, Math.min(1, root.progress))) + 2; height: 5; radius: 2.5
-                color: "#d4af37"; opacity: 0.22
-                visible: root.progress > 0
-            }
-            Rectangle {
-                x: root.barX0; y: root.barY - 1
-                width: (root.barX1 - root.barX0) * Math.max(0, Math.min(1, root.progress)); height: 2; radius: 1
-                color: "#ecc865"
-                visible: root.progress > 0
-            }
-        }
-        Pic {
-            x: 296; y: 65; width: 18; height: 18
-            source: root.assetsBase + "cd-play.png"
-            opacity: root.lit ? 1 : root.loaded ? 0.3 : 0
-            visible: !root.vintage && opacity > 0
-            Behavior on opacity { enabled: root.live; NumberAnimation { duration: 200 } }
-        }
-        Pic { x: 286; y: 40; width: 196; height: 68; visible: !root.vintage; source: root.assetsBase + "cd-glass.png" }
         Pic {
             x: 291.5; y: 156; width: 28; height: 28
             source: root.assetsBase + "cd-led.png"

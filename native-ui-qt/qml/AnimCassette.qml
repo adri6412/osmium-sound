@@ -43,10 +43,8 @@ Item {
     // "eject" (value undefined), "volume" (value {level, final}), "power"
     // (value: the wanted state). Never emitted by a still preview.
     signal action(string name, var value)
-    // Full screen (NpStage): the 90s front panel, with the grey-green tape
-    // LCD (LcdTape.qml: level meters, counter, indicators) in the display
-    // window and silk-screen prints. The meters follow this device's audio.
-    property bool vintage: false
+    // The tape LCD (LcdTape.qml): the counter follows the time, the level
+    // meters this device's audio.
     property real elapsed: 0
     property real levelL: 0
     property real levelR: 0
@@ -83,9 +81,6 @@ Item {
     readonly property real hingeY: doorY + doorH
     readonly property real openAngle: 34               // degrees the door tilts forward
     readonly property real slide: 62                   // points the cassette travels into the holder
-    readonly property real barX0: 368
-    readonly property real barX1: 488
-    readonly property real barY: 49
 
     // ── choreography state ─────────────────────────────────────────────────
     // phase: 0 empty (door closed or closing), 1 inserting, 2 loaded, 3 removing
@@ -415,7 +410,7 @@ Item {
         // all at once, not piece by piece while the images decode
         visible: deck.status === Image.Ready && door.status === Image.Ready && shell.status === Image.Ready
 
-        Pic { id: deck; width: 520; height: 260; file: root.vintage ? "deck-v.png" : "deck.png" }
+        Pic { id: deck; width: 520; height: 260; file: "deck.png" }
 
         // the door with the holder and the cassette in it, tilting forward on
         // its bottom hinge (Rotation about x projects with a perspective)
@@ -632,7 +627,6 @@ Item {
         }
 
         LcdTape {
-            visible: root.vintage
             x: 339; y: 20
             base: root.assetsBase + "../lcd/"
             texScale: root.decodeScale
@@ -645,32 +639,6 @@ Item {
             levelR: !root.live ? 56 : root.lit ? root.levelR : 0
         }
 
-        // display: progress bar and play symbol, under the glass reflection
-        Item {
-            opacity: root.loaded ? 1 : 0
-            visible: !root.vintage && opacity > 0
-            Behavior on opacity { enabled: root.live; NumberAnimation { duration: 300 } }
-            Rectangle {
-                x: root.barX0 - 1; y: root.barY - 2.5
-                width: Math.max(0, (root.barX1 - root.barX0) * Math.max(0, Math.min(1, root.progress))) + 2; height: 5; radius: 2.5
-                color: "#d4af37"; opacity: 0.22
-                visible: root.progress > 0
-            }
-            Rectangle {
-                x: root.barX0; y: root.barY - 1
-                width: (root.barX1 - root.barX0) * Math.max(0, Math.min(1, root.progress)); height: 2; radius: 1
-                color: "#ecc865"
-                visible: root.progress > 0
-            }
-        }
-        Pic {
-            x: 344; y: 40; width: 18; height: 18
-            file: "disp-play.png"
-            opacity: root.lit ? 1 : root.loaded ? 0.3 : 0
-            visible: !root.vintage && opacity > 0
-            Behavior on opacity { enabled: root.live; NumberAnimation { duration: 200 } }
-        }
-        Pic { x: 336; y: 17; width: 166; height: 64; visible: !root.vintage; file: "disp-glass.png" }
         // the power LED
         Pic {
             x: 430; y: 218; width: 24; height: 24

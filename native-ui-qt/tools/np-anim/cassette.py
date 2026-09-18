@@ -27,8 +27,8 @@ design of AnimCassette.qml; the geometry constants below are mirrored there):
   deck.png          the whole deck without the door: drop shadow, brushed
                     front panel, the bay behind the door (back wall lit by a
                     lamp under the top lip, the two reel spindles), the six
-                    transport keys, display window, the volume fader's slot,
-                    jack, power key
+                    transport keys, the window of the tape LCD (LcdTape.qml),
+                    the volume fader's slot, jack, power key and the prints
   door.png          the door: brushed frame, cassette holder lip and clips,
                     smoked glass with its reflection (tilts open in the QML)
   door-edge.png     the top face of the door, seen only while it is tilted
@@ -37,8 +37,6 @@ design of AnimCassette.qml; the geometry constants below are mirrored there):
                     power): shown while a finger is on it (over deck.png)
   fader.png         the volume fader's cap (moved by the QML to follow the
                     volume)
-  disp-play.png     the lit play symbol of the display
-  disp-glass.png    reflection of the display glass (over the progress bar)
   led.png           the lit LED next to the power key
   cas.png           the cassette front: smoked shell, screws, graphite label
                     with a clear window cut out (see-through), the tape path
@@ -82,9 +80,7 @@ KEY_X0, KEY_W, KEY_GAP = 16, 46, 6
 PLAY_KEY = 1                      # rewind, play, fast forward, stop, pause, eject
 DISPLAY = (336, 17, 502, 81)
 DISPLAY_R = 6
-DISP_PLAY_C = (353, 49)
-BAR = (368, 49, 488)              # x0, y, x1 of the progress track
-# the volume: a horizontal fader (the 90s panel, vintage, numbers its ticks)
+# the volume: a horizontal fader, its ticks numbered 0-10
 FADER = (352.0, 488.0, 146.0)                 # x at 0, x at 100, y of the slot
 FADER_CAP = (12.0, 20.0)                      # the cap, centred on its position
 JACK_C = (350, 230)
@@ -334,10 +330,9 @@ def shade_key(cv, x0, y0, x1, y1, kind, pressed=False, lit=False):
 
 
 # ── the deck ───────────────────────────────────────────────────────────────
-# the 90s front panel of the full-screen view (vintage): the display window
-# holds the grey-green tape LCD (LcdTape.qml, drawn by the scene), and the
-# panel gets silk-screen prints; everything else is the same deck
-def build_deck(out, vintage=False):
+# a 90s front panel: the display window holds the grey-green tape LCD
+# (LcdTape.qml, drawn by the scene), the panel carries silk-screen prints
+def build_deck(out):
     cv = Canvas(0, 0, CANVAS[0], CANVAS[1], PPT_BIG)
     X, Y, n = cv.X, cv.Y, cv.n
     rng = np.random.default_rng(31)
@@ -453,9 +448,6 @@ def build_deck(out, vintage=False):
     glass = 0.0010 + 0.0025 * smoothstep(0, 30, Y - DISPLAY[1])
     glass = glass * (1 - 0.6 * np.exp(-inside / 2.0))
     glass = gray3(glass)
-    if not vintage:
-        unlit = cv.cov(symbol_sd(X, Y, "play", *DISP_PLAY_C)) * 0.8 + cv.cov(sd_rrect(X, Y, BAR[0], BAR[1] - 1.0, BAR[2], BAR[1] + 1.0, 1.0))
-        glass = glass + np.clip(unlit, 0, 1)[..., None] * rgb3((0.010, 0.0075, 0.003))
     plate = mix(plate, glass, cv.cov(sd_disp))
 
 
@@ -489,71 +481,24 @@ def build_deck(out, vintage=False):
         tx = fx0 + (fx1 - fx0) * k / 10
         tm = cv.cov(sd_rrect(X, Y, tx - 0.3, fy - 9.5, tx + 0.3, fy - 6.5 + (1.2 if k % 5 == 0 else 0), 0.1))
         plate = plate * (1 - tm[..., None]) + 0.40 * tm[..., None]
-    if vintage:
-        import cdfront
-        items = [(name, (key_rect(i)[0] + key_rect(i)[2]) / 2, 214.5, 3.8, True, "m", 0.3)
-                 for i, name in enumerate(("REW", "PLAY", "F.FWD", "STOP", "PAUSE", "EJECT"))]
-        items += [
-            ("OSMIUM", DISPLAY[0], 92, 8.0, True, "l", 1.9),
-            ("TC-90", DISPLAY[2], 92, 6.2, True, "r", 0.4),
-            ("STEREO CASSETTE DECK", DISPLAY[0], 102, 3.8, False, "l", 0.7),
-            ("AUTO REVERSE  \u00b7  NR", DISPLAY[2], 102, 3.6, False, "r", 0.3),
-            ("VOLUME", (FADER[0] + FADER[1]) / 2, 160, 3.8, True, "m", 0.6),
-            ("PHONES", JACK_C[0], 214.5, 3.8, True, "m", 0.3),
-            ("POWER", (POWER[0] + POWER[2]) / 2, 214.5, 3.8, True, "m", 0.3),
-        ]
-        # the 90s panel numbers the ticks 0-10
-        items += [(str(k), FADER[0] + (FADER[1] - FADER[0]) * k / 10, FADER[2] - 14.5, 3.4, True, "m", 0.0)
-                  for k in range(11)]
-        ink = cdfront.text_mask(cv, items)
-        plate = plate * (1 - ink[..., None]) + 0.50 * ink[..., None]
-        cv.over(srgb(plate), body * (1 - in_bay))
-        save(cv.image(), out, "deck-v.png")
-        return
-
-    # the only lettering: OSMIUM, lightly engraved between display and fader
-    m = text_mask(cv, "OSMIUM", (DISPLAY[0] + DISPLAY[2]) / 2, ENGRAVE_Y, 5.0, 2.5)
-    if m is not None:
-        sh_ = int(round(0.3 * n))
-        wall = np.clip(m - np.roll(np.roll(m, -sh_, axis=0), -sh_, axis=1), 0, 1)   # lower right walls
-        rim = np.clip(np.roll(np.roll(m, sh_, axis=0), sh_, axis=1) - m, 0, 1)      # lit edge outside
-        plate = plate * (1 - 0.70 * m)[..., None] + gray3(0.040 * wall + 0.012 * rim)
-
+    import cdfront
+    items = [(name, (key_rect(i)[0] + key_rect(i)[2]) / 2, 214.5, 3.8, True, "m", 0.3)
+             for i, name in enumerate(("REW", "PLAY", "F.FWD", "STOP", "PAUSE", "EJECT"))]
+    items += [
+        ("OSMIUM", DISPLAY[0], 92, 8.0, True, "l", 1.9),
+        ("TC-90", DISPLAY[2], 92, 6.2, True, "r", 0.4),
+        ("STEREO CASSETTE DECK", DISPLAY[0], 102, 3.8, False, "l", 0.7),
+        ("AUTO REVERSE  \u00b7  NR", DISPLAY[2], 102, 3.6, False, "r", 0.3),
+        ("VOLUME", (FADER[0] + FADER[1]) / 2, 160, 3.8, True, "m", 0.6),
+        ("PHONES", JACK_C[0], 214.5, 3.8, True, "m", 0.3),
+        ("POWER", (POWER[0] + POWER[2]) / 2, 214.5, 3.8, True, "m", 0.3),
+    ]
+    items += [(str(k), FADER[0] + (FADER[1] - FADER[0]) * k / 10, FADER[2] - 14.5, 3.4, True, "m", 0.0)
+              for k in range(11)]
+    ink = cdfront.text_mask(cv, items)
+    plate = plate * (1 - ink[..., None]) + 0.50 * ink[..., None]
     cv.over(srgb(plate), body * (1 - in_bay))
     save(cv.image(), out, "deck.png")
-
-
-FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"     # fonts-dejavu-core
-ENGRAVE_Y = 105
-
-
-def text_mask(cv, text, cx, cy, cap_pt, spacing_pt):
-    """Coverage of letter-spaced text centred on (cx, cy) on the canvas'
-    sample grid, or None (and a note) when the font is missing."""
-    from PIL import ImageDraw, ImageFont
-    if not os.path.exists(FONT):
-        print("note: " + FONT + " not found, no engraving")
-        return None
-    n = cv.n
-    size = int(round(cap_pt * n / 0.729))                    # DejaVu Sans cap height
-    font = ImageFont.truetype(FONT, size)
-    adv = [font.getlength(ch) for ch in text]
-    total = sum(adv) + spacing_pt * n * (len(text) - 1)
-    H, W = cv.X.shape
-    x0 = (cx - cv.X[0, 0]) * n + 0.5 - total / 2
-    img = Image.new("L", (W, H), 0)
-    d = ImageDraw.Draw(img)
-    x = x0
-    top = (cy - cv.Y[0, 0]) * n + 0.5 - cap_pt * n / 2
-    asc = font.getbbox("O")[1]
-    for ch, a in zip(text, adv):
-        d.text((x, top - asc), ch, font=font, fill=255)
-        x += a + spacing_pt * n
-    return np.asarray(img, dtype=np.float32) / 255.0
-
-
-def gold_dot(X, Y, ix, iy):
-    return rgb3((0.55, 0.40, 0.10)) + rgb3((0.55, 0.45, 0.25)) * np.exp(-((X - ix + 0.5) ** 2 + (Y - iy + 0.6) ** 2) / 0.5)[..., None]
 
 
 def build_key_image(out, k, kind, lit, name):
@@ -600,35 +545,7 @@ def build_fader(out):
     save(cv.image(), out, "fader.png")
 
 
-def build_display_parts(out):
-    # lit play symbol with its glow
-    cx, cy = DISP_PLAY_C
-    cv = Canvas(cx - 9, cy - 9, 18, 18, PPT_CAS)
-    X, Y = cv.X, cv.Y
-    sd = symbol_sd(X, Y, "play", cx, cy)
-    cv.over((0.95, 0.72, 0.25), 0.45 * soft(sd, 1.4))
-    col = np.zeros(X.shape + (3,), np.float32) + rgb3((1.0, 0.86, 0.52))
-    col = col + smoothstep(-0.2, -2.0, sd)[..., None] * rgb3((0.0, 0.08, 0.15))
-    cv.over(np.clip(col, 0, 1), cv.cov(sd))
-    save(cv.image(), out, "disp-play.png")
-
-    # the glass reflection
-    x0, y0, x1, y1 = DISPLAY
-    cv = Canvas(x0, y0, x1 - x0, y1 - y0, PPT_BIG)
-    X, Y = cv.X, cv.Y
-    sd = sd_rrect(X, Y, *DISPLAY, DISPLAY_R)
-    m = cv.cov(sd)
-    t = (Y - y0) / (y1 - y0)
-    u = (X - x0) / (x1 - x0)
-    diag = (u * 2.6 - t)
-    refl = 0.08 * (1 - smoothstep(0.0, 0.48, t)) * (1 - 0.5 * u)
-    refl = refl + 0.05 * np.exp(-((diag - 0.8) / 0.22) ** 2) + 0.03 * np.exp(-((diag - 1.2) / 0.05) ** 2)
-    inner = np.clip(-sd, 0, None)
-    cv.over((1, 1, 1), np.clip(refl, 0, 1) * m)
-    cv.over((0, 0, 0), 0.55 * np.exp(-inner / 1.4) * smoothstep(0.35, 0.0, t) * m)
-    cv.over((1, 1, 1), 0.10 * np.exp(-((inner - 0.6) / 0.35) ** 2) * smoothstep(0.6, 1.0, t) * m)
-    save(cv.image(), out, "disp-glass.png")
-
+def build_led(out):
     # the lit LED
     cx, cy = LED_C
     cv = Canvas(cx - 12, cy - 12, 24, 24, PPT_CAS)
@@ -981,7 +898,7 @@ def main():
     ap.add_argument("--only", default="", help="comma separated builder names (debug)")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    builders = {"deck": build_deck, "deck-v": lambda o: build_deck(o, vintage=True), "fader": build_fader, "keys": build_keys, "display": build_display_parts,
+    builders = {"deck": build_deck, "fader": build_fader, "keys": build_keys, "led": build_led,
                 "door": build_door, "dooredge": build_door_edge, "cassette": build_cassette,
                 "back": build_cassette_back, "shadow": build_cassette_shadow, "pack": build_pack,
                 "hub": build_hub}

@@ -24,8 +24,6 @@ Item {
     property real devScale: 1
     property bool live: true
     property bool active: false
-    // full screen (NpStage): the scenes that have one draw their 90s front panel
-    property bool vintage: false
 
     readonly property var builtin: ({ cd: "AnimCd.qml", cdfront: "AnimCdFront.qml", vinyl: "AnimVinyl.qml", cassette: "AnimCassette.qml" })
     // a store scene: anim.json's `scene`, a flat .qml name inside its folder
@@ -106,7 +104,6 @@ Item {
     Binding { when: loader.item !== null; target: loader.item; property: "title"; value: root.title }
     Binding { when: loader.item !== null; target: loader.item; property: "subtitle"; value: root.subtitle }
 
-    Binding { when: loader.item !== null && loader.item.vintage !== undefined; target: loader.item; property: "vintage"; value: root.vintage }
 
     // A scene with working controls (the cassette deck) declares `power`,
     // `volume` and `volumeFixed` and an action(name, value) signal; the

@@ -1,8 +1,8 @@
 // Now Playing at full screen, opened by the button next to the clock: with
 // the VU meters on, the two meters large and centred with only the track's
 // title, artist and progress below; with the VU meters off and an animation
-// chosen, that animation over the whole screen (the CD players and the
-// cassette deck as a 90s front panel).
+// chosen, that animation over the whole screen: the same scene as in the
+// panel, only larger.
 //
 // It lives inside NowPlaying (it slides with it) and covers it; while it is
 // open NowPlaying hides its own meters and animation, so only one of each
@@ -101,7 +101,6 @@ Item {
     NpAnimation {
         x: 24; y: 58; width: parent.width - 48; height: parent.height - 110
         kind: root.mode === "anim" ? Player.npAnimation : ""
-        vintage: true
         active: root.shown && root.mode === "anim"
         devScale: root.devScale
     }

@@ -391,7 +391,7 @@ Item {
     }
 
     // the meters run for the VU panels, and for the cassette deck's level
-    // meters at full screen (only our own DAC has levels)
-    Binding { target: Vu; property: "active"; value: root.shown && (root.effVu || (root.staged && (root.stageMode === "vu"
-                                                     || (Player.npAnimation === "cassette" && Player.isOwn)))) }
+    // meters, here or at full screen (only our own DAC has levels)
+    Binding { target: Vu; property: "active"; value: root.shown && Player.isOwn && (root.effVu || (root.staged && root.stageMode === "vu")
+                                                     || ((root.effAnim || root.staged) && Player.npAnimation === "cassette")) }
 }

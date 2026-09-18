@@ -26,14 +26,15 @@ they already downloaded when the version goes up.
 ## The scene contract (format 1)
 
 A scene is loaded like the built-in ones (`native-ui-qt/qml/NpAnimation.qml`)
-and gets the same inputs; it declares the ones it uses:
+and gets the same inputs; it declares the ones it uses. The same scene draws
+the Now Playing panel, the full-screen view (just larger: it scales its design
+to the box it is given) and the still of the Settings card.
 
 - always: `assetsBase` (its own folder, with a trailing slash), `devScale`,
   `live` (false for the still of the Settings card: draw the final pose once,
   never run a timer), `active` (on screen), `playing`, `hasTrack`, `progress`
   (0..1), `artwork` (URL), `mediaKey` (changes with the album), `title`,
   `subtitle`;
-- full screen: `vintage` (true: the 90s front-panel version, if it has one);
 - controls: `power`, `volume`, `volumeFixed`, and a `signal action(name,
   value)` with `play`, `pause`, `stop`, `prev`, `next`, `eject`, `volume`
   (`{level, final}`), `power`, `repeat`, `random`, `wind` (+1/-1), `windStop`;

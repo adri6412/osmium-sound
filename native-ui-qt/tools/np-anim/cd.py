@@ -19,10 +19,9 @@ design of AnimCd.qml (the geometry constants below are mirrored there):
                       drop shadow, brushed top plate, lid rails, the well with
                       its finger notch, turntable, spindle and laser slot
   cd-bridge.png       the raised right block (drawn over the sliding lid, which
-                      parks under it): display window, four buttons and
+                      parks under it): the window of the grey-green LCD
+                      (LcdCd.qml), four buttons with their symbols, prints and
                       the unlit LED
-  cd-glass.png        reflection of the display glass, over the progress bar
-  cd-play.png         the lit play symbol of the display (with its glow)
   cd-led.png          the lit LED with its glow (fades in while playing)
   cd-lid.png          the smoked acrylic sliding lid with its static reflection
   cd-disc.png         the disc minus its printed label: clear hub, stacking
@@ -62,10 +61,6 @@ LID = (20, 15, 248, 225)          # closed position
 LID_R = 6
 LID_TRAVEL = 238                  # to the right, under the bridge
 BRIDGE = (252, 8, 516, 232)
-DISPLAY = (286, 40, 482, 108)
-DISPLAY_R = 7
-PLAY_C = (305, 74)
-BAR = (324, 74, 464)              # x0, y, x1 of the progress track
 BUTTONS = ((348, 170), (389.33, 170), (430.67, 170), (472, 170))
 BUTTON_R = 9.5
 LED_C = (305.5, 170)
@@ -321,14 +316,13 @@ def build_base(out):
     save(cv.image(), out, "cd-base.png")
 
 
-# the 90s front panel of the full-screen view (vintage): a window for the
-# grey-green LCD (LcdCd.qml, 196 x 100) instead of the black display, symbols
-# on the keys and silk-screen prints
+# the 90s front panel: a window for the grey-green LCD (LcdCd.qml, 196 x 100),
+# symbols on the keys and silk-screen prints
 LCD_WIN = (283, 27, 485, 133)
 LCD_AT = (286, 30)
 
 
-def build_bridge(out, vintage=False):
+def build_bridge(out):
     x0 = BRIDGE[0] - 8
     cv = Canvas(x0, 0, CANVAS[0] - x0, CANVAS[1], PPT_BIG)
     X, Y, n = cv.X, cv.Y, cv.n
@@ -346,7 +340,7 @@ def build_bridge(out, vintage=False):
     B = 2.8
     h = B * np.sqrt(1 - (1 - np.clip(e / B, 0, 1)) ** 2)
 
-    sd_d = sd_rrect(X, Y, *LCD_WIN, 3.0) if vintage else sd_rrect(X, Y, *DISPLAY, DISPLAY_R)
+    sd_d = sd_rrect(X, Y, *LCD_WIN, 3.0)
     h = h - 1.6 * (1 - smoothstep(0.0, 1.8, sd_d))
 
 
@@ -374,13 +368,9 @@ def build_bridge(out, vintage=False):
 
     # display window: black glass, faint unlit play symbol and track
     inside = np.clip(-sd_d, 0, None)
-    glass = 0.0010 + 0.0025 * smoothstep(0, 30, Y - DISPLAY[1])
+    glass = 0.0010 + 0.0025 * smoothstep(0, 30, Y - LCD_WIN[1])
     glass = glass * (1 - 0.6 * np.exp(-inside / 2.0))
     glass = np.repeat(glass[..., None], 3, axis=2)
-    if not vintage:
-        tri = play_sd(X, Y)
-        unlit = cv.cov(tri) * 0.8 + cv.cov(sd_rrect(X, Y, BAR[0], BAR[1] - 1.0, BAR[2], BAR[1] + 1.0, 1.0))
-        glass = glass + np.clip(unlit, 0, 1)[..., None] * rgb3((0.010, 0.0075, 0.003))
     dm = cv.cov(sd_d)
     top = top * (1 - dm[..., None]) + glass * dm[..., None]
 
@@ -413,78 +403,29 @@ def build_bridge(out, vintage=False):
     bead_c = rgb3((0.022, 0.011, 0.002)) + rgb3((0.5, 0.45, 0.4)) * np.exp(-((X - LED_C[0] + 0.8) ** 2 + (Y - LED_C[1] + 0.9) ** 2) / 0.25)[..., None]
     top = top * (1 - bead[..., None]) + bead_c * bead[..., None]
 
-    if vintage:
-        from cdfront import symbol_mask, text_mask
-        ink = 0.50
-        # symbols engraved in the caps: play/pause (a small triangle and two
-        # bars side by side), stop, skip back, skip forward
-        marks = [symbol_mask(cv, "play", BUTTONS[0][0] - 2.6, BUTTONS[0][1], 4.0),
-                 symbol_mask(cv, "pause", BUTTONS[0][0] + 3.0, BUTTONS[0][1], 4.0)]
-        marks += [symbol_mask(cv, name, bc[0], bc[1], 5.0) for name, bc in zip(("stop", "prev", "next"), BUTTONS[1:])]
-        for sm in marks:
-            top = top * (1 - sm[..., None]) + 0.012 * sm[..., None]
-        items = [
-            ("PLAY/PAUSE", BUTTONS[0][0], 153, 4.0, True, "m", 0.1),
-            ("STOP", BUTTONS[1][0], 153, 4.0, True, "m", 0.25),
-            ("SKIP", (BUTTONS[2][0] + BUTTONS[3][0]) / 2, 153, 4.0, True, "m", 0.25),
-            ("PLAY", LED_C[0], 153, 4.0, True, "m", 0.25),
-            ("OSMIUM", 290, 206, 9.5, True, "l", 2.2),
-            ("CD-80T", 484, 206, 7.0, True, "r", 0.5),
-            ("COMPACT DISC PLAYER", 290, 218, 4.4, False, "l", 0.8),
-            ("TOP LOADING  \u00b7  1 BIT DAC", 484, 218, 4.0, False, "r", 0.3),
-        ]
-        prints = text_mask(cv, items)
-        top = top * (1 - prints[..., None]) + ink * prints[..., None]
+    from cdfront import symbol_mask, text_mask
+    ink = 0.50
+    # symbols engraved in the caps: play/pause (a small triangle and two
+    # bars side by side), stop, skip back, skip forward
+    marks = [symbol_mask(cv, "play", BUTTONS[0][0] - 2.6, BUTTONS[0][1], 4.0),
+             symbol_mask(cv, "pause", BUTTONS[0][0] + 3.0, BUTTONS[0][1], 4.0)]
+    marks += [symbol_mask(cv, name, bc[0], bc[1], 5.0) for name, bc in zip(("stop", "prev", "next"), BUTTONS[1:])]
+    for sm in marks:
+        top = top * (1 - sm[..., None]) + 0.012 * sm[..., None]
+    items = [
+        ("PLAY/PAUSE", BUTTONS[0][0], 153, 4.0, True, "m", 0.1),
+        ("STOP", BUTTONS[1][0], 153, 4.0, True, "m", 0.25),
+        ("SKIP", (BUTTONS[2][0] + BUTTONS[3][0]) / 2, 153, 4.0, True, "m", 0.25),
+        ("PLAY", LED_C[0], 153, 4.0, True, "m", 0.25),
+        ("OSMIUM", 290, 206, 9.5, True, "l", 2.2),
+        ("CD-80T", 484, 206, 7.0, True, "r", 0.5),
+        ("COMPACT DISC PLAYER", 290, 218, 4.4, False, "l", 0.8),
+        ("TOP LOADING  \u00b7  1 BIT DAC", 484, 218, 4.0, False, "r", 0.3),
+    ]
+    prints = text_mask(cv, items)
+    top = top * (1 - prints[..., None]) + ink * prints[..., None]
     cv.over(srgb(top), cov_b)
-    save(cv.image(), out, "cd-bridge-v.png" if vintage else "cd-bridge.png")
-
-
-def play_sd(X, Y):
-    """A rounded play triangle centred on PLAY_C, 9 points tall."""
-    cx, cy = PLAY_C
-    hgt = 4.5
-    # equilateral-ish: vertices (-3.4,-4.5) (-3.4,4.5) (4.4,0)
-    px, py = X - cx, np.abs(Y - cy)
-    a = np.array([-3.4, hgt])
-    b = np.array([4.4, 0.0])
-    ex, ey = b - a
-    ln = math.hypot(ex, ey)
-    nxv, nyv = -ey / ln, ex / ln          # outward normal of the slanted edge
-    d1 = (px - a[0]) * nxv + (py - a[1]) * nyv
-    d2 = -(px - a[0])
-    return np.maximum(d1, d2) + 0.0
-
-
-def build_glass(out):
-    x0, y0, x1, y1 = DISPLAY
-    cv = Canvas(x0, y0, x1 - x0, y1 - y0, PPT_BIG)
-    X, Y = cv.X, cv.Y
-    sd = sd_rrect(X, Y, *DISPLAY, DISPLAY_R)
-    m = cv.cov(sd)
-    t = (Y - y0) / (y1 - y0)
-    u = (X - x0) / (x1 - x0)
-    diag = (u * 3.4 - t)          # diagonal coordinate
-    refl = 0.09 * (1 - smoothstep(0.0, 0.48, t)) * (1 - 0.5 * u)
-    refl = refl + 0.06 * np.exp(-((diag - 0.9) / 0.22) ** 2) + 0.035 * np.exp(-((diag - 1.35) / 0.05) ** 2)
-    inner = np.clip(-sd, 0, None)
-    cv.over((1, 1, 1), np.clip(refl, 0, 1) * m)
-    cv.over((0, 0, 0), 0.55 * np.exp(-inner / 1.4) * smoothstep(0.35, 0.0, t) * m)
-    cv.over((1, 1, 1), 0.10 * np.exp(-((inner - 0.6) / 0.35) ** 2) * smoothstep(0.6, 1.0, t) * m)
-    save(cv.image(), out, "cd-glass.png")
-
-
-def build_play(out):
-    cx, cy = PLAY_C
-    cv = Canvas(cx - 9, cy - 9, 18, 18, PPT_DISC)
-    X, Y = cv.X, cv.Y
-    sd = play_sd(X, Y)
-    glow = 0.45 * soft(sd, 1.4)
-    cv.over((0.95, 0.72, 0.25), glow)
-    core = cv.cov(sd)
-    col = np.zeros(X.shape + (3,), np.float32) + rgb3((1.0, 0.86, 0.52))
-    col = col + (1 - smoothstep(-1.2, 0, sd))[..., None] * 0 + smoothstep(-0.2, -2.0, sd)[..., None] * rgb3((0.0, 0.08, 0.15))
-    cv.over(np.clip(col, 0, 1), core)
-    save(cv.image(), out, "cd-play.png")
+    save(cv.image(), out, "cd-bridge.png")
 
 
 def build_led(out):
@@ -702,7 +643,6 @@ def main():
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     builders = {"base": build_base, "bridge": build_bridge,
-                "bridge-v": lambda o: build_bridge(o, vintage=True), "glass": build_glass, "play": build_play,
                 "led": build_led, "lid": build_lid, "disc": build_disc, "label": build_label,
                 "sheen": build_sheen, "shadows": build_shadows, "puck": build_puck}
     only = [s for s in args.only.split(",") if s]

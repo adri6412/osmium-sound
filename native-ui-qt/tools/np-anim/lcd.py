@@ -480,8 +480,19 @@ TAPE_IND = {
     "rev": ("<", 104.0, 46.0, 6.0, True),
     "fwd": (">", 112.0, 46.0, 6.0, True),
 }
-# the dB scale under the meters: (text, segment it sits under)
-T_SCALE = (("-30", 0), ("-20", 2), ("-10", 5), ("-5", 8), ("0", 11), ("+3", 14))
+# The dB scale under the meters, where the bar really reaches that level.
+# The meters show VuMeter's 0..100, which vu_meter_daemon.py makes from the
+# RMS of what goes to the DAC: -50 dBFS -> 0, -5 dBFS -> 100, then ^1.2.
+# 0 on the scale is 0 VU at -18 dBFS (the usual digital reference).
+VU_MIN_DBFS, VU_MAX_DBFS, VU_GAMMA = -50.0, -5.0, 1.2
+VU_ZERO_DBFS = -18.0
+T_SCALE = (-30, -20, -10, -5, 0, 3, 6, 10)
+
+
+def tape_level_x(vu_db):
+    """x of the bar's end when the level is vu_db (dB against 0 VU)."""
+    f = min(1.0, max(0.0, (vu_db + VU_ZERO_DBFS - VU_MIN_DBFS) / (VU_MAX_DBFS - VU_MIN_DBFS))) ** VU_GAMMA
+    return T_METER_X0 + f * (T_SEGS * T_SEG_DX - (T_SEG_DX - T_SEG_W))
 
 
 def tape_seg(i, row):
@@ -492,8 +503,9 @@ def tape_seg(i, row):
 
 def tape_scale(lay):
     f = ImageFont.truetype(FONT, int(round(3.8 * lay.k)))
-    for t, i in T_SCALE:
-        cx = T_METER_X0 + i * T_SEG_DX + T_SEG_W / 2
+    for v in T_SCALE:
+        t = ("+" if v > 0 else "") + str(v)
+        cx = tape_level_x(v)
         tw = lay.d.textlength(t, font=f) / lay.k
         lay.d.text(((cx - tw / 2 - lay.x0) * lay.k, (33.5 - lay.y0) * lay.k), t, font=f, fill=255)
 

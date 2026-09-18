@@ -30,7 +30,6 @@ Item {
     property string mediaKey: ""
     property string title: ""
     property string subtitle: ""
-    property bool vintage: true              // always a 90s front panel
     // controls (NpAnimation feeds these to scenes that declare them)
     property bool power: true
     property int volume: -1

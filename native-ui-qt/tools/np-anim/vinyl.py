@@ -6,7 +6,7 @@ on a turntable seen from above. Everything that looks like material, light
 or shadow is baked here, once, into PNG layers; the kiosk only moves a few
 flat textures (the label and the strobe dots turn, the tone arm swings).
 
-  vinyl.py [OUT_DIR] [--only-vintage]      default: native-ui-qt/assets/anim/vinyl/
+  vinyl.py [OUT_DIR] [--only-plinth]      default: native-ui-qt/assets/anim/vinyl/
 
 Deterministic (fixed seeds, no inputs, no fonts: the engraved name is drawn
 with strokes). Needs numpy, scipy and Pillow; about a minute on one core. All geometry is written in "base points": the scene is designed at
@@ -16,12 +16,10 @@ the end and must match the ones at the top of AnimVinyl.qml.
 
 Layers, bottom to top, as AnimVinyl.qml stacks them:
   plinth_shadow.png  soft drop shadow of the plinth (low resolution, blurry)
-  plinth-v.png       the same in black 90s satin, with a pitch fader and prints
-                     (the full-screen view, AnimVinyl.vintage)
-  plinth.png         walnut plinth, arm board, pivot base, arm rest, cue
-                     lever, anti-skate knob, start/stop and speed buttons,
-                     the LED (off), the engraved name plate and the
-                     platter's shadow
+  plinth.png         black 90s satin plinth, arm board, pivot base, arm rest,
+                     cue lever, anti-skate knob, start/stop and speed buttons,
+                     the LED (off), the pitch fader, the prints, the engraved
+                     name plate and the platter's shadow
   platter.png        machined platter rim + rubber mat, light baked in (static:
                      it is round, only the dots show that it turns)
   dots.png           the strobe dots on the rim            (rotates while slow)
@@ -244,27 +242,6 @@ def save(img, out_dir, name):
 
 
 # ─── plinth ────────────────────────────────────────────────────────────────
-def walnut(g):
-    """Dark oiled walnut, the grain running along the long side."""
-    X, Y = g.X, g.Y
-    warp = (noise(g, 90, 22, 11) - 0.5) * 12.0 + (noise(g, 30, 6, 12) - 0.5) * 2.4
-    v = Y + warp + 0.018 * (X - 260)
-    period = 3.4 + 1.8 * noise(g, 140, 50, 13)
-    phase = v / period + 6.0 * noise(g, 220, 70, 14)
-    f = phase - np.floor(phase)
-    late = smoothstep(0.50, 0.86, f) * (1 - smoothstep(0.90, 1.0, f))       # late wood bands
-    late = late * (0.35 + 0.65 * noise(g, 60, 7, 18))                        # some rings fainter
-    fibre = noise(g, 22, 0.32, 15, order=1)                                 # fine streaks
-    pores = smoothstep(0.82, 0.96, noise(g, 3.5, 0.28, 16, order=1))        # dark flecks
-    figure = noise(g, 40, 12, 17)                                           # slow light drift
-    hue = noise(g, 110, 60, 19)[..., None]                                  # chocolate <-> honey
-    light_wood = np.array([0.245, 0.158, 0.100], np.float32) * (1 - hue) + np.array([0.262, 0.165, 0.092], np.float32) * hue
-    dark_wood = np.array([0.100, 0.062, 0.042], np.float32) * (1 - hue) + np.array([0.118, 0.068, 0.038], np.float32) * hue
-    t = (0.60 - 0.42 * late - 0.16 * (fibre - 0.5) - 0.26 * pores + 0.34 * (figure - 0.5))
-    t = np.clip(t, 0, 1)[..., None]
-    return dark_wood + (light_wood - dark_wood) * t
-
-
 def render_plinth_shadow(out_dir):
     x, y, w, h = PLINTH
     g = Grid(x - 24, y - 16, w + 48, h + 44, dpp=1.0, ss=4)
@@ -300,7 +277,7 @@ def black_satin(g):
     return np.array([0.034, 0.034, 0.038], np.float32) * (0.92 + 0.08 * grain)[..., None]
 
 
-# the full-screen 90s panel (vintage): a pitch fader on the right, prints
+# the 90s plinth: a pitch fader on the right, prints
 PITCH = (414.0, 116.0, 196.0)          # x of the slot, y at +8 %, y at -8 %
 INK_V = np.array([0.70, 0.70, 0.72], np.float32)
 
@@ -312,26 +289,25 @@ def prints(g, items):
     return cdfront.text_mask(types.SimpleNamespace(X=g.X, Y=g.Y, n=1.0 / g.px), items)
 
 
-def render_plinth(out_dir, vintage=False):
+def render_plinth(out_dir):
     x, y, w, h = PLINTH
     g = Grid(x, y, w, h)
     cv = Canvas(g)
     X, Y = g.X, g.Y
     px, py = P
 
-    # the plinth: walnut, oiled satin finish, rounded top edge
+    # the plinth: black satin, rounded top edge
     d = sd_rrect(X, Y, x + w / 2, y + h / 2, w / 2, h / 2, PLINTH_R)
     body = cov(d, g)
     hgt = bevel_height(-d, 3.2)
     n = normals_from_height(hgt, g)
-    wood = black_satin(g) if vintage else walnut(g)
-    col = light(wood, n, amb=0.55, kd=0.62, ks=0.18 if vintage else 0.10, shin=20 if vintage else 14)
+    col = light(black_satin(g), n, amb=0.55, kd=0.62, ks=0.18, shin=20)
     # a broad soft reflection of the room light on the satin finish
     glow = np.exp(-(((X - 150) / 170) ** 2 + ((Y - 30) / 120) ** 2))[..., None]
-    col = col + glow * (np.array([0.040, 0.040, 0.044], dtype=np.float32) if vintage else np.array([0.045, 0.036, 0.030], dtype=np.float32))
+    col = col + glow * np.array([0.040, 0.040, 0.044], dtype=np.float32)
     # the polished edge catches the light on the upper and left sides
     edge = smoothstep(3.2, 0.0, -d) * body
-    col = col + (edge * np.clip(n @ LIGHT - 0.55, 0, 1) * 0.9)[..., None] * (np.array([0.6, 0.6, 0.64], dtype=np.float32) if vintage else np.array([0.9, 0.75, 0.6], dtype=np.float32))
+    col = col + (edge * np.clip(n @ LIGHT - 0.55, 0, 1) * 0.9)[..., None] * np.array([0.6, 0.6, 0.64], dtype=np.float32)
     cv.over(col, body)
 
     # platter shadow (the platter is round: the shadow never moves)
@@ -439,38 +415,37 @@ def render_plinth(out_dir, vintage=False):
     plate = plate * (1 - engraved[..., None]) + (GOLD * 0.42) * engraved[..., None]
     cv.over(light(plate, normals_from_height(hpl, g), amb=0.6, kd=0.45, ks=0.35, shin=22), cov(dpl, g))
 
-    if vintage:
-        # the pitch fader: a slot, a scale +8 .. -8 %, the cap parked at 0
-        sx, sy0, sy1 = PITCH
-        dslot = sd_rrect(X, Y, sx, (sy0 + sy1) / 2, 1.6, (sy1 - sy0) / 2 + 3, 1.6)
-        cv.over((0.004, 0.004, 0.005), cov(dslot, g))
-        for k in range(9):
-            ty = sy0 + (sy1 - sy0) * k / 8
-            long_ = k in (0, 4, 8)
-            cv.over(INK_V * (1.2 if k == 4 else 1.0), cov(sd_rrect(X, Y, sx - 7.5 - (1.5 if long_ else 0), ty, 2.5 + (1.5 if long_ else 0), 0.28, 0.1), g))
-        cy0 = (sy0 + sy1) / 2
-        part_shadow(cv, lambda X_, Y_: sd_rrect(X_, Y_, sx, cy0, 7.5, 4.8, 1.2), 3.0, 0.85)
-        dcap = sd_rrect(X, Y, sx, cy0, 7.5, 4.8, 1.2)
-        ribs = 0.12 * np.cos((Y - cy0) * 2 * math.pi / 1.4) * (np.abs(Y - cy0) > 1.2)
-        hcap = bevel_height(-dcap, 1.0) + ribs * smoothstep(0.8, 1.6, -dcap)
-        capc = light(np.array([0.05, 0.05, 0.055], np.float32), normals_from_height(hcap, g), amb=0.5, kd=0.6, ks=0.6, shin=36)
-        cv.over(capc, cov(dcap, g))
-        cv.over((0.85, 0.85, 0.85), cov(sd_rrect(X, Y, sx, cy0, 5.8, 0.35, 0.1), g))
-        items = [
-            ("+8", sx - 14.0, sy0 - 1.3, 3.4, True, "r", 0.0),
-            ("0", sx - 14.0, cy0 - 1.3, 3.4, True, "r", 0.0),
-            ("-8", sx - 14.0, sy1 - 1.3, 3.4, True, "r", 0.0),
-            ("PITCH", sx, sy1 + 9, 3.4, True, "m", 0.5),
-            ("%", sx + 5, sy0 - 1.3, 3.0, True, "l", 0.0),
-            ("START\u00b7STOP", BTN_START[0], BTN_START[1] - 15.5, 3.0, True, "m", 0.2),
-            ("33", BTN_33[0], BTN_33[1] - 9.0, 2.9, True, "m", 0.0),
-            ("45", BTN_45[0], BTN_45[1] - 9.0, 2.9, True, "m", 0.0),
-            ("RPM", BTN_45[0] + 7.5, BTN_45[1] - 1.1, 2.6, True, "l", 0.2),
-            ("SL-90  \u00b7  QUARTZ DIRECT DRIVE", NAMEPLATE[0] + 19, NAMEPLATE[1] - 10.5, 2.9, True, "r", 0.3),
-        ]
-        ink = prints(g, items)
-        cv.over(INK_V, ink)
-    return save(cv.image(), out_dir, "plinth-v.png" if vintage else "plinth.png"), (g.x, g.y, g.w, g.h)
+    # the pitch fader: a slot, a scale +8 .. -8 %, the cap parked at 0
+    sx, sy0, sy1 = PITCH
+    dslot = sd_rrect(X, Y, sx, (sy0 + sy1) / 2, 1.6, (sy1 - sy0) / 2 + 3, 1.6)
+    cv.over((0.004, 0.004, 0.005), cov(dslot, g))
+    for k in range(9):
+        ty = sy0 + (sy1 - sy0) * k / 8
+        long_ = k in (0, 4, 8)
+        cv.over(INK_V * (1.2 if k == 4 else 1.0), cov(sd_rrect(X, Y, sx - 7.5 - (1.5 if long_ else 0), ty, 2.5 + (1.5 if long_ else 0), 0.28, 0.1), g))
+    cy0 = (sy0 + sy1) / 2
+    part_shadow(cv, lambda X_, Y_: sd_rrect(X_, Y_, sx, cy0, 7.5, 4.8, 1.2), 3.0, 0.85)
+    dcap = sd_rrect(X, Y, sx, cy0, 7.5, 4.8, 1.2)
+    ribs = 0.12 * np.cos((Y - cy0) * 2 * math.pi / 1.4) * (np.abs(Y - cy0) > 1.2)
+    hcap = bevel_height(-dcap, 1.0) + ribs * smoothstep(0.8, 1.6, -dcap)
+    capc = light(np.array([0.05, 0.05, 0.055], np.float32), normals_from_height(hcap, g), amb=0.5, kd=0.6, ks=0.6, shin=36)
+    cv.over(capc, cov(dcap, g))
+    cv.over((0.85, 0.85, 0.85), cov(sd_rrect(X, Y, sx, cy0, 5.8, 0.35, 0.1), g))
+    items = [
+        ("+8", sx - 14.0, sy0 - 1.3, 3.4, True, "r", 0.0),
+        ("0", sx - 14.0, cy0 - 1.3, 3.4, True, "r", 0.0),
+        ("-8", sx - 14.0, sy1 - 1.3, 3.4, True, "r", 0.0),
+        ("PITCH", sx, sy1 + 9, 3.4, True, "m", 0.5),
+        ("%", sx + 5, sy0 - 1.3, 3.0, True, "l", 0.0),
+        ("START\u00b7STOP", BTN_START[0], BTN_START[1] - 15.5, 3.0, True, "m", 0.2),
+        ("33", BTN_33[0], BTN_33[1] - 9.0, 2.9, True, "m", 0.0),
+        ("45", BTN_45[0], BTN_45[1] - 9.0, 2.9, True, "m", 0.0),
+        ("RPM", BTN_45[0] + 7.5, BTN_45[1] - 1.1, 2.6, True, "l", 0.2),
+        ("SL-90  \u00b7  QUARTZ DIRECT DRIVE", NAMEPLATE[0] + 19, NAMEPLATE[1] - 10.5, 2.9, True, "r", 0.3),
+    ]
+    ink = prints(g, items)
+    cv.over(INK_V, ink)
+    return save(cv.image(), out_dir, "plinth.png"), (g.x, g.y, g.w, g.h)
 
 
 def _glyphs(h):
@@ -876,12 +851,12 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     out_dir = args[0] if args else os.path.join(here, "..", "..", "assets", "anim", "vinyl")
     os.makedirs(out_dir, exist_ok=True)
-    fns = (render_plinth_shadow, render_plinth, lambda o: render_plinth(o, vintage=True), render_platter, render_dots,
+    fns = (render_plinth_shadow, render_plinth, render_platter, render_dots,
            render_record_shadow, render_record, render_label, render_label_shade, render_spindle, render_arm,
            render_arm_shadow, render_led)
-    # --only-vintage: just the 90s plinth of the full-screen view (plinth-v.png)
-    if "--only-vintage" in sys.argv:
-        fns = (lambda o: render_plinth(o, vintage=True),)
+    # --only-plinth: just plinth.png (the others take about a minute)
+    if "--only-plinth" in sys.argv:
+        fns = (render_plinth,)
     for fn in fns:
         path, rect = fn(out_dir)
         names = [os.path.basename(path)] + (["dots_blur.png"] if fn is render_dots else [])
