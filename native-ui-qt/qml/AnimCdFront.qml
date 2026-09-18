@@ -53,11 +53,12 @@ Item {
     function px(v) { return Math.max(1, Math.round(v * root.texScale)) }
 
     readonly property real drawerX: 21
-    readonly property real drawerY: 37
+    readonly property real drawerY: 33
     readonly property real drawerW: 200
-    readonly property real drawerH: 58
-    readonly property real slotBottom: 98
-    readonly property real travel: 106
+    readonly property real drawerH: 64
+    readonly property real slotTop: 31
+    readonly property real slotBottom: 100
+    readonly property real travel: 140
     readonly property real bedH: 124
     readonly property real bedDiscX: 100
     readonly property real bedDiscY: 86
@@ -66,13 +67,13 @@ Item {
     // name: [x0, y0, x1, y1] (cdfront.py KEYS)
     readonly property var keys: {
         var k = {
-            play: [429, 39, 455, 63], stop: [457, 39, 482, 63], pause: [484, 39, 508, 63],
-            eject: [236, 126, 252, 146], repeat: [378, 126, 384, 146], random: [396, 126, 402, 146],
-            prev: [424, 126, 442, 146], next: [446, 126, 464, 146],
-            rew: [468, 126, 486, 146], ff: [490, 126, 508, 146],
-            power: [22, 170, 44, 192]
+            play: [429, 42, 455, 66], stop: [457, 42, 482, 66], pause: [484, 42, 508, 66],
+            eject: [236, 136, 252, 158], repeat: [378, 136, 384, 158], random: [396, 136, 402, 158],
+            prev: [424, 137, 442, 157], next: [446, 137, 464, 157],
+            rew: [468, 137, 486, 157], ff: [490, 137, 508, 157],
+            power: [22, 196, 46, 220]
         }
-        for (var i = 0; i < 10; i++) k["n" + (i + 1)] = [262 + i * 10.5, 126, 268 + i * 10.5, 146]
+        for (var i = 0; i < 10; i++) k["n" + (i + 1)] = [262 + i * 10.5, 136, 268 + i * 10.5, 158]
         return k
     }
     readonly property var keyNames: ["play", "stop", "pause", "eject", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8",
@@ -271,15 +272,16 @@ Item {
         }
 
         Pic {
-            x: 46; y: 174; width: 14; height: 14
+            x: 48; y: 201; width: 14; height: 14
             source: root.assetsBase + (root.power || !root.live ? "cdf-led-green.png" : "cdf-led-red.png")
         }
 
-        // the drawer: its bed (with the disc) shows between the slot and the
-        // drawer front as it comes out
+        // the drawer: its bed (with the disc) shows behind the drawer front as
+        // it comes out, in front of the panel below the slot and, further
+        // back, inside the slot's opening, in the shade of the cabinet
         readonly property real frontY: root.drawerY + root.travel * root.trayOut
         Item {
-            x: root.drawerX; y: root.slotBottom - 2
+            x: root.drawerX; y: root.slotTop
             width: root.drawerW; height: Math.max(0, stage.frontY - y)
             clip: true
             visible: root.trayOut > 0.001
@@ -353,9 +355,18 @@ Item {
                     Pic { anchors.fill: parent; source: root.assetsBase + "../cd/cd-disc.png" }
                 }
             }
+            // inside the cabinet: darker the further back
+            Rectangle {
+                width: parent.width; height: root.slotBottom - root.slotTop
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0.88) }
+                    GradientStop { position: 0.7; color: Qt.rgba(0, 0, 0, 0.55) }
+                    GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.35) }
+                }
+            }
         }
         Pic {
-            x: root.drawerX - 8; y: stage.frontY + 54       // cdfront.py: DRAWER y1 - 4 - y0
+            x: root.drawerX - 8; y: stage.frontY + 60       // cdfront.py: DRAWER y1 - 4 - y0
             width: 216; height: 24
             visible: root.trayOut > 0.001
             opacity: Math.min(1, root.trayOut * 3)

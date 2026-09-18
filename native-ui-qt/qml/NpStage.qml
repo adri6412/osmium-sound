@@ -64,8 +64,11 @@ Item {
             x: 80; width: parent.width - 160; y: parent.height - 44; height: 24
             horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
             // a radio: its station too (Player.stationName is only set for streams)
-            text: [Player.title !== Player.stationName ? Player.title : "", Player.artist,
-                   Player.album === "" ? Player.stationName : ""].filter(function(x) { return !!x }).join(" · ")
+            text: {
+                var l = [Player.title !== Player.stationName ? Player.title : "", Player.artist,
+                         Player.album === "" ? Player.stationName : ""]
+                return l.filter(function(x, i) { return !!x && l.indexOf(x) === i }).join(" · ")
+            }
             elide: Text.ElideRight
             color: Theme.silverA(0.75); font.family: Theme.font; font.pixelSize: 15
         }
@@ -100,8 +103,10 @@ Item {
     }
 
     // ── the animation ──────────────────────────────────────────────────────
+    // as large as the screen allows: from under the close button to just
+    // above the track line
     NpAnimation {
-        x: 24; y: 58; width: parent.width - 48; height: parent.height - 110
+        x: 12; y: 54; width: parent.width - 24; height: parent.height - 102
         kind: root.mode === "anim" ? Player.npAnimation : ""
         active: root.shown && root.mode === "anim"
         devScale: root.devScale

@@ -8,8 +8,8 @@ it, the blue-green fluorescent display (tools/np-anim/lcd.py --vfd) behind
 a smoked window in the middle and the framed PLAY / STOP / PAUSE keys at the
 right; a step down to the lower part with the row of slim keys (OPEN, the
 track numbers 1-10, REPEAT, RANDOM) and the square skip / search keys; at the
-bottom POWER, a gold script, the gold headphone jack and its level knob; and
-champagne feet under the case. The drawer slides out towards the viewer;
+bottom POWER, a gold script, the gold headphone jack and its level knob. The
+case fills the scene. The drawer slides out towards the viewer;
 from above one sees its bed with the disc on it.
 
 Drawing and lighting come from cd.py (same light).
@@ -20,7 +20,7 @@ DIR defaults to native-ui-qt/assets/anim/cdfront/. Files, all in the 520 x 260
 point design of AnimCdFront.qml (the geometry constants below are mirrored
 there):
 
-  cdf-base.png       the player: drop shadow, feet, front, the drawer slot,
+  cdf-base.png       the player: thin shadow, front, the drawer slot,
                      the display window (without the display), keys, jack,
                      knob, prints
   cdf-drawer.png     the drawer front, closed flush in the slot
@@ -41,39 +41,36 @@ from cd import (Canvas, blinn, lambert, normals, radial_noise, rgb3, save, sd_ci
                 smoothstep, soft, srgb, streaks, LXY, LSLOPE)
 
 CANVAS = (520, 260)
-BODY = (4, 12, 516, 222)
+BODY = (3, 5, 517, 253)               # the whole scene: nothing under the case
 BODY_R = 3
-FEET = (70, 260, 450)                 # centres of the three feet under the case
-FOOT_W, FOOT_Y = 50, (222, 234)
-SPLIT_Y = 112                         # the step down to the lower part
-SLOT = (18, 34, 224, 98)
-DRAWER = (21, 37, 221, 95)
-TRAVEL = 106                          # how far the drawer comes out
+SPLIT_Y = 120                         # the step down to the lower part
+SLOT = (18, 30, 224, 100)
+DRAWER = (21, 33, 221, 97)
+TRAVEL = 140                          # how far the drawer comes out
 BED_W, BED_H = 200, 124               # its front edge is the drawer front's top
 BED_DISC = (100, 86)                  # disc centre in the bed (middle of what shows when open)
 BED_DISC_R = (97, 33)                 # the 12 cm recess as seen (rx, ry)
-BADGE = (22, 124, 150, 146)
+BADGE = (22, 136, 150, 158)
 WIN = (236, 26, 414, 106)             # the smoked window of the display
 VFD_AT = (246.6, 26)                  # the LcdCd panel (196 x 100) at VFD_K
 VFD_K = 0.8
-FRAME = (425, 35, 511, 67)            # the raised frame round PLAY / STOP / PAUSE
-KEY_Y = (126, 146)                    # the lower row
-BIG_Y = (39, 63)                      # the framed transport keys
+FRAME = (425, 38, 511, 70)            # the raised frame round PLAY / STOP / PAUSE
+KEY_Y = (136, 158)                    # the lower row
 NUM_X0, NUM_DX, NUM_W = 262, 10.5, 6.0
 KEYS = {                              # name: x0, y0, x1, y1
-    "play": (429, 39, 455, 63), "stop": (457, 39, 482, 63), "pause": (484, 39, 508, 63),
-    "eject": (236, 126, 252, 146),
-    "repeat": (378, 126, 384, 146), "random": (396, 126, 402, 146),
-    "prev": (424, 126, 442, 146), "next": (446, 126, 464, 146),
-    "rew": (468, 126, 486, 146), "ff": (490, 126, 508, 146),
-    "power": (22, 170, 44, 192),
+    "play": (429, 42, 455, 66), "stop": (457, 42, 482, 66), "pause": (484, 42, 508, 66),
+    "eject": (236, 136, 252, 158),
+    "repeat": (378, 136, 384, 158), "random": (396, 136, 402, 158),
+    "prev": (424, 137, 442, 157), "next": (446, 137, 464, 157),
+    "rew": (468, 137, 486, 157), "ff": (490, 137, 508, 157),
+    "power": (22, 196, 46, 220),
 }
 for _i in range(10):
-    KEYS["n%d" % (_i + 1)] = (NUM_X0 + _i * NUM_DX, 126, NUM_X0 + _i * NUM_DX + NUM_W, 146)
-LED = (53, 181)
-JACK = (440, 184)
-KNOB = (484, 182)
-KNOB_R = 10
+    KEYS["n%d" % (_i + 1)] = (NUM_X0 + _i * NUM_DX, 136, NUM_X0 + _i * NUM_DX + NUM_W, 158)
+LED = (55, 208)
+JACK = (440, 208)
+KNOB = (484, 206)
+KNOB_R = 11
 
 PPT = 3.6
 FONT = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
@@ -161,26 +158,10 @@ def build_base(out):
     rng = np.random.default_rng(31)
     bx0, by0, bx1, by1 = BODY
 
-    # ── shadow on the shelf, under the case and its feet ──
-    sh = (0.55 * soft(sd_rrect(X, Y - 8, bx0 + 10, by0 + 4, bx1 - 10, FOOT_Y[1], BODY_R), 8.0)
-          + 0.35 * soft(sd_rrect(X, Y - 2, bx0 + 2, by0 + 2, bx1 - 2, FOOT_Y[1] + 1, BODY_R), 2.4))
-    for fx in FEET:
-        sh = sh + 0.6 * soft(sd_rrect(X, Y - 1.5, fx - FOOT_W / 2, FOOT_Y[1] - 3, fx + FOOT_W / 2, FOOT_Y[1] + 1.5, 2), 1.6)
+    # ── a thin shadow round the case (it fills the scene) ──
+    sh = soft(sd_rrect(X, Y - 1.5, bx0 + 1, by0 + 1, bx1 - 1, by1, BODY_R), 1.8)
     edge = np.minimum(np.minimum(X, CANVAS[0] - X), np.minimum(Y, CANVAS[1] - Y))
-    cv.over((0, 0, 0), np.clip(sh, 0, 0.9) * smoothstep(0, 5, edge))
-
-    # ── champagne feet: turned aluminium cylinders seen from the front ──
-    for fx in FEET:
-        fsd = sd_rrect(X, Y, fx - FOOT_W / 2, FOOT_Y[0] - 2, fx + FOOT_W / 2, FOOT_Y[1], 1.2)
-        u = np.clip((X - fx) / (FOOT_W / 2), -1, 1)
-        nz = np.sqrt(np.clip(1 - u * u, 0, 1))
-        fl = np.clip(-u * LXY[0] * 0.8 + nz * 0.6, 0, None)
-        v = (Y - FOOT_Y[0]) / (FOOT_Y[1] - FOOT_Y[0])
-        band = 0.10 * np.cos(v * 38) * 0.3
-        tone = 0.10 + 0.45 * fl + 0.55 * np.exp(-((u + 0.35) / 0.18) ** 2) + band
-        tone = tone * (0.55 + 0.45 * smoothstep(-0.1, 0.25, v))       # the case's shadow at the top
-        fc = srgb(rgb3((0.78, 0.66, 0.46)) * tone[..., None])
-        cv.over(fc, cv.cov(fsd))
+    cv.over((0, 0, 0), np.clip(0.8 * sh, 0, 0.9) * smoothstep(0, 2, edge))
 
     sd_body = sd_rrect(X, Y, *BODY, BODY_R)
     body = cv.cov(sd_body)
@@ -217,10 +198,11 @@ def build_base(out):
     kcol = 0.022 * (0.35 + 0.65 * lambert(nx, ny, nz)) + 0.45 * blinn(nx, ny, nz, 70) + 0.05 * blinn(nx, ny, nz, 8)
     col = col * (1 - keys) + kcol * keys
 
-    # slot interior: nearly black (the drawer front sits in it)
-    ins = np.clip(-sd_slot, 0, None)
+    # slot interior: the dark inside of the cabinet (seen when the drawer is
+    # out), black under the upper edge, a faint light towards the bottom
     slot_in = cv.cov(sd_slot)
-    col = col * (1 - slot_in) + (0.003 + 0.004 * (1 - np.exp(-ins / 1.5))) * slot_in
+    inside = 0.0006 + 0.0016 * smoothstep(SLOT[1], SLOT[3], Y) ** 2
+    col = col * (1 - slot_in) + inside * slot_in
     rgb = np.repeat(col[..., None], 3, axis=2) * rgb3((0.985, 0.99, 1.02))
 
     # the display window: smoked glass round the display, the same dark
@@ -280,26 +262,26 @@ def build_base(out):
     # ── prints ──
     name_w = text_width("OSMIUM", 8.5, True, 1.6)
     items = [
-        ("COMPACT DISC PLAYER  CD-90", 22 + name_w + 6, 21.5, 3.6, True, "l", 0.35),
+        ("COMPACT DISC PLAYER  CD-90", 22 + name_w + 6, 15.5, 3.6, True, "l", 0.35),
         ("1-BIT DAC", BADGE[0] + 18, BADGE[1] + 5.5, 4.2, True, "l", 0.6),
         ("DIGITAL CONVERSION", BADGE[0] + 18, BADGE[1] + 13.5, 3.0, False, "l", 0.4),
         ("REMOTE SENSOR", WIN[0] + 2, 109.5, 2.4, False, "l", 0.3),
-        ("PLAY", 442, 29, 3.8, True, "m", 0.4),
-        ("STOP", 469.5, 29, 3.8, True, "m", 0.4),
-        ("PAUSE", 496, 29, 3.8, True, "m", 0.4),
-        ("OPEN", 244, 119.5, 3.0, True, "m", 0.2),
-        ("REPEAT", 381, 119.5, 3.0, True, "m", 0.1),
-        ("RANDOM", 399, 119.5, 3.0, True, "m", 0.0),
-        ("POWER", 33, 163.5, 3.2, True, "m", 0.3),
-        ("PHONES", JACK[0], 194, 3.2, True, "m", 0.3),
-        ("PHONE", KNOB[0] + 14, 190, 2.8, True, "l", 0.2),
-        ("LEVEL", KNOB[0] + 14, 194.5, 2.8, True, "l", 0.2),
-        ("0", KNOB[0] - 10, 194.5, 2.8, True, "m", 0.0),
-        ("10", KNOB[0] + 9, 194.5, 2.8, True, "m", 0.0),
+        ("PLAY", 442, 31.5, 3.8, True, "m", 0.4),
+        ("STOP", 469.5, 31.5, 3.8, True, "m", 0.4),
+        ("PAUSE", 496, 31.5, 3.8, True, "m", 0.4),
+        ("OPEN", 244, 129.5, 3.0, True, "m", 0.2),
+        ("REPEAT", 381, 129.5, 3.0, True, "m", 0.1),
+        ("RANDOM", 399, 129.5, 3.0, True, "m", 0.0),
+        ("POWER", 34, 189.5, 3.2, True, "m", 0.3),
+        ("PHONES", JACK[0], 218.5, 3.2, True, "m", 0.3),
+        ("PHONE", KNOB[0] + 15, 214, 2.8, True, "l", 0.2),
+        ("LEVEL", KNOB[0] + 15, 218.5, 2.8, True, "l", 0.2),
+        ("0", KNOB[0] - 11, 218.5, 2.8, True, "m", 0.0),
+        ("10", KNOB[0] + 10, 218.5, 2.8, True, "m", 0.0),
     ]
     for i in range(10):
         x0 = NUM_X0 + i * NUM_DX
-        items.append((str(i + 1), x0 + NUM_W / 2, 119.5, 3.0, True, "m", 0.0))
+        items.append((str(i + 1), x0 + NUM_W / 2, 129.5, 3.0, True, "m", 0.0))
     ink = np.clip(text_mask(cv, items) + ink_all, 0, 1)
     rgb = rgb * (1 - ink[..., None]) + rgb3(INK) * ink[..., None]
     # symbols on the key caps
@@ -311,8 +293,8 @@ def build_base(out):
         rgb = rgb * (1 - sm[..., None]) + rgb3(INK) * 0.95 * sm[..., None]
 
     # ── gold: the name and the script, a metallic gradient ──
-    gold_items = text_mask(cv, [("OSMIUM", 22, 19.5, 8.5, True, "l", 1.6)])
-    script = text_mask(cv, [("Reference", 170, 178, 13.0, True, "m", 0.0)], font=FONT_SCRIPT)
+    gold_items = text_mask(cv, [("OSMIUM", 22, 13.5, 8.5, True, "l", 1.6)])
+    script = text_mask(cv, [("Reference", 170, 203, 14.0, True, "m", 0.0)], font=FONT_SCRIPT)
     g = np.clip(gold_items + script, 0, 1)
     tg = np.clip(((Y - 12) % 14) / 14, 0, 1)
     gshade = 0.75 + 0.55 * np.exp(-((tg - 0.35) / 0.2) ** 2)

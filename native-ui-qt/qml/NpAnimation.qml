@@ -69,11 +69,14 @@ Item {
     readonly property string station: live && Player.remote && Player.album === "" ? Player.stationName : ""
     readonly property string song: Player.title !== root.station ? Player.title : ""
     readonly property string title: !live ? "" : Player.album || root.station || Player.title
-    readonly property string subtitle: !live ? "" : root.station !== "" ? [Player.artist, root.song].filter(function(x) { return !!x }).join(" - ")
+    // the names that are there, each once (a radio may send the same one as
+    // artist and title)
+    function names(list) { return list.filter(function(x, i) { return !!x && list.indexOf(x) === i }) }
+    readonly property string subtitle: !live ? "" : root.station !== "" ? names([Player.artist, root.song]).join(" - ")
                                                                         : Player.artist
     // the CD-Text: the song and its artist, then the station
     readonly property string trackTitle: !live ? "" : root.song || root.station
-    readonly property string trackArtist: !live ? "" : root.song !== "" ? [Player.artist, root.station].filter(function(x) { return !!x }).join(" - ")
+    readonly property string trackArtist: !live ? "" : root.song !== "" ? names([Player.artist !== root.song ? Player.artist : "", root.station]).join(" - ")
                                                                         : Player.artist
 
     function inputs() {
