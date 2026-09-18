@@ -30,6 +30,7 @@ Item {
     signal startScreensaver()
     signal toggleView()
     signal openPlaybackSetting(string which)
+    signal openSettings()
 
     readonly property real pad: 20
     readonly property real leftW: (root.width - pad * 2) * 0.44
@@ -145,26 +146,28 @@ Item {
         color: Player.isOwn ? Theme.silverA(0.7) : Theme.gold; font.family: Theme.font; font.pixelSize: 10; font.letterSpacing: 2.5
     }
     RoundButton {                                 // player da pilotare (#99)
-        x: root.width - root.pad - 34 * 4 - 24; y: 14; width: 34; height: 34; icon: "speaker"; iconSize: 18
+        x: root.width - root.pad - 34 * 5 - 32; y: 14; width: 34; height: 34; icon: "speaker"; iconSize: 18
         bg: Player.isOwn ? Theme.wa(0.10) : Theme.goldA(0.3)
         bgPress: Player.isOwn ? Theme.wa(0.20) : Theme.goldA(0.3)
         fg: Player.isOwn ? Theme.white : Theme.gold
         onClicked: root.openPlayerPicker()
     }
     RoundButton {                                 // VU or animation <-> lyrics (hidden when neither is available)
-        x: root.width - root.pad - 34 * 3 - 16; y: 14; width: 34; height: 34
+        x: root.width - root.pad - 34 * 4 - 24; y: 14; width: 34; height: 34
         visible: (Player.vuEnabled && Player.isOwn) || (!Player.vuEnabled && root.animChosen)
         icon: root.viewVu ? "mic-2" : (Player.vuEnabled ? "audio-lines" : "disc-3"); iconSize: 18
         onClicked: root.toggleView()
     }
-    RoundButton { x: root.width - root.pad - 34 * 2 - 8; y: 14; width: 34; height: 34; icon: "list-music"; iconSize: 18; onClicked: root.openQueue() }
+    RoundButton { x: root.width - root.pad - 34 * 3 - 16; y: 14; width: 34; height: 34; icon: "list-music"; iconSize: 18; onClicked: root.openQueue() }
     RoundButton {
-        x: root.width - root.pad - 34; y: 14; width: 34; height: 34; icon: "moon"; iconSize: 18
+        x: root.width - root.pad - 34 * 2 - 8; y: 14; width: 34; height: 34; icon: "moon"; iconSize: 18
         bg: Player.sleepSecs > 0 ? Theme.goldA(0.3) : Theme.wa(0.10)
         bgPress: Player.sleepSecs > 0 ? Theme.goldA(0.3) : Theme.wa(0.20)
         fg: Player.sleepSecs > 0 ? Theme.gold : Theme.white
         onClicked: root.openSleep()
     }
+    // straight to Settings
+    RoundButton { x: root.width - root.pad - 34; y: 14; width: 34; height: 34; icon: "settings"; iconSize: 18; onClicked: root.openSettings() }
 
     // ─── copertina con ombra 0 20px 60px rgba(0,0,0,.7) e targa LED ────────
     Rectangle {

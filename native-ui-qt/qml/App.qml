@@ -89,6 +89,7 @@ Item {
         onStartScreensaver: screensaver.show(true)
         onToggleView: { app.viewVu = !app.viewVu; Sys.setConf("nowplaying-view", app.viewVu ? "vu" : "lyrics") }
         // the BitPerfect / ReplayGain lights open Settings → Playback on that setting
+        onOpenSettings: { app.setExpanded(false); mainScreen.browser.openTab(4) }
         onOpenPlaybackSetting: (which) => {
             app.setExpanded(false)
             mainScreen.browser.openTab(4)

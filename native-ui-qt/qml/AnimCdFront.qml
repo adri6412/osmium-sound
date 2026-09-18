@@ -95,6 +95,11 @@ Item {
     property string word: ""                 // what the LCD spells during the moves
     property string labelArt: ""
     property int trayDur: 0
+    // The drawer moves at the pace of a real one: about 2.8 s end to end, a
+    // motor that gets going at once, runs at an even speed and eases into
+    // its stop.
+    readonly property int trayMs: 2800
+    readonly property var trayCurve: [0.30, 0.0, 0.30, 1.0, 1.0, 1.0]
     property int gapDur: 0
 
     function stopAll() { loadAnim.stop(); unloadAnim.stop(); closeAnim.stop(); openAnim.stop(); readTimer.stop() }
@@ -122,13 +127,13 @@ Item {
         if (labelArt !== artwork) { artPrev.source = ""; labelArt = artwork }
         phase = 1
         discA = 0; discUp = 1
-        trayDur = Math.round(650 * (1 - trayOut))
+        trayDur = Math.round(root.trayMs * (1 - trayOut))
         loadAnim.start()
     }
     function unload() {
         stopAll()
         phase = 3
-        trayDur = Math.round(650 * (1 - trayOut))
+        trayDur = Math.round(root.trayMs * (1 - trayOut))
         unloadAnim.start()
     }
     function unloaded() {
@@ -152,7 +157,7 @@ Item {
         } else if (phase === 2 || phase === 0) {
             stopAll()
             phase = hasTrack ? 4 : 0
-            trayDur = Math.round(650 * (1 - trayOut))
+            trayDur = Math.round(root.trayMs * (1 - trayOut))
             openAnim.start()
             if (hasTrack) root.action("eject", true)
         }
@@ -183,20 +188,20 @@ Item {
         id: loadAnim
         PauseAnimation { duration: root.gapDur }
         PropertyAction { target: root; property: "word"; value: "  OPEn" }
-        NumberAnimation { target: root; property: "trayOut"; to: 1; duration: root.trayDur; easing.type: Easing.InOutCubic }
+        NumberAnimation { target: root; property: "trayOut"; to: 1; duration: root.trayDur; easing.type: Easing.BezierSpline; easing.bezierCurve: root.trayCurve }
         ParallelAnimation {
             NumberAnimation { target: root; property: "discA"; to: 1; duration: 200; easing.type: Easing.OutQuad }
             NumberAnimation { target: root; property: "discUp"; to: 0; duration: 420; easing.type: Easing.OutCubic }
         }
         PauseAnimation { duration: 260 }
         PropertyAction { target: root; property: "word"; value: "" }
-        NumberAnimation { target: root; property: "trayOut"; to: 0; duration: 650; easing.type: Easing.InOutCubic }
+        NumberAnimation { target: root; property: "trayOut"; to: 0; duration: root.trayMs; easing.type: Easing.BezierSpline; easing.bezierCurve: root.trayCurve }
         ScriptAction { script: root.loaded() }
     }
     SequentialAnimation {
         id: unloadAnim
         PropertyAction { target: root; property: "word"; value: "  OPEn" }
-        NumberAnimation { target: root; property: "trayOut"; to: 1; duration: root.trayDur; easing.type: Easing.InOutCubic }
+        NumberAnimation { target: root; property: "trayOut"; to: 1; duration: root.trayDur; easing.type: Easing.BezierSpline; easing.bezierCurve: root.trayCurve }
         ParallelAnimation {
             NumberAnimation { target: root; property: "discUp"; to: 1; duration: 340; easing.type: Easing.InCubic }
             NumberAnimation { target: root; property: "discA"; to: 0; duration: 340; easing.type: Easing.InQuad }
@@ -206,12 +211,12 @@ Item {
     SequentialAnimation {
         id: openAnim
         PropertyAction { target: root; property: "word"; value: "  OPEn" }
-        NumberAnimation { target: root; property: "trayOut"; to: 1; duration: root.trayDur; easing.type: Easing.InOutCubic }
+        NumberAnimation { target: root; property: "trayOut"; to: 1; duration: root.trayDur; easing.type: Easing.BezierSpline; easing.bezierCurve: root.trayCurve }
     }
     SequentialAnimation {
         id: closeAnim
         PropertyAction { target: root; property: "word"; value: "" }
-        NumberAnimation { target: root; property: "trayOut"; to: 0; duration: Math.round(650 * root.trayOut); easing.type: Easing.InOutCubic }
+        NumberAnimation { target: root; property: "trayOut"; to: 0; duration: Math.round(root.trayMs * root.trayOut); easing.type: Easing.BezierSpline; easing.bezierCurve: root.trayCurve }
         ScriptAction { script: if (root.phase === 1) root.loaded() }
     }
     Timer { id: readTimer; interval: 1100; onTriggered: root.word = "" }
