@@ -230,10 +230,22 @@ AB_DL_UA="hifi-player-ota"
 
 # Size in bytes of a remote file, following redirects (GitHub answers with a
 # 302 whose own Content-Length is 0: the last one is the file's). 0 = unknown.
+# file.osmiumsound.it (R2 behind Cloudflare) answers a HEAD with no
+# Content-Length at all: then the first byte is asked for, and the size read
+# from the total of its Content-Range ("bytes 0-0/<size>"). --max-filesize
+# stops a server that ignores the range from sending the whole bundle.
 ab_url_size() {
-    curl -sfIL --retry 3 --connect-timeout 20 --max-time 60 -A "$AB_DL_UA" "$1" 2>/dev/null \
+    _n=$(curl -sfIL --retry 3 --connect-timeout 20 --max-time 60 -A "$AB_DL_UA" "$1" 2>/dev/null \
         | tr -d '\r' \
-        | awk 'tolower($1) == "content-length:" && $2 ~ /^[0-9]+$/ { n = $2 } END { print n + 0 }'
+        | awk 'tolower($1) == "content-length:" && $2 ~ /^[0-9]+$/ { n = $2 } END { print n + 0 }')
+    if [ "${_n:-0}" -le 0 ]; then
+        _n=$(curl -sfL -r 0-0 -o /dev/null -D - --max-filesize 1048576 --retry 3 --connect-timeout 20 \
+                --max-time 60 -A "$AB_DL_UA" "$1" 2>/dev/null \
+            | tr -d '\r' \
+            | awk 'tolower($1) == "content-range:" { t = $0; sub(/.*\//, "", t); if (t ~ /^[0-9]+$/) n = t }
+                   END { print n + 0 }')
+    fi
+    echo "${_n:-0}"
 }
 
 # ab_dl_room <dir> <bytes still to write>: success when the filesystem holding

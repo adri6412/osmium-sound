@@ -48,6 +48,12 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self): self.serve(True)
     def serve(self, body):
         n = self.hit()
+        # /nolen: a HEAD without Content-Length, as file.osmiumsound.it answers
+        if self.path == '/nolen' and not body:
+            self.send_response(200)
+            self.send_header('Accept-Ranges', 'bytes')
+            self.end_headers()
+            return
         if self.path == '/redir':
             self.send_response(302)
             self.send_header('Location', '/file')
@@ -104,6 +110,7 @@ AB_DL_RETRY_DELAY=0
 # ── size ───────────────────────────────────────────────────────────────
 expect "size of a plain file" "$(ab_url_size "$U/file")" "$SIZE"
 expect "size behind a 302 is the file's, not the redirect's" "$(ab_url_size "$U/redir")" "$SIZE"
+expect "size without Content-Length on HEAD comes from Content-Range" "$(ab_url_size "$U/nolen")" "$SIZE"
 expect "size of a missing server is 0" "$(ab_url_size "http://127.0.0.1:1/x")" "0"
 
 # ── download ───────────────────────────────────────────────────────────
