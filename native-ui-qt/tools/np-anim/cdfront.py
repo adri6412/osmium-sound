@@ -3,12 +3,11 @@
 
 A late-80s / early-90s black front-loading CD player in the manner of the
 Japanese and European hi-fi of the time, seen from the front: an upper
-fascia with the gold name, the disc drawer at the left with a badge under
-it, the blue-green fluorescent display (tools/np-anim/lcd.py --vfd) behind
+fascia with the gold name, the disc drawer at the left, the blue-green fluorescent display (tools/np-anim/lcd.py --vfd) behind
 a smoked window in the middle and the framed PLAY / STOP / PAUSE keys at the
 right; a step down to the lower part with the row of slim keys (OPEN, the
 track numbers 1-10, REPEAT, RANDOM) and the square skip / search keys; at the
-bottom POWER, a gold script, the gold headphone jack and its level knob. The
+bottom POWER, a gold script and the gold headphone jack. The
 case fills the scene. The drawer slides out towards the viewer;
 from above one sees its bed with the disc on it.
 
@@ -22,11 +21,12 @@ there):
 
   cdf-base.png       the player: thin shadow, front, the drawer slot,
                      the display window (without the display), keys, jack,
-                     knob, prints
+                     prints
   cdf-drawer.png     the drawer front, closed flush in the slot
   cdf-bed.png        the drawer's bed seen from above, disc recess included
                      (BED_W x BED_H; its front edge meets the drawer front)
   cdf-drawer-sh.png  the shadow the open drawer casts on the front below it
+  cdf-drawer-side.png  the drawer's right side, shown as it comes out
   cdf-led-red.png    the standby LED lit
   cdf-led-green.png  the power LED lit
 """
@@ -49,8 +49,7 @@ DRAWER = (21, 33, 221, 97)
 TRAVEL = 140                          # how far the drawer comes out
 BED_W, BED_H = 200, 124               # its front edge is the drawer front's top
 BED_DISC = (100, 86)                  # disc centre in the bed (middle of what shows when open)
-BED_DISC_R = (97, 33)                 # the 12 cm recess as seen (rx, ry)
-BADGE = (22, 136, 150, 158)
+BED_DISC_R = (88, 30)                 # the 12 cm recess as seen (rx, ry)
 WIN = (236, 26, 414, 106)             # the smoked window of the display
 VFD_AT = (246.6, 26)                  # the LcdCd panel (196 x 100) at VFD_K
 VFD_K = 0.8
@@ -68,9 +67,7 @@ KEYS = {                              # name: x0, y0, x1, y1
 for _i in range(10):
     KEYS["n%d" % (_i + 1)] = (NUM_X0 + _i * NUM_DX, 136, NUM_X0 + _i * NUM_DX + NUM_W, 158)
 LED = (55, 208)
-JACK = (440, 208)
-KNOB = (484, 206)
-KNOB_R = 11
+JACK = (494, 208)
 
 PPT = 3.6
 FONT = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
@@ -173,10 +170,8 @@ def build_base(out):
     h = h + 1.4 * (1 - lower)                                     # the upper fascia stands out
     sd_slot = sd_rrect(X, Y, *SLOT, 1.5)
     sd_win = sd_rrect(X, Y, *WIN, 2.0)
-    sd_badge = sd_rrect(X, Y, *BADGE, 1.0)
     sd_frame = sd_rrect(X, Y, *FRAME, 2.5)
     h = h - 1.6 * (1 - smoothstep(-1.2, 0.0, sd_slot)) - 1.0 * (1 - smoothstep(-0.8, 0.0, sd_win))
-    h = h + 0.5 * cv.cov(sd_badge)
     h = h + raised(sd_frame, 1.4, 1.2) - 1.0 * cv.cov(sd_rrect(X, Y, FRAME[0] + 2.4, FRAME[1] + 2.4, FRAME[2] - 2.4, FRAME[3] - 2.4, 1.5))
     keys = np.zeros_like(X)
     for name, (x0, y0, x1, y1) in KEYS.items():
@@ -212,20 +207,6 @@ def build_base(out):
     glass = glass + (0.12 * blinn(nx, ny, nz, 90))[..., None]
     rgb = rgb * (1 - win_in[..., None]) + glass * win_in[..., None]
 
-    # the badge: a dark plate with a thin light border and its emblem
-    bad = cv.cov(sd_badge)
-    rgb = rgb * (1 - 0.35 * bad[..., None])
-    border = cv.cov(np.abs(sd_rrect(X, Y, BADGE[0] + 1.2, BADGE[1] + 1.2, BADGE[2] - 1.2, BADGE[3] - 1.2, 0.6)) - 0.18)
-    em_x, em_y = BADGE[0] + 9, (BADGE[1] + BADGE[3]) / 2
-    emblem = np.clip(cv.cov(sd_rrect(X, Y, em_x - 5, em_y - 5, em_x + 5, em_y + 5, 0.6))
-                     - cv.cov(sd_rrect(X, Y, em_x - 4.2, em_y - 4.2, em_x + 4.2, em_y + 4.2, 0.4)), 0, 1)
-    # inside the emblem: a single pulse, the one bit
-    wave = cv.cov(np.maximum(np.abs(Y - em_y - 1.2 + 2.6 * (np.abs(X - em_x) < 1.2)) - 0.3, np.abs(X - em_x) - 3.2))
-    emblem = np.clip(emblem + wave, 0, 1)
-
-    # the frame's inner well shows a slightly lighter satin
-    ink_all = np.clip(border * 0.6 + emblem, 0, 1)
-
     # jack: gold ring, black hole
     jr = np.hypot(X - JACK[0], Y - JACK[1])
     ring = cv.cov(np.abs(jr - 4.2) - 1.6)
@@ -236,25 +217,6 @@ def build_base(out):
     hole = cv.cov(jr - 2.5)
     rgb = rgb * (1 - hole[..., None]) + 0.002 * hole[..., None]
 
-    # the level knob: black, knurled, a white index
-    kr = np.hypot(X - KNOB[0], Y - KNOB[1])
-    sd_knob = kr - KNOB_R
-    kh = 3.0 * np.sqrt(np.clip(1 - (1 - np.clip(-sd_knob / 1.8, 0, 1)) ** 2, 0, 1))
-    ang = np.arctan2(Y - KNOB[1], X - KNOB[0])
-    knurl = 0.25 * np.cos(ang * 60) * smoothstep(KNOB_R - 2.2, KNOB_R - 1.0, kr)
-    knx, kny, knz = normals(kh + knurl, n)
-    turned = radial_noise(kr, rng, 0.15, rmax=20)
-    kcol2 = 0.04 * (1 + 0.1 * turned) * (0.3 + 0.7 * lambert(knx, kny, knz)) + 0.50 * blinn(knx, kny, knz, 40)
-    a0 = math.radians(-120)
-    u = (X - KNOB[0]) * math.cos(a0) + (Y - KNOB[1]) * math.sin(a0)
-    v = -(X - KNOB[0]) * math.sin(a0) + (Y - KNOB[1]) * math.cos(a0)
-    line = cv.cov(np.maximum(np.abs(v) - 0.45, np.maximum(3.0 - u, u - (KNOB_R - 2.4))))
-    kcol2 = kcol2 * (1 - line) + 0.55 * line
-    kn = cv.cov(sd_knob)
-    ksh = soft(np.hypot(X - KNOB[0] - LXY[0] * -3 * LSLOPE, Y - KNOB[1] - LXY[1] * -3 * LSLOPE) - KNOB_R, 1.8)
-    rgb = rgb * (1 - 0.6 * ksh * (1 - kn))[..., None]
-    rgb = rgb * (1 - kn[..., None]) + kcol2[..., None] * kn[..., None]
-
     # LED socket (unlit)
     led = cv.cov(np.hypot(X - LED[0], Y - LED[1]) - 1.7)
     rgb = rgb * (1 - led[..., None]) + 0.010 * led[..., None]
@@ -263,8 +225,6 @@ def build_base(out):
     name_w = text_width("OSMIUM", 8.5, True, 1.6)
     items = [
         ("COMPACT DISC PLAYER  CD-90", 22 + name_w + 6, 15.5, 3.6, True, "l", 0.35),
-        ("1-BIT DAC", BADGE[0] + 18, BADGE[1] + 5.5, 4.2, True, "l", 0.6),
-        ("DIGITAL CONVERSION", BADGE[0] + 18, BADGE[1] + 13.5, 3.0, False, "l", 0.4),
         ("REMOTE SENSOR", WIN[0] + 2, 109.5, 2.4, False, "l", 0.3),
         ("PLAY", 442, 31.5, 3.8, True, "m", 0.4),
         ("STOP", 469.5, 31.5, 3.8, True, "m", 0.4),
@@ -274,15 +234,11 @@ def build_base(out):
         ("RANDOM", 399, 129.5, 3.0, True, "m", 0.0),
         ("POWER", 34, 189.5, 3.2, True, "m", 0.3),
         ("PHONES", JACK[0], 218.5, 3.2, True, "m", 0.3),
-        ("PHONE", KNOB[0] + 15, 214, 2.8, True, "l", 0.2),
-        ("LEVEL", KNOB[0] + 15, 218.5, 2.8, True, "l", 0.2),
-        ("0", KNOB[0] - 11, 218.5, 2.8, True, "m", 0.0),
-        ("10", KNOB[0] + 10, 218.5, 2.8, True, "m", 0.0),
     ]
     for i in range(10):
         x0 = NUM_X0 + i * NUM_DX
         items.append((str(i + 1), x0 + NUM_W / 2, 129.5, 3.0, True, "m", 0.0))
-    ink = np.clip(text_mask(cv, items) + ink_all, 0, 1)
+    ink = text_mask(cv, items)
     rgb = rgb * (1 - ink[..., None]) + rgb3(INK) * ink[..., None]
     # symbols on the key caps
     for name, (x0, y0, x1, y1) in KEYS.items():
@@ -311,7 +267,7 @@ def build_drawer(out):
     rng = np.random.default_rng(41)
     sd = sd_rrect(X, Y, x0, y0, x1, y1, 1.5)
     e = np.clip(-sd, 0, None)
-    h = 1.2 * np.sqrt(1 - (1 - np.clip(e / 1.2, 0, 1)) ** 2)
+    h = 2.0 * np.sqrt(1 - (1 - np.clip(e / 2.0, 0, 1)) ** 2)      # a well rounded edge all round
     # the tall flap of the period: a flat face, then a lip standing out a
     # little along the bottom third, with a shallow finger recess in it
     lip_y = y0 + 0.66 * (y1 - y0)
@@ -330,28 +286,59 @@ def build_drawer(out):
 
 
 def build_bed(out):
+    """The tray seen from above as it comes out: a trapezoid (narrower at the
+    back, inside the player) with raised side rails whose tops catch the
+    light and whose inner walls fall into shade, the disc recesses stepped
+    down into it, and along the front the top face of the drawer flap."""
     cv = Canvas(0, 0, BED_W, BED_H, PPT)
     X, Y, n = cv.X, cv.Y, cv.n
     rng = np.random.default_rng(43)
-    # a trapezoid: narrower towards the back (top of the image)
-    inset = 7.0 * (1 - Y / BED_H)
-    sd = np.maximum(np.maximum(inset + 1 - X, X - (BED_W - 1 - inset)), -Y)
+    inset = 16.0 * (1 - Y / BED_H)                   # the sides run towards the back
+    left, right = inset + 1, BED_W - 1 - inset
+    sd = np.maximum(np.maximum(left - X, X - right), -Y)
     sd = np.maximum(sd, Y - BED_H)
     cx, cy = BED_DISC
     rx, ry = BED_DISC_R
-    # the recesses, as ellipses (a circle seen at a grazing angle)
     q12 = np.hypot((X - cx) / rx, (Y - cy) / ry) - 1
     q8 = np.hypot((X - cx) / (rx * 0.67), (Y - cy) / (ry * 0.67)) - 1
     hole = np.hypot((X - cx) / 9, (Y - cy) / 3) - 1
-    h = -0.9 * smoothstep(0.02, -0.02, q12) - 0.8 * smoothstep(0.03, -0.03, q8)
-    nx, ny, nz = normals(h * 2.0, n)
+    # rails: 7 points wide along both sides, standing 3 points up
+    RAIL = 8.0
+    d_side = np.minimum(X - left, right - X)
+    rail = smoothstep(RAIL + 0.6, RAIL - 0.6, d_side)
+    FLAP = 8.0                                       # the flap's top face along the front
+    flap = smoothstep(BED_H - FLAP - 0.4, BED_H - FLAP + 0.4, Y)
+    h = 3.0 * np.maximum(rail, flap)
+    h = h - 1.4 * smoothstep(0.02, -0.02, q12) * (1 - rail) - 1.0 * smoothstep(0.03, -0.03, q8) * (1 - rail)
+    nx, ny, nz = normals(h, n)
     tex = 0.04 * streaks(X.shape, n, rng, 3, 0.4)
-    col = 0.022 * (1 + tex) * (0.35 + 0.65 * lambert(nx, ny, nz)) + 0.25 * blinn(nx, ny, nz, 20)
+    col = 0.020 * (1 + tex) * (0.30 + 0.70 * lambert(nx, ny, nz)) + 0.30 * blinn(nx, ny, nz, 24)
+    # the rails' inner walls: in their own shadow, deeper towards the back
+    wall = smoothstep(RAIL + 2.5, RAIL + 0.3, d_side) * (1 - rail)
+    col = col * (1 - 0.65 * wall)
+    # the tops of the rails and of the flap: the lighter satin of the drawer
+    top = np.maximum(rail, flap)
+    col = col + top * 0.010 + flap * (0.012 + 0.035 * np.exp(-((Y - (BED_H - FLAP + 0.6)) / 0.5) ** 2))
+    # the recess casts a shadow on its lower wall's floor (light from above)
+    rim = np.exp(-(q12 / 0.035) ** 2) * (Y < cy)
+    col = col * (1 - 0.5 * rim)
     # darker towards the back, inside the player
-    col = col * (0.35 + 0.65 * smoothstep(0, BED_H * 0.55, Y))
+    col = col * (0.30 + 0.70 * smoothstep(0, BED_H * 0.55, Y))
     col = col * (1 - 0.9 * np.clip(0.5 - hole * 3, 0, 1))
     cv.over(srgb(np.repeat(col[..., None], 3, axis=2)), cv.cov(sd))
     save(cv.image(), out, "cdf-bed.png")
+
+
+def build_drawer_side(out):
+    """The drawer's right-hand side, seen as it comes out (the drawer is left
+    of the middle of the view): a dark satin face, lit along its top."""
+    x0, y0, x1, y1 = DRAWER
+    w = 8.0
+    cv = Canvas(0, 0, w, y1 - y0, PPT)
+    X, Y = cv.X, cv.Y
+    col = 0.010 + 0.006 * (1 - X / w) + 0.05 * np.exp(-(Y / 0.6) ** 2)
+    cv.over(srgb(np.repeat(col[..., None], 3, axis=2)), np.ones_like(X))
+    save(cv.image(), out, "cdf-drawer-side.png")
 
 
 def build_drawer_shadow(out):
@@ -386,7 +373,7 @@ def main():
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     builders = {"base": build_base, "drawer": build_drawer, "bed": build_bed,
-                "shadow": build_drawer_shadow, "leds": build_leds}
+                "shadow": build_drawer_shadow, "side": build_drawer_side, "leds": build_leds}
     only = [s for s in args.only.split(",") if s]
     for k, f in builders.items():
         if not only or k in only:

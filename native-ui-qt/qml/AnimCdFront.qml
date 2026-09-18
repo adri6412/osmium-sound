@@ -62,8 +62,8 @@ Item {
     readonly property real bedH: 124
     readonly property real bedDiscX: 100
     readonly property real bedDiscY: 86
-    readonly property real discRx: 93
-    readonly property real squash: 33 / 97         // the disc seen at a grazing angle
+    readonly property real discRx: 85
+    readonly property real squash: 30 / 88         // the disc seen at a grazing angle
     // name: [x0, y0, x1, y1] (cdfront.py KEYS)
     readonly property var keys: {
         var k = {
@@ -372,6 +372,15 @@ Item {
             opacity: Math.min(1, root.trayOut * 3)
             source: root.assetsBase + "cdf-drawer-sh.png"
         }
+        // its right side, seen more the further it comes out
+        Pic {
+            x: root.drawerX + root.drawerW - 1; y: stage.frontY
+            width: 8 * root.trayOut; height: root.drawerH
+            visible: root.trayOut > 0.001
+            source: root.assetsBase + "cdf-drawer-side.png"
+            fillMode: Image.Stretch
+            sourceSize.width: root.px(8)
+        }
         Pic {
             id: drawer
             x: root.drawerX - 1; y: stage.frontY - 1
@@ -379,9 +388,10 @@ Item {
             source: root.assetsBase + "cdf-drawer.png"
         }
 
-        // the keys: a press darkens the cap for a moment. ◀◀ / ▶▶ search:
-        // a tap jumps a few seconds, held they wind on (NpAnimation's "wind",
-        // which crosses into the next or previous track) until released
+        // the keys: a press darkens the cap for a moment. ◀◀ / ▶▶ search (⏮ ⏭
+        // skip): a touch jumps a few seconds at once, held they wind on
+        // (NpAnimation's "wind", which crosses into the next or previous
+        // track) until released. A stream has nothing to search.
         Repeater {
             model: root.keyNames
             Item {
@@ -396,16 +406,17 @@ Item {
                     anchors.fill: parent
                     anchors.margins: key.slim ? -2 : -3
                     enabled: root.live
-                    onPressed: if (key.modelData === "rew" || key.modelData === "ff") root.searchStart(key.modelData === "ff" ? 1 : -1, kArea)
-                    onReleased: if (key.modelData === "rew" || key.modelData === "ff") root.searchStop()
-                    onCanceled: if (key.modelData === "rew" || key.modelData === "ff") root.searchStop()
-                    onClicked: if (key.modelData !== "rew" && key.modelData !== "ff") root.press(key.modelData)
+                    readonly property bool search: key.modelData === "rew" || key.modelData === "ff"
+                    onPressed: if (search) root.searchStart(key.modelData === "ff" ? 1 : -1, kArea)
+                    onReleased: if (search) root.searchStop()
+                    onCanceled: if (search) root.searchStop()
+                    onClicked: if (!search) root.press(key.modelData)
                 }
             }
         }
     }
 
-    // search: the first step at once, then one every 350 ms while held
+    // search (◀◀ / ▶▶): the first step at once, then one every 350 ms while held
     property int searchDir: 0
     property var searchArea: null
     function searchStart(dir, area) {
