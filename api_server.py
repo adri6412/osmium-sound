@@ -3758,8 +3758,15 @@ def set_vu_style(style):
 #  headless unit); ABSENT, unreadable or unknown content means "none".
 # ──────────────────────────────────────────────────────────────────
 NOWPLAYING_ANIMATION_FILE = '/etc/hifi-player/nowplaying-animation'
-NOWPLAYING_ANIMATION_CHOICES = ('none', 'cd', 'cdfront', 'vinyl', 'cassette')
+# the scenes the interface ships; the animation store adds more (below)
+NOWPLAYING_ANIMATION_BUILTIN = ('none', 'cd', 'cdfront', 'vinyl', 'cassette')
+NOWPLAYING_ANIMATION_CHOICES = NOWPLAYING_ANIMATION_BUILTIN
 NOWPLAYING_ANIMATION_DEFAULT = 'none'
+
+
+def nowplaying_animation_choices():
+    """Built-in ids, then those installed from the animation store."""
+    return list(NOWPLAYING_ANIMATION_BUILTIN) + [a['id'] for a in list_store_animations()]
 
 # Error text for a refused id, added to the shared catalogue (hifi_i18n.py)
 # unless it already carries one, so _t() below answers in both languages.
@@ -3767,22 +3774,25 @@ _I18N_MESSAGES.setdefault('prefs.animationUnknown',
                           {'en': 'That animation is not available', 'it': 'Questa animazione non è disponibile'})
 
 def get_nowplaying_animation():
-    """Return { animation, choices }."""
+    """Return { animation, choices, store }: store lists the installed store
+    animations with their names and scene file, for the settings screens."""
     animation = NOWPLAYING_ANIMATION_DEFAULT
     try:
         with open(NOWPLAYING_ANIMATION_FILE) as f:
             animation = f.read(64).strip()
     except Exception:
         pass
-    if animation not in NOWPLAYING_ANIMATION_CHOICES:
+    store = list_store_animations()
+    choices = list(NOWPLAYING_ANIMATION_BUILTIN) + [a['id'] for a in store]
+    if animation not in choices:
         animation = NOWPLAYING_ANIMATION_DEFAULT
-    return {'animation': animation, 'choices': list(NOWPLAYING_ANIMATION_CHOICES)}
+    return {'animation': animation, 'choices': choices, 'store': store}
 
 def set_nowplaying_animation(animation):
-    """Persist the animation choice. Only one of the fixed ids is accepted;
+    """Persist the animation choice. A built-in id or an installed store one;
     'none' is stored like any other, the way the switches above store "off".
     Leaves the VU meter switch alone: the interface does the gating."""
-    if not isinstance(animation, str) or animation.strip() not in NOWPLAYING_ANIMATION_CHOICES:
+    if not isinstance(animation, str) or animation.strip() not in nowplaying_animation_choices():
         return {'success': False, 'animation': get_nowplaying_animation()['animation'],
                 'code': 'prefs.animationUnknown', 'message': _t('prefs.animationUnknown', _lang())}
     animation = animation.strip()
@@ -3857,25 +3867,27 @@ def _vu_msg(code):
     return {'code': code, 'message': _t(code, _lang())}
 
 
-def _vu_http_get(url, limit, timeout=30):
+def _vu_http_get(url, limit, timeout=30, agent='OsmiumSound-VU/1.0'):
     # an explicit User-Agent: some static hosts refuse urllib's default one
-    req = urllib.request.Request(url, headers={'User-Agent': 'OsmiumSound-VU/1.0'})
+    req = urllib.request.Request(url, headers={'User-Agent': agent})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read(limit + 1)
     except (urllib.error.URLError, OSError, ValueError) as e:
-        log.info("vu store: GET %s failed: %s", url, e)
+        log.info("store: GET %s failed: %s", url, e)
         raise _VuStoreError('vuStore.downloadFailed')
     if len(data) > limit:
         raise _VuStoreError('vuStore.verifyFailed')
     return data
 
 
-def _vu_verify_signature(data, sig):
+def _vu_verify_signature(data, sig, pubkey=None):
     """Ed25519 over the exact catalogue bytes, like hifi-os-update.sh does for
-    the OS bundles. No key, no openssl or a bad signature all mean no."""
-    if not os.path.isfile(VU_STORE_PUBKEY):
-        log.warning("vu store: no public key at %s, catalogue refused", VU_STORE_PUBKEY)
+    the OS bundles. No key, no openssl or a bad signature all mean no. The
+    animation store checks its own catalogue with the same function."""
+    pubkey = pubkey or VU_STORE_PUBKEY
+    if not os.path.isfile(pubkey):
+        log.warning("store: no public key at %s, catalogue refused", pubkey)
         return False
     with _tempfile.TemporaryDirectory(prefix='hifi-vu-sig-') as d:
         fdata, fsig = os.path.join(d, 'index.json'), os.path.join(d, 'index.json.sig')
@@ -3884,7 +3896,7 @@ def _vu_verify_signature(data, sig):
         with open(fsig, 'wb') as f:
             f.write(sig)
         try:
-            r = subprocess.run(['openssl', 'pkeyutl', '-verify', '-pubin', '-inkey', VU_STORE_PUBKEY,
+            r = subprocess.run(['openssl', 'pkeyutl', '-verify', '-pubin', '-inkey', pubkey,
                                 '-rawin', '-in', fdata, '-sigfile', fsig],
                                capture_output=True, timeout=20)
         except (OSError, subprocess.SubprocessError) as e:
@@ -4315,6 +4327,479 @@ def vu_store_mark_seen():
         _vu_write_atomic(os.path.join(VU_STORE_STATE_DIR, 'seen.json'), json.dumps(sorted(seen)).encode('utf-8'))
     except OSError:
         return {'success': False, **_vu_msg('prefs.saveFailed')}
+    return {'success': True}
+
+# ──────────────────────────────────────────────────────────────────
+#  Now-playing animation store: more animations, downloaded on demand from
+#  file.osmiumsound.it/anim/, the same way as the VU meter skins above: a
+#  catalogue (index.json) with a detached Ed25519 signature made with the OS
+#  update key and checked against ota-pubkey.pem, then every package
+#  (.animpak) and preview checked against the sha256 the catalogue names.
+#
+#  Unlike a skin, an animation is a scene: QML the kiosk loads and runs, with
+#  its images. That is accepted because it arrives exactly like an update of
+#  the interface does - signed with the same key, so it carries the same trust
+#  and nothing else is ever loaded (no manual upload, no other source). A
+#  package holds anim.json (id, version, format, name, the scene's file) and
+#  flat .qml / .png / .jpg / .json files; ANIM_SCENE_FORMAT is the scene
+#  contract of the interface shipped next to this API (the inputs NpAnimation
+#  gives a scene), newer entries are listed as needing an update.
+#
+#  Installed animations live on the data partition, next to the store skins,
+#  and are refreshed like them: at start, every ANIM_STORE_REFRESH, and on a
+#  GET older than ANIM_STORE_STALE; a refresh brings the installed ones up to
+#  the listed version. The four animations the interface ships stay built in.
+# ──────────────────────────────────────────────────────────────────
+ANIM_STORE_URL = os.environ.get('HIFI_ANIM_STORE_URL', 'https://file.osmiumsound.it/anim/')
+ANIM_STORE_DIR = os.environ.get('HIFI_ANIM_STORE_DIR', '/var/lib/hifi-player/anim-scenes')
+ANIM_STORE_STATE_DIR = os.environ.get('HIFI_ANIM_STORE_STATE_DIR', '/var/lib/hifi-player/anim-store')
+ANIM_STORE_PUBKEY = os.environ.get('HIFI_ANIM_STORE_PUBKEY', '/etc/hifi-player/ota-pubkey.pem')
+ANIM_SCENE_FORMAT = 1
+ANIM_STORE_REFRESH = 12 * 3600
+ANIM_STORE_STALE = 600
+ANIM_STORE_FIRST_CHECK = 150
+ANIM_STORE_SIG_RETRY = 5
+ANIM_INDEX_MAX = 1024 * 1024
+ANIM_PACK_MAX = 40 * 1024 * 1024
+ANIM_PACK_UNPACKED_MAX = 80 * 1024 * 1024
+ANIM_PACK_FILES_MAX = 64
+ANIM_PREVIEW_MAX = 1024 * 1024
+ANIM_QML_MAX = 512 * 1024
+# QML files may start with a capital: a scene's own components are types
+_ANIM_FILE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(png|jpg|json|qml)$')
+_ANIM_PACK_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,80}\.animpak$')
+_ANIM_ID_RE = _VU_STYLE_RE
+_ANIM_AGENT = 'OsmiumSound-Anim/1.0'
+
+_anim_store_lock = threading.Lock()
+_anim_store = {'catalog': None, 'checked': 0, 'error': None, 'checking': False, 'loaded': False, 'jobs': {}}
+
+
+class _AnimStoreError(Exception):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def _anim_msg(code):
+    return {'code': code, 'message': _t(code, _lang())}
+
+
+def _anim_get(url, limit):
+    """_vu_http_get with this store's error codes."""
+    try:
+        return _vu_http_get(url, limit, agent=_ANIM_AGENT)
+    except _VuStoreError as e:
+        raise _AnimStoreError(e.code.replace('vuStore.', 'animStore.'))
+
+
+def _anim_parse_index(raw):
+    """The catalogue's entries, validated, highest version per id."""
+    try:
+        doc = json.loads(raw.decode('utf-8'))
+    except (UnicodeDecodeError, ValueError):
+        raise _AnimStoreError('animStore.catalogInvalid')
+    anims = doc.get('animations') if isinstance(doc, dict) else None
+    if not isinstance(anims, list):
+        raise _AnimStoreError('animStore.catalogInvalid')
+    out = {}
+    for e in anims:
+        if not isinstance(e, dict):
+            continue
+        aid, ver, fmt = e.get('id'), e.get('version'), e.get('format', 1)
+        name = e.get('name')
+        if not (isinstance(aid, str) and _ANIM_ID_RE.match(aid) and isinstance(ver, int) and not isinstance(ver, bool)
+                and ver >= 1 and isinstance(fmt, int) and fmt >= 1 and isinstance(name, dict)
+                and isinstance(name.get('en'), str) and name.get('en')):
+            continue
+        pack, size, sha = e.get('file'), e.get('size'), str(e.get('sha256') or '').lower()
+        if not (isinstance(pack, str) and _ANIM_PACK_RE.match(pack) and isinstance(size, int)
+                and 0 < size <= ANIM_PACK_MAX and _VU_SHA_RE.match(sha)):
+            continue
+        entry = {'id': aid, 'version': ver, 'format': fmt,
+                 'name': {'en': name['en'][:60], 'it': str(name.get('it') or name['en'])[:60]},
+                 'author': str(e.get('author') or '')[:80], 'license': str(e.get('license') or '')[:80],
+                 'file': pack, 'size': size, 'sha256': sha, 'preview': None}
+        pv, pvs, pvsize = e.get('preview'), str(e.get('previewSha256') or '').lower(), e.get('previewSize')
+        if (isinstance(pv, str) and _VU_PREVIEW_RE.match(pv) and _VU_SHA_RE.match(pvs)
+                and isinstance(pvsize, int) and 0 < pvsize <= ANIM_PREVIEW_MAX):
+            entry['preview'] = {'file': pv, 'sha256': pvs, 'size': pvsize}
+        if aid not in out or out[aid]['version'] < ver:
+            out[aid] = entry
+    return sorted(out.values(), key=lambda x: x['id'])
+
+
+def _anim_preview_path(entry):
+    return os.path.join(ANIM_STORE_STATE_DIR, 'previews', entry['preview']['sha256'] + '.jpg')
+
+
+def _anim_read_meta(aid):
+    """anim.json of an installed animation, or None."""
+    try:
+        with open(os.path.join(ANIM_STORE_DIR, aid, 'anim.json'), encoding='utf-8') as f:
+            meta = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(meta, dict) or not isinstance(meta.get('scene'), str) \
+            or not os.path.isfile(os.path.join(ANIM_STORE_DIR, aid, meta['scene'])):
+        return None
+    return meta
+
+
+def _anim_installed_store():
+    """{id: version} of the animations unpacked from the store."""
+    out = {}
+    try:
+        names = os.listdir(ANIM_STORE_DIR)
+    except OSError:
+        return out
+    for aid in names:
+        if not _ANIM_ID_RE.match(aid) or aid in NOWPLAYING_ANIMATION_BUILTIN:
+            continue
+        meta = _anim_read_meta(aid)
+        if meta is None:
+            continue
+        v = meta.get('version', 0)
+        out[aid] = v if isinstance(v, int) and not isinstance(v, bool) else 0
+    return out
+
+
+def list_store_animations():
+    """The installed store animations, [{id, name:{en,it}, scene}], in their
+    declared order: what the kiosk offers next to the built-in ones and
+    loads from ANIM_STORE_DIR/<id>/<scene>."""
+    out = []
+    for aid in _anim_installed_store():
+        meta = _anim_read_meta(aid) or {}
+        name = meta.get('name') if isinstance(meta.get('name'), dict) else {}
+        order = meta.get('order', 50)
+        out.append({'id': aid, 'name': {'en': str(name.get('en') or aid), 'it': str(name.get('it') or name.get('en') or aid)},
+                    'scene': meta.get('scene'), 'order': order if isinstance(order, int) and not isinstance(order, bool) else 50})
+    out.sort(key=lambda a: (a['order'], a['id']))
+    return [{'id': a['id'], 'name': a['name'], 'scene': a['scene']} for a in out]
+
+
+def _anim_seen_ids():
+    try:
+        with open(os.path.join(ANIM_STORE_STATE_DIR, 'seen.json'), encoding='utf-8') as f:
+            v = json.load(f)
+        return set(x for x in v if isinstance(x, str)) if isinstance(v, list) else set()
+    except (OSError, ValueError):
+        return set()
+
+
+def _anim_check_meta(meta, entry, names):
+    """anim.json of a package: the id/version the catalogue promised, a
+    format this interface runs and a scene file inside the package."""
+    if not isinstance(meta, dict) or meta.get('id') != entry['id'] or meta.get('version') != entry['version']:
+        return False
+    fmt = meta.get('format', 1)
+    if not isinstance(fmt, int) or isinstance(fmt, bool) or fmt > ANIM_SCENE_FORMAT:
+        return False
+    scene = meta.get('scene')
+    if not (isinstance(scene, str) and scene.endswith('.qml') and scene in names):
+        return False
+    name = meta.get('name')
+    return isinstance(name, dict) and isinstance(name.get('en'), str) and bool(name.get('en'))
+
+
+def _anim_unpack(data, entry):
+    """Unpack a verified .animpak into ANIM_STORE_DIR/<id>, replacing an older
+    copy only once the new one is complete."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+        infos = zf.infolist()
+    except (zipfile.BadZipFile, ValueError):
+        raise _AnimStoreError('animStore.invalidPackage')
+    if not infos or len(infos) > ANIM_PACK_FILES_MAX:
+        raise _AnimStoreError('animStore.invalidPackage')
+    names, total = set(), 0
+    for info in infos:
+        mode = (info.external_attr >> 16) & 0o170000
+        if (info.is_dir() or not _ANIM_FILE_RE.match(info.filename) or info.filename in names
+                or mode not in (0, 0o100000)):
+            raise _AnimStoreError('animStore.invalidPackage')
+        names.add(info.filename)
+        total += info.file_size
+    if total > ANIM_PACK_UNPACKED_MAX or 'anim.json' not in names:
+        raise _AnimStoreError('animStore.invalidPackage')
+    try:
+        files = {n: zf.read(n) for n in names}
+        meta = json.loads(files['anim.json'].decode('utf-8'))
+    except (zipfile.BadZipFile, UnicodeDecodeError, ValueError, OSError, RuntimeError):
+        raise _AnimStoreError('animStore.invalidPackage')
+    if not _anim_check_meta(meta, entry, names):
+        raise _AnimStoreError('animStore.invalidPackage')
+    for n, blob in files.items():
+        if n.endswith('.png') and not blob.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise _AnimStoreError('animStore.invalidPackage')
+        if n.endswith('.jpg') and not blob.startswith(b'\xff\xd8\xff'):
+            raise _AnimStoreError('animStore.invalidPackage')
+        if n.endswith('.qml'):
+            try:
+                if len(blob) > ANIM_QML_MAX or '\x00' in blob.decode('utf-8'):
+                    raise _AnimStoreError('animStore.invalidPackage')
+            except UnicodeDecodeError:
+                raise _AnimStoreError('animStore.invalidPackage')
+    aid = entry['id']
+    dest = os.path.join(ANIM_STORE_DIR, aid)
+    tmp = os.path.join(ANIM_STORE_DIR, '.tmp-' + aid)
+    old = os.path.join(ANIM_STORE_DIR, '.old-' + aid)
+    try:
+        os.makedirs(ANIM_STORE_DIR, exist_ok=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(old, ignore_errors=True)
+        os.makedirs(tmp)
+        for n, blob in files.items():
+            with open(os.path.join(tmp, n), 'wb') as f:
+                f.write(blob)
+        if os.path.isdir(dest):
+            os.rename(dest, old)
+        os.rename(tmp, dest)
+        shutil.rmtree(old, ignore_errors=True)
+    except OSError:
+        log.exception("anim store: unpacking %s failed", aid)
+        shutil.rmtree(tmp, ignore_errors=True)
+        if not os.path.isdir(dest) and os.path.isdir(old):
+            os.rename(old, dest)
+        raise _AnimStoreError('animStore.installFailed')
+
+
+def _anim_install_entry(entry):
+    """Download, verify and unpack one catalogue entry (job state in
+    _anim_store['jobs']). True when installed."""
+    aid = entry['id']
+    try:
+        data = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, entry['file']), entry['size'])
+        if len(data) != entry['size'] or _hashlib.sha256(data).hexdigest() != entry['sha256']:
+            raise _AnimStoreError('animStore.verifyFailed')
+        with _anim_store_lock:
+            _anim_store['jobs'][aid] = {'state': 'installing'}
+        _anim_unpack(data, entry)
+    except _AnimStoreError as e:
+        log.warning("anim store: %s v%s not installed: %s", aid, entry['version'], e.code)
+        with _anim_store_lock:
+            _anim_store['jobs'][aid] = {'state': 'error', 'code': e.code}
+        return False
+    with _anim_store_lock:
+        _anim_store['jobs'].pop(aid, None)
+    log.info("anim store: %s v%s installed", aid, entry['version'])
+    return True
+
+
+def _anim_store_load_cached():
+    """The last verified catalogue from disk, re-verified."""
+    with _anim_store_lock:
+        if _anim_store['loaded']:
+            return
+        _anim_store['loaded'] = True
+    try:
+        with open(os.path.join(ANIM_STORE_STATE_DIR, 'index.json'), 'rb') as f:
+            raw = f.read(ANIM_INDEX_MAX + 1)
+        with open(os.path.join(ANIM_STORE_STATE_DIR, 'index.json.sig'), 'rb') as f:
+            sig = f.read(4096)
+        mtime = os.path.getmtime(os.path.join(ANIM_STORE_STATE_DIR, 'index.json'))
+    except OSError:
+        return
+    if len(raw) > ANIM_INDEX_MAX or not _vu_verify_signature(raw, sig, ANIM_STORE_PUBKEY):
+        return
+    try:
+        catalog = _anim_parse_index(raw)
+    except _AnimStoreError:
+        return
+    with _anim_store_lock:
+        if _anim_store['catalog'] is None:
+            _anim_store['catalog'] = catalog
+            _anim_store['checked'] = min(mtime, time.time() - ANIM_STORE_STALE - 1)
+
+
+def _anim_store_refresh():
+    """Fetch and verify the catalogue and its previews, then bring the
+    animations installed from the store up to date. One at a time."""
+    with _anim_store_lock:
+        if _anim_store['checking']:
+            return
+        _anim_store['checking'] = True
+    error = None
+    catalog = None
+    try:
+        raw = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, 'index.json'), ANIM_INDEX_MAX)
+        sig = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, 'index.json.sig'), 4096)
+        if not _vu_verify_signature(raw, sig, ANIM_STORE_PUBKEY):
+            # the list and its signature are uploaded one after the other
+            time.sleep(ANIM_STORE_SIG_RETRY)
+            raw = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, 'index.json'), ANIM_INDEX_MAX)
+            sig = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, 'index.json.sig'), 4096)
+            if not _vu_verify_signature(raw, sig, ANIM_STORE_PUBKEY):
+                raise _AnimStoreError('animStore.signatureInvalid')
+        catalog = _anim_parse_index(raw)
+        for entry in catalog:
+            if not entry['preview'] or os.path.isfile(_anim_preview_path(entry)):
+                continue
+            try:
+                blob = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, entry['preview']['file']), entry['preview']['size'])
+            except _AnimStoreError:
+                continue
+            if _hashlib.sha256(blob).hexdigest() == entry['preview']['sha256'] and blob.startswith(b'\xff\xd8\xff'):
+                _vu_write_atomic(_anim_preview_path(entry), blob)
+        try:
+            _vu_write_atomic(os.path.join(ANIM_STORE_STATE_DIR, 'index.json'), raw)
+            _vu_write_atomic(os.path.join(ANIM_STORE_STATE_DIR, 'index.json.sig'), sig)
+        except OSError:
+            log.exception("anim store: could not keep the catalogue on disk")
+    except _AnimStoreError as e:
+        error = 'animStore.catalogUnavailable' if e.code == 'animStore.downloadFailed' else e.code
+    except Exception:
+        log.exception("anim store: refresh failed")
+        error = 'animStore.catalogUnavailable'
+    with _anim_store_lock:
+        if catalog is not None:
+            _anim_store['catalog'] = catalog
+        _anim_store['error'] = error
+        _anim_store['checked'] = time.time()
+        _anim_store['loaded'] = True
+    try:
+        if catalog is not None:
+            installed = _anim_installed_store()
+            for entry in catalog:
+                if (entry['id'] in installed and entry['id'] not in NOWPLAYING_ANIMATION_BUILTIN
+                        and entry['version'] > installed[entry['id']] and entry['format'] <= ANIM_SCENE_FORMAT):
+                    with _anim_store_lock:
+                        if entry['id'] in _anim_store['jobs'] and _anim_store['jobs'][entry['id']].get('state') != 'error':
+                            continue
+                        _anim_store['jobs'][entry['id']] = {'state': 'downloading'}
+                    _anim_install_entry(entry)
+    finally:
+        with _anim_store_lock:
+            _anim_store['checking'] = False
+
+
+def _anim_store_refresh_async():
+    threading.Thread(target=_anim_store_refresh, daemon=True, name='anim-store-refresh').start()
+
+
+def _anim_store_background():
+    time.sleep(ANIM_STORE_FIRST_CHECK)
+    while True:
+        try:
+            _anim_store_refresh()
+        except Exception:
+            log.exception("anim store: periodic check failed")
+        time.sleep(ANIM_STORE_REFRESH)
+
+
+def _anim_find_entry(aid):
+    with _anim_store_lock:
+        for entry in _anim_store['catalog'] or []:
+            if entry['id'] == aid:
+                return entry
+    return None
+
+
+def get_anim_store(summary=False):
+    """The store as the settings screens show it. summary=True only counts
+    what is new (for a badge) and never carries the previews."""
+    _anim_store_load_cached()
+    with _anim_store_lock:
+        stale = not _anim_store['checking'] and time.time() - _anim_store['checked'] > ANIM_STORE_STALE
+        catalog = list(_anim_store['catalog'] or [])
+        jobs = {k: dict(v) for k, v in _anim_store['jobs'].items()}
+        error, checked = _anim_store['error'], _anim_store['checked']
+    if stale:
+        _anim_store_refresh_async()
+    installed, seen = _anim_installed_store(), _anim_seen_ids()
+    items = []
+    for entry in catalog:
+        aid = entry['id']
+        if aid in NOWPLAYING_ANIMATION_BUILTIN:
+            continue
+        have = installed.get(aid)
+        supported = entry['format'] <= ANIM_SCENE_FORMAT
+        item = {'id': aid, 'version': entry['version'], 'name': entry['name'], 'author': entry['author'],
+                'license': entry['license'], 'size': entry['size'], 'supported': supported,
+                'installed': have is not None, 'installedVersion': have,
+                'update': have is not None and supported and entry['version'] > have,
+                'new': have is None and supported and aid not in seen}
+        job = jobs.get(aid)
+        if job:
+            item['job'] = job['state']
+            if job.get('code'):
+                item['jobError'] = _anim_msg(job['code'])
+        if not summary:
+            item['preview'] = None
+            if entry['preview']:
+                try:
+                    with open(_anim_preview_path(entry), 'rb') as f:
+                        item['preview'] = 'data:image/jpeg;base64,' + _base64.b64encode(f.read()).decode('ascii')
+                except OSError:
+                    pass
+        items.append(item)
+    if summary:
+        return {'new': sum(1 for i in items if i['new']), 'updates': sum(1 for i in items if i['update'])}
+    with _anim_store_lock:
+        checking = _anim_store['checking']
+    return {'animations': items, 'checking': checking or stale, 'checked': int(checked),
+            'error': _anim_msg(error) if error else None,
+            'busy': any(i.get('job') in ('downloading', 'installing') for i in items)}
+
+
+def anim_store_check():
+    _anim_store_refresh_async()
+    return {'success': True, 'checking': True}
+
+
+def anim_store_install(aid):
+    aid = str(aid or '').strip()
+    _anim_store_load_cached()
+    entry = _anim_find_entry(aid) if _ANIM_ID_RE.match(aid) else None
+    if entry is None:
+        return {'success': False, **_anim_msg('animStore.unknown')}
+    if aid in NOWPLAYING_ANIMATION_BUILTIN:
+        return {'success': False, **_anim_msg('animStore.builtin')}
+    if entry['format'] > ANIM_SCENE_FORMAT:
+        return {'success': False, **_anim_msg('animStore.unsupported')}
+    if _anim_installed_store().get(aid) == entry['version']:
+        return {'success': True, 'installed': True}
+    with _anim_store_lock:
+        if _anim_store['jobs'].get(aid, {}).get('state') in ('downloading', 'installing'):
+            return {'success': False, **_anim_msg('animStore.busy')}
+        _anim_store['jobs'][aid] = {'state': 'downloading'}
+    threading.Thread(target=_anim_install_entry, args=(entry,), daemon=True, name='anim-store-install').start()
+    return {'success': True, 'started': True}
+
+
+def anim_store_remove(aid):
+    aid = str(aid or '').strip()
+    if not _ANIM_ID_RE.match(aid) or aid not in _anim_installed_store():
+        return {'success': False, **_anim_msg('animStore.notInstalled')}
+    with _anim_store_lock:
+        if _anim_store['jobs'].get(aid, {}).get('state') in ('downloading', 'installing'):
+            return {'success': False, **_anim_msg('animStore.busy')}
+        _anim_store['jobs'].pop(aid, None)
+    try:
+        shutil.rmtree(os.path.join(ANIM_STORE_DIR, aid))
+    except OSError:
+        log.exception("anim store: removing %s failed", aid)
+        return {'success': False, **_anim_msg('animStore.removeFailed')}
+    # the animation in use is gone: back to none rather than a stale choice
+    try:
+        with open(NOWPLAYING_ANIMATION_FILE) as f:
+            if f.read().strip() == aid:
+                os.remove(NOWPLAYING_ANIMATION_FILE)
+    except OSError:
+        pass
+    return {'success': True}
+
+
+def anim_store_mark_seen():
+    _anim_store_load_cached()
+    with _anim_store_lock:
+        ids = [e['id'] for e in _anim_store['catalog'] or []]
+    seen = _anim_seen_ids() | set(ids)
+    try:
+        _vu_write_atomic(os.path.join(ANIM_STORE_STATE_DIR, 'seen.json'), json.dumps(sorted(seen)).encode('utf-8'))
+    except OSError:
+        return {'success': False, **_anim_msg('prefs.saveFailed')}
     return {'success': True}
 
 # ──────────────────────────────────────────────────────────────────
@@ -7638,6 +8123,28 @@ def api_vu_store_remove():
 def api_vu_store_seen():
     return jsonify(vu_store_mark_seen())
 
+@app.route('/anim_store', methods=['GET'])
+def api_anim_store():
+    return jsonify(get_anim_store(summary=request.args.get('summary') == '1'))
+
+@app.route('/anim_store/check', methods=['POST'])
+def api_anim_store_check():
+    return jsonify(anim_store_check())
+
+@app.route('/anim_store/install', methods=['POST'])
+def api_anim_store_install():
+    data = request.get_json(silent=True) or {}
+    return jsonify(anim_store_install(data.get('id')))
+
+@app.route('/anim_store/remove', methods=['POST'])
+def api_anim_store_remove():
+    data = request.get_json(silent=True) or {}
+    return jsonify(anim_store_remove(data.get('id')))
+
+@app.route('/anim_store/seen', methods=['POST'])
+def api_anim_store_seen():
+    return jsonify(anim_store_mark_seen())
+
 @app.route('/vu_meter', methods=['POST'])
 def api_set_vu_meter():
     data = request.get_json(silent=True) or {}
@@ -7868,4 +8375,5 @@ if __name__ == '__main__':
     _startup_network_recovery()
     threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
     threading.Thread(target=_vu_store_background, daemon=True, name='vu-store').start()
+    threading.Thread(target=_anim_store_background, daemon=True, name='anim-store').start()
     app.run(host='127.0.0.1', port=8000, threaded=True)

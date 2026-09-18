@@ -571,7 +571,14 @@
       },
       "noneHelp": "In riproduzione si vedono i testi del brano.",
       "saved": "Animazione salvata",
-      "failed": "Impossibile salvare l'animazione"
+      "failed": "Impossibile salvare l'animazione",
+      "storeTitle": "Altre animazioni da scaricare",
+      "storeHelp": "Nuove animazioni pubblicate da Osmium Sound. Le scarica l'apparecchio stesso; un'animazione scaricata si aggiorna da sola e compare tra le scelte qui sopra.",
+      "storeLoading": "Caricamento dell'elenco…",
+      "storeEmpty": "Al momento non ci sono altre animazioni da scaricare.",
+      "storeCheck": "Controlla di nuovo",
+      "removeConfirm": "Rimuovere l'animazione «{name}» dall'apparecchio? Potrai scaricarla di nuovo in seguito.",
+      "storeFailed": "Lo store delle animazioni non ha risposto"
     },
     "display": {
       "currentLabel": "Attuale",

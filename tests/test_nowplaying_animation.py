@@ -26,6 +26,8 @@ class NowPlayingAnimationTestCase(unittest.TestCase):
         self._patch('NOWPLAYING_ANIMATION_FILE', os.path.join(self.tmp, 'etc', 'nowplaying-animation'))
         # the VU switch lives next to it: setting an animation must not touch it
         self._patch('VU_METER_FILE', os.path.join(self.tmp, 'etc', 'vu-meter-enabled'))
+        # no animations from the store unless a test installs some
+        self._patch('ANIM_STORE_DIR', os.path.join(self.tmp, 'anim-scenes'))
         self.client = api_server.app.test_client()
 
     def tearDown(self):
@@ -50,7 +52,7 @@ class NowPlayingAnimationTestCase(unittest.TestCase):
 
     def test_default_is_none(self):
         self.assertEqual(api_server.get_nowplaying_animation(),
-                         {'animation': 'none', 'choices': CHOICES})
+                         {'animation': 'none', 'choices': CHOICES, 'store': []})
 
     def test_set_each_valid_id(self):
         for aid in ('cd', 'vinyl', 'cassette', 'none'):
@@ -126,7 +128,7 @@ class NowPlayingAnimationTestCase(unittest.TestCase):
     def test_route_get(self):
         r = self.client.get('/nowplaying_animation')
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.get_json(), {'animation': 'none', 'choices': CHOICES})
+        self.assertEqual(r.get_json(), {'animation': 'none', 'choices': CHOICES, 'store': []})
 
     def test_route_post_valid(self):
         for aid in CHOICES:

@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""Install a VU meter skin (.vupak) or a Now Playing animation (.animpak)
+from a local file, the way the stores install what they download.
+
+    sudo hifi-pack-install FILE.vupak | FILE.animpak
+    sudo hifi-pack-install --remove vu|anim ID
+    hifi-pack-install --list
+
+The package goes through the same checks the stores make (flat file names,
+the file types, anim.json / skin.json, a format this interface supports, not
+a built-in id) and lands in the same folders, so the kiosk and the web admin
+offer it at once and "remove" works on it as on a downloaded one. A newer
+version of the same id replaces the old one; the store may later replace it
+with its own version when that one is higher.
+
+What is NOT checked is where the file comes from: the stores only take
+packages named by their signed catalogue, a file given here has no such
+signature. That is the point of the command (trying a skin or a scene before
+it is published), and why it needs root. An .animpak is a scene the kiosk
+runs: install only packages you trust.
+"""
+import argparse
+import io
+import json
+import os
+import sys
+import zipfile
+
+# api_server.py sits next to the other services; HIFI_API_DIR for a checkout
+sys.path.insert(0, os.environ.get('HIFI_API_DIR', '/usr/local/bin'))
+try:
+    import api_server as api  # noqa: E402
+except Exception as e:  # pragma: no cover - a broken install, nothing to test
+    sys.exit(f'hifi-pack-install: cannot load api_server.py ({e})')
+
+KINDS = {
+    '.vupak': {'kind': 'vu', 'meta': 'skin.json', 'label': 'VU meter'},
+    '.animpak': {'kind': 'anim', 'meta': 'anim.json', 'label': 'animation'},
+}
+
+
+def msg(code):
+    return api._t(code, 'en')
+
+
+def read_meta(data, meta_name):
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            meta = json.loads(zf.read(meta_name).decode('utf-8'))
+    except (zipfile.BadZipFile, KeyError, UnicodeDecodeError, ValueError):
+        return None
+    return meta if isinstance(meta, dict) else None
+
+
+def install(path):
+    ext = os.path.splitext(path)[1].lower()
+    spec = KINDS.get(ext)
+    if spec is None:
+        sys.exit('hifi-pack-install: give a .vupak or an .animpak file')
+    try:
+        with open(path, 'rb') as f:
+            data = f.read(api.ANIM_PACK_MAX + 1)
+    except OSError as e:
+        sys.exit(f'hifi-pack-install: {e}')
+    limit = api.VU_PACK_MAX if spec['kind'] == 'vu' else api.ANIM_PACK_MAX
+    if len(data) > limit:
+        sys.exit(f'hifi-pack-install: the file is larger than {limit} bytes')
+    meta = read_meta(data, spec['meta'])
+    pid, ver = (meta or {}).get('id'), (meta or {}).get('version')
+    if not (isinstance(pid, str) and api._VU_STYLE_RE.match(pid) and isinstance(ver, int)
+            and not isinstance(ver, bool) and ver >= 1):
+        sys.exit(f"hifi-pack-install: {spec['meta']} has no valid id / version")
+    entry = {'id': pid, 'version': ver}
+    if spec['kind'] == 'vu':
+        if pid in api._vu_builtin_ids():
+            sys.exit('hifi-pack-install: ' + msg('vuStore.builtin'))
+        unpack, err = api._vu_unpack, api._VuStoreError
+    else:
+        if pid in api.NOWPLAYING_ANIMATION_BUILTIN:
+            sys.exit('hifi-pack-install: ' + msg('animStore.builtin'))
+        print('note: an animation is a scene the kiosk runs; this file has no store signature')
+        unpack, err = api._anim_unpack, api._AnimStoreError
+    try:
+        unpack(data, entry)
+    except err as e:
+        sys.exit('hifi-pack-install: ' + msg(e.code))
+    except PermissionError:
+        sys.exit('hifi-pack-install: permission denied (run it with sudo)')
+    print(f"installed {spec['label']} {pid} v{ver}")
+
+
+def remove(kind, pid):
+    if kind == 'vu':
+        r = api.vu_store_remove(pid)
+    elif kind == 'anim':
+        r = api.anim_store_remove(pid)
+    else:
+        sys.exit('hifi-pack-install: --remove vu|anim ID')
+    if not r.get('success'):
+        sys.exit('hifi-pack-install: ' + str(r.get('message') or 'not removed'))
+    print(f'removed {kind} {pid}')
+
+
+def list_installed():
+    vu = api._vu_installed_store()
+    anim = api._anim_installed_store()
+    print('VU meters (store / local):' + ('' if vu else ' none'))
+    for k in sorted(vu):
+        print(f'  {k} v{vu[k]}')
+    print('Animations (store / local):' + ('' if anim else ' none'))
+    for k in sorted(anim):
+        print(f'  {k} v{anim[k]}')
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    ap.add_argument('file', nargs='?', help='a .vupak or .animpak file')
+    ap.add_argument('--remove', nargs=2, metavar=('vu|anim', 'ID'), help='remove an installed skin or animation')
+    ap.add_argument('--list', action='store_true', help='list what the stores (or this command) installed')
+    args = ap.parse_args()
+    if args.list:
+        list_installed()
+    elif args.remove:
+        remove(*args.remove)
+    elif args.file:
+        install(args.file)
+    else:
+        ap.print_help()
+        sys.exit(2)
+
+
+if __name__ == '__main__':
+    main()

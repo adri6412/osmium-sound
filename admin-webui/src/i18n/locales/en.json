@@ -571,7 +571,14 @@
       },
       "noneHelp": "Now Playing shows the song lyrics.",
       "saved": "Animation saved",
-      "failed": "Could not save the animation"
+      "failed": "Could not save the animation",
+      "storeTitle": "More animations to download",
+      "storeHelp": "New animations published by Osmium Sound. The device downloads them itself; a downloaded animation updates by itself and joins the choices above.",
+      "storeLoading": "Loading the list…",
+      "storeEmpty": "There are no other animations to download at the moment.",
+      "storeCheck": "Check again",
+      "removeConfirm": "Remove the animation “{name}” from the device? You can download it again later.",
+      "storeFailed": "The animation store did not answer"
     },
     "display": {
       "currentLabel": "Current",

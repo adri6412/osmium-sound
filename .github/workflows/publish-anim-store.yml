@@ -1,0 +1,92 @@
+name: Publish the animation store
+
+# Packs every animation in anim-store/ into a .animpak with its preview, writes the
+# catalogue (index.json), signs it with the OTA signing key the devices trust
+# (api_server.py verifies it against /etc/hifi-player/ota-pubkey.pem) and
+# uploads it all to file.osmiumsound.it/anim/. Manual on purpose: publishing
+# reaches every device.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: anim-store
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+
+      - name: Pack the animations and write the catalogue
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          for d in anim-store/*/; do
+            [ -f "$d/anim.json" ] || continue
+            python native-ui-qt/tools/anim-store.py pack "$d" --out out
+          done
+          python native-ui-qt/tools/anim-store.py index out
+          cat out/index.json
+
+      - name: Sign the catalogue
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$OTA_SIGNING_KEY" ]; then
+            echo "::error::OTA_SIGNING_KEY is not set: an unsigned catalogue is refused by every device"
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$OTA_SIGNING_KEY" > "$RUNNER_TEMP/ota-key.pem"
+          openssl pkeyutl -sign -inkey "$RUNNER_TEMP/ota-key.pem" -rawin -in out/index.json -out out/index.json.sig
+          rm -f "$RUNNER_TEMP/ota-key.pem"
+          # what a device will do with it
+          openssl pkeyutl -verify -pubin -inkey distro/ota-keys/ota-pubkey.pem -rawin \
+            -in out/index.json -sigfile out/index.json.sig
+
+      - name: Upload to file.osmiumsound.it/anim/
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: osmium-sound-iso-beta
+          PUBLIC_BASE: https://file.osmiumsound.it
+        run: |
+          set -euo pipefail
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_ENDPOINT" ]; then
+            echo "::error::R2 secrets (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT) are not set"
+            exit 1
+          fi
+          put() {
+            aws s3 cp "out/$1" "s3://$R2_BUCKET/anim/$1" --endpoint-url "$R2_ENDPOINT" \
+              --content-type "$2" --cache-control "$3" --only-show-errors
+            curl -fsSI --retry 3 "$PUBLIC_BASE/anim/$1" >/dev/null \
+              || { echo "::error::$PUBLIC_BASE/anim/$1 is not served after the upload"; exit 1; }
+          }
+          # packages and previews first: the catalogue must never name a file
+          # that is not there. Their names carry the version: immutable.
+          for f in out/*.animpak; do
+            [ -e "$f" ] || continue
+            put "$(basename "$f")" application/zip "public, max-age=31536000, immutable"
+          done
+          for f in out/*.jpg; do
+            [ -e "$f" ] || continue
+            put "$(basename "$f")" image/jpeg "public, max-age=31536000, immutable"
+          done
+          # the list and its signature last, back to back (a device that reads
+          # the new list with the old signature reads both again)
+          put index.json application/json "no-cache"
+          put index.json.sig application/octet-stream "no-cache"
+          echo "Animation store published on $PUBLIC_BASE/anim/"

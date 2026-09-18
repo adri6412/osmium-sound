@@ -604,7 +604,7 @@ Column {
                         fillMode: Image.PreserveAspectFit; smooth: true; asynchronous: true
                         sourceSize.width: Math.round(width * (root.ctl ? root.ctl.devScale : 1))
                     }
-                    Icon { visible: !vt.row.preview; anchors.centerIn: parent; name: "gauge"; size: 32; color: Theme.silverA(0.4) }
+                    Icon { visible: !vt.row.preview; anchors.centerIn: parent; name: vt.row.icon || "gauge"; size: 32; color: Theme.silverA(0.4) }
                     Rectangle {
                         visible: !!vt.row.isNew || vt.st === "update"
                         x: 8; y: 8; height: 22; width: badge.implicitWidth + 16; radius: 11; color: Theme.gold

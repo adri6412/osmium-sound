@@ -112,6 +112,11 @@ Item {
         // section is open, the count of news for the dot on its row always
         property var vuStore: ({ skins: [], checking: false, busy: false, error: null, loaded: false })
         property int vuStoreNew: 0
+        // the animation store (api_server /anim_store), the same way; storeAnims
+        // are the animations downloaded from it, offered next to the built-in ones
+        property var animStore: ({ animations: [], checking: false, busy: false, error: null, loaded: false })
+        property int animStoreNew: 0
+        property var storeAnims: []                                 // [{id, name:{en,it}, scene}]
         property string otaChannel: "prod"; property var otaChannels: ["prod", "dev"]
         property string audioCur: ""; property var audio: []          // [{id,name}]
         property string lmsMode: "local"; property string lmsHost: ""; property string playerName: ""; property string lyrionChannel: "release"
@@ -162,6 +167,18 @@ Item {
                 vuStore = d
                 if (wasBusy && !d.busy) get(api("/vu_style"), function(v) { vuStyles = v.styles || [] })
                 if (markSeen && d.skins.length) Api.post(api("/vu_store/seen"), {}, function() { vuStoreNew = 0 }, 5000)
+                root.rebuild()
+            }, 10000)
+        }
+        function loadAnimStore(markSeen) {
+            Api.get(api("/anim_store"), function(ok, d) {
+                if (!ok || !d || typeof d !== "object") { animStore = Object.assign({}, animStore, { loaded: true, checking: false, busy: false }); root.rebuild(); return }
+                var wasBusy = animStore.busy
+                d.loaded = true
+                d.animations = d.animations || []
+                animStore = d
+                if (wasBusy && !d.busy) get(api("/nowplaying_animation"), function(v) { storeAnims = v.store || [] })
+                if (markSeen && d.animations.length) Api.post(api("/anim_store/seen"), {}, function() { animStoreNew = 0 }, 5000)
                 root.rebuild()
             }, 10000)
         }
@@ -237,7 +254,8 @@ Item {
             get(api("/pointer_status"), function(d) { pointerEnabled = d.enabled !== false; pointerAvailable = d.available !== false })
             get(api("/vu_meter"), function(d) { vuMeter = d.enabled !== false })
             get(api("/vu_style"), function(d) { vuStyles = d.styles || [] })
-            get(api("/nowplaying_animation"), function(d) { npAnimation = str(d, "animation", "none") })
+            get(api("/nowplaying_animation"), function(d) { npAnimation = str(d, "animation", "none"); storeAnims = d.store || [] })
+            get(api("/anim_store?summary=1"), function(d) { animStoreNew = Number(d.new || 0) + Number(d.updates || 0) })
             get(api("/vu_store?summary=1"), function(d) { vuStoreNew = Number(d.new || 0) + Number(d.updates || 0) })
             get(api("/player_enabled"), function(d) { playerEnabled = d.enabled !== false })
             get(api("/ui_refresh"), function(d) { uiRefreshSupported = !!d.supported; uiRefresh = str(d, "mode", "native") })
@@ -423,6 +441,7 @@ Item {
         if (id === "multiroom" && cfg.lmsMode === "follow") cfg.loadDiscover()
         if (id === "multiroom") cfg.loadLibrary()
         if (id === "vuMeters") cfg.loadStore(true)
+        if (id === "animations") cfg.loadAnimStore(true)
         if (id === "thirdPartyNotices" && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
         rebuild(); page.contentY = 0; appear()
         if (mark) { pendingMark = mark; markTimer.restart() }
@@ -1021,21 +1040,57 @@ Item {
     // and the button to turn them off. Each card is a still of the scene.
     function secAnimations() {
         help("settings.animations.help")
+        var lang = I18n.lang
         if (cfg.vuMeter) {
             note(Tr.t("settings.animations.vuOn"), "dark")
             action(Tr.t("settings.animations.turnOffVu"), "anim_vu_off", "accent")
-            return
+        } else {
+            // the built-in scenes, then the ones downloaded from the store
+            var kinds = ["none", "cd", "cdfront", "vinyl", "cassette"].map(function(k) {
+                return { id: k, label: Tr.t("settings.animations." + k) }
+            })
+            for (var s = 0; s < cfg.storeAnims.length; s++) {
+                var nm = cfg.storeAnims[s].name || {}
+                kinds.push({ id: cfg.storeAnims[s].id, label: String(nm[lang] || nm.en || cfg.storeAnims[s].id) })
+            }
+            for (var i = 0; i < kinds.length; i += 2) {
+                var cards = []
+                for (var j = i; j < i + 2; j++)
+                    cards.push(j < kinds.length
+                               ? { type: "animcard", label: kinds[j].label, arg: kinds[j].id,
+                                   sel: Player.npAnimation === kinds[j].id, act: "np_anim" }
+                               : { type: "help", label: "" })
+                grid(cards)
+            }
         }
-        var KINDS = ["none", "cd", "cdfront", "vinyl", "cassette"]
-        for (var i = 0; i < KINDS.length; i += 2) {
-            var cards = []
-            for (var j = i; j < i + 2; j++)
-                cards.push(j < KINDS.length
-                           ? { type: "animcard", label: Tr.t("settings.animations." + KINDS[j]), arg: KINDS[j],
-                               sel: Player.npAnimation === KINDS[j], act: "np_anim" }
-                           : { type: "help", label: "" })
-            grid(cards)
+        animStoreRows(lang)
+    }
+    // More animations to download: a card per scene of the store
+    function animStoreRows(lang) {
+        var as = cfg.animStore
+        label("settings.animations.storeTitle", 14); help("settings.animations.storeHelp", 12)
+        if (as.error) note(as.error.message || "", as.animations.length ? "dark" : "red")
+        if (!as.animations.length) {
+            if (!as.loaded || as.checking) note(Tr.t("settings.animations.storeLoading"), "dark")
+            else if (!as.error) note(Tr.t("settings.animations.storeEmpty"), "dark")
         }
+        var cards = []
+        for (var i = 0; i < as.animations.length; i++) {
+            var k = as.animations[i], nm = k.name || {}
+            var mb = (Number(k.size || 0) / 1048576).toFixed(1).replace(".", lang === "it" ? "," : ".") + " MB"
+            var state = k.job === "downloading" ? "downloading" : k.job === "installing" ? "installing"
+                      : !k.supported ? "unsupported" : k.update ? "update" : k.installed ? "installed" : "available"
+            cards.push({ type: "vustore", label: String(nm[lang] || nm.en || k.id), arg: k.id, preview: k.preview || "", icon: "disc-3",
+                         meta: [k.author || "", mb].filter(function(x) { return !!x }).join(" · "),
+                         state: state, isNew: !!k.new, err: k.jobError ? String(k.jobError.message || "") : "",
+                         act: state === "installed" ? "anim_remove" : "anim_install" })
+            if (cards.length === 2 || i === as.animations.length - 1) {
+                if (cards.length === 1) cards.push({ type: "help", label: "" })
+                grid(cards); cards = []
+            }
+        }
+        if (as.loaded && !as.checking && !as.busy)
+            grid([acell(Tr.t("settings.animations.storeCheck"), "anim_check", "accent", { icon: "rotate-cw", hh: 44 })])
     }
     function playerPrefs() {
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")
@@ -1521,6 +1576,28 @@ Item {
             Api.post(A("/vu_store/check"), {}, function() { cfg.loadStore(false) }, 12000)
             cfg.vuStore = Object.assign({}, cfg.vuStore, { checking: true })
             break
+        case "anim_install":
+            if (row.state === "downloading" || row.state === "installing" || row.state === "unsupported") return
+            Api.post(A("/anim_store/install"), { id: arg }, function(ok, d) {
+                if (d && d.success === false) say(String(d.message || ""), true)
+                cfg.loadAnimStore(false)
+            }, 12000)
+            cfg.animStore = Object.assign({}, cfg.animStore, { busy: true })
+            break
+        case "anim_remove":
+            Ui.dialogs.confirm(Tr.tf("settings.animations.removeConfirm", "name", row.label), Tr.t("settings.vuMeters.remove"), true, function(ok) {
+                if (!ok) return
+                Api.post(A("/anim_store/remove"), { id: arg }, function(ok2, d) {
+                    if (d && d.success === false) say(String(d.message || ""), true)
+                    else if (Player.npAnimation === arg) Player.npAnimation = "none"
+                    cfg.load(); cfg.loadAnimStore(false)
+                }, 12000)
+            })
+            return
+        case "anim_check":
+            Api.post(A("/anim_store/check"), {}, function() { cfg.loadAnimStore(false) }, 12000)
+            cfg.animStore = Object.assign({}, cfg.animStore, { checking: true })
+            break
         case "autoexpand": post(A("/nowplaying_autoexpand"), { seconds: parseInt(arg) }); cfg.autoexpand = parseInt(arg); Player.refreshSettings(); break
         case "transition": setPref("transitionType", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
         case "transdur": setPref("transitionDuration", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
@@ -1769,6 +1846,11 @@ Item {
         running: root.visible && root.active >= 0 && root.secs[root.active].id === "vuMeters" && (cfg.vuStore.checking || cfg.vuStore.busy)
         onTriggered: cfg.loadStore(false)
     }
+    Timer {
+        interval: 1500; repeat: true
+        running: root.visible && root.active >= 0 && root.secs[root.active].id === "animations" && (cfg.animStore.checking || cfg.animStore.busy)
+        onTriggered: cfg.loadAnimStore(false)
+    }
     // mentre il disco si formatta lo stato va riletto da solo
     Timer { interval: 2000; repeat: true; running: root.fmtWatch; onTriggered: { if (!Ui.dialogs.active) root.fmtWatch = false; else cfg.load() } }
 
@@ -1820,7 +1902,7 @@ Item {
                                         Icon { anchors.centerIn: parent; name: secRow.modelData.id === "displayMode" && cfg.displayMode === "headless" ? "monitor-off" : secRow.modelData.icon; size: 22; color: Theme.gold } }
                             Text { x: 66; width: parent.width - 66 - 46; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(secRow.modelData.key); elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 18 }
                             // news in the VU meter store: new skins or updates of downloaded ones
-                            Rectangle { visible: secRow.modelData.id === "vuMeters" && cfg.vuStoreNew > 0; x: parent.width - 16 - 22 - 20; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: Theme.gold }
+                            Rectangle { visible: (secRow.modelData.id === "vuMeters" && cfg.vuStoreNew > 0) || (secRow.modelData.id === "animations" && cfg.animStoreNew > 0); x: parent.width - 16 - 22 - 20; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: Theme.gold }
                             Icon { x: parent.width - 16 - 22; anchors.verticalCenter: parent.verticalCenter; name: "chevron-right"; size: 22; color: Theme.silver }
                         }
                         Tap { id: sTap; onClicked: root.openSection(secRow.modelData.id) }

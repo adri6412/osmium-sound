@@ -2,6 +2,7 @@
 #include "api.h"
 #include <QJSEngine>
 #include <QQmlEngine>
+#include <QRegularExpression>
 #include <QUrl>
 #include <QtDebug>
 #include <cmath>
@@ -368,9 +369,11 @@ void Player::toggleFavorite() {
 }
 
 // The Now Playing animations the kiosk knows how to draw (assets/anim/<id>).
+// A built-in scene or one installed from the animation store: any id of the
+// store's shape (api_server _ANIM_ID_RE); the API only ever reports one it has.
 static bool isNpAnimation(const QString &v) {
-    return v == QLatin1String("none") || v == QLatin1String("cd") || v == QLatin1String("cdfront")
-        || v == QLatin1String("vinyl") || v == QLatin1String("cassette");
+    static const QRegularExpression id(QStringLiteral("^[a-z0-9][a-z0-9_-]{0,40}$"));
+    return id.match(v).hasMatch();
 }
 
 void Player::pollSettings() {

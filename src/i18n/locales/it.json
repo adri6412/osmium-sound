@@ -524,7 +524,13 @@
       "cd": "CD dall'alto",
       "vinyl": "Vinile",
       "cassette": "Musicassetta",
-      "cdfront": "Lettore CD"
+      "cdfront": "Lettore CD",
+      "storeTitle": "Altre animazioni da scaricare",
+      "storeHelp": "Nuove animazioni pubblicate da Osmium Sound. Un'animazione scaricata si aggiorna da sola e compare tra quelle qui sopra.",
+      "storeLoading": "Caricamento dell'elenco…",
+      "storeEmpty": "Al momento non ci sono altre animazioni da scaricare.",
+      "storeCheck": "Controlla di nuovo",
+      "removeConfirm": "Rimuovere l'animazione «{name}» da questo apparecchio? Potrai scaricarla di nuovo in seguito."
     },
     "playback": {
       "help": "Opzioni di riproduzione applicate al player attivo: transizioni tra i brani (crossfade/gapless) e normalizzazione del volume (ReplayGain).",

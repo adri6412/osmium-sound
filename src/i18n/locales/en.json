@@ -524,7 +524,13 @@
       "cd": "Top-loading CD",
       "vinyl": "Vinyl",
       "cassette": "Cassette",
-      "cdfront": "CD player"
+      "cdfront": "CD player",
+      "storeTitle": "More animations to download",
+      "storeHelp": "New animations published by Osmium Sound. A downloaded animation updates by itself and appears among the ones above.",
+      "storeLoading": "Loading the list…",
+      "storeEmpty": "There are no other animations to download at the moment.",
+      "storeCheck": "Check again",
+      "removeConfirm": "Remove the animation “{name}” from this device? You can download it again later."
     },
     "playback": {
       "help": "Playback options applied to the active player: track transitions (crossfade/gapless) and volume normalisation (ReplayGain).",

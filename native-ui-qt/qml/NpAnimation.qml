@@ -9,6 +9,12 @@
 //
 // The scene is loaded by file name, not by type, so a broken or missing
 // scene only leaves this box empty instead of breaking Now Playing.
+//
+// A kind that is not built in comes from the animation store: its folder
+// Sys.animStore/<id>/ holds anim.json (naming the scene file) and the
+// scene's QML and images; the scene gets that folder as assetsBase and the
+// same inputs as the built-in ones (the contract is ANIM_SCENE_FORMAT 1 in
+// api_server.py and anim-store/README.md).
 import QtQuick
 import Hifi
 
@@ -21,18 +27,31 @@ Item {
     // full screen (NpStage): the scenes that have one draw their 90s front panel
     property bool vintage: false
 
-    readonly property string file: kind === "cd" ? "AnimCd.qml"
-                                 : kind === "cdfront" ? "AnimCdFront.qml"
-                                 : kind === "vinyl" ? "AnimVinyl.qml"
-                                 : kind === "cassette" ? "AnimCassette.qml" : ""
+    readonly property var builtin: ({ cd: "AnimCd.qml", cdfront: "AnimCdFront.qml", vinyl: "AnimVinyl.qml", cassette: "AnimCassette.qml" })
+    // a store scene: anim.json's `scene`, a flat .qml name inside its folder
+    function storeScene(k) {
+        if (!/^[a-z0-9][a-z0-9_-]{0,40}$/.test(k)) return ""
+        try {
+            var meta = JSON.parse(Sys.readFile(Sys.animStore + "/" + k + "/anim.json") || "null")
+            if (meta && typeof meta.scene === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.qml$/.test(meta.scene))
+                return "file://" + Sys.animStore + "/" + k + "/" + meta.scene
+        } catch (e) {}
+        return ""
+    }
+    readonly property bool fromStore: kind !== "" && kind !== "none" && builtin[kind] === undefined
+    readonly property string file: kind === "" || kind === "none" ? ""
+                                 : builtin[kind] !== undefined ? builtin[kind]
+                                 : storeScene(kind)
 
     // the kind of the scene loaded now: the pictures' folder follows it, not
     // `kind`, or a change would point the old scene at the new one's folder
     // for an instant before it is replaced
     property string loadedKind: ""
+    property bool loadedStore: false
 
     // what the scene sees; the still preview gets a fixed "playing" state
-    readonly property string assetsBase: "file://" + Sys.assets + "/anim/" + loadedKind + "/"
+    readonly property string assetsBase: loadedStore ? "file://" + Sys.animStore + "/" + loadedKind + "/"
+                                                     : "file://" + Sys.assets + "/anim/" + loadedKind + "/"
     readonly property bool hasTrack: !live || Player.title !== "" || Player.trackUrl !== ""
     readonly property bool playing: !live || Player.playing
     readonly property real progress: live && Player.duration > 0 ? Math.max(0, Math.min(1, Player.elapsed / Player.duration)) : 0
@@ -60,7 +79,8 @@ Item {
     function load() {
         loader.source = ""                 // the old scene goes first, untouched
         root.loadedKind = root.file === "" ? "" : root.kind
-        if (root.file !== "") loader.setSource(Qt.resolvedUrl(root.file), inputs())
+        root.loadedStore = root.fromStore
+        if (root.file !== "") loader.setSource(root.fromStore ? root.file : Qt.resolvedUrl(root.file), inputs())
     }
     // a `kind` given at creation also signals a change: load once, when complete
     property bool completed: false

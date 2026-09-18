@@ -742,17 +742,62 @@ async function setVuStyle(style) {
 // ── Now-playing animation ──────────────────────────────────────────
 // A CD, vinyl record or cassette the kiosk shows where the VU meters would be,
 // only while they are off. The two settings stay independent on the device,
-// so this just stores the pick. Choices come from the device, limited to the
-// ones this page has a name for.
+// so this just stores the pick. Choices come from the device: the built-in
+// ones this page has a name for, then those downloaded from the animation
+// store, named by their own anim.json.
 const NP_ANIMATION_IDS = ['none', 'cd', 'cdfront', 'vinyl', 'cassette'];
 const npAnimation = ref('none');
 const npAnimations = ref(NP_ANIMATION_IDS);
+const npStoreAnims = ref([]);
 async function loadNpAnimation() {
   const r = await api.sys('nowplaying_animation');
   if (!r.ok) return;
   npAnimation.value = r.data.animation || 'none';
+  npStoreAnims.value = Array.isArray(r.data.store) ? r.data.store : [];
   const known = (r.data.choices || []).filter((id) => NP_ANIMATION_IDS.includes(id));
-  if (known.length) npAnimations.value = known;
+  if (known.length) npAnimations.value = known.concat(npStoreAnims.value.map((a) => a.id));
+}
+function npAnimLabel(id) {
+  if (NP_ANIMATION_IDS.includes(id)) return t('settings.animations.choice.' + id);
+  const a = npStoreAnims.value.find((x) => x.id === id);
+  return (a && a.name && (a.name[lang.value] || a.name.en)) || id;
+}
+
+// ── Animation store ────────────────────────────────────────────────
+// More animations published by Osmium Sound, downloaded and checked by the
+// device itself, like the VU meter store below. A finished install refreshes
+// the choices above.
+const animStore = reactive({ animations: [], checking: false, busy: false, error: null, loaded: false });
+const animStoreSeen = ref(false);
+let animStorePoll = null;
+async function loadAnimStore(markSeen) {
+  const r = await api.sys('anim_store');
+  if (!r.ok) { animStore.loaded = true; animStore.checking = false; animStore.busy = false; return; }
+  const wasBusy = animStore.busy;
+  Object.assign(animStore, { animations: r.data.animations || [], checking: !!r.data.checking, busy: !!r.data.busy, error: r.data.error || null, loaded: true });
+  if (wasBusy && !animStore.busy) loadNpAnimation();
+  if (markSeen && animStore.animations.length) { api.sysPost('anim_store/seen', {}); animStoreSeen.value = true; }
+  if ((animStore.checking || animStore.busy) && !animStorePoll) animStorePoll = setInterval(() => loadAnimStore(false), 1500);
+  if (!animStore.checking && !animStore.busy && animStorePoll) { clearInterval(animStorePoll); animStorePoll = null; }
+}
+function animStoreName(a) { return (a.name && (a.name[lang.value] || a.name.en)) || a.id; }
+async function installAnim(a) {
+  const r = await api.sysPost('anim_store/install', { id: a.id });
+  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.animations.storeFailed')), true);
+  loadAnimStore(false);
+}
+async function removeAnim(a) {
+  if (!window.confirm(t('settings.animations.removeConfirm', { name: animStoreName(a) }))) return;
+  const r = await api.sysPost('anim_store/remove', { id: a.id });
+  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.animations.storeFailed')), true);
+  loadNpAnimation(); loadAnimStore(false);
+}
+const animStoreNew = computed(() => (animStoreSeen.value ? 0 : animStore.animations.filter((a) => a.new || a.update).length));
+watch(open, (k) => { if (k === 'animations') loadAnimStore(true); }, { immediate: true });
+async function checkAnimStore() {
+  await api.sysPost('anim_store/check', {});
+  animStore.checking = true;
+  loadAnimStore(false);
 }
 async function setNpAnimation(animation) {
   if (animation === npAnimation.value) return;
@@ -1341,7 +1386,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadNpAnimation(); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
+  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadNpAnimation(); loadAnimStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1350,7 +1395,7 @@ onMounted(async () => {
 });
 onUnmounted(() => {
   if (lyrionPoll) clearInterval(lyrionPoll); if (skinPoll) clearInterval(skinPoll); if (tailscalePoll) clearInterval(tailscalePoll);
-  if (timezonePoll) clearInterval(timezonePoll); if (vuStorePoll) clearInterval(vuStorePoll);
+  if (timezonePoll) clearInterval(timezonePoll); if (vuStorePoll) clearInterval(vuStorePoll); if (animStorePoll) clearInterval(animStorePoll);
   window.dispatchEvent(new CustomEvent('hifi-settings-active', { detail: false }));
 });
 </script>
@@ -1364,7 +1409,7 @@ onUnmounted(() => {
     <div class="card" style="padding: 6px 16px;">
       <div v-for="s in listedSections" :key="s.key" class="net between" @click="goto(s.key)">
         <span>
-          <span style="display:block;">{{ s.label }}<span v-if="s.key === 'vuMeters' && vuStoreNew" class="dot-new"></span></span>
+          <span style="display:block;">{{ s.label }}<span v-if="(s.key === 'vuMeters' && vuStoreNew) || (s.key === 'animations' && animStoreNew)" class="dot-new"></span></span>
           <span class="muted">{{ s.desc }}</span>
         </span>
         <span class="silver" style="font-size: 18px;">›</span>
@@ -1722,11 +1767,39 @@ onUnmounted(() => {
         <span class="seg">
           <button v-for="a in npAnimations" :key="a"
                   :class="{ active: npAnimation === a }" @click="setNpAnimation(a)">
-            {{ t('settings.animations.choice.' + a) }}
+            {{ npAnimLabel(a) }}
           </button>
         </span>
         <p v-if="npAnimation === 'none'" class="muted" style="margin: 0;">{{ t('settings.animations.noneHelp') }}</p>
       </template>
+
+      <label style="margin-top: 18px;">{{ t('settings.animations.storeTitle') }}</label>
+      <p class="muted" style="margin: 0 0 10px;">{{ t('settings.animations.storeHelp') }}</p>
+      <p v-if="animStore.error" class="muted" style="color: #f0b4b4;">{{ animStore.error.message }}</p>
+      <p v-if="!animStore.animations.length && (!animStore.loaded || animStore.checking)" class="muted">{{ t('settings.animations.storeLoading') }}</p>
+      <p v-else-if="!animStore.animations.length && !animStore.error" class="muted">{{ t('settings.animations.storeEmpty') }}</p>
+      <div class="vu-grid">
+        <div v-for="a in animStore.animations" :key="a.id" class="vu-card" :class="{ fresh: a.new }">
+          <div class="vu-preview">
+            <img v-if="a.preview" :src="a.preview" :alt="animStoreName(a)" />
+            <span v-if="a.new" class="pill gold vu-badge">{{ t('settings.vuMeters.badgeNew') }}</span>
+            <span v-else-if="a.update" class="pill gold vu-badge">{{ t('settings.vuMeters.badgeUpdate') }}</span>
+          </div>
+          <strong>{{ animStoreName(a) }}</strong>
+          <span class="muted">{{ [a.author, vuStoreSize(a.size)].filter(Boolean).join(' · ') }}</span>
+          <span v-if="a.jobError" class="muted" style="color: #f0b4b4;">{{ a.jobError.message }}</span>
+          <button v-if="a.job === 'downloading' || a.job === 'installing'" disabled>
+            {{ a.job === 'downloading' ? t('settings.vuMeters.downloading') : t('settings.vuMeters.installing') }}
+          </button>
+          <button v-else-if="!a.supported" class="secondary" disabled>{{ t('settings.vuMeters.unsupported') }}</button>
+          <button v-else-if="a.update" @click="installAnim(a)">{{ t('settings.vuMeters.update') }}</button>
+          <button v-else-if="a.installed" class="secondary" @click="removeAnim(a)">{{ t('settings.vuMeters.remove') }}</button>
+          <button v-else @click="installAnim(a)">{{ t('settings.vuMeters.install') }}</button>
+        </div>
+      </div>
+      <button v-if="animStore.loaded && !animStore.checking && !animStore.busy" class="ghost" style="margin-top: 12px;" @click="checkAnimStore">
+        {{ t('settings.animations.storeCheck') }}
+      </button>
     </div>
 
     <!-- Display mode -->

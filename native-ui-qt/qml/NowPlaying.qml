@@ -15,7 +15,7 @@ Item {
     readonly property bool effVu: viewVu && Player.vuEnabled && Player.isOwn
     // with the VU meters off, a CD / vinyl / cassette may take their place
     // (Settings → Animations); it is not tied to our own DAC, so no isOwn
-    readonly property bool animChosen: ["cd", "cdfront", "vinyl", "cassette"].indexOf(Player.npAnimation) >= 0
+    readonly property bool animChosen: Player.npAnimation !== "" && Player.npAnimation !== "none"   // built in or from the store
     readonly property bool effAnim: viewVu && !Player.vuEnabled && animChosen
     property bool shown: false                         // a video (VU attivi solo qui)
     // Full screen (NpStage), from the button next to the clock: the meters
