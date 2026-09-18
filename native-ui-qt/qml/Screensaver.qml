@@ -110,7 +110,9 @@ Item {
         Row {
             anchors.horizontalCenter: parent.horizontalCenter; y: parent.cy + 256 - 8; spacing: 8; opacity: 0.2
             Rectangle { width: 8; height: 8; radius: 4; color: Theme.gold; anchors.verticalCenter: parent.verticalCenter }
-            Text { text: "HIFI PLAYER"; color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true; font.letterSpacing: 7; anchors.verticalCenter: parent.verticalCenter }
+            // two-tone like the top bar: SOUND in gold
+            Text { text: "OSMIUM"; color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true; font.letterSpacing: 7; anchors.verticalCenter: parent.verticalCenter }
+            Text { text: "SOUND"; color: Theme.gold; font.family: Theme.font; font.pixelSize: 14; font.bold: true; font.letterSpacing: 7; anchors.verticalCenter: parent.verticalCenter }
         }
     }
     // il tocco sveglia sempre; il movimento del mouse solo se non e' voluto
