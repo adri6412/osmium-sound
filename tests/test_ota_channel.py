@@ -158,7 +158,7 @@ class OtaChannelTestCase(unittest.TestCase):
         finally:
             api_server.urllib.request.urlopen = saved
 
-    # ── _fetch_release: Pages → file.osmiumsound.it mirror (prod only) → API ──
+    # ── _fetch_release: Pages → file.osmiumsound.it mirror → API ──
 
     def _fake_by_url(self, table):
         """urlopen stand-in keyed by URL prefix: a payload, or an exception to raise."""
@@ -200,16 +200,17 @@ class OtaChannelTestCase(unittest.TestCase):
             api_server.urllib.request.urlopen = saved
             api_server._RELEASE_CACHE.clear()
 
-    def test_dev_never_touches_the_mirror(self):
+    def test_dev_reads_its_own_mirror_manifest(self):
         saved = api_server.urllib.request.urlopen
         api_server._RELEASE_CACHE.clear()
         try:
             self._fake_by_url({
                 api_server.OTA_MANIFEST_BASE: OSError('pages down'),
-                api_server.OTA_PROD_MIRROR_BASE: _release('v2.5.30'),
+                api_server.OTA_PROD_MIRROR_BASE + '/latest-prod.json': _release('v2.5.30'),
+                api_server.OTA_PROD_MIRROR_BASE + '/latest-dev.json': _release('v2.5.31-dev.2'),
                 'https://api.github.com/': [_release('v2.5.31-dev.1', prerelease=True)],
             })
-            self.assertEqual(api_server._fetch_release('dev')['tag_name'], 'v2.5.31-dev.1')
+            self.assertEqual(api_server._fetch_release('dev')['tag_name'], 'v2.5.31-dev.2')
         finally:
             api_server.urllib.request.urlopen = saved
             api_server._RELEASE_CACHE.clear()

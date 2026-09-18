@@ -1,0 +1,74 @@
+name: Keep only the newest OTA release of each channel on file.osmiumsound.it
+
+# Every release is uploaded to R2 (ota/<tag>/, see build-ui-ota.yml) and the
+# devices download it from there; only the release each channel's manifest
+# names is ever downloaded, so the others are deleted
+# (.github/scripts/prune-ota-r2.py says what stays and why).
+#
+# Called by build-ui-ota.yml once a release is verified, which works from any
+# branch a tag is cut on. The schedule and the manual run only work once this
+# file is on the default branch (GitHub reads those triggers from there).
+
+on:
+  workflow_call:
+    inputs:
+      keep:
+        description: 'Tag to keep whatever the manifests say (the release being published)'
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only list what would be deleted'
+        type: boolean
+        default: true
+  schedule:
+    - cron: '17 4 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ota-r2-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Delete the releases no channel names any more
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          KEEP: ${{ inputs.keep }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: osmium-sound-iso-beta
+        run: |
+          set -euo pipefail
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$R2_ENDPOINT" ]; then
+            echo "::error::R2 secrets (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT) are not set"
+            exit 1
+          fi
+          python3 -m pip install --quiet boto3
+          # What the Pages manifests say: they are what the devices read first.
+          # Read from the gh-pages branch through the API (the public host may
+          # turn a runner away); a channel with no answer here still has the
+          # bucket's own mirror, and with neither the script deletes nothing.
+          set --
+          for ch in prod dev alpha; do
+            tag=$(gh api "repos/$REPO/contents/ota/latest-$ch.json?ref=gh-pages" \
+                    -H 'Accept: application/vnd.github.raw' 2>/dev/null \
+                  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name",""))' 2>/dev/null || true)
+            echo "gh-pages latest-$ch.json: ${tag:-?}"
+            [ -n "$tag" ] && set -- "$@" --channel-tag "$ch=$tag"
+          done
+          [ -n "$KEEP" ] && set -- "$@" --keep "$KEEP"
+          # shellcheck disable=SC2086  # empty or one flag
+          python3 .github/scripts/prune-ota-r2.py "$@" $DRY_RUN

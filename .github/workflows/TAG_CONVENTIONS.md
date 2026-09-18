@@ -23,7 +23,8 @@ only fires on `companion-v*`. Tag names are case-sensitive.
   normal GitHub Release and upload the same payloads to
   `https://file.osmiumsound.it/ota/<tag>/`, which is where the **prod** channel
   downloads from (`ota/latest-prod.json` points there; the GitHub Release is
-  the mirror and the API fallback).
+  the API fallback). dev and alpha tags are uploaded there the same way, and
+  only the newest release of each channel stays (`prune-ota-r2.yml`).
 - **`svil` = development.** Day-to-day work. Prerelease tags `vX.Y.Z-dev.N` are
   cut from here. Because the tag has a hyphen, `build-ui-ota.yml` marks the
   release as a **prerelease**, which `/releases/latest` ignores — so prod

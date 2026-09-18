@@ -1506,21 +1506,22 @@ channels that legacy single-root installs use, and that still carry a device
 up to its conversion.
 
 Four independent channels, described by a static manifest per release
-channel (`latest-<channel>.json` on Cloudflare Pages, mirrored for prod at
-`https://file.osmiumsound.it/ota/latest-prod.json`) and applied as root by
+channel (`latest-<channel>.json` on Cloudflare Pages, mirrored at
+`https://file.osmiumsound.it/ota/latest-<channel>.json`) and applied as root by
 helper scripts in `/usr/local/sbin/` (invoked from `api_server.py`
 via `systemd-run --no-block --collect`, so the updater survives any service
 restart — e.g. `hifi-qt`, or lightdm on a legacy install — its own payload triggers). Each channel writes live
 progress to `/run/hifi-*-status.json`, polled by the UI via
 `GET /{app,system,os,lyrion}_update/status`.
 
-Where the payloads live: **stable** releases (`vX.Y.Z`) are downloaded from
+Where the payloads live: releases of **every channel** are downloaded from
 `https://file.osmiumsound.it/ota/<tag>/<asset>` (Cloudflare R2, the same host
 as the install ISO and the flasher; the release workflow uploads them and
 verifies every URL and range support before the manifest goes out), with the
-GitHub Release kept complete as the mirror and as the fallback of devices
-that reach neither manifest. **dev/alpha** builds stay on GitHub Releases
-only. Asset names are identical on both hosts: the OS signature check on the
+GitHub Release kept complete as the fallback of devices that reach neither
+manifest. Only the newest release of each channel stays in the bucket:
+`prune-ota-r2.yml` deletes the rest once a release is verified, and every
+night (`.github/scripts/prune-ota-r2.py`). Asset names are identical on both hosts: the OS signature check on the
 device rebuilds the signed sidecar from `hifi-os-<tag>.tar.gz`.
 
 Each of `hifi-ota-update.sh`, `hifi-system-update.sh` and `hifi-os-update.sh`
