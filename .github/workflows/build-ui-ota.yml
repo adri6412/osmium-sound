@@ -275,6 +275,8 @@ jobs:
           echo "== update plan (python) =="
           python3 -m pip install --quiet flask flask-cors
           python3 tests/test_update_plan.py
+          echo "== what stays on file.osmiumsound.it (python) =="
+          python3 tests/test_prune_ota_r2.py
           echo "== timezone (python) =="
           python3 tests/test_timezone.py
           echo "== static IPv4 (python) =="
