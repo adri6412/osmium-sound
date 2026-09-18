@@ -49,8 +49,14 @@ SPLIT_Y = 120                         # the step down to the lower part
 SLOT = (18, 30, 224, 100)
 DRAWER = (21, 33, 221, 97)
 TRAVEL = 140                          # how far the drawer comes out
-BED_W, BED_H = 200, 104               # its front edge is the drawer front's top
-BED_DISC = (100, 64)                  # disc centre in the bed (middle of what shows when open)
+# The tray fully out, in perspective: its front edge (under the drawer front,
+# which comes out PERSPECTIVE_K times larger) is 220 wide, where it passes the
+# slot it is as wide as the drawer (200), inside it narrows on.
+PERSPECTIVE_K = 1.10
+BED_W, BED_H = 226, 104               # its front edge is the drawer front's top
+BED_FRONT = (3, 223)                  # x of the tray's sides at its front edge
+BED_BACK = (18, 208)                  # ... and at its back, inside the player
+BED_DISC = (113, 64)                  # disc centre in the bed (middle of what shows when open)
 BED_DISC_R = (88, 30)                 # the 12 cm recess as seen (rx, ry)
 WIN = (236, 26, 414, 106)             # the smoked window of the display
 VFD_AT = (246.6, 26)                  # the LcdCd panel (196 x 100) at VFD_K
@@ -295,8 +301,9 @@ def build_bed(out):
     cv = Canvas(0, 0, BED_W, BED_H, PPT)
     X, Y, n = cv.X, cv.Y, cv.n
     rng = np.random.default_rng(43)
-    inset = 16.0 * (1 - Y / BED_H)                   # the sides run towards the back
-    left, right = inset + 1, BED_W - 1 - inset
+    t = Y / BED_H                                    # 0 at the back .. 1 at the front
+    left = BED_BACK[0] + (BED_FRONT[0] - BED_BACK[0]) * t
+    right = BED_BACK[1] + (BED_FRONT[1] - BED_BACK[1]) * t
     sd = np.maximum(np.maximum(left - X, X - right), -Y)
     sd = np.maximum(sd, Y - BED_H)
     cx, cy = BED_DISC
@@ -327,6 +334,12 @@ def build_bed(out):
     # darker towards the back, inside the player
     col = col * (0.30 + 0.70 * smoothstep(0, BED_H * 0.55, Y))
     col = col * (1 - 0.9 * np.clip(0.5 - hole * 3, 0, 1))
+    # the tray's right side below its rail: seen from the right of it, a dark
+    # face widening towards the front (the tray's height grows with nearness)
+    side_w = 1.0 + 3.0 * t
+    side = cv.cov(np.maximum(right - X, X - (right + side_w))) * (Y > 0)
+    side_col = 0.008 + 0.010 * np.exp(-((X - right) / 0.5) ** 2)
+    cv.over(srgb(np.repeat(side_col[..., None], 3, axis=2)), side)
     cv.over(srgb(np.repeat(col[..., None], 3, axis=2)), cv.cov(sd))
     save(cv.image(), out, "cdf-bed.png")
 

@@ -59,9 +59,15 @@ Item {
     readonly property real slotTop: 31
     readonly property real slotBottom: 100
     readonly property real travel: 140
+    readonly property real bedW: 226
     readonly property real bedH: 104
-    readonly property real bedDiscX: 100
+    readonly property real bedDiscX: 113
     readonly property real bedDiscY: 64
+    // perspective: the drawer grows as it comes towards the viewer, up to
+    // 1.10 fully out (the tray's picture is drawn for that); the tray is as
+    // wide as the slot where it passes it
+    readonly property real persp: 1 + 0.10 * trayOut
+    readonly property real drawerCx: drawerX + drawerW / 2
     readonly property real discRx: 85
     readonly property real squash: 30 / 88         // the disc seen at a grazing angle
     // name: [x0, y0, x1, y1] (cdfront.py KEYS)
@@ -288,13 +294,15 @@ Item {
         // back, inside the slot's opening, in the shade of the cabinet
         readonly property real frontY: root.drawerY + root.travel * root.trayOut
         Item {
-            x: root.drawerX; y: root.slotTop
-            width: root.drawerW; height: Math.max(0, stage.frontY - y)
+            id: bedClip
+            x: root.drawerCx - root.bedW / 2; y: root.slotTop
+            width: root.bedW; height: Math.max(0, stage.frontY - y)
             clip: true
             visible: root.trayOut > 0.001
             Item {
                 y: stage.frontY - root.bedH - parent.y
-                width: root.drawerW; height: root.bedH
+                width: root.bedW; height: root.bedH
+                transform: Scale { origin.x: root.bedW / 2; xScale: root.persp / 1.10 }
                 Pic { anchors.fill: parent; source: root.assetsBase + "cdf-bed.png" }
                 // the disc, flattened by the viewing angle
                 Item {
@@ -364,7 +372,8 @@ Item {
             }
             // inside the cabinet: darker the further back
             Rectangle {
-                width: parent.width; height: root.slotBottom - root.slotTop
+                x: 18 - bedClip.x; width: 206                   // cdfront.py SLOT
+                height: root.slotBottom - root.slotTop
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0.60) }
                     GradientStop { position: 0.7; color: Qt.rgba(0, 0, 0, 0.35) }
@@ -372,27 +381,34 @@ Item {
                 }
             }
         }
-        Pic {
-            x: root.drawerX - 8; y: stage.frontY + 60       // cdfront.py: DRAWER y1 - 4 - y0
-            width: 216; height: 24
-            visible: root.trayOut > 0.001
-            opacity: Math.min(1, root.trayOut * 3)
-            source: root.assetsBase + "cdf-drawer-sh.png"
-        }
-        // its right side, seen more the further it comes out
-        Pic {
-            x: root.drawerX + root.drawerW - 1; y: stage.frontY
-            width: 8 * root.trayOut; height: root.drawerH
-            visible: root.trayOut > 0.001
-            source: root.assetsBase + "cdf-drawer-side.png"
-            fillMode: Image.Stretch
-            sourceSize.width: root.px(8)
-        }
-        Pic {
-            id: drawer
-            x: root.drawerX - 1; y: stage.frontY - 1
-            width: root.drawerW + 2; height: root.drawerH + 2
-            source: root.assetsBase + "cdf-drawer.png"
+        // the drawer front, its shadow and its right side, all grown by the
+        // perspective about the drawer's middle and its top edge
+        Item {
+            x: root.drawerCx; y: stage.frontY
+            scale: root.persp
+            transformOrigin: Item.TopLeft
+            Pic {
+                x: -root.drawerW / 2 - 8; y: 60                // cdfront.py: DRAWER y1 - 4 - y0
+                width: 216; height: 24
+                visible: root.trayOut > 0.001
+                opacity: Math.min(1, root.trayOut * 3)
+                source: root.assetsBase + "cdf-drawer-sh.png"
+            }
+            // its right side, seen more the further it comes out
+            Pic {
+                x: root.drawerW / 2 - 1; y: 0
+                width: 8 * root.trayOut; height: root.drawerH
+                visible: root.trayOut > 0.001
+                source: root.assetsBase + "cdf-drawer-side.png"
+                fillMode: Image.Stretch
+                sourceSize.width: root.px(8)
+            }
+            Pic {
+                id: drawer
+                x: -root.drawerW / 2 - 1; y: -1
+                width: root.drawerW + 2; height: root.drawerH + 2
+                source: root.assetsBase + "cdf-drawer.png"
+            }
         }
 
         // the keys: a press darkens the cap for a moment. ◀◀ / ▶▶ search (⏮ ⏭
