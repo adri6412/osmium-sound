@@ -293,7 +293,7 @@
             <li><strong>AMD:</strong> any Ryzen (2017 onwards, every generation) or Athlon on the AM4 socket; the A-series APUs "Carrizo" (2015) and "Bristol Ridge" (2016).</li>
           </ul>
           <p>Avoid Atom "Bay Trail"/"Cherry Trail" tablets and HDMI sticks (2013–2015): many of them have a 32-bit UEFI that cannot boot the 64-bit image. Older PCs may work if their firmware offers a UEFI mode, but we don't test them.</p>
-          <p>Not sure? If the PC came with Windows 8 or newer pre-installed, it has UEFI. On Windows, run <kbd>msinfo32</kbd> and check that "BIOS Mode" says <strong>UEFI</strong>. In the firmware setup make sure the boot mode is "UEFI" (not "Legacy" or "CSM only"), and when you pick the stick from the boot menu choose the entry that starts with <strong>UEFI:</strong> rather than the one without the prefix. UEFI yes, Secure Boot no: it has to be turned off, see <a href="#en-installation">Installation</a>.</p>
+          <p>Not sure? If the PC came with Windows 8 or newer pre-installed, it has UEFI. On Windows, run <kbd>msinfo32</kbd> and check that "BIOS Mode" says <strong>UEFI</strong>. In the firmware setup make sure the boot mode is "UEFI" (not "Legacy" or "CSM only"), and when you pick the stick from the boot menu choose the entry that starts with <strong>UEFI:</strong> rather than the one without the prefix. Secure Boot can stay on — the installer and the installed system are signed; see <a href="#en-installation">Installation</a>.</p>
         </div>
         <div class="box tip">
           <span class="label">Note</span>
@@ -305,9 +305,9 @@
         <h2>Installation</h2>
         <p>Installation happens entirely from a USB stick, with a full installer built into the device itself. Drive it directly on the mini-PC's screen (mouse/keyboard/touchscreen), or from your phone via the QR code shown in the corner — both work at once, and neither needs the other to get started.</p>
 
-        <div class="box warn">
-          <span class="label">Disable Secure Boot first</span>
-          <p>Osmium Sound's installer/live USB currently does <strong>not</strong> boot with UEFI <strong>Secure Boot</strong> enabled — the mini-PC will refuse to start from the stick, or fail partway through boot. Before plugging in the USB stick, go into your mini-PC's BIOS/UEFI setup (usually <kbd>F2</kbd>/<kbd>Del</kbd>/<kbd>Esc</kbd> at power-on) and <strong>disable Secure Boot</strong>. You can leave it disabled permanently.</p>
+        <div class="box ok">
+          <span class="label">Secure Boot can stay on</span>
+          <p>The installer and the system it installs are signed for UEFI <strong>Secure Boot</strong>: the first-stage loader is signed by Microsoft, GRUB and the kernel by Debian. You do not have to turn anything off. If one particular mini-PC still refuses to start from the stick, its firmware is being fussy — go into the BIOS/UEFI setup (usually <kbd>F2</kbd>/<kbd>Del</kbd>/<kbd>Esc</kbd> at power-on), turn <strong>Secure Boot</strong> off and try again.</p>
         </div>
 
         <ol class="steps">
@@ -315,8 +315,6 @@
             Download the latest version from the <a href="index.html#install">download section</a> of the website (it is also on <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank" rel="noopener">GitHub</a>).</li>
           <li><strong>Write the ISO to a USB stick</strong>
             The simplest way is <strong>Osmium Flasher</strong>, from the <a href="index.html#install">download section</a>: it downloads the image, verifies its signature and writes the stick, and it never lists your system disk. Failing that, <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus or the <code>dd</code> command work just as well. Use a stick of at least 8&nbsp;GB.</li>
-          <li><strong>Turn Secure Boot off</strong>
-            Enter the firmware setup (usually <kbd>Del</kbd> or <kbd>F2</kbd>), disable <strong>Secure Boot</strong>, then save and exit. This is needed on every machine: the install image is not signed for Secure Boot and will not start with it enabled.</li>
           <li><strong>Boot the mini-PC from the stick</strong>
             Plug in the stick, power on the mini-PC, and pick USB boot from the boot menu (usually <kbd>F11</kbd>/<kbd>F12</kbd>/<kbd>Esc</kbd> depending on the motherboard). Choose <strong>Install Osmium Sound</strong> from the menu.</li>
           <li><strong>Choose the disk, right on the screen</strong>
@@ -714,7 +712,7 @@
             <li><strong>AMD:</strong> qualsiasi Ryzen (dal 2017, tutte le generazioni) o Athlon su socket AM4; le APU serie A "Carrizo" (2015) e "Bristol Ridge" (2016).</li>
           </ul>
           <p>Evita invece tablet e "stick" HDMI con Atom "Bay Trail"/"Cherry Trail" (2013–2015): molti hanno un UEFI a 32 bit che non può avviare l'immagine a 64 bit. PC più vecchi possono funzionare se il firmware offre la modalità UEFI, ma non li testiamo.</p>
-          <p>Non sei sicuro? Se il PC è stato venduto con Windows 8 o successivo preinstallato, ha l'UEFI. Su Windows esegui <kbd>msinfo32</kbd> e controlla che "Modalità BIOS" indichi <strong>UEFI</strong>. Nel setup del firmware verifica che la modalità di avvio sia "UEFI" (non "Legacy" o "CSM only") e, quando scegli la chiavetta dal menu di boot, usa la voce che inizia con <strong>UEFI:</strong> anziché quella senza prefisso. UEFI sì, Secure Boot no: va disattivato, vedi <a href="#it-installazione">Installazione</a>.</p>
+          <p>Non sei sicuro? Se il PC è stato venduto con Windows 8 o successivo preinstallato, ha l'UEFI. Su Windows esegui <kbd>msinfo32</kbd> e controlla che "Modalità BIOS" indichi <strong>UEFI</strong>. Nel setup del firmware verifica che la modalità di avvio sia "UEFI" (non "Legacy" o "CSM only") e, quando scegli la chiavetta dal menu di boot, usa la voce che inizia con <strong>UEFI:</strong> anziché quella senza prefisso. Il Secure Boot può restare attivo — l'installer e il sistema installato sono firmati; vedi <a href="#it-installazione">Installazione</a>.</p>
         </div>
         <div class="box tip">
           <span class="label">Nota</span>
@@ -726,9 +724,9 @@
         <h2>Installazione</h2>
         <p>L'installazione avviene interamente da chiavetta USB, con un installer completo integrato nel dispositivo stesso. Guidala direttamente sullo schermo del mini-PC (mouse/tastiera/touchscreen), oppure dal telefono tramite il QR code mostrato nell'angolo — funzionano entrambi contemporaneamente, e nessuno dei due richiede l'altro per iniziare.</p>
 
-        <div class="box warn">
-          <span class="label">Disattiva prima il Secure Boot</span>
-          <p>L'installer/chiavetta live di Osmium Sound al momento <strong>non</strong> si avvia con il <strong>Secure Boot</strong> UEFI attivo — il mini-PC si rifiuterà di avviarsi dalla chiavetta, oppure il boot si interromperà a metà. Prima di collegare la chiavetta USB, entra nel setup BIOS/UEFI del mini-PC (di solito <kbd>F2</kbd>/<kbd>Canc</kbd>/<kbd>Esc</kbd> all'accensione) e <strong>disattiva il Secure Boot</strong>. Puoi lasciarlo disattivato in modo permanente.</p>
+        <div class="box ok">
+          <span class="label">Il Secure Boot può restare attivo</span>
+          <p>L'installer e il sistema che installa sono firmati per il <strong>Secure Boot</strong> UEFI: il primo stadio è firmato da Microsoft, GRUB e il kernel da Debian. Non devi disattivare niente. Se un particolare mini-PC non parte comunque dalla chiavetta, è il suo firmware a fare storie — entra nel setup BIOS/UEFI (di solito <kbd>F2</kbd>/<kbd>Canc</kbd>/<kbd>Esc</kbd> all'accensione), disattiva il <strong>Secure Boot</strong> e riprova.</p>
         </div>
 
         <ol class="steps">
@@ -736,8 +734,6 @@
             Scarica l'ultima versione dalla <a href="index.html#install">sezione download</a> del sito (è anche su <a href="https://github.com/adri6412/osmium-sound/releases" target="_blank" rel="noopener">GitHub</a>).</li>
           <li><strong>Scrivi la ISO su una chiavetta USB</strong>
             Il modo più semplice è <strong>Osmium Flasher</strong>, dalla <a href="index.html#install">sezione download</a>: scarica l'immagine, ne verifica la firma e scrive la chiavetta, senza mai elencare il disco di sistema. In alternativa vanno bene <a href="https://etcher.balena.io/" target="_blank" rel="noopener">balenaEtcher</a>, Rufus o il comando <code>dd</code>. Serve una chiavetta da almeno 8&nbsp;GB.</li>
-          <li><strong>Disattiva il Secure Boot</strong>
-            Entra nel setup del firmware (di solito <kbd>Canc</kbd> o <kbd>F2</kbd>), disattiva il <strong>Secure Boot</strong>, poi salva ed esci. Serve su tutte le macchine: l'immagine di installazione non è firmata per il Secure Boot e con quello attivo non parte.</li>
           <li><strong>Avvia il mini-PC dalla chiavetta</strong>
             Collega la chiavetta, accendi il mini-PC e seleziona l'avvio da USB dal menu di boot (di solito <kbd>F11</kbd>/<kbd>F12</kbd>/<kbd>Esc</kbd> a seconda della scheda madre). Scegli <strong>Install Osmium Sound</strong> dal menu.</li>
           <li><strong>Scegli il disco, direttamente sullo schermo</strong>

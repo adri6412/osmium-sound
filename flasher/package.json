@@ -1,7 +1,7 @@
 {
   "name": "osmium-flasher",
   "productName": "Osmium Flasher",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Downloads the current Osmium Sound installer image and writes it to a USB stick",
   "main": "src/main.js",
   "author": "Osmium Sound <support@osmiumsound.it>",

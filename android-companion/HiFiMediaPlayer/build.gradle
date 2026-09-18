@@ -85,8 +85,8 @@ android {
         minSdkVersion rootProject.minSdkVersion
         targetSdkVersion rootProject.targetSdkVersion
 
-        versionCode 32
-        versionName "1.0.11"
+        versionCode 33
+        versionName "1.0.12"
 
         vectorDrawables.useSupportLibrary = true
         multiDexEnabled true
@@ -128,7 +128,15 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // Play Console flags a release whose code is not obfuscated ("app
+            // optimization below our threshold"). R8 was off since 7f9265d
+            // because it broke the release build, which the keep rules in
+            // proguard-squeezer.cfg now cover: they had been left pointing at
+            // the pre-rebranding package and matched nothing.
+            minifyEnabled true
+            // Resource shrinking stays off: the Play Console asks for
+            // obfuscation, and dropping resources is a separate risk to take
+            // on its own.
             shrinkResources false
             signingConfig signingConfigs.release
             // You could use 'proguardFile "proguard.cfg"' here and get the
