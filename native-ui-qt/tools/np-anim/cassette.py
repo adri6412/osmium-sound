@@ -715,25 +715,19 @@ def build_cassette(out, variant="graphite"):
     base = base + (0.020 * np.exp(-e / 0.7) * (0.35 + 0.65 * smoothstep(CAS_H * 0.6, 0, Y)))
     col = gray3(base, (1.0, 1.0, 1.04))
 
-    # inside the trapezoid, seen through the smoke: guide rollers, the tape,
-    # capstan and pin holes, the felt pressure pad on its spring
+    # inside the trapezoid, seen through the smoke: the guide rollers, the
+    # capstan and pin holes. The tape along the bottom edge and the felt
+    # pressure pad on its spring are not drawn: behind the smoked shell
+    # they only show on a clear cassette.
     trap = cv.cov(sd_t)
     smoke = rgb3((0.55, 0.55, 0.60))
     inner = gray3(np.full_like(X, 0.0045))
-    ty0, ty1 = mm(60.9), mm(62.4)
-    tape = cv.cov(sd_rrect(X, Y, mm(15.6), ty0, mm(84.8), ty1, 0.2))
-    tape_c = rgb3((0.150, 0.080, 0.036)) * (1 + 0.8 * np.exp(-((Y - ty0 - 0.3) / 0.35) ** 2))[..., None]
-    inner = mix(inner, tape_c, tape)
     for rx in (15.9, 84.5):
         rr = np.hypot(Xm - rx, Ym - 59.9) * MM
         ro = cv.cov(rr - mm(1.9))
         rc = gray3(0.30 * (0.5 + 0.5 * smoothstep(mm(1.9), 0, rr)) + 0.4 * np.exp(-((Xm - rx + 0.6) ** 2 + (Ym - 59.4) ** 2) / 0.3))
         rc = mix(rc, gray3(np.full_like(X, 0.02)), cv.cov(rr - mm(0.5)))
         inner = mix(inner, rc, ro)
-    pad = cv.cov(sd_rrect(X, Y, mm(47.4), mm(60.3), mm(53.0), mm(61.9), 0.3))
-    inner = mix(inner, gray3(0.16 + 0.03 * grain(X.shape, rng, 0.6)), pad)
-    spring = cv.cov(sd_rrect(X, Y, mm(42.5), mm(59.6), mm(57.9), mm(60.2), 0.3))
-    inner = mix(inner, rgb3((0.22, 0.14, 0.05)), spring)
     col = mix(col, inner * smoke + col * 0.6, trap * 0.85)
     for hx in (26.0, 74.4):
         rh_ = np.hypot(Xm - hx, Ym - 58.0) * MM
