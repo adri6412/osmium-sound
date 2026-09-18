@@ -38,8 +38,8 @@ to the box it is given) and the still of the Settings card.
 - controls: `power`, `volume`, `volumeFixed`, and a `signal action(name,
   value)` with `play`, `pause`, `stop`, `prev`, `next`, `eject`, `volume`
   (`{level, final}`), `power`, `repeat`, `random`, `wind` (+1/-1), `windStop`;
-- a display: `trackIndex`, `trackTotal`, `elapsed`, `repeatMode`,
-  `shuffleMode`, `trackTitle`, `trackArtist`;
+- a display: `trackIndex`, `trackTotal`, `elapsed`, `duration` (seconds, 0
+  unknown), `repeatMode`, `shuffleMode`, `trackTitle`, `trackArtist`;
 - levels (this device's own audio): `levelL`, `levelR` (0..100).
 
 It may import `QtQuick`, `QtQuick.Effects` and `QtQuick.Shapes`. Its own

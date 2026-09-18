@@ -46,6 +46,7 @@ Item {
     // The tape LCD (LcdTape.qml): the counter follows the time, the level
     // meters this device's audio.
     property real elapsed: 0
+    property real duration: 0            // seconds, 0 unknown (a stream)
     property real levelL: 0
     property real levelR: 0
 
@@ -93,6 +94,7 @@ Item {
     property real angR: 0
     property real packP: 0.5                 // tape on the right reel, 0 .. 1, as drawn
     property real packTarget: 0.5            // ... as the progress says
+    property real tapeF: 1                   // the tape on the cassette, 0 .. 1 of a full pack, as drawn
     property int gapDur: 0
     property int doorDur: 0
     property int holdDur: 0
@@ -105,11 +107,20 @@ Item {
     property real labelA: 1
 
     // tape packs: the tape moves from the left reel to the right one; the
-    // area of the two packs together stays the same
-    readonly property real rL: Math.sqrt(hubR * hubR + (1 - packP) * (packR * packR - hubR * hubR))
-    readonly property real rR: Math.sqrt(hubR * hubR + packP * (packR * packR - hubR * hubR))
-    // constant tape speed: a reel turns faster the smaller its pack
-    function omega(r) { return Math.max(60, Math.min(220, 220 * hubR / r)) }
+    // area of the two packs together stays the same.
+    // The cassette holds as much tape as the track lasts at the real 4.76 cm/s,
+    // a full pack being a C90 side (45 minutes; longer tracks fill it): a
+    // short song winds a thin ring round each hub, a long suite nearly fills
+    // a reel. Then the reels, turning at the real tape speed, carry across
+    // exactly the tape the packs show going over. Unknown (a stream): a
+    // full cassette.
+    readonly property real fullPackSec: 45 * 60
+    readonly property real tapeTarget: duration > 0 ? Math.min(1, duration / fullPackSec) : 1
+    readonly property real rL: Math.sqrt(hubR * hubR + (1 - packP) * tapeF * (packR * packR - hubR * hubR))
+    readonly property real rR: Math.sqrt(hubR * hubR + packP * tapeF * (packR * packR - hubR * hubR))
+    // constant tape speed, 47.6 mm/s: a reel turns faster the smaller its
+    // pack (degrees per second, r in points)
+    function omega(r) { return 47.6 * mm / r * 180 / Math.PI }
 
     // Fast wind: holding ◀◀ or ▶▶ (a tap still skips a track) winds the tape
     // for as long as the key is held: the reels race (backwards for rewind)
@@ -164,29 +175,42 @@ Item {
         // Playing, the tape runs left to right along the open bottom edge,
         // past the heads: off the left pack, onto the right one. Seen from
         // the front both reels turn counterclockwise (a negative rotation).
+        // Winding is six times faster, held under 1300 degrees a second: at
+        // 30 frames a second a hub (six spokes) turning faster would seem to
+        // slow down or go backwards.
         var w = windDir > 0 ? 6 : windDir < 0 ? -6 : 1
-        var a = angL - w * k * omega(rL)
-        var b = angR - w * k * omega(rR)
+        var a = angL - k * Math.max(-1300, Math.min(1300, w * omega(rL)))
+        var b = angR - k * Math.max(-1300, Math.min(1300, w * omega(rR)))
         angL = a - 360 * Math.floor(a / 360)
         angR = b - 360 * Math.floor(b / 360)
         spinF = (u >= 1 && spinTo === 0) ? 0 : f
         // the packs follow the progress smoothly (a new track: a quick glide)
         var g = packTarget - packP
         if (g !== 0) packP = Math.abs(g) < 0.0005 ? packTarget : packP + g * (1 - Math.exp(-dt / 0.28))
+        var h = tapeTarget - tapeF
+        if (h !== 0) tapeF = Math.abs(h) < 0.0005 ? tapeTarget : tapeF + h * (1 - Math.exp(-dt / 0.28))
     }
     // the reels stopped with the packs not where they should be (a seek while
     // paused, a pause right after a new track): one bounded glide
     function settlePacks() {
-        if (!live || !active || phase !== 2 || Math.abs(packTarget - packP) < 0.002) {
+        var d = Math.max(Math.abs(packTarget - packP), Math.abs(tapeTarget - tapeF))
+        if (!live || !active || phase !== 2 || d < 0.002) {
             packGlide.stop()
             packP = packTarget
+            tapeF = tapeTarget
             return
         }
-        packGlide.to = packTarget
-        packGlide.duration = Math.round(300 + 600 * Math.min(1, Math.abs(packTarget - packP) * 4))
+        packAnim.to = packTarget
+        tapeAnim.to = tapeTarget
+        packGlide.dur = Math.round(300 + 600 * Math.min(1, d * 4))
         packGlide.restart()
     }
-    NumberAnimation { id: packGlide; target: root; property: "packP"; easing.type: Easing.InOutQuad }
+    ParallelAnimation {
+        id: packGlide
+        property int dur: 300
+        NumberAnimation { id: packAnim; target: root; property: "packP"; duration: packGlide.dur; easing.type: Easing.InOutQuad }
+        NumberAnimation { id: tapeAnim; target: root; property: "tapeF"; duration: packGlide.dur; easing.type: Easing.InOutQuad }
+    }
 
     function stopAll() {
         insertAnim.stop(); removeAnim.stop(); closeAnim.stop()
@@ -202,6 +226,7 @@ Item {
         packGlide.stop()
         packTarget = progress > 0 ? Math.min(1, progress) : 0.5     // unknown (a radio): half and half
         packP = packTarget
+        tapeF = tapeTarget
     }
     // hidden: back to an empty, closed deck, so the next appearance replays
     // the insertion
@@ -215,7 +240,7 @@ Item {
         stopAll()
         phase = 2; doorOpen = 0; casIn = 1; casA = 1; spinF = 0
         takeMedia()
-        angL = 16; angR = 47; packTarget = 0.35; packP = 0.35
+        angL = 16; angR = 47; packTarget = 0.35; packP = 0.35; tapeF = 1
     }
     // Compares what is in the deck with what should be there. Called late
     // (Qt.callLater) so that inputs changing together, e.g. hasTrack and then
@@ -321,6 +346,12 @@ Item {
     // does it while the reels turn, settlePacks() when they stand still.
     // While a cassette goes in they are set straight away; progress 0 (a
     // stop, a track that has not started) keeps them where they are.
+    // a new track, the same cassette: its tape grows or shrinks the same way
+    onTapeTargetChanged: {
+        if (!live || phase === 3) return
+        if (phase !== 2 || !active) { packGlide.stop(); tapeF = tapeTarget }
+        else if (!spinTimer.running) settlePacks()
+    }
     onProgressChanged: {
         if (!live || phase === 3 || !(progress > 0)) return
         packTarget = Math.min(1, progress)

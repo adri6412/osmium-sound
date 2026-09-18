@@ -515,6 +515,9 @@ class H(BaseHTTPRequestHandler):
                 threading.Timer(5.0, lambda: STATE.__setitem__("install", {"state": "done", "message": "", "progress": 100})).start()
             if u.path == "/mock/cd": STATE["cd"] = data
             if u.path == "/mock/ota": STATE["ota"] = data
+            if u.path == "/mock/track":            # {"duration": s, "time": s}: another track length
+                for k in ("duration", "time"):
+                    if k in data: STATE[k] = float(data[k])
         if port == 8080:
             if u.path == "/api/pair/token": return self._json({"token": "abc123def456"})
             if u.path == "/api/sources/smb/discover":
