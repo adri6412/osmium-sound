@@ -89,16 +89,18 @@ Item {
         return 1300 / (2 * Math.PI * r) * 360
     }
     // At 30 frames a second a disc turning 50-100 degrees a frame would
-    // stutter and wheel backwards: past ~100 rpm the print melts into the
-    // rings the eye sees on a real one (the smear below).
-    readonly property real blur: Math.max(0, Math.min(1, (speed - 600) / 900))
+    // stutter and wheel backwards: from ~80 rpm the print melts, gradually,
+    // into the rings the eye sees on a real one (the smear below), all
+    // rings past ~330 rpm.
+    readonly property real blur: Math.max(0, Math.min(1, (speed - 480) / 1500))
 
     onWantSpinChanged: {
         spinFrom = speed
         spinUp = wantSpin
-        // the motor pulls the disc up to speed in about a second; the brake
-        // stops it a little faster, hard before the lid opens
-        spinDur = wantSpin ? 1200 : phase === 3 ? 450 : 900
+        // the motor pulls the disc up to speed in about three seconds, as a
+        // real player's does (the art can be seen gathering speed for the
+        // first two); the brake is quicker, hard before the lid opens
+        spinDur = wantSpin ? 3000 : phase === 3 ? 450 : 900
         spinT0 = Date.now()
     }
 
