@@ -71,18 +71,34 @@ Item {
     property int lidDur: 0
     property int gapDur: 0                   // beat between the old disc out and the new one in
 
-    readonly property real spinRate: 225
     readonly property bool wantSpin: live && active && phase === 2 && playing && hasTrack
     property real spinFrom: 0
-    property real spinTo: 0
-    property real spinDur: 800
+    property bool spinUp: false
+    property real spinDur: 1200
     property double spinT0: 0
     property double lastT: 0
+    property real lcdAngle: 0                // the LCD's own spin indicator
+
+    // A real CD turns at constant linear velocity (1.3 m/s): ~500 rpm where
+    // the music starts (radius 25 mm) down to ~215 at the edge (58 mm). The
+    // pickup's place follows the position on the whole disc, the tracks
+    // before plus this one; equal playing time covers equal area.
+    function clvRate() {                     // degrees per second
+        var f = trackTotal > 0 && trackIndex >= 0 ? Math.max(0, Math.min(1, (trackIndex + progress) / trackTotal)) : 0
+        var r = Math.sqrt(25 * 25 + f * (58 * 58 - 25 * 25))
+        return 1300 / (2 * Math.PI * r) * 360
+    }
+    // At 30 frames a second a disc turning 50-100 degrees a frame would
+    // stutter and wheel backwards: past ~100 rpm the print melts into the
+    // rings the eye sees on a real one (the smear below).
+    readonly property real blur: Math.max(0, Math.min(1, (speed - 600) / 900))
 
     onWantSpinChanged: {
         spinFrom = speed
-        spinTo = wantSpin ? spinRate : 0
-        spinDur = phase === 3 ? 350 : 800
+        spinUp = wantSpin
+        // the motor pulls the disc up to speed in about a second; the brake
+        // stops it a little faster, hard before the lid opens
+        spinDur = wantSpin ? 1200 : phase === 3 ? 450 : 900
         spinT0 = Date.now()
     }
 
@@ -101,10 +117,69 @@ Item {
         lastT = now
         var u = Math.min(1, Math.max(0, (now - spinT0) / spinDur))
         var e = u * u * (3 - 2 * u)
-        var v = spinFrom + (spinTo - spinFrom) * e
-        var a = angle + (speed + v) * 0.5 * dt
-        angle = a - 360 * Math.floor(a / 360)
-        speed = (u >= 1 && spinTo === 0) ? 0 : v
+        var to = spinUp ? clvRate() : 0
+        var v = spinFrom + (to - spinFrom) * e
+        // (fully smeared, the hidden print needs not turn: no frame to draw)
+        if (blur < 1) {
+            var a = angle + (speed + v) * 0.5 * dt
+            angle = a - 360 * Math.floor(a / 360)
+        }
+        speed = (u >= 1 && !spinUp) ? 0 : v
+        // the indicator steps at its own readable pace, not the disc's
+        var l = lcdAngle + Math.min(speed, 540) * dt
+        lcdAngle = l - 360 * Math.floor(l / 360)
+    }
+
+    // The smear: the mean colour of each ring of the print (in linear light,
+    // as the eye blends it), laid down as one radial gradient. A 96 x 96
+    // sample of the artwork or the generic label is plenty. Drawn once per
+    // image (and texture size), and only once the disc gets up to speed.
+    function paintSmear() {
+        var ctx = smear.getContext("2d")
+        var W = smear.width, H = smear.height
+        var label = root.assetsBase + "cd-label.png"
+        var art = artImg.status === Image.Ready ? artImg : artPrev
+        var N = 96
+        ctx.reset()
+        if (disc.artReady && art.implicitWidth > 0 && art.implicitHeight > 0) {
+            var side = Math.min(art.implicitWidth, art.implicitHeight)
+            ctx.drawImage(art, (art.implicitWidth - side) / 2, (art.implicitHeight - side) / 2, side, side, 0, 0, N, N)
+        } else if (smear.isImageLoaded(label)) {
+            ctx.drawImage(label, 0, 0, N, N)
+        } else {
+            return
+        }
+        var d = ctx.getImageData(0, 0, N, N).data
+        ctx.clearRect(0, 0, W, H)
+        var r0 = 34.5, r1 = 89.6, B = 32         // the printed ring (cd.py PRINT_R0/R1)
+        var acc = []
+        for (var b = 0; b < B; b++) acc.push([0, 0, 0, 0])
+        for (var y = 0; y < N; y++) {
+            for (var x = 0; x < N; x++) {
+                var r = Math.hypot(x + 0.5 - N / 2, y + 0.5 - N / 2) / (N / 2) * discR
+                if (r < r0 || r >= r1) continue
+                var i = 4 * (y * N + x), a = d[i + 3] / 255
+                var k = acc[Math.floor((r - r0) / (r1 - r0) * B)]
+                k[0] += a * Math.pow(d[i] / 255, 2.2)
+                k[1] += a * Math.pow(d[i + 1] / 255, 2.2)
+                k[2] += a * Math.pow(d[i + 2] / 255, 2.2)
+                k[3] += a
+            }
+        }
+        function css(k, alpha) {
+            function c(v) { return Math.round(255 * Math.pow(k[3] > 0 ? v / k[3] : 0, 1 / 2.2)) }
+            return "rgba(" + c(k[0]) + "," + c(k[1]) + "," + c(k[2]) + "," + alpha + ")"
+        }
+        var g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W / 2)
+        g.addColorStop((r0 - 0.3) / discR, css(acc[0], 0))
+        g.addColorStop(r0 / discR, css(acc[0], 1))
+        for (b = 0; b < B; b++)
+            g.addColorStop((r0 + (b + 0.5) / B * (r1 - r0)) / discR, css(acc[b], 1))
+        g.addColorStop(r1 / discR, css(acc[B - 1], 1))
+        g.addColorStop((r1 + 0.3) / discR, css(acc[B - 1], 0))
+        ctx.fillStyle = g
+        ctx.fillRect(0, 0, W, H)
+        smear.stale = false
     }
 
     function stopAll() {
@@ -273,8 +348,28 @@ Item {
                 source: root.assetsBase + "cd-shadow-near.png"
             }
 
-            // the disc: label (artwork masked to the printed ring) + clear hub,
-            // mirror band and rim, cooked in one layer that turns as one quad
+            // the print at speed: each ring of the label smeared to its mean
+            // colour (drawn once per artwork, it never moves); the sharp print
+            // fades out over it as the disc gets up to speed
+            Canvas {
+                id: smear
+                // drawn at texture size, scaled down to the disc
+                width: root.px(disc.width); height: root.px(disc.height)
+                x: disc.x + (disc.width - width) / 2
+                y: disc.y + (disc.height - height) / 2
+                scale: disc.scale * disc.width / width
+                opacity: root.discA
+                visible: root.blur > 0 && opacity > 0.002
+                property bool stale: true
+                function redraw() { stale = true; if (visible) requestPaint() }
+                onVisibleChanged: if (visible && stale) requestPaint()
+                onWidthChanged: redraw()
+                onAvailableChanged: if (available) loadImage(root.assetsBase + "cd-label.png")
+                onImageLoaded: redraw()
+                onPaint: root.paintSmear()
+            }
+            // the disc's print: the generic label or the artwork masked to the
+            // printed ring, cooked in one layer that turns as one quad
             Item {
                 id: disc
                 width: root.discR * 2; height: root.discR * 2
@@ -282,13 +377,14 @@ Item {
                 y: root.wellY - root.discR - 5 * stage.dh
                 scale: 1 + 0.22 * stage.dh
                 rotation: root.angle + 16 * stage.dh    // a slight twist of the hand while it lowers the disc
-                opacity: root.discA
+                opacity: root.discA * (1 - root.blur)
                 visible: opacity > 0.002
                 layer.enabled: true
                 layer.smooth: true
                 layer.textureSize: Qt.size(root.px(width), root.px(height))
 
                 readonly property bool artReady: root.labelArt !== "" && (artImg.status === Image.Ready || artPrev.status === Image.Ready)
+                onArtReadyChanged: smear.redraw()
 
                 Pic { anchors.fill: parent; source: root.assetsBase + "cd-label.png" }
                 // 🚨 two images (see Cover.qml): radio artwork changes every few
@@ -319,7 +415,7 @@ Item {
                     layer.enabled: true
                     layer.smooth: true
                     layer.textureSize: Qt.size(root.px(width), root.px(height))
-                    onStatusChanged: if (status === Image.Ready) artPrev.source = source
+                    onStatusChanged: if (status === Image.Ready) { artPrev.source = source; smear.redraw() }
                 }
                 Pic {
                     id: printMask
@@ -345,7 +441,15 @@ Item {
                     maskThresholdMin: 0.5
                     maskSpreadAtMin: 1.0
                 }
-                Pic { anchors.fill: parent; source: root.assetsBase + "cd-disc.png" }
+            }
+            // clear hub, mirror band and rim: round, they need not turn
+            Pic {
+                width: disc.width; height: disc.height
+                x: disc.x; y: disc.y
+                scale: disc.scale
+                opacity: root.discA
+                visible: opacity > 0.002
+                source: root.assetsBase + "cd-disc.png"
             }
             // the light on the disc stays where it is while the disc turns
             Pic {
@@ -407,8 +511,8 @@ Item {
             calFrom: root.lcdReady ? root.lcdTrack : 0
             calTo: root.lcdReady ? Math.min(16, root.lcdTotal) : 0
             over: root.lcdReady && root.lcdTotal > 16
-            // the indicator follows the disc itself: a step every 45 degrees
-            spin: !root.lcdReady ? -1 : root.speed > 0 ? Math.floor(root.angle / 45) % 8 : 8
+            // the indicator turns while the disc does, a step every 45 degrees
+            spin: !root.lcdReady ? -1 : root.speed > 0 ? Math.floor(root.lcdAngle / 45) % 8 : 8
             text: (root.lcdReady || !root.live) ? [!root.live ? "Allegro" : root.trackTitle, !root.live ? "Beaux Arts Trio" : root.trackArtist].filter(function(x) { return !!x }).join(" - ") : ""
             scroll: root.live && root.active && root.playing
         }
