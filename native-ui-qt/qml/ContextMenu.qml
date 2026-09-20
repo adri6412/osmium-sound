@@ -11,6 +11,10 @@ Item {
     property real f: 0
     readonly property int rowH: 41
     readonly property int boxW: 272
+    // where the box stands (the guided tour lights it up)
+    readonly property real boxX: box.x
+    readonly property real boxY: box.y
+    readonly property real boxH: box.height
     visible: false
     anchors.fill: parent
     function open(list, x, y) {

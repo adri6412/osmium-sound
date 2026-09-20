@@ -466,7 +466,10 @@ Item {
         Pic { id: deck; width: 520; height: 260; file: "deck.png" }
 
         // the door with the holder and the cassette in it, tilting forward on
-        // its bottom hinge (Rotation about x projects with a perspective)
+        // its bottom hinge (Rotation about x projects with a perspective).
+        // 🚨 The angle is negative on purpose: a positive one leans the top
+        // of the door AWAY from the viewer (into the deck), and that is how
+        // it opened at first ("lo sportello si apre in dentro").
         Item {
             id: hinged
             width: 520; height: 260
@@ -474,7 +477,7 @@ Item {
                 origin.x: root.doorX + root.doorW / 2
                 origin.y: root.hingeY
                 axis { x: 1; y: 0; z: 0 }
-                angle: root.openAngle * root.doorOpen
+                angle: -root.openAngle * root.doorOpen
             }
             readonly property real lift: root.slide * (1 - root.casIn)
 

@@ -63,7 +63,11 @@ VFD_AT = (246.6, 26)                  # the LcdCd panel (196 x 100) at VFD_K
 VFD_K = 0.8
 FRAME = (425, 38, 511, 70)            # the raised frame round PLAY / STOP / PAUSE
 KEY_Y = (136, 158)                    # the lower row
-NUM_X0, NUM_DX, NUM_W = 262, 10.5, 6.0
+# The track numbers: a row of their own under the lower row, wide caps with
+# the digit printed on them. They were slim bars 6 pt wide next to OPEN,
+# unusable on a touch screen ("incliccabili su un touch").
+NUM_X0, NUM_DX, NUM_W = 236, 27.2, 25.0
+NUM_Y = (170, 196)
 KEYS = {                              # name: x0, y0, x1, y1
     "play": (429, 42, 455, 66), "stop": (457, 42, 482, 66), "pause": (484, 42, 508, 66),
     "eject": (236, 136, 252, 158),
@@ -73,7 +77,7 @@ KEYS = {                              # name: x0, y0, x1, y1
     "power": (22, 196, 46, 220),
 }
 for _i in range(10):
-    KEYS["n%d" % (_i + 1)] = (NUM_X0 + _i * NUM_DX, 136, NUM_X0 + _i * NUM_DX + NUM_W, 158)
+    KEYS["n%d" % (_i + 1)] = (NUM_X0 + _i * NUM_DX, NUM_Y[0], NUM_X0 + _i * NUM_DX + NUM_W, NUM_Y[1])
 LED = (55, 208)
 JACK = (494, 208)
 
@@ -183,7 +187,7 @@ def build_base(out):
     h = h + raised(sd_frame, 1.4, 1.2) - 1.0 * cv.cov(sd_rrect(X, Y, FRAME[0] + 2.4, FRAME[1] + 2.4, FRAME[2] - 2.4, FRAME[3] - 2.4, 1.5))
     keys = np.zeros_like(X)
     for name, (x0, y0, x1, y1) in KEYS.items():
-        r = 1.2 if slim(name) else 1.8
+        r = 1.2 if slim(name) and not name[1:].isdigit() else 1.8
         sd_k = sd_rrect(X, Y, x0, y0, x1, y1, r)
         kc = cv.cov(sd_k)
         base_h = h
@@ -243,11 +247,15 @@ def build_base(out):
         ("POWER", 34, 189.5, 3.2, True, "m", 0.3),
         ("PHONES", JACK[0], 218.5, 3.2, True, "m", 0.3),
     ]
-    for i in range(10):
-        x0 = NUM_X0 + i * NUM_DX
-        items.append((str(i + 1), x0 + NUM_W / 2, 129.5, 3.0, True, "m", 0.0))
     ink = text_mask(cv, items)
     rgb = rgb * (1 - ink[..., None]) + rgb3(INK) * ink[..., None]
+    # the digits on the track keys' caps, like the transport symbols
+    digits = []
+    for i in range(10):
+        x0 = NUM_X0 + i * NUM_DX
+        digits.append((str(i + 1), x0 + NUM_W / 2, (NUM_Y[0] + NUM_Y[1]) / 2 - 2.4, 6.5, True, "m", 0.0))
+    dm = text_mask(cv, digits)
+    rgb = rgb * (1 - dm[..., None]) + rgb3(INK) * 0.95 * dm[..., None]
     # symbols on the key caps
     for name, (x0, y0, x1, y1) in KEYS.items():
         if slim(name):

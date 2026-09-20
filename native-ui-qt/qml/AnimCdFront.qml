@@ -79,7 +79,8 @@ Item {
             rew: [468, 137, 486, 157], ff: [490, 137, 508, 157],
             power: [22, 196, 46, 220]
         }
-        for (var i = 0; i < 10; i++) k["n" + (i + 1)] = [262 + i * 10.5, 136, 268 + i * 10.5, 158]
+        // the track numbers: a row of wide caps of their own (cdfront.py NUM_*)
+        for (var i = 0; i < 10; i++) k["n" + (i + 1)] = [236 + i * 27.2, 170, 236 + i * 27.2 + 25, 196]
         return k
     }
     readonly property var keyNames: ["play", "stop", "pause", "eject", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8",
@@ -426,13 +427,14 @@ Item {
                 id: key
                 required property string modelData
                 readonly property var r: root.keys[modelData]
-                readonly property bool slim: /^n[0-9]+$/.test(modelData) || modelData === "repeat" || modelData === "random"
+                readonly property bool number: /^n[0-9]+$/.test(modelData)
+                readonly property bool slim: modelData === "repeat" || modelData === "random"
                 x: r[0]; y: r[1]; width: r[2] - r[0]; height: r[3] - r[1]
                 Rectangle { anchors.fill: parent; radius: key.slim ? 1.2 : 1.8; color: "black"; opacity: kArea.pressed ? 0.45 : 0 }
                 MouseArea {
                     id: kArea
                     anchors.fill: parent
-                    anchors.margins: key.slim ? -2 : -3
+                    anchors.margins: key.number ? -1 : key.slim ? -2 : -3
                     enabled: root.live
                     readonly property bool search: key.modelData === "rew" || key.modelData === "ff"
                     onPressed: if (search) root.searchStart(key.modelData === "ff" ? 1 : -1, kArea)

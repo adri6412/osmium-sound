@@ -11,9 +11,13 @@ Item {
     property real devicePixelScale: 1
     property bool expanded: false
     property bool viewVu: Sys.conf("nowplaying-view", "vu") !== "lyrics"
+    // the albums of the library as a grid or as Cover Flow (a preference of
+    // this screen, kept next to the Now Playing view)
+    property string albumView: Sys.conf("album-view", "grid") === "coverflow" ? "coverflow" : "grid"
+    function setAlbumView(v) { albumView = v === "coverflow" ? "coverflow" : "grid"; Sys.setConf("album-view", albumView) }
     // tempo dell'ultimo tocco (per l'auto-apertura e il salvaschermo)
     readonly property real lastInput: Sys.lastInput
-    readonly property bool busyOverlay: dialogs.active || vk.active || ota.active || cdrip.open
+    readonly property bool busyOverlay: dialogs.active || vk.active || ota.active || cdrip.open || tutorial.active
 
     // ─── principale <-> Now Playing: y:'100%' con molla 200/26 ─────────────
     Spring { id: npSpring; stiffness: 200; damping: 26 }
@@ -27,6 +31,7 @@ Item {
         Ui.app = app; Ui.vk = vk; Ui.dialogs = dialogs; Ui.toast = toast; Ui.overlays = overlays
         npSpring.set(Sys.startExpanded ? 0 : 1)
         expanded = Sys.startExpanded
+        if (tutorialCanStart) tutorialDelay.restart()      // no intro or wizard to wait for
     }
 
     // Choose the player to drive (#99): the server's list, this device's own
@@ -48,6 +53,31 @@ Item {
         })
     }
 
+    // The guided tour (Tutorial.qml): once, when the screen is free for the
+    // first time and its "shown" file is missing: after the first wizard on
+    // a new appliance, at the first start after the update on an old one.
+    readonly property bool tutorialCanStart: !wizard.active && !intro.active && !screensaver.covering && !ota.active && !cdrip.open && !dialogs.active
+    property bool tutorialTried: false
+    onTutorialCanStartChanged: if (tutorialCanStart && !tutorialTried) tutorialDelay.restart()
+    Timer {
+        id: tutorialDelay
+        interval: 1500
+        onTriggered: {
+            if (!app.tutorialCanStart || app.tutorialTried) return
+            app.tutorialTried = true
+            if (!tutorial.wasShown()) tutorial.start()
+        }
+    }
+    function startTutorial() { tutorialTried = true; tutorial.start() }
+    // the tour's album steps: the list as a grid or as Cover Flow, whatever
+    // the owner chose (put back when the tour ends), and the long-press menu
+    function tutorialAlbums(mode) { setExpanded(false); albumView = mode; mainScreen.browser.tutorialAlbums(mode) }
+    function tutorialListRect() { return mainScreen.browser.tutorialListRect() }
+    function tutorialMenuRect() { return mainScreen.browser.tutorialMenuRect() }
+    function tutorialRestore() { mainScreen.browser.closeMenu(); albumView = Sys.conf("album-view", "grid") === "coverflow" ? "coverflow" : "grid" }
+    // the tour's home steps: the main screen, Music tab, at its home
+    function tutorialHome() { setExpanded(false); mainScreen.browser.showMusicTab(); if (mainScreen.browser.view !== LibraryModel.Home) mainScreen.browser.navHome() }
+
     // Now Playing's artist and album lead to their pages in the library
     function openAlbum(id, title) { if (!id) return; setExpanded(false); mainScreen.browser.openAlbum(id, title) }
     function openArtist(id, name) { if (!id) return; setExpanded(false); mainScreen.browser.openArtist(id, name) }
@@ -62,6 +92,7 @@ Item {
     readonly property var cd: cdrip
     readonly property var toastItem: toast
     readonly property var otaItem: ota
+    readonly property var tour: tutorial
 
     MainScreen {
         id: mainScreen
@@ -127,7 +158,7 @@ Item {
         interval: 500; repeat: true
         // only for this device's own playback: a phone across the house
         // changing track is no reason to pop the player open (#99)
-        running: Player.autoexpandSecs > 0 && Player.playing && !app.expanded && Player.connected && Player.isOwn && !wizard.active
+        running: Player.autoexpandSecs > 0 && Player.playing && !app.expanded && Player.connected && Player.isOwn && !wizard.active && !tutorial.active
         onTriggered: {
             if (mainScreen.browsing) return
             var key = Player.title + "|" + Player.artist + "|" + Player.album
@@ -142,6 +173,7 @@ Item {
     Dialogs { id: dialogs; anchors.fill: parent }
     OtaOverlay { id: ota; anchors.fill: parent }
     CdRip { id: cdrip; anchors.fill: parent }
+    Tutorial { id: tutorial; anchors.fill: parent }       // the guided tour, over everything but the saver and the intro
     Toast { id: toast; anchors.fill: parent }             // z-[10050]: sopra CD (z-70) e aggiornamento
     VirtualKeyboard { id: vk; anchors.fill: parent }
     Screensaver {

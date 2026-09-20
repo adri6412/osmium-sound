@@ -79,6 +79,7 @@ Item {
         { id: "playback", icon: "sliders", key: "settings.sections.playback" },
         { id: "vuMeters", icon: "audio-lines", key: "settings.sections.vuMeters" },
         { id: "animations", icon: "disc-3", key: "settings.sections.animations" },
+        { id: "library", icon: "library", key: "settings.sections.library" },
         { id: "multiroom", icon: "speaker", key: "settings.sections.multiroom" },
         { id: "alarm", icon: "alarm-clock", key: "settings.sections.alarm" },
         { id: "network", icon: "wifi", key: "settings.sections.network" },
@@ -705,6 +706,7 @@ Item {
             case "playback": secPlayback(); break
             case "vuMeters": secVuMeters(); break
             case "animations": secAnimations(); break
+            case "library": secLibrary(); break
             case "multiroom": secMultiroom(); break
             case "btSpeakers": secBtSpeakers(); break
             case "alarm": secAlarm(); break
@@ -1121,6 +1123,15 @@ Item {
         if (as.loaded && !as.checking && !as.busy)
             grid([acell(Tr.t("settings.animations.storeCheck"), "anim_check", "accent", { icon: "rotate-cw", hh: 44 })])
     }
+    // The library: how the albums are shown, a grid of cards or Cover Flow
+    // (the same choice as the button in the crumb bar of the album list)
+    function secLibrary() {
+        help("settings.library.help")
+        label("settings.library.albumView", 14); help("settings.library.albumViewHelp", 12)
+        var av = Ui.app ? Ui.app.albumView : "grid"
+        grid([cell(Tr.t("settings.library.viewGrid"), "grid", av === "grid", "album_view", { hh: 44 }),
+              cell(Tr.t("settings.library.viewCoverflow"), "coverflow", av === "coverflow", "album_view", { hh: 44 })])
+    }
     function playerPrefs() {
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")
         label("settings.playback.transition", 14)
@@ -1406,6 +1417,9 @@ Item {
         info(Tr.t("settings.info.platform"), cfg.platform + " (" + cfg.arch + ")").style = "seg"
         info(Tr.t("settings.info.apiStatus"), Tr.t(cfg.apiOk ? "settings.info.connected" : "settings.info.disconnected")).style = "seg"
         netCheckEntry(false)
+        sep()
+        // the guided tour of the interface, again on demand
+        action(Tr.t("settings.info.replayTutorial"), "tutorial", "accent")
         sep()
         helpText("Osmium Sound " + cfg.version, 12).center = true
         // ogni interfaccia dice con cosa è fatta: questa è Qt/QML, non Electron
@@ -1756,6 +1770,8 @@ Item {
             Api.post(A("/anim_store/check"), {}, function() { cfg.loadAnimStore(false) }, 12000)
             cfg.animStore = Object.assign({}, cfg.animStore, { checking: true })
             break
+        case "album_view": if (Ui.app) Ui.app.setAlbumView(arg); break
+        case "tutorial": if (Ui.app) Ui.app.startTutorial(); return
         case "autoexpand": post(A("/nowplaying_autoexpand"), { seconds: parseInt(arg) }); cfg.autoexpand = parseInt(arg); Player.refreshSettings(); break
         case "transition": setPref("transitionType", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
         case "transdur": setPref("transitionDuration", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break

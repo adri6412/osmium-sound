@@ -133,11 +133,34 @@ Item {
         }
         Tap { id: clockTap; onClicked: root.startScreensaver() }
     }
-    RoundButton {                                 // full screen: big meters or the animation
-        x: clockPill.x + clockPill.width + 10; y: 31 - 18; width: 36; height: 36
-        visible: root.stageMode !== ""
-        icon: "maximize-2"; iconSize: 18
-        onClicked: root.stageOpen = true
+    // full screen (big meters or the animation), then the two choosers: which
+    // VU meter look, which animation. The lit one says what plays on screen.
+    Row {
+        x: clockPill.x + clockPill.width + 10; y: 31 - 18
+        spacing: 8
+        RoundButton {
+            width: 36; height: 36
+            visible: root.stageMode !== ""
+            icon: "maximize-2"; iconSize: 18
+            onClicked: root.stageOpen = true
+        }
+        RoundButton {                             // the meters' looks (our own DAC only, like the meters)
+            width: 36; height: 36
+            visible: Player.isOwn
+            icon: "audio-lines"; iconSize: 18
+            bg: Player.vuEnabled ? Theme.goldA(0.3) : Theme.wa(0.10)
+            bgPress: Player.vuEnabled ? Theme.goldA(0.3) : Theme.wa(0.20)
+            fg: Player.vuEnabled ? Theme.gold : Theme.white
+            onClicked: chooser.open("vu")
+        }
+        RoundButton {                             // the animations
+            width: 36; height: 36
+            icon: "disc-3"; iconSize: 18
+            bg: !Player.vuEnabled && root.animChosen ? Theme.goldA(0.3) : Theme.wa(0.10)
+            bgPress: !Player.vuEnabled && root.animChosen ? Theme.goldA(0.3) : Theme.wa(0.20)
+            fg: !Player.vuEnabled && root.animChosen ? Theme.gold : Theme.white
+            onClicked: chooser.open("anim")
+        }
     }
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -392,6 +415,14 @@ Item {
         devScale: root.devScale
         onClose: root.stageOpen = false
     }
+    // the popup of the two chooser buttons (VU meter looks / animations)
+    NpChooser {
+        id: chooser
+        anchors.fill: parent
+        devScale: root.devScale
+        z: 10
+    }
+    onShownChanged: if (!shown) chooser.close()
 
     // the meters run for the VU panels, and for the cassette deck's level
     // meters, here or at full screen (only our own DAC has levels)

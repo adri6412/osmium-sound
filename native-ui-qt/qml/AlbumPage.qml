@@ -27,6 +27,8 @@ Item {
     property bool aboutOpen: false
     property bool byTrack: false
     readonly property int discs: Math.max(1, Number(album.disccount || 1))
+    // the cover is on screen: the Cover Flow's flying copy can go (Browser)
+    readonly property bool coverReady: state_ === 2 && cover.ready
     readonly property bool metaOk: meta !== null && !!meta.release
 
     function load() {

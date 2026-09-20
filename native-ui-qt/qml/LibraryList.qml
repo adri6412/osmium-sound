@@ -11,7 +11,11 @@ Item {
     property string pluginCmd: ""
     signal rowTap(int row, bool onPlay)
     signal rowLongPress(int row, real x, real y)
+    signal expandAlbum(int row, real x, real y, real size, string src)   // Cover Flow: the front cover opens
     readonly property bool grid: view === LibraryModel.Albums || view === LibraryModel.NewMusic
+    // the albums as Cover Flow instead of the grid (Settings → Library, or
+    // the button in the crumb bar)
+    readonly property bool coverflow: grid && !!Ui.app && Ui.app.albumView === "coverflow"
     readonly property bool search: view === LibraryModel.Search
     readonly property int pitch: view === LibraryModel.Tracks || view === LibraryModel.PlaylistTracks ? 50
                                : view === LibraryModel.Radios || view === LibraryModel.Apps ? 54 : 58
@@ -33,10 +37,22 @@ Item {
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 12 }
     }
     function scrollToRow(row) {
-        if (grid) gridView.positionViewAtIndex(row, GridView.Beginning)
+        if (coverflow) flowView.scrollToRow(row)
+        else if (grid) gridView.positionViewAtIndex(row, GridView.Beginning)
         else listView.positionViewAtIndex(row, ListView.Beginning)
     }
-    function scrollTop() { listView.contentY = 0; gridView.contentY = 0 }
+    function scrollTop() { listView.contentY = 0; gridView.contentY = 0; flowView.scrollTop() }
+
+    // ─── Cover Flow of the albums ──────────────────────────────────────────
+    CoverFlow {
+        id: flowView
+        anchors.fill: parent
+        visible: root.coverflow
+        devScale: root.devScale
+        onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
+        onRowLongPress: (row, x, y) => root.rowLongPress(row, x, y)
+        onExpand: (row, x, y, size, src) => root.expandAlbum(row, x, y, size, src)
+    }
 
     // URL di un'icona di menu/radio: percorso sul server oppure http locale
     function iconUrl(icon) {
@@ -183,8 +199,8 @@ Item {
         // griglia di Electron (grid-cols-3 gap-3).
         anchors.fill: parent
         anchors.rightMargin: -12
-        visible: root.grid
-        model: root.grid ? Library : null
+        visible: root.grid && !root.coverflow
+        model: root.grid && !root.coverflow ? Library : null
         cellWidth: root.cardW + 12; cellHeight: root.cardH + 12
         clip: true
         flickDeceleration: 1500; maximumFlickVelocity: 4000

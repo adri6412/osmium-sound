@@ -15,6 +15,7 @@ Item {
     readonly property real contentTop: hasCrumbs ? 83 : 40
     readonly property bool hasSearch: tab === 0 && (view === LibraryModel.Artists || view === LibraryModel.Albums || view === LibraryModel.Composers)
     readonly property bool hasAz: hasSearch
+    readonly property bool azShown: hasAz && !list.coverflow      // Cover Flow has its own slider
     readonly property bool browsing: tab === 0 && view !== LibraryModel.Home
     // the album and artist pages load their own data (AlbumPage.qml, ArtistPage.qml)
     readonly property bool isPage: view === LibraryModel.AlbumPage || view === LibraryModel.ArtistPage
@@ -133,6 +134,29 @@ Item {
     function openArtist(id, name) { if (!id) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, String(id)) }
     function openPerson(mbid, name) { if (!mbid) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, "", "mbid:" + mbid) }
     function openMenu(items, x, y) { ctx.open(items, x, y) }
+    function closeMenu() { ctx.visible = false }
+    // The guided tour: the album list (grid or Cover Flow), and the menu a
+    // long press opens, on the first album, so it can be seen. Rectangles
+    // in canvas coordinates (this panel starts at x 341, its content at
+    // contentTop), null when there is nothing to light up yet.
+    function tutorialAlbums(mode) {
+        showMusicTab(); closeMenu()
+        if (view !== LibraryModel.Albums) { navHome(); goView(LibraryModel.Albums, Tr.t("player.titles.albums")) }
+    }
+    function tutorialListRect() {
+        var top = (cdBanner.visible ? 48 : 0)
+        return [x + list.x, contentTop + top + list.y, list.width, list.height]
+    }
+    function tutorialMenuRect() {
+        if (view !== LibraryModel.Albums || Library.state !== 2 || Library.count < 1 || list.coverflow) return null
+        var cw = list.cardW, top = (cdBanner.visible ? 48 : 0)
+        ctx.open(ctxItems(0), list.x + cw / 2, list.y + cw / 2 + top)
+        if (!ctx.visible) return null
+        // the card and its menu together
+        var x0 = Math.min(list.x, ctx.boxX), y0 = Math.min(list.y + top, ctx.boxY)
+        var x1 = Math.max(list.x + cw, ctx.boxX + ctx.boxW), y1 = Math.max(list.y + top + cw + 48, ctx.boxY + ctx.boxH)
+        return [x + x0 - 6, contentTop + y0 - 6, x1 - x0 + 12, y1 - y0 + 12]
+    }
     // a page opened without its title (from a track's menu) names its crumb once loaded
     function setPageTitle(view, id, title) {
         if (!title || cur.view !== view || String(cur.p1) !== String(id)) return
@@ -346,7 +370,10 @@ Item {
     }
 
     // il contenuto compare in dissolvenza (0,12 s) a ogni cambio
-    function appear() { fadeAnim.restart() }
+    // (not while the Cover Flow's cover flies to the album page: the page
+    // must come up under it without the whole panel blinking)
+    property bool quietNav: false
+    function appear() { if (quietNav) { quietNav = false; return } fadeAnim.restart() }
     NumberAnimation { id: fadeAnim; target: content; property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
     Connections { target: Library; function onLoaded() { root.appear() } }
 
@@ -476,11 +503,22 @@ Item {
             }
         }
         Rectangle {                                     // "Indietro"
+            id: backBtn
             visible: root.nav.length > 1
             x: parent.width - 12 - width; y: 21.5 - 11; width: backText.implicitWidth + 24; height: 22; radius: 8
             color: backTap.mix(Theme.wa(0.05), Theme.wa(0.1))
             Text { id: backText; anchors.centerIn: parent; text: Tr.t("common.back"); color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
             Tap { id: backTap; onClicked: root.navBack() }
+        }
+        // the albums as a grid or as Cover Flow (also in Settings → Library)
+        Rectangle {
+            visible: list.grid && !root.isPage
+            readonly property bool flow: list.coverflow
+            x: (backBtn.visible ? backBtn.x : parent.width - 12) - 8 - width; y: 21.5 - 11; width: 22 + 8 + viewText.implicitWidth + 12; height: 22; radius: 8
+            color: viewTap.mix(flow ? Theme.goldA(0.15) : Theme.wa(0.05), Theme.wa(0.12))
+            Icon { x: 8; anchors.verticalCenter: parent.verticalCenter; name: parent.flow ? "layout-grid" : "gallery-horizontal"; size: 13; color: parent.flow ? Theme.gold : Theme.silverA(0.7) }
+            Text { id: viewText; x: 8 + 13 + 6; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(parent.flow ? "player.view.grid" : "player.view.coverflow"); color: parent.flow ? Theme.gold : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
+            Tap { id: viewTap; onClicked: Ui.app.setAlbumView(parent.flow ? "grid" : "coverflow") }
         }
     }
 
@@ -635,12 +673,79 @@ Item {
                 LibraryList {
                     id: list
                     x: 12; y: parent.listY + 4
-                    width: (root.hasAz ? root.width - 32 - 12 : root.width - 12) - 12
+                    width: (root.azShown ? root.width - 32 - 12 : root.width - 12) - 12
                     height: root.height - root.contentTop - y - 12
                     visible: Library.state === 2 && Library.count > 0 && !root.isPage
                     onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
                     // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
                     onRowLongPress: (row, x, y) => ctx.open(root.ctxItems(row), list.x + x, list.y + y + (cdBanner.visible ? 48 : 0))
+                    onExpandAlbum: (row, x, y, size, src) => hero.fly(row, list.x + x, list.y + y, size, src)
+                }
+                // The album that opens from Cover Flow: a copy of its cover
+                // swells over the row, then settles where the page keeps its
+                // own, and stays on top until that one has loaded.
+                Item {
+                    id: hero
+                    visible: false
+                    z: 50
+                    property int row: -1
+                    property real radiusV: 0
+                    property bool settled: false
+                    readonly property real bigS: Math.min(parent.width, parent.height) * 0.84
+                    readonly property bool landed: settled && root.isPage && !!root.pageItem && !!root.pageItem.coverReady
+                    onLandedChanged: if (landed) fadeOut.restart()
+                    function fly(r, x0, y0, s0, src) {
+                        swell.stop(); fadeOut.stop()
+                        row = r; heroImg.source = src
+                        x = x0; y = y0; width = s0; height = s0; radiusV = 0; opacity = 1; settled = false
+                        visible = true
+                        giveUp.restart(); swell.restart()
+                    }
+                    // 🚨 not a Cover: its sourceSize follows the width, and an
+                    // item that grows every frame would reload the picture every
+                    // frame and never show it. Fixed textures, scaled by the GPU.
+                    Image {
+                        id: heroImg
+                        anchors.fill: parent; visible: false
+                        readonly property int px: Theme.coverPx(200)
+                        asynchronous: true; cache: true; smooth: true
+                        fillMode: Image.PreserveAspectCrop
+                        sourceSize.width: px; sourceSize.height: px
+                        layer.enabled: true; layer.smooth: true
+                        layer.textureSize: Qt.size(px, px)
+                    }
+                    Rectangle {
+                        id: heroMask
+                        anchors.fill: parent; visible: false
+                        radius: hero.radiusV
+                        layer.enabled: true; layer.smooth: true
+                        layer.textureSize: Qt.size(512, 512)
+                    }
+                    ShaderImage { anchors.fill: parent; source: heroImg; mask: heroMask; visible: heroImg.status === Image.Ready }
+                    DiagonalFallback { anchors.fill: parent; radius: hero.radiusV; visible: heroImg.status !== Image.Ready
+                                       Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) } }
+                    SequentialAnimation {
+                        id: swell
+                        ParallelAnimation {
+                            NumberAnimation { target: hero; property: "x"; to: (hero.parent.width - hero.bigS) / 2; duration: 480; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: hero; property: "y"; to: (hero.parent.height - hero.bigS) / 2; duration: 480; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: hero; property: "width"; to: hero.bigS; duration: 480; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: hero; property: "height"; to: hero.bigS; duration: 480; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: hero; property: "radiusV"; to: 12; duration: 480 }
+                        }
+                        PauseAnimation { duration: 90 }
+                        ScriptAction { script: { root.quietNav = true; root.rowTap(hero.row, false) } }
+                        ParallelAnimation {
+                            NumberAnimation { target: hero; property: "x"; to: 16; duration: 440; easing.type: Easing.InOutCubic }
+                            NumberAnimation { target: hero; property: "y"; to: 16; duration: 440; easing.type: Easing.InOutCubic }
+                            NumberAnimation { target: hero; property: "width"; to: 164; duration: 440; easing.type: Easing.InOutCubic }
+                            NumberAnimation { target: hero; property: "height"; to: 164; duration: 440; easing.type: Easing.InOutCubic }
+                        }
+                        ScriptAction { script: hero.settled = true }
+                    }
+                    // gone once the page shows its own cover, or after a while regardless
+                    Timer { id: giveUp; interval: 2500; onTriggered: if (hero.visible) fadeOut.restart() }
+                    NumberAnimation { id: fadeOut; target: hero; property: "opacity"; to: 0; duration: 160; onFinished: hero.visible = false }
                 }
                 Spinner { visible: Library.state === 1 && !root.isPage; active: visible && root.visible && !(Ui.app && Ui.app.expanded); radius: 20; x: list.x + list.width / 2 - 20; y: list.y + 60 - 20 }   // w-10 h-10
                 Column {
@@ -656,7 +761,7 @@ Item {
                 }
                 // indice A-Z (w-8)
                 AzIndex {
-                    visible: root.hasAz
+                    visible: root.azShown
                     x: root.width - 32; y: parent.listY; width: 32; height: root.height - root.contentTop - y
                     onLetter: (l) => { var r = Library.letterFirst(l); if (r >= 0) list.scrollToRow(r) }
                 }

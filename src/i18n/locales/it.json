@@ -355,6 +355,17 @@
     "thisDevice": "questo apparecchio",
     "controlling": "Stai pilotando {{name}}",
     "noOtherPlayers": "Nessun altro player su questo Lyrion",
+    "chooser": {
+      "vuTitle": "VU meter",
+      "vuHint": "Scegli un aspetto: i VU meter si accendono",
+      "animTitle": "Animazioni",
+      "animHint": "Scegline una: prende il posto dei VU meter",
+      "loadError": "L'elenco non è arrivato"
+    },
+    "view": {
+      "grid": "Griglia",
+      "coverflow": "Cover Flow"
+    },
     "backToOwn": "Torna a questo apparecchio",
     "addToQueue": "Aggiungi a coda",
     "playNext": "Riproduci dopo",
@@ -470,6 +481,7 @@
       "playback": "Riproduzione",
       "vuMeters": "VU meter",
       "animations": "Animazioni",
+      "library": "Libreria",
       "dsp": "DSP / Equalizzatore",
       "multiroom": "Lyrion Music Server",
       "btSpeakers": "Altoparlanti Bluetooth",
@@ -515,6 +527,13 @@
       "badgeUpdate": "NUOVA VERSIONE",
       "animationsHint": "Con i VU meter spenti puoi scegliere un'animazione.",
       "chooseAnimation": "Scegli un'animazione"
+    },
+    "library": {
+      "help": "Come si vede la libreria musicale su questo schermo.",
+      "albumView": "Vista degli album",
+      "albumViewHelp": "Una griglia di schede, oppure le copertine in fila da sfogliare col dito o col mouse (Cover Flow). Si cambia anche dal pulsante nell'elenco degli album.",
+      "viewGrid": "Griglia",
+      "viewCoverflow": "Cover Flow"
     },
     "animations": {
       "help": "Al posto dei VU meter, la schermata \"in riproduzione\" può mostrare un CD, un disco in vinile o una musicassetta che girano con la musica. Il tasto accanto all'ora la mostra a tutto schermo.",
@@ -872,6 +891,7 @@
       "switchFailed": "Impossibile cambiare connessione. Verifica e riprova."
     },
     "info": {
+      "replayTutorial": "Rivedi la guida dello schermo",
       "hostname": "Hostname",
       "deviceIp": "IP Dispositivo",
       "platform": "Platform",
@@ -1244,5 +1264,23 @@
       "translated": "tradotto",
       "vocal": "voce"
     }
+  },
+  "tutorial": {
+    "skip": "Salta",
+    "next": "Avanti",
+    "finish": "Fine",
+    "welcome": { "title": "Benvenuto in Osmium Sound", "body": "Un giro veloce dello schermo: cosa c'è dove, e cosa fa un tocco. Dura un minuto, e puoi rivederlo da Impostazioni → Info di sistema." },
+    "miniPlayer": { "title": "Quello che suona", "body": "A sinistra c'è sempre il brano in corso: copertina, titolo, tasti di riproduzione e salto, casuale e ripeti, il volume. Tocca l'artista o l'album per aprire la loro pagina." },
+    "expand": { "title": "Il player grande", "body": "Questa freccia apre la schermata “in riproduzione” a tutto schermo, con i VU meter o un'animazione. Per tornare, trascinala in basso o tocca la freccia in alto a sinistra." },
+    "tabs": { "title": "Musica, Radio, App, Scopri, Impostazioni", "body": "Le schede in alto: la tua libreria, le radio internet, le app di Lyrion, musica da scoprire e le impostazioni dell'apparecchio. Il tasto di accensione è nell'angolo." },
+    "library": { "title": "La tua libreria", "body": "Cerca in tutta la libreria dalla casella, oppure sfoglia per artisti, album, generi, anni, compositori, cartelle e playlist. In ogni elenco, una pressione lunga su una riga apre il suo menu: suona dopo, aggiungi alla coda, preferiti." },
+    "albumList": { "title": "Gli album", "body": "Tutti gli album della libreria, con la copertina. Un tocco apre l'album, il tasto play sulla scheda lo fa partire subito. Scrivi nella casella per filtrare, o salta con le lettere a destra." },
+    "longPress": { "title": "Tieni premuto per il menu", "body": "Tieni il dito per un attimo su un album, un brano, un artista o una playlist: si apre il suo menu, come questo. Suona dopo, aggiungi alla coda, salva tra i preferiti, vai all'artista." },
+    "coverFlow": { "title": "Cover Flow", "body": "Gli stessi album come una fila di copertine da sfogliare: trascina col dito, gira la rotella del mouse, tocca una copertina di lato, tieni premute le frecce o scorri il cursore in basso. Griglia o Cover Flow si scelgono dal pulsante nella barra in alto, o da Impostazioni → Libreria." },
+    "npLeft": { "title": "Ora, schermo intero, aspetto", "body": "L'ora avvia il salvaschermo. Accanto: lo schermo intero per gli strumenti o l'animazione, poi le due scelte: quali VU meter, quale animazione (un CD, un disco, una cassetta)." },
+    "npRight": { "title": "Player, testi, coda, sonno", "body": "Da destra: il player da comandare, strumenti o testi, la coda, il timer di spegnimento e le impostazioni." },
+    "npInfo": { "title": "Il brano", "body": "Tocca l'artista o l'album per aprire la loro pagina. La barra fa saltare nel brano, il cuore lo salva tra i preferiti, il cursore a destra è il volume." },
+    "npPanel": { "title": "Strumenti e animazioni", "body": "Qui stanno i VU meter, oppure l'animazione che hai scelto. Il registratore a cassette e i lettori CD hanno tasti che funzionano: play, stop, salto, espulsione, i numeri delle tracce." },
+    "done": { "title": "Questo è tutto", "body": "Buon ascolto. Puoi rivedere questa guida quando vuoi da Impostazioni → Info di sistema." }
   }
 }

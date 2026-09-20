@@ -355,6 +355,17 @@
     "thisDevice": "this device",
     "controlling": "Controlling {{name}}",
     "noOtherPlayers": "No other player on this Lyrion",
+    "chooser": {
+      "vuTitle": "VU meters",
+      "vuHint": "Pick a look: the meters come on",
+      "animTitle": "Animations",
+      "animHint": "Pick one: it takes the meters' place",
+      "loadError": "The list did not arrive"
+    },
+    "view": {
+      "grid": "Grid",
+      "coverflow": "Cover Flow"
+    },
     "backToOwn": "Back to this device",
     "addToQueue": "Add to queue",
     "playNext": "Play next",
@@ -470,6 +481,7 @@
       "playback": "Playback",
       "vuMeters": "VU Meters",
       "animations": "Animations",
+      "library": "Library",
       "dsp": "DSP / Equalizer",
       "multiroom": "Lyrion Music Server",
       "btSpeakers": "Bluetooth speakers",
@@ -515,6 +527,13 @@
       "badgeUpdate": "NEW VERSION",
       "animationsHint": "With the VU meters off you can choose an animation.",
       "chooseAnimation": "Choose an animation"
+    },
+    "library": {
+      "help": "How the music library is shown on this screen.",
+      "albumView": "Album view",
+      "albumViewHelp": "A grid of cards, or the covers standing in a row to flip through with a finger or the mouse (Cover Flow). The button in the album list switches too.",
+      "viewGrid": "Grid",
+      "viewCoverflow": "Cover Flow"
     },
     "animations": {
       "help": "Instead of the VU meters, the Now Playing screen can show a CD, a vinyl record or a cassette turning with the music. The button next to the clock shows it full screen.",
@@ -872,6 +891,7 @@
       "switchFailed": "Could not switch connection. Check it and try again."
     },
     "info": {
+      "replayTutorial": "Show the guided tour of the screen again",
       "hostname": "Hostname",
       "deviceIp": "Device IP",
       "platform": "Platform",
@@ -1244,5 +1264,23 @@
       "translated": "translated",
       "vocal": "vocals"
     }
+  },
+  "tutorial": {
+    "skip": "Skip",
+    "next": "Next",
+    "finish": "Done",
+    "welcome": { "title": "Welcome to Osmium Sound", "body": "A quick tour of the screen: what is where, and what a touch does. It takes a minute, and you can see it again from Settings → System info." },
+    "miniPlayer": { "title": "What is playing", "body": "The left side always shows the current track: cover, title, play and skip keys, shuffle and repeat, the volume. Touch the artist or the album name to open their page." },
+    "expand": { "title": "The big player", "body": "This arrow opens the full Now Playing screen, with the VU meters or an animation. Swipe it down, or touch the arrow at its top left, to come back." },
+    "tabs": { "title": "Music, Radio, Apps, Discover, Settings", "body": "The tabs at the top: your library, internet radios, the Lyrion apps, music to discover, and the settings of the appliance. The power key is in the corner." },
+    "library": { "title": "Your library", "body": "Search the whole library from the box, or browse by artists, albums, genres, years, composers, folders and playlists. In any list, a long press on a row opens its menu: play next, add to the queue, favourites." },
+    "albumList": { "title": "The albums", "body": "Every album of the library, with its cover. A touch opens the album, the play button on the card plays it right away. Type in the box to filter, or jump with the letters on the right." },
+    "longPress": { "title": "Hold to get the menu", "body": "Keep a finger on an album, a track, an artist or a playlist for a moment: its menu opens, like this one. Play next, add to the queue, save among the favourites, go to the artist." },
+    "coverFlow": { "title": "Cover Flow", "body": "The same albums as a row of covers to flip through: drag with a finger, turn the mouse wheel, touch a cover at the side, hold the arrows, or slide the knob below. Switch between grid and Cover Flow with the button in the crumb bar, or in Settings → Library." },
+    "npLeft": { "title": "Clock, full screen, looks", "body": "The clock starts the screensaver. Next to it: full screen for the meters or the animation, then the two choosers: which VU meters, which animation (a CD, a record, a cassette)." },
+    "npRight": { "title": "Player, lyrics, queue, sleep", "body": "From the right: the player to control, meters or lyrics, the queue, the sleep timer, and the settings." },
+    "npInfo": { "title": "The track", "body": "Touch the artist or the album to open their page. The bar seeks, the heart saves the track among the favourites, the slider on the right is the volume." },
+    "npPanel": { "title": "Meters and animations", "body": "Here live the VU meters, or the animation you chose. The cassette deck and the CD players have working keys: play, stop, skip, eject, the track numbers." },
+    "done": { "title": "That is all", "body": "Enjoy the music. You can see this tour again any time from Settings → System info." }
   }
 }
