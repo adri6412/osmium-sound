@@ -10,7 +10,7 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 ![UI](https://img.shields.io/badge/UI-Qt%206%20%2F%20QML-41cd52)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-green)
 ![Node](https://img.shields.io/badge/node-20%2B-brightgreen)
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/P4K825K4Y6)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://osmiumsound.it/kofi?from=github)
 
 [**🌐 Website**](https://osmiumsound.it) · [**⬇️ Download**](https://github.com/adri6412/osmium-sound/releases) · [**📱 Android companion**](https://github.com/adri6412/osmium-sound/releases?q=companion) · [**📖 Architecture**](ARCHITECTURE.md)
 
@@ -98,7 +98,7 @@ Contributions are welcome — pull requests and issues are open on [GitHub](http
 
 If Osmium Sound is useful to you, you can support its development on Ko-fi:
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/P4K825K4Y6)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://osmiumsound.it/kofi?from=github)
 
 ---
 
