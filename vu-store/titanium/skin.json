@@ -1,6 +1,6 @@
 {
   "id": "titanium",
-  "version": 2,
+  "version": 3,
   "name": {
     "en": "Titanium",
     "it": "Titanio"
@@ -15,22 +15,22 @@
   "needle": {
     "image": "needle.png",
     "width": 205.52,
-    "height": 464.93,
-    "pivotX": 102.76,
-    "pivotY": 619.43
+    "height": 527.45,
+    "pivotX": 106.68,
+    "pivotY": 482.54
   },
   "meters": [
     [
-      541.1,
-      732.97
+      545.03,
+      533.56
     ],
     [
-      1509.05,
-      732.97
+      1509.38,
+      533.56
     ]
   ],
   "angles": [
-    -38.86,
-    39.17
+    -54.11,
+    54.11
   ]
 }
