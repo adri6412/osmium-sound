@@ -37,8 +37,8 @@ pixels):
 | `copper` | VU Dagostino: under backplate + quadranti, over frame esterno 2 (v2) | 715,790 / 340..875 | 34.5,557.93 | 744.31,897.93 · 2070.41,898.14 | -44.5,47.65 |
 | `golden` | VU Golden: under quadranti, over frame | 700,775 / 280..1180 | 34.1,949.77 | 736.58,1229.77 · 2103.58,1231.77 | -34.1,34.3 |
 | `aluminium` | VU Aluminium Style: under quadrante fix, over frame; v2 lancette | 750,830 / 230..1020 | 38.5,1041.91 | 796.59,1271.91 · 2024.46,1275.09 | -34.6,33.0 |
-| `glossy` | VU Glossy: under quadrante, over the coils + frame | 770,826 / 347..1060, `--cut 1021` | 25.5,689 | 795.5,1036 · 2016.5,1036 | -48.84,47.67 |
-| `titanium` | VU Titanium: under quadrante, over the coils + frame | 730,780 / 158..820, `--cut 656` | 23.5,862 | 753.5,1020 · 2100.5,1020 | -38.89,39.14 |
+| `glossy` | VU Glossy: under quadrante, over frame | 650,936 / 347..1170 | 143.0,761.5 | 793.0,1108.5 · 2014.0,1108.5 | -44.15,43.4 |
+| `titanium` | VU Titanium: under quadrante, over frame | 610,896 / 158..805 | 143.0,862 | 753.0,1020 · 2100.0,1020 | -38.86,39.17 |
 
 The v2 Aluminium needle leans slightly in the artwork (tip at x 792, collar
 at 788.5): its axis is the collar's centre.
@@ -47,18 +47,20 @@ The Aluminium scale is light on dark: `measure` looks for dark pixels, so its
 pivots were measured on the bright ones instead. For Golden, `measure` reads
 the dial's dark border as the outer ticks (±43°): the scale ends are ±34°.
 
-Glossy and Titanium draw the moving coil in the "lancette" layer, so they use
-`needle --cut ROW --rest coils.png`: the shaft stops where the brass collar
-begins, its last row runs on down past the pivot, and the still collars and
-coils become an `--over` below the frame, where the frame's bracket covers
-them.
+Glossy and Titanium draw the needle, its collar and its coil in one "lancette"
+layer, and the whole moving part turns together, like every other meter here:
+plain `needle` with no `--cut`, cut wide enough to take the coil in (286
+columns), and the frame is the only `--over`.
 
-Their pivots are not the ones `measure` prints. The Glossy scale is an arc,
-but its centre is 290 px below the coil: turning the needle there tears it
-away from the hub the artwork draws. The pivot is the collar's centre instead,
-with the end angles aimed at the −20 and +3 ticks from that point — the ticks
-in between are then off by at most 1 % of full scale. The Titanium scale is
-dead straight, so there is no arc to fit at all, and the needle only reaches
-−20 and +3 if it turns around a point far below the panel (y 1020, 671 px
-under the scale bar); its shaft ends at row 820, inside the opaque part of the
-bezel, so nothing juts out under the panel at full deflection.
+Their pivots are not the ones `measure` prints. Glossy turns on the coil's own
+axis, not on the centre of its scale arc, which sits 216 px lower: from there
+the coil turns on the spot, inside the frame's bracket, and the ticks in
+between are off by at most 0.7 % of full scale. The Titanium scale is dead
+straight, so there is no arc to fit at all, and the needle only reaches −20
+and +3 turning around a point 671 px under the scale bar. Its coil does swing
+out of the bracket, but it ends up behind the opaque part of the bezel; what
+stays in sight is the shaft and its brass collar, which follow the needle.
+
+Check the sprite over the whole sweep: `VuPanel.qml` does not clip the needle
+to the panel, so a corner that leaves the canvas is drawn over the Now Playing
+background.
