@@ -1,0 +1,36 @@
+{
+  "id": "glossy",
+  "version": 1,
+  "name": {
+    "en": "Glossy",
+    "it": "Lucido"
+  },
+  "order": 100,
+  "size": [
+    2048,
+    1080
+  ],
+  "under": "under.png",
+  "over": "over.png",
+  "needle": {
+    "image": "needle.png",
+    "width": 40.24,
+    "height": 512.36,
+    "pivotX": 18.32,
+    "pivotY": 495.11
+  },
+  "meters": [
+    [
+      571.64,
+      744.47
+    ],
+    [
+      1449.05,
+      744.47
+    ]
+  ],
+  "angles": [
+    -48.84,
+    47.67
+  ]
+}
