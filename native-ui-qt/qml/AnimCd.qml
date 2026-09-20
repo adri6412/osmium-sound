@@ -134,11 +134,16 @@ Item {
 
     // The smear: the mean colour of each ring of the print (in linear light,
     // as the eye blends it), laid down as one radial gradient. A 96 x 96
-    // sample of the artwork or the generic label is plenty. Drawn once per
-    // image (and texture size), and only once the disc gets up to speed.
-    function paintSmear() {
-        var ctx = smear.getContext("2d")
-        var W = smear.width, H = smear.height
+    // sample of the artwork or the generic label is plenty.
+    //
+    // 🚨 A repaint blanks the canvas it draws on for a frame, and at speed
+    // that canvas is all one can see of the disc: the disc flashed black on
+    // every track change (each track has its own artwork url). So the rings
+    // are measured first, dropped when they come out the same as the ones on
+    // screen, and otherwise painted on the spare canvas, which only takes
+    // over once it is done.
+    function ringColours(canvas) {
+        var ctx = canvas.getContext("2d")
         var label = root.assetsBase + "cd-label.png"
         var art = artImg.status === Image.Ready ? artImg : artPrev
         var N = 96
@@ -146,16 +151,15 @@ Item {
         if (disc.artReady && art.implicitWidth > 0 && art.implicitHeight > 0) {
             var side = Math.min(art.implicitWidth, art.implicitHeight)
             ctx.drawImage(art, (art.implicitWidth - side) / 2, (art.implicitHeight - side) / 2, side, side, 0, 0, N, N)
-        } else if (smear.isImageLoaded(label)) {
+        } else if (canvas.isImageLoaded(label)) {
             ctx.drawImage(label, 0, 0, N, N)
         } else {
-            return
+            return null
         }
         var d = ctx.getImageData(0, 0, N, N).data
-        ctx.clearRect(0, 0, W, H)
-        var r0 = 34.5, r1 = 89.6, B = 32         // the printed ring (cd.py PRINT_R0/R1)
+        var r0 = smear.printR0, r1 = smear.printR1, B = smear.rings, b
         var acc = []
-        for (var b = 0; b < B; b++) acc.push([0, 0, 0, 0])
+        for (b = 0; b < B; b++) acc.push([0, 0, 0, 0])
         for (var y = 0; y < N; y++) {
             for (var x = 0; x < N; x++) {
                 var r = Math.hypot(x + 0.5 - N / 2, y + 0.5 - N / 2) / (N / 2) * discR
@@ -168,20 +172,26 @@ Item {
                 k[3] += a
             }
         }
-        function css(k, alpha) {
+        return acc.map(function(k) {
             function c(v) { return Math.round(255 * Math.pow(k[3] > 0 ? v / k[3] : 0, 1 / 2.2)) }
-            return "rgba(" + c(k[0]) + "," + c(k[1]) + "," + c(k[2]) + "," + alpha + ")"
-        }
+            return c(k[0]) + "," + c(k[1]) + "," + c(k[2])
+        })
+    }
+    function paintRings(canvas, cols) {
+        var ctx = canvas.getContext("2d")
+        var W = canvas.width, H = canvas.height
+        var r0 = smear.printR0, r1 = smear.printR1, B = cols.length
+        ctx.reset()
+        ctx.clearRect(0, 0, W, H)
         var g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W / 2)
-        g.addColorStop((r0 - 0.3) / discR, css(acc[0], 0))
-        g.addColorStop(r0 / discR, css(acc[0], 1))
-        for (b = 0; b < B; b++)
-            g.addColorStop((r0 + (b + 0.5) / B * (r1 - r0)) / discR, css(acc[b], 1))
-        g.addColorStop(r1 / discR, css(acc[B - 1], 1))
-        g.addColorStop((r1 + 0.3) / discR, css(acc[B - 1], 0))
+        g.addColorStop((r0 - 0.3) / discR, "rgba(" + cols[0] + ",0)")
+        g.addColorStop(r0 / discR, "rgba(" + cols[0] + ",1)")
+        for (var b = 0; b < B; b++)
+            g.addColorStop((r0 + (b + 0.5) / B * (r1 - r0)) / discR, "rgba(" + cols[b] + ",1)")
+        g.addColorStop(r1 / discR, "rgba(" + cols[B - 1] + ",1)")
+        g.addColorStop((r1 + 0.3) / discR, "rgba(" + cols[B - 1] + ",0)")
         ctx.fillStyle = g
         ctx.fillRect(0, 0, W, H)
-        smear.stale = false
     }
 
     function stopAll() {
@@ -353,7 +363,7 @@ Item {
             // the print at speed: each ring of the label smeared to its mean
             // colour (drawn once per artwork, it never moves); the sharp print
             // fades out over it as the disc gets up to speed
-            Canvas {
+            Item {
                 id: smear
                 // drawn at texture size, scaled down to the disc
                 width: root.px(disc.width); height: root.px(disc.height)
@@ -362,13 +372,43 @@ Item {
                 scale: disc.scale * disc.width / width
                 opacity: root.discA
                 visible: root.blur > 0 && opacity > 0.002
+                readonly property real printR0: 34.5   // the printed ring (cd.py PRINT_R0/R1)
+                readonly property real printR1: 89.6
+                readonly property int rings: 32
+                property var shown: null               // the ring colours on screen
+                property int front: 0
                 property bool stale: true
-                function redraw() { stale = true; if (visible) requestPaint() }
-                onVisibleChanged: if (visible && stale) requestPaint()
-                onWidthChanged: redraw()
-                onAvailableChanged: if (available) loadImage(root.assetsBase + "cd-label.png")
-                onImageLoaded: redraw()
-                onPaint: root.paintSmear()
+                function redraw() {
+                    stale = true
+                    if (!visible) return
+                    stale = false
+                    ;(front === 0 ? canvasB : canvasA).requestPaint()
+                }
+                onVisibleChanged: if (visible && stale) redraw()
+                onWidthChanged: { shown = null; redraw() }
+                component Buffer: Canvas {
+                    id: buf
+                    required property int index
+                    anchors.fill: parent
+                    // (opacity, not visible: an invisible canvas cannot paint)
+                    opacity: smear.front === index ? 1 : 0
+                    property bool fresh: false
+                    onAvailableChanged: if (available) loadImage(root.assetsBase + "cd-label.png")
+                    onImageLoaded: smear.redraw()
+                    onPaint: {
+                        var cols = root.ringColours(buf)
+                        // the next track of the same album: the rings come out
+                        // the same, the canvas on screen is left alone
+                        if (!cols || (smear.shown && smear.shown.join() === cols.join())) return
+                        root.paintRings(buf, cols)
+                        smear.shown = cols
+                        fresh = true
+                    }
+                    // painted at last: this one goes in front
+                    onPainted: if (fresh) { fresh = false; smear.front = index }
+                }
+                Buffer { id: canvasA; index: 0 }
+                Buffer { id: canvasB; index: 1 }
             }
             // the disc's print: the generic label or the artwork masked to the
             // printed ring, cooked in one layer that turns as one quad
