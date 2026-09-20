@@ -38,7 +38,7 @@ pixels):
 | `golden` | VU Golden: under quadranti, over frame | 700,775 / 280..1180 | 34.1,949.77 | 736.58,1229.77 · 2103.58,1231.77 | -34.1,34.3 |
 | `aluminium` | VU Aluminium Style: under quadrante fix, over frame; v2 lancette | 750,830 / 230..1020 | 38.5,1041.91 | 796.59,1271.91 · 2024.46,1275.09 | -34.6,33.0 |
 | `glossy` | VU Glossy: under quadrante, over frame | 650,936 / 347..1170 | 143.0,761.5 | 793.0,1108.5 · 2014.0,1108.5 | -44.15,43.4 |
-| `titanium` | VU Titanium: under quadrante, over frame | 610,896 / 158..805 | 143.0,862 | 753.0,1020 · 2100.0,1020 | -38.86,39.17 |
+| `titanium` | VU Titanium: under quadrante, over frame; red needle 87 px longer | 610,896 / 71..805 | 148.46,671.5 | 758.46,742.5 · 2100.46,742.5 | -54.11,54.11 |
 
 The v2 Aluminium needle leans slightly in the artwork (tip at x 792, collar
 at 788.5): its axis is the collar's centre.
@@ -52,14 +52,18 @@ layer, and the whole moving part turns together, like every other meter here:
 plain `needle` with no `--cut`, cut wide enough to take the coil in (286
 columns), and the frame is the only `--over`.
 
-Their pivots are not the ones `measure` prints. Glossy turns on the coil's own
-axis, not on the centre of its scale arc, which sits 216 px lower: from there
-the coil turns on the spot, inside the frame's bracket, and the ticks in
-between are off by at most 0.7 % of full scale. The Titanium scale is dead
-straight, so there is no arc to fit at all, and the needle only reaches −20
-and +3 turning around a point 671 px under the scale bar. Its coil does swing
-out of the bracket, but it ends up behind the opaque part of the bezel; what
-stays in sight is the shaft and its brass collar, which follow the needle.
+Both turn on the coil's own axis, so the coil turns on the spot in its housing
+and the needle always comes out of it. That is not what `measure` prints:
+Glossy's scale arc has its centre 216 px lower, and turning the needle there
+walks it off the hub. Aimed from the coil instead, the ticks in between are
+off by at most 0.7 % of full scale.
+
+Titanium's scale is dead straight, so there is no arc to fit at all, and the
+needle as drawn is 87 px too short to reach −20 and +3 from the coil. It is
+lengthened by that much: only the red part is resampled, the stem, collar and
+coil keep their pixels and their rows. The needle is then long enough to run
+behind the top bezel between levels 33 and 67, which is the price of a hinge
+that stays where the artwork draws it.
 
 Check the sprite over the whole sweep: `VuPanel.qml` does not clip the needle
 to the panel, so a corner that leaves the canvas is drawn over the Now Playing
