@@ -18,6 +18,8 @@ STATE = {
     "lms_mode": "local", "lms_host": "", "tz": "Europe/Rome", "device_name": "Osmium", "ota_channel": "dev", "lyrion_channel": "release",
     "audio": "hw:CARD=DAC,DEV=0", "shell_user": "", "pldir": "/srv/music/playlist", "skin": "osmium", "fmt": {"state": "idle"},
     "install": {"state": "idle"}, "cd": {"no_disc": True}, "cdrip": {"state": "idle"},
+    # the top-bar connectivity icon: internet | lan | offline, wired | wireless | none
+    "net": os.environ.get("MOCK_NET", "internet"), "net_type": os.environ.get("MOCK_NET_TYPE", "wired"),
     # Ricerca dei dispositivi in rete: uno con nome mDNS, uno che chiede la
     # password (192.168.0.60) e uno trovato solo dalla sonda sulla porta.
     "smbscan": {"t0": 0.0, "hosts": [
@@ -32,6 +34,10 @@ QUEUE = [("Rosanna", "TOTO", "TOTO IV"), ("Africa", "TOTO", "TOTO IV"), ("Hold t
 T0 = time.time()
 # Scenarios (env):
 #   MOCK_LONG_QUEUE=1        40 tracks in the queue (scrolling tests, #100)
+#   MOCK_NET=lan|offline     the top-bar connectivity icon (default internet);
+#   MOCK_NET_TYPE=wireless   wired by default, `none` = no link at all
+#   MOCK_WIFI_FAIL=1         Settings → Network → "Connect to Wi-Fi" fails
+#   MOCK_WIRED_FAIL=1        ... and so does "Use wired"
 #   MOCK_SHARED_LMS=N        somebody else's Lyrion (#99): the list holds a
 #                            phone player from the start, our "Osmium" only
 #                            shows up N seconds after the mock started (LAN
@@ -412,10 +418,14 @@ class H(BaseHTTPRequestHandler):
                                                                   {"id": "ice-blue", "name": {"en": "Ice Blue", "it": "Blu ghiaccio"}},
                                                                   {"id": "exposed", "name": {"en": "Exposed", "it": "A vista"}},
                                                                   {"id": "panoramic", "name": {"en": "Panoramic", "it": "Panoramico"}}]},
-                "/update/status": STATE["ota"], "/boot_mode": {"mode": "live"}, "/provision_status": {"pending": False, "completed": True},
+                "/update/status": STATE["ota"], "/boot_mode": {"mode": "live"}, "/provision_status": {"pending": False, "completed": True, "networks": [{"ssid": "CasaWiFi", "security": "WPA2", "signal": 78, "band": "2.4"}, {"ssid": "CasaWiFi", "security": "WPA2", "signal": 64, "band": "5"}, {"ssid": "Ospiti", "security": "", "signal": 40, "band": "2.4"}]},
                 "/player_name": {"name": "Osmium"}, "/ui_language": {"lang": STATE["lang"]},
                 "/display_mode": {"mode": STATE["display_mode"]}, "/ui_resolution": {"mode": STATE["ui_resolution"]}, "/ui_refresh": {"supported": True, "mode": STATE["ui_refresh"]},
                 "/network_status": {"connected": True, "type": "wired", "ssid": None, "ip": "192.168.0.133", "device": "eth0"},
+                "/connectivity": {"state": STATE["net"], "type": STATE["net_type"], "ssid": "CasaWiFi" if STATE["net_type"] == "wireless" else None,
+                                  "ip": None if STATE["net"] == "offline" and STATE["net_type"] == "none" else "192.168.0.133",
+                                  "device": None if STATE["net_type"] == "none" else ("wlan0" if STATE["net_type"] == "wireless" else "eth0"),
+                                  "gateway": "192.168.0.1", "router": STATE["net"] != "offline", "at": int(time.time())},
                 "/network_info": {"hostname": "osmium", "ip": "192.168.0.133", "netmask": "255.255.255.0"},
                 "/system_info": {"hostname": "osmium", "platform": "Debian 13", "arch": "x86_64", "local_ip": "192.168.0.133", "version": "2.5.24-dev.2",
                                  "network_interfaces": [{"name": "eth0", "address": "192.168.0.133", "active": True}, {"name": "wlan0", "address": "192.168.0.140", "active": False}]},
@@ -435,7 +445,9 @@ class H(BaseHTTPRequestHandler):
                 "/discover_lms": {"servers": [{"name": "NAS Lyrion", "ip": "192.168.0.50"}, {"name": "Osmium", "ip": "192.168.0.133"}]},
                 "/install/status": STATE["install"],
                 "/install/disks": {"disks": [{"path": "/dev/sda", "model": "Samsung SSD 870", "transport": "sata", "size": 500107862016}, {"path": "/dev/nvme0n1", "model": "WD Black SN770", "transport": "nvme", "size": 1000204886016}, {"path": "/dev/mmcblk0boot0", "model": "eMMC", "size": 4000000}]},
-                "/wifi_scan": {"networks": [{"ssid": "CasaWiFi", "security": "WPA2", "signal": 78}, {"ssid": "Ospiti", "security": "", "signal": 40}, {"ssid": "Vicino", "security": "WPA2", "signal": 20}]},
+                # CasaWiFi sta su tutte e due le bande, come quasi ogni router di casa:
+                # e' il caso che l'elenco deve saper distinguere.
+                "/wifi_scan": {"networks": [{"ssid": "CasaWiFi", "security": "WPA2", "signal": 78, "band": "2.4", "saved": True}, {"ssid": "CasaWiFi", "security": "WPA2", "signal": 64, "band": "5", "saved": True}, {"ssid": "Ospiti", "security": "", "signal": 40, "band": "2.4"}, {"ssid": "Vicino", "security": "WPA2", "signal": 20, "band": "5"}]},
             }
             if u.path in table: return self._json(table[u.path])
             return self._json({"success": False, "error": "mock: " + u.path}, 404)
@@ -500,6 +512,18 @@ class H(BaseHTTPRequestHandler):
                   "/vu_style": lambda: VU_API.set_vu_style(data.get("style"))}.get(u.path)
             if fn: return self._json(fn())
         if port == 8000:
+            if u.path == "/wifi_connect":
+                time.sleep(1.0)                      # nmcli takes its time
+                if os.environ.get("MOCK_WIFI_FAIL"):
+                    return self._json({"success": False, "code": "network.connectFailed",
+                                       "message": "Error: Connection activation failed: (7) Secrets were required, but not provided."})
+                STATE["net"] = "internet"; STATE["net_type"] = "wireless"
+                return self._json({"success": True, "message": "ok", "ip": "192.168.0.140"})
+            if u.path == "/wired_dhcp":
+                if os.environ.get("MOCK_WIRED_FAIL"):
+                    return self._json({"success": False, "code": "network.cableNotConnected", "message": "no carrier"})
+                STATE["net_type"] = "wired"
+                return self._json({"success": True, "code": "network.wiredConnected", "ip": "192.168.0.133"})
             if u.path == "/vu_meter": STATE["vu"] = bool(data.get("enable", data.get("enabled", True)))
             if u.path == "/vu_style": STATE["vu_style"] = str(data.get("style") or "classic")
             if u.path == "/nowplaying_animation":

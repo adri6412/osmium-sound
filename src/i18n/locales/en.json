@@ -888,7 +888,12 @@
       "useWiredButton": "Use wired",
       "switchedToWifi": "Now using Wi-Fi ({ssid}) — the wired connection has been turned off.",
       "switchedToWired": "Now using the wired connection — Wi-Fi has been turned off.",
-      "switchFailed": "Could not switch connection. Check it and try again."
+      "switchFailed": "Could not switch connection. Check it and try again.",
+      "connecting": "Connecting to {ssid}…",
+      "connectFailed": "Could not connect to {ssid}. Check the password and try again.",
+      "saved": "Saved",
+      "connectingWired": "Connecting with the cable…",
+      "wiredFailed": "Could not connect with the cable. Check that it is plugged in and try again."
     },
     "info": {
       "replayTutorial": "Show the guided tour of the screen again",
@@ -1265,6 +1270,13 @@
       "vocal": "vocals"
     }
   },
+  "connectivity": {
+    "internetWifi": "Connected to {ssid}, internet available",
+    "internetWired": "Connected by cable, internet available",
+    "lanWifi": "Connected to {ssid}, but the internet is not reachable",
+    "lanWired": "Connected by cable, but the internet is not reachable",
+    "offline": "No network connection"
+  },
   "tutorial": {
     "skip": "Skip",
     "next": "Next",
@@ -1272,7 +1284,7 @@
     "welcome": { "title": "Welcome to Osmium Sound", "body": "A quick tour of the screen: what is where, and what a touch does. It takes a minute, and you can see it again from Settings → System info." },
     "miniPlayer": { "title": "What is playing", "body": "The left side always shows the current track: cover, title, play and skip keys, shuffle and repeat, the volume. Touch the artist or the album name to open their page." },
     "expand": { "title": "The big player", "body": "This arrow opens the full Now Playing screen, with the VU meters or an animation. Swipe it down, or touch the arrow at its top left, to come back." },
-    "tabs": { "title": "Music, Radio, Apps, Discover, Settings", "body": "The tabs at the top: your library, internet radios, the Lyrion apps, music to discover, and the settings of the appliance. The power key is in the corner." },
+    "tabs": { "title": "Music, Radio, Apps, Discover, Settings", "body": "The tabs at the top: your library, internet radios, the Lyrion apps, music to discover, and the settings of the appliance. The power key is in the corner, and next to it the network icon: touch it to see whether the internet is reachable." },
     "library": { "title": "Your library", "body": "Search the whole library from the box, or browse by artists, albums, genres, years, composers, folders and playlists. In any list, a long press on a row opens its menu: play next, add to the queue, favourites." },
     "albumList": { "title": "The albums", "body": "Every album of the library, with its cover. A touch opens the album, the play button on the card plays it right away. Type in the box to filter, or jump with the letters on the right." },
     "longPress": { "title": "Hold to get the menu", "body": "Keep a finger on an album, a track, an artist or a playlist for a moment: its menu opens, like this one. Play next, add to the queue, save among the favourites, go to the artist." },

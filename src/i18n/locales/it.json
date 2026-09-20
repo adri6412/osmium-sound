@@ -888,7 +888,12 @@
       "useWiredButton": "Usa il cavo",
       "switchedToWifi": "Ora in uso il Wi-Fi ({ssid}) — la connessione via cavo è stata disattivata.",
       "switchedToWired": "Ora in uso la connessione via cavo — il Wi-Fi è stato disattivato.",
-      "switchFailed": "Impossibile cambiare connessione. Verifica e riprova."
+      "switchFailed": "Impossibile cambiare connessione. Verifica e riprova.",
+      "connecting": "Connessione a {ssid} in corso…",
+      "connectFailed": "Connessione a {ssid} non riuscita. Controlla la password e riprova.",
+      "saved": "Salvata",
+      "connectingWired": "Connessione via cavo in corso…",
+      "wiredFailed": "Connessione via cavo non riuscita. Controlla che il cavo sia collegato e riprova."
     },
     "info": {
       "replayTutorial": "Rivedi la guida dello schermo",
@@ -1265,6 +1270,13 @@
       "vocal": "voce"
     }
   },
+  "connectivity": {
+    "internetWifi": "Connesso a {ssid}, internet disponibile",
+    "internetWired": "Connesso via cavo, internet disponibile",
+    "lanWifi": "Connesso a {ssid}, ma internet non è raggiungibile",
+    "lanWired": "Connesso via cavo, ma internet non è raggiungibile",
+    "offline": "Nessuna connessione di rete"
+  },
   "tutorial": {
     "skip": "Salta",
     "next": "Avanti",
@@ -1272,7 +1284,7 @@
     "welcome": { "title": "Benvenuto in Osmium Sound", "body": "Un giro veloce dello schermo: cosa c'è dove, e cosa fa un tocco. Dura un minuto, e puoi rivederlo da Impostazioni → Info di sistema." },
     "miniPlayer": { "title": "Quello che suona", "body": "A sinistra c'è sempre il brano in corso: copertina, titolo, tasti di riproduzione e salto, casuale e ripeti, il volume. Tocca l'artista o l'album per aprire la loro pagina." },
     "expand": { "title": "Il player grande", "body": "Questa freccia apre la schermata “in riproduzione” a tutto schermo, con i VU meter o un'animazione. Per tornare, trascinala in basso o tocca la freccia in alto a sinistra." },
-    "tabs": { "title": "Musica, Radio, App, Scopri, Impostazioni", "body": "Le schede in alto: la tua libreria, le radio internet, le app di Lyrion, musica da scoprire e le impostazioni dell'apparecchio. Il tasto di accensione è nell'angolo." },
+    "tabs": { "title": "Musica, Radio, App, Scopri, Impostazioni", "body": "Le schede in alto: la tua libreria, le radio internet, le app di Lyrion, musica da scoprire e le impostazioni dell'apparecchio. Il tasto di accensione è nell'angolo, e accanto c'è l'icona della rete: toccala per sapere se internet è raggiungibile." },
     "library": { "title": "La tua libreria", "body": "Cerca in tutta la libreria dalla casella, oppure sfoglia per artisti, album, generi, anni, compositori, cartelle e playlist. In ogni elenco, una pressione lunga su una riga apre il suo menu: suona dopo, aggiungi alla coda, preferiti." },
     "albumList": { "title": "Gli album", "body": "Tutti gli album della libreria, con la copertina. Un tocco apre l'album, il tasto play sulla scheda lo fa partire subito. Scrivi nella casella per filtrare, o salta con le lettere a destra." },
     "longPress": { "title": "Tieni premuto per il menu", "body": "Tieni il dito per un attimo su un album, un brano, un artista o una playlist: si apre il suo menu, come questo. Suona dopo, aggiungi alla coda, salva tra i preferiti, vai all'artista." },

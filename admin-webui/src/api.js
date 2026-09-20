@@ -80,8 +80,10 @@ export const api = {
 
   // provisioning
   provisionStatus: () => req('/api/provision/status'),
-  provisionWifiConnect: (ssid, password) =>
-    req('/api/provision/wifi_connect', { method: 'POST', body: { ssid, password } }),
+  // `band` ('2.4' / '5' / '6') only when the same name is on more than one of
+  // them and the owner picked one — see webui_server._picked_band.
+  provisionWifiConnect: (ssid, password, band = '') =>
+    req('/api/provision/wifi_connect', { method: 'POST', body: { ssid, password, band } }),
   provisionClaimMode: (mode) =>
     req('/api/provision/claim_mode', { method: 'POST', body: { mode, source: 'web' } }),
   provisionFinalize: () => req('/api/provision/finalize', { method: 'POST' }),

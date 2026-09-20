@@ -146,7 +146,7 @@ Item {
         property var alarms: []                                     // [{id,time,on}]
         property string netType: ""; property string netSsid: ""; property string netIp: ""; property string netDev: ""; property string netSubnet: ""; property bool netConnected: false
         property var ifaces: []                                     // [{name,addr,wifi,active}]
-        property var wifi: []                                       // [{ssid,security,signal}]
+        property var wifi: []                                       // [{ssid,security,signal,band}]
         property var upd: [{cur: "", latest: "", avail: false}, {cur: "", latest: "", avail: false}, {cur: "", latest: "", avail: false}]
         property bool updChecking: false; property bool updCheckFailed: false
         property string otaState: ""; property string otaMsg: ""; property int otaPct: 0
@@ -377,7 +377,7 @@ Item {
         }
         function loadWifi() {
             Api.get(api("/wifi_scan"), function(ok, d) {
-                wifi = ok && d && d.networks ? d.networks.map(function(n) { return { ssid: String(n.ssid || ""), security: String(n.security || ""), signal: Number(n.signal || 0) } }) : []
+                wifi = ok && d && d.networks ? d.networks.map(function(n) { return { ssid: String(n.ssid || ""), security: String(n.security || ""), signal: Number(n.signal || 0), band: String(n.band || ""), saved: !!n.saved } }) : []
                 if (Ui.dialogs) Ui.dialogs.updateWifi(wifi)
             }, 20000)
         }
@@ -421,7 +421,9 @@ Item {
         function onPlayerChanged() { if (root.active >= 0) root.rebuild() }
     }
     signal dataChanged()
+    property bool netReloading: false
     onDataChanged: {
+        if (netReloading) { netReloading = false; msg = "" }
         if (active >= 0) rebuild()
         if (Ui.dialogs && Ui.dialogs.active) Ui.dialogs.formatStatus(cfg.fmtState, cfg.fmtMsg, cfg.fmtPct)
     }
@@ -453,6 +455,28 @@ Item {
 
     function enter() { cfg.load(); goRoot() }
     function say(text, err) { msg = text; msgErr = !!err; rebuild() }
+    // Settings → Network → "Connect to Wi-Fi". The answer decides the message:
+    // before, the page said "now using Wi-Fi" the moment the request left,
+    // whatever NetworkManager made of it. A failed attempt reopens the window
+    // with the name and the key still in and the reason under them, so one
+    // wrong character is corrected instead of typed all over again.
+    function wifiAsk(pre) {
+        cfg.loadWifi()
+        Ui.dialogs.wifi(cfg.wifi, function(ssid, pw, band) {
+            if (!ssid) return
+            say(Tr.tf("settings.network.connecting", "ssid", ssid))
+            // band is set only when the same name is on more than one band:
+            // only then is the profile pinned to one of them. nmcli can take
+            // up to 45 s to give up, so the request waits for it.
+            Api.post(cfg.api("/wifi_connect"), { ssid: ssid, password: pw || "", band: band || "" }, function(ok, d) {
+                cfg.load()
+                if (ok && d && d.success) { say(Tr.tf("settings.network.switchedToWifi", "ssid", ssid)); return }
+                var why = Tr.tf("settings.network.connectFailed", "ssid", ssid)
+                say(why, true)
+                wifiAsk({ ssid: ssid, pass: pw || "", band: band || "", err: why })
+            }, 60000)
+        }, pre)
+    }
     function goRoot() { active = -1; msg = ""; pendAct = ""; backTo = ""; rows = []; page.contentY = 0; appear() }
     function goBack() { if (backTo) openSection(backTo); else goRoot() }
     function openSection(i, mark) {
@@ -1860,16 +1884,19 @@ Item {
             Ui.dialogs.text(Tr.tf("settings.updates.changelogTitle", "version", cfg.upd[0].latest || cfg.upd[0].cur), cfg.changelog)
             return
         case "upd_autocheck": autoCheck = !autoCheck; Sys.setConf("ota-autocheck", autoCheck ? "1" : "0"); if (Ui.app && Ui.app.main) Ui.app.main.browser.checkUpdates(); break
-        case "wifi_panel":
-            cfg.loadWifi()
-            Ui.dialogs.wifi(cfg.wifi, function(ssid, pw) {
-                if (!ssid) return
-                post(A("/wifi_connect"), { ssid: ssid, password: pw || "" })
-                say(Tr.tf("settings.network.switchedToWifi", "ssid", ssid))
-            })
+        case "wifi_panel": wifiAsk(); return
+        case "wired_dhcp":
+            say(Tr.t("settings.network.connectingWired"))
+            Api.post(A("/wired_dhcp"), {}, function(ok, d) {
+                cfg.load()
+                if (ok && d && d.success) say(Tr.t("settings.network.switchedToWired"))
+                else say(Tr.t("settings.network.wiredFailed"), true)
+            }, 60000)
             return
-        case "wired_dhcp": post(A("/wired_dhcp"), {}); say(Tr.t("settings.network.switchedToWired")); break
-        case "net_reload": cfg.load(); say(Tr.t("settings.network.loading")); break
+        // "Reload data": the note goes away when the reload has landed (it
+        // used to stay on the page until the section was left)
+        // (flag raised AFTER load(): its first dataChanged can fire synchronously)
+        case "net_reload": cfg.load(); netReloading = true; say(Tr.t("settings.network.loading")); return
         case "net_iface": return
         case "src_rw": {
             var wantRw = true

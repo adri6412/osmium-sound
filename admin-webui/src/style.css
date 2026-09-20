@@ -151,6 +151,10 @@ label.upload-btn:hover { filter: brightness(1.1); }
 .net:hover { background: rgba(255, 255, 255, 0.02); }
 .net:last-child { border-bottom: 0; }
 .check { color: var(--gold); font-weight: 700; }
+/* The band of a Wi-Fi network, shown only when the same name is on more
+   than one of them (2.4 / 5 GHz) — the only thing telling the rows apart. */
+.band { color: var(--gold); border: 1px solid var(--border); border-radius: 4px;
+  padding: 1px 6px; font-size: 11px; margin-left: 6px; white-space: nowrap; }
 
 .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); color: var(--silver); }
 .pill.gold { border-color: rgba(212, 175, 55, 0.5); color: var(--gold); background: var(--gold-dim); }

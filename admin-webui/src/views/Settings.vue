@@ -147,7 +147,21 @@ async function toggleKdump(enable) {
 
 // ── network ──────────────────────────────────────────────────────
 const net = ref({}); const wifi = ref([]); const ssid = ref(''); const wifiPass = ref('');
+// The band picked from a dual-band row ('2.4' / '5' / '6'), '' when the name
+// was typed by hand or exists on one band only: almost every home router
+// broadcasts the same name on 2.4 and 5 GHz, and without this the two rows
+// would be the same row.
+const wifiBand = ref('');
 const netBusy = ref(false);
+const dualSsids = computed(() => {
+  const seen = new Set(), dual = new Set();
+  for (const n of wifi.value) { if (seen.has(n.ssid)) dual.add(n.ssid); seen.add(n.ssid); }
+  return dual;
+});
+function pickNet(n) {
+  ssid.value = n.ssid;
+  wifiBand.value = dualSsids.value.has(n.ssid) ? (n.band || '') : '';
+}
 async function loadNet() { const r = await api.sys('network_status'); if (r.ok) net.value = r.data; }
 async function scanWifi() {
   netBusy.value = true; const r = await api.sys('wifi_scan'); netBusy.value = false;
@@ -155,7 +169,7 @@ async function scanWifi() {
 }
 async function connectWifi() {
   netBusy.value = true; say(t('settings.network.connecting'));
-  const r = await api.sysPost('wifi_connect', { ssid: ssid.value, password: wifiPass.value });
+  const r = await api.sysPost('wifi_connect', { ssid: ssid.value, password: wifiPass.value, band: wifiBand.value });
   netBusy.value = false;
   if (r.ok && r.data.success !== false) { say(t('settings.network.connected')); loadNet(); }
   else say(bodyMsg(r, t('settings.network.connectFailed')), true);
@@ -1515,13 +1529,18 @@ onUnmounted(() => {
         <button class="secondary" :disabled="netBusy" @click="scanWifi">{{ t('settings.network.scanWifi') }}</button>
         <button class="secondary" :disabled="netBusy" @click="wired">{{ t('settings.network.useWired') }}</button>
       </div>
-      <div v-for="n in wifi" :key="n.ssid" class="net between" @click="ssid = n.ssid">
-        <span>{{ n.ssid }} <span class="check" v-if="n.in_use">✓</span></span>
+      <div v-for="n in wifi" :key="n.ssid + '|' + (n.band || '')" class="net between" @click="pickNet(n)">
+        <span>{{ n.ssid }}
+          <span class="band" v-if="n.band && dualSsids.has(n.ssid)">{{ n.band }} GHz</span>
+          <span class="check" v-if="n.in_use">✓</span></span>
         <span class="muted">{{ n.signal }}%</span>
       </div>
       <template v-if="wifi.length || ssid">
-        <label>{{ t('settings.network.ssidLabel') }}</label><input v-model="ssid" />
-        <label>{{ t('settings.network.passwordLabel') }}</label><input v-model="wifiPass" type="password" />
+        <label>{{ t('settings.network.ssidLabel') }}</label><input v-model="ssid" @input="wifiBand = ''" />
+        <!-- In clear on purpose: a Wi-Fi key is long, typed once, and a typo
+             hidden behind dots is the commonest reason a join fails. -->
+        <label>{{ t('settings.network.passwordLabel') }}</label>
+        <input v-model="wifiPass" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
         <div style="margin-top: 12px;"><button :disabled="netBusy" @click="connectWifi">{{ t('settings.network.connect') }}</button></div>
       </template>
 

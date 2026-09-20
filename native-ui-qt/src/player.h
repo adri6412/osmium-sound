@@ -87,6 +87,14 @@ class Player : public QObject {
     Q_PROPERTY(QString otaMessage READ otaMessage NOTIFY otaChanged)
     Q_PROPERTY(QString otaKind READ otaKind NOTIFY otaChanged)
     Q_PROPERTY(int otaPercent READ otaPercent NOTIFY otaChanged)
+    // connectivity for the top-bar icon (api_server /connectivity):
+    // "unknown" until the first answer, then "internet", "lan" or "offline";
+    // the type is the link's ("wired"/"wireless"), or the last one seen once
+    // the box is offline, so the icon keeps the shape the owner knows
+    Q_PROPERTY(QString netState READ netState NOTIFY netChanged)
+    Q_PROPERTY(QString netType READ netType NOTIFY netChanged)
+    Q_PROPERTY(QString netSsid READ netSsid NOTIFY netChanged)
+    Q_PROPERTY(QString netIp READ netIp NOTIFY netChanged)
 public:
     explicit Player(QObject *parent = nullptr);
     void start();
@@ -148,6 +156,10 @@ public:
     QString otaMessage() const { return m_otaMsg; }
     QString otaKind() const { return m_otaKind; }
     int otaPercent() const { return m_otaPct; }
+    QString netState() const { return m_netState; }
+    QString netType() const { return m_netType; }
+    QString netSsid() const { return m_netSsid; }
+    QString netIp() const { return m_netIp; }
 
     // ─── comandi (stessi di lms.c) ────────────────────────────────────────
     Q_INVOKABLE void togglePlay();
@@ -199,6 +211,7 @@ signals:
     void modeChanged();
     void settingsChanged();
     void otaChanged();
+    void netChanged();
     void favoriteChanged();
     void usbMounted(const QString &label);
     void trackChanged();          // brano nuovo (titolo/artista/album diversi)
@@ -213,6 +226,7 @@ private:
     void pollSettings();
     void pollUsb();
     void pollOta();
+    void pollNet();
     void checkFavorite();
     void derive();
     void updateArtwork();
@@ -221,7 +235,8 @@ private:
 
     QTimer m_tick, m_statusTimer;
     QElapsedTimer m_clock;
-    qint64 m_lastStatus = 0, m_lastPrefs = 0, m_lastSettings = 0, m_lastUsb = 0, m_lastOta = 0, m_lastElapsedTick = 0;
+    qint64 m_lastStatus = 0, m_lastPrefs = 0, m_lastSettings = 0, m_lastUsb = 0, m_lastOta = 0, m_lastNet = 0, m_lastElapsedTick = 0;
+    QString m_netState = "unknown", m_netType, m_netSsid, m_netIp;
     bool m_statusInFlight = false, m_wantNow = false;
 
     bool m_connected = false;

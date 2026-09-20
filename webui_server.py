@@ -382,10 +382,38 @@ def _wired_connected():
     return False
 
 
+def _wifi_band(freq):
+    """'2.4', '5' or '6' from the frequency nmcli prints ('2462 MHz'), '' when
+    it makes no sense. Same rule as api_server._wifi_band — a router that puts
+    one SSID on both bands must not come back as one unchoosable row."""
+    try:
+        mhz = int(str(freq).strip().split()[0])
+    except (TypeError, ValueError, IndexError):
+        return ''
+    if 2400 <= mhz < 2500:
+        return '2.4'
+    if 4900 <= mhz < 5925:
+        return '5'
+    if 5925 <= mhz <= 7125:
+        return '6'
+    return ''
+
+
+def _wifi_band_args(band):
+    """`802-11-wireless.band` for a band picked from the scan list, nothing
+    otherwise (see api_server._wifi_band_args)."""
+    if band == '2.4':
+        return ['802-11-wireless.band', 'bg']
+    if band in ('5', '6'):
+        return ['802-11-wireless.band', 'a']
+    return []
+
+
 def _scan_wifi():
-    """Return a cached-friendly list of {ssid, signal, security, in_use}."""
+    """Return a cached-friendly list of {ssid, signal, security, band, in_use}."""
     if FAKE:
-        return [{'ssid': 'FakeNet', 'signal': 80, 'security': 'WPA2', 'in_use': False}]
+        return [{'ssid': 'FakeNet', 'signal': 80, 'security': 'WPA2', 'band': '2.4', 'in_use': False},
+                {'ssid': 'FakeNet', 'signal': 66, 'security': 'WPA2', 'band': '5', 'in_use': False}]
     _nmcli(['device', 'wifi', 'rescan'], timeout=20)
     # `rescan` only requests a scan and returns immediately -- results land
     # asynchronously a few seconds later. Reading the list right away worked
@@ -401,21 +429,35 @@ def _scan_wifi():
     # whatever list is captured here is final for the whole setup flow.
     nets = []
     for _ in range(8):
-        rc, out, _ = _nmcli(['-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
+        rc, out, _ = _nmcli(['-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY,FREQ', 'device', 'wifi', 'list'])
         nets = []
         if rc == 0:
-            seen = set()
+            # One row per SSID *and band* (it used to be one per SSID, which
+            # threw the 5 GHz half of every home router away). Several access
+            # points on the same band still collapse into one row: those are
+            # the ones nobody can choose between.
+            seen = {}
             for line in out.splitlines():
                 # nmcli -t escapes ':' inside fields as '\:'; split on unescaped ':'
                 parts = re.split(r'(?<!\\):', line)
-                if len(parts) < 4:
+                if len(parts) < 5:
                     continue
                 ssid = parts[1].replace('\\:', ':')
-                if not ssid or ssid in seen:
+                if not ssid:
                     continue
-                seen.add(ssid)
-                nets.append({'ssid': ssid, 'signal': int(parts[2] or 0),
-                             'security': parts[3] or '', 'in_use': parts[0].strip() == '*'})
+                band = _wifi_band(parts[4])
+                signal = int(parts[2] or 0)
+                prev = seen.get((ssid, band))
+                if prev is not None:
+                    if signal > prev['signal']:
+                        prev['signal'] = signal
+                        prev['security'] = parts[3] or ''
+                    prev['in_use'] = prev['in_use'] or parts[0].strip() == '*'
+                    continue
+                net = {'ssid': ssid, 'signal': signal, 'security': parts[3] or '',
+                       'band': band, 'in_use': parts[0].strip() == '*'}
+                seen[(ssid, band)] = net
+                nets.append(net)
         if nets:
             break
         time.sleep(1.5)
@@ -472,8 +514,12 @@ def _ap_ssid(dev):
     return f'Osmium-Setup-{suffix}'
 
 
-def _connect_wifi(ssid, password, ap_fallback=True):
+def _connect_wifi(ssid, password, ap_fallback=True, band=''):
     """Try to join, and on failure delete the stale profile.
+
+    `band` ('2.4' / '5' / '6') is the band the owner picked from a dual-band
+    SSID; it pins the profile to that half of the router, which is the whole
+    point of showing the two rows apart.
 
     `ap_fallback` (only True for the post-setup network-loss recovery
     caller): also drop any AP before joining and, on failure, re-raise it so
@@ -513,6 +559,7 @@ def _connect_wifi(ssid, password, ap_fallback=True):
     if password:
         add_args += ['802-11-wireless-security.key-mgmt', 'wpa-psk',
                      '802-11-wireless-security.psk', password]
+    add_args += _wifi_band_args(band)
     rc, _, err = _nmcli(add_args)
     if rc != 0:
         return False, (err.strip() or _wt('network.connectFailed', _lang())), None
@@ -1323,9 +1370,10 @@ def provision_wifi_connect():
     data = request.get_json(silent=True) or {}
     ssid = (data.get('ssid') or '').strip()
     password = data.get('password') or ''
+    band = _picked_band(data.get('band'))
     # Reply first: the join itself (with its scan-and-retry dance) can take a
     # while, and the on-screen panel just needs to know it started.
-    threading.Thread(target=_bg_connect, args=(ssid, password), daemon=True).start()
+    threading.Thread(target=_bg_connect, args=(ssid, password, band), daemon=True).start()
     return jsonify({'success': True, 'dropping_ap': True})
 
 
@@ -1341,14 +1389,20 @@ def provision_wifi_rescan():
     return jsonify({'success': True, 'networks': nets})
 
 
-def _bg_connect(ssid, password):
+def _picked_band(value):
+    """The band a client asked for, or '' for anything we don't recognise."""
+    band = (value or '').strip()
+    return band if band in ('2.4', '5', '6') else ''
+
+
+def _bg_connect(ssid, password, band=''):
     with _prov_lock:
         state = _load_prov_state()
         state['stage'] = 'connecting'
         state['ssid_attempt'] = ssid
         state['error'] = None
         _save_prov_state(state)
-        ok, err, ap = _connect_wifi(ssid, password, ap_fallback=False)
+        ok, err, ap = _connect_wifi(ssid, password, ap_fallback=False, band=band)
         state = _load_prov_state()
         if ok:
             state['stage'] = 'network-ok'
@@ -1821,13 +1875,14 @@ def netrecovery_wifi_connect():
     data = request.get_json(silent=True) or {}
     ssid = (data.get('ssid') or '').strip()
     password = data.get('password') or ''
+    band = _picked_band(data.get('band'))
     # Reply first (the AP is about to drop; the phone must know to expect it).
-    threading.Thread(target=_bg_netrecovery_connect, args=(ssid, password), daemon=True).start()
+    threading.Thread(target=_bg_netrecovery_connect, args=(ssid, password, band), daemon=True).start()
     return jsonify({'success': True, 'dropping_ap': True})
 
 
-def _bg_netrecovery_connect(ssid, password):
-    ok, err, ap = _connect_wifi(ssid, password)
+def _bg_netrecovery_connect(ssid, password, band=''):
+    ok, err, ap = _connect_wifi(ssid, password, band=band)
     with _net_lock:
         if ok:
             # Connected: _connect_wifi already tore the AP down; the network
@@ -2391,6 +2446,7 @@ _CAPTIVE_CSS = """
  select{-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%23aab' d='M5 7l5 6 5-6z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:14px;padding-right:36px}
  .muted{color:#889;font-size:13px}
  .net{padding:10px;border-bottom:1px solid #262b35;cursor:pointer} .row{display:flex;justify-content:space-between}
+ .band{color:#c8a24a;border:1px solid #3a3320;border-radius:4px;padding:1px 5px;font-size:11px;margin-left:6px;white-space:nowrap}
  .langbar{text-align:right;margin-bottom:8px} .langbar a{color:#889;font-size:13px;text-decoration:none;margin-left:10px}
  .langbar a.active{color:#c8a24a;font-weight:600}
  .bar{height:8px;border-radius:4px;background:#12151b;overflow:hidden;margin:10px 0}
@@ -2454,9 +2510,12 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
  <label id="lbl-wifi">Wi-Fi network</label>
  <div id="nets"></div>
  <label id="lbl-ssid">Or enter the network name (SSID)</label>
- <input id="ssid" placeholder="Network name">
+ <input id="ssid" placeholder="Network name" oninput="pickedBand=''">
  <label id="lbl-pass">Wi-Fi password</label>
- <input id="pass" type="password" placeholder="Password">
+ <!-- Shown in clear on purpose: a Wi-Fi key is long, typed once, on a phone
+      held by whoever owns the network, and a typo behind dots is the single
+      most common reason a join fails. -->
+ <input id="pass" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Password">
  <button onclick="connect()" id="btn-connect">Connect via Wi-Fi</button>
  <button class="sec" id="btn-wired" onclick="useWired()">I'm connected via cable (Ethernet)</button>
  <p class="muted" id="netmsg"></p>
@@ -2831,10 +2890,7 @@ if(STRINGS[LANG]){applyStrings();show('step-restore')}
 
 function load(){if(netPhaseDone)return;fetch('/api/provision/status').then(function(r){return r.json()}).then(function(s){
   if(!s.pending){return}
-  var n=document.getElementById('nets');n.innerHTML='';
-  (s.networks||[]).forEach(function(net){var d=document.createElement('div');d.className='net';
-    d.innerHTML='<div class="row"><span>'+net.ssid+'</span><span class="muted">'+net.signal+'%</span></div>';
-    d.onclick=function(){document.getElementById('ssid').value=net.ssid};n.appendChild(d)});
+  fillNets(s.networks||[]);
   if(s.error){document.getElementById('netmsg').textContent=S.error+s.error}
   if(s.stage==='network-ok'){netPhaseDone=true;checkMandatoryUpdate()}
 })}
@@ -3016,7 +3072,27 @@ function waitForReboot(){
   checkDown();
 }
 
-function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value};
+// The band the owner picked from the list. Kept only while the name in the
+// box is still the one they tapped: a hand-typed SSID carries no band, and a
+// band is only sent at all when the same name really is on two of them --
+// pinning a profile that has nowhere else to go just gives NetworkManager one
+// more way to fail.
+var pickedBand='';
+function fillNets(list){
+  var n=document.getElementById('nets');n.innerHTML='';
+  var dual={};list.forEach(function(net){dual[net.ssid]=(dual[net.ssid]||0)+1});
+  list.forEach(function(net){
+    var d=document.createElement('div');d.className='net';
+    var row=document.createElement('div');row.className='row';
+    var name=document.createElement('span');name.textContent=net.ssid;
+    // One SSID on 2.4 and 5 GHz would otherwise be two identical rows.
+    if(net.band&&dual[net.ssid]>1){var b=document.createElement('span');b.className='band';b.textContent=net.band+' GHz';name.appendChild(b)}
+    var sig=document.createElement('span');sig.className='muted';sig.textContent=net.signal+'%';
+    row.appendChild(name);row.appendChild(sig);d.appendChild(row);
+    d.onclick=function(){document.getElementById('ssid').value=net.ssid;pickedBand=dual[net.ssid]>1?(net.band||''):''};
+    n.appendChild(d)});
+}
+function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value,band:pickedBand};
   document.getElementById('netmsg').textContent=hostMsg(S.connecting);
   jpost('/api/provision/wifi_connect',b)}
 function useWired(){jpost('/api/provision/use_wired',{}).then(function(res){
@@ -3928,6 +4004,7 @@ NET_RECOVERY_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8
  label{display:block;font-size:13px;color:#aab;margin:8px 0 4px} input,button{width:100%;padding:12px;border-radius:8px;border:1px solid #333;background:#12151b;color:#eee;font-size:15px;box-sizing:border-box}
  button{background:#c8a24a;color:#111;font-weight:600;border:0;margin-top:12px} .muted{color:#889;font-size:13px}
  .net{padding:10px;border-bottom:1px solid #262b35;cursor:pointer} .row{display:flex;justify-content:space-between}
+ .band{color:#c8a24a;border:1px solid #3a3320;border-radius:4px;padding:1px 5px;font-size:11px;margin-left:6px;white-space:nowrap}
  .langbar{text-align:right;margin-bottom:8px} .langbar a{color:#889;font-size:13px;text-decoration:none;margin-left:10px}
  .langbar a.active{color:#c8a24a;font-weight:600}
 </style></head><body>
@@ -3940,9 +4017,12 @@ NET_RECOVERY_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8
  <label id="lbl-wifi">Wi-Fi network</label>
  <div id="nets"></div>
  <label id="lbl-ssid">Or enter the network name (SSID)</label>
- <input id="ssid" placeholder="Network name">
+ <input id="ssid" placeholder="Network name" oninput="pickedBand=''">
  <label id="lbl-pass">Wi-Fi password</label>
- <input id="pass" type="password" placeholder="Password">
+ <!-- Shown in clear on purpose: a Wi-Fi key is long, typed once, on a phone
+      held by whoever owns the network, and a typo behind dots is the single
+      most common reason a join fails. -->
+ <input id="pass" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Password">
  <button onclick="connect()" id="btn-connect">Connect</button>
  <p class="muted" id="netmsg"></p>
 </div>
@@ -3964,13 +4044,30 @@ document.getElementById('btn-connect').textContent=S.connect;
 function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||'','X-UI-Lang':LANG}}
 function load(){fetch('/api/netrecovery/status',{headers:h()}).then(function(r){return r.json()}).then(function(s){
   if(!s.active){location.href='/';return}
-  var n=document.getElementById('nets');n.innerHTML='';
-  (s.networks||[]).forEach(function(net){var d=document.createElement('div');d.className='net';
-    d.innerHTML='<div class="row"><span>'+net.ssid+'</span><span class="muted">'+net.signal+'%</span></div>';
-    d.onclick=function(){document.getElementById('ssid').value=net.ssid};n.appendChild(d)});
+  fillNets(s.networks||[]);
   if(s.error){document.getElementById('netmsg').textContent=S.error+s.error}
 })}
-function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value};
+// The band the owner picked from the list. Kept only while the name in the
+// box is still the one they tapped: a hand-typed SSID carries no band, and a
+// band is only sent at all when the same name really is on two of them --
+// pinning a profile that has nowhere else to go just gives NetworkManager one
+// more way to fail.
+var pickedBand='';
+function fillNets(list){
+  var n=document.getElementById('nets');n.innerHTML='';
+  var dual={};list.forEach(function(net){dual[net.ssid]=(dual[net.ssid]||0)+1});
+  list.forEach(function(net){
+    var d=document.createElement('div');d.className='net';
+    var row=document.createElement('div');row.className='row';
+    var name=document.createElement('span');name.textContent=net.ssid;
+    // One SSID on 2.4 and 5 GHz would otherwise be two identical rows.
+    if(net.band&&dual[net.ssid]>1){var b=document.createElement('span');b.className='band';b.textContent=net.band+' GHz';name.appendChild(b)}
+    var sig=document.createElement('span');sig.className='muted';sig.textContent=net.signal+'%';
+    row.appendChild(name);row.appendChild(sig);d.appendChild(row);
+    d.onclick=function(){document.getElementById('ssid').value=net.ssid;pickedBand=dual[net.ssid]>1?(net.band||''):''};
+    n.appendChild(d)});
+}
+function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value,band:pickedBand};
   document.getElementById('netmsg').textContent=S.connecting;
   fetch('/api/netrecovery/wifi_connect',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b)})}
 setInterval(load,3000);load();

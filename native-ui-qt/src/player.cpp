@@ -22,6 +22,8 @@ Player::Player(QObject *parent) : QObject(parent) {
         if (now - m_lastSettings >= 5000) { m_lastSettings = now; pollSettings(); }
         if (now - m_lastUsb >= 4000) { m_lastUsb = now; pollUsb(); }
         if (now - m_lastOta >= 3000) { m_lastOta = now; pollOta(); }
+        // the service caches its answer for 10 s: asking more often is pointless
+        if (now - m_lastNet >= 15000) { m_lastNet = now; pollNet(); }
         // l'avanzamento scorre in locale fra un poll e l'altro (app.c)
         if (m_playing && m_duration > 0 && now - m_lastElapsedTick >= 500) {
             m_lastElapsedTick = now;
@@ -41,7 +43,8 @@ void Player::start() {
     pollSettings();
     pollUsb();
     pollOta();
-    m_lastSettings = m_lastUsb = m_lastOta = m_clock.elapsed();
+    pollNet();
+    m_lastSettings = m_lastUsb = m_lastOta = m_lastNet = m_clock.elapsed();
     m_tick.start();
 }
 
@@ -464,6 +467,24 @@ void Player::pollOta() {
         m_otaState = st; m_otaMsg = msg; m_otaKind = kind; m_otaPct = pct;
         emit otaChanged();
     }, 4000);
+}
+
+void Player::pollNet() {
+    Api *a = Api::instance();
+    a->request("GET", a->apiBase() + "/connectivity", {}, [this](bool ok, const QVariant &d, int) {
+        // the service not answering says nothing about the network: keep
+        // what we last knew (it restarts during an update, for one)
+        if (!ok || d.typeId() != QMetaType::QVariantMap) return;
+        QVariantMap m = d.toMap();
+        QString st = m.value("state", "offline").toString();
+        if (st != "internet" && st != "lan") st = "offline";
+        QString ty = m.value("type").toString();
+        if (ty != "wired" && ty != "wireless") ty = m_netType;      // offline: keep the last shape
+        QString ssid = m.value("ssid").toString(), ip = m.value("ip").toString();
+        if (st == m_netState && ty == m_netType && ssid == m_netSsid && ip == m_netIp) return;
+        m_netState = st; m_netType = ty; m_netSsid = ssid; m_netIp = ip;
+        emit netChanged();
+    }, 8000);
 }
 
 // ─── stato derivato (useLyrionPlayer.js / app.c derive()) ──────────────────

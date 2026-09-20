@@ -389,7 +389,7 @@ Item {
         Item {
             id: brandMark
             width: 16 + brandText.width + 4; height: 40
-            x: powerBtn.x - width
+            x: netIcon.x - width
             visible: tabRow.width <= x
             Row {
                 id: brandText
@@ -398,6 +398,33 @@ Item {
                 // two-tone like the status plate: SOUND in gold
                 Text { text: "OSMIUM"; color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
                 Text { text: "SOUND"; color: Theme.gold; font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
+            }
+        }
+        // the connection, as an OS's tray shows it: the link's shape (Wi-Fi
+        // or cable) when the internet answers, the same with a gold dot when
+        // only the home network does, the "off" shape when nothing does. A
+        // touch says it in words. Hidden until the service has answered once.
+        Item {
+            id: netIcon
+            readonly property string st: Player.netState
+            readonly property bool wifi: Player.netType === "wireless"
+            readonly property bool off: st === "offline"
+            readonly property string icon: off ? (wifi ? "wifi-off" : "unplug") : (wifi ? "wifi" : "network")
+            visible: st !== "unknown"
+            width: visible ? 32 : 0; height: 40
+            x: powerBtn.x - width
+            Icon {
+                anchors.centerIn: parent; name: netIcon.icon; size: 16
+                color: netTap.mix(netIcon.off ? Theme.red400 : Theme.silverA(0.6), Theme.white)
+                scale: netTap.tapScale
+            }
+            Rectangle { visible: netIcon.st === "lan"; x: 19; y: 21; width: 7; height: 7; radius: 3.5; color: Theme.gold; border.width: 1; border.color: Theme.panel }
+            Tap {
+                id: netTap; tap: 0.9
+                onClicked: {
+                    var k = netIcon.off ? "offline" : netIcon.st + (netIcon.wifi ? "Wifi" : "Wired")
+                    Ui.toast.say(netIcon.icon, Tr.tf("connectivity." + k, "ssid", Player.netSsid))
+                }
             }
         }
         Item {

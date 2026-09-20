@@ -21,7 +21,8 @@ Item {
     property bool connected: false
     property string stage: ""
     property string perror: ""
-    property var nets: []                // [{ssid,security,signal}]
+    property var nets: []                // [{ssid,security,signal,band}]
+    property var dualSsids: ({})         // nome -> true quando la rete e' su piu' bande
     property int pick: -1
     property string pass: ""
     property bool connecting: false
@@ -71,8 +72,8 @@ Item {
         // schermata deve restare, o non ci si potrebbe piu' guardare.
         if (!dry && d.pending === false && d.completed === true) { root.mode = 0; return }
         stage = String(d.stage || ""); perror = d.error ? String(d.error) : ""
-        var n = (d.networks || []).map(function(x) { return { ssid: String(x.ssid || ""), security: String(x.security || ""), signal: Number(x.signal || 0) } })
-        if (n.length || !nets.length) nets = n
+        var n = (d.networks || []).map(function(x) { return { ssid: String(x.ssid || ""), security: String(x.security || ""), signal: Number(x.signal || 0), band: String(x.band || "") } })
+        if (n.length || !nets.length) { nets = n; dualSsids = markDual(n) }
     }
     function pollProvision() { Api.get(Api.apiBase + "/provision_status", function(ok, d) { if (ok && d && typeof d === "object") readProvision(d) }, 6000) }
     function readInstall() { Api.get(Api.apiBase + "/install/status", function(ok, d) { if (ok && d && typeof d === "object") { state = String(d.state || "idle"); msg = String(d.message || ""); progress = Number(d.progress || 0) } }, 6000) }
@@ -92,10 +93,24 @@ Item {
     Timer { interval: 1000; repeat: true; running: root.mode === 2; onTriggered: root.readInstall() }
     Timer { interval: 1000; repeat: true; running: root.mode === 2 && root.state === "done"
             onTriggered: { if (root.countdown === 0) root.countdown = 10; else if (root.countdown > 1) root.countdown--; else if (!root.dry) { root.countdown = 0; Api.post(Api.apiBase + "/reboot", {}) } } }
+    // Quasi ogni router di casa trasmette lo stesso nome su 2.4 e 5 GHz: senza
+    // sapere quali nomi sono doppi le due righe sarebbero indistinguibili, e
+    // la banda scelta non avrebbe senso da mandare (si fissa il profilo su una
+    // meta' del router solo quando la scelta e' vera).
+    function markDual(list) {
+        var seen = {}, dup = {}
+        for (var i = 0; i < list.length; i++) {
+            var s = list[i].ssid
+            if (seen[s]) dup[s] = true
+            seen[s] = true
+        }
+        return dup
+    }
+    function bandOf(i) { return i >= 0 && i < nets.length && dualSsids[nets[i].ssid] ? nets[i].band : "" }
     function wifiConnect() {
         if (pick < 0) return
         connecting = true; wifiErr = ""
-        Api.post(Api.apiBase + "/provision_wifi_connect", { ssid: nets[pick].ssid, password: pass }, function(ok, d, st) {
+        Api.post(Api.apiBase + "/provision_wifi_connect", { ssid: nets[pick].ssid, password: pass, band: bandOf(pick) }, function(ok, d, st) {
             if (!ok || st < 200 || st >= 300) wifiErr = Tr.t("wizard.wifi.connectFailed")
             connecting = false
         }, 20000)
@@ -200,6 +215,7 @@ Item {
                     model: root.nets
                     boundsBehavior: Flickable.StopAtBounds
                     delegate: Rectangle {
+                        id: netRow
                         required property var modelData
                         required property int index
                         readonly property bool on: index === root.pick
@@ -208,7 +224,13 @@ Item {
                         color: on ? Theme.goldA(0.1) : "transparent"
                         Rectangle { visible: index < root.nets.length - 1; x: 0; y: 43; width: parent.width; height: 1; color: Theme.wa(0.05) }
                         Icon { x: 10; anchors.verticalCenter: parent.verticalCenter; name: "wifi"; size: 16; color: parent.on ? Theme.gold : Theme.silverA(0.6) }
-                        Text { x: 36; width: parent.width - 86; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; text: modelData.ssid; color: parent.on ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                        Row {
+                            id: netName
+                            x: 36; width: parent.width - 86; spacing: 6
+                            anchors.verticalCenter: parent.verticalCenter
+                            Text { width: Math.min(implicitWidth, netName.width - (tag.visible ? tag.width + 6 : 0)); elide: Text.ElideRight; text: netRow.modelData.ssid; color: netRow.on ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
+                            BandTag { id: tag; band: root.dualSsids[netRow.modelData.ssid] ? netRow.modelData.band : ""; on: netRow.on; anchors.verticalCenter: parent.verticalCenter }
+                        }
                         // lucchetto (12 px, opacity-60) per le reti protette, al posto del %
                         Icon { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; name: "lock"; size: 12
                                visible: modelData.security !== "" && modelData.security !== "--" && modelData.security.toLowerCase() !== "none"
@@ -220,8 +242,11 @@ Item {
                     id: passField
                     visible: root.pick >= 0
                     y: parent.listH + 12; width: parent.width; height: 44; textSize: 16; padding: 14
-                    color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5); password: true   // bg-white/5, border-white/10, focus oro/50
-                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder")
+                    // In chiaro: la chiave del Wi-Fi si scrive una volta sola, su
+                    // una tastiera a schermo, e un carattere sbagliato dietro i
+                    // pallini e' il motivo piu' comune di una connessione fallita.
+                    color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)   // bg-white/5, border-white/10, focus oro/50
+                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder"); vkButton: true
                     onTextEdited: (t) => root.pass = t
                     onAccepted: root.wifiConnect()
                 }

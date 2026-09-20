@@ -338,8 +338,15 @@ def close_all_apps_and_restart():
 def get_system_info():
     try:
         hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
-        
+        # The host name is normally in /etc/hosts; when it is not, this goes
+        # out to DNS, which hangs or fails without a network — and the
+        # interface list, the one thing the network page needs while the
+        # box is offline, must not go down with it.
+        try:
+            local_ip = socket.gethostbyname(hostname)
+        except Exception:
+            local_ip = 'Unknown'
+
         # Ottieni tutte le interfacce di rete
         import psutil
         network_interfaces = []
@@ -1288,6 +1295,121 @@ def network_check():
         return {'success': True, 'channel': channel, 'at': int(time.time()),
                 'verdict': verdict or 'ok', 'warn': warn, 'steps': out}
 
+# ──────────────────────────────────────────────────────────────────
+#  Connectivity at a glance: the three states an OS's tray icon shows
+#  ("internet", "lan" = only the local network, "offline"), for the
+#  kiosk's top bar. Cheap on purpose (one ping, one TCP connect, a
+#  couple of seconds at worst) and cached, since the UI asks every
+#  few seconds; the full story is the network check above.
+# ──────────────────────────────────────────────────────────────────
+CONNECTIVITY_TTL = 10        # seconds a result is served from the cache
+_CONNECTIVITY_LOCK = threading.Lock()
+_connectivity_cache = {'at': 0.0, 'result': None}
+
+def _conn_router_ok(gw):
+    """Whether the gateway answers: one ping, or, failing that, a live ARP
+    entry (plenty of routers ignore ping)."""
+    try:
+        r = _run(['ping', '-n', '-q', '-c', '1', '-W', '1', gw], timeout=4)
+        if re.search(r'packets transmitted, [1-9]\d* received', r.stdout):
+            return True
+        n = _run(['ip', 'neigh', 'show', gw], timeout=3).stdout
+        return 'lladdr' in n and not re.search(r'\b(FAILED|INCOMPLETE)\b', n)
+    except Exception:
+        return False
+
+def _conn_internet_ok():
+    """Whether at least one of the raw-IP HTTPS targets answers a TCP connect."""
+    res = _netcheck_parallel({f'{h}:{p}': (lambda h=h, p=p: _netcheck_tcp(h, p, timeout=2))
+                              for h, p in _NETCHECK_IP_TARGETS}, 2.5)
+    return any(isinstance(v, int) for v in res.values())
+
+def _connectivity_probe():
+    device, dtype = _active_device()
+    ip = _device_ip(device) if device else None
+    typ = 'wireless' if dtype == 'wifi' else ('wired' if dtype == 'ethernet' else 'none')
+    out = {'state': 'offline', 'type': typ, 'device': device, 'ip': ip,
+           'ssid': _active_ssid() if dtype == 'wifi' else None, 'gateway': None, 'router': False}
+    if not ip:
+        return out
+    try:
+        gw = _default_gateway()
+    except Exception:
+        gw = None
+    out['gateway'] = gw
+    res = _netcheck_parallel({'router': (lambda: _conn_router_ok(gw)) if gw else (lambda: False),
+                              'internet': _conn_internet_ok}, 4)
+    out['router'] = res['router'] is True
+    if res['internet'] is True:
+        # a reply from the outside proves the router works, ping or not
+        out.update(state='internet', router=True)
+    elif out['router']:
+        out['state'] = 'lan'
+    # an address but a router that neither answers nor shows in ARP: the
+    # link is up but leads nowhere, which for the owner is "offline"
+    return out
+
+def get_connectivity(force=False):
+    now = time.monotonic()
+    with _CONNECTIVITY_LOCK:
+        c = _connectivity_cache
+        if not force and c['result'] is not None and now - c['at'] < CONNECTIVITY_TTL:
+            return dict(c['result'])
+        try:
+            res = _connectivity_probe()
+        except Exception as e:
+            logging.warning('connectivity probe failed: %s', e)
+            res = {'state': 'offline', 'type': 'none', 'device': None, 'ip': None,
+                   'ssid': None, 'gateway': None, 'router': False}
+        res['at'] = int(time.time())
+        c['result'] = res
+        c['at'] = time.monotonic()
+        return dict(res)
+
+def _wifi_band(freq):
+    """'2.4', '5' or '6' from the frequency nmcli prints ('2462 MHz'), '' when
+    it makes no sense.
+
+    A home router almost always broadcasts the same SSID on 2.4 and 5 GHz, and
+    a scan list that shows that name twice with nothing to tell the two rows
+    apart is unusable — hence the band on every network, and the band the
+    owner picked carried all the way down to the profile (see
+    _wifi_band_args)."""
+    try:
+        mhz = int(str(freq).strip().split()[0])
+    except (TypeError, ValueError, IndexError):
+        return ''
+    if 2400 <= mhz < 2500:
+        return '2.4'
+    if 4900 <= mhz < 5925:
+        return '5'
+    if 5925 <= mhz <= 7125:
+        return '6'
+    return ''
+
+
+def _signal_int(value):
+    """The SIGNAL column as a number; nmcli prints it as text and can leave it
+    empty."""
+    try:
+        return int(str(value).strip() or 0)
+    except ValueError:
+        return 0
+
+
+def _wifi_band_args(band):
+    """`802-11-wireless.band` for a band the owner picked from the scan list.
+
+    Only set when the UI says the choice was a real one (an SSID that appears
+    on more than one band): pinning a profile that has nowhere else to go
+    would only give NetworkManager one more way to fail."""
+    if band == '2.4':
+        return ['802-11-wireless.band', 'bg']
+    if band in ('5', '6'):
+        return ['802-11-wireless.band', 'a']
+    return []
+
+
 def wifi_scan():
     try:
         _run(['nmcli', 'device', 'wifi', 'rescan'], timeout=12)
@@ -1301,29 +1423,52 @@ def wifi_scan():
         # background scans to fall back on -- but that cache doesn't exist
         # yet right after boot, so don't trust the first read blindly.
         for attempt in range(6):
-            r = _run(['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
-            networks = []
+            r = _run(['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY,FREQ', 'device', 'wifi', 'list'])
+            # One row per band, not per access point: a mesh or a repeater puts
+            # the same SSID on the same band several times over, and those are
+            # the rows nobody can choose between. Strongest signal wins.
+            by_band = {}
+            order = []
             for line in r.stdout.strip().split('\n'):
                 if not line:
                     continue
                 parts = _terse_split(line)
-                if len(parts) < 4:
+                if len(parts) < 5:
                     continue
-                in_use, ssid, signal_, security = parts[0], parts[1], parts[2], parts[3]
+                in_use, ssid, signal_, security, freq = parts[0], parts[1], parts[2], parts[3], parts[4]
                 if not ssid:
                     continue
-                networks.append({
+                net = {
                     'ssid': ssid,
                     'signal': signal_,
                     'security': security,
                     'in_use': in_use == '*',
-                })
+                    'band': _wifi_band(freq),
+                }
+                key = (ssid, net['band'])
+                prev = by_band.get(key)
+                if prev is None:
+                    by_band[key] = net
+                    order.append(key)
+                else:
+                    if _signal_int(net['signal']) > _signal_int(prev['signal']):
+                        prev.update(signal=net['signal'], security=net['security'])
+                    prev['in_use'] = prev['in_use'] or net['in_use']
+            networks = [by_band[k] for k in order]
             if networks or attempt == 5:
                 break
             time.sleep(1)
     except Exception:
         log.exception("wifi_scan failed")
         return {'networks': [], 'error': _t('network.scanFailed', _lang())}
+    # "Saved", as a phone shows it: NetworkManager still has a profile (and
+    # so the key) for these, and the UI joins them without asking for it.
+    try:
+        saved = set(_connection_ids_for_device_type('wifi'))
+    except Exception:
+        saved = set()
+    for net in networks:
+        net['saved'] = net['ssid'] in saved
     return {'networks': networks}
 
 def _scan_security(ssid):
@@ -1400,7 +1545,7 @@ def _preserved_ipv4_args(conn):
     return args
 
 
-def _wifi_join(ssid, password, dev):
+def _wifi_join(ssid, password, dev, band=''):
     """Join `ssid`, returning the CompletedProcess of the step that decided it.
 
     When a password is given the connection profile is built here
@@ -1417,11 +1562,24 @@ def _wifi_join(ssid, password, dev):
 
     With no password there is nothing to write, so a saved profile is
     activated as it stands (its stored secret is still good) and only a
-    network we have no profile for goes through the shorthand."""
+    network we have no profile for goes through the shorthand.
+
+    `band` is the band the owner picked from a dual-band SSID: without it
+    NetworkManager joins whichever of the two it likes, which would make the
+    two rows in the list the same row."""
+    band_args = _wifi_band_args(band)
     if not password:
         if _wifi_profile_exists(ssid):
+            # The stored secret is still good — only the chosen band has to be
+            # written onto the profile before it comes up.
+            if band_args:
+                _run(['nmcli', 'connection', 'modify', 'id', ssid] + band_args)
             return _run(['nmcli', 'connection', 'up', 'id', ssid], timeout=45)
-        return _run(['nmcli', 'device', 'wifi', 'connect', ssid], timeout=45)
+        if not band_args:
+            return _run(['nmcli', 'device', 'wifi', 'connect', ssid], timeout=45)
+        # An open network on a chosen band: the shorthand can't pin one, so
+        # build the profile here too (_wifi_security_args gives nothing back
+        # for an empty password, which is exactly what an open AP wants).
 
     sec_args = _wifi_security_args(ssid, password)
     # Read before the delete, write back into the replacement: the admin web UI
@@ -1432,7 +1590,7 @@ def _wifi_join(ssid, password, dev):
     add = ['nmcli', 'connection', 'add', 'type', 'wifi', 'con-name', ssid, 'ssid', ssid]
     if dev:
         add += ['ifname', dev]
-    r = _run(add + sec_args + ip_args)
+    r = _run(add + sec_args + band_args + ip_args)
     if r.returncode != 0:
         return r
     # Association can still fail transiently on marginal signal, so one retry
@@ -1452,7 +1610,7 @@ def _wifi_join(ssid, password, dev):
     return r
 
 
-def wifi_connect(ssid, password):
+def wifi_connect(ssid, password, band=''):
     if not ssid:
         return {'success': False, 'code': 'network.ssidMissing', 'message': _t('network.ssidMissing', _lang())}
     # ssid/password are passed as argv to nmcli (no shell), but a value that
@@ -1464,10 +1622,12 @@ def wifi_connect(ssid, password):
         if value and not safe_arg.fullmatch(value):
             return {'success': False, 'code': 'network.invalidField',
                     'message': _t('network.invalidField', _lang(), label=label)}
+    if band not in ('', '2.4', '5', '6'):
+        band = ''
     dev = _first_device_of_type('wifi')
     _ensure_networkmanager_state(dev)
     try:
-        r = _wifi_join(ssid, password, dev)
+        r = _wifi_join(ssid, password, dev, band)
     except subprocess.TimeoutExpired:
         return {'success': False, 'code': 'network.connectTimeout',
                 'message': _t('network.connectTimeout', _lang())}
@@ -5058,13 +5218,13 @@ def set_provision_mode(mode, source='screen'):
                 'message': _t('provisioning.notActive', _lang())}
     return body
 
-def provision_wifi_connect(ssid, password):
+def provision_wifi_connect(ssid, password, band=''):
     """Kick off the same Wi-Fi join webui_server's captive portal uses, from
     the on-screen manual network-setup panel. The AP drops immediately on
     webui's side; the kiosk keeps polling /provision_status to see it
     through 'connecting' -> 'network-ok'/'failed'."""
     body, status = _proxy_webui('/api/provision/wifi_connect', method='POST',
-                                body={'ssid': ssid, 'password': password})
+                                body={'ssid': ssid, 'password': password, 'band': band})
     if body is None:
         return {'success': False, 'code': 'provisioning.notActive',
                 'message': _t('provisioning.notActive', _lang())}
@@ -8139,6 +8299,10 @@ def api_network_status():
 def api_network_check():
     return jsonify(network_check())
 
+@app.route('/connectivity', methods=['GET'])
+def api_connectivity():
+    return jsonify(get_connectivity(force=request.args.get('force') == '1'))
+
 @app.route('/wifi_scan', methods=['GET'])
 def api_wifi_scan():
     return jsonify(wifi_scan())
@@ -8146,7 +8310,8 @@ def api_wifi_scan():
 @app.route('/wifi_connect', methods=['POST'])
 def api_wifi_connect():
     data = request.get_json(silent=True) or {}
-    return jsonify(wifi_connect(data.get('ssid'), data.get('password', '')))
+    return jsonify(wifi_connect(data.get('ssid'), data.get('password', ''),
+                                (data.get('band') or '').strip()))
 
 @app.route('/wired_dhcp', methods=['POST'])
 def api_wired_dhcp():
@@ -8421,7 +8586,8 @@ def api_provision_mode():
 def api_provision_wifi_connect():
     data = request.get_json(silent=True) or {}
     return jsonify(provision_wifi_connect((data.get('ssid') or '').strip(),
-                                          data.get('password') or ''))
+                                          data.get('password') or '',
+                                          (data.get('band') or '').strip()))
 
 @app.route('/provision_wifi_rescan', methods=['POST'])
 def api_provision_wifi_rescan():
