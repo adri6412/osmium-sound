@@ -20,7 +20,7 @@
   "app": {
     "logout": "Esci",
     "library": "Libreria",
-    "support": "Sostienici"
+    "support": "Sostienimi"
   },
   "auth": {
     "loginTitle": "Accedi",
