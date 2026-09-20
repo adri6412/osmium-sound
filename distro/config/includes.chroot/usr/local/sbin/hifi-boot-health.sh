@@ -25,7 +25,12 @@ while :; do
         ab_warn "avvio NON dichiarato buono entro ${TIMEOUT}s (data=$(mountpoint -q "$AB_DATA_MNT" && echo ok || echo no), api=$(curl -fsS -m 3 http://127.0.0.1:8000/ota_channel >/dev/null 2>&1 && echo ok || echo no))"
         exit 1
     fi
-    sleep 5
+    # 🚨 1, not 5. hifi-api.service is Type=simple, so systemd calls it started
+    # the moment it execs, not when Flask is listening — the wait happens here
+    # either way. With sleep 5 that wait was rounded up to the next turn of the
+    # loop: 14.7 s measured on an appliance whose API was ready well before.
+    # What a turn costs is the curl -m 3 above, not this pause.
+    sleep 1
 done
 # /data on tmpfs: the initramfs could not mount the data partition, so this
 # boot is running on the image's factory /etc and everything written during it

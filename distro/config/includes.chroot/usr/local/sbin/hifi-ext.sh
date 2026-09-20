@@ -428,7 +428,12 @@ cmd_list() {
     for _m in "$META_DIR"/*/request.json; do
         [ -f "$_m" ] || continue
         _n=$(json_get "$_m" name); _p=$(json_get "$_m" packages); _i=$(json_get "$_m" image)
-        if [ ! -d "$EXT_DIR/$_n" ]; then
+        _e=$(json_get "$_m" error)
+        if [ -n "$_e" ] && [ "$_i" = "$_cur" ]; then
+            # Refresh gave up on this image and will not try again until the
+            # next one, so say so rather than leaving it as a bare "missing".
+            _state="failed ($_e)"
+        elif [ ! -d "$EXT_DIR/$_n" ]; then
             _state="missing"
         elif [ "$_i" = "$_cur" ]; then
             _state="active"
@@ -461,8 +466,11 @@ cmd_upgrade() {
         _any=1
         log "add-on '$_n': rebuilding from today's archive"
         rc=0
+        # A subshell for the same reason as in cmd_refresh: build_ext fails by
+        # calling die(), and without this one add-on that cannot be rebuilt
+        # ended the upgrade for every add-on after it in the list.
         # shellcheck disable=SC2086
-        build_ext "$_n" 0 $_p || rc=$?
+        ( build_ext "$_n" 0 $_p ) || rc=$?
         case "$rc" in
             0) _changed=1 ;;
             2) log "add-on '$_n': the image now provides it — removed"
@@ -482,7 +490,7 @@ cmd_upgrade() {
     return 0
 }
 
-# Called at boot by hifi-ext-refresh.service after an image update: every add-on
+# Called by hifi-ext-refresh.timer a few minutes after boot: every add-on
 # whose pin no longer matches is resolved again against the image that is now
 # running. What could not be rebuilt stays out — systemd refuses it anyway, so a
 # failure here costs an add-on, never the boot.
@@ -493,22 +501,42 @@ cmd_refresh() {
     for _m in "$META_DIR"/*/request.json; do
         [ -f "$_m" ] || continue
         _n=$(json_get "$_m" name); _p=$(json_get "$_m" packages); _i=$(json_get "$_m" image)
+        _e=$(json_get "$_m" error)
         [ -n "$_n" ] || continue
-        if [ "$_i" = "$_cur" ] && [ -d "$EXT_DIR/$_n" ]; then
+        # Already built for this image, or already known not to build for it.
+        # 🚨 The second half is not redundant: the failure branch below deletes
+        # EXT_DIR/$_n, so [ -d ... ] stays false for a failed add-on forever.
+        # Without the error marker a package that cannot be resolved runs
+        # 'apt-get update' plus a full download on EVERY boot, for good —
+        # 2 min 19 s of it, measured on an appliance in the field, hidden
+        # behind SuccessExitStatus=0 1. Retried once per image version instead,
+        # which is the right cadence: a new image is exactly what can fix it.
+        if [ "$_i" = "$_cur" ] && { [ -d "$EXT_DIR/$_n" ] || [ -n "$_e" ]; }; then
             continue
         fi
         log "add-on '$_n' was built for image ${_i:-?}, rebuilding for $_cur"
         rc=0
+        # 🚨 A SUBSHELL, and it is the whole point of the failure branch below.
+        # Every real failure inside build_ext — no network, a package that no
+        # longer resolves, the guardian refusing a file — goes through die(),
+        # which is 'exit 1'. Called plainly, that killed this entire pass: the
+        # add-ons further down the list were never even looked at, nothing was
+        # recorded, and the next boot did the same apt-get update and the same
+        # download all over again. Here die() only ends the subshell and the
+        # loop carries on to record what happened.
         # shellcheck disable=SC2086  # the package list is a plain word list
-        build_ext "$_n" 0 $_p || rc=$?
+        ( build_ext "$_n" 0 $_p ) || rc=$?
         case "$rc" in
             0) _changed=1 ;;
             2) log "add-on '$_n': the new image already provides it — removed"
                rm -rf "${EXT_DIR:?}/$_n" "${META_DIR:?}/$_n"; _changed=1 ;;
             *) warn "add-on '$_n' could not be rebuilt: it stays disabled"
                rm -rf "${EXT_DIR:?}/$_n"
+               # 🚨 "$_cur", not "$_i": the image recorded here is the one the
+               # rebuild was attempted against. Writing the OLD one back made
+               # the skip test above fail on every single boot.
                printf '{"name":"%s","packages":"%s","image":"%s","error":"rebuild failed"}\n' \
-                   "$_n" "$_p" "$_i" > "$META_DIR/$_n/request.json" ;;
+                   "$_n" "$_p" "$_cur" > "$META_DIR/$_n/request.json" ;;
         esac
     done
     if [ "$_changed" = 1 ]; then

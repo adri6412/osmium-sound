@@ -76,7 +76,7 @@ flowchart TB
 | `hifi-boot-health` / `hifi-boot-watchdog.timer` | `hifi-boot-health.sh` / `hifi-boot-watchdog.sh` | Image slots: mark the booted slot good once `/data`, the API and RAUC answer; otherwise reboot into the other slot after 10 minutes — see [Image layout: A/B slots](#image-layout-ab-slots) |
 | `hifi-rauc-config` | `hifi-rauc-config.sh` | Regenerates `/etc/rauc/system.conf` at every boot |
 | `hifi-ab-finish`, `hifi-ab-image`, `hifi-ab-firstboot` | `hifi-ab-convert.sh`, `hifi-ab-image.sh`, `hifi-ab-firstboot.sh` | Legacy → A/B conversion: finish the repartitioned disk, chain into the first image update, merge accounts and renumber owners on the first image boot |
-| `hifi-ext-refresh` | `hifi-ext.sh refresh` | Rebuilds add-ons made for a previous image version (never blocks the boot) |
+| `hifi-ext-refresh.timer` → `hifi-ext-refresh` | `hifi-ext.sh refresh` | Three minutes after boot, rebuilds add-ons made for a previous image version. A timer, and `Nice=19`/`IOSchedulingClass=idle`, so the rebuild never holds the boot back nor competes with the UI |
 | `hifi-qt` | `/opt/hifi-qt/hifi-qt` | The on-screen UI (eglfs, `TTYPath=/dev/tty1`, `Conflicts=lightdm.service`). `WantedBy=graphical.target`, so it stays down in headless mode — see [On-screen UI](#on-screen-ui-qt-on-drmkms) |
 | `hifi-kiosk-session` | `hifi-kiosk-session.sh` | Legacy Electron installs only. Oneshot before LightDM: decides Wayland (labwc) vs X11 for the kiosk session and writes LightDM's `user-session` accordingly — see [Legacy Electron kiosk](#legacy-electron-kiosk-pre-ab-installs) |
 | `hifi-update-stage-resume` / `hifi-update-apply` | `hifi-update-stage-runner.sh` / `hifi-update-apply-runner.sh` | Resume an interrupted staging; apply staged bundles inside `system-update.target` — see [OTA update system](#ota-update-system) |
@@ -1384,6 +1384,31 @@ has `TRY` set, and the selector falls back to the other slot.
 `hifi-rauc-config.service` (`compatible=osmium-x86_64`, `bootloader=grub`,
 plain bundles refused, the signing time used for certificate checks).
 
+#### What the boot does not wait for
+
+The one thing between power-on and a picture is
+`hifi-qt` ← `hifi-vumeter` ← `squeezelite` ← `network-online.target`, so
+`NetworkManager-wait-online` is masked in the image (`build-image.sh`): the
+interface draws, and the app finds Lyrion with retries once the LAN is up.
+Masked alongside it, none of them on the path to the picture but all of them
+holding the boot back: `systemd-binfmt` (it gates `sysinit.target`),
+`networking.service`, `keyboard-setup`, `e2scrub_reap`/`e2scrub_all`, `nmbd`
+and `samba-ad-dc`. Bluetooth is **not** masked — it is a feature of the
+appliance.
+
+These masks had existed for months as OS migrations (`0007`, `0009`, `0011`,
+`0031`), but an image slot never runs an OS migration, so a flashed appliance
+paid every one of them again; the image is where the durable state belongs.
+
+Separately, a unit pulled in by `WantedBy=multi-user.target` gets an implicit
+`Before=multi-user.target`, so the boot counts as unfinished until it has
+started — even for services nothing on screen waits on. `smbd`, `tailscaled`
+and `ssh` carry a `DefaultDependencies=no` drop-in
+(`hifi-no-boot-block.conf`, the recipe from migration `0032`) and
+`hifi-boot-health` has the same in its own unit, since it spends its whole
+life waiting for Flask to answer on localhost. They all still start at the
+same point in the boot; they just stop holding the target.
+
 ### The image update
 
 `build-distro.sh --stage image` → `build-image.sh` produces
@@ -1493,9 +1518,15 @@ started for you.
 Because an extension built for one image is refused by the next,
 `hifi-ext-refresh.service` rebuilds every add-on from its stored request after
 an image update (an add-on the image now provides is dropped; one that can no
-longer be built is disabled and flagged, never blocking the boot). Only that
-service logs to file; typed commands talk to the terminal. A lock with the
-owner's pid (`/run/hifi-ext.lock`) survives a killed run. Tests:
+longer be built is disabled and flagged). It is started by
+`hifi-ext-refresh.timer` three minutes into the boot, not pulled in by
+`multi-user.target`: the rebuild is an `apt-get update` plus a download, and as
+a boot-time unit it both delayed "boot finished" and took CPU and disk from the
+interface coming up. An add-on that fails to rebuild records the image it
+failed on, so it is retried once per image version rather than on every boot,
+and `hifi-ext.sh list` reports it as `failed`. Only that service logs to file;
+typed commands talk to the terminal. A lock with the owner's pid
+(`/run/hifi-ext.lock`) survives a killed run. Tests:
 `tests/test-ext-guardian.sh`, `tests/test-apt-shim.sh`.
 
 ## OTA update system

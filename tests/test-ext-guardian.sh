@@ -32,9 +32,15 @@ setup() {  # <files the fake package ships, one per line in $ROOT/deb.list>
     # stubs: apt-get "downloads" one .deb, dpkg-deb reads the canned listing
     cat > "$ROOT/bin/apt-get" <<EOF
 #!/bin/sh
+printf '%s\n' "\$*" >> "$ROOT/apt-calls"
 for a in "\$@"; do case "\$a" in -o) ;; Dir::Cache::archives=*) d=\${a#Dir::Cache::archives=} ;; esac; done
 d=\$(printf '%s\n' "\$@" | sed -n 's/^Dir::Cache::archives=//p' | head -n 1)
 case " \$* " in *" update "*) exit 0 ;; esac
+if [ -f "$ROOT/apt-fail-pkg" ] && \
+   printf '%s' " \$* " | grep -q " \$(cat "$ROOT/apt-fail-pkg") "; then
+    printf 'E: Unable to locate package %s\n' "\$(cat "$ROOT/apt-fail-pkg")" >&2
+    exit 100
+fi
 [ -n "\$d" ] && { mkdir -p "\$d"; : > "\$d/fake_1.0_amd64.deb"; }
 exit 0
 EOF
@@ -160,6 +166,35 @@ contains "refresh: re-pinned to the new image" \
          "$(cat "$ROOT/var/lib/extensions/fake/usr/lib/extension-release.d/extension-release.fake")" \
          "SYSEXT_LEVEL=v2.5.25-test"
 contains "refresh: listed as active again" "$(run list)" "active"
+
+# ── 6b. a rebuild that cannot be done: recorded once, not retried every boot ─
+# Two bugs met here, and together they cost an appliance in the field 2 min 19 s
+# of apt on EVERY boot, hidden behind the unit's SuccessExitStatus=0 1:
+#   • build_ext fails by calling die(), which is 'exit 1'. Called plainly it
+#     ended the whole refresh pass, so nothing was recorded and the add-ons
+#     after it in the list were never looked at.
+#   • the failure branch then wrote the OLD image back into request.json, so
+#     the "already tried this one" test could never become true.
+setup
+printf 'usr/bin/newtool\n' > "$ROOT/deb.list"
+run add alpha >/dev/null 2>&1
+printf 'usr/bin/othertool\n' > "$ROOT/deb.list"
+run add beta >/dev/null 2>&1
+printf 'v2.5.25-test\n' > "$ROOT/usr/lib/osmium/IMAGE_VERSION"
+printf 'alpha\n' > "$ROOT/apt-fail-pkg"     # alpha no longer resolves on the new image
+run refresh >/dev/null 2>&1
+contains "failed rebuild: pinned to the image it failed ON" \
+         "$(cat "$ROOT/var/lib/hifi-player/ext/alpha/request.json")" '"image":"v2.5.25-test"'
+contains "failed rebuild: the reason is kept" \
+         "$(cat "$ROOT/var/lib/hifi-player/ext/alpha/request.json")" '"error"'
+contains "failed rebuild: list says failed, not just missing" "$(run list)" "failed"
+contains "failed rebuild: the add-on after it was still rebuilt" \
+         "$(cat "$ROOT/var/lib/extensions/beta/usr/lib/extension-release.d/extension-release.beta")" \
+         "SYSEXT_LEVEL=v2.5.25-test"
+: > "$ROOT/apt-calls"
+run refresh >/dev/null 2>&1
+check "failed rebuild: the next boot does not go near apt again" "" \
+      "$(cat "$ROOT/apt-calls")"
 
 # ── 7. a lock left behind by a killed run must not block the next one ───────
 setup
