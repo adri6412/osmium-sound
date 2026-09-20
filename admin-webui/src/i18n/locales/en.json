@@ -20,8 +20,7 @@
   "app": {
     "logout": "Log out",
     "library": "Library",
-    "support": "Osmium Sound is free and made in spare time. If you enjoy it,",
-    "supportLink": "support it on Ko-fi"
+    "support": "Support us"
   },
   "auth": {
     "loginTitle": "Sign in",

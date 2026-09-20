@@ -20,8 +20,7 @@
   "app": {
     "logout": "Esci",
     "library": "Libreria",
-    "support": "Osmium Sound è gratuito ed è fatto nel tempo libero. Se ti piace,",
-    "supportLink": "sostienilo su Ko-fi"
+    "support": "Sostienici"
   },
   "auth": {
     "loginTitle": "Accedi",

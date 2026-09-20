@@ -4,6 +4,7 @@ import { RouterView, useRoute } from 'vue-router';
 import { api } from './api.js';
 import { useI18n } from './i18n';
 import UpdateProgressOverlay from './components/UpdateProgressOverlay.vue';
+import kofiLogo from './assets/kofi.png';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -27,6 +28,14 @@ async function logout() {
   <div class="topbar">
     <div class="brand">OSMIUM <span class="gold">SOUND</span></div>
     <div class="topbar-actions">
+      <!-- The only place a person who already uses the appliance is reminded
+           that the project can be supported. The link goes through the site so
+           that opening it can be counted. On a phone the label goes, the cup stays. -->
+      <a v-if="showLibrary" class="topbar-link topbar-kofi" href="https://osmiumsound.it/kofi?from=admin"
+         target="_blank" rel="noopener" :title="t('app.support')">
+        <img :src="kofiLogo" alt="Ko-fi" width="24" height="19">
+        <span>{{ t('app.support') }}</span>
+      </a>
       <!-- The Library editor is a page of its own next to this one (library.html,
            /library on the same origin and session), so a plain link. -->
       <a v-if="showLibrary" class="topbar-link" href="library">{{ t('app.library') }}</a>
@@ -36,24 +45,18 @@ async function logout() {
   <div class="wrap">
     <RouterView />
   </div>
-  <!-- One quiet line under every admin page: the only place a person who
-       already uses the appliance is ever reminded that it can be supported.
-       The link goes through the site so that opening it can be counted. -->
-  <p v-if="showLibrary" class="support-line">
-    {{ t('app.support') }}
-    <a href="https://osmiumsound.it/kofi?from=admin" target="_blank" rel="noopener">{{ t('app.supportLink') }}</a>
-  </p>
   <UpdateProgressOverlay />
 </template>
 
 <style>
-.support-line {
-  margin: 0;
-  padding: 0 18px 28px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-  opacity: 0.8;
+.topbar-kofi {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 12px 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.topbar-kofi img { width: 24px; height: auto; display: block; }
+@media (max-width: 420px) {
+  .topbar-kofi { padding: 8px; }
+  .topbar-kofi span { display: none; }
 }
 </style>
