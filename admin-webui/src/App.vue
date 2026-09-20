@@ -36,5 +36,24 @@ async function logout() {
   <div class="wrap">
     <RouterView />
   </div>
+  <!-- One quiet line under every admin page: the only place a person who
+       already uses the appliance is ever reminded that it can be supported.
+       The link goes through the site so that opening it can be counted. -->
+  <p v-if="showLibrary" class="support-line">
+    {{ t('app.support') }}
+    <a href="https://osmiumsound.it/kofi?from=admin" target="_blank" rel="noopener">{{ t('app.supportLink') }}</a>
+  </p>
   <UpdateProgressOverlay />
 </template>
+
+<style>
+.support-line {
+  margin: 0;
+  padding: 0 18px 28px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+</style>
