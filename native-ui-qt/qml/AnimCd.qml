@@ -83,10 +83,15 @@ Item {
     // the music starts (radius 25 mm) down to ~215 at the edge (58 mm). The
     // pickup's place follows the position on the whole disc, the tracks
     // before plus this one; equal playing time covers equal area.
+    // ... scaled down to about a third: at the real pace the print could
+    // only ever be the smear below, and in between it stepped 40 degrees
+    // a frame (the "bad refresh" the owner saw). At this pace the art is
+    // still there to be glimpsed, as through a real player's window.
+    readonly property real paceScale: 0.3
     function clvRate() {                     // degrees per second
         var f = trackTotal > 0 && trackIndex >= 0 ? Math.max(0, Math.min(1, (trackIndex + progress) / trackTotal)) : 0
         var r = Math.sqrt(25 * 25 + f * (58 * 58 - 25 * 25))
-        return 1300 / (2 * Math.PI * r) * 360
+        return 1300 / (2 * Math.PI * r) * 360 * paceScale
     }
     // At 30 frames a second a disc turning 50-100 degrees a frame would
     // stutter and wheel backwards: from ~80 rpm the print melts, gradually,
