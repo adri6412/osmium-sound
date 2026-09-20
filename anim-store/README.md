@@ -40,7 +40,9 @@ to the box it is given) and the still of the Settings card.
   (`{level, final}`), `power`, `repeat`, `random`, `wind` (+1/-1), `windStop`,
   `track` (a queue position, 1-based);
 - a display: `trackIndex`, `trackTotal`, `elapsed`, `duration` (seconds, 0
-  unknown), `trackId`, `repeatMode`, `shuffleMode`, `trackTitle`, `trackArtist`;
+  unknown), `trackId`, `repeatMode`, `shuffleMode`;
+- the track playing, as opposed to `title` / `subtitle`, which are the album
+  and its artist: `trackTitle`, `trackArtist`;
 - levels (this device's own audio): `levelL`, `levelR` (0..100).
 
 It may import `QtQuick`, `QtQuick.Effects` and `QtQuick.Shapes`. Its own

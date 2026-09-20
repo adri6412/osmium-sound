@@ -144,8 +144,10 @@ Item {
     Binding { when: root.display; target: loader.item; property: "trackTotal"; value: root.live ? Player.total : 0 }
     Binding { when: root.display; target: loader.item; property: "repeatMode"; value: root.live ? Player.repeat : 0 }
     Binding { when: root.display; target: loader.item; property: "shuffleMode"; value: root.live ? Player.shuffle : 0 }
-    Binding { when: root.display; target: loader.item; property: "trackTitle"; value: root.trackTitle }
-    Binding { when: root.display; target: loader.item; property: "trackArtist"; value: root.trackArtist }
+    // the track playing, not the album: the CD players' display shows it, the
+    // cassette writes it on its label (so any scene declaring it gets it)
+    Binding { when: loader.item !== null && loader.item.trackTitle !== undefined; target: loader.item; property: "trackTitle"; value: root.trackTitle }
+    Binding { when: loader.item !== null && loader.item.trackArtist !== undefined; target: loader.item; property: "trackArtist"; value: root.trackArtist }
     // Fast wind on the cassette deck: a jump of windStep seconds per call.
     // Past the end it moves on to the next track, before the start to the end
     // of the previous one. After a track change nothing moves until the new

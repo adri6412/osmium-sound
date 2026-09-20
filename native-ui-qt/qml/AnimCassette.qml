@@ -5,7 +5,8 @@
 //
 // A pure scene (no Hifi imports) driven by NpAnimation.qml; the images are
 // built by tools/np-anim/cassette.py, whose geometry constants are mirrored
-// below. The album title and artist on the label are live text.
+// below. The track and its artist on the label are live text (the album
+// decides which cassette is in the deck, not what is written on it).
 //
 // The deck's controls work: the transport keys, eject (the cassette comes
 // out and stays out until PLAY or playback from elsewhere), the volume
@@ -32,8 +33,14 @@ Item {
     property real progress: 0            // 0..1 (0 when unknown, e.g. radio)
     property string artwork: ""          // album artwork URL; "" = no picture on the label
     property string mediaKey: ""         // a new value swaps the cassette
-    property string title: ""            // album (or track) title, written on the label
+    property string title: ""            // album (or station) title
     property string subtitle: ""         // artist
+    // What the label says: the track playing, not the album. A stream with no
+    // track information falls back to the album (or the station) and its artist.
+    property string trackTitle: ""       // the track
+    property string trackArtist: ""      // its artist (a radio: artist - station)
+    readonly property string labelTop: trackTitle !== "" ? trackTitle : title
+    readonly property string labelBottom: trackTitle !== "" ? trackArtist : subtitle
     // the deck's controls (optional: without them the display still works)
     property int volume: -1              // 0..100, -1 unknown
     property bool volumeFixed: false     // the volume is not ours to change (fader disabled)
@@ -229,8 +236,8 @@ Item {
     function takeMedia() {
         labelSwap.stop()
         labelA = 1
-        labelTitle = title
-        labelSub = subtitle
+        labelTitle = labelTop
+        labelSub = labelBottom
         if (labelArt !== artwork) { artPrev.source = ""; labelArt = artwork }
         loadedKey = mediaKey
         packGlide.stop()
@@ -338,17 +345,18 @@ Item {
     onActiveChanged: Qt.callLater(sync)
     onHasTrackChanged: Qt.callLater(sync)
     onLiveChanged: Qt.callLater(sync)
-    onTitleChanged: Qt.callLater(applyLabel)
-    onSubtitleChanged: Qt.callLater(applyLabel)
+    onLabelTopChanged: Qt.callLater(applyLabel)
+    onLabelBottomChanged: Qt.callLater(applyLabel)
     onArtworkChanged: Qt.callLater(applyArt)
     // (hidden or empty, nothing is loaded: insert() takes the label of the moment)
     function applyLabel() {
-        if (!live) { labelTitle = title; labelSub = subtitle; return }
+        if (!live) { labelTitle = labelTop; labelSub = labelBottom; return }
         if (!active || phase === 0 || phase === 3 || mediaKey !== loadedKey) return
-        if (labelTitle === title && labelSub === subtitle) return
-        // same cassette, new words (a radio's song): a short fade, not a pop
+        if (labelTitle === labelTop && labelSub === labelBottom) return
+        // same cassette, new words (the next track of the album, a radio's
+        // song): a short fade, not a pop
         if (phase === 2) labelSwap.restart()
-        else { labelTitle = title; labelSub = subtitle }
+        else { labelTitle = labelTop; labelSub = labelBottom }
     }
     function applyArt() {
         if (!live || (active && phase !== 0 && phase !== 3 && mediaKey === loadedKey)) labelArt = artwork
@@ -419,7 +427,7 @@ Item {
     SequentialAnimation {
         id: labelSwap
         NumberAnimation { target: root; property: "labelA"; to: 0; duration: 160; easing.type: Easing.InQuad }
-        ScriptAction { script: { root.labelTitle = root.title; root.labelSub = root.subtitle } }
+        ScriptAction { script: { root.labelTitle = root.labelTop; root.labelSub = root.labelBottom } }
         NumberAnimation { target: root; property: "labelA"; to: 1; duration: 220; easing.type: Easing.OutQuad }
     }
 
@@ -553,7 +561,7 @@ Item {
                     file: "cas.png"
                 }
 
-                // the label: artwork sticker, title and artist
+                // the label: artwork sticker, track and artist
                 Item {
                     id: label
                     x: 10.4 * root.mm; y: 4.4 * root.mm
