@@ -16,7 +16,15 @@ Rectangle {
     color: primary ? tap.mix(Theme.gold, Theme.mix(Theme.gold, Theme.white, 0.25)) : tap.mix(Theme.surface, Theme.light)
     border.width: primary ? 0 : 1; border.color: Theme.border
     opacity: dim ? 0.4 : 1
-    scale: tap.tapScale
+    // lo scoppio dei preferiti: chi lo usa chiama burst() quando AGGIUNGE
+    property real pop: 0
+    function burst() { if (Theme.lushMotion) popAnim.restart() }
+    SequentialAnimation {
+        id: popAnim
+        NumberAnimation { target: root; property: "pop"; from: 0; to: 1; duration: Theme.dur(90);  easing.type: Easing.OutQuad }
+        NumberAnimation { target: root; property: "pop"; to: 0;         duration: Theme.dur(220); easing.type: Easing.OutCubic }
+    }
+    scale: tap.tapScale * (1 + 0.12 * pop)
     Row {
         id: row
         anchors.centerIn: parent; spacing: 8

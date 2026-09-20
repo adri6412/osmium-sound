@@ -18,9 +18,9 @@ Item {
     visible: active || fade > 0
     anchors.fill: parent
 
-    Spring { id: sc; stiffness: 550; damping: 30 }
+    Spring { id: sc; stiffness: 550; damping: 30; rate: Theme.motionRate }
     property real fade: 0
-    Behavior on fade { NumberAnimation { duration: 250; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Behavior on fade { NumberAnimation { duration: Theme.dur(250); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
 
     function api(p) { return Api.apiBase + p }
     function nameOf(o) {

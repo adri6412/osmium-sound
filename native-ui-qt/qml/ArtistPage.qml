@@ -222,26 +222,34 @@ Item {
         property real cw: 100
         property real devScale: 1
         property var mask: null
+        property Flickable flick: null      // for RowTap: a flick must not leave the card lit
         signal open(string id, string title)
         width: cw; height: cw + 48
-        Rectangle { anchors.fill: parent; radius: 12; color: cTap.pressed ? Theme.mix(Theme.surface, Theme.wa(0.05), 1) : Theme.surface; border.width: 1; border.color: Theme.border }
-        DiagonalFallback {
-            width: card.cw; height: card.cw; radius: 12; visible: cImg.status !== Image.Ready
-            Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) }
+        // The scale goes on the drawing, not on the card: RowTap fills the
+        // card, and scaling that would shrink the touch area under the finger.
+        Item {
+            id: cardSkin
+            anchors.fill: parent
+            scale: cTap.tapScale
+            Rectangle { anchors.fill: parent; radius: 12; color: cTap.mix(Theme.surface, Theme.wa(0.05)); border.width: 1; border.color: Theme.border }
+            DiagonalFallback {
+                width: card.cw; height: card.cw; radius: 12; visible: cImg.status !== Image.Ready
+                Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) }
+            }
+            Image {
+                id: cImg; width: card.cw; height: card.cw; visible: false
+                readonly property int px: Theme.coverPx(card.cw)
+                source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px : ""
+                asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop; smooth: true
+                sourceSize.width: px; sourceSize.height: px
+                layer.enabled: true; layer.smooth: true
+                layer.textureSize: Qt.size(Math.ceil(card.cw * card.devScale), Math.ceil(card.cw * card.devScale))
+            }
+            ShaderImage { width: card.cw; height: card.cw; source: cImg; mask: card.mask; visible: cImg.status === Image.Ready }
+            Text { x: 8; y: card.cw + 8; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.title; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
+            Text { x: 8; y: card.cw + 24; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.sub; elide: Text.ElideRight; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
         }
-        Image {
-            id: cImg; width: card.cw; height: card.cw; visible: false
-            readonly property int px: Theme.coverPx(card.cw)
-            source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px : ""
-            asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop; smooth: true
-            sourceSize.width: px; sourceSize.height: px
-            layer.enabled: true; layer.smooth: true
-            layer.textureSize: Qt.size(Math.ceil(card.cw * card.devScale), Math.ceil(card.cw * card.devScale))
-        }
-        ShaderImage { width: card.cw; height: card.cw; source: cImg; mask: card.mask; visible: cImg.status === Image.Ready }
-        Text { x: 8; y: card.cw + 8; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.title; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
-        Text { x: 8; y: card.cw + 24; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.sub; elide: Text.ElideRight; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
-        Tap { id: cTap; onClicked: card.open(card.albumId, card.title) }
+        RowTap { id: cTap; flick: card.flick; tap: 0.98; onClicked: card.open(card.albumId, card.title) }
     }
 
     // for the test channel (eval app.main.browser.pageItem.scrollTo(900))
@@ -299,7 +307,7 @@ Item {
                         PageButton { icon: "play"; filled: true; primary: true; label: Tr.t("player.page.play"); onClicked: root.play("load") }
                         PageButton { icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: if (root.browser) root.browser.loadShuffled("artist_id", root.artistId) }
                         PageButton { icon: "list-plus"; onClicked: root.play("add") }
-                        PageButton { icon: "heart"; visible: root.favUrl !== ""; onClicked: if (root.browser) root.browser.addFavorite(root.favUrl, root.name, "playlist") }
+                        PageButton { id: favBtn; icon: "heart"; visible: root.favUrl !== ""; onClicked: { burst(); if (root.browser) root.browser.addFavorite(root.favUrl, root.name, "playlist") } }
                     }
                 }
             }
@@ -357,7 +365,7 @@ Item {
                                 readonly property string libId: String(modelData.artist_id || "")
                                 readonly property string line: root.memberLine(modelData)
                                 width: Math.min(col.width, Math.max(mName.implicitWidth, mSub.implicitWidth) + 28); height: line ? 50 : 34; radius: 10
-                                color: mTap.pressed ? Theme.light : Theme.surface; border.width: 1; border.color: Theme.border
+                                color: mTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
                                 Text { id: mName; x: 14; y: line ? 8 : 0; height: line ? 18 : parent.height; width: parent.width - 28; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
                                        text: String(modelData.name || ""); color: libId ? Theme.white : Theme.silverA(0.9); font.family: Theme.font; font.pixelSize: 13 }
                                 Text { id: mSub; visible: !!line; x: 14; y: 27; height: 15; width: parent.width - 28; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
@@ -385,7 +393,7 @@ Item {
                                 required property var modelData
                                 albumId: modelData.id; title: modelData.album; art: modelData.art
                                 sub: modelData.year > 0 ? String(modelData.year) : ""
-                                cw: root.cardW; devScale: root.devScale; mask: artMask
+                                cw: root.cardW; devScale: root.devScale; mask: artMask; flick: page
                                 onOpen: (id, title) => { if (root.browser) root.browser.openAlbum(id, title) }
                             }
                         }
@@ -409,7 +417,7 @@ Item {
                     Item {
                         required property var modelData
                         width: col.width; height: 56
-                        Rectangle { anchors.fill: parent; anchors.bottomMargin: 4; radius: 8; color: crTap.pressed ? Theme.light : Theme.surface }
+                        Rectangle { anchors.fill: parent; anchors.bottomMargin: 4; radius: 8; color: crTap.mix(Theme.surface, Theme.light) }
                         Text { x: 14; y: 7; width: parent.width - 28; height: 20; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
                                text: String(modelData.title || "") + (modelData.artist ? " — " + modelData.artist : ""); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
                         Text { x: 14; y: 28; width: parent.width - 28; height: 16; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
@@ -432,7 +440,7 @@ Item {
                         Rectangle {
                             required property var modelData
                             width: sName.implicitWidth + 28; height: 32; radius: 16
-                            color: sTap.pressed ? Theme.light : Theme.surface; border.width: 1; border.color: Theme.border
+                            color: sTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
                             Text { id: sName; anchors.centerIn: parent; text: modelData.name; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
                             Tap { id: sTap; onClicked: if (root.browser) root.browser.openArtist(modelData.id, modelData.name) }
                         }

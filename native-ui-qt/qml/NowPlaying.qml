@@ -221,9 +221,9 @@ Item {
     LedBar {
         x: root.pad + (root.leftW - root.ledW) / 2; y: root.artY + root.artSide + 32
         width: root.ledW; devScale: root.devScale
-        // BitPerfect / ReplayGain describe THIS device's signal path: off
-        // while driving another player (the format LEDs stay, they are the
-        // stream's)
+        // BitPerfect / ReplayGain follow the player being driven, like the
+        // format LEDs and the volume slider: the prefs behind ledMode are
+        // polled on the selected player, not on our own (#101)
         mode: Player.isOwn ? Player.ledMode : 0
         onOpenSetting: (which) => root.openPlaybackSetting(which)
     }
@@ -249,7 +249,7 @@ Item {
         Text {
             width: parent.width; height: 28; verticalAlignment: Text.AlignVCenter
             text: Player.artist || (Player.stationName !== "" ? "" : Tr.t("player.unknownArtist"))   // a radio with no song yet: nothing
-            color: npArtistTap.pressed ? Theme.white : Theme.gold; font.family: Theme.font; font.pixelSize: 18; elide: Text.ElideRight
+            color: npArtistTap.mix(Theme.gold, Theme.white); font.family: Theme.font; font.pixelSize: 18; elide: Text.ElideRight
             // the artist's page (library tracks only)
             Tap { id: npArtistTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
                   enabled: Player.artistId !== ""; onClicked: Ui.app.openArtist(Player.artistId, Player.artist) }
@@ -257,7 +257,7 @@ Item {
         Text {
             width: parent.width; height: 20; verticalAlignment: Text.AlignVCenter
             text: Player.album
-            color: npAlbumTap.pressed ? Theme.white : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 14; elide: Text.ElideRight
+            color: npAlbumTap.mix(Theme.silverA(0.7), Theme.white); font.family: Theme.font; font.pixelSize: 14; elide: Text.ElideRight
             Tap { id: npAlbumTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
                   enabled: Player.albumId !== ""; onClicked: Ui.app.openAlbum(Player.albumId, Player.album) }
         }
@@ -310,9 +310,9 @@ Item {
             readonly property real g: 12
             Item {                                 // shuffle
                 x: 9 - 20; y: controls.cy - 20; width: 40; height: 40
-                Icon { anchors.centerIn: parent; name: "shuffle"; size: 18
+                Icon { anchors.centerIn: parent; name: "shuffle"; size: 18; scale: shTap.tapScale
                        color: Player.shuffle > 0 ? Theme.gold : shTap.mix(Theme.silverA(0.6), Theme.white) }
-                Tap { id: shTap; onClicked: Player.cycleShuffle() }
+                Tap { id: shTap; tap: 0.88; onClicked: Player.cycleShuffle() }
             }
             Item {                                 // precedente (whileTap .9)
                 x: 30 + 12 - 22 + controls.g; y: controls.cy - 22; width: 44; height: 44
@@ -324,11 +324,20 @@ Item {
                 x: 66 + 2 * controls.g; y: controls.cy - 28; width: 56; height: 56
                 Glow { anchors.centerIn: parent; radius: 28; blur: 24; color: Theme.goldA(0.4) }
                 Rectangle { anchors.fill: parent; radius: 28; color: Theme.gold; scale: playTap.tapScale }
+                // Due icone che si scambiano in dissolvenza: cambiare `name` di
+                // colpo era uno scatto, e lo scarto ottico del triangolo
+                // saltava con lui. A riposo quella di sotto e' `visible: false`.
+                property real pf: Player.playing ? 1 : 0
+                Behavior on pf { NumberAnimation { duration: Theme.dur(110); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+                Icon {
+                    anchors.centerIn: parent; anchors.horizontalCenterOffset: 4
+                    name: "play"; filled: true; size: 26; color: Theme.black
+                    opacity: 1 - playBtn.pf; visible: opacity > 0.01; scale: playTap.tapScale
+                }
                 Icon {
                     anchors.centerIn: parent
-                    anchors.horizontalCenterOffset: Player.playing ? 0 : 4
-                    name: Player.playing ? "pause" : "play"; filled: true; size: 26; color: Theme.black
-                    scale: playTap.tapScale
+                    name: "pause"; filled: true; size: 26; color: Theme.black
+                    opacity: playBtn.pf; visible: opacity > 0.01; scale: playTap.tapScale
                 }
                 Tap { id: playTap; tap: 0.95; grow: 4; onClicked: Player.togglePlay() }
             }
@@ -339,20 +348,36 @@ Item {
             }
             Item {                                 // ripeti
                 x: 170 + 9 - 20 + 4 * controls.g; y: controls.cy - 20; width: 40; height: 40
-                Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 18
+                Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 18; scale: rpTap.tapScale
                        color: Player.repeat > 0 ? Theme.gold : rpTap.mix(Theme.silverA(0.6), Theme.white) }
-                Tap { id: rpTap; onClicked: Player.cycleRepeat() }
+                Tap { id: rpTap; tap: 0.88; onClicked: Player.cycleRepeat() }
             }
             Item {                                 // preferito (Lyrion Favorites): cuore pieno e oro se il brano lo e'
+                id: favBox
                 x: 170 + 9 - 20 + 4 * controls.g + 45; y: controls.cy - 20; width: 40; height: 40   // same pitch as next -> repeat
                 visible: Player.favoritesAvailable && Player.trackUrl !== ""
-                Icon { anchors.centerIn: parent; name: "heart"; filled: Player.isFavorite; size: 18; scale: favTap.tapScale
+                // lo scoppio quando si AGGIUNGE: 0 -> 1 -> 0 in poco piu' di
+                // un quarto di secondo, e finisce li'
+                property real pop: 0
+                SequentialAnimation {
+                    id: favBurst
+                    NumberAnimation { target: favBox; property: "pop"; from: 0; to: 1; duration: Theme.dur(90);  easing.type: Easing.OutQuad }
+                    NumberAnimation { target: favBox; property: "pop"; to: 0;         duration: Theme.dur(220); easing.type: Easing.OutCubic }
+                }
+                Icon { anchors.centerIn: parent; name: "heart"; filled: Player.isFavorite; size: 18
+                       scale: favTap.tapScale * (1 + 0.3 * favBox.pop)
                        color: Player.isFavorite ? Theme.gold : favTap.mix(Theme.silverA(0.6), Theme.white) }
                 Tap {
                     id: favTap; tap: 0.9
                     onClicked: {
                         var was = Player.isFavorite
                         Player.toggleFavorite()
+                        // 🚨 Qui e non su onFavoriteChanged: quel segnale scatta
+                        // anche cambiando brano, e il cuore scoppierebbe da solo.
+                        // 🚨 E non mentre i VU o una scena girano: tutto questo
+                        // sta nello strato cotto, e animarlo li' ricuoce una
+                        // texture a schermo intero a ogni fotogramma.
+                        if (!was && Theme.lushMotion && !root.effVu && !root.effAnim) favBurst.restart()
                         Ui.toast.say("heart", Tr.t(was ? "player.removedFromFavorites" : "player.addedToFavorites"))
                     }
                 }
@@ -360,9 +385,9 @@ Item {
             // volume, a destra: icona + barra 155 px
             Item {
                 x: parent.width - 180 + 8.5 - 18; y: controls.cy - 18; width: 36; height: 36
-                Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 17
-                       color: Player.volumeFixed ? Theme.silverA(0.21) : Theme.silverA(0.7) }
-                Tap { onClicked: Player.toggleMute() }
+                Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 17; scale: muteTap.tapScale
+                       color: Player.volumeFixed ? Theme.silverA(0.21) : muteTap.mix(Theme.silverA(0.7), Theme.white) }
+                Tap { id: muteTap; tap: 0.88; grow: 4; onClicked: Player.toggleMute() }
             }
             Item {
                 id: volBar

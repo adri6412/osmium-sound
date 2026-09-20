@@ -37,11 +37,11 @@ Item {
             x: parent.cx - 224; y: parent.cy + 56; width: 448; height: 12; radius: 6; color: Theme.gray
             // riempimento bg-hifi-accent; senza percentuale la barra e' piena e pulsa (animate-pulse: 1 -> .5 -> 1 in 2 s)
             Rectangle { width: Player.otaPercent > 0 ? parent.width * Math.max(0, Math.min(100, Player.otaPercent)) / 100 : parent.width; height: 12; radius: 6; color: Theme.accent
-                        Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+                        Behavior on width { NumberAnimation { duration: Theme.dur(400); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
                         SequentialAnimation on opacity {
-                            running: root.active && Player.otaPercent <= 0 && !root.done && !root.error; loops: Animation.Infinite
-                            NumberAnimation { from: 1; to: 0.5; duration: 1000; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.4, 0, 0.6, 1, 1, 1] }
-                            NumberAnimation { from: 0.5; to: 1; duration: 1000; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.4, 0, 0.6, 1, 1, 1] }
+                            running: root.active && Player.otaPercent <= 0 && !root.done && !root.error && Theme.motionRate > 0; loops: Animation.Infinite
+                            NumberAnimation { from: 1; to: 0.5; duration: Theme.dur(1000); easing.type: Easing.BezierSpline; easing.bezierCurve: [0.4, 0, 0.6, 1, 1, 1] }
+                            NumberAnimation { from: 0.5; to: 1; duration: Theme.dur(1000); easing.type: Easing.BezierSpline; easing.bezierCurve: [0.4, 0, 0.6, 1, 1, 1] }
                             onRunningChanged: if (!running) parent.opacity = 1
                         } }
         }

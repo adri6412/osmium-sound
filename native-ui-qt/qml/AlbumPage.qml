@@ -211,7 +211,7 @@ Item {
                                 width: Math.min(implicitWidth, info.width)
                                 wrapMode: Text.Wrap; maximumLineCount: 3; elide: Text.ElideRight
                                 text: modelData.name + (index < root.artists.length - 1 ? "," : "")
-                                color: aTap.pressed ? Theme.white : Theme.gold; font.family: Theme.font; font.pixelSize: 15
+                                color: aTap.mix(Theme.gold, Theme.white); font.family: Theme.font; font.pixelSize: 15
                                 Tap { id: aTap; grow: 4; enabled: modelData.id !== ""; onClicked: root.openPerson(modelData) }
                             }
                         }
@@ -236,7 +236,7 @@ Item {
                 PageButton { icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: root.shuffle() }
                 PageButton { icon: "list-plus"; onClicked: root.play("add") }
                 PageButton { icon: "list-start"; onClicked: root.play("insert") }
-                PageButton { icon: "heart"; visible: !!root.album.favorites_url; onClicked: if (root.browser) root.browser.addFavorite(String(root.album.favorites_url), String(root.album.album || ""), "playlist") }
+                PageButton { id: favBtn; icon: "heart"; visible: !!root.album.favorites_url; onClicked: { burst(); if (root.browser) root.browser.addFavorite(String(root.album.favorites_url), String(root.album.album || ""), "playlist") } }
             }
 
             // ── state of the online lookup ─────────────────────────────────
@@ -270,43 +270,44 @@ Item {
                     }
                     Item {
                         width: parent.width; height: trow.modelData.sub ? 52 : 44
-                        Rectangle {
-                            anchors.fill: parent; anchors.bottomMargin: 4; radius: 8
-                            color: trTap.pressed && !trTap.moved ? Theme.light : trow.current ? Theme.goldA(0.12) : Theme.surface
-                            border.width: trow.current ? 1 : 0; border.color: Theme.goldA(0.3)
-                        }
-                        Text {
-                            x: 8; width: 30; height: parent.height - 4; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignRight
-                            text: trow.current ? "▶" : (trow.modelData.n > 0 ? String(trow.modelData.n) : "")
-                            color: trow.current ? Theme.gold : Theme.silverA(0.45); font.family: Theme.mono; font.pixelSize: 12
-                        }
-                        Text {
-                            x: 50; y: trow.modelData.sub ? 7 : 0; width: parent.width - 50 - 64
-                            height: trow.modelData.sub ? 20 : parent.height - 4; verticalAlignment: Text.AlignVCenter
-                            text: trow.modelData.title; elide: Text.ElideRight
-                            color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: trow.current
-                        }
-                        Text {
-                            visible: trow.modelData.sub !== ""
-                            x: 50; y: 27; width: parent.width - 50 - 64; height: 16; verticalAlignment: Text.AlignVCenter
-                            text: trow.modelData.sub; elide: Text.ElideRight
-                            color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11
-                        }
-                        Text {
-                            anchors.right: parent.right; anchors.rightMargin: 12; height: parent.height - 4; verticalAlignment: Text.AlignVCenter
-                            text: trow.modelData.dur > 0 ? Meta.dur(trow.modelData.dur) : ""
-                            color: Theme.silverA(0.5); font.family: Theme.mono; font.pixelSize: 12
-                        }
-                        MouseArea {
-                            id: trTap
+                        // the scale goes on the drawing, not on the delegate (see LibraryList)
+                        Item {
+                            id: trSkin
                             anchors.fill: parent
-                            property bool moved: false
-                            property real px: 0; property real py: 0
-                            pressAndHoldInterval: 500
-                            onPressed: (m) => { moved = false; px = m.x; py = m.y }
-                            onPositionChanged: (m) => { if (Math.abs(m.y - py) > 10 || Math.abs(m.x - px) > 10) moved = true }
+                            scale: trTap.tapScale
+                            Rectangle {
+                                anchors.fill: parent; anchors.bottomMargin: 4; radius: 8
+                                color: trTap.mix(trow.current ? Theme.goldA(0.12) : Theme.surface, Theme.light)
+                                border.width: trow.current ? 1 : 0; border.color: Theme.goldA(0.3)
+                            }
+                            Text {
+                                x: 8; width: 30; height: parent.height - 4; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignRight
+                                text: trow.current ? "▶" : (trow.modelData.n > 0 ? String(trow.modelData.n) : "")
+                                color: trow.current ? Theme.gold : Theme.silverA(0.45); font.family: Theme.mono; font.pixelSize: 12
+                            }
+                            Text {
+                                x: 50; y: trow.modelData.sub ? 7 : 0; width: parent.width - 50 - 64
+                                height: trow.modelData.sub ? 20 : parent.height - 4; verticalAlignment: Text.AlignVCenter
+                                text: trow.modelData.title; elide: Text.ElideRight
+                                color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: trow.current
+                            }
+                            Text {
+                                visible: trow.modelData.sub !== ""
+                                x: 50; y: 27; width: parent.width - 50 - 64; height: 16; verticalAlignment: Text.AlignVCenter
+                                text: trow.modelData.sub; elide: Text.ElideRight
+                                color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11
+                            }
+                            Text {
+                                anchors.right: parent.right; anchors.rightMargin: 12; height: parent.height - 4; verticalAlignment: Text.AlignVCenter
+                                text: trow.modelData.dur > 0 ? Meta.dur(trow.modelData.dur) : ""
+                                color: Theme.silverA(0.5); font.family: Theme.mono; font.pixelSize: 12
+                            }
+                        }
+                        RowTap {
+                            id: trTap
+                            flick: page; tap: 0.98; holdRing: true
                             onClicked: root.play("load", trow.index)
-                            onPressAndHold: (m) => { if (!moved) { var p = mapToItem(root, m.x, m.y); root.trackMenu(trow.index, p.x, p.y) } }
+                            onLongPress: (x, y) => { var p = mapToItem(root, x, y); root.trackMenu(trow.index, p.x, p.y) }
                         }
                     }
                 }
@@ -330,7 +331,7 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: (root.byTrack ? "− " : "+ ") + Tr.t("player.page.creditsByTrack")
-                    color: btTap.pressed ? Theme.white : Theme.gold; font.family: Theme.font; font.pixelSize: 13
+                    color: btTap.mix(Theme.gold, Theme.white); font.family: Theme.font; font.pixelSize: 13
                     Tap { id: btTap; grow: 8; onClicked: root.byTrack = !root.byTrack }
                 }
             }
@@ -389,7 +390,7 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: Tr.t("player.page.chooseEdition")
-                    color: edTap.pressed ? Theme.white : Theme.gold; font.family: Theme.font; font.pixelSize: 13
+                    color: edTap.mix(Theme.gold, Theme.white); font.family: Theme.font; font.pixelSize: 13
                     Tap { id: edTap; grow: 8; onClicked: picker.open(root.albumId) }
                 }
             }

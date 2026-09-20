@@ -2,6 +2,7 @@
 // con la maniglia per riordinare, scorrimento laterale per togliere, piede
 // con "salva come playlist" e "svuota".
 import QtQuick
+import Hifi
 import Hifi.Ui
 
 Rectangle {
@@ -65,8 +66,8 @@ Rectangle {
         spacing: 4
         // le righe che si spostano scivolano al loro posto, come il layout
         // animato di framer-motion in QueueRow
-        displaced: Transition { NumberAnimation { properties: "y"; duration: 180 } }
-        move: Transition { NumberAnimation { properties: "y"; duration: 180 } }
+        displaced: Transition { NumberAnimation { properties: "y"; duration: Theme.dur(180) } }
+        move: Transition { NumberAnimation { properties: "y"; duration: Theme.dur(180) } }
         interactive: root.interactive && !dragRow.active
         flickDeceleration: 1500; maximumFlickVelocity: 4000
         boundsBehavior: Flickable.StopAtBounds
@@ -84,13 +85,25 @@ Rectangle {
                                            ? dragRow.dy - (dragRow.cur - dragRow.from) * 58 : 0
             z: dragRow.active && dragRow.cur === index ? 2 : 0
             property real swipeDx: 0
+            // 🚨 No RowTap here, and nothing about the gesture is touched:
+            // this MouseArea decides the swipe and the reorder with a
+            // preventStealing that changes by itself (issue #100). It is only
+            // read: until the gesture has made up its mind the finger is
+            // resting on the row and the box lights up; the moment it turns
+            // into a scroll or a drag it fades away. During the swipe the
+            // feedback is the red backing.
+            readonly property real pressF: qTap.pressed && !qTap.decided && !dragRow.active ? 1 : 0
+            property real pressAnim: pressF
+            Behavior on pressAnim { NumberAnimation { duration: Theme.dur(Theme.tTap); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+            Spring { id: pressS; stiffness: 550; damping: 30; rate: Theme.motionRate; to: row.pressF }
             Rectangle {                              // sfondo rosso con cestino (scorrimento)
                 y: row.dragDy; width: parent.width; height: parent.height; radius: 8; color: Theme.redA(0.2); visible: row.swipeDx < 0
                 Icon { anchors.right: parent.right; anchors.rightMargin: 16; anchors.verticalCenter: parent.verticalCenter; name: "trash-2"; size: 16; color: Theme.red300 }
             }
             Rectangle {
                 x: row.swipeDx; y: row.dragDy; width: parent.width; height: parent.height; radius: 8
-                color: row.current ? Theme.goldA(0.15) : Theme.surface
+                scale: Theme.motionRate > 0 ? 1 - 0.02 * pressS.value : 1
+                color: Theme.mix(row.current ? Theme.goldA(0.15) : Theme.surface, Theme.light, row.pressAnim)
                 border.width: row.current ? 1 : 0; border.color: Theme.goldA(0.3)
                 Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; name: "grip-vertical"; size: 15; color: dragRow.active && dragRow.cur === row.index ? Theme.white : Theme.silverA(0.4) }   // active:text-white
                 Text {
@@ -110,6 +123,7 @@ Rectangle {
                 }
             }
             MouseArea {
+                id: qTap
                 anchors.fill: parent
                 enabled: root.interactive
                 property real x0: 0; property real y0: 0; property bool horiz: false; property bool decided: false

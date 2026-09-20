@@ -94,7 +94,8 @@ Item {
         width: pillText.implicitWidth + padX * 2 + (icon ? 8 : 0); height: 28; radius: height / 2
         Icon { visible: !!parent.icon; x: 8; anchors.verticalCenter: parent.verticalCenter; name: parent.icon; size: 10; color: Theme.gold; filled: true }
         Text { id: pillText; x: parent.padX + (parent.icon ? 8 : 0); anchors.verticalCenter: parent.verticalCenter; text: parent.label; color: parent.fg; font.family: Theme.font; font.pixelSize: parent.px }
-        Tap { onClicked: parent.clicked() }
+        scale: pillTap.tapScale
+        Tap { id: pillTap; tap: 0.95; grow: 4; onClicked: parent.clicked() }
     }
 
     Flickable {
@@ -241,7 +242,7 @@ Item {
                 Rectangle {
                     x: parent.width - 60; anchors.verticalCenter: parent.verticalCenter; width: 44; height: 24; radius: 12
                     color: parent.on ? Theme.gold : Theme.wa(0.15)
-                    Rectangle { x: parent.parent.on ? 22 : 2; y: 2; width: 20; height: 20; radius: 10; color: Theme.white; Behavior on x { NumberAnimation { duration: 120 } } }
+                    Rectangle { x: parent.parent.on ? 22 : 2; y: 2; width: 20; height: 20; radius: 10; color: Theme.white; Behavior on x { NumberAnimation { duration: Theme.dur(120) } } }
                     Tap { grow: 8; onClicked: {
                         if (root.dstmProvider) { root.dstmLast = root.dstmProvider; Player.cmd(["playerpref", "plugin.dontstopthemusic:provider", ""]); root.dstmProvider = "" }
                         else if (root.dstmLast) { Player.cmd(["playerpref", "plugin.dontstopthemusic:provider", root.dstmLast]); root.dstmProvider = root.dstmLast }

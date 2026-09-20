@@ -20,9 +20,9 @@ Item {
     visible: active
     anchors.fill: parent
 
-    Spring { id: slide; stiffness: 320; damping: 24 }      // 0 fuori, 1 a posto
+    Spring { id: slide; stiffness: 320; damping: 24; rate: Theme.motionRate }      // 0 fuori, 1 a posto
     property real fade: 0
-    Behavior on fade { NumberAnimation { duration: 200; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Behavior on fade { NumberAnimation { duration: Theme.dur(200); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
 
     function openText(lbl, initial, pw, f) {
         label = lbl || Tr.t("keyboard.enterText")

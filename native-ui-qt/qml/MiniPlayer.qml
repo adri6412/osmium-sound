@@ -66,7 +66,11 @@ Item {
         id: art
         x: 45; y: root.y0 + 8; width: 250; height: 250
         source: Player.artworkUrl; radius: 16; devScale: root.devScale; border: Theme.wa(0.05)
-        Tap { enabled: Player.connected; onClicked: root.expand() }
+        // 🚨 no scale here: the cover is big and carries a blurred shadow,
+        // redrawing it every frame for 1.5 % is not worth it. A dark veil says
+        // the touch instead, and that costs one rectangle.
+        Rectangle { anchors.fill: parent; radius: 16; color: Theme.blackA(0.25); opacity: coverTap.pressAnim }
+        Tap { id: coverTap; enabled: Player.connected; onClicked: root.expand() }
     }
 
     Column {
@@ -88,13 +92,13 @@ Item {
         Text {
             width: parent.width; height: 19; verticalAlignment: Text.AlignVCenter
             text: Player.artist || (Player.stationName !== "" ? "" : Tr.t("player.unknownArtist"))   // a radio with no song yet: nothing
-            color: miniArtistTap.pressed ? Theme.white : Theme.gold; font.family: Theme.font; font.pixelSize: 13; elide: Text.ElideRight
+            color: miniArtistTap.mix(Theme.gold, Theme.white); font.family: Theme.font; font.pixelSize: 13; elide: Text.ElideRight
             Tap { id: miniArtistTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
                   enabled: Player.artistId !== ""; onClicked: Ui.app.openArtist(Player.artistId, Player.artist) }
         }
         Text {
             width: parent.width; height: 16; visible: root.hasAlbum; verticalAlignment: Text.AlignVCenter
-            text: Player.album; color: miniAlbumTap.pressed ? Theme.white : Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12; elide: Text.ElideRight
+            text: Player.album; color: miniAlbumTap.mix(Theme.silverA(0.6), Theme.white); font.family: Theme.font; font.pixelSize: 12; elide: Text.ElideRight
             Tap { id: miniAlbumTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
                   enabled: Player.albumId !== ""; onClicked: Ui.app.openAlbum(Player.albumId, Player.album) }
         }
@@ -141,12 +145,22 @@ Item {
             Tap { id: prevTap; tap: 0.88; onClicked: Player.prev() }
         }
         Item {
+            id: miniPlayBtn
             x: 144; y: 0; width: 52; height: 52
             Glow { anchors.centerIn: parent; radius: 26; blur: 18; color: Theme.goldA(0.35) }
             Rectangle { anchors.fill: parent; radius: 26; color: Theme.gold; scale: playTap.tapScale }
+            // the two icons swap in a fade (see NowPlaying)
+            property real pf: Player.playing ? 1 : 0
+            Behavior on pf { NumberAnimation { duration: Theme.dur(110); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
             Icon {
-                anchors.centerIn: parent; anchors.horizontalCenterOffset: Player.playing ? 0 : 1
-                name: Player.playing ? "pause" : "play"; filled: true; size: 20; color: Theme.black; scale: playTap.tapScale
+                anchors.centerIn: parent; anchors.horizontalCenterOffset: 1
+                name: "play"; filled: true; size: 20; color: Theme.black; scale: playTap.tapScale
+                opacity: 1 - miniPlayBtn.pf; visible: opacity > 0.01
+            }
+            Icon {
+                anchors.centerIn: parent
+                name: "pause"; filled: true; size: 20; color: Theme.black; scale: playTap.tapScale
+                opacity: miniPlayBtn.pf; visible: opacity > 0.01
             }
             Tap { id: playTap; tap: 0.94; grow: 4; onClicked: Player.togglePlay() }
         }
@@ -164,23 +178,23 @@ Item {
         opacity: Player.connected ? 1 : 0.3            // disabled:opacity-30 senza player
         Item {
             x: 84; width: 28; height: 28
-            Icon { anchors.centerIn: parent; name: "shuffle"; size: 16; color: Player.shuffle > 0 ? Theme.gold : shTap.mix(Theme.silverA(0.5), Theme.white) }
-            Tap { id: shTap; onClicked: Player.cycleShuffle() }
+            Icon { anchors.centerIn: parent; name: "shuffle"; size: 16; color: Player.shuffle > 0 ? Theme.gold : shTap.mix(Theme.silverA(0.5), Theme.white); scale: shTap.tapScale }
+            Tap { id: shTap; tap: 0.88; onClicked: Player.cycleShuffle() }
         }
         Item {
             x: 132; width: 28; height: 28
-            Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 16; color: Player.repeat > 0 ? Theme.gold : rpTap.mix(Theme.silverA(0.5), Theme.white) }
-            Tap { id: rpTap; onClicked: Player.cycleRepeat() }
+            Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 16; color: Player.repeat > 0 ? Theme.gold : rpTap.mix(Theme.silverA(0.5), Theme.white); scale: rpTap.tapScale }
+            Tap { id: rpTap; tap: 0.88; onClicked: Player.cycleRepeat() }
         }
         Item {
             x: 180; width: 28; height: 28
-            Icon { anchors.centerIn: parent; name: "list-music"; size: 16; color: qTap.mix(Theme.silverA(0.5), Theme.white) }
-            Tap { id: qTap; onClicked: root.openQueue() }
+            Icon { anchors.centerIn: parent; name: "list-music"; size: 16; color: qTap.mix(Theme.silverA(0.5), Theme.white); scale: qTap.tapScale }
+            Tap { id: qTap; tap: 0.88; onClicked: root.openQueue() }
         }
         Item {
             x: 228; width: 28; height: 28
-            Icon { anchors.centerIn: parent; name: "moon"; size: 16; color: Player.sleepSecs > 0 ? Theme.gold : slTap.mix(Theme.silverA(0.5), Theme.white) }
-            Tap { id: slTap; onClicked: root.openSleep() }
+            Icon { anchors.centerIn: parent; name: "moon"; size: 16; color: Player.sleepSecs > 0 ? Theme.gold : slTap.mix(Theme.silverA(0.5), Theme.white); scale: slTap.tapScale }
+            Tap { id: slTap; tap: 0.88; onClicked: root.openSleep() }
         }
     }
 
@@ -191,8 +205,8 @@ Item {
         readonly property real frac: Math.max(0, Math.min(100, Player.volume)) / 100
         Item {
             x: 11; y: 4; width: 24; height: 24
-            Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 14; color: Player.volumeFixed ? Theme.silverA(0.18) : Player.muted ? Theme.gold : Theme.silverA(0.6) }
-            Tap { onClicked: Player.toggleMute() }
+            Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 14; color: Player.volumeFixed ? Theme.silverA(0.18) : Player.muted ? Theme.gold : muteTap.mix(Theme.silverA(0.6), Theme.white); scale: muteTap.tapScale }
+            Tap { id: muteTap; tap: 0.88; grow: 4; onClicked: Player.toggleMute() }
         }
         Item {
             id: volBar

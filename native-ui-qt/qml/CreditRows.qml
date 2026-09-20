@@ -75,7 +75,7 @@ Column {
                                 readonly property bool linked: libId !== "" || !!modelData.mbid
                                 readonly property bool last: index === (entry.modelData.people || []).length - 1
                                 text: String(modelData.name || "") + (modelData.credit ? " (" + modelData.credit + ")" : "") + (last ? "" : ",")
-                                color: libId !== "" ? (pTap.pressed ? Theme.gold : Theme.white) : linked ? (pTap.pressed ? Theme.gold : Theme.silverA(0.9)) : Theme.silverA(0.75)
+                                color: libId !== "" ? pTap.mix(Theme.white, Theme.gold) : linked ? pTap.mix(Theme.silverA(0.9), Theme.gold) : Theme.silverA(0.75)
                                 font.family: Theme.font; font.pixelSize: 13
                                 lineHeight: 19; lineHeightMode: Text.FixedHeight
                                 Tap { id: pTap; grow: 4; enabled: parent.linked; onClicked: root.person(parent.modelData) }

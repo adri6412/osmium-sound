@@ -12,9 +12,9 @@ Item {
     property string text: ""
     anchors.fill: parent
     visible: open
-    Spring { id: rise; stiffness: 550; damping: 30 }
+    Spring { id: rise; stiffness: 550; damping: 30; rate: Theme.motionRate }
     property real fade: 0
-    Behavior on fade { NumberAnimation { duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Behavior on fade { NumberAnimation { duration: Theme.dur(300); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
     property string icon: "usb"
     function show(label) { say("usb", Tr.tf("usbToast.mounted", "label", label || "USB")) }
     function say(ic, t) {

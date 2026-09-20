@@ -500,7 +500,8 @@
       "systemControls": "System Controls",
       "language": "Language",
       "thirdPartyNotices": "Third-Party Notices",
-      "netCheck": "Network check"
+      "netCheck": "Network check",
+      "uiMotion": "Interface motion"
     },
     "language": {
       "help": "Choose the interface language."
@@ -551,6 +552,19 @@
       "storeEmpty": "There are no other animations to download at the moment.",
       "storeCheck": "Check again",
       "removeConfirm": "Remove the animation “{name}” from this device? You can download it again later."
+    },
+    "uiMotion": {
+      "help": "How much the screen moves when you touch it. The movement is short and stops by itself, so it costs the graphics chip next to nothing; turn it down if you prefer the interface to stand still.",
+      "option": {
+        "full": "Full",
+        "reduced": "Reduced",
+        "none": "None"
+      },
+      "optionHelp": {
+        "full": "Recommended \u2014 buttons give way under a finger, panels slide in",
+        "reduced": "The same movements, twice as quick",
+        "none": "Nothing moves: everything changes at once"
+      }
     },
     "playback": {
       "help": "Playback options applied to the active player: track transitions (crossfade/gapless) and volume normalisation (ReplayGain).",

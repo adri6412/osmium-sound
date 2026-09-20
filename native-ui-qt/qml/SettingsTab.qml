@@ -79,6 +79,7 @@ Item {
         { id: "playback", icon: "sliders", key: "settings.sections.playback" },
         { id: "vuMeters", icon: "audio-lines", key: "settings.sections.vuMeters" },
         { id: "animations", icon: "disc-3", key: "settings.sections.animations" },
+        { id: "uiMotion", icon: "move", key: "settings.sections.uiMotion" },
         { id: "library", icon: "library", key: "settings.sections.library" },
         { id: "multiroom", icon: "speaker", key: "settings.sections.multiroom" },
         { id: "alarm", icon: "alarm-clock", key: "settings.sections.alarm" },
@@ -660,7 +661,7 @@ Item {
     }
 
     function appear() { fadeAnim.restart() }
-    NumberAnimation { id: fadeAnim; target: body; property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
+    NumberAnimation { id: fadeAnim; target: body; property: "opacity"; from: 0; to: 1; duration: Theme.dur(120); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
     Keys.onEscapePressed: if (active >= 0) goBack()
 
     // ─── costruzione delle righe ───────────────────────────────────────────
@@ -730,6 +731,7 @@ Item {
             case "playback": secPlayback(); break
             case "vuMeters": secVuMeters(); break
             case "animations": secAnimations(); break
+            case "uiMotion": secUiMotion(); break
             case "library": secLibrary(); break
             case "multiroom": secMultiroom(); break
             case "btSpeakers": secBtSpeakers(); break
@@ -1119,6 +1121,18 @@ Item {
             }
         }
         animStoreRows(lang)
+    }
+    // How much the interface itself moves under a finger. Takes effect at
+    // once, nothing to restart: Theme.motionRate divides every duration and
+    // sets the rate of every spring.
+    function secUiMotion() {
+        help("settings.uiMotion.help")
+        var OPT = ["full", "reduced", "none"]
+        for (var i = 0; i < OPT.length; i++) {
+            var r = option(Tr.t("settings.uiMotion.option." + OPT[i]), Tr.t("settings.uiMotion.optionHelp." + OPT[i]),
+                           OPT[i], Theme.motionLevel === OPT[i], "ui_motion")
+            r.style = "border"; r.hh = 62
+        }
     }
     // More animations to download: a card per scene of the store
     function animStoreRows(lang) {
@@ -1743,6 +1757,7 @@ Item {
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break
         case "vu_style": post(A("/vu_style"), { style: arg }); Player.vuStyle = arg; break
         case "open_animations": openSection("animations"); return
+        case "ui_motion": Sys.setConf("ui-motion", arg); Theme.motionLevel = arg; break
         case "anim_vu_off": post(A("/vu_meter"), { enable: false }); cfg.vuMeter = false; Player.vuEnabled = false; break
         case "np_anim":
             post(A("/nowplaying_animation"), { animation: arg }); cfg.npAnimation = arg; Player.npAnimation = arg
@@ -2139,9 +2154,9 @@ Item {
                 color: "transparent"; border.width: 2; border.color: Theme.gold
                 SequentialAnimation {
                     id: markFlashAnim
-                    NumberAnimation { target: markFlash; property: "opacity"; to: 1; duration: 150 }
-                    PauseAnimation { duration: 700 }
-                    NumberAnimation { target: markFlash; property: "opacity"; to: 0; duration: 500 }
+                    NumberAnimation { target: markFlash; property: "opacity"; to: 1; duration: Theme.dur(150) }
+                    PauseAnimation { duration: Theme.dur(700) }
+                    NumberAnimation { target: markFlash; property: "opacity"; to: 0; duration: Theme.dur(500) }
                 }
             }
         }

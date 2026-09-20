@@ -112,76 +112,81 @@ Item {
             readonly property real iconW: v === LibraryModel.Artists || v === LibraryModel.Composers || v === LibraryModel.Playlists || v === LibraryModel.Search ? 28
                                         : v === LibraryModel.Tracks || v === LibraryModel.PlaylistTracks ? 13
                                         : v === LibraryModel.Folders || v === LibraryModel.Genres || v === LibraryModel.Years ? 15 : 24
-            // active:bg-hifi-light (bianco 5 % su #161616 era ~#161616: il tocco non si vedeva)
-            Rectangle { anchors.fill: parent; radius: 8; color: rowTap.pressed && !rowTap.moved ? Theme.light : Theme.surface }
-            // icona a sinistra
+            // 🚨 the scale goes on the DRAWING, not on the delegate: RowTap
+            // fills the delegate, and scaling that too would shrink the touch
+            // area exactly while the finger holds it (a touch near the edge
+            // would be lost).
             Item {
-                x: 12; anchors.verticalCenter: parent.verticalCenter; width: row.iconW; height: row.iconW
-                Rectangle { anchors.fill: parent; radius: 14; color: Theme.light; visible: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || (row.v === LibraryModel.Search && row.kind !== 2) }
-                Rectangle { anchors.fill: parent; radius: 8; color: Theme.light; visible: row.v === LibraryModel.Playlists }
-                Image {
-                    id: rowImg
-                    anchors.fill: parent
-                    visible: false
-                    source: (row.v >= LibraryModel.Radios) ? root.iconUrl(row.icon) : ""
-                    asynchronous: true; cache: true; smooth: true
-                    sourceSize.width: Math.round(24 * root.devScale * 2); sourceSize.height: Math.round(24 * root.devScale * 2)
-                    fillMode: Image.PreserveAspectCrop
-                    layer.enabled: true
-                    layer.smooth: true
-                    layer.textureSize: Qt.size(Math.ceil(24 * root.devScale * 2), Math.ceil(24 * root.devScale * 2))
-                }
-                Rectangle { id: rowMask; anchors.fill: parent; radius: 4; visible: false; layer.enabled: true; layer.smooth: true
-                            layer.textureSize: Qt.size(Math.ceil(width * root.devScale * 2), Math.ceil(height * root.devScale * 2)) }
-                ShaderImage { anchors.fill: parent; source: rowImg; mask: rowMask; visible: rowImg.status === Image.Ready }
-                Icon {
-                    anchors.centerIn: parent
-                    visible: rowImg.status !== Image.Ready
-                    name: row.v === LibraryModel.Artists ? "user" : row.v === LibraryModel.Composers ? "piano" : row.v === LibraryModel.Playlists ? "list-music"
-                        : row.v === LibraryModel.Genres ? "tag" : row.v === LibraryModel.Years ? "calendar"
-                        : row.v === LibraryModel.Search ? (row.kind === 0 ? "user" : row.kind === 1 ? "disc" : "music")
-                        : row.v === LibraryModel.Folders ? (row.isDir ? "folder" : "music")
-                        : row.v === LibraryModel.Radios ? "radio" : row.v === LibraryModel.Apps ? "app-window"
-                        : row.v === LibraryModel.PluginItems ? (row.hasInput ? "search" : row.hasItems ? "folder" : "music")   // lente sul nodo di ricerca, come Electron
-                        : (row.v === LibraryModel.MenuHome || row.v === LibraryModel.Menu) ? ((row.go && row.go.length) ? "app-window" : "music") : "music"
-                    size: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || (row.v === LibraryModel.Search && row.kind !== 2) ? 13 : row.v === LibraryModel.Playlists ? 14 : row.v === LibraryModel.Folders || row.v === LibraryModel.Genres || row.v === LibraryModel.Years ? 15 : row.v === LibraryModel.Tracks || row.v === LibraryModel.PlaylistTracks ? 13 : 15
-                    color: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || row.v === LibraryModel.Playlists || (row.v === LibraryModel.Search && row.kind !== 2) ? Theme.silver
-                         : (row.v === LibraryModel.Folders && row.isDir) || row.v === LibraryModel.Genres || row.v === LibraryModel.Years ? Theme.gold : Theme.silverA(0.6)
-                }
-            }
-            Text {
-                x: 12 + row.iconW + 12; anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - x - (row.playBtn ? 48 : 12)
-                text: row.text; elide: Text.ElideRight
-                color: Theme.white; font.family: Theme.font; font.pixelSize: 14
-            }
-            // il brano che cerca il proprio artista: righe con la seconda riga (album/artista) quando c'e'
-            Text {
-                visible: row.v === LibraryModel.Search && row.sub !== ""
-                x: 12 + row.iconW + 12; y: parent.height / 2 + 2
-                width: parent.width - x - (row.playBtn ? 48 : 12)
-                text: row.sub; elide: Text.ElideRight
-                color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 11
-            }
-            Rectangle {                                   // pulsante play a destra (opacity-70, active:opacity-100)
-                id: rowPlay
-                visible: row.playBtn
-                x: parent.width - 12 - 28; anchors.verticalCenter: parent.verticalCenter; width: 28; height: 28; radius: 14
-                color: Theme.goldA(0.2)
-                opacity: rowTap.pressed && !rowTap.moved && rowTap.mouseX >= x ? 1 : 0.7
-                Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 12; color: Theme.gold }
-            }
-            MouseArea {
-                id: rowTap
+                id: skin
                 anchors.fill: parent
-                property bool moved: false
-                pressAndHoldInterval: 500
-                onPressed: moved = false
-                onPositionChanged: (m) => { if (Math.abs(m.y - pressY) > 10 || Math.abs(m.x - pressX) > 10) moved = true }
-                property real pressX: 0; property real pressY: 0
-                onPressedChanged: if (pressed) { pressX = mouseX; pressY = mouseY }
+                scale: rowTap.tapScale
+                // active:bg-hifi-light (bianco 5 % su #161616 era ~#161616: il tocco non si vedeva)
+                Rectangle { anchors.fill: parent; radius: 8; color: rowTap.mix(Theme.surface, Theme.light) }
+                // icona a sinistra
+                Item {
+                    x: 12; anchors.verticalCenter: parent.verticalCenter; width: row.iconW; height: row.iconW
+                    Rectangle { anchors.fill: parent; radius: 14; color: Theme.light; visible: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || (row.v === LibraryModel.Search && row.kind !== 2) }
+                    Rectangle { anchors.fill: parent; radius: 8; color: Theme.light; visible: row.v === LibraryModel.Playlists }
+                    Image {
+                        id: rowImg
+                        anchors.fill: parent
+                        visible: false
+                        source: (row.v >= LibraryModel.Radios) ? root.iconUrl(row.icon) : ""
+                        asynchronous: true; cache: true; smooth: true
+                        sourceSize.width: Math.round(24 * root.devScale * 2); sourceSize.height: Math.round(24 * root.devScale * 2)
+                        fillMode: Image.PreserveAspectCrop
+                        layer.enabled: true
+                        layer.smooth: true
+                        layer.textureSize: Qt.size(Math.ceil(24 * root.devScale * 2), Math.ceil(24 * root.devScale * 2))
+                    }
+                    Rectangle { id: rowMask; anchors.fill: parent; radius: 4; visible: false; layer.enabled: true; layer.smooth: true
+                                layer.textureSize: Qt.size(Math.ceil(width * root.devScale * 2), Math.ceil(height * root.devScale * 2)) }
+                    ShaderImage { anchors.fill: parent; source: rowImg; mask: rowMask; visible: rowImg.status === Image.Ready }
+                    Icon {
+                        anchors.centerIn: parent
+                        visible: rowImg.status !== Image.Ready
+                        name: row.v === LibraryModel.Artists ? "user" : row.v === LibraryModel.Composers ? "piano" : row.v === LibraryModel.Playlists ? "list-music"
+                            : row.v === LibraryModel.Genres ? "tag" : row.v === LibraryModel.Years ? "calendar"
+                            : row.v === LibraryModel.Search ? (row.kind === 0 ? "user" : row.kind === 1 ? "disc" : "music")
+                            : row.v === LibraryModel.Folders ? (row.isDir ? "folder" : "music")
+                            : row.v === LibraryModel.Radios ? "radio" : row.v === LibraryModel.Apps ? "app-window"
+                            : row.v === LibraryModel.PluginItems ? (row.hasInput ? "search" : row.hasItems ? "folder" : "music")   // lente sul nodo di ricerca, come Electron
+                            : (row.v === LibraryModel.MenuHome || row.v === LibraryModel.Menu) ? ((row.go && row.go.length) ? "app-window" : "music") : "music"
+                        size: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || (row.v === LibraryModel.Search && row.kind !== 2) ? 13 : row.v === LibraryModel.Playlists ? 14 : row.v === LibraryModel.Folders || row.v === LibraryModel.Genres || row.v === LibraryModel.Years ? 15 : row.v === LibraryModel.Tracks || row.v === LibraryModel.PlaylistTracks ? 13 : 15
+                        color: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || row.v === LibraryModel.Playlists || (row.v === LibraryModel.Search && row.kind !== 2) ? Theme.silver
+                             : (row.v === LibraryModel.Folders && row.isDir) || row.v === LibraryModel.Genres || row.v === LibraryModel.Years ? Theme.gold : Theme.silverA(0.6)
+                    }
+                }
+                Text {
+                    x: 12 + row.iconW + 12; anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - x - (row.playBtn ? 48 : 12)
+                    text: row.text; elide: Text.ElideRight
+                    color: Theme.white; font.family: Theme.font; font.pixelSize: 14
+                }
+                // il brano che cerca il proprio artista: righe con la seconda riga (album/artista) quando c'e'
+                Text {
+                    visible: row.v === LibraryModel.Search && row.sub !== ""
+                    x: 12 + row.iconW + 12; y: parent.height / 2 + 2
+                    width: parent.width - x - (row.playBtn ? 48 : 12)
+                    text: row.sub; elide: Text.ElideRight
+                    color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 11
+                }
+                Rectangle {                                   // pulsante play a destra (opacity-70, active:opacity-100)
+                    id: rowPlay
+                    visible: row.playBtn
+                    x: parent.width - 12 - 28; anchors.verticalCenter: parent.verticalCenter; width: 28; height: 28; radius: 14
+                    color: Theme.goldA(0.2)
+                    // 🚨 pressX is frozen at the press: with mouseX the circle
+                    // went dark the moment the finger drifted a point out of its half
+                    opacity: 0.7 + 0.3 * (rowTap.pressX >= x ? rowTap.pressAnim : 0)
+                    Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 12; color: Theme.gold }
+                }
+            }
+            RowTap {
+                id: rowTap
+                flick: listView; tap: 0.98; holdRing: true
                 onClicked: (m) => root.rowTap(row.index, row.playBtn && m.x >= width - 48)
-                onPressAndHold: (m) => { if (!moved) root.rowLongPress(row.index, row.mapToItem(root, m.x, m.y).x, row.mapToItem(root, m.x, m.y).y) }
+                onLongPress: (x, y) => root.rowLongPress(row.index, row.mapToItem(root, x, y).x, row.mapToItem(root, x, y).y)
             }
         }
         ScrollBar_ { flick: listView }
@@ -214,66 +219,70 @@ Item {
             required property string sub
             required property string art
             width: root.cardW; height: root.cardH
-            Rectangle { anchors.fill: parent; radius: 12; color: cardTap.pressed ? Theme.mix(Theme.surface, Theme.wa(0.05), 1) : Theme.surface; border.width: 1; border.color: Theme.border }
+            // 🚨 the play circle has no touch area of its own: the card's
+            // covers it and would take the press anyway (it already did, and
+            // the circle never lit up). cardTap decides the zone, and the
+            // colour follows the press from there.
+            readonly property real playCx: root.cardW - 6 - 15
+            readonly property bool playHit: Math.abs(cardTap.pressX - playCx) <= 18 && Math.abs(cardTap.pressY - playCx) <= 18
+            readonly property real playF: playHit ? cardTap.pressAnim : 0
+            // the scale on the drawing, not on the delegate (see the list row)
             Item {
-                id: artBox
-                width: root.cardW; height: root.cardW
-                DiagonalFallback { anchors.fill: parent; radius: 12; visible: artImg.status !== Image.Ready
-                            Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) } }
-                Image {
-                    id: artImg; anchors.fill: parent; visible: false
-                    // 🚨 stessa forma di indirizzo del kiosk Electron (`cover?size=`):
-                    // con `cover_<W>x<H>_o.jpg` alcune copertine restavano nere,
-                    // perche' Lyrion non sa sempre produrre quella variante.
-                    // La misura segue lo schermo: 300 sulla tela 1 a 1, fino a 1200 a 4K.
-                    readonly property int px: Theme.coverPx(root.cardW)
-                    source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px : ""
-                    asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
-                    smooth: true
-                    // 🚨 Si decodifica ESATTAMENTE alla misura che Lyrion serve
-                    // (Theme.coverPx, al massimo 1200): chiedere il doppio dei pixel
-                    // dello schermo ingrandiva un'immagine che piu' dettaglio non ne
-                    // ha, e sprecava megabyte di memoria video per riquadro. E' da li'
-                    // che venivano le copertine nere a caso: finita la memoria della
-                    // scheda video, qualche texture non si alloca piu' e resta il vuoto
-                    // (ricaricando l'elenco ne toccavano altre, e sembrava casuale).
-                    sourceSize.width: artImg.px; sourceSize.height: artImg.px
-                    // 🚨 la texture che la mascheratura usa deve stare alla risoluzione
-                    // dello SCHERMO (non a quella in punti, o si vede seghettata; non al
-                    // doppio, o si spreca memoria video per un dettaglio che non c'e')
-                    layer.enabled: true
-                    layer.smooth: true
-                    layer.textureSize: Qt.size(Math.ceil(root.cardW * root.devScale), Math.ceil(root.cardW * root.devScale))
-                }
-                // angoli tondi solo in alto (rounded-t-xl): la maschera e' UNA SOLA per
-                // tutte le schede (sono identiche), non una per riquadro — vedi
-                // sharedArtMask in fondo al file
-                ShaderImage { anchors.fill: parent; source: artImg; mask: root.artMask; visible: artImg.status === Image.Ready }
-                // shadow-lg = 0 10px 15px -3px + 0 4px 6px -4px, nero al 10 %
-                BoxShadow { targetX: parent.width - 36; targetY: parent.height - 36; targetW: 30; targetH: 30; radius: 15; blur: 15; spread: -3; offsetY: 10; color: Theme.blackA(0.1) }
-                BoxShadow { targetX: parent.width - 36; targetY: parent.height - 36; targetW: 30; targetH: 30; radius: 15; blur: 6; spread: -4; offsetY: 4; color: Theme.blackA(0.1) }
-                Rectangle {
-                    x: parent.width - 6 - 30; y: parent.height - 6 - 30; width: 30; height: 30; radius: 15
-                    color: cardPlayTap.pressed ? Theme.gold : Theme.blackA(0.6)      // active:bg-hifi-gold active:text-black
-                    Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 14; color: cardPlayTap.pressed ? Theme.black : Theme.white }
-                    Tap { id: cardPlayTap; onClicked: root.rowTap(card.index, true) }
-                }
-            }
-            Text { x: 8; y: artBox.height + 8; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
-            Text { x: 8; y: artBox.height + 24; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.sub; elide: Text.ElideRight; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
-            MouseArea {
-                id: cardTap
+                id: cardSkin
                 anchors.fill: parent
-                property bool moved: false
-                property real pressX: 0; property real pressY: 0
-                pressAndHoldInterval: 500
-                onPressed: (m) => { moved = false; pressX = m.x; pressY = m.y }
-                onPositionChanged: (m) => { if (Math.abs(m.y - pressY) > 10 || Math.abs(m.x - pressX) > 10) moved = true }
-                onClicked: (m) => {
-                    var bx = root.cardW - 6 - 15, by = root.cardW - 6 - 15
-                    root.rowTap(card.index, Math.abs(m.x - bx) <= 18 && Math.abs(m.y - by) <= 18)
+                scale: cardTap.tapScale
+                Rectangle { anchors.fill: parent; radius: 12; color: cardTap.mix(Theme.surface, Theme.wa(0.05)); border.width: 1; border.color: Theme.border }
+                Item {
+                    id: artBox
+                    width: root.cardW; height: root.cardW
+                    DiagonalFallback { anchors.fill: parent; radius: 12; visible: artImg.status !== Image.Ready
+                                Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) } }
+                    Image {
+                        id: artImg; anchors.fill: parent; visible: false
+                        // 🚨 stessa forma di indirizzo del kiosk Electron (`cover?size=`):
+                        // con `cover_<W>x<H>_o.jpg` alcune copertine restavano nere,
+                        // perche' Lyrion non sa sempre produrre quella variante.
+                        // La misura segue lo schermo: 300 sulla tela 1 a 1, fino a 1200 a 4K.
+                        readonly property int px: Theme.coverPx(root.cardW)
+                        source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px : ""
+                        asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
+                        smooth: true
+                        // 🚨 Si decodifica ESATTAMENTE alla misura che Lyrion serve
+                        // (Theme.coverPx, al massimo 1200): chiedere il doppio dei pixel
+                        // dello schermo ingrandiva un'immagine che piu' dettaglio non ne
+                        // ha, e sprecava megabyte di memoria video per riquadro. E' da li'
+                        // che venivano le copertine nere a caso: finita la memoria della
+                        // scheda video, qualche texture non si alloca piu' e resta il vuoto
+                        // (ricaricando l'elenco ne toccavano altre, e sembrava casuale).
+                        sourceSize.width: artImg.px; sourceSize.height: artImg.px
+                        // 🚨 la texture che la mascheratura usa deve stare alla risoluzione
+                        // dello SCHERMO (non a quella in punti, o si vede seghettata; non al
+                        // doppio, o si spreca memoria video per un dettaglio che non c'e')
+                        layer.enabled: true
+                        layer.smooth: true
+                        layer.textureSize: Qt.size(Math.ceil(root.cardW * root.devScale), Math.ceil(root.cardW * root.devScale))
+                    }
+                    // angoli tondi solo in alto (rounded-t-xl): la maschera e' UNA SOLA per
+                    // tutte le schede (sono identiche), non una per riquadro — vedi
+                    // sharedArtMask in fondo al file
+                    ShaderImage { anchors.fill: parent; source: artImg; mask: root.artMask; visible: artImg.status === Image.Ready }
+                    // shadow-lg = 0 10px 15px -3px + 0 4px 6px -4px, nero al 10 %
+                    BoxShadow { targetX: parent.width - 36; targetY: parent.height - 36; targetW: 30; targetH: 30; radius: 15; blur: 15; spread: -3; offsetY: 10; color: Theme.blackA(0.1) }
+                    BoxShadow { targetX: parent.width - 36; targetY: parent.height - 36; targetW: 30; targetH: 30; radius: 15; blur: 6; spread: -4; offsetY: 4; color: Theme.blackA(0.1) }
+                    Rectangle {
+                        x: parent.width - 6 - 30; y: parent.height - 6 - 30; width: 30; height: 30; radius: 15
+                        color: Theme.mix(Theme.blackA(0.6), Theme.gold, card.playF)      // active:bg-hifi-gold active:text-black
+                        Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 14; color: Theme.mix(Theme.white, Theme.black, card.playF) }
+                    }
                 }
-                onPressAndHold: (m) => { if (!moved) root.rowLongPress(card.index, card.mapToItem(root, m.x, m.y).x, card.mapToItem(root, m.x, m.y).y) }
+                Text { x: 8; y: artBox.height + 8; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
+                Text { x: 8; y: artBox.height + 24; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.sub; elide: Text.ElideRight; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
+            }
+            RowTap {
+                id: cardTap
+                flick: gridView; tap: 0.98; holdRing: true
+                onClicked: (m) => root.rowTap(card.index, Math.abs(m.x - card.playCx) <= 18 && Math.abs(m.y - card.playCx) <= 18)
+                onLongPress: (x, y) => root.rowLongPress(card.index, card.mapToItem(root, x, y).x, card.mapToItem(root, x, y).y)
             }
         }
         // la vista sborda di 12 a destra: la barra sta sul bordo VISIBILE

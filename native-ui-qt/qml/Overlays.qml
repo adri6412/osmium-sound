@@ -12,40 +12,40 @@ Item {
     readonly property bool busy: active !== 0
     signal savedPlaylist()
 
-    Spring { id: slide; stiffness: 240; damping: 28 }     // 0 dentro, 1 fuori
+    Spring { id: slide; stiffness: 240; damping: 28; rate: Theme.motionRate }     // 0 dentro, 1 fuori
     property real fade: 0
-    Behavior on fade { NumberAnimation { id: fadeAnim; duration: 200; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Behavior on fade { NumberAnimation { id: fadeAnim; duration: Theme.dur(200); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
 
     function openQueue() {
         queue.load()
         active = 1; leaving = 0
         slide.set(1); slide.to = 0
-        fadeAnim.duration = 200
+        fadeAnim.duration = Theme.dur(200)
         fade = 1
     }
     function openSleep() {
         active = 3; leaving = 0
-        fadeAnim.duration = 180
+        fadeAnim.duration = Theme.dur(180)
         fade = 1
     }
     function openSave() {
         save.name = ""; save.msg = ""
         active = 2; leaving = 0
-        fadeAnim.duration = 180
+        fadeAnim.duration = Theme.dur(180)
         fade = 1
     }
     // "Come lo chiamo?": cb(name) with the confirmed name; cancel = nothing
     function prompt(title, initial, cb) {
         namer.title = title || ""; namer.name = initial || ""; namer.msg = ""; namer.cb = cb
         active = 4; leaving = 0
-        fadeAnim.duration = 180
+        fadeAnim.duration = Theme.dur(180)
         fade = 1
     }
     function close() {
         if (active === 0) return
         leaving = active
         if (active === 1) slide.to = 1
-        fadeAnim.duration = active === 1 ? 220 : 150
+        fadeAnim.duration = Theme.dur(active === 1 ? 220 : 150)
         fade = 0
     }
     // fine dell'uscita: quando la dissolvenza (e la molla) sono ferme

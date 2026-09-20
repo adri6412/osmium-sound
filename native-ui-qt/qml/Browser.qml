@@ -83,8 +83,9 @@ Item {
         var e = { view: view, title: title || "…", p1: p1 || "", p2: p2 || "", input: input || "" }
         if (replace) n[n.length - 1] = e; else { if (n.length >= 16) return; n.push(e) }
         nav = n
+        navDir = 1
         search.text = ""; Library.filter = ""
-        ctx.visible = false
+        ctx.close()
         if (!(replace && msearchOpen)) msearchOpen = false
         loadTop()
         appear()
@@ -96,24 +97,28 @@ Item {
 
     function navHome() {
         nav = [{ view: LibraryModel.Home, title: Tr.t("player.titles.home"), p1: "", p2: "", input: "" }]
-        msearchOpen = false; ctx.visible = false; search.text = ""
+        navDir = -1
+        msearchOpen = false; ctx.close(); search.text = ""
         pageLoader.sourceComponent = null
         appear()
     }
     function navBack() {
         if (nav.length <= 1) return
         var n = nav.slice(); n.pop(); nav = n
-        msearchOpen = false; search.text = ""; ctx.visible = false
+        navDir = -1
+        msearchOpen = false; search.text = ""; ctx.close()
         loadTop(); appear()
     }
     function navToCrumb(i) {
         if (i >= nav.length - 1) return
         nav = nav.slice(0, i + 1)
-        msearchOpen = false; search.text = ""; ctx.visible = false
+        navDir = -1
+        msearchOpen = false; search.text = ""; ctx.close()
         loadTop(); appear()
     }
     function openTab(i) {
-        tab = i; ctx.visible = false
+        navDir = i > tab ? 1 : i < tab ? -1 : 0
+        tab = i; ctx.close()
         if (i === 1) { navHome(); goView(LibraryModel.Radios, Tr.t("player.titles.radio")) }
         else if (i === 2) { navHome(); goView(LibraryModel.MenuHome, Tr.t("player.titles.apps")) }
         else if (i === 0) {
@@ -129,12 +134,12 @@ Item {
     function showPlaylists() { tab = 0; navHome(); goView(LibraryModel.Playlists, Tr.t("player.titles.playlists")) }
     // the album and artist pages, from anywhere (library, search, Now Playing,
     // credits); a person known only to MusicBrainz opens the artist page by mbid
-    function showMusicTab() { if (tab !== 0) { tab = 0; ctx.visible = false } }
+    function showMusicTab() { if (tab !== 0) { navDir = -1; tab = 0; ctx.close() } }
     function openAlbum(id, title) { if (!id) return; showMusicTab(); goView(LibraryModel.AlbumPage, title, String(id)) }
     function openArtist(id, name) { if (!id) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, String(id)) }
     function openPerson(mbid, name) { if (!mbid) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, "", "mbid:" + mbid) }
     function openMenu(items, x, y) { ctx.open(items, x, y) }
-    function closeMenu() { ctx.visible = false }
+    function closeMenu() { ctx.close() }
     // The guided tour: the album list (grid or Cover Flow), and the menu a
     // long press opens, on the first album, so it can be seen. Rectangles
     // in canvas coordinates (this panel starts at x 341, its content at
@@ -369,13 +374,42 @@ Item {
         }
     }
 
-    // il contenuto compare in dissolvenza (0,12 s) a ogni cambio
+    // The content fades in and slides 12 points the way one is going: from
+    // the right going in, from the left coming back.
     // (not while the Cover Flow's cover flies to the album page: the page
     // must come up under it without the whole panel blinking)
     property bool quietNav: false
-    function appear() { if (quietNav) { quietNav = false; return } fadeAnim.restart() }
-    NumberAnimation { id: fadeAnim; target: content; property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
-    Connections { target: Library; function onLoaded() { root.appear() } }
+    property int navDir: 0
+    function appear() {
+        if (quietNav) { quietNav = false; return }
+        slideAnim.stop()
+        pane.opacity = 0
+        pane.x = Theme.lushMotion ? navDir * 12 : 0
+        navDir = 0
+        // 🚨 Not in this frame: this is the one where the new page is built,
+        // and a page never shown before (Settings: 23 cards with a shadow and
+        // an icon each) can cost several. Starting together, the animation is
+        // already half way through at its first step and one sees it snap.
+        // One turn of FrameAnimation waits for the frame to be drawn, and the
+        // movement starts after it.
+        paintGate.restart()
+    }
+    // the gate: it fires on a drawn frame, not at the end of the event loop
+    // (Qt.callLater would still be inside the same frame)
+    FrameAnimation {
+        id: paintGate
+        running: false
+        onTriggered: { stop(); slideAnim.start() }
+    }
+    ParallelAnimation {
+        id: slideAnim
+        NumberAnimation { target: pane; property: "opacity"; to: 1; duration: Theme.dur(160); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
+        NumberAnimation { target: pane; property: "x"; to: 0; duration: Theme.dur(180); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
+    }
+    // 🚨 appear() comes twice, once on the navigation and once when the data
+    // lands: with the fade alone it did not show, with the slide it would be a
+    // jolt. The second is dropped while the first is still running.
+    Connections { target: Library; function onLoaded() { if (!slideAnim.running && !paintGate.running) root.appear() } }
 
     // ─── barra dei tab ─────────────────────────────────────────────────────
     Rectangle {
@@ -465,6 +499,32 @@ Item {
         // 0 full words, 1 short word, 2 dot only
         readonly property int updMode: tabMeasure.width + 6 + updFull.advanceWidth <= brandMark.x ? 0
                                      : tabMeasure.width + 6 + updShortM.advanceWidth <= brandMark.x ? 1 : 2
+        // The underline, one for the whole bar. Outside the Row: inside, the
+        // positioner would lay it out in line with the tabs.
+        property real uX: 8
+        property real uW: 0
+        property bool uPrimed: false
+        function uGo() {
+            // on the first frame the text widths can still be 0: it arms
+            // itself on a real measurement, or the bar flies in from x=0
+            if (!uPrimed) { uxS.set(uX); uwS.set(uW); uPrimed = uW > 0 }
+            else { uxS.to = uX; uwS.to = uW }
+        }
+        // 🚨 Qt.callLater and not a direct call: uX and uW arrive from TWO
+        // separate Bindings, and setting off on the first write the spring
+        // aims for one frame at the new position with the old width. Between
+        // the labelled tabs the widths are alike and it does not show; going
+        // to Settings, the one that is an icon alone, it snapped. callLater
+        // folds the two writes into a single update.
+        onUXChanged: Qt.callLater(uGo)
+        onUWChanged: Qt.callLater(uGo)
+        Spring { id: uxS; stiffness: 220; damping: 26; rate: Theme.motionRate }
+        Spring { id: uwS; stiffness: 220; damping: 26; rate: Theme.motionRate }
+        Rectangle {
+            visible: uwS.value > 1
+            x: tabRow.x + uxS.value; y: 38; width: Math.max(0, uwS.value); height: 2
+            topLeftRadius: 2; topRightRadius: 2; color: Theme.gold      // rounded-t-sm
+        }
         Row {
             id: tabRow
             Repeater {
@@ -489,8 +549,13 @@ Item {
                         text: Tr.t(tabBar.updMode === 1 ? "settings.updates.availableShort" : "settings.updates.available"); color: Theme.gold
                         font.family: Theme.font; font.pixelSize: 12; font.bold: true
                     }
-                    // rounded-t-sm: 2 px solo sui due angoli in alto
-                    Rectangle { visible: tabItem.active; x: 8; y: 38; width: parent.width - 16; height: 2; topLeftRadius: 2; topRightRadius: 2; color: Theme.gold }
+                    // 🚨 the underline no longer lives here: there is one,
+                    // in tabBar, and it slides from tab to tab. The delegate
+                    // only says where the active one is, and it writes
+                    // UPWARD: nothing in the chain that decides the tabs'
+                    // widths reads uX/uW, so there is no loop.
+                    Binding { target: tabBar; property: "uX"; value: tabItem.x + 8;      when: tabItem.active; restoreMode: Binding.RestoreNone }
+                    Binding { target: tabBar; property: "uW"; value: tabItem.width - 16; when: tabItem.active; restoreMode: Binding.RestoreNone }
                     Tap { id: tabTap; onClicked: root.openTab(tabItem.index) }
                 }
             }
@@ -554,243 +619,249 @@ Item {
         id: content
         y: root.contentTop; width: parent.width; height: root.height - y
         clip: true
-        SettingsTab { id: settingsTab; anchors.fill: parent; visible: root.tab === 4; devScale: root.devScale }
-        DiscoverTab { id: discoverTab; anchors.fill: parent; visible: root.tab === 3; devScale: root.devScale }
-
+        // 🚨 The long-press menu stays OUTSIDE this box: the page slides,
+        // not the menu standing over it.
         Item {
-            id: libArea
+            id: pane
             anchors.fill: parent
-            visible: root.tab !== 4 && root.tab !== 3
+            SettingsTab { id: settingsTab; anchors.fill: parent; visible: root.tab === 4; devScale: root.devScale }
+            DiscoverTab { id: discoverTab; anchors.fill: parent; visible: root.tab === 3; devScale: root.devScale }
 
-            // non ancora collegati a Lyrion (LyrionServer.jsx:1267)
-            Column {
-                id: connCol
-                anchors.centerIn: parent; spacing: 16
-                visible: !Player.connected
-                // 🚨 col server spento l'attesa non finisce mai: passato questo
-                // tempo la rotellina si ferma, se no la scena si ridisegna a ogni
-                // vsync all'infinito (il costo misurato sta in Spinner.qml)
-                property bool waiting: true
-                Timer { interval: 10000; running: connCol.visible && connCol.waiting; onTriggered: connCol.waiting = false }
-                Connections { target: Player; function onConnectedChanged() { if (Player.connected) connCol.waiting = true } }
-                Spinner { anchors.horizontalCenter: parent.horizontalCenter; radius: 24; visible: connCol.waiting; active: connCol.waiting && !Player.connected && root.visible && !(Ui.app && Ui.app.expanded) }
-                Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t(connCol.waiting ? "player.connecting" : "player.connectError"); color: Theme.silver; font.family: Theme.font; font.pixelSize: 14 }
-            }
-
-            // fascia "CD rilevato" in cima alla scheda Musica
-            CdBanner { id: cdBanner; visible: root.tab === 0 && Ui.cdrip && Ui.cdrip.bannerVisible; width: parent.width }
-            // la home: ricerca in tutta la libreria, poi le tessere
             Item {
+                id: libArea
                 anchors.fill: parent
-                anchors.topMargin: cdBanner.visible ? 48 : 0
-                visible: root.view === LibraryModel.Home && Player.connected
-                TextField_ {
-                    id: homeSearch
-                    x: 12; y: 12; width: parent.width - 24 - 8 - 38; height: 38
-                    textSize: 14; padding: 16; restBorder: Theme.accent
-                    placeholder: Tr.t("player.librarySearchPlaceholder")
-                    acceptOnVkConfirm: true
-                    onAccepted: root.submitLibrarySearch(homeSearch.text)
+                visible: root.tab !== 4 && root.tab !== 3
+
+                // non ancora collegati a Lyrion (LyrionServer.jsx:1267)
+                Column {
+                    id: connCol
+                    anchors.centerIn: parent; spacing: 16
+                    visible: !Player.connected
+                    // 🚨 col server spento l'attesa non finisce mai: passato questo
+                    // tempo la rotellina si ferma, se no la scena si ridisegna a ogni
+                    // vsync all'infinito (il costo misurato sta in Spinner.qml)
+                    property bool waiting: true
+                    Timer { interval: 10000; running: connCol.visible && connCol.waiting; onTriggered: connCol.waiting = false }
+                    Connections { target: Player; function onConnectedChanged() { if (Player.connected) connCol.waiting = true } }
+                    Spinner { anchors.horizontalCenter: parent.horizontalCenter; radius: 24; visible: connCol.waiting; active: connCol.waiting && !Player.connected && root.visible && !(Ui.app && Ui.app.expanded) }
+                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t(connCol.waiting ? "player.connecting" : "player.connectError"); color: Theme.silver; font.family: Theme.font; font.pixelSize: 14 }
                 }
-                Rectangle {
-                    x: parent.width - 12 - 38; y: 12; width: 38; height: 38; radius: 10
-                    color: homeSearch.text.trim().length >= 2 ? Theme.goldA(0.2) : Theme.goldA(0.08)
-                    Icon { anchors.centerIn: parent; name: "search"; size: 16; color: homeSearch.text.trim().length >= 2 ? Theme.gold : Theme.goldA(0.4) }
-                    Tap { onClicked: root.submitLibrarySearch(homeSearch.text) }
-                }
-                Repeater {
-                    model: root.tiles
+
+                // fascia "CD rilevato" in cima alla scheda Musica
+                CdBanner { id: cdBanner; visible: root.tab === 0 && Ui.cdrip && Ui.cdrip.bannerVisible; width: parent.width }
+                // la home: ricerca in tutta la libreria, poi le tessere
+                Item {
+                    anchors.fill: parent
+                    anchors.topMargin: cdBanner.visible ? 48 : 0
+                    visible: root.view === LibraryModel.Home && Player.connected
+                    TextField_ {
+                        id: homeSearch
+                        x: 12; y: 12; width: parent.width - 24 - 8 - 38; height: 38
+                        textSize: 14; padding: 16; restBorder: Theme.accent
+                        placeholder: Tr.t("player.librarySearchPlaceholder")
+                        acceptOnVkConfirm: true
+                        onAccepted: root.submitLibrarySearch(homeSearch.text)
+                    }
                     Rectangle {
-                        required property var modelData
-                        required property int index
-                        readonly property real tw: (root.width - 32 - 24) / 3
-                        // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
-                        // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno).
-                        // A taller canvas (16:10: 640) shares its extra height among the rows.
-                        readonly property real th: 117 + Math.max(0, root.height - 600) / 3
-                        x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (th + 12)
-                        width: tw; height: th; radius: 12
-                        color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
-                        Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
-                        Tap {
-                            id: tileTap
-                            onClicked: {
-                                if (modelData.view === LibraryModel.PluginItems) root.goView(LibraryModel.PluginItems, Tr.t(modelData.key), "favorites")
-                                else root.goView(modelData.view, Tr.t(modelData.key))
+                        x: parent.width - 12 - 38; y: 12; width: 38; height: 38; radius: 10
+                        color: homeSearch.text.trim().length >= 2 ? Theme.goldA(0.2) : Theme.goldA(0.08)
+                        Icon { anchors.centerIn: parent; name: "search"; size: 16; color: homeSearch.text.trim().length >= 2 ? Theme.gold : Theme.goldA(0.4) }
+                        Tap { onClicked: root.submitLibrarySearch(homeSearch.text) }
+                    }
+                    Repeater {
+                        model: root.tiles
+                        Rectangle {
+                            required property var modelData
+                            required property int index
+                            readonly property real tw: (root.width - 32 - 24) / 3
+                            // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
+                            // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno).
+                            // A taller canvas (16:10: 640) shares its extra height among the rows.
+                            readonly property real th: 117 + Math.max(0, root.height - 600) / 3
+                            x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (th + 12)
+                            width: tw; height: th; radius: 12
+                            color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
+                            Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
+                            Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                            Tap {
+                                id: tileTap
+                                onClicked: {
+                                    if (modelData.view === LibraryModel.PluginItems) root.goView(LibraryModel.PluginItems, Tr.t(modelData.key), "favorites")
+                                    else root.goView(modelData.view, Tr.t(modelData.key))
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // il resto: barre di ricerca + lista + indice A-Z
-            Item {
-                anchors.fill: parent
-                anchors.topMargin: cdBanner.visible ? 48 : 0
-                visible: root.view !== LibraryModel.Home && Player.connected
-                property real y0: 0
-                // ricerca dei menu Jive (Cerca…)
-                Rectangle {
-                    id: msearchRow
-                    visible: root.msearchOpen
-                    width: parent.width; height: 47; color: Theme.panelA(0.4)
-                    Rectangle { y: 46; width: parent.width; height: 1; color: Theme.borderA(0.5) }
-                    Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; name: "search"; size: 15; color: Theme.silverA(0.5) }
-                    TextField_ {
-                        id: msearch
-                        x: 35; y: 8; width: parent.width - 35 - 8 - 29 - 8 - 29 - 12; height: 31
-                        textSize: 14; padding: 12
-                        placeholder: root.msearchTitle || Tr.t("player.searchPlaceholder")
-                        acceptOnVkConfirm: true
-                        onAccepted: root.submitMsearch()
-                    }
-                    Rectangle {
-                        x: parent.width - 12 - 29 - 8 - 29; y: 9; width: 29; height: 29; radius: 8
-                        color: msearch.text ? Theme.goldA(0.2) : Theme.goldA(0.08)
-                        Icon { anchors.centerIn: parent; name: "search"; size: 15; color: msearch.text ? Theme.gold : Theme.goldA(0.4) }
-                        Tap { onClicked: root.submitMsearch() }
-                    }
-                    Item {
-                        x: parent.width - 12 - 29; y: 9; width: 29; height: 29
-                        Icon { anchors.centerIn: parent; name: "x"; size: 15; color: Theme.silverA(0.6) }
-                        Tap { onClicked: root.msearchOpen = false }
-                    }
-                }
-                // filtro artisti/album
+                // il resto: barre di ricerca + lista + indice A-Z
                 Item {
-                    id: searchRow
-                    visible: root.hasSearch
-                    y: root.msearchOpen ? 47 : 0; width: parent.width; height: 50
-                    TextField_ {
-                        id: search
-                        x: 12; y: 6; width: parent.width - 24; height: 38
-                        textSize: 14; padding: 16; restBorder: Theme.accent
-                        placeholder: Tr.t(root.view === LibraryModel.Albums ? "player.filterAlbumsPlaceholder" : "player.filterArtistsPlaceholder")
-                        onTextEdited: debounce.restart()
-                        Timer { id: debounce; interval: 200; onTriggered: Library.filter = search.text }
-                        Item {
-                            visible: search.text !== ""
-                            x: parent.width - 30; y: 7; width: 24; height: 24
-                            Icon { anchors.centerIn: parent; name: "x"; size: 14; color: xTap.pressed ? Theme.white : Theme.silverA(0.5) }   // active:text-white
-                            Tap { id: xTap; grow: 6; onClicked: { search.text = ""; Library.filter = "" } }
-                        }
-                    }
-                }
-                readonly property real listY: (root.msearchOpen ? 47 : 0) + (root.hasSearch ? 50 : 0)
-                // the album or artist page, in place of the list
-                Loader {
-                    id: pageLoader
                     anchors.fill: parent
-                    visible: root.isPage
-                }
-                Component {
-                    id: albumPageComp
-                    AlbumPage { browser: root; albumId: String(root.cur.p1); devScale: root.devScale }
-                }
-                Component {
-                    id: artistPageComp
-                    ArtistPage {
-                        browser: root; devScale: root.devScale
-                        artistId: String(root.cur.p1 || "")
-                        mbid: String(root.cur.p2 || "").indexOf("mbid:") === 0 ? String(root.cur.p2).substring(5) : ""
-                        name: root.cur.title === "…" ? "" : root.cur.title
-                    }
-                }
-                LibraryList {
-                    id: list
-                    x: 12; y: parent.listY + 4
-                    width: (root.azShown ? root.width - 32 - 12 : root.width - 12) - 12
-                    height: root.height - root.contentTop - y - 12
-                    visible: Library.state === 2 && Library.count > 0 && !root.isPage
-                    onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
-                    // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
-                    onRowLongPress: (row, x, y) => ctx.open(root.ctxItems(row), list.x + x, list.y + y + (cdBanner.visible ? 48 : 0))
-                    onExpandAlbum: (row, x, y, size, src) => hero.fly(row, list.x + x, list.y + y, size, src)
-                }
-                // The album that opens from Cover Flow: a copy of its cover
-                // swells over the row, then settles where the page keeps its
-                // own, and stays on top until that one has loaded.
-                Item {
-                    id: hero
-                    visible: false
-                    z: 50
-                    property int row: -1
-                    property real radiusV: 0
-                    property bool settled: false
-                    readonly property real bigS: Math.min(parent.width, parent.height) * 0.84
-                    readonly property bool landed: settled && root.isPage && !!root.pageItem && !!root.pageItem.coverReady
-                    onLandedChanged: if (landed) fadeOut.restart()
-                    function fly(r, x0, y0, s0, src) {
-                        swell.stop(); fadeOut.stop()
-                        row = r; heroImg.source = src
-                        x = x0; y = y0; width = s0; height = s0; radiusV = 0; opacity = 1; settled = false
-                        visible = true
-                        giveUp.restart(); swell.restart()
-                    }
-                    // 🚨 not a Cover: its sourceSize follows the width, and an
-                    // item that grows every frame would reload the picture every
-                    // frame and never show it. Fixed textures, scaled by the GPU.
-                    Image {
-                        id: heroImg
-                        anchors.fill: parent; visible: false
-                        readonly property int px: Theme.coverPx(200)
-                        asynchronous: true; cache: true; smooth: true
-                        fillMode: Image.PreserveAspectCrop
-                        sourceSize.width: px; sourceSize.height: px
-                        layer.enabled: true; layer.smooth: true
-                        layer.textureSize: Qt.size(px, px)
-                    }
+                    anchors.topMargin: cdBanner.visible ? 48 : 0
+                    visible: root.view !== LibraryModel.Home && Player.connected
+                    property real y0: 0
+                    // ricerca dei menu Jive (Cerca…)
                     Rectangle {
-                        id: heroMask
-                        anchors.fill: parent; visible: false
-                        radius: hero.radiusV
-                        layer.enabled: true; layer.smooth: true
-                        layer.textureSize: Qt.size(512, 512)
-                    }
-                    ShaderImage { anchors.fill: parent; source: heroImg; mask: heroMask; visible: heroImg.status === Image.Ready }
-                    DiagonalFallback { anchors.fill: parent; radius: hero.radiusV; visible: heroImg.status !== Image.Ready
-                                       Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) } }
-                    SequentialAnimation {
-                        id: swell
-                        ParallelAnimation {
-                            NumberAnimation { target: hero; property: "x"; to: (hero.parent.width - hero.bigS) / 2; duration: 480; easing.type: Easing.OutCubic }
-                            NumberAnimation { target: hero; property: "y"; to: (hero.parent.height - hero.bigS) / 2; duration: 480; easing.type: Easing.OutCubic }
-                            NumberAnimation { target: hero; property: "width"; to: hero.bigS; duration: 480; easing.type: Easing.OutCubic }
-                            NumberAnimation { target: hero; property: "height"; to: hero.bigS; duration: 480; easing.type: Easing.OutCubic }
-                            NumberAnimation { target: hero; property: "radiusV"; to: 12; duration: 480 }
+                        id: msearchRow
+                        visible: root.msearchOpen
+                        width: parent.width; height: 47; color: Theme.panelA(0.4)
+                        Rectangle { y: 46; width: parent.width; height: 1; color: Theme.borderA(0.5) }
+                        Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; name: "search"; size: 15; color: Theme.silverA(0.5) }
+                        TextField_ {
+                            id: msearch
+                            x: 35; y: 8; width: parent.width - 35 - 8 - 29 - 8 - 29 - 12; height: 31
+                            textSize: 14; padding: 12
+                            placeholder: root.msearchTitle || Tr.t("player.searchPlaceholder")
+                            acceptOnVkConfirm: true
+                            onAccepted: root.submitMsearch()
                         }
-                        PauseAnimation { duration: 90 }
-                        ScriptAction { script: { root.quietNav = true; root.rowTap(hero.row, false) } }
-                        ParallelAnimation {
-                            NumberAnimation { target: hero; property: "x"; to: 16; duration: 440; easing.type: Easing.InOutCubic }
-                            NumberAnimation { target: hero; property: "y"; to: 16; duration: 440; easing.type: Easing.InOutCubic }
-                            NumberAnimation { target: hero; property: "width"; to: 164; duration: 440; easing.type: Easing.InOutCubic }
-                            NumberAnimation { target: hero; property: "height"; to: 164; duration: 440; easing.type: Easing.InOutCubic }
+                        Rectangle {
+                            x: parent.width - 12 - 29 - 8 - 29; y: 9; width: 29; height: 29; radius: 8
+                            color: msearch.text ? Theme.goldA(0.2) : Theme.goldA(0.08)
+                            Icon { anchors.centerIn: parent; name: "search"; size: 15; color: msearch.text ? Theme.gold : Theme.goldA(0.4) }
+                            Tap { onClicked: root.submitMsearch() }
                         }
-                        ScriptAction { script: hero.settled = true }
+                        Item {
+                            x: parent.width - 12 - 29; y: 9; width: 29; height: 29
+                            Icon { anchors.centerIn: parent; name: "x"; size: 15; color: Theme.silverA(0.6) }
+                            Tap { onClicked: root.msearchOpen = false }
+                        }
                     }
-                    // gone once the page shows its own cover, or after a while regardless
-                    Timer { id: giveUp; interval: 2500; onTriggered: if (hero.visible) fadeOut.restart() }
-                    NumberAnimation { id: fadeOut; target: hero; property: "opacity"; to: 0; duration: 160; onFinished: hero.visible = false }
-                }
-                Spinner { visible: Library.state === 1 && !root.isPage; active: visible && root.visible && !(Ui.app && Ui.app.expanded); radius: 20; x: list.x + list.width / 2 - 20; y: list.y + 60 - 20 }   // w-10 h-10
-                Column {
-                    visible: Library.state === 3 && !root.isPage
-                    x: list.x; y: list.y + 40; width: list.width; spacing: 12
-                    Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "alert-circle"; size: 40; color: Theme.red400 }
-                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t("player.connectionErrorTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
-                }
-                Text {
-                    visible: Library.state === 2 && Library.count === 0 && !root.isPage
-                    x: list.x; y: list.y + 32; width: list.width; horizontalAlignment: Text.AlignHCenter
-                    text: Tr.t("common.noResults"); color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 14
-                }
-                // indice A-Z (w-8)
-                AzIndex {
-                    visible: root.azShown
-                    x: root.width - 32; y: parent.listY; width: 32; height: root.height - root.contentTop - y
-                    onLetter: (l) => { var r = Library.letterFirst(l); if (r >= 0) list.scrollToRow(r) }
+                    // filtro artisti/album
+                    Item {
+                        id: searchRow
+                        visible: root.hasSearch
+                        y: root.msearchOpen ? 47 : 0; width: parent.width; height: 50
+                        TextField_ {
+                            id: search
+                            x: 12; y: 6; width: parent.width - 24; height: 38
+                            textSize: 14; padding: 16; restBorder: Theme.accent
+                            placeholder: Tr.t(root.view === LibraryModel.Albums ? "player.filterAlbumsPlaceholder" : "player.filterArtistsPlaceholder")
+                            onTextEdited: debounce.restart()
+                            Timer { id: debounce; interval: 200; onTriggered: Library.filter = search.text }
+                            Item {
+                                visible: search.text !== ""
+                                x: parent.width - 30; y: 7; width: 24; height: 24
+                                Icon { anchors.centerIn: parent; name: "x"; size: 14; color: xTap.mix(Theme.silverA(0.5), Theme.white) }   // active:text-white
+                                Tap { id: xTap; grow: 6; onClicked: { search.text = ""; Library.filter = "" } }
+                            }
+                        }
+                    }
+                    readonly property real listY: (root.msearchOpen ? 47 : 0) + (root.hasSearch ? 50 : 0)
+                    // the album or artist page, in place of the list
+                    Loader {
+                        id: pageLoader
+                        anchors.fill: parent
+                        visible: root.isPage
+                    }
+                    Component {
+                        id: albumPageComp
+                        AlbumPage { browser: root; albumId: String(root.cur.p1); devScale: root.devScale }
+                    }
+                    Component {
+                        id: artistPageComp
+                        ArtistPage {
+                            browser: root; devScale: root.devScale
+                            artistId: String(root.cur.p1 || "")
+                            mbid: String(root.cur.p2 || "").indexOf("mbid:") === 0 ? String(root.cur.p2).substring(5) : ""
+                            name: root.cur.title === "…" ? "" : root.cur.title
+                        }
+                    }
+                    LibraryList {
+                        id: list
+                        x: 12; y: parent.listY + 4
+                        width: (root.azShown ? root.width - 32 - 12 : root.width - 12) - 12
+                        height: root.height - root.contentTop - y - 12
+                        visible: Library.state === 2 && Library.count > 0 && !root.isPage
+                        onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
+                        // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
+                        onRowLongPress: (row, x, y) => ctx.open(root.ctxItems(row), list.x + x, list.y + y + (cdBanner.visible ? 48 : 0))
+                        onExpandAlbum: (row, x, y, size, src) => hero.fly(row, list.x + x, list.y + y, size, src)
+                    }
+                    // The album that opens from Cover Flow: a copy of its cover
+                    // swells over the row, then settles where the page keeps its
+                    // own, and stays on top until that one has loaded.
+                    Item {
+                        id: hero
+                        visible: false
+                        z: 50
+                        property int row: -1
+                        property real radiusV: 0
+                        property bool settled: false
+                        readonly property real bigS: Math.min(parent.width, parent.height) * 0.84
+                        readonly property bool landed: settled && root.isPage && !!root.pageItem && !!root.pageItem.coverReady
+                        onLandedChanged: if (landed) fadeOut.restart()
+                        function fly(r, x0, y0, s0, src) {
+                            swell.stop(); fadeOut.stop()
+                            row = r; heroImg.source = src
+                            x = x0; y = y0; width = s0; height = s0; radiusV = 0; opacity = 1; settled = false
+                            visible = true
+                            giveUp.restart(); swell.restart()
+                        }
+                        // 🚨 not a Cover: its sourceSize follows the width, and an
+                        // item that grows every frame would reload the picture every
+                        // frame and never show it. Fixed textures, scaled by the GPU.
+                        Image {
+                            id: heroImg
+                            anchors.fill: parent; visible: false
+                            readonly property int px: Theme.coverPx(200)
+                            asynchronous: true; cache: true; smooth: true
+                            fillMode: Image.PreserveAspectCrop
+                            sourceSize.width: px; sourceSize.height: px
+                            layer.enabled: true; layer.smooth: true
+                            layer.textureSize: Qt.size(px, px)
+                        }
+                        Rectangle {
+                            id: heroMask
+                            anchors.fill: parent; visible: false
+                            radius: hero.radiusV
+                            layer.enabled: true; layer.smooth: true
+                            layer.textureSize: Qt.size(512, 512)
+                        }
+                        ShaderImage { anchors.fill: parent; source: heroImg; mask: heroMask; visible: heroImg.status === Image.Ready }
+                        DiagonalFallback { anchors.fill: parent; radius: hero.radiusV; visible: heroImg.status !== Image.Ready
+                                           Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) } }
+                        SequentialAnimation {
+                            id: swell
+                            ParallelAnimation {
+                                NumberAnimation { target: hero; property: "x"; to: (hero.parent.width - hero.bigS) / 2; duration: Theme.dur(480); easing.type: Easing.OutCubic }
+                                NumberAnimation { target: hero; property: "y"; to: (hero.parent.height - hero.bigS) / 2; duration: Theme.dur(480); easing.type: Easing.OutCubic }
+                                NumberAnimation { target: hero; property: "width"; to: hero.bigS; duration: Theme.dur(480); easing.type: Easing.OutCubic }
+                                NumberAnimation { target: hero; property: "height"; to: hero.bigS; duration: Theme.dur(480); easing.type: Easing.OutCubic }
+                                NumberAnimation { target: hero; property: "radiusV"; to: 12; duration: Theme.dur(480) }
+                            }
+                            PauseAnimation { duration: Theme.dur(90) }
+                            ScriptAction { script: { root.quietNav = true; root.rowTap(hero.row, false) } }
+                            ParallelAnimation {
+                                NumberAnimation { target: hero; property: "x"; to: 16; duration: Theme.dur(440); easing.type: Easing.InOutCubic }
+                                NumberAnimation { target: hero; property: "y"; to: 16; duration: Theme.dur(440); easing.type: Easing.InOutCubic }
+                                NumberAnimation { target: hero; property: "width"; to: 164; duration: Theme.dur(440); easing.type: Easing.InOutCubic }
+                                NumberAnimation { target: hero; property: "height"; to: 164; duration: Theme.dur(440); easing.type: Easing.InOutCubic }
+                            }
+                            ScriptAction { script: hero.settled = true }
+                        }
+                        // gone once the page shows its own cover, or after a while regardless
+                        Timer { id: giveUp; interval: 2500; onTriggered: if (hero.visible) fadeOut.restart() }
+                        NumberAnimation { id: fadeOut; target: hero; property: "opacity"; to: 0; duration: Theme.dur(160); onFinished: hero.visible = false }
+                    }
+                    Spinner { visible: Library.state === 1 && !root.isPage; active: visible && root.visible && !(Ui.app && Ui.app.expanded); radius: 20; x: list.x + list.width / 2 - 20; y: list.y + 60 - 20 }   // w-10 h-10
+                    Column {
+                        visible: Library.state === 3 && !root.isPage
+                        x: list.x; y: list.y + 40; width: list.width; spacing: 12
+                        Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "alert-circle"; size: 40; color: Theme.red400 }
+                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t("player.connectionErrorTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
+                    }
+                    Text {
+                        visible: Library.state === 2 && Library.count === 0 && !root.isPage
+                        x: list.x; y: list.y + 32; width: list.width; horizontalAlignment: Text.AlignHCenter
+                        text: Tr.t("common.noResults"); color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 14
+                    }
+                    // indice A-Z (w-8)
+                    AzIndex {
+                        visible: root.azShown
+                        x: root.width - 32; y: parent.listY; width: 32; height: root.height - root.contentTop - y
+                        onLetter: (l) => { var r = Library.letterFirst(l); if (r >= 0) list.scrollToRow(r) }
+                    }
                 }
             }
         }

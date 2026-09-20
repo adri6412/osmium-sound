@@ -19,7 +19,7 @@ Item {
     anchors.fill: parent
 
     property real fade: 0
-    Behavior on fade { NumberAnimation { duration: 1000; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeInOut } }
+    Behavior on fade { NumberAnimation { duration: Theme.dur(1000); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeInOut } }
     // 🚨 Quando il fondo nero e' del tutto opaco, sotto non si vede piu' niente:
     // App.qml nasconde le schermate, e con loro si spengono i VU (Vu.active
     // segue `shown` di NowPlaying). Senza questo, con lo schermo coperto e la
@@ -52,8 +52,8 @@ Item {
     property int driftIdx: 0
     property real dx: 0
     property real dy: 0
-    Behavior on dx { NumberAnimation { duration: 4000; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeInOut } }
-    Behavior on dy { NumberAnimation { duration: 4000; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeInOut } }
+    Behavior on dx { NumberAnimation { duration: Theme.dur(4000); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeInOut } }
+    Behavior on dy { NumberAnimation { duration: Theme.dur(4000); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeInOut } }
     Timer { interval: 45000; repeat: true; running: root.active; onTriggered: { root.driftIdx = (root.driftIdx + 1) % 5; root.dx = root.drift[root.driftIdx][0]; root.dy = root.drift[root.driftIdx][1] } }
     property date now: new Date()
     Timer { interval: 500; repeat: true; running: root.active; triggeredOnStart: true; onTriggered: root.now = new Date() }

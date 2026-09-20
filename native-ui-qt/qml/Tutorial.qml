@@ -53,14 +53,14 @@ Item {
     property real hw: 0
     property real hh: 0
     property bool lit: false
-    Behavior on hx { enabled: root.lit; NumberAnimation { duration: 340; easing.type: Easing.InOutCubic } }
-    Behavior on hy { enabled: root.lit; NumberAnimation { duration: 340; easing.type: Easing.InOutCubic } }
-    Behavior on hw { enabled: root.lit; NumberAnimation { duration: 340; easing.type: Easing.InOutCubic } }
-    Behavior on hh { enabled: root.lit; NumberAnimation { duration: 340; easing.type: Easing.InOutCubic } }
+    Behavior on hx { enabled: root.lit; NumberAnimation { duration: Theme.dur(340); easing.type: Easing.InOutCubic } }
+    Behavior on hy { enabled: root.lit; NumberAnimation { duration: Theme.dur(340); easing.type: Easing.InOutCubic } }
+    Behavior on hw { enabled: root.lit; NumberAnimation { duration: Theme.dur(340); easing.type: Easing.InOutCubic } }
+    Behavior on hh { enabled: root.lit; NumberAnimation { duration: Theme.dur(340); easing.type: Easing.InOutCubic } }
     property real fade: 0
-    Behavior on fade { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+    Behavior on fade { NumberAnimation { duration: Theme.dur(260); easing.type: Easing.OutCubic } }
     property real cardA: 0
-    Behavior on cardA { NumberAnimation { duration: 200 } }
+    Behavior on cardA { NumberAnimation { duration: Theme.dur(200) } }
 
     function start() {
         step = -1
@@ -115,9 +115,9 @@ Item {
         opacity: root.fade
         // a soft breath, so the eye finds it
         SequentialAnimation on scale {
-            running: root.active && root.lit; loops: Animation.Infinite
-            NumberAnimation { to: 1.012; duration: 900; easing.type: Easing.InOutSine }
-            NumberAnimation { to: 1.0; duration: 900; easing.type: Easing.InOutSine }
+            running: root.active && root.lit && Theme.motionRate > 0; loops: Animation.Infinite
+            NumberAnimation { to: 1.012; duration: Theme.dur(900); easing.type: Easing.InOutSine }
+            NumberAnimation { to: 1.0; duration: Theme.dur(900); easing.type: Easing.InOutSine }
         }
     }
     MouseArea { anchors.fill: parent; onClicked: root.next() }
@@ -152,8 +152,8 @@ Item {
          : fitsBelow ? root.hy + root.hh + 18
          : fitsAbove ? root.hy - 18 - height
          : Math.max(12, Math.min(root.ch - 12 - height, root.hy + root.hh / 2 - height / 2))
-        Behavior on x { enabled: root.active; NumberAnimation { duration: 300; easing.type: Easing.InOutCubic } }
-        Behavior on y { enabled: root.active; NumberAnimation { duration: 300; easing.type: Easing.InOutCubic } }
+        Behavior on x { enabled: root.active; NumberAnimation { duration: Theme.dur(300); easing.type: Easing.InOutCubic } }
+        Behavior on y { enabled: root.active; NumberAnimation { duration: Theme.dur(300); easing.type: Easing.InOutCubic } }
         BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 40; spread: -10; offsetY: 18; color: Theme.blackA(0.4) }
         MouseArea { anchors.fill: parent }        // taps on the card do not skip ahead
 

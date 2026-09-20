@@ -40,10 +40,10 @@ Item {
     property string luser: ""
     property string lpass: ""
 
-    Spring { id: sc; stiffness: 550; damping: 30 }
+    Spring { id: sc; stiffness: 550; damping: 30; rate: Theme.motionRate }
     property real fade: 0
-    Behavior on fade { NumberAnimation { id: fadeAnim; duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
-    Behavior on closeScale { NumberAnimation { duration: 200; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Behavior on fade { NumberAnimation { id: fadeAnim; duration: Theme.dur(300); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Behavior on closeScale { NumberAnimation { duration: Theme.dur(200); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
     property real closeScale: 1
 
     function openCommon(k) {
@@ -51,7 +51,7 @@ Item {
         wifiSel = -1; editingPass = false; err = ""
         sc.set(0.92); sc.to = 1.0
         closeScale = 1
-        fadeAnim.duration = 300; fade = 1
+        fadeAnim.duration = Theme.dur(300); fade = 1
     }
     function confirm(text, ok, dang, f) { openCommon(1); body = text || ""; okLabel = ok || Tr.t("common.confirm"); danger = !!dang; cb = f }
     function pick(t, list, cur, f) {
@@ -109,7 +109,7 @@ Item {
         if (!active || closing) return
         closing = true
         closeScale = 0.92
-        fadeAnim.duration = 200; fade = 0
+        fadeAnim.duration = Theme.dur(200); fade = 0
     }
     Timer { interval: 30; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.kind = 0; root.closing = false } }
 

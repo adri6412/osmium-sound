@@ -25,13 +25,27 @@ Item {
         if (py < 8) py = y + 12
         px = Math.max(8, Math.min(parent.width - 8 - w, px))
         py = Math.max(8, Math.min(parent.height - 8 - h, py))
+        // 🚨 box.x/box.y and visible are set AT ONCE: Tutorial.qml calls
+        // open() and reads boxX/boxY/boxH in the same turn to frame the menu.
+        // Only opacity and scale animate, never the geometry.
         box.x = px; box.y = py
+        hideAnim.stop()
         visible = true
-        f = 0; f = 1
+        f = 0
+        showAnim.restart()
     }
-    function close() { visible = false }
-    Behavior on f { NumberAnimation { duration: 150; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
-    MouseArea { anchors.fill: parent; onPressed: root.visible = false }
+    function close() { if (!visible) return; showAnim.stop(); hideAnim.restart() }
+    NumberAnimation {
+        id: showAnim; target: root; property: "f"; to: 1; duration: Theme.dur(150)
+        easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut
+    }
+    NumberAnimation {
+        id: hideAnim; target: root; property: "f"; to: 0; duration: Theme.dur(110)
+        easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeIn
+        onStopped: if (root.f <= 0.001) root.visible = false
+    }
+    // while it closes the menu no longer answers the finger
+    MouseArea { anchors.fill: parent; enabled: !hideAnim.running; onPressed: root.close() }
     Rectangle {
         id: box
         width: root.boxW; height: 12 + root.rowH * root.items.length; radius: 16
@@ -60,7 +74,7 @@ Item {
                         text: modelData.label || ""; elide: Text.ElideRight
                         color: modelData.danger ? Theme.red300 : Theme.white; font.family: Theme.font; font.pixelSize: 14
                     }
-                    Tap { id: itemTap; onClicked: { root.visible = false; if (modelData.cb) modelData.cb() } }
+                    Tap { id: itemTap; onClicked: { root.close(); if (modelData.cb) modelData.cb() } }
                 }
             }
         }

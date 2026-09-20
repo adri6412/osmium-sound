@@ -500,7 +500,8 @@
       "systemControls": "Controlli Sistema",
       "language": "Lingua",
       "thirdPartyNotices": "Componenti di terze parti",
-      "netCheck": "Diagnosi rete"
+      "netCheck": "Diagnosi rete",
+      "uiMotion": "Movimento dell\u2019interfaccia"
     },
     "language": {
       "help": "Scegli la lingua dell'interfaccia."
@@ -551,6 +552,19 @@
       "storeEmpty": "Al momento non ci sono altre animazioni da scaricare.",
       "storeCheck": "Controlla di nuovo",
       "removeConfirm": "Rimuovere l'animazione «{name}» da questo apparecchio? Potrai scaricarla di nuovo in seguito."
+    },
+    "uiMotion": {
+      "help": "Quanto lo schermo si muove quando lo tocchi. Il movimento \u00e8 breve e si ferma da solo, quindi non pesa quasi nulla sulla scheda video; abbassalo se preferisci l\u2019interfaccia ferma.",
+      "option": {
+        "full": "Completo",
+        "reduced": "Ridotto",
+        "none": "Nessuno"
+      },
+      "optionHelp": {
+        "full": "Consigliato \u2014 i pulsanti cedono sotto il dito, i pannelli scorrono",
+        "reduced": "Gli stessi movimenti, al doppio della velocit\u00e0",
+        "none": "Niente si muove: tutto cambia di colpo"
+      }
     },
     "playback": {
       "help": "Opzioni di riproduzione applicate al player attivo: transizioni tra i brani (crossfade/gapless) e normalizzazione del volume (ReplayGain).",

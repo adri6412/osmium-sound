@@ -108,7 +108,8 @@ Column {
         opacity: m.dim ? 0.5 : 1                            // disabled:opacity-50 su TUTTO il pulsante
         Icon { visible: !!m.icon; anchors.centerIn: parent; name: m.icon || ""; size: 16; color: root.btnFg(m.style) }
         Text { id: miniText; visible: !m.icon; anchors.centerIn: parent; text: m.label || ""; font.family: Theme.font; font.pixelSize: 12; color: root.btnFg(m.style) }
-        Tap { id: mTap; enabled: !m.dim; grow: 4; onClicked: root.ctl.activate(row, m.act, m.arg) }
+        scale: mTap.tapScale
+        Tap { id: mTap; tap: 0.95; enabled: !m.dim; grow: 4; onClicked: root.ctl.activate(row, m.act, m.arg) }
     }
     component MiniRow: Row {
         property var row: ({})
@@ -117,11 +118,23 @@ Column {
         Repeater { model: row.mini || []; MiniButton { required property var modelData; m: modelData; row: parent.row } }
     }
     component Switch_: Rectangle {
+        id: sw
         property bool on: false
         property bool dim: false
         width: 44; height: 24; radius: 12
-        color: dim ? Qt.rgba(on ? Theme.gold.r : Theme.accent.r, on ? Theme.gold.g : Theme.accent.g, on ? Theme.gold.b : Theme.accent.b, 0.55) : (on ? Theme.gold : Theme.accent)
-        Rectangle { x: on ? 24 : 4; y: 4; width: 16; height: 16; radius: 8; color: Theme.white; Behavior on x { NumberAnimation { duration: 120 } } }
+        // one spring for the knob and for the track: the colour makes
+        // exactly the same travel instead of snapping half way
+        color: {
+            var c = Theme.mix(Theme.accent, Theme.gold, knobS.value)
+            return dim ? Qt.rgba(c.r, c.g, c.b, 0.55) : c
+        }
+        Rectangle { x: 4 + 20 * knobS.value; y: 4; width: 16; height: 16; radius: 8; color: Theme.white }
+        Spring { id: knobS; stiffness: 320; damping: 30; rate: Theme.motionRate; to: sw.on ? 1 : 0 }
+        // 🚨 SettingsTab.rebuild() makes ALL the rows again, on every round
+        // of polling too: without this each rebuild would replay the slide of
+        // every switch that is already on. set() is Q_INVOKABLE, not a QML
+        // write: it does not break the binding on `to`.
+        Component.onCompleted: knobS.set(sw.on ? 1 : 0)
     }
 
     // ─── i tipi di riga ────────────────────────────────────────────────────

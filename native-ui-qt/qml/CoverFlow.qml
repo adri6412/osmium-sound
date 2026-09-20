@@ -49,7 +49,7 @@ Item {
     property bool dragging: false
     // the spring drives pos except under the finger (a Binding with `when`
     // would put the old value back each time the finger takes over)
-    Spring { id: sp; stiffness: 170; damping: 24; onValueChanged: if (!root.dragging) root.pos = value }
+    Spring { id: sp; stiffness: 170; damping: 24; rate: Theme.motionRate; onValueChanged: if (!root.dragging) root.pos = value }
     function goTo(i, now) {
         i = Math.max(0, Math.min(count - 1, Math.round(i)))
         if (now) { sp.set(i); pos = i } else { if (!dragging) sp.set(pos); sp.to = i }
@@ -93,7 +93,7 @@ Item {
                 // the row makes way for the album that opens (the flying
                 // copy covers the front one from the first frame)
                 opacity: root.opening ? 0 : 1
-                Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutQuad } }
+                Behavior on opacity { NumberAnimation { duration: Theme.dur(220); easing.type: Easing.OutQuad } }
                 x: root.cx - root.cs / 2 + (Math.abs(d) < 1 ? d * root.off : (d > 0 ? 1 : -1) * (root.off + (Math.abs(d) - 1) * root.gap))
                 y: root.coverY
                 width: root.cs; height: root.cs
@@ -248,7 +248,7 @@ Item {
             width: 48; height: 48
             z: 200
             opacity: root.opening ? 0 : (can ? 1 : 0.28)
-            Behavior on opacity { NumberAnimation { duration: 200 } }
+            Behavior on opacity { NumberAnimation { duration: Theme.dur(200) } }
             Rectangle {
                 anchors.fill: parent; radius: 24
                 color: arrowTap.mix(Theme.wa(0.08), Theme.goldA(0.25))
@@ -276,7 +276,7 @@ Item {
         width: root.width; height: root.height - y
         z: 150
         opacity: root.opening ? 0 : 1
-        Behavior on opacity { NumberAnimation { duration: 220 } }
+        Behavior on opacity { NumberAnimation { duration: Theme.dur(220) } }
         Text {
             x: 24; width: parent.width - 48; y: 0; height: 22
             horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
@@ -302,8 +302,10 @@ Item {
             Rectangle {
                 x: parent.width * slider.frac - 7; y: 8; width: 14; height: 14; radius: 7
                 color: Theme.gold
-                scale: sliderArea.pressed ? 1.4 : 1
-                Behavior on scale { NumberAnimation { duration: 120 } }
+                // the knob grows under the finger, on a spring: 1.4 at once
+                // was a jerk, this is a travel
+                scale: 1 + 0.25 * knobS.value
+                Spring { id: knobS; stiffness: 400; damping: 28; rate: Theme.motionRate; to: sliderArea.pressed ? 1 : 0 }
             }
             Rectangle {
                 visible: sliderArea.pressed

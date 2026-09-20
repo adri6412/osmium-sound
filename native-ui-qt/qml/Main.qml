@@ -30,6 +30,11 @@ Item {
     // La scala vera dello schermo, a disposizione di chiunque disegni su una
     // texture (Icon, Cover, le maschere) e di chi chiede le copertine.
     Binding { target: Theme; property: "dpr"; value: root.s }
+
+    // How much the interface is allowed to move (Settings -> Interface motion).
+    // Read once here because Theme only imports QtQuick; Settings writes it
+    // back when the owner changes it.
+    Component.onCompleted: Theme.motionLevel = Sys.conf("ui-motion", "full")
     // 320 = il lato della copertina in Now Playing, la piu' grande che chiediamo
     Binding { target: Player; property: "coverPx"; value: Theme.coverPx(320) }
     // a 4K un fotogramma costa quattro volte quanto a 1080p e la scena si

@@ -79,7 +79,7 @@ Item {
                 required property var modelData
                 readonly property bool cur: String(modelData.mbid) === root.current
                 width: list.width; height: 52; radius: 8
-                color: cTap.pressed ? Theme.light : cur ? Theme.goldA(0.12) : Theme.surface
+                color: cTap.mix(cur ? Theme.goldA(0.12) : Theme.surface, Theme.light)
                 border.width: cur ? 1 : 0; border.color: Theme.goldA(0.4)
                 Text {
                     x: 12; y: 8; width: parent.width - 24; height: 18; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight

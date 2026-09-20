@@ -41,6 +41,27 @@ QtObject {
     readonly property var easeInOut: [0.42, 0, 0.58, 1, 1, 1]
     readonly property var easeIn: [0.42, 0, 1, 1, 1, 1]
 
+    // How much the interface is allowed to move (Settings -> Interface motion,
+    // kept in `ui-motion`). 🚨 Theme only imports QtQuick and must not know
+    // about Sys: Main.qml reads the file at start and Settings writes this
+    // back, the way App.qml holds albumView.
+    property string motionLevel: "full"           // "full" | "reduced" | "none"
+    // How fast time runs: as written, twice as fast, or not at all.
+    readonly property real motionRate: motionLevel === "none" ? 0 : motionLevel === "reduced" ? 2 : 1
+    // The flourishes that are movement for its own sake — a page sliding in,
+    // the heart's pop, the long-press ring — only at "full". The answer to a
+    // touch is not a flourish: that one thins out but never goes.
+    readonly property bool lushMotion: motionLevel === "full"
+    // A duration in milliseconds, through that setting. It is a binding, so
+    // every `duration: Theme.dur(150)` follows the setting by itself; at 0 the
+    // animation simply happens at once, with no Behavior to switch off.
+    function dur(ms) { return motionRate > 0 ? Math.round(ms / motionRate) : 0 }
+    // The durations that repeat across the interface.
+    readonly property int tTap: 150        // touch tint
+    readonly property int tFade: 120       // content appearing
+    readonly property int tPanel: 200      // a panel coming or going
+    readonly property int tOverlay: 300    // a full-screen layer
+
     // the logical canvas: 600 points tall (1024 wide at 16:10 and taller),
     // its long side following the screen's shape (Main.qml)
     property int canvasW: 1024

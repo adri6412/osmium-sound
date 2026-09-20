@@ -20,7 +20,7 @@ Item {
     readonly property bool busyOverlay: dialogs.active || vk.active || ota.active || cdrip.open || tutorial.active
 
     // ─── principale <-> Now Playing: y:'100%' con molla 200/26 ─────────────
-    Spring { id: npSpring; stiffness: 200; damping: 26 }
+    Spring { id: npSpring; stiffness: 200; damping: 26; rate: Theme.motionRate }
     function setExpanded(on) {
         if (expanded === on) return
         expanded = on

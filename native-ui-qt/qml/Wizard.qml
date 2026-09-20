@@ -117,7 +117,7 @@ Item {
     }
     function fmtSize(b) { var gb = b / (1024 * 1024 * 1024); return gb >= 1000 ? (gb / 1024).toFixed(1) + " TB" : gb >= 10 ? Math.round(gb) + " GB" : gb.toFixed(1) + " GB" }
     function stepTo(s) { step = s; if (s === 1) readDisks(); fadeAnim.restart() }
-    NumberAnimation { id: fadeAnim; target: body; property: "opacity"; from: 0; to: 1; duration: 200 }
+    NumberAnimation { id: fadeAnim; target: body; property: "opacity"; from: 0; to: 1; duration: Theme.dur(200) }
     Keys.onPressed: (e) => {
         if (mode === 1 && pick >= 0) {
             if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) wifiConnect()
@@ -146,7 +146,8 @@ Item {
         Row { anchors.centerIn: parent; spacing: 8
               Text { text: parent.parent.label; color: parent.parent.fg; font.family: Theme.font; font.pixelSize: 15; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
               Icon { visible: !!parent.parent.trail; name: parent.parent.trail || ""; size: 18; color: parent.parent.fg; anchors.verticalCenter: parent.verticalCenter } }
-        Tap { onClicked: parent.clicked() }
+        scale: bigTap.tapScale
+        Tap { id: bigTap; tap: 0.97; onClicked: parent.clicked() }
     }
     component QrCorner: Rectangle {
         readonly property string value: "http://" + (root.ip || "hifiplayer.local")

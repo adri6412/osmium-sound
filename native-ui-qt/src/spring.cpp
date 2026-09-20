@@ -41,6 +41,15 @@ void Spring::setTo(double t) {
     if (t == m_to && (m_running || t == m_v)) return;
     m_to = t;
     emit toChanged();
+    // movement turned off: be there already
+    if (m_rate <= 0) {
+        m_drv->stop();
+        m_v = m_to; m_vel = 0;
+        setRunning(false);
+        emit valueChanged();
+        emit finished();
+        return;
+    }
     if (std::fabs(m_to - m_v) < m_restDelta && std::fabs(m_vel) < m_restSpeed) { m_v = m_to; m_vel = 0; emit valueChanged(); return; }
     if (!m_running) { setRunning(true); m_drv->start(); }
 }
@@ -55,6 +64,7 @@ void Spring::finish() {
 }
 
 void Spring::step(double dt) {
+    dt *= m_rate > 0 ? m_rate : 1;
     const double h = 1.0 / 240;
     for (double left = dt; left > 0; left -= h) {
         double s = left < h ? left : h;

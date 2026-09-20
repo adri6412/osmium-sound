@@ -35,11 +35,11 @@ Item {
     visible: open
     Component.onCompleted: Ui.cdrip = root
 
-    Spring { id: sc; stiffness: 550; damping: 30 }
+    Spring { id: sc; stiffness: 550; damping: 30; rate: Theme.motionRate }
     property real fade: 0
-    Behavior on fade { NumberAnimation { duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Behavior on fade { NumberAnimation { duration: Theme.dur(300); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
     property real closeScale: 1
-    Behavior on closeScale { NumberAnimation { duration: 200 } }
+    Behavior on closeScale { NumberAnimation { duration: Theme.dur(200) } }
 
     function loadInfo() {
         Api.get(Api.srcBase + "/api/cd/info" + (pickedRelease ? "?release=" + encodeURIComponent(pickedRelease) : ""), function(ok, d) {
