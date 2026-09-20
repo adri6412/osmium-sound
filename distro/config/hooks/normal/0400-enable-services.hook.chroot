@@ -87,6 +87,21 @@ systemctl disable smbd.service nmbd.service || true
 # Windows' "Network": sources_server.py turns it on together with smbd.
 systemctl disable wsdd2.service || true
 
+echo "I: [hifi] Bluetooth speakers: supervisor ON, everything else OFF by default"
+# 🚨 hifi-bt-out.service is the ONLY Bluetooth unit enabled here, and that is
+# the whole design: unit enablement does not survive an A/B image swap, so the
+# owner's choice is kept in /etc/hifi-player/bluetooth.json (which IS carried
+# over) and this daemon re-applies it on every boot — starting bluetoothd,
+# BlueALSA, the pairing agent and one squeezelite per speaker only when the
+# choice is on. With the choice off it costs one idle Python process and
+# leaves the adapter powered down.
+systemctl enable hifi-bt-out.service || true
+# Debian auto-enables these on install; ours replace them (a source-role
+# BlueALSA started on demand), and two daemons fighting over the same adapter
+# is the kind of failure nobody debugs from a listening room.
+systemctl disable bluetooth.service || true
+systemctl disable bluealsa.service bluealsa-aplay.service || true
+
 echo "I: [hifi] disabling getty on tty1 (no text console flashes)"
 systemctl mask getty@tty1.service || true
 

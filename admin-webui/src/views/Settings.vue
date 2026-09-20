@@ -22,6 +22,7 @@ const { t, lang } = useI18n();
 const sections = computed(() => [
   { key: 'network',   label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
   { key: 'audio',     label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
+  { key: 'btSpeakers', label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
   { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
   // 'dsp' is deliberately NOT listed here — the feature (and its room-correction
   // sub-flow) is being held back for a future paid tier. The card markup below
@@ -383,6 +384,75 @@ async function saveShellAccount() {
   say(bodyMsg(r, ok ? t('settings.services.sshLoginSaved') : t('settings.services.sshLoginFailed')), !ok);
   if (ok) { shell.password = ''; loadShell(); }
 }
+// ── Bluetooth speakers (A2DP source) ─────────────────────────────
+// Pair a speaker or a pair of headphones and it becomes a Lyrion player of
+// its own — its own name, its own queue — next to the device's built-in
+// player, which keeps the DAC to itself throughout. api_server does the
+// pairing and the connecting; a supervisor on the device does the rest (and
+// the reconnecting), so everything here is: send a command, take the state
+// that comes back.
+const bt = reactive({
+  available: false, enabled: false, adapter: false, speakers: [], found: [],
+  busy: false, scanning: false, open: '', name: '',
+});
+let btPoll = null;
+function applyBt(d) {
+  bt.available = !!d.available; bt.enabled = !!d.enabled; bt.adapter = !!d.adapter;
+  bt.speakers = d.speakers || []; bt.found = d.found || [];
+}
+async function loadBt() {
+  const r = await api.sys('bt_speakers');
+  if (r.ok && r.data && r.data.available !== undefined) applyBt(r.data);
+}
+// Every /bt_speakers/* reply carries the whole state, so one helper unpacks
+// them all — and one place decides what the owner is told.
+async function btCall(path, body) {
+  bt.busy = true;
+  const r = await api.sysPost(path, body || {});
+  bt.busy = false; bt.scanning = false;
+  if (r.ok && r.data && r.data.available !== undefined) {
+    applyBt(r.data);
+    if (r.data.message) say(r.data.message, r.data.success === false);
+    return r.data.success !== false;
+  }
+  say(bodyMsg(r, t('settings.btSpeakers.opFailed')), true);
+  return false;
+}
+const setBt = (v) => btCall('bt_speakers/enable', { enable: v });
+async function btScan() { bt.scanning = true; await btCall('bt_speakers/scan', { seconds: 12 }); }
+const btAdd = (mac) => btCall('bt_speakers/add', { mac });
+const btConnect = (sp) => btCall('bt_speakers/connect', { mac: sp.mac, connect: !sp.connected });
+const btAuto = (sp) => btCall('bt_speakers/update', { mac: sp.mac, autoconnect: !sp.autoconnect });
+function btRename(sp) {
+  const name = (bt.name || '').trim();
+  if (!name || name === sp.player) return;
+  return btCall('bt_speakers/update', { mac: sp.mac, player: name });
+}
+async function btForget(sp) {
+  if (!confirm(t('settings.btSpeakers.forgetConfirm', { name: sp.player || sp.name }))) return;
+  bt.open = '';
+  await btCall('bt_speakers/remove', { mac: sp.mac });
+}
+function btToggle(sp) {
+  bt.open = bt.open === sp.mac ? '' : sp.mac;
+  bt.name = sp.player || '';
+}
+function btState(sp) {
+  if (!sp.enabled) return t('settings.btSpeakers.switchedOff');
+  if (sp.playing) return t('settings.btSpeakers.ready');
+  if (sp.connected) return t('settings.btSpeakers.connecting');
+  return t('settings.btSpeakers.notConnected');
+}
+// Only polled while the section is open, and never on top of a command in
+// flight: with the adapter up, answering it runs bluetoothctl once per known
+// device.
+watch(open, (k) => {
+  if (btPoll) { clearInterval(btPoll); btPoll = null; }
+  if (k !== 'btSpeakers') return;
+  loadBt();
+  btPoll = setInterval(() => { if (!bt.busy) loadBt(); }, 5000);
+}, { immediate: true });
+
 // ── Tailscale — join the owner's own tailnet, exposing every port on this
 // appliance (web UI, Lyrion, SMB, ...) from anywhere that tailnet reaches, so
 // the music library stays reachable away from home. Not the old remote-support
@@ -1409,6 +1479,7 @@ onMounted(async () => {
 onUnmounted(() => {
   if (lyrionPoll) clearInterval(lyrionPoll); if (skinPoll) clearInterval(skinPoll); if (tailscalePoll) clearInterval(tailscalePoll);
   if (timezonePoll) clearInterval(timezonePoll); if (vuStorePoll) clearInterval(vuStorePoll); if (animStorePoll) clearInterval(animStorePoll);
+  if (btPoll) clearInterval(btPoll);
   window.dispatchEvent(new CustomEvent('hifi-settings-active', { detail: false }));
 });
 </script>
@@ -1494,6 +1565,74 @@ onUnmounted(() => {
       <label>{{ t('settings.audio.playerName') }}</label>
       <div class="row"><input v-model="playerName" /><button class="secondary fit" @click="saveName">{{ t('common.save') }}</button></div>
       <p class="sub" style="margin-top: 4px;">{{ t('settings.audio.playerNameHint') }}</p>
+    </div>
+
+    <!-- Bluetooth speakers: pair one and it turns into a player of its own,
+         next to the built-in one. The DAC is untouched throughout. -->
+    <div class="card" v-if="open === 'btSpeakers'">
+      <p class="sub">{{ t('settings.btSpeakers.help') }}</p>
+      <p class="sub" v-if="!bt.available">{{ t('settings.btSpeakers.unavailable') }}</p>
+      <template v-else>
+        <div class="between item">
+          <span>{{ t('settings.btSpeakers.enable') }}
+            <span class="muted">{{ t('settings.btSpeakers.enableHint') }}</span>
+          </span>
+          <Toggle :model-value="bt.enabled" :disabled="bt.busy" @update:model-value="setBt" />
+        </div>
+
+        <template v-if="bt.enabled">
+          <p class="sub" v-if="!bt.adapter">{{ t('settings.btSpeakers.noAdapter') }}</p>
+          <template v-else>
+            <label>{{ t('settings.btSpeakers.yours') }}</label>
+            <p class="sub" v-if="!bt.speakers.length">{{ t('settings.btSpeakers.none') }}</p>
+            <template v-for="sp in bt.speakers" :key="sp.mac">
+              <div class="net between" @click="btToggle(sp)">
+                <span>
+                  <span style="display:block;">{{ sp.player || sp.name }}</span>
+                  <span class="muted">{{ btState(sp) }}</span>
+                </span>
+                <span class="check">{{ bt.open === sp.mac ? '▾' : '▸' }}</span>
+              </div>
+              <div v-if="bt.open === sp.mac" style="padding: 0 4px 10px;">
+                <label>{{ t('settings.btSpeakers.playerName') }}</label>
+                <div class="row">
+                  <input v-model="bt.name" />
+                  <button class="secondary fit" :disabled="bt.busy" @click="btRename(sp)">{{ t('common.save') }}</button>
+                </div>
+                <p class="sub">{{ t('settings.btSpeakers.playerNameHint') }}</p>
+                <div class="between item">
+                  <span>{{ t('settings.btSpeakers.autoconnect') }}
+                    <span class="muted">{{ t('settings.btSpeakers.autoconnectHint') }}</span>
+                  </span>
+                  <Toggle :model-value="sp.autoconnect" :disabled="bt.busy" @update:model-value="() => btAuto(sp)" />
+                </div>
+                <div class="row" style="margin-top: 10px;">
+                  <button class="secondary" :disabled="bt.busy" @click="btConnect(sp)">
+                    {{ sp.connected ? t('settings.btSpeakers.disconnect') : t('settings.btSpeakers.connect') }}
+                  </button>
+                  <button class="danger fit" :disabled="bt.busy" @click="btForget(sp)">{{ t('settings.btSpeakers.forget') }}</button>
+                </div>
+                <p class="sub" style="margin-top: 6px;">{{ t('settings.btSpeakers.address') }}: <span class="silver">{{ sp.mac }}</span></p>
+              </div>
+            </template>
+
+            <label>{{ t('settings.btSpeakers.found') }}</label>
+            <p class="sub">{{ t('settings.btSpeakers.searchHint') }}</p>
+            <button :disabled="bt.busy" @click="btScan">
+              {{ bt.scanning ? t('settings.btSpeakers.searching') : t('settings.btSpeakers.search') }}
+            </button>
+            <p class="sub" v-if="bt.scanning">{{ t('settings.btSpeakers.searchingHint') }}</p>
+            <p class="sub" v-else-if="!bt.found.length">{{ t('settings.btSpeakers.foundNone') }}</p>
+            <div v-for="d in bt.found" :key="d.mac" class="net between" @click="btAdd(d.mac)">
+              <span>
+                <span style="display:block;">{{ d.name || d.mac }}</span>
+                <span class="muted">{{ d.audio ? d.mac : t('settings.btSpeakers.notAudio') }}</span>
+              </span>
+              <span class="check">+</span>
+            </div>
+          </template>
+        </template>
+      </template>
     </div>
 
     <!-- Sources (native — talks directly to sources_server.py through

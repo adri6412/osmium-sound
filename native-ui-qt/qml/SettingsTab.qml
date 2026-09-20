@@ -26,6 +26,14 @@ Item {
     // la barra dei tab per decidere se controllare gli aggiornamenti
     property bool autoCheck: Sys.conf("ota-autocheck", "1") !== "0"
     property bool smbShowPw: false
+    // Bluetooth speakers: which speaker's panel is open, and the name being
+    // typed into it. The name is held here rather than written straight back
+    // to cfg because a rebuild would otherwise throw away a half-typed word
+    // every time the five-second refresh lands.
+    property int btBand: -1
+    property string btNameEdit: ""
+    property bool btBusy: false
+    property bool btScanning: false
     // Procedura guidata "aggiungi una cartella di rete". Sostituisce le quattro
     // caselle vuote (server/share/utente/password), che sono inutilizzabili per
     // chi non sa gia' cos'e' una condivisione SMB: prima si cercano da soli i
@@ -67,6 +75,7 @@ Item {
         { id: "language", icon: "globe", key: "settings.sections.language" },
         { id: "sources", icon: "hard-drive", key: "settings.sections.sources" },
         { id: "audio", icon: "volume-2", key: "settings.sections.audio" },
+        { id: "btSpeakers", icon: "bluetooth", key: "settings.sections.btSpeakers" },
         { id: "playback", icon: "sliders", key: "settings.sections.playback" },
         { id: "vuMeters", icon: "audio-lines", key: "settings.sections.vuMeters" },
         { id: "animations", icon: "disc-3", key: "settings.sections.animations" },
@@ -106,6 +115,11 @@ Item {
         property string displayMode: "gui"; property string uiResolution: "auto"; property string uiRefresh: "native"; property bool uiRefreshSupported: false
         property string timezone: ""
         property bool vuMeter: true; property int autoexpand: 0; property bool playerEnabled: true
+        // Bluetooth speakers (api_server /bt_speakers). btSpeakers are the ones
+        // set up as players, btFound whatever else the last search saw.
+        property bool btAvailable: false; property bool btEnabled: false; property bool btAdapter: false
+        property var btSpeakers: []
+        property var btFound: []
         property var vuStyles: []                                   // [{id, name:{en,it}}]; the choice is Player.vuStyle
         property string npAnimation: "none"                         // Now Playing animation with the VU meters off
         // VU meter store (api_server /vu_store): the full list only while the
@@ -155,6 +169,18 @@ Item {
                 if (ok && d && typeof d === "object") { try { fn(d) } catch (e) { Sys.log("settings: " + url + ": " + e) } }
                 if (--pending === 0 && g === gen) { loaded = true; root.dataChanged() }
             }, 5000)
+        }
+        // Bluetooth, read only while its own section is open: with the adapter
+        // up, answering it runs bluetoothctl once per known device, which is
+        // not something load() should do on every settings change.
+        function loadBt() {
+            Api.get(api("/bt_speakers"), function(ok, d) {
+                if (ok && d && typeof d === "object") {
+                    btAvailable = !!d.available; btEnabled = !!d.enabled; btAdapter = !!d.adapter
+                    btSpeakers = d.speakers || []; btFound = d.found || []
+                }
+                root.btBusy = false; root.btScanning = false; root.rebuild()
+            }, 130000)
         }
         // the store's list, with previews: separate from load(), which runs on
         // every settings change and would carry the images each time
@@ -435,11 +461,13 @@ Item {
         active = i; msg = ""; pendAct = ""; countdown = 0; backTo = ""
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
+        btBand = -1; btNameEdit = ""; btBusy = false; btScanning = false
         wizReset()
         if (id === "timezone" && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
         if (id === "webRemote") cfg.mintToken()
         if (id === "multiroom" && cfg.lmsMode === "follow") cfg.loadDiscover()
         if (id === "multiroom") cfg.loadLibrary()
+        if (id === "btSpeakers") { btBusy = true; cfg.loadBt() }
         if (id === "vuMeters") cfg.loadStore(true)
         if (id === "animations") cfg.loadAnimStore(true)
         if (id === "thirdPartyNotices" && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
@@ -678,6 +706,7 @@ Item {
             case "vuMeters": secVuMeters(); break
             case "animations": secAnimations(); break
             case "multiroom": secMultiroom(); break
+            case "btSpeakers": secBtSpeakers(); break
             case "alarm": secAlarm(); break
             case "network": secNetwork(); break
             case "webRemote": secWebremote(); break
@@ -1200,6 +1229,58 @@ Item {
             var t = toggle(cfg.players[p].name, "", cfg.players[p].sync, "sync_toggle", cfg.players[p].id); t.icon = "speaker"
         }
     }
+    // ── Bluetooth speakers ────────────────────────────────────────────────
+    // Pair a speaker here and it becomes a Lyrion player of its own, with its
+    // own name and its own queue, next to this device's built-in player — so
+    // it can be grouped with it, or play something else entirely. The DAC is
+    // never involved: nothing here changes what the built-in player does.
+    function secBtSpeakers() {
+        help("settings.btSpeakers.help")
+        if (!cfg.btAvailable) { note(Tr.t("settings.btSpeakers.unavailable"), "dark", "info"); return }
+        var sw = toggle(Tr.t("settings.btSpeakers.enable"), Tr.t("settings.btSpeakers.enableHint"), cfg.btEnabled, "bt_enable")
+        sw.dim = btBusy
+        if (!cfg.btEnabled) return
+        if (btBusy && !cfg.btSpeakers.length && !cfg.btFound.length) { helpText(Tr.t("common.loading"), 13); return }
+        if (!cfg.btAdapter) { note(Tr.t("settings.btSpeakers.noAdapter"), "red", "alert-triangle"); return }
+
+        label("settings.btSpeakers.yours")
+        if (!cfg.btSpeakers.length) helpText(Tr.t("settings.btSpeakers.none"), 13)
+        for (var i = 0; i < cfg.btSpeakers.length; i++) {
+            var sp = cfg.btSpeakers[i]
+            var state = !sp.enabled ? Tr.t("settings.btSpeakers.switchedOff")
+                      : sp.playing ? Tr.t("settings.btSpeakers.ready")
+                      : sp.connected ? Tr.t("settings.btSpeakers.connecting")
+                      : Tr.t("settings.btSpeakers.notConnected")
+            var b = bandRow(sp.connected ? "bluetooth-connected" : "bluetooth",
+                            String(sp.player || sp.name || sp.mac), state, btBand === i, "bt_band", String(i), false)
+            if (btBand !== i) continue
+            begin(b.children)
+            help("settings.btSpeakers.playerNameHint", 12)
+            input(Tr.t("settings.btSpeakers.playerName"), btNameEdit, "bt_name", false, sp.mac)
+            var ren = action(Tr.t("settings.btSpeakers.rename"), "bt_rename", "accent"); ren.hh = 40; ren.arg = sp.mac
+            toggle(Tr.t("settings.btSpeakers.autoconnect"), Tr.t("settings.btSpeakers.autoconnectHint"), !!sp.autoconnect, "bt_auto", sp.mac)
+            grid([acell(sp.connected ? Tr.t("settings.btSpeakers.disconnect") : Tr.t("settings.btSpeakers.connect"),
+                        sp.connected ? "bt_disconnect" : "bt_connect", "light", { hh: 40, arg: sp.mac }),
+                  acell(Tr.t("settings.btSpeakers.forget"), "bt_forget", "red", { hh: 40, arg: sp.mac })])
+            var addr = info(Tr.t("settings.btSpeakers.address"), sp.mac); addr.mono = true; addr.px = 12; addr.hh = 36
+            end()
+        }
+
+        sep()
+        label("settings.btSpeakers.found")
+        help("settings.btSpeakers.searchHint", 12)
+        var sc = action(btScanning ? Tr.t("settings.btSpeakers.searching") : Tr.t("settings.btSpeakers.search"),
+                        "bt_scan", "accent")
+        sc.icon = "bluetooth-searching"; sc.hh = 44; sc.dim = btScanning || btBusy
+        if (btScanning) helpText(Tr.t("settings.btSpeakers.searchingHint"), 12)
+        else if (!cfg.btFound.length) helpText(Tr.t("settings.btSpeakers.foundNone"), 13)
+        for (var j = 0; j < cfg.btFound.length; j++) {
+            var dev = cfg.btFound[j]
+            var sub = dev.audio ? dev.mac : Tr.t("settings.btSpeakers.notAudio")
+            var r = option(String(dev.name || dev.mac), sub, dev.mac, false, "bt_add")
+            r.icon = dev.audio ? "speaker" : "bluetooth"; r.hh = 60; r.style = "row"; r.dim = btBusy
+        }
+    }
     function secAlarm() {
         help("settings.alarm.help")
         if (remoteNote()) return
@@ -1497,11 +1578,39 @@ Item {
         case "player_name": nameEdit = text; break
         case "lms_host": hostEdit = text; break
         case "pick_new": pickNew = text; break
+        case "bt_name": btNameEdit = text; break
         }
         // le righe dipendenti (pulsante "applica" attivo/spento) si rifanno subito
         dimRefresh.restart()
     }
     Timer { id: dimRefresh; interval: 150; onTriggered: root.rebuild() }
+
+    // Every /bt_speakers/* reply carries the full state, so there is exactly
+    // one place that unpacks it — and exactly one place that decides whether
+    // the message on screen is a complaint or a confirmation.
+    function btApply(ok, d) {
+        btBusy = false; btScanning = false
+        if (ok && d && typeof d === "object") {
+            if (d.available !== undefined) {
+                cfg.btAvailable = !!d.available; cfg.btEnabled = !!d.enabled; cfg.btAdapter = !!d.adapter
+                cfg.btSpeakers = d.speakers || []; cfg.btFound = d.found || []
+            }
+            if (d.message) { say(String(d.message), d.success === false); return }
+        } else {
+            say(Tr.t("settings.btSpeakers.opFailed"), true); return
+        }
+        rebuild()
+    }
+    // While the section is open, follow a speaker that is switching itself on
+    // (or off) without making the owner tap anything. Held back while a
+    // command is in flight, and while the on-screen keyboard is up — a
+    // rebuild there would throw away what is being typed.
+    Timer {
+        interval: 5000; repeat: true
+        running: root.active >= 0 && root.secs[root.active].id === "btSpeakers"
+                 && !root.btBusy && !(Ui.vk && Ui.vk.active)
+        onTriggered: cfg.loadBt()
+    }
     function fieldCommit(row) { rebuild() }
 
     // ─── azioni ────────────────────────────────────────────────────────────
@@ -1542,6 +1651,55 @@ Item {
             Ui.dialogs.pick(Tr.t("settings.sections.timezone"), timezones, timezones.indexOf(cfg.timezone), function(i) {
                 if (i < 0) return
                 post(A("/timezone"), { timezone: timezones[i] }); cfg.timezone = timezones[i]; rebuild()
+            })
+            return
+        // ── Bluetooth speakers ───────────────────────────────────────
+        // Every one of these answers with the whole new state (the endpoints
+        // return get_bt_speakers()), so the reply is applied straight away
+        // instead of waiting for the next poll — pairing takes long enough
+        // that a second round trip would be felt.
+        case "bt_enable":
+            btBusy = true
+            Api.post(A("/bt_speakers/enable"), { enable: !row.on }, function(ok, d) { btApply(ok, d) }, 40000)
+            break
+        case "bt_band":
+            var idx = Number(arg)
+            btBand = (btBand === idx) ? -1 : idx
+            // the field starts on the name the speaker actually has
+            btNameEdit = btBand >= 0 && cfg.btSpeakers[btBand] ? String(cfg.btSpeakers[btBand].player || "") : ""
+            break
+        case "bt_scan":
+            btScanning = true; btBusy = true
+            Api.post(A("/bt_speakers/scan"), { seconds: 12 }, function(ok, d) { btApply(ok, d) }, 60000)
+            break
+        case "bt_add":
+            btBusy = true
+            say(Tr.t("settings.btSpeakers.pairing"))
+            Api.post(A("/bt_speakers/add"), { mac: arg }, function(ok, d) { btApply(ok, d) }, 120000)
+            break
+        case "bt_connect":
+        case "bt_disconnect":
+            btBusy = true
+            Api.post(A("/bt_speakers/connect"), { mac: arg, connect: act === "bt_connect" },
+                     function(ok, d) { btApply(ok, d) }, 90000)
+            break
+        case "bt_auto":
+            btBusy = true
+            Api.post(A("/bt_speakers/update"), { mac: arg, autoconnect: !row.on },
+                     function(ok, d) { btApply(ok, d) }, 40000)
+            break
+        case "bt_rename":
+            if (!btNameEdit.trim()) return
+            btBusy = true
+            Api.post(A("/bt_speakers/update"), { mac: arg, player: btNameEdit.trim() },
+                     function(ok, d) { btApply(ok, d) }, 40000)
+            break
+        case "bt_forget":
+            Ui.dialogs.confirm(Tr.t("settings.btSpeakers.forgetConfirm"),
+                               Tr.t("settings.btSpeakers.forget"), true, function(ok) {
+                if (!ok) return
+                btBand = -1; btBusy = true
+                Api.post(A("/bt_speakers/remove"), { mac: arg }, function(ok2, d) { btApply(ok2, d) }, 60000)
             })
             return
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break

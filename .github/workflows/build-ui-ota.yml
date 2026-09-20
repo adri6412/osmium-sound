@@ -287,6 +287,8 @@ jobs:
           python3 tests/test_metadata.py
           echo "== library editor: tags inside the files (python) =="
           python3 tests/test_tags.py
+          echo "== bluetooth speakers (python) =="
+          python3 tests/test_bt_speakers.py
 
       - name: Stage LMS skin assets into the OS payload
         # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately
@@ -351,6 +353,7 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-image-update.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-stream-tune.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-bluealsa-run.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ext.sh \
             distro/config/includes.chroot/usr/local/bin/apt \
             distro/config/includes.chroot/usr/local/sbin/hifi-factory-reset.sh \

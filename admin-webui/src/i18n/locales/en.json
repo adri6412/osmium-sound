@@ -153,6 +153,10 @@
         "label": "Audio output",
         "desc": "DAC and player name"
       },
+      "btSpeakers": {
+        "label": "Bluetooth speakers",
+        "desc": "Play to a speaker or headphones"
+      },
       "sources": {
         "label": "Music sources",
         "desc": "Folders, USB, network shares, CD"
@@ -268,6 +272,36 @@
       "changeFailed": "Could not change the output device",
       "nameSaved": "Name saved",
       "saveFailed": "Could not save"
+    },
+    "btSpeakers": {
+      "help": "Play to a Bluetooth speaker or a pair of headphones. Each one you add becomes a player in its own right, with its own name and its own queue, next to this device's own player — so you can send it a different album, or group the two together. The DAC output is untouched.",
+      "unavailable": "Bluetooth is not available on this device yet. Install the latest update and look again.",
+      "enable": "Bluetooth",
+      "enableHint": "Off until you need it: with it off the Bluetooth radio stays powered down.",
+      "noAdapter": "No Bluetooth was found on this device. A USB Bluetooth adapter is all it takes.",
+      "yours": "Your speakers",
+      "none": "No speaker yet. Search below to add the first one.",
+      "connecting": "Connected, starting up",
+      "ready": "Ready to play",
+      "notConnected": "Not connected — switch the speaker on",
+      "switchedOff": "Switched off",
+      "playerName": "Name of the player",
+      "playerNameHint": "The name this speaker shows under, in the app and on the player list.",
+      "autoconnect": "Reconnect on its own",
+      "autoconnectHint": "Reconnects as soon as the speaker is switched on again.",
+      "connect": "Connect",
+      "disconnect": "Disconnect",
+      "forget": "Forget",
+      "forgetConfirm": "Forget {name}? Its player disappears and you will have to pair it again.",
+      "address": "Address",
+      "found": "Add a speaker",
+      "search": "Search",
+      "searching": "Searching…",
+      "searchHint": "Put the speaker in pairing mode first — usually by holding its Bluetooth button until the light blinks quickly.",
+      "searchingHint": "Looking for speakers nearby. This takes about ten seconds.",
+      "foundNone": "Nothing found yet. Put the speaker in pairing mode and search again.",
+      "notAudio": "Not a speaker",
+      "opFailed": "The device did not answer"
     },
     "sources": {
       "hint": "Manage local folders, USB/internal disks, SMB shares and CD ripping.",

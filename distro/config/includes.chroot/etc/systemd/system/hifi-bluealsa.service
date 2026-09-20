@@ -1,0 +1,22 @@
+[Unit]
+# Osmium Sound — BlueALSA, the bridge between BlueZ and ALSA.
+#
+# Runs in SOURCE role only (-p a2dp-source): this appliance sends audio TO
+# Bluetooth speakers/headphones, it does not receive it from a phone. Every
+# connected speaker shows up as an ALSA PCM (bluealsa:DEV=<MAC>,PROFILE=a2dp)
+# that a squeezelite instance of its own opens — see hifi-bt-player@.service.
+#
+# Never enabled: hifi-bt-out.service starts and stops it according to the
+# owner's Bluetooth choice (/etc/hifi-player/bluetooth.json). An enable
+# symlink would also be lost on the next A/B image swap, which is exactly why
+# the supervisor — and not systemd's own enablement — owns this unit's state.
+Description=Osmium Sound - BlueALSA (Bluetooth audio out)
+After=dbus.service bluetooth.service
+Requires=dbus.service
+BindsTo=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/hifi-bluealsa-run.sh
+Restart=always
+RestartSec=3

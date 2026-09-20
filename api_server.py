@@ -2583,6 +2583,10 @@ SUPPORT_JOURNAL_UNITS = [
     # where the conversion is armed and carried out, and a bundle that does not
     # name them leaves "why is it still on the old layout" unanswerable.
     'hifi-rauc-config', 'hifi-ab-finish', 'hifi-ab-image', 'hifi-ab-firstboot',
+    # Bluetooth speakers: the supervisor's journal is where a speaker that
+    # never reconnects leaves its trail (bluetoothd's own log alone does not
+    # say which player unit was started or why one wasn't).
+    'hifi-bt-out',
     'bluetooth', 'NetworkManager',
 ]
 # Config worth including — never secrets/keys. Mirrors the allow-list spirit of
@@ -5906,232 +5910,467 @@ def delete_dsp_preset(name):
     return {'success': True, **get_dsp_presets(), 'message': _t('dspPreset.deleted', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
-#  Bluetooth audio (A2DP sink) — OPTIONAL, OFF by default. Lets the
-#  appliance appear as a Bluetooth speaker: a phone connects and streams
-#  straight to the DAC, no app/account needed (guest-friendly input, the
-#  same idea as Volumio/WiiM/Bluesound/Eversolo). See OS migration
-#  0024-bluetooth.sh for the systemd units/prerequisites, and
-#  distro/config/includes.chroot/usr/local/sbin/hifi-bt-{aplay-run,
-#  watcher.py} (delivered by the system OTA channel) for the runtime DAC
-#  handover + Now Playing metadata.
+#  Bluetooth speakers (A2DP source) — OPTIONAL, OFF by default. Lets
+#  the appliance play OUT to a Bluetooth speaker or a pair of
+#  headphones. Each paired speaker gets a squeezelite instance of its
+#  own (hifi-bt-player@<mac>.service), so it shows up in Lyrion as a
+#  player in its own right, with its own name and its own queue,
+#  alongside this device's built-in player — the same arrangement
+#  piCorePlayer offers, and it is what makes a Bluetooth speaker
+#  groupable with the main player for multiroom.
 #
-#  Concurrency with squeezelite/CamillaDSP: Bluetooth "wins". When a phone
-#  starts actively streaming, hifi-bt-watcher.py pauses the local Lyrion
-#  player (and stops CamillaDSP if it was running, same release-before-open
-#  ordering as the DSP toggle above) so the real DAC is free, then restarts
-#  hifi-bt-aplay.service to open it. That handover reacts to live BlueZ
-#  D-Bus signals from the watcher daemon; this section only turns the whole
-#  subsystem on/off, reports status, and — since Bluetooth carries no cover
-#  art worth trusting (BlueZ's AVRCP art support is unreliable) — resolves
-#  one from an online lookup for the UI's Now Playing overlay.
+#  Nothing here touches the DAC: the built-in player keeps playing
+#  through it while a Bluetooth speaker plays something else. The two
+#  are separate Lyrion players, not two outputs fighting over one card.
+#
+#  🚨 This section does NOT start or stop anything. It writes the
+#  owner's choice to /etc/hifi-player/bluetooth.json and signals
+#  hifi-bt-out.service, which owns the whole runtime: bluetoothd,
+#  BlueALSA (in a2dp-source role), the pairing agent, reconnecting a
+#  speaker that was switched off, and one player unit per connected
+#  speaker. The reason the choice cannot simply be `systemctl enable`
+#  is the A/B image scheme — unit enablement does not survive an image
+#  swap, the state file does (it is seeded by hifi-ab-seed.sh and it is
+#  in the backup). See that unit and hifi-bt-out.py.
+#
+#  What this section does do synchronously is the parts that are a
+#  conversation with the hardware and that the user is waiting on:
+#  scanning, pairing and an explicit connect/disconnect.
 # ──────────────────────────────────────────────────────────────────
-BT_UNITS = ('bluetooth.service', 'hifi-bluealsa.service', 'hifi-bt-agent.service',
-            'hifi-bt-aplay.service', 'hifi-bt-watcher.service')
 BT_STATE_FILE = '/etc/hifi-player/bluetooth.json'
-BT_NOW_PLAYING_FILE = '/run/hifi-bt/now-playing.json'
-BT_CAMILLA_STOPPED_FLAG = '/run/hifi-bt/camilla-stopped'
-BT_APLAY_SCRIPT = '/usr/local/sbin/hifi-bt-aplay-run'
+BT_STATUS_FILE = '/run/hifi-bt/output.json'
+BT_SUPERVISOR = 'hifi-bt-out.service'
+BT_PLAYER_UNIT = 'hifi-bt-player@{}.service'
+BT_BLUEALSA_UNIT = 'hifi-bluealsa.service'
+# The ALSA plugin squeezelite opens as bluealsa:DEV=<MAC>. The daemon alone is
+# not enough — see the system-bundle/OS-migration split in 0024-bluetooth.sh,
+# where the two halves of this feature can legitimately arrive one update
+# apart, and a half-installed feature must report itself unavailable.
+BT_ALSA_PLUGIN_GLOB = '/usr/lib/*/alsa-lib/libasound_module_pcm_bluealsa.so'
 _BT_MAC_RE = re.compile(r'^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$')
+# The A2DP sink service a speaker or a pair of headphones advertises. Anything
+# without it (a keyboard, a phone, a fitness band) can be paired but will
+# never play, so the UI is told which is which.
+_BT_SINK_UUID = '0000110b'
 _bt_apply_lock = threading.Lock()
 
-def _bt_available():
-    return (_unit_exists('hifi-bluealsa.service')
-            and shutil.which('bluetoothctl') is not None
-            and os.path.exists(BT_APLAY_SCRIPT))
 
-def _read_bt_state():
+def _bt_available():
+    return (shutil.which('bluetoothctl') is not None
+            and _unit_exists(BT_SUPERVISOR)
+            and _unit_exists(BT_BLUEALSA_UNIT)
+            and bool(glob.glob(BT_ALSA_PLUGIN_GLOB)))
+
+
+def _bt_read_doc():
+    """The whole state document. Kept in the file the sink design already
+    used, so backup/restore ("bluetooth" category, which also carries
+    /var/lib/bluetooth and therefore the pairing keys) keeps working
+    unchanged, and so does a restore made before this feature existed."""
     try:
         with open(BT_STATE_FILE) as f:
-            return bool(json.load(f).get('enabled'))
+            doc = json.load(f)
+        if not isinstance(doc, dict):
+            return {'enabled': False, 'speakers': []}
+        doc.setdefault('enabled', False)
+        if not isinstance(doc.get('speakers'), list):
+            doc['speakers'] = []
+        return doc
     except Exception:
-        return False
+        return {'enabled': False, 'speakers': []}
 
-def _write_bt_state(enabled):
+
+def _bt_write_doc(doc):
     os.makedirs(os.path.dirname(BT_STATE_FILE), exist_ok=True)
     tmp = BT_STATE_FILE + '.tmp'
     with open(tmp, 'w') as f:
-        json.dump({'enabled': bool(enabled)}, f)
+        json.dump(doc, f, indent=1)
     os.replace(tmp, BT_STATE_FILE)
 
-def _bt_paired_devices():
-    """[{mac, name, connected}], best-effort — empty on any failure so a
-    flaky bluetoothctl call never breaks the whole status response."""
+
+def _read_bt_state():
+    """Just the master switch. Kept as its own function because
+    set_device_name() (which renames the adapter along with the player) calls
+    it, and because that is all most callers want."""
+    return bool(_bt_read_doc().get('enabled'))
+
+
+def _bt_kick():
+    """Tell the supervisor to re-read the state file now rather than at its
+    next poll, so the UI's follow-up status request isn't answered from a
+    snapshot taken before the change."""
+    try:
+        subprocess.run(['systemctl', 'kill', '-s', 'HUP', BT_SUPERVISOR],
+                       capture_output=True, timeout=10)
+    except Exception:
+        pass
+
+
+def _bt_snapshot():
+    """What the supervisor last saw. Reading a small file beats running
+    bluetoothctl on every status poll from three UIs at once."""
+    try:
+        with open(BT_STATUS_FILE) as f:
+            snap = json.load(f)
+        return snap if isinstance(snap, dict) else {}
+    except Exception:
+        return {}
+
+
+def _bt_player_mac(mac):
+    """A stable, unique player id for the speaker's squeezelite.
+
+    Lyrion keys a player (its name, its volume, which group it is in) on this
+    id, so it has to survive reboots and updates — and it must not collide
+    with another Osmium paired to the same speaker, which is why this device's
+    machine-id goes into the hash and not just the speaker's address. The
+    first byte is forced to locally-administered/unicast so the result can
+    never look like a real manufacturer's address."""
+    try:
+        with open('/etc/machine-id') as f:
+            seed = f.read().strip()
+    except Exception:
+        seed = socket.gethostname()
+    digest = _hashlib.sha256((seed + '|' + mac.upper()).encode()).digest()
+    b = bytearray(digest[:6])
+    b[0] = (b[0] & 0xFE) | 0x02
+    return ':'.join('%02X' % x for x in b)
+
+
+def _bt_clean_name(name, fallback='Bluetooth'):
+    """A player name safe to hand to squeezelite and to show in Lyrion.
+    Spaces are fine (it reaches squeezelite through execv, one argv entry),
+    control characters are not."""
+    name = re.sub(r'[\x00-\x1f\x7f]', '', str(name or '')).strip()
+    return (name[:40] or fallback)
+
+
+def _bt_instance(mac):
+    """'F4:2B:7D:63:98:D7' -> 'f4-2b-7d-63-98-d7', the systemd instance name."""
+    return mac.replace(':', '-').lower()
+
+
+def _bt_device_info(mac):
+    """{name, paired, trusted, connected, audio} for one device, from BlueZ."""
+    info = {'mac': mac, 'name': '', 'paired': False, 'trusted': False,
+            'connected': False, 'audio': False}
+    try:
+        r = subprocess.run(['bluetoothctl', 'info', mac],
+                           capture_output=True, text=True, timeout=10)
+        text = r.stdout or ''
+    except Exception:
+        return info
+    m = re.search(r'^\s*(?:Alias|Name):\s*(.+)$', text, re.M)
+    if m:
+        info['name'] = m.group(1).strip()
+    info['paired'] = 'Paired: yes' in text
+    info['trusted'] = 'Trusted: yes' in text
+    info['connected'] = 'Connected: yes' in text
+    info['audio'] = _BT_SINK_UUID in text.lower()
+    return info
+
+
+def _bt_known_devices():
+    """Everything BlueZ currently knows about: paired devices plus whatever
+    the last scan turned up. Best-effort — an empty list on failure is a UI
+    that says "nothing found", not a broken page."""
     devices = []
     try:
-        r = subprocess.run(['bluetoothctl', 'devices', 'Paired'],
+        r = subprocess.run(['bluetoothctl', 'devices'],
                            capture_output=True, text=True, timeout=10)
-        lines = (r.stdout or '').splitlines()
-        if r.returncode != 0 or not lines:
-            # Older bluez CLIs don't support the "Paired" filter argument.
-            r = subprocess.run(['bluetoothctl', 'paired-devices'],
-                               capture_output=True, text=True, timeout=10)
-            lines = (r.stdout or '').splitlines()
-        for line in lines:
-            m = re.match(r'Device\s+([0-9A-Fa-f:]{17})\s+(.*)', line.strip())
+        for line in (r.stdout or '').splitlines():
+            m = re.match(r'Device\s+([0-9A-Fa-f:]{17})\s*(.*)', line.strip())
             if not m:
                 continue
-            mac, name = m.group(1), m.group(2)
-            info = subprocess.run(['bluetoothctl', 'info', mac],
-                                  capture_output=True, text=True, timeout=10)
-            devices.append({'mac': mac, 'name': name,
-                            'connected': 'Connected: yes' in (info.stdout or '')})
+            mac = m.group(1).upper()
+            info = _bt_device_info(mac)
+            if not info['name']:
+                info['name'] = m.group(2).strip() or mac
+            devices.append(info)
     except Exception:
-        log.exception("_bt_paired_devices failed")
+        log.exception("_bt_known_devices failed")
     return devices
 
-def get_bluetooth_status():
-    try:
-        ac = subprocess.run(['systemctl', 'is-active', 'bluetooth.service'],
-                           capture_output=True, text=True, timeout=10)
-        active = ac.stdout.strip() == 'active'
-        discoverable = False
-        if active:
-            show = subprocess.run(['bluetoothctl', 'show'],
-                                  capture_output=True, text=True, timeout=10)
-            discoverable = 'Discoverable: yes' in (show.stdout or '')
-        return {'available': _bt_available(), 'enabled': _read_bt_state(), 'active': active,
-                'discoverable': discoverable, 'devices': _bt_paired_devices() if active else []}
-    except Exception:
-        log.exception("get_bluetooth_status failed")
-        return {'available': False, 'enabled': False, 'active': False, 'discoverable': False,
-                'devices': [], 'error': _t('bluetooth.statusUnavailable', _lang())}
 
-def set_bluetooth(enable):
-    """Enable or disable the whole Bluetooth subsystem (persists). Serialized
-    so an enable/disable double-click can't interleave with itself."""
+def get_bt_speakers():
+    """Status for the Bluetooth speakers screen: the master switch, the
+    configured speakers with their live state, and whatever else is in range
+    from the last scan."""
+    try:
+        doc = _bt_read_doc()
+        enabled = bool(doc.get('enabled'))
+        snap = _bt_snapshot()
+        live = {str(s.get('mac', '')).upper(): s for s in (snap.get('speakers') or [])}
+
+        speakers = []
+        for sp in doc.get('speakers') or []:
+            mac = str(sp.get('mac', '')).upper()
+            if not _BT_MAC_RE.match(mac):
+                continue
+            state = live.get(mac, {})
+            speakers.append({
+                'mac': mac,
+                'name': sp.get('name') or mac,
+                'player': sp.get('player') or sp.get('name') or mac,
+                'enabled': bool(sp.get('enabled', True)),
+                'autoconnect': bool(sp.get('autoconnect', True)),
+                'codec': sp.get('codec') or '',
+                'connected': bool(state.get('connected')),
+                'playing': bool(state.get('playing')),
+            })
+
+        # In range but not set up yet. Only meaningful while the adapter is
+        # up; with Bluetooth off BlueZ has nothing to tell us.
+        configured = {s['mac'] for s in speakers}
+        found = []
+        if enabled:
+            for dev in _bt_known_devices():
+                if dev['mac'] not in configured:
+                    found.append(dev)
+
+        return {'available': _bt_available(), 'enabled': enabled,
+                'adapter': bool(snap.get('adapter')) if enabled else False,
+                'speakers': speakers, 'found': found}
+    except Exception:
+        log.exception("get_bt_speakers failed")
+        return {'available': False, 'enabled': False, 'adapter': False,
+                'speakers': [], 'found': [],
+                'error': _t('bluetooth.statusUnavailable', _lang())}
+
+
+def _bt_fail(code, **extra):
+    out = {'success': False, 'code': code, 'message': _t(code, _lang())}
+    out.update(extra)
+    return out
+
+
+def _bt_ok(code, **extra):
+    out = {'success': True, 'code': code, 'message': _t(code, _lang())}
+    out.update(extra)
+    out.update(get_bt_speakers())
+    return out
+
+
+def set_bt_enabled(enable):
+    """Turn the whole Bluetooth side on or off. Serialized so a double-tap
+    can't interleave with itself."""
     if enable and not _bt_available():
-        return {'success': False, 'available': False, 'enabled': False, 'active': False,
-                'discoverable': False, 'devices': [],
-                'code': 'bluetooth.unavailableUpdate', 'message': _t('bluetooth.unavailableUpdate', _lang())}
+        return _bt_fail('bluetooth.unavailableUpdate', **get_bt_speakers())
     with _bt_apply_lock:
-        _write_bt_state(enable)
+        doc = _bt_read_doc()
+        doc['enabled'] = bool(enable)
         try:
-            if enable:
-                subprocess.run(['modprobe', 'btusb'], capture_output=True, timeout=15)
-                subprocess.run(['modprobe', 'bluetooth'], capture_output=True, timeout=15)
-                subprocess.run(['sudo', 'systemctl', 'unmask', 'bluetooth.service'],
-                               capture_output=True, text=True, timeout=15)
-                for unit in BT_UNITS:
-                    r = subprocess.run(['sudo', 'systemctl', 'enable', '--now', unit],
-                                       capture_output=True, text=True, timeout=30)
-                    if r.returncode != 0:
-                        log.error("set_bluetooth enable %s failed: %s", unit, (r.stderr or '').strip())
-                # hifi-bt-watcher.py sets power/pairable/alias once the adapter
-                # comes up — give it a moment before the UI's first status poll.
-                for _ in range(10):
-                    r = subprocess.run(['bluetoothctl', 'list'],
-                                       capture_output=True, text=True, timeout=5)
-                    if (r.stdout or '').strip():
-                        break
-                    time.sleep(1)
-            else:
-                for unit in reversed(BT_UNITS):
-                    subprocess.run(['sudo', 'systemctl', 'disable', '--now', unit],
-                                   capture_output=True, text=True, timeout=30)
-                subprocess.run(['sudo', 'systemctl', 'mask', 'bluetooth.service'],
-                               capture_output=True, text=True, timeout=15)
-                # Never leave DSP off just because Bluetooth is being turned off.
-                if os.path.exists(BT_CAMILLA_STOPPED_FLAG):
-                    _run(['systemctl', 'start', DSP_UNIT], timeout=30)
-                    try:
-                        os.remove(BT_CAMILLA_STOPPED_FLAG)
-                    except OSError:
-                        pass
-                subprocess.run(['modprobe', '-r', 'btusb'], capture_output=True, timeout=15)
+            _bt_write_doc(doc)
         except Exception:
-            log.exception("set_bluetooth failed")
-            status = get_bluetooth_status()
-            status['success'] = False
-            status['code'] = 'bluetooth.opFailed'
-            status['message'] = _t('bluetooth.opFailed', _lang())
-            return status
-    status = get_bluetooth_status()
-    status['success'] = True
-    status['message'] = _t('bluetooth.enabled' if enable else 'bluetooth.disabled', _lang())
-    return status
+            log.exception("set_bt_enabled: could not persist the choice")
+            return _bt_fail('bluetooth.opFailed', **get_bt_speakers())
+        _bt_kick()
+        if enable:
+            # The supervisor has to start bluetoothd and power the adapter up
+            # before the screen's first status poll means anything.
+            for _ in range(15):
+                time.sleep(1)
+                if _bt_snapshot().get('adapter'):
+                    break
+    return _bt_ok('bluetooth.enabled' if enable else 'bluetooth.disabled')
 
-def set_bt_discoverable():
+
+def bt_scan(seconds=10):
+    """Look for speakers in range. Blocking on purpose: the screen shows a
+    spinner and the answer is the list, which is easier to get right than a
+    progress endpoint for something that takes ten seconds."""
     if not _bt_available():
-        return {'success': False, 'code': 'bluetooth.unavailable',
-                'message': _t('bluetooth.unavailable', _lang())}
+        return _bt_fail('bluetooth.unavailable')
+    if not _read_bt_state():
+        return _bt_fail('bluetooth.turnOnFirst')
     try:
-        subprocess.run(['bluetoothctl', 'discoverable-timeout', '120'],
-                       capture_output=True, text=True, timeout=10)
-        r = subprocess.run(['bluetoothctl', 'discoverable', 'on'],
-                           capture_output=True, text=True, timeout=10)
-        if r.returncode != 0:
-            return {'success': False, 'code': 'bluetooth.cannotMakeVisible',
-                    'message': _t('bluetooth.cannotMakeVisible', _lang())}
+        seconds = max(3, min(int(seconds or 10), 30))
+    except (TypeError, ValueError):
+        seconds = 10
+    if not _bt_snapshot().get('adapter'):
+        return _bt_fail('bluetooth.noAdapter', **get_bt_speakers())
+    try:
+        # --timeout makes bluetoothctl run discovery for that long and then
+        # stop it, which matters: discovery left running eats airtime and is
+        # audible as stutter on a speaker that is already playing.
+        subprocess.run(['bluetoothctl', '--timeout', str(seconds), 'scan', 'on'],
+                       capture_output=True, text=True, timeout=seconds + 15)
     except Exception:
-        log.exception("set_bt_discoverable failed")
-        return {'success': False, 'code': 'bluetooth.cannotMakeVisible',
-                'message': _t('bluetooth.cannotMakeVisible', _lang())}
-    return {'success': True, 'seconds': 120, 'message': _t('bluetooth.visibleFor2Min', _lang())}
+        log.exception("bt_scan failed")
+        return _bt_fail('bluetooth.scanFailed', **get_bt_speakers())
+    return _bt_ok('bluetooth.scanDone')
 
-def bt_forget(mac):
-    """Unpair/remove a device. MAC comes straight from a network request, so
-    it's validated against a strict address pattern before ever reaching a
-    shell-adjacent subprocess argument."""
+
+def bt_add_speaker(mac, player=None):
+    """Pair, trust and set a speaker up as a player, in one step.
+
+    Trusting matters as much as pairing here: a trusted speaker may reconnect
+    by itself when it is switched on, and BlueZ accepts it without asking
+    anyone. The MAC comes straight off a network request, so it is checked
+    against a strict address pattern before it reaches a subprocess argument."""
+    if not _bt_available():
+        return _bt_fail('bluetooth.unavailable')
     if not mac or not _BT_MAC_RE.match(mac):
-        return {'success': False, 'code': 'bluetooth.invalidAddress',
-                'message': _t('bluetooth.invalidAddress', _lang())}
-    try:
-        r = subprocess.run(['bluetoothctl', 'remove', mac],
-                           capture_output=True, text=True, timeout=10)
-        if r.returncode != 0:
-            return {'success': False, 'code': 'bluetooth.deviceNotFound',
-                    'message': _t('bluetooth.deviceNotFound', _lang())}
-    except Exception:
-        log.exception("bt_forget failed")
-        return {'success': False, 'code': 'bluetooth.forgetFailed',
-                'message': _t('bluetooth.forgetFailed', _lang())}
-    return {'success': True, 'devices': _bt_paired_devices(), 'message': _t('bluetooth.forgotten', _lang())}
+        return _bt_fail('bluetooth.invalidAddress')
+    if not _read_bt_state():
+        return _bt_fail('bluetooth.turnOnFirst')
+    mac = mac.upper()
 
-# Cover art never arrives over Bluetooth (AVRCP art support in BlueZ is
-# experimental/unreliable, and cars/phones mostly rely on their own
-# proprietary stacks for it) — best-effort online lookup by title+artist
-# instead. Tiny in-memory cache so repeated Now Playing polls during the
-# same track don't refetch; capped so a long BT listening session (many
-# different tracks) can't grow it unbounded.
-_bt_cover_cache = {}
-_BT_COVER_CACHE_MAX = 200
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        if any(str(s.get('mac', '')).upper() == mac for s in doc['speakers']):
+            return _bt_fail('bluetooth.alreadyAdded', **get_bt_speakers())
 
-def _bt_cover_lookup(title, artist, album):
-    key = (title or '', artist or '', album or '')
-    if key == ('', '', ''):
-        return None
-    if key in _bt_cover_cache:
-        return _bt_cover_cache[key]
-    cover = None
-    try:
-        term = urllib.parse.quote(f'{artist} {title}'.strip())
-        url = f'https://itunes.apple.com/search?term={term}&media=music&entity=song&limit=1'
-        req = urllib.request.Request(url, headers={'User-Agent': 'OsmiumSound/1.0'})
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            data = json.loads(resp.read())
-        results = data.get('results') or []
-        if results:
-            # ...100x100bb.jpg -> a larger cover; still tiny/fast over LAN.
-            art = results[0].get('artworkUrl100')
-            if art:
-                cover = art.replace('100x100bb', '600x600bb')
-    except Exception:
-        cover = None  # offline / no match / rate-limited — fine, just no art
-    if len(_bt_cover_cache) >= _BT_COVER_CACHE_MAX:
-        _bt_cover_cache.clear()
-    _bt_cover_cache[key] = cover
-    return cover
+        info = _bt_device_info(mac)
+        if not info['paired']:
+            try:
+                # Discovery must stop before pairing: BlueZ will not pair while
+                # the adapter is still hopping around looking for devices.
+                subprocess.run(['bluetoothctl', 'scan', 'off'],
+                               capture_output=True, text=True, timeout=10)
+                r = subprocess.run(['bluetoothctl', 'pair', mac],
+                                   capture_output=True, text=True, timeout=60)
+            except Exception:
+                log.exception("bt_add_speaker: pair failed")
+                return _bt_fail('bluetooth.pairFailed', **get_bt_speakers())
+            info = _bt_device_info(mac)
+            if not info['paired']:
+                log.error("bt pair %s failed: %s", mac, (r.stdout or r.stderr or '').strip()[-200:])
+                return _bt_fail('bluetooth.pairFailed', **get_bt_speakers())
 
-def get_bluetooth_now_playing():
+        subprocess.run(['bluetoothctl', 'trust', mac], capture_output=True, timeout=15)
+
+        name = _bt_clean_name(info['name'] or player or mac, mac)
+        doc['speakers'].append({
+            'mac': mac,
+            'name': name,
+            'player': _bt_clean_name(player or name, name),
+            'player_mac': _bt_player_mac(mac),
+            'enabled': True,
+            'autoconnect': True,
+            'codec': '',
+        })
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_add_speaker: could not persist the speaker")
+            return _bt_fail('bluetooth.opFailed', **get_bt_speakers())
+    _bt_kick()
+    # The supervisor connects it and starts its player; give it one cycle so
+    # the reply already shows the speaker as connected.
+    time.sleep(3)
+    return _bt_ok('bluetooth.speakerAdded')
+
+
+def bt_remove_speaker(mac):
+    """Forget a speaker: its player goes away and BlueZ drops the pairing."""
+    if not mac or not _BT_MAC_RE.match(mac):
+        return _bt_fail('bluetooth.invalidAddress')
+    mac = mac.upper()
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        before = len(doc['speakers'])
+        doc['speakers'] = [s for s in doc['speakers']
+                           if str(s.get('mac', '')).upper() != mac]
+        if len(doc['speakers']) == before:
+            return _bt_fail('bluetooth.deviceNotFound', **get_bt_speakers())
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_remove_speaker: could not persist")
+            return _bt_fail('bluetooth.opFailed', **get_bt_speakers())
+    # Stop the player first, then unpair: removing a device out from under a
+    # squeezelite that still has its PCM open is how you get a hung ALSA
+    # handle instead of a clean exit.
+    _bt_kick()
+    time.sleep(1)
     try:
-        with open(BT_NOW_PLAYING_FILE) as f:
-            np = json.load(f)
+        subprocess.run(['systemctl', 'stop', BT_PLAYER_UNIT.format(_bt_instance(mac))],
+                       capture_output=True, timeout=30)
+        subprocess.run(['bluetoothctl', 'remove', mac], capture_output=True, timeout=20)
     except Exception:
-        np = {}
-    if not np.get('active'):
-        return {'active': False}
-    np['cover_url'] = _bt_cover_lookup(np.get('title'), np.get('artist'), np.get('album'))
-    return np
+        log.exception("bt_remove_speaker: unpair failed")
+    _bt_kick()
+    return _bt_ok('bluetooth.forgotten')
+
+
+def bt_update_speaker(mac, fields):
+    """Rename a speaker's player, or switch it off without forgetting it."""
+    if not mac or not _BT_MAC_RE.match(mac):
+        return _bt_fail('bluetooth.invalidAddress')
+    mac = mac.upper()
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        target = None
+        for s in doc['speakers']:
+            if str(s.get('mac', '')).upper() == mac:
+                target = s
+                break
+        if target is None:
+            return _bt_fail('bluetooth.deviceNotFound', **get_bt_speakers())
+        if 'player' in fields:
+            target['player'] = _bt_clean_name(fields['player'], target.get('name') or mac)
+        if 'enabled' in fields:
+            target['enabled'] = bool(fields['enabled'])
+        if 'autoconnect' in fields:
+            target['autoconnect'] = bool(fields['autoconnect'])
+        if 'codec' in fields:
+            codec = re.sub(r'[^A-Za-z0-9_-]', '', str(fields.get('codec') or ''))[:16]
+            target['codec'] = codec
+        target.setdefault('player_mac', _bt_player_mac(mac))
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_update_speaker: could not persist")
+            return _bt_fail('bluetooth.opFailed', **get_bt_speakers())
+    # A rename or a codec change only reaches Lyrion when squeezelite restarts
+    # with the new arguments; the supervisor does that on its next pass, but
+    # restarting it here means the new name is already there when the screen
+    # refreshes.
+    unit = BT_PLAYER_UNIT.format(_bt_instance(mac))
+    try:
+        if subprocess.run(['systemctl', 'is-active', unit],
+                          capture_output=True, text=True, timeout=10).stdout.strip() == 'active':
+            subprocess.run(['systemctl', 'restart', unit], capture_output=True, timeout=30)
+    except Exception:
+        log.exception("bt_update_speaker: player restart failed")
+    _bt_kick()
+    return _bt_ok('bluetooth.saved')
+
+
+def bt_connect(mac, connect=True):
+    """Connect or disconnect a speaker by hand. Disconnecting also parks the
+    automatic retry (autoconnect off), because a speaker the owner just
+    disconnected reconnecting fifteen seconds later is not a feature."""
+    if not mac or not _BT_MAC_RE.match(mac):
+        return _bt_fail('bluetooth.invalidAddress')
+    if not _read_bt_state():
+        return _bt_fail('bluetooth.turnOnFirst')
+    mac = mac.upper()
+    try:
+        r = subprocess.run(['bluetoothctl', 'connect' if connect else 'disconnect', mac],
+                           capture_output=True, text=True, timeout=40)
+    except Exception:
+        log.exception("bt_connect failed")
+        return _bt_fail('bluetooth.connectFailed' if connect else 'bluetooth.opFailed',
+                        **get_bt_speakers())
+    ok = _bt_device_info(mac)['connected'] == bool(connect)
+    if not ok and connect:
+        log.error("bt connect %s failed: %s", mac, (r.stdout or r.stderr or '').strip()[-200:])
+        return _bt_fail('bluetooth.connectFailed', **get_bt_speakers())
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        for s in doc['speakers']:
+            if str(s.get('mac', '')).upper() == mac:
+                s['autoconnect'] = bool(connect)
+                break
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_connect: could not persist autoconnect")
+    _bt_kick()
+    time.sleep(2)
+    return _bt_ok('bluetooth.connected' if connect else 'bluetooth.disconnected')
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
@@ -8332,27 +8571,49 @@ def api_tidal_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_tidal(bool(data.get('enable'))))
 
+# ── Bluetooth speakers (A2DP source) ──────────────────────────────
+# /bluetooth_status keeps its old path: it is the one Bluetooth route that
+# ever had callers outside this file, and answering it with the new shape
+# costs nothing. The sink-era routes (/bluetooth_discoverable,
+# /bluetooth_now_playing) are gone with the sink role itself.
 @app.route('/bluetooth_status', methods=['GET'])
-def api_bluetooth_status():
-    return jsonify(get_bluetooth_status())
+@app.route('/bt_speakers', methods=['GET'])
+def api_bt_speakers():
+    return jsonify(get_bt_speakers())
 
 @app.route('/bluetooth_set', methods=['POST'])
-def api_bluetooth_set():
+@app.route('/bt_speakers/enable', methods=['POST'])
+def api_bt_enable():
     data = request.get_json(silent=True) or {}
-    return jsonify(set_bluetooth(bool(data.get('enable'))))
+    return jsonify(set_bt_enabled(bool(data.get('enable'))))
 
-@app.route('/bluetooth_discoverable', methods=['POST'])
-def api_bluetooth_discoverable():
-    return jsonify(set_bt_discoverable())
+@app.route('/bt_speakers/scan', methods=['POST'])
+def api_bt_scan():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_scan(data.get('seconds', 10)))
+
+@app.route('/bt_speakers/add', methods=['POST'])
+def api_bt_add():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_add_speaker(data.get('mac'), data.get('player')))
 
 @app.route('/bluetooth_forget', methods=['POST'])
-def api_bluetooth_forget():
+@app.route('/bt_speakers/remove', methods=['POST'])
+def api_bt_remove():
     data = request.get_json(silent=True) or {}
-    return jsonify(bt_forget(data.get('mac')))
+    return jsonify(bt_remove_speaker(data.get('mac')))
 
-@app.route('/bluetooth_now_playing', methods=['GET'])
-def api_bluetooth_now_playing():
-    return jsonify(get_bluetooth_now_playing())
+@app.route('/bt_speakers/update', methods=['POST'])
+def api_bt_update():
+    data = request.get_json(silent=True) or {}
+    fields = {k: data[k] for k in ('player', 'enabled', 'autoconnect', 'codec')
+              if k in data}
+    return jsonify(bt_update_speaker(data.get('mac'), fields))
+
+@app.route('/bt_speakers/connect', methods=['POST'])
+def api_bt_connect():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_connect(data.get('mac'), bool(data.get('connect', True))))
 
 @app.route('/show_global_keyboard', methods=['POST'])
 def api_show_global_keyboard():

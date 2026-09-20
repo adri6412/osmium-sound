@@ -1,0 +1,20 @@
+[Unit]
+# Osmium Sound — Bluetooth pairing agent.
+#
+# A headless box has no keypad and no display, so it pairs as
+# NoInputNoOutput: speakers and headphones use "Just Works" pairing, which
+# needs no PIN on either side. Without a registered agent BlueZ refuses to
+# pair at all, so this is what makes "Scan" -> "Pair" work in Settings.
+#
+# Started by hifi-bt-out.service, never enabled — same reason as
+# hifi-bluealsa.service above.
+Description=Osmium Sound - Bluetooth pairing agent (no PIN, headless)
+After=bluetooth.service
+Requires=bluetooth.service
+BindsTo=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bt-agent -c NoInputNoOutput
+Restart=always
+RestartSec=3

@@ -29,6 +29,15 @@ chmod +x /usr/local/sbin/hifi-ota-update.sh /usr/local/sbin/hifi-lyrion-update.s
          /usr/local/sbin/hifi-ota-enroll-key.sh /usr/local/sbin/hifi-ota-alpha-toggle.sh \
          2>/dev/null || true
 
+# 🚨 This repo has core.filemode=false, so git records a new file as 644 no
+# matter what it looks like on disk, and live-build copies that mode straight
+# into the image. hifi-bluealsa.service runs the launcher directly, so without
+# this line Bluetooth output is a unit that dies with "Permission denied".
+# (The system OTA path already does the same, broadly, in hifi-system-update.sh.)
+echo "I: [hifi] making the Bluetooth speaker scripts executable"
+chmod +x /usr/local/sbin/hifi-bluealsa-run.sh /usr/local/sbin/hifi-bt-out.py \
+         /usr/local/sbin/hifi-bt-player-run.py 2>/dev/null || true
+
 echo "I: [hifi] seeding UI_VERSION if missing"
 [ -f "$APPDIR/UI_VERSION" ] || echo "unknown" > "$APPDIR/UI_VERSION"
 

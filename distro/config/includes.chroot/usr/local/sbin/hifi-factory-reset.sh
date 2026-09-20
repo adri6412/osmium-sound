@@ -28,9 +28,14 @@ log() { echo "I: [hifi-factory-reset] $*"; }
 # ── 1) stop services that hold user state ────────────────────────────
 log "stopping user-state services"
 for unit in smbd nmbd wsdd2 hifi-bluealsa hifi-bt-agent hifi-bt-aplay hifi-bt-watcher \
-            bluetooth camilladsp lyrionmusicserver hifi-backup; do
+            hifi-bt-out bluetooth camilladsp lyrionmusicserver hifi-backup; do
     systemctl stop "$unit" 2>/dev/null || true
 done
+# One squeezelite per paired Bluetooth speaker (hifi-bt-player@<mac>): the
+# instances are created on the fly, so they have to be swept by pattern rather
+# than named. hifi-bt-out is stopped above first, or it would start them again
+# between this line and the moment bluetooth.json is deleted further down.
+systemctl stop 'hifi-bt-player@*' 2>/dev/null || true
 # Both are re-enabled by sources_server.py the moment a disk is adopted again;
 # leaving them enabled here would announce a server with no shares after a reset.
 systemctl disable smbd wsdd2 2>/dev/null || true

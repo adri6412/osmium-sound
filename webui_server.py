@@ -992,6 +992,15 @@ _AUTH_ROUTES = {
     ('/api/system/anim_store/install', 'POST'): '/anim_store/install',
     ('/api/system/anim_store/remove', 'POST'): '/anim_store/remove',
     ('/api/system/anim_store/seen', 'POST'): '/anim_store/seen',
+    # Bluetooth speakers (A2DP source): pair one and it becomes a Lyrion
+    # player of its own, next to this device's built-in one.
+    ('/api/system/bt_speakers', 'GET'): '/bt_speakers',
+    ('/api/system/bt_speakers/enable', 'POST'): '/bt_speakers/enable',
+    ('/api/system/bt_speakers/scan', 'POST'): '/bt_speakers/scan',
+    ('/api/system/bt_speakers/add', 'POST'): '/bt_speakers/add',
+    ('/api/system/bt_speakers/remove', 'POST'): '/bt_speakers/remove',
+    ('/api/system/bt_speakers/update', 'POST'): '/bt_speakers/update',
+    ('/api/system/bt_speakers/connect', 'POST'): '/bt_speakers/connect',
     ('/api/system/pointer_status', 'GET'): '/pointer_status',
     ('/api/system/pointer_set', 'POST'): '/pointer_set',
     ('/api/system/nowplaying_autoexpand', 'GET'): '/nowplaying_autoexpand',
@@ -1852,6 +1861,12 @@ def _handle_proxy(local_path, method):
     data, status = _proxy(API_BASE, api_path, method=method, body=body,
                           timeout=220 if 'debug_kdump' in api_path  # may apt-get install kdump-tools
                           else 200 if 'tailscale_install' in api_path
+                          # Bluetooth talks to hardware that answers when it
+                          # feels like it: a scan runs for its full window, and
+                          # pairing waits on a speaker whose button someone
+                          # still has to press. api_server bounds each of these
+                          # itself — this only has to outlast it.
+                          else 120 if api_path.startswith('/bt_speakers')
                           # Joining a Wi-Fi network or bringing the cable up
                           # ends in a DHCP wait, so these outlast the default
                           # budget on any slow network — and cutting them off
