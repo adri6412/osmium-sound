@@ -137,7 +137,7 @@
       "shareLabel": "Shared folder name",
       "device": "Device",
       "folder": "Folder",
-      "writeHint": "Leave this off if the folder only has to be listened to. Turn it on to let the player save into it — needed to copy CDs onto it.",
+      "writeHint": "Lets the player save into this folder — needed to copy CDs onto it. Turn it off if the folder only has to be listened to.",
       "allowWrite": "Let the player write into this folder",
       "addNow": "Add this folder",
       "added": "{name} added — the music is being read now.",

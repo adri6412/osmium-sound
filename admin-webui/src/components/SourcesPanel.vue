@@ -211,7 +211,7 @@ const wiz = reactive({
   manual: false,         // "I'll type it myself"
   host: '', name: '', share: '',
   username: '', password: '',
-  rw: false,
+  rw: true,
   busy: false,
   err: '', detail: '', detailOpen: false,
   needsAuth: false,
@@ -228,7 +228,7 @@ function wizStopScan() {
 function wizReset() {
   wizStopScan();
   Object.assign(wiz, { step: 0, manual: false, host: '', name: '', share: '',
-                       username: '', password: '', rw: false, busy: false,
+                       username: '', password: '', rw: true, busy: false,
                        err: '', detail: '', detailOpen: false,
                        needsAuth: false, canList: true, noClient: false });
   Object.assign(scan, { state: '', progress: 0, hosts: [] });

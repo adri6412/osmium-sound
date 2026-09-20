@@ -508,6 +508,8 @@ MESSAGES = {
     'mount.smbUnreachable': {'en': "Can't reach {server} on the network (port 445)",
                              'it': 'Impossibile raggiungere {server} sulla rete (porta 445)'},
     'mount.mountedSmb': {'en': 'Mounted (SMB {vers})', 'it': 'Montato (SMB {vers})'},
+    'mount.mountedSmbRo': {'en': 'Mounted read-only (SMB {vers}): the other device does not allow writing into this folder',
+                           'it': 'Montato in sola lettura (SMB {vers}): l\'altro dispositivo non consente di scrivere in questa cartella'},
     'mount.genericFailed': {'en': 'Mount failed', 'it': 'Mount fallito'},
     'mount.missingIdentifiers': {'en': 'Missing partuuid/uuid or mount point',
                                  'it': 'partuuid/uuid o mountpoint mancante'},

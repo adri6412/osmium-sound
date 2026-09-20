@@ -433,7 +433,7 @@
       "wizDevice": "Device",
       "wizFolder": "Folder",
       "wizAllowWrite": "Let the player write into this folder",
-      "wizWriteHint": "Needed to copy CDs onto it. Leave it off if the folder only has to be listened to.",
+      "wizWriteHint": "Lets the player save into it — needed to copy CDs onto it. Turn it off if the folder only has to be listened to.",
       "wizAddNow": "Add this folder",
       "wizListFailed": "Could not read the shared folders from this device.",
       "wizOpenFailed": "Could not open this folder.",

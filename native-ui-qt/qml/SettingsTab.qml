@@ -43,7 +43,7 @@ Item {
     property bool wizManual: false
     property string wizHost: ""; property string wizName: ""; property string wizShare: ""
     property string wizUser: ""; property string wizPw: ""
-    property bool wizRw: false; property bool wizBusy: false
+    property bool wizRw: true; property bool wizBusy: false
     property string wizErr: ""; property string wizDetail: ""; property bool wizDetailOpen: false
     property var wizShares: []           // [{name, comment}]
     property bool wizNeedsAuth: false
@@ -529,7 +529,7 @@ Item {
     // ─── procedura guidata "cartella di rete" ──────────────────────────────
     function wizReset() {
         wiz = -1; wizManual = false; wizHost = ""; wizName = ""; wizShare = ""
-        wizUser = ""; wizPw = ""; wizRw = false; wizBusy = false
+        wizUser = ""; wizPw = ""; wizRw = true; wizBusy = false
         wizErr = ""; wizDetail = ""; wizDetailOpen = false
         wizShares = []; wizNeedsAuth = false; wizCanList = true; wizNoClient = false
         scanState = ""; scanPct = 0; scanHosts = []

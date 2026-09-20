@@ -250,6 +250,15 @@ def _run_json(cmd, timeout=30):
 
 
 # ─────────────────────────── SMB mounting ───────────────────────────
+def _smb_wants_rw(src):
+    """Is this SMB source meant to be writable? The one place that answers it.
+
+    Missing key = yes: read-write is the default for every source type, and a
+    source stored before that changed carries an explicit "rw" either way, so
+    nobody's deliberate read-only choice is overridden by this."""
+    return bool(src.get("rw", True))
+
+
 def mount_smb(src):
     """Mount one SMB source. Returns (ok, message, detail).
 
@@ -258,14 +267,22 @@ def mount_smb(src):
     "technical details" line -- handing someone NT_STATUS_LOGON_FAILURE as
     the whole error is exactly what this replaces.
 
-    Read-only by default (matches "add a NAS folder to browse into the
-    library" — most SMB sources are someone else's existing music
-    collection, not a target the appliance should be able to modify).
-    src["rw"]=True mounts read-write instead, with the same uid=/gid=
-    mapping the FAT-like adopted-disk mounts use (mount.cifs presents every
-    file under that uid/gid regardless of what wrote it, so unlike ext4
-    there's no post-write chown step needed) — opt-in, e.g. for CD-ripping
-    onto a NAS share (see _rip_writable_sources())."""
+    Read-write by default, like every other source type (adopted internal
+    and USB disks already mount rw): a share someone adds here is their own
+    NAS folder, and an appliance that cannot rip a CD onto it or delete a
+    file from it surprised owners far more often than the read-only default
+    protected anyone. The mount carries the same uid=/gid= mapping the
+    FAT-like adopted-disk mounts use (mount.cifs presents every file under
+    that uid/gid regardless of what wrote it, so unlike ext4 there's no
+    post-write chown step needed).
+
+    src["rw"]=False mounts read-only instead. So does a server that refuses
+    to hand the share over writable at all: rather than leave the owner
+    unable to add a share their NAS exports read-only, the read-only options
+    are tried before giving up, and src["rw"] is flipped to False so the
+    stored state tells the truth about what they got (the list shows it
+    read-only, and _rip_writable_sources() won't offer it as a rip
+    destination)."""
     server = src["server"].strip().strip("/")
     share = src["share"].strip().strip("/")
     username = src.get("username", "")
@@ -298,11 +315,13 @@ def mount_smb(src):
         return False, _ht('mount.smbUnreachable', _hlang(), server=server), ""
 
     unc = f"//{server}/{share}"
-    if src.get("rw"):
+    want_rw = _smb_wants_rw(src)
+    ro_opts = "uid=0,gid=0,iocharset=utf8,ro,file_mode=0644,dir_mode=0755"
+    passes = [(ro_opts, False)]
+    if want_rw:
         uid, gid = _ensure_samba_uid_gid()
-        base_opts = f"uid={uid},gid={gid},iocharset=utf8,rw,file_mode=0664,dir_mode=0775"
-    else:
-        base_opts = "uid=0,gid=0,iocharset=utf8,ro,file_mode=0644,dir_mode=0755"
+        rw_opts = f"uid={uid},gid={gid},iocharset=utf8,rw,file_mode=0664,dir_mode=0775"
+        passes = [(rw_opts, True), (ro_opts, False)]
 
     cred_path = None
     try:
@@ -318,13 +337,29 @@ def mount_smb(src):
             cred_opt = ",guest"
 
         last = ""
-        for vers in ("3.1.1", "3.0", "2.1", "1.0"):
-            opts = f"{base_opts}{cred_opt},vers={vers}"
-            r = _run(["mount", "-t", "cifs", unc, mountpoint, "-o", opts])
-            if r.returncode == 0:
-                return True, _ht('mount.mountedSmb', _hlang(), vers=vers), ""
-            last = (r.stderr or r.stdout).strip()
-        code = _smb_reason(last)
+        code = None
+        for base_opts, writable in passes:
+            for vers in ("3.1.1", "3.0", "2.1", "1.0"):
+                opts = f"{base_opts}{cred_opt},vers={vers}"
+                r = _run(["mount", "-t", "cifs", unc, mountpoint, "-o", opts])
+                if r.returncode == 0:
+                    if want_rw and not writable:
+                        # Writable was asked for and refused: keep the share
+                        # rather than the error, and record what it really is
+                        # (api_add_smb() saves this dict right after we
+                        # return, so the flip is persisted with it).
+                        src["rw"] = False
+                        return True, _ht('mount.mountedSmbRo', _hlang(), vers=vers), last
+                    return True, _ht('mount.mountedSmb', _hlang(), vers=vers), ""
+                last = (r.stderr or r.stdout).strip()
+            code = _smb_reason(last)
+            if code:
+                # A password, a share name or a server that isn't answering:
+                # the read-only pass would fail the same way, four mounts and
+                # four timeouts later. Only an unrecognised failure (which is
+                # what "mount error(30): Read-only file system" comes out as)
+                # is worth retrying without the write options.
+                break
         return False, (_m(code) if code else _ht('mount.genericFailed', _hlang())), last
     finally:
         if cred_path:
@@ -5412,9 +5447,10 @@ def api_add_smb():
         "username": (data.get("username") or "").strip(),
         "password": data.get("password") or "",
         "mountpoint": os.path.join(MOUNT_ROOT, _slug(server, share)),
-        # Opt-in — see mount_smb()'s docstring. Off by default: most SMB
-        # sources are an existing NAS library the appliance should only read.
-        "rw": bool(data.get("rw")),
+        # On by default — see mount_smb()'s docstring. A caller that asks
+        # for read-only still gets it, and so does a share the server only
+        # lets us read (mount_smb() flips this back itself).
+        "rw": bool(data.get("rw", True)),
     }
     if defer:
         # current_paths() (and so both _lyrion_push_live() and the restart-
@@ -5730,7 +5766,7 @@ def api_set_smb_rw(sid):
         src = next((s for s in state["sources"] if s.get("id") == sid and s.get("type") == "smb"), None)
         if not src:
             return _err("msg.sourceNotFound", 404)
-        if src.get("rw", False) == rw:
+        if _smb_wants_rw(src) == rw:
             return jsonify({"success": True, "message": _m("msg.noChange")})
         src["rw"] = rw
         save_state(state)
@@ -6572,12 +6608,12 @@ def _rip_watcher():
 
 def _rip_writable_sources():
     """Sources the rip can write into: adopted (rw, hifimusic-owned) internal
-    or USB disks, plus any SMB share explicitly mounted read-write (opt-in —
-    see mount_smb())."""
+    or USB disks, plus any SMB share mounted read-write — which is the
+    default, but not one the server always allows (see mount_smb())."""
     out = []
     for s in load_state().get("sources", []):
         t = s.get("type")
-        if t not in ("internal", "usb") and not (t == "smb" and s.get("rw")):
+        if t not in ("internal", "usb") and not (t == "smb" and _smb_wants_rw(s)):
             continue
         mp = s.get("mountpoint") or ""
         if os.path.ismount(mp) and os.access(mp, os.W_OK):
@@ -7331,7 +7367,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
     <div style="flex:1"><label data-i18n="sources.pass"></label><input id="smbPass" type="password" placeholder="••••••"></div></div>
     <div style="height:10px"></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--silver)">
-      <input type="checkbox" id="smbRw" style="width:auto"> <span data-i18n="sources.smbRw"></span>
+      <input type="checkbox" id="smbRw" style="width:auto" checked> <span data-i18n="sources.smbRw"></span>
     </label>
     <div style="height:12px"></div>
     <button class="ghost" onclick="addSmb()" data-i18n="sources.mountAndAdd"></button>
@@ -7490,7 +7526,7 @@ async function addSmb(){
   const m=document.getElementById('smbMsg'); m.textContent=T('sources.mounting');
   const r=await j('/api/sources/smb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   m.textContent=r.success?(T('sources.mounted')+' '+(r.message||'')):(r.message||T('sources.error')); m.className='msg '+(r.success?'ok':'bad');
-  if(r.success){smbPass.value='';document.getElementById('smbRw').checked=false;load();}
+  if(r.success){smbPass.value='';document.getElementById('smbRw').checked=true;load();}
 }
 async function rm(id){ await j('/api/sources/'+id,{method:'DELETE'}); load(); }
 async function setSmbRw(id,rw){

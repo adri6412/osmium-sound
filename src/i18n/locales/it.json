@@ -137,7 +137,7 @@
       "shareLabel": "Nome della cartella condivisa",
       "device": "Dispositivo",
       "folder": "Cartella",
-      "writeHint": "Lascialo spento se la cartella deve solo essere ascoltata. Accendilo per permettere al lettore di salvarci dentro: serve per copiarci i CD.",
+      "writeHint": "Permette al lettore di salvare in questa cartella: serve per copiarci i CD. Spegnilo se la cartella deve solo essere ascoltata.",
       "allowWrite": "Permetti al lettore di scrivere in questa cartella",
       "addNow": "Aggiungi questa cartella",
       "added": "{name} aggiunta: sto leggendo la musica.",

@@ -433,7 +433,7 @@
       "wizDevice": "Dispositivo",
       "wizFolder": "Cartella",
       "wizAllowWrite": "Permetti al lettore di scrivere in questa cartella",
-      "wizWriteHint": "Serve per copiarci i CD. Lascialo spento se la cartella deve solo essere ascoltata.",
+      "wizWriteHint": "Permette al lettore di salvarci dentro: serve per copiarci i CD. Spegnilo se la cartella deve solo essere ascoltata.",
       "wizAddNow": "Aggiungi questa cartella",
       "wizListFailed": "Non sono riuscito a leggere le cartelle condivise di questo dispositivo.",
       "wizOpenFailed": "Non sono riuscito ad aprire questa cartella.",
