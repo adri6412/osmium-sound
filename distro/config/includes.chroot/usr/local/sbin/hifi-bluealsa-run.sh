@@ -36,5 +36,17 @@ done
 # reopens it on the next track. Holding the Bluetooth transport open for a few
 # seconds turns that into a gapless resume instead of a fresh A2DP handshake,
 # which on most speakers costs a good second of silence.
-# shellcheck disable=SC2086  # $CODECS is a deliberate list of -c arguments
-exec "$BIN" -p a2dp-source --keep-alive=10 $CODECS "$@"
+#
+# 🚨 Asked for the same way as the codecs, and for the same reason: the option
+# only exists from BlueALSA 4.0, and a device that came up through the OTA
+# path rather than the image can still be on 3.x. An option the daemon does
+# not know makes it exit on the spot — and since the unit restarts it for
+# ever, what the owner would get is not "no gapless resume" but every speaker
+# dropping out every three seconds, with nothing in the UI to explain it.
+KEEPALIVE=""
+case "$HELP" in
+    *keep-alive*) KEEPALIVE="--keep-alive=10" ;;
+esac
+
+# shellcheck disable=SC2086  # both are deliberate lists of arguments
+exec "$BIN" -p a2dp-source $KEEPALIVE $CODECS "$@"

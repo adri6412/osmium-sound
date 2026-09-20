@@ -25,6 +25,11 @@ Type=simple
 ExecStart=/usr/bin/python3 /usr/local/sbin/hifi-bt-out.py
 Restart=always
 RestartSec=5
+# The poll loop can be inside a `bluetoothctl connect` when the shutdown
+# arrives: the SIGTERM handler is reached at once, but the connect attempt it
+# is waiting on has its own 30-second budget. Rather than let that show up as
+# a stalled shutdown, cap the wait — there is nothing here worth finishing.
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target

@@ -224,7 +224,7 @@ Item {
         // BitPerfect / ReplayGain follow the player being driven, like the
         // format LEDs and the volume slider: the prefs behind ledMode are
         // polled on the selected player, not on our own (#101)
-        mode: Player.isOwn ? Player.ledMode : 0
+        mode: Player.ledMode
         onOpenSetting: (which) => root.openPlaybackSetting(which)
     }
 

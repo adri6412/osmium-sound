@@ -490,11 +490,10 @@ class PlayerCommandTests(unittest.TestCase):
             json.dump(doc, f)
 
 
-class SupervisorTests(unittest.TestCase):
-    """hifi-bt-out.py: the daemon that turns the state file into running
-    services. It is the only thing that starts or stops anything, so what
-    matters is that it does nothing at all when the owner said no, and that a
-    player is started only once its speaker is really connected."""
+class SupervisorHarness(unittest.TestCase):
+    """hifi-bt-out.py with a fake bluetoothctl and a fake systemd under it.
+    Split from the tests themselves so the classes below can share it without
+    re-running each other's cases."""
 
     @classmethod
     def setUpClass(cls):
@@ -517,6 +516,10 @@ class SupervisorTests(unittest.TestCase):
         self.connected = set()
         self.active = set()
         self.connect_succeeds = True
+        # Addresses bluetoothctl will not answer about: the question times out
+        # the way it really does while the adapter is busy paging a speaker
+        # that has just walked out of range.
+        self.silent = set()
         p = patch.object(self.mod.subprocess, 'run', self._fake_run)
         p.start()
         self.addCleanup(p.stop)
@@ -536,6 +539,8 @@ class SupervisorTests(unittest.TestCase):
             if cmd[1] == 'show':
                 return _cp(cmd, stdout='Controller 00:11:22:33:44:55\n\tPowered: yes\n')
             if cmd[1] == 'info':
+                if cmd[2] in self.silent:
+                    raise subprocess.TimeoutExpired(cmd, timeout or 10)
                 yes = 'yes' if cmd[2] in self.connected else 'no'
                 return _cp(cmd, stdout=f'Device {cmd[2]}\n\tConnected: {yes}\n')
             if cmd[1] == 'connect':
@@ -569,6 +574,13 @@ class SupervisorTests(unittest.TestCase):
 
     def _argv(self, *prefix):
         return [c for c in self.calls if c[:len(prefix)] == list(prefix)]
+
+
+class SupervisorTests(SupervisorHarness):
+    """The daemon that turns the state file into running services. It is the
+    only thing that starts or stops anything, so what matters is that it does
+    nothing at all when the owner said no, and that a player is started only
+    once its speaker is really connected."""
 
     def test_off_starts_nothing_and_powers_the_adapter_down(self):
         self._write({'enabled': False, 'speakers': [{'mac': MAC, 'name': 'Anker'}]})
@@ -644,6 +656,199 @@ class SupervisorTests(unittest.TestCase):
             {'mac': 'nonsense', 'name': 'x'}, {'mac': MAC, 'name': 'Anker'}]})
         self.mod.Supervisor().tick()
         self.assertEqual([s['mac'] for s in self._status()['speakers']], [MAC])
+
+
+class TwoSpeakersTests(SupervisorHarness):
+    """🚨 The reason this file has a whole class for it: with headphones and
+    a speaker both connected, switching one off used to drop the other too.
+
+    Nothing dramatic was happening — bluetoothctl simply did not answer in
+    time about the speaker that was still playing, because the adapter was
+    busy paging the one that had gone, and an unanswered question counted as
+    "not connected". That stopped the good speaker's player and sent the
+    adapter after it as well."""
+
+    PLAYER = 'hifi-bt-player@f4-2b-7d-63-98-d7.service'
+    PLAYER2 = 'hifi-bt-player@f4-4e-fd-08-52-3f.service'
+
+    def _both(self, **extra):
+        self._write({'enabled': True, 'speakers': [
+            dict({'mac': MAC, 'name': 'Cuffie'}, **extra),
+            dict({'mac': MAC2, 'name': 'Casse'}, **extra)]})
+
+    def test_a_speaker_bluez_will_not_talk_about_keeps_playing(self):
+        """The single line this whole class exists for."""
+        self._both()
+        self.connected.update({MAC, MAC2})
+        self.active.update({self.PLAYER, self.PLAYER2})
+        sup = self.mod.Supervisor()
+        sup.tick()                        # both answer: both known connected
+        self.silent.add(MAC2)             # and now one question goes unanswered
+        self.calls.clear()
+        sup.tick()
+        self.assertEqual(self._argv('systemctl', 'stop', self.PLAYER2), [])
+        self.assertEqual(self._argv('bluetoothctl', 'connect', MAC2), [])
+
+    def test_a_speaker_that_goes_quiet_is_still_reported_as_it_last_was(self):
+        """The screen must not show a speaker dropping out because we could
+        not ask about it — the owner is listening to it."""
+        self._both()
+        self.connected.update({MAC, MAC2})
+        sup = self.mod.Supervisor()
+        sup.tick()
+        self.silent.add(MAC2)
+        sup.tick()
+        row = [s for s in self._status()['speakers'] if s['mac'] == MAC2][0]
+        self.assertTrue(row['connected'])
+        self.assertTrue(row['stale'])
+
+    def test_one_speaker_walking_off_does_not_take_the_other_with_it(self):
+        """The whole scenario: the headphones are switched off, and while the
+        adapter chases them bluetoothctl stops answering about the speaker."""
+        self._both()
+        self.connected.update({MAC, MAC2})
+        self.active.update({self.PLAYER, self.PLAYER2})
+        sup = self.mod.Supervisor()
+        sup.tick()
+        self.connect_succeeds = False
+        self.connected.discard(MAC)       # the headphones are switched off
+        self.silent.add(MAC2)             # BlueZ gets slow about the speaker
+        self.calls.clear()
+        sup.tick()
+        self.assertIn(['systemctl', 'stop', self.PLAYER], self.calls)
+        self.assertEqual(self._argv('systemctl', 'stop', self.PLAYER2), [])
+        self.assertIn(self.PLAYER2, self.active)
+
+    def test_only_one_speaker_is_paged_per_pass(self):
+        """The adapter can only page one device at a time, and every second
+        spent paging is a second stolen from whatever is still playing."""
+        self.connect_succeeds = False
+        self._both()
+        self.mod.Supervisor().tick()
+        attempts = [c for c in self.calls if c[:2] == ['bluetoothctl', 'connect']]
+        self.assertEqual(len(attempts), 1)
+
+    def test_every_state_is_read_before_anything_is_paged(self):
+        """Ordering is the fix: a page attempt blocks for up to twenty
+        seconds and is what makes the next question time out. It goes last."""
+        self.connect_succeeds = False
+        self._both()
+        self.connected.add(MAC2)
+        self.mod.Supervisor().tick()
+        first_connect = next(i for i, c in enumerate(self.calls)
+                             if c[:2] == ['bluetoothctl', 'connect'])
+        asked = [i for i, c in enumerate(self.calls)
+                 if c[:2] == ['bluetoothctl', 'info'] and c[2] == MAC2]
+        self.assertTrue(asked)
+        self.assertLess(min(asked), first_connect)
+
+    def test_a_confirmed_disconnection_is_still_acted_on_at_once(self):
+        """Holding the last state is for silence, not for a "no": a speaker
+        BlueZ says is gone must lose its player on the spot, or squeezelite
+        sits there restarting against a PCM that is not there."""
+        self._both()
+        self.connected.update({MAC, MAC2})
+        self.active.update({self.PLAYER, self.PLAYER2})
+        sup = self.mod.Supervisor()
+        sup.tick()
+        self.connect_succeeds = False
+        self.connected.discard(MAC2)
+        self.calls.clear()
+        sup.tick()
+        self.assertIn(['systemctl', 'stop', self.PLAYER2], self.calls)
+
+
+class StateFileReadTests(SupervisorHarness):
+    """Reading the owner's choice. Getting this wrong is expensive: "off"
+    means powering the adapter down, which disconnects every speaker at
+    once."""
+
+    def test_a_file_that_cannot_be_read_does_not_mean_off(self):
+        self._write({'enabled': True, 'speakers': [{'mac': MAC, 'name': 'Casse'}]})
+        sup = self.mod.Supervisor()
+        sup.tick()
+        with open(self.mod.STATE_FILE, 'w') as f:
+            f.write('{ this is not json')
+        self.calls.clear()
+        sup.tick()
+        self.assertEqual(self._argv('bluetoothctl', 'power', 'off'), [])
+        self.assertEqual(self._argv('systemctl', 'stop', 'bluetooth.service'), [])
+        self.assertTrue(self._status()['enabled'])
+
+    def test_no_file_at_all_does_mean_off(self):
+        """A device where the feature was never switched on."""
+        self.active.add('bluetooth.service')
+        self.mod.Supervisor().tick()
+        self.assertIn(['bluetoothctl', 'power', 'off'], self.calls)
+        self.assertFalse(self._status()['enabled'])
+
+
+class UnitFileTests(unittest.TestCase):
+    """The systemd units the image ships. Two rules here are load-bearing and
+    both look like tidy-up bait to anyone reading them later, so they are
+    pinned: the agent's stop signal, and which unit may carry [Install]."""
+
+    UNITS = os.path.join(REPO, 'distro', 'config', 'includes.chroot',
+                         'etc', 'systemd', 'system')
+
+    SBIN = os.path.join(REPO, 'distro', 'config', 'includes.chroot',
+                        'usr', 'local', 'sbin')
+
+    def _unit(self, name):
+        with open(os.path.join(self.UNITS, name)) as f:
+            return f.read()
+
+    def _sbin(self, name):
+        with open(os.path.join(self.SBIN, name)) as f:
+            return f.read()
+
+    def test_bluealsa_is_never_given_an_option_it_may_not_know(self):
+        """🚨 BlueALSA exits on an unrecognised option, and its unit restarts
+        it for ever: what the owner gets is not a missing refinement but every
+        speaker dropping out every three seconds. --keep-alive only exists
+        from 4.0, and a device upgraded through the OTA path can be on 3.x, so
+        it is asked for the same way the optional codecs are."""
+        text = self._sbin('hifi-bluealsa-run.sh')
+        exec_line = [l for l in text.splitlines() if l.startswith('exec ')][0]
+        self.assertNotIn('--keep-alive', exec_line)
+        self.assertIn('$KEEPALIVE', exec_line)
+        self.assertIn('*keep-alive*)', text)
+
+    def test_the_pairing_agent_is_stopped_with_SIGINT(self):
+        """🚨 bluez-tools wires bt-agent's handlers up crossed: SIGTERM lands
+        in the SIGUSR1 handler and returns G_SOURCE_CONTINUE, so bt-agent
+        deliberately keeps running. systemd then waits out its 90-second
+        default and the appliance appears not to switch off. SIGINT is the one
+        that quits the main loop."""
+        unit = self._unit('hifi-bt-agent.service')
+        self.assertIn('KillSignal=SIGINT', unit)
+        stop = [l for l in unit.splitlines() if l.startswith('TimeoutStopSec=')]
+        self.assertTrue(stop, 'no TimeoutStopSec: a future bluez-tools could hold a shutdown again')
+        self.assertLessEqual(int(stop[0].split('=')[1]), 10)
+
+    def test_only_the_supervisor_may_be_enabled(self):
+        """Everything else is started by hifi-bt-out.service. An [Install]
+        section on any of them invites a `systemctl enable` that then vanishes
+        at the next A/B image swap, leaving Bluetooth mysteriously off."""
+        for name in ('hifi-bluealsa.service', 'hifi-bt-agent.service',
+                     'hifi-bt-player@.service'):
+            self.assertNotIn('[Install]', self._unit(name), name)
+        self.assertIn('WantedBy=multi-user.target', self._unit('hifi-bt-out.service'))
+
+    def test_the_image_enables_the_supervisor_and_nothing_else_bluetooth(self):
+        hook = os.path.join(REPO, 'distro', 'config', 'hooks', 'normal',
+                            '0400-enable-services.hook.chroot')
+        with open(hook) as f:
+            text = f.read()
+        enabled = [l.split()[2] for l in text.splitlines()
+                   if l.startswith('systemctl enable ') and ('bt' in l or 'blue' in l)]
+        self.assertEqual(enabled, ['hifi-bt-out.service'])
+        self.assertIn('systemctl disable bluetooth.service', text)
+
+    def test_the_players_die_with_bluealsa(self):
+        """The PCM goes away with the daemon; a squeezelite left pointing at
+        it is a restart loop, not a player."""
+        self.assertIn('BindsTo=hifi-bluealsa.service', self._unit('hifi-bt-player@.service'))
 
 
 if __name__ == '__main__':

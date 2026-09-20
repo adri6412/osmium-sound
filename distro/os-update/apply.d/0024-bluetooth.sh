@@ -36,6 +36,7 @@ ensure_pkg libasound2-plugin-bluez || true
 # ── Neutralise units that would fight ours ───────────────────────────
 # Debian's own bluealsa units (auto-enabled by the package), and the two units
 # from the old sink design, whose files may still exist from an earlier run.
+# These are stopped as well as disabled: nothing should be running them.
 for u in bluealsa.service bluealsa-aplay.service \
          hifi-bt-aplay.service hifi-bt-watcher.service; do
     state=$(systemctl is-enabled "$u" 2>/dev/null) || state=""
@@ -43,6 +44,21 @@ for u in bluealsa.service bluealsa-aplay.service \
         systemctl disable --now "$u" >/dev/null 2>&1 && mark_changed "disabled $u"
     elif [ "$(systemctl is-active "$u" 2>/dev/null)" = "active" ]; then
         systemctl stop "$u" >/dev/null 2>&1 && mark_changed "stopped $u"
+    fi
+done
+
+# ── Stale autostart links from the version of this migration that
+#    enabled everything by hand ────────────────────────────────────────
+# A device that had Bluetooth ON under the sink design still carries
+# multi-user.target.wants symlinks for these two. Their unit files no longer
+# have an [Install] section, so the symlinks are orphans — but systemd still
+# honours them, and the adapter would come up at every boot no matter what the
+# owner chose. Disabled, NOT stopped: from here on hifi-bt-out.service decides
+# when they run, and on a box whose owner has Bluetooth on they should stay up
+# across this update.
+for u in hifi-bluealsa.service hifi-bt-agent.service; do
+    if [ -e "/etc/systemd/system/multi-user.target.wants/$u" ]; then
+        systemctl disable "$u" >/dev/null 2>&1 && mark_changed "unlinked stale autostart for $u"
     fi
 done
 

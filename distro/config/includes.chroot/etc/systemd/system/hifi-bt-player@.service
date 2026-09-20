@@ -23,6 +23,10 @@ Type=simple
 ExecStart=/usr/bin/python3 /usr/local/sbin/hifi-bt-player-run.py %i
 Restart=always
 RestartSec=5
+# squeezelite exits on SIGTERM readily enough, but it can be inside an ALSA
+# write to a speaker that has just walked out of range. Never worth a stalled
+# shutdown.
+TimeoutStopSec=10
 
 # Same reasoning as squeezelite.service: this process feeds an audio sink, and
 # an underrun is audible. Lower weights than the local player though — the DAC

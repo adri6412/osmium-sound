@@ -22,6 +22,18 @@ own retry with a backoff (15 s doubling to five minutes): a box sitting next
 to a speaker that is off for the night must not spend the night in a connect
 loop, and must still pick it up promptly in the morning.
 
+🚨 One speaker must never take another one down with it. Everything here is
+asked of BlueZ through bluetoothctl, one process per question, and the moment
+a speaker walks out of range those questions are exactly the ones that come
+back slowly or not at all — the adapter is busy paging, bluetoothd is busy
+tearing a link down. An unanswered question used to read as "not connected",
+and acting on that stopped the OTHER speaker's player and sent the adapter
+paging a speaker that was streaming perfectly well: switch the headphones
+off, lose the speakers too. So a question now has three answers — yes, no,
+and "could not ask" — and nothing is ever torn down on the third. The passes
+are ordered to match: every speaker's state is read first, while the radio is
+quiet, and only then is at most ONE connection attempt made.
+
 A snapshot of what it sees goes to /run/hifi-bt/output.json for api_server to
 serve without having to run bluetoothctl on every status poll.
 """
@@ -60,6 +72,9 @@ SINK_UNITS = ("hifi-bt-aplay.service", "hifi-bt-watcher.service")
 POLL_SECONDS = 8
 RETRY_MIN = 15
 RETRY_MAX = 300
+# A page attempt takes the radio away from whatever is playing on another
+# speaker, so it is kept short and there is never more than one per pass.
+CONNECT_SECONDS = 20
 
 _stop = False
 _wake = False
@@ -87,6 +102,10 @@ def log(msg):
 
 
 def run(cmd, timeout=15):
+    """The CompletedProcess, or None when the command produced no answer at
+    all — it timed out, it isn't installed, it was killed. 🚨 None is not the
+    same as an answer of "no", and the difference is load-bearing here: see
+    device_connected()."""
     try:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except Exception:
@@ -105,6 +124,18 @@ def unit_active(unit):
 def unit_exists(unit):
     r = run(["systemctl", "show", "-p", "LoadState", "--value", unit], 10)
     return bool(r) and (r.stdout or "").strip() not in ("", "not-found", "masked")
+
+
+def unit_stamp(unit):
+    """A fingerprint that changes when a unit restarts. Cheap enough to take
+    every pass, and it is what turns "all my speakers dropped at once" from a
+    mystery into a line in the journal."""
+    r = run(["systemctl", "show", "-p", "MainPID",
+             "-p", "ActiveEnterTimestampMonotonic", "--value", unit], 10)
+    if not r:
+        return None
+    values = tuple(line.strip() for line in (r.stdout or "").splitlines() if line.strip())
+    return values or None
 
 
 def start_unit(unit):
@@ -127,15 +158,6 @@ def instance(mac):
     return mac.replace(":", "-").lower()
 
 
-def read_state():
-    try:
-        with open(STATE_FILE) as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-
 def speakers_of(state):
     out_ = []
     for s in (state.get("speakers") or []):
@@ -155,8 +177,32 @@ def adapter_powered():
     return "Powered: yes" in out(["bluetoothctl", "show"], 10)
 
 
+_CONNECTED_RE = re.compile(r"^\s*Connected:\s*(yes|no)\s*$", re.M)
+
+
 def device_connected(mac):
-    return "Connected: yes" in out(["bluetoothctl", "info", mac], 10)
+    """True, False, or None when BlueZ could not be asked.
+
+    🚨 That third answer is the whole point. `bluetoothctl info` is a fresh
+    process and a fresh D-Bus client every time, and it is slowest — or dies
+    on its timeout — exactly when a link is being torn down or the adapter is
+    paging. Reading that silence as "not connected" is what let one speaker
+    going out of range stop the other one's player and have the adapter chase
+    a speaker that was already playing.
+    """
+    r = run(["bluetoothctl", "info", mac], 10)
+    if r is None:
+        return None
+    text = (r.stdout or "") + (r.stderr or "")
+    m = _CONNECTED_RE.search(text)
+    if m:
+        return m.group(1) == "yes"
+    if re.search(r"not available", text, re.I):
+        # BlueZ has never heard of this address: unpaired by hand, or
+        # /var/lib/bluetooth restored from a backup older than the pairing.
+        # The only case where no Connected: line still means a definite no.
+        return False
+    return None
 
 
 def running_players():
@@ -187,6 +233,38 @@ class Supervisor:
         # mac -> {"next": monotonic deadline, "delay": current backoff}
         self.retry = {}
         self.was_enabled = None
+        # mac -> the last answer BlueZ actually gave. What the screen is told
+        # while a question goes unanswered, so a slow pass never shows up as a
+        # speaker dropping out.
+        self.seen = {}
+        self.quiet_since = {}     # mac -> when the answers stopped coming
+        self.state_cache = None   # the last state file that parsed
+        self.stamps = {}          # unit -> restart fingerprint
+
+    # ── The owner's choice ───────────────────────────────────────────
+    def read_state(self):
+        """🚨 A file that cannot be read is NOT taken as "Bluetooth off".
+        Off means tearing the whole stack down, which disconnects every
+        speaker at once — far too violent an answer to a transient read
+        error. Only a file that genuinely isn't there means off, which is a
+        device where the feature was never switched on."""
+        try:
+            with open(STATE_FILE) as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("not an object")
+            self.state_cache = data
+            return data
+        except FileNotFoundError:
+            self.state_cache = None
+            return {}
+        except Exception:
+            if self.state_cache is None:
+                log(f"{STATE_FILE} cannot be read and nothing is cached; "
+                    f"treating Bluetooth as off")
+                return {}
+            log(f"{STATE_FILE} cannot be read; keeping the last good copy")
+            return self.state_cache
 
     # ── Bluetooth off ────────────────────────────────────────────────
     def tear_down(self):
@@ -200,6 +278,9 @@ class Supervisor:
             run(["bluetoothctl", "power", "off"], 10)
             stop_unit(BLUEZ_UNIT)
         self.retry.clear()
+        self.seen.clear()
+        self.quiet_since.clear()
+        self.stamps.clear()
 
     # ── Bluetooth on ─────────────────────────────────────────────────
     def bring_up(self):
@@ -226,33 +307,54 @@ class Supervisor:
         start_unit(BLUEALSA_UNIT)
         return True
 
-    def ensure_speaker(self, sp):
-        """Connect the speaker if it should be connected, and keep its player
-        instance in step with whether it actually is."""
+    def watch_restarts(self):
+        """Say in the log when BlueZ or BlueALSA has restarted under us.
+
+        Either one takes every connected speaker with it: bluetoothd for the
+        obvious reason, BlueALSA because the A2DP endpoint it registers with
+        BlueZ dies with the daemon and BlueZ tears down every transport that
+        was using it. If speakers ever drop *together* rather than one at a
+        time, this is the line that names the culprit."""
+        for unit in (BLUEZ_UNIT, BLUEALSA_UNIT):
+            stamp = unit_stamp(unit)
+            if stamp is None:
+                continue
+            before = self.stamps.get(unit)
+            self.stamps[unit] = stamp
+            if before and before != stamp and before[0] not in ("0", ""):
+                log(f"{unit} restarted ({before} -> {stamp}); every connected "
+                    f"speaker will have been dropped with it")
+
+    # ── What BlueZ says ──────────────────────────────────────────────
+    def observe(self, mac):
+        """The speaker's connection state, or the last one BlueZ gave us if it
+        did not answer this time. None only while nothing has ever been
+        heard about this address."""
+        answer = device_connected(mac)
+        if answer is None:
+            if mac not in self.quiet_since:
+                self.quiet_since[mac] = time.monotonic()
+                held = self.seen.get(mac)
+                log(f"{mac}: BlueZ did not answer; holding "
+                    f"{'connected' if held else 'disconnected' if held is False else 'unknown'}")
+            return self.seen.get(mac)
+        if mac in self.quiet_since:
+            waited = int(time.monotonic() - self.quiet_since.pop(mac))
+            log(f"{mac}: BlueZ is answering again after {waited}s")
+        if self.seen.get(mac) is not answer:
+            log(f"{mac} is {'connected' if answer else 'disconnected'}")
+        self.seen[mac] = answer
+        return answer
+
+    # ── The player follows the state we are sure of ──────────────────
+    def apply_player(self, sp, state):
         mac = sp["mac"]
         unit = PLAYER_UNIT.format(instance(mac))
-        wanted = bool(sp.get("enabled", True))
-        connected = device_connected(mac)
-
-        if wanted and not connected and sp.get("autoconnect", True):
-            slot = self.retry.setdefault(mac, {"next": 0.0, "delay": RETRY_MIN})
-            if time.monotonic() >= slot["next"]:
-                log(f"connecting {mac} ({sp.get('name') or 'speaker'})")
-                run(["bluetoothctl", "connect", mac], 30)
-                # Ask BlueZ rather than trust what bluetoothctl printed: it
-                # reports "Connection successful" for a link that then drops
-                # straight back out, and a player started on a PCM that isn't
-                # there only earns a restart loop.
-                connected = device_connected(mac)
-                if connected:
-                    self.retry.pop(mac, None)
-                else:
-                    slot["next"] = time.monotonic() + slot["delay"]
-                    slot["delay"] = min(slot["delay"] * 2, RETRY_MAX)
-        elif connected:
+        if not bool(sp.get("enabled", True)):
+            stop_unit(unit)
+            return
+        if state is True:
             self.retry.pop(mac, None)
-
-        if wanted and connected:
             if not unit_active(unit):
                 # A speaker switched off mid-track leaves squeezelite
                 # restarting until this loop catches up, and enough of those
@@ -262,9 +364,54 @@ class Supervisor:
                 run(["systemctl", "reset-failed", unit], 10)
                 log(f"starting {unit}")
                 run(["systemctl", "start", unit], 45)
-        else:
+        elif state is False:
             stop_unit(unit)
-        return connected
+        # state is None — we do not know, so nothing moves. Whatever is
+        # playing keeps playing: squeezelite exits by itself if its PCM has
+        # really gone, and stopping it on a guess is how one speaker used to
+        # silence another.
+
+    # ── Reconnecting ─────────────────────────────────────────────────
+    def due_for_connect(self, speakers, states):
+        """The speaker most overdue for a connection attempt, or None.
+
+        One per pass on purpose: the adapter can only page one device at a
+        time anyway, and two attempts in the same pass would keep the radio
+        away from a speaker that is playing for twice as long. A speaker
+        whose state is merely unknown is never paged — it may well be
+        connected and streaming."""
+        now = time.monotonic()
+        due = []
+        for sp in speakers:
+            mac = sp["mac"]
+            if states.get(mac) is not False:
+                continue
+            if not sp.get("enabled", True) or not sp.get("autoconnect", True):
+                continue
+            slot = self.retry.setdefault(mac, {"next": 0.0, "delay": RETRY_MIN})
+            if now >= slot["next"]:
+                due.append((slot["next"], mac, sp))
+        if not due:
+            return None
+        due.sort(key=lambda row: row[0])
+        return due[0][2]
+
+    def try_connect(self, sp):
+        mac = sp["mac"]
+        slot = self.retry.setdefault(mac, {"next": 0.0, "delay": RETRY_MIN})
+        log(f"connecting {mac} ({sp.get('name') or 'speaker'})")
+        run(["bluetoothctl", "connect", mac], CONNECT_SECONDS)
+        # Ask BlueZ rather than trust what bluetoothctl printed: it reports
+        # "Connection successful" for a link that then drops straight back
+        # out, and a player started on a PCM that isn't there only earns a
+        # restart loop.
+        answer = self.observe(mac)
+        if answer:
+            self.retry.pop(mac, None)
+        else:
+            slot["next"] = time.monotonic() + slot["delay"]
+            slot["delay"] = min(slot["delay"] * 2, RETRY_MAX)
+        return answer
 
     def prune(self, keep_macs):
         """Stop players for speakers that were removed from the list."""
@@ -275,7 +422,7 @@ class Supervisor:
                 run(["systemctl", "reset-failed", unit], 10)
 
     def tick(self):
-        state = read_state()
+        state = self.read_state()
         enabled = bool(state.get("enabled"))
         speakers = speakers_of(state)
 
@@ -290,19 +437,46 @@ class Supervisor:
             return
 
         up = self.bring_up()
+        self.watch_restarts()
         self.prune([s["mac"] for s in speakers])
+
+        # Pass one: read every speaker's state while the radio is quiet.
+        # Nothing below this line may run before all of them have answered —
+        # a page attempt is the one thing that makes bluetoothctl slow, and a
+        # slow answer for one speaker must never be read as another speaker
+        # dropping out.
+        states = {sp["mac"]: (self.observe(sp["mac"]) if up else self.seen.get(sp["mac"]))
+                  for sp in speakers}
+
+        # Pass two: the players follow.
+        for sp in speakers:
+            self.apply_player(sp, states[sp["mac"]])
+
+        # Pass three: at most one connection attempt, last, so the blocking
+        # part of the pass cannot poison anybody else's answer.
+        if up:
+            sp = self.due_for_connect(speakers, states)
+            if sp is not None:
+                states[sp["mac"]] = self.try_connect(sp)
+                self.apply_player(sp, states[sp["mac"]])
+
         rows = []
         for sp in speakers:
-            connected = self.ensure_speaker(sp) if up else False
-            unit = PLAYER_UNIT.format(instance(sp["mac"]))
+            mac = sp["mac"]
+            unit = PLAYER_UNIT.format(instance(mac))
+            connected = states.get(mac)
             rows.append({
-                "mac": sp["mac"],
+                "mac": mac,
                 "name": sp.get("name") or "",
                 "player": sp.get("player") or sp.get("name") or "",
                 "enabled": bool(sp.get("enabled", True)),
                 "autoconnect": bool(sp.get("autoconnect", True)),
-                "connected": connected,
-                "playing": connected and unit_active(unit),
+                "connected": bool(connected),
+                "playing": bool(connected) and unit_active(unit),
+                # True while this row is the last thing BlueZ said rather than
+                # what it says now. Nothing acts on it; it is there so a
+                # support log can tell a stale row from a fresh one.
+                "stale": connected is None or mac in self.quiet_since,
             })
         write_status({"enabled": True, "adapter": up,
                       "bluealsa": unit_active(BLUEALSA_UNIT),
