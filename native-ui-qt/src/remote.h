@@ -29,6 +29,7 @@
 // multimediali: frecce e invio di una tastiera li porta gia' Qt, e agire due
 // volte sullo stesso tasto sarebbe peggio che non agire.
 #pragma once
+#include <QDateTime>
 #include <QElapsedTimer>
 #include <QFileSystemWatcher>
 #include <QHash>
@@ -65,7 +66,11 @@ public:
     QVariantList devices() const { return m_devices; }
     bool present() const { return !m_devices.isEmpty(); }
     QVariantMap lastKey() const { return m_lastKey; }
-    bool learning() const { return m_learning; }
+    // 🚨 In prova ci si mette anche dal web admin: lui scrive una scadenza in
+    // /run/hifi-remote/learn e noi smettiamo di agire finche' dura. Con una
+    // scadenza e non un interruttore, perche' un browser chiuso a meta' prova
+    // non deve lasciare un apparecchio in cui il telecomando non comanda piu'.
+    bool learning() const { return m_learning || m_webLearnUntil > QDateTime::currentSecsSinceEpoch(); }
     void setLearning(bool on);
 
     Q_INVOKABLE void rescan();
@@ -125,6 +130,9 @@ private:
     void onKey(Dev &dev, int code, int value);
     void publishDevices();
     void loadCustom();
+    void loadChosen();
+    void publishLastKey() const;    // /run/hifi-remote/last.json, per il web admin
+    void readWebLearn();            // /run/hifi-remote/learn
     bool saveCustom(int code, const QString &device);      // scrive remote-keys.json
     void startRepeat(const QString &action);
     void stopRepeat();
@@ -135,6 +143,9 @@ private:
     // codice -> azione. Da remote-keys.json.
     QHash<QString, QHash<int, QString>> m_custom;
     QString m_chosen;                // il nome del "mio telecomando"
+    qint64 m_webLearnUntil = 0;      // prova dei tasti chiesta dal web admin
+    QFileSystemWatcher m_confWatch;  // i due file che cambia anche il web admin
+    QTimer m_confRescan, m_learnTick;
     QString m_learnDevice;           // chi sta parlando al pannello di prova
     QVariantList m_devices;
     QVariantMap m_lastKey;

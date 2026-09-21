@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
@@ -7,6 +7,7 @@ import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
 
 const router = useRouter();
+
 const { t } = useI18n();
 const stage = ref('loading');   // loading | account | configure | done
 const provisioning = ref(false);
@@ -33,6 +34,34 @@ const lyrionProgress = ref(0);
 const lyrionMsg = ref('');
 const lyrionError = ref('');
 let lyrionPoll = null;
+
+// ── Telecomando (l'ultimo passo) ─────────────────────────────────
+// Chi ha un telecomando puo' sistemarlo subito invece di andarlo a cercare
+// nelle impostazioni dopo. Qui solo il minimo: cosa e' gia' collegato e
+// l'accoppiamento di uno Bluetooth. Quale tasto fa cosa resta in
+// Impostazioni -> Telecomando, che non e' roba da primo avvio.
+const rc = reactive({ devices: [], busy: false, scanning: false,
+                      bt: { available: false, supported: false, remotes: [], found: [] } });
+async function loadRemote() {
+  const r = await api.sys('remote');
+  if (r.ok && r.data) rc.devices = r.data.devices || [];
+  const b = await api.sys('bt_remotes');
+  if (b.ok && b.data && b.data.available !== undefined) Object.assign(rc.bt, b.data);
+}
+async function rcScan() {
+  rc.busy = true; rc.scanning = true;
+  await api.sysPost('bt_remotes/scan', { seconds: 12 });
+  rc.busy = false; rc.scanning = false;
+  await loadRemote();
+}
+async function rcPair(mac) {
+  rc.busy = true;
+  await api.sysPost('bt_remotes/add', { mac });
+  rc.busy = false;
+  await loadRemote();
+}
+const rcWhere = (d) => (d.bus === 'bluetooth' ? t('setup.remoteViaBluetooth')
+                      : d.bus === 'usb' ? t('setup.remoteViaUsb') : t('setup.remoteViaOther'));
 
 // Internal vs external, offered up front: someone adding a player to a house
 // that already runs Lyrion should not have to install a second server and then
@@ -184,7 +213,7 @@ async function afterAuth() {
     currentDevice.value = res.data.current || 'default';
   }
   stage.value = provisioning.value ? 'configure' : 'done';
-  if (stage.value === 'configure') checkLyrion();
+  if (stage.value === 'configure') { checkLyrion(); loadRemote(); }
 }
 
 async function pickDevice(id) {
@@ -291,6 +320,35 @@ async function finish() {
       <h3><span class="dot"></span>{{ t('setup.musicTitle') }}</h3>
       <p class="sub">{{ t('setup.musicHint') }}</p>
       <SourcesPanel />
+    </div>
+    <div class="card">
+      <h3><span class="dot"></span>{{ t('setup.remoteTitle') }}</h3>
+      <p class="sub">{{ t('setup.remoteHint') }}</p>
+      <template v-if="rc.devices.length">
+        <div v-for="d in rc.devices" :key="d.name + d.address" class="net between">
+          <span>
+            <span style="display:block;">{{ d.name }}</span>
+            <span class="muted">{{ rcWhere(d) }}</span>
+          </span>
+          <span class="check">✓</span>
+        </div>
+      </template>
+      <p class="sub" v-else>{{ t('setup.remoteNone') }}</p>
+      <template v-if="rc.bt.available && rc.bt.supported">
+        <p class="sub" style="margin-top: 10px;">{{ t('setup.remoteBtHint') }}</p>
+        <button class="secondary" :disabled="rc.busy" @click="rcScan">
+          {{ rc.scanning ? t('setup.remoteSearching') : t('setup.remoteSearch') }}
+        </button>
+        <div v-for="d in rc.bt.found" :key="d.mac" class="net between" @click="rcPair(d.mac)">
+          <span>
+            <span style="display:block;">{{ d.name || d.mac }}</span>
+            <span class="muted">{{ d.mac }}</span>
+          </span>
+          <span class="check">+</span>
+        </div>
+        <p class="sub" v-if="rc.bt.remotes.length">{{ t('setup.remotePaired') }}</p>
+      </template>
+      <p class="sub">{{ t('setup.remoteLater') }}</p>
     </div>
     <button :disabled="busy" @click="finish">{{ busy ? t('setup.finishing') : t('setup.finishSetup') }}</button>
   </div>

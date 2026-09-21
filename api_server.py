@@ -6766,6 +6766,237 @@ def bt_remote_remove(mac):
 
 
 # ──────────────────────────────────────────────────────────────────
+#  Remote controls, seen from the web admin
+#
+#  I tasti li legge l'interfaccia sullo schermo, che possiede /dev/input
+#  (native-ui-qt/src/remote.cpp): qui non si legge nessun dispositivo. Al web
+#  admin serve la stessa fotografia — quali telecomandi ci sono, cosa fa ogni
+#  tasto, qual e' "il mio telecomando" — e per averla le due parti si passano
+#  quattro file:
+#
+#    /etc/hifi-player/remote-keys.json   cosa fa ogni tasto (per dispositivo)
+#    /etc/hifi-player/remote-device      il telecomando dichiarato dall'utente
+#    /run/hifi-remote/last.json          l'ultimo tasto premuto (lo scrive lei)
+#    /run/hifi-remote/learn              "sto provando i tasti": scadenza epoch
+#
+#  🚨 L'elenco dei dispositivi si ricava da sysfs con le stesse regole di
+#  remote.cpp, non chiedendolo all'interfaccia: cosi' la pagina funziona anche
+#  mentre il kiosk si riavvia per un aggiornamento.
+# ──────────────────────────────────────────────────────────────────
+REMOTE_KEYS_FILE = '/etc/hifi-player/remote-keys.json'
+REMOTE_DEVICE_FILE = '/etc/hifi-player/remote-device'
+REMOTE_RUN_DIR = '/run/hifi-remote'
+REMOTE_LAST_FILE = REMOTE_RUN_DIR + '/last.json'
+REMOTE_LEARN_FILE = REMOTE_RUN_DIR + '/learn'
+REMOTE_LEARN_SECONDS = 180
+# Le azioni assegnabili: 🚨 stesso elenco e stesso ordine di kActions in
+# native-ui-qt/src/remote.cpp. Se cambia li', cambia anche qui.
+REMOTE_ACTIONS = [
+    'playPause', 'play', 'pause', 'stop', 'next', 'prev', 'forward', 'rewind',
+    'volumeUp', 'volumeDown', 'mute',
+    'up', 'down', 'left', 'right', 'ok', 'back', 'home', 'menu', 'pageUp', 'pageDown',
+    'nowPlaying', 'fullScreen', 'nextVu', 'nextAnimation', 'queue', 'search',
+    'favorite', 'shuffle', 'standby', 'eject',
+]
+# i codici evdev che bastano a riconoscere un telecomando (linux/input-event-codes.h)
+_KEY_PLAYPAUSE, _KEY_NEXTSONG, _KEY_PREVIOUSSONG = 164, 163, 165
+_KEY_PLAYCD, _KEY_STOPCD, _KEY_PLAY = 200, 166, 207
+_KEY_UP, _KEY_DOWN, _KEY_LEFT, _KEY_RIGHT = 103, 108, 105, 106
+_KEY_ENTER, _KEY_OK, _KEY_SELECT = 28, 0x160, 0x161
+_REL_X, _REL_Y, _ABS_X, _ABS_MT_X = 0, 1, 0, 53
+
+
+def _sysfs_bit(bitmap, bit):
+    """Un bit di un bitmap di /sys/class/input: parole esadecimali, la piu'
+    significativa per prima."""
+    words = (bitmap or '').split()
+    if not words:
+        return False
+    idx = len(words) - 1 - bit // 64
+    if idx < 0 or idx >= len(words):
+        return False
+    try:
+        return bool((int(words[idx], 16) >> (bit % 64)) & 1)
+    except ValueError:
+        return False
+
+
+def _remote_devices():
+    """I telecomandi collegati adesso, con le regole di remote.cpp: tasti
+    multimediali oppure frecce+conferma, e niente tastiere complete fra i
+    "telecomandi veri"."""
+    out = []
+    chosen = _remote_chosen()
+    root = os.environ.get('HIFI_SYSFS_INPUT', '/sys/class/input')
+    for d in sorted(glob.glob(os.path.join(root, 'input*'))):
+        def rd(name):
+            try:
+                with open(os.path.join(d, name)) as f:
+                    return f.read().strip()
+            except Exception:
+                return ''
+        key = rd('capabilities/key')
+        if not key:
+            continue
+        full_keyboard = all(_sysfs_bit(key, b) for b in range(1, 32))
+        media = any(_sysfs_bit(key, c) for c in
+                    (_KEY_PLAYPAUSE, _KEY_NEXTSONG, _KEY_PREVIOUSSONG, _KEY_PLAYCD, _KEY_STOPCD, _KEY_PLAY))
+        nav = (all(_sysfs_bit(key, c) for c in (_KEY_UP, _KEY_DOWN, _KEY_LEFT, _KEY_RIGHT))
+               and any(_sysfs_bit(key, c) for c in (_KEY_ENTER, _KEY_OK, _KEY_SELECT)))
+        if not media and not (nav and not full_keyboard):
+            continue
+        rel, abs_ = rd('capabilities/rel'), rd('capabilities/abs')
+        pointer = _sysfs_bit(rel, _REL_X) and _sysfs_bit(rel, _REL_Y)
+        tablet = _sysfs_bit(abs_, _ABS_X) or _sysfs_bit(abs_, _ABS_MT_X)
+        name = rd('name') or os.path.basename(d)
+        try:
+            bus = int(rd('id/bustype') or '0', 16)
+        except ValueError:
+            bus = 0
+        out.append({
+            'name': name,
+            'bus': 'bluetooth' if bus == 5 else 'usb' if bus == 3 else 'other',
+            'kind': 'remote' if (not full_keyboard and not pointer and not tablet) else 'keyboard',
+            'chosen': bool(chosen) and name == chosen,
+            'address': rd('uniq').upper(),
+        })
+    return out
+
+
+def _remote_chosen():
+    try:
+        with open(REMOTE_DEVICE_FILE) as f:
+            return f.readline().strip()
+    except Exception:
+        return ''
+
+
+def _remote_keys_doc():
+    """remote-keys.json, sempre nella forma nuova {all, devices}. Un file del
+    primo giorno era una mappa piatta codice -> azione: vale per tutti."""
+    try:
+        with open(REMOTE_KEYS_FILE) as f:
+            doc = json.load(f)
+        if not isinstance(doc, dict):
+            return {'all': {}, 'devices': {}}
+        if 'all' in doc or 'devices' in doc:
+            return {'all': dict(doc.get('all') or {}), 'devices': dict(doc.get('devices') or {})}
+        return {'all': dict(doc), 'devices': {}}
+    except Exception:
+        return {'all': {}, 'devices': {}}
+
+
+def _remote_last_key():
+    try:
+        with open(REMOTE_LAST_FILE) as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _remote_learning():
+    try:
+        with open(REMOTE_LEARN_FILE) as f:
+            return float(f.read().strip() or 0) > time.time()
+    except Exception:
+        return False
+
+
+def get_remote():
+    """Quello che serve alla pagina Telecomando del web admin."""
+    # 🚨 Non basta chiedere a systemd se l'unita' e' attiva: in collaudo (e su
+    # un apparecchio dove qualcuno l'ha avviata a mano) l'interfaccia gira lo
+    # stesso, e la pagina direbbe il falso. Conta che ci sia il processo.
+    running = False
+    try:
+        running = subprocess.run(['systemctl', 'is-active', 'hifi-qt.service'],
+                                 capture_output=True, text=True, timeout=10).stdout.strip() == 'active'
+        if not running:
+            running = subprocess.run(['pgrep', '-f', 'hifi-qt --assets'],
+                                     capture_output=True, timeout=10).returncode == 0
+    except Exception:
+        pass
+    doc = _remote_keys_doc()
+    return {
+        'devices': _remote_devices(),
+        'chosen': _remote_chosen(),
+        'keys': doc,
+        'actions': REMOTE_ACTIONS,
+        'lastKey': _remote_last_key(),
+        'learning': _remote_learning(),
+        # 🚨 I tasti li legge l'interfaccia sullo schermo: senza quella, la
+        # prova dei tasti non puo' funzionare e la pagina deve dirlo.
+        'interfaceRunning': running,
+    }
+
+
+def set_remote_device(device):
+    """"Questo e' il mio telecomando" (nome vuoto = nessuno)."""
+    device = re.sub(r'[\x00-\x1f\x7f]', '', str(device or '')).strip()[:80]
+    try:
+        os.makedirs(os.path.dirname(REMOTE_DEVICE_FILE), exist_ok=True)
+        tmp = REMOTE_DEVICE_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(device + '\n')
+        os.replace(tmp, REMOTE_DEVICE_FILE)
+    except Exception:
+        log.exception("set_remote_device failed")
+        return {'success': False, 'message': _t('remote.saveFailed', _lang()), **get_remote()}
+    return {'success': True, 'message': _t('remote.saved', _lang()), **get_remote()}
+
+
+def set_remote_key(code, action, device=''):
+    """Cosa fa un tasto, per QUEL dispositivo (vuoto = per tutti). `action`
+    None toglie l'assegnazione, "" vuol dire "questo tasto non fa niente"."""
+    try:
+        code = int(code)
+    except (TypeError, ValueError):
+        return {'success': False, 'message': _t('remote.badKey', _lang()), **get_remote()}
+    if code <= 0:
+        return {'success': False, 'message': _t('remote.badKey', _lang()), **get_remote()}
+    if action is not None:
+        action = str(action)
+        if action and action not in REMOTE_ACTIONS:
+            return {'success': False, 'message': _t('remote.badAction', _lang()), **get_remote()}
+    device = re.sub(r'[\x00-\x1f\x7f]', '', str(device or '')).strip()[:80]
+
+    doc = _remote_keys_doc()
+    where = doc['devices'].setdefault(device, {}) if device else doc['all']
+    if action is None:
+        where.pop(str(code), None)
+        if device and not doc['devices'][device]:
+            doc['devices'].pop(device, None)
+    else:
+        where[str(code)] = action
+    try:
+        os.makedirs(os.path.dirname(REMOTE_KEYS_FILE), exist_ok=True)
+        tmp = REMOTE_KEYS_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            json.dump(doc, f, indent=1)
+        os.replace(tmp, REMOTE_KEYS_FILE)
+    except Exception:
+        log.exception("set_remote_key failed")
+        return {'success': False, 'message': _t('remote.saveFailed', _lang()), **get_remote()}
+    return {'success': True, 'message': _t('remote.saved', _lang()), **get_remote()}
+
+
+def set_remote_learning(enable):
+    """La finestra "sto provando i tasti": l'interfaccia la guarda e smette di
+    agire sui tasti finche' dura. 🚨 Con una scadenza, non un interruttore: un
+    browser chiuso a meta' prova non deve lasciare un apparecchio in cui il
+    telecomando non comanda piu' niente."""
+    try:
+        os.makedirs(REMOTE_RUN_DIR, exist_ok=True)
+        with open(REMOTE_LEARN_FILE, 'w') as f:
+            f.write(str(int(time.time()) + REMOTE_LEARN_SECONDS) if enable else '0')
+    except Exception:
+        log.exception("set_remote_learning failed")
+        return {'success': False, 'message': _t('remote.saveFailed', _lang()), **get_remote()}
+    return {'success': True, **get_remote()}
+
+
+# ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
 # ──────────────────────────────────────────────────────────────────
 
@@ -9036,6 +9267,28 @@ def api_bt_remotes_add():
 def api_bt_remotes_remove():
     data = request.get_json(silent=True) or {}
     return jsonify(bt_remote_remove(data.get('mac')))
+
+# ── telecomandi, dal web admin ───────────────────────────────────────
+@app.route('/remote', methods=['GET'])
+def api_remote():
+    return jsonify(get_remote())
+
+@app.route('/remote/device', methods=['POST'])
+def api_remote_device():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_remote_device(data.get('device')))
+
+@app.route('/remote/keys', methods=['POST'])
+def api_remote_keys():
+    data = request.get_json(silent=True) or {}
+    # 'action' assente = togli l'assegnazione; "" = questo tasto non fa niente
+    action = data.get('action', None) if 'action' in data else None
+    return jsonify(set_remote_key(data.get('code'), action, data.get('device', '')))
+
+@app.route('/remote/learn', methods=['POST'])
+def api_remote_learn():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_remote_learning(bool(data.get('enable'))))
 
 @app.route('/show_global_keyboard', methods=['POST'])
 def api_show_global_keyboard():

@@ -314,6 +314,10 @@ MESSAGES = {
     'bluetooth.remoteAdded': {'en': 'Remote added: press a key to use it',
                               'it': 'Telecomando aggiunto: premi un tasto per usarlo'},
     'bluetooth.remoteForgotten': {'en': 'Remote forgotten', 'it': 'Telecomando dimenticato'},
+    'remote.saved': {'en': 'Saved', 'it': 'Salvato'},
+    'remote.saveFailed': {'en': 'Could not save the choice', 'it': 'Non sono riuscito a salvare la scelta'},
+    'remote.badKey': {'en': 'That key is not valid', 'it': 'Quel tasto non è valido'},
+    'remote.badAction': {'en': 'That action does not exist', 'it': 'Quell\'azione non esiste'},
 
     # ── OTA channel ──────────────────────────────────────────────────
     'ota.invalidChannel': {'en': 'Invalid channel', 'it': 'Canale non valido'},

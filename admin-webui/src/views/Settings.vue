@@ -23,6 +23,7 @@ const sections = computed(() => [
   { key: 'network',   label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
   { key: 'audio',     label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
   { key: 'btSpeakers', label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
+  { key: 'remote',    label: t('settings.sections.remote.label'),    desc: t('settings.sections.remote.desc') },
   { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
   // 'dsp' is deliberately NOT listed here — the feature (and its room-correction
   // sub-flow) is being held back for a future paid tier. The card markup below
@@ -466,6 +467,85 @@ watch(open, (k) => {
   loadBt();
   btPoll = setInterval(() => { if (!bt.busy) loadBt(); }, 5000);
 }, { immediate: true });
+
+// ── Telecomando ───────────────────────────────────────────────────
+// I tasti li legge l'interfaccia sullo schermo, che possiede /dev/input
+// (native-ui-qt/src/remote.cpp); qui si vede la stessa fotografia attraverso
+// api_server (/remote) e si accoppia un telecomando Bluetooth (/bt_remotes).
+// 🚨 La prova dei tasti apre una finestra con scadenza sull'apparecchio: per
+// quel tempo i tasti si vedono qui e NON comandano l'interfaccia, cosi' chi
+// prova da lontano non fa partire un album per sbaglio. Si chiude da sola.
+const rc = reactive({
+  devices: [], chosen: '', keys: { all: {}, devices: {} }, actions: [],
+  lastKey: {}, learning: false, interfaceRunning: false,
+  busy: false, testing: false,
+  bt: { available: false, supported: false, adapter: false, remotes: [], found: [], scanning: false },
+});
+let rcPoll = null;
+
+async function loadRemote() {
+  const r = await api.sys('remote');
+  if (r.ok && r.data) Object.assign(rc, r.data);
+}
+async function loadRemoteBt() {
+  const r = await api.sys('bt_remotes');
+  if (r.ok && r.data && r.data.available !== undefined) Object.assign(rc.bt, r.data);
+}
+async function rcCall(path, body, reload = loadRemote) {
+  rc.busy = true;
+  const r = await api.sysPost(path, body || {});
+  rc.busy = false; rc.bt.scanning = false;
+  if (r.ok && r.data) {
+    if (r.data.available !== undefined) Object.assign(rc.bt, r.data);
+    else Object.assign(rc, r.data);
+    if (r.data.message) say(r.data.message, r.data.success === false);
+    if (reload) await reload();
+    return r.data.success !== false;
+  }
+  say(bodyMsg(r, t('settings.remote.opFailed')), true);
+  return false;
+}
+// "questo e' il mio telecomando": l'unico modo per non confondere una
+// tastiera e un telecomando, che mandano gli stessi codici
+const rcMine = (d) => rcCall('remote/device', { device: rc.chosen === d.name ? '' : d.name });
+// La prova dei tasti: si accende mentre la scheda e' aperta, e si spegne
+// uscendo. La scadenza sull'apparecchio e' la rete di sicurezza.
+async function rcTest(on) {
+  rc.testing = on;
+  await rcCall('remote/learn', { enable: on });
+}
+const rcAssign = (code, action, device) => rcCall('remote/keys', { code, action, device: device || '' });
+const rcUnassign = (code, device) => rcCall('remote/keys', { code, device: device || '' });
+// quale azione fa oggi quel tasto su quel dispositivo
+function rcActionOf(code, device) {
+  const k = String(code);
+  const d = (rc.keys.devices || {})[device] || {};
+  if (k in d) return d[k];
+  const all = rc.keys.all || {};
+  return k in all ? all[k] : '';
+}
+const rcIsCustom = (code, device) => {
+  const k = String(code);
+  return k in ((rc.keys.devices || {})[device] || {}) || k in (rc.keys.all || {});
+};
+const rcActionLabel = (a) => (a ? t('settings.remote.actions.' + a) : t('settings.remote.doesNothing'));
+const rcWhere = (d) => (d.bus === 'bluetooth' ? t('settings.remote.viaBluetooth')
+                      : d.bus === 'usb' ? t('settings.remote.viaUsb') : t('settings.remote.viaOther'));
+async function rcScan() { rc.bt.scanning = true; await rcCall('bt_remotes/scan', { seconds: 12 }, loadRemoteBt); }
+const rcPair = (mac) => rcCall('bt_remotes/add', { mac }, loadRemoteBt);
+const rcForget = (mac) => rcCall('bt_remotes/remove', { mac }, loadRemoteBt);
+// Un telecomando Bluetooth collegato dovrebbe comparire anche fra i
+// dispositivi di input: se non c'e', i suoi tasti non arrivano (succede
+// quando il nucleo rifiuta la mappa che il telecomando dichiara).
+const rcHasKeys = (name) => !name || rc.devices.some((d) => d.name.startsWith(name) || name.startsWith(d.name));
+
+watch(open, (k) => {
+  if (rcPoll) { clearInterval(rcPoll); rcPoll = null; }
+  if (k !== 'remote') { if (rc.testing) rcTest(false); return; }
+  loadRemote(); loadRemoteBt();
+  rcPoll = setInterval(() => { if (!rc.busy) loadRemote(); }, rc.testing ? 1000 : 4000);
+}, { immediate: true });
+onUnmounted(() => { if (rcPoll) clearInterval(rcPoll); if (rc.testing) rcTest(false); });
 
 // ── Tailscale — join the owner's own tailnet, exposing every port on this
 // appliance (web UI, Lyrion, SMB, ...) from anywhere that tailnet reaches, so
@@ -1650,6 +1730,97 @@ onUnmounted(() => {
               <span class="check">+</span>
             </div>
           </template>
+        </template>
+      </template>
+    </div>
+
+    <!-- Telecomando: quello che l'interfaccia sullo schermo legge da /dev/input,
+         visto da qui attraverso api_server (/remote, /bt_remotes) -->
+    <div class="card" v-if="open === 'remote'">
+      <p class="sub">{{ t('settings.remote.help') }}</p>
+
+      <label>{{ t('settings.remote.connected') }}</label>
+      <p class="sub" v-if="!rc.devices.length">{{ t('settings.remote.none') }}</p>
+      <div v-for="d in rc.devices" :key="d.name + d.address" class="net between">
+        <span>
+          <span style="display:block;">{{ d.name }}</span>
+          <span class="muted">
+            {{ rcWhere(d) }} ·
+            {{ (d.kind === 'remote' || d.chosen) ? t('settings.remote.full') : t('settings.remote.mediaOnly') }}
+            <template v-if="d.chosen"> · {{ t('settings.remote.isMine') }}</template>
+          </span>
+        </span>
+        <button class="secondary fit" :disabled="rc.busy" @click="rcMine(d)">
+          {{ d.chosen ? t('settings.remote.notMine') : t('settings.remote.mine') }}
+        </button>
+      </div>
+      <p class="sub" v-if="rc.devices.length > 1">{{ t('settings.remote.mineHint') }}</p>
+
+      <label>{{ t('settings.remote.test') }}</label>
+      <p class="sub">{{ t('settings.remote.testHintWeb') }}</p>
+      <p class="sub" v-if="!rc.interfaceRunning">{{ t('settings.remote.needsInterface') }}</p>
+      <div class="between item">
+        <span>{{ t('settings.remote.testSwitch') }}</span>
+        <Toggle :model-value="rc.testing" :disabled="rc.busy || !rc.interfaceRunning"
+                @update:model-value="rcTest" />
+      </div>
+      <template v-if="rc.testing">
+        <p class="sub" v-if="!rc.lastKey || !rc.lastKey.code">{{ t('settings.remote.pressAKey') }}</p>
+        <div v-else>
+          <p class="sub">
+            {{ t('settings.remote.keyLabel') }}: <span class="silver">{{ rc.lastKey.key }} · {{ rc.lastKey.code }}</span>
+            <template v-if="rc.lastKey.device"> — {{ rc.lastKey.device }}</template>
+          </p>
+          <p class="sub">
+            {{ t('settings.remote.doesLabel') }}:
+            <span class="silver">{{ rcActionLabel(rcActionOf(rc.lastKey.code, rc.lastKey.device)) }}</span>
+            <template v-if="rcIsCustom(rc.lastKey.code, rc.lastKey.device)"> ({{ t('settings.remote.custom') }})</template>
+          </p>
+          <label>{{ t('settings.remote.assign') }}</label>
+          <select :disabled="rc.busy"
+                  :value="rcActionOf(rc.lastKey.code, rc.lastKey.device)"
+                  @change="rcAssign(rc.lastKey.code, $event.target.value, rc.lastKey.device)">
+            <option value="">{{ t('settings.remote.assignNothing') }}</option>
+            <option v-for="a in rc.actions" :key="a" :value="a">{{ t('settings.remote.actions.' + a) }}</option>
+          </select>
+          <button class="secondary" style="margin-top: 8px;"
+                  v-if="rcIsCustom(rc.lastKey.code, rc.lastKey.device)" :disabled="rc.busy"
+                  @click="rcUnassign(rc.lastKey.code, rc.lastKey.device)">
+            {{ t('settings.remote.unassign') }}
+          </button>
+        </div>
+      </template>
+      <p class="sub">{{ t('settings.remote.keysBody') }}</p>
+
+      <label>{{ t('settings.remote.btTitle') }}</label>
+      <p class="sub">{{ t('settings.remote.btHelp') }}</p>
+      <p class="sub" v-if="!rc.bt.available">{{ t('settings.remote.btUnavailable') }}</p>
+      <p class="sub" v-else-if="!rc.bt.supported">{{ t('settings.remote.btNeedsUpdate') }}</p>
+      <template v-else>
+        <p class="sub" v-if="!rc.bt.remotes.length">{{ t('settings.remote.btNone') }}</p>
+        <div v-for="r in rc.bt.remotes" :key="r.mac" class="net between">
+          <span>
+            <span style="display:block;">{{ r.name || r.mac }}</span>
+            <span class="muted">
+              {{ r.connected ? t('settings.remote.btConnected') : t('settings.remote.btNotConnected') }}
+              <template v-if="r.connected && !rcHasKeys(r.name)"> — {{ t('settings.remote.btNoKeys') }}</template>
+            </span>
+          </span>
+          <button class="danger fit" :disabled="rc.busy" @click="rcForget(r.mac)">{{ t('settings.remote.btForget') }}</button>
+        </div>
+        <button :disabled="rc.busy" @click="rcScan" style="margin-top: 10px;">
+          {{ rc.bt.scanning ? t('settings.remote.btSearching') : t('settings.remote.btSearch') }}
+        </button>
+        <p class="sub" v-if="rc.bt.scanning">{{ t('settings.remote.btSearchingHint') }}</p>
+        <template v-else>
+          <p class="sub" v-if="!rc.bt.found.length">{{ t('settings.remote.btFoundNone') }}</p>
+          <div v-for="d in rc.bt.found" :key="d.mac" class="net between" @click="rcPair(d.mac)">
+            <span>
+              <span style="display:block;">{{ d.name || d.mac }}</span>
+              <span class="muted">{{ d.mac }}</span>
+            </span>
+            <span class="check">+</span>
+          </div>
         </template>
       </template>
     </div>

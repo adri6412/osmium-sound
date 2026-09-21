@@ -174,12 +174,31 @@ bool mediaOnly(const QString &a) {
 
 Remote::Remote(const QString &configDir, QObject *parent) : QObject(parent), m_configDir(configDir) {
     m_clock.start();
-    {   // quale dispositivo l'utente ha indicato come il suo telecomando
-        QFile f(m_configDir + "/remote-device");
-        if (f.open(QIODevice::ReadOnly | QIODevice::Text))
-            m_chosen = QString::fromUtf8(f.readLine()).trimmed();
-    }
+    loadChosen();
     loadCustom();
+    // I due file li cambia anche il web admin (api_server /remote/*): si
+    // rileggono quando cambiano, invece di far ripartire l'interfaccia.
+    m_confRescan.setSingleShot(true);
+    m_confRescan.setInterval(300);
+    connect(&m_confRescan, &QTimer::timeout, this, [this]() {
+        loadChosen();
+        loadCustom();
+        for (auto it = m_open.begin(); it != m_open.end(); ++it)
+            it->chosen = !m_chosen.isEmpty() && it->name == m_chosen;
+        readWebLearn();
+        publishDevices();
+    });
+    connect(&m_confWatch, &QFileSystemWatcher::directoryChanged, this, [this]() { m_confRescan.start(); });
+    if (QDir(m_configDir).exists()) m_confWatch.addPath(m_configDir);
+    QDir().mkpath("/run/hifi-remote");
+    if (QDir("/run/hifi-remote").exists()) m_confWatch.addPath("/run/hifi-remote");
+    // la finestra di prova del web admin scade da sola: la si ricontrolla
+    m_learnTick.setInterval(3000);
+    connect(&m_learnTick, &QTimer::timeout, this, [this]() {
+        const bool was = m_webLearnUntil > QDateTime::currentSecsSinceEpoch();
+        if (!was && m_webLearnUntil) { m_webLearnUntil = 0; emit learningChanged(); m_learnTick.stop(); }
+    });
+    readWebLearn();
     m_repeat.setSingleShot(false);
     connect(&m_repeat, &QTimer::timeout, this, [this]() {
         if (m_repeatAction.isEmpty()) { m_repeat.stop(); return; }
@@ -331,11 +350,13 @@ void Remote::onKey(Dev &dev, int code, int value) {
         m_lastKey = QVariantMap{ { "code", code }, { "key", keyName(code) }, { "action", act },
                                  { "device", dev.name }, { "at", m_clock.elapsed() } };
         emit lastKeyChanged();
+        publishLastKey();
         return;                             // in prova non si agisce
     }
     m_lastKey = QVariantMap{ { "code", code }, { "key", keyName(code) }, { "action", act },
                              { "device", dev.name }, { "at", m_clock.elapsed() } };
     emit lastKeyChanged();
+    publishLastKey();
 
     if (act.isEmpty()) return;
     // Da un dispositivo che NON e' un telecomando (una tastiera, un air mouse)
@@ -506,6 +527,41 @@ bool Remote::saveCustom(int code, const QString &device) {
     return true;
 }
 
+// Per il pannello del web admin: l'ultimo tasto, dove l'api_server lo legge.
+void Remote::publishLastKey() const {
+    QJsonObject o;
+    o.insert("code", m_lastKey.value("code").toInt());
+    o.insert("key", m_lastKey.value("key").toString());
+    o.insert("action", m_lastKey.value("action").toString());
+    o.insert("device", m_lastKey.value("device").toString());
+    o.insert("at", QDateTime::currentSecsSinceEpoch());
+    QDir().mkpath("/run/hifi-remote");
+    QFile f("/run/hifi-remote/last.json");
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return;
+    f.write(QJsonDocument(o).toJson(QJsonDocument::Compact));
+}
+
+void Remote::readWebLearn() {
+    qint64 until = 0;
+    QFile f("/run/hifi-remote/learn");
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) until = QString::fromUtf8(f.readAll()).trimmed().toLongLong();
+    if (until == m_webLearnUntil) return;
+    const bool before = learning();
+    m_webLearnUntil = until;
+    if (until > QDateTime::currentSecsSinceEpoch()) { stopRepeat(); m_learnTick.start(); }
+    if (learning() != before) emit learningChanged();
+}
+
+void Remote::loadChosen() {
+    QFile f(m_configDir + "/remote-device");
+    QString name;
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) name = QString::fromUtf8(f.readLine()).trimmed();
+    if (name == m_chosen) return;
+    m_chosen = name;
+    if (m_learning && m_learnDevice != m_chosen) { m_learnDevice = m_chosen; emit learnDeviceChanged(); }
+    emit devicesChanged();
+}
+
 void Remote::setLearning(bool on) {
     if (m_learning == on) return;
     m_learning = on;
@@ -529,6 +585,7 @@ void Remote::setChosen(const QString &device) {
     QDir().mkpath(m_configDir);
     QFile f(m_configDir + "/remote-device");
     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(device.toUtf8() + "\n");
+    f.close();
     for (auto it = m_open.begin(); it != m_open.end(); ++it)
         it->chosen = !m_chosen.isEmpty() && it->name == m_chosen;
     // in prova si passa ad ascoltare lui
