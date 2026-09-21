@@ -13,6 +13,8 @@ Item {
     readonly property bool active: kind !== 0
     property bool closing: false
     visible: active
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.active && !root.closing }
     anchors.fill: parent
 
     property string title: ""

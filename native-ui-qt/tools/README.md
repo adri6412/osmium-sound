@@ -18,6 +18,10 @@ un finto apparecchio in Python.
   pannello veri: un `QMouseEvent` costruito a mano e mandato alla finestra non tiene la presa fra un
   evento e l'altro, e i trascinamenti non diventavano mai scorrimenti. Il primo evento dopo l'avvio
   puo' andare perso (stato del puntatore su xcb): premettere un `move`.
+- `fake-remote.py` — un telecomando finto per provare la lettura di evdev senza telecomando:
+  `fake-remote.py tree DIR` prepara un albero sysfs e una fifo, poi `dev-run.sh` con `FAKE_REMOTE=DIR`
+  lo fa vedere all'interfaccia e `fake-remote.py send DIR play next up ok` preme i tasti.
+  🚨 la fifo non e' un evdev vero: la presa esclusiva (EVIOCGRAB) non si puo' provare cosi'.
 - `mock-server.py` — scenari via ambiente: `MOCK_LONG_QUEUE=1` (40 brani in coda),
   `MOCK_SHARED_LMS=N` (Lyrion altrui: prima solo un telefono, il nostro "Osmium" compare dopo N s),
   `MOCK_PLAYERS=1` (altri due player sul server, ognuno col suo now playing: per il selettore di player;

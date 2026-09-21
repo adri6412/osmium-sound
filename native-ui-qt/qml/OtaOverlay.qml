@@ -13,6 +13,8 @@ Item {
     readonly property bool done: Player.otaState === "done" || Player.otaState === "success"
     readonly property bool error: Player.otaState === "error" || Player.otaState === "failed"
     visible: active
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.active }
     anchors.fill: parent
     Connections { target: Player; function onOtaChanged() { if (root.busy && Player.otaState !== root.lastState) root.dismissed = false; root.lastState = Player.otaState } }
     MouseArea { anchors.fill: parent }

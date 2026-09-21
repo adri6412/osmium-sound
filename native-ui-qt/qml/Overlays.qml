@@ -59,6 +59,8 @@ Item {
     // disegnare sotto (vedi Screensaver.covering)
     property bool covered: false
     visible: active !== 0 && !covered
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.active !== 0 && !root.covered }
     // sfondo scuro: /60 per la coda, /70 per i dialoghi
     Rectangle {
         anchors.fill: parent

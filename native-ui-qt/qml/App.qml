@@ -29,6 +29,7 @@ Item {
     }
     Component.onCompleted: {
         Ui.app = app; Ui.vk = vk; Ui.dialogs = dialogs; Ui.toast = toast; Ui.overlays = overlays
+        Nav.root = app                                     // il telecomando cerca i riquadri da qui
         npSpring.set(Sys.startExpanded ? 0 : 1)
         expanded = Sys.startExpanded
         if (tutorialCanStart) tutorialDelay.restart()      // no intro or wizard to wait for
@@ -82,6 +83,93 @@ Item {
     function openAlbum(id, title) { if (!id) return; setExpanded(false); mainScreen.browser.openAlbum(id, title) }
     function openArtist(id, name) { if (!id) return; setExpanded(false); mainScreen.browser.openArtist(id, name) }
 
+    // ─── telecomando ───────────────────────────────────────────────────────
+    // Da qui passano il telecomando (USB o Bluetooth, letto in remote.cpp) e
+    // una tastiera attaccata: Remote traduce i tasti in azioni e questa
+    // funzione decide cosa vuol dire ogni azione ADESSO. "Indietro" con un
+    // dialogo aperto chiude il dialogo; nella libreria torna di un passo.
+    // Le frecce non fanno cose diverse schermata per schermata: muovono il
+    // riflettore (Nav.qml), e OK preme dove il riflettore si trova.
+    Connections {
+        target: Remote
+        function onAction(name, repeat) { app.remote(name, repeat) }
+    }
+    // il dito ha la precedenza: appoggiarlo spegne il riflettore
+    Connections { target: Sys; function onPointerTouched() { Nav.hide() } }
+
+    function remote(a, repeat) {
+        // col salvaschermo davanti, il primo tasto lo manda via e basta: chi
+        // sveglia lo schermo non si aspetta che quel tasto apra anche qualcosa.
+        // I tasti di riproduzione, invece, fanno anche il loro mestiere.
+        if (screensaver.active) {
+            screensaver.hide()
+            if (a === "up" || a === "down" || a === "left" || a === "right" || a === "ok" ||
+                a === "back" || a === "home" || a === "menu" || a === "standby" ||
+                a === "pageUp" || a === "pageDown" || a === "search") return
+        }
+        switch (a) {
+        case "up": case "down": case "left": case "right": Nav.move(a); return
+        case "pageUp": Nav.page("up"); return
+        case "pageDown": Nav.page("down"); return
+        case "ok": Nav.activate(false); return
+        case "menu": Nav.activate(true); return            // come tenere il dito premuto
+        case "back": remoteBack(); return
+        case "home": remoteHome(); return
+        case "playPause": Player.togglePlay(); return
+        case "play": Player.play(true); return
+        case "pause": Player.play(false); return
+        case "stop": Player.cmd(["stop"]); return
+        case "next": Player.next(); return
+        case "prev": Player.prev(); return
+        case "forward": Player.seek(Player.elapsed + 30); return
+        case "rewind": Player.seek(Math.max(0, Player.elapsed - 30)); return
+        case "volumeUp": remoteVolume(repeat ? 2 : 5); return
+        case "volumeDown": remoteVolume(repeat ? -2 : -5); return
+        case "mute":
+            Player.toggleMute()
+            toast.say(Player.muted ? "volume-2" : "volume-x", Tr.t(Player.muted ? "remote.soundOn" : "remote.muted"))
+            return
+        case "nowPlaying": setExpanded(!expanded); return
+        case "queue": if (overlays.busy) overlays.close(); else overlays.openQueue(); return
+        case "search": setExpanded(false); mainScreen.browser.focusSearch(); return
+        case "favorite": if (Player.favoritesAvailable) Player.toggleFavorite(); return
+        case "shuffle": Player.cycleShuffle(); return
+        case "standby": screensaver.show(true); return
+        case "eject": if (cdrip.haveDisc) cdrip.eject(); return
+        }
+    }
+    // Il volume dal telecomando: un passo da 5, piu' corto a tasto tenuto
+    // premuto (le ripetizioni arrivano otto al secondo). Il riquadro che
+    // compare e' l'unico posto dove si vede il volume da qualunque schermata.
+    function remoteVolume(d) {
+        if (Player.volumeFixed) return
+        var v = Math.max(0, Math.min(100, Player.volume + d))
+        Player.setVolume(v)
+        toast.say(v === 0 ? "volume-x" : "volume-2", v + "%")
+    }
+    // "Indietro": chiude quello che c'e' davanti, uno strato per volta
+    function remoteBack() {
+        if (vk.active) { vk.close(false); return }
+        if (dialogs.active) { dialogs.close(); return }
+        if (cdrip.open) { cdrip.close(); return }
+        if (tutorial.active) { tutorial.finish(); return }
+        if (overlays.busy) { overlays.close(); return }
+        if (ota.active) { ota.dismissed = true; return }
+        if (mainScreen.browser.menuOpen) { mainScreen.browser.closeMenu(); return }
+        if (expanded) { setExpanded(false); return }
+        mainScreen.browser.navBack()
+    }
+    // "Casa": la libreria, com'e' appena accesa
+    function remoteHome() {
+        if (vk.active) vk.close(false)
+        if (dialogs.active) dialogs.close()
+        if (overlays.busy) overlays.close()
+        setExpanded(false)
+        mainScreen.browser.showMusicTab()
+        mainScreen.browser.navHome()
+        Nav.clear()
+    }
+
     // per il canale di collaudo (eval): app.settings.openSection(n) ecc.
     readonly property var settings: Ui.settings
     readonly property var main: mainScreen
@@ -93,6 +181,7 @@ Item {
     readonly property var toastItem: toast
     readonly property var otaItem: ota
     readonly property var tour: tutorial
+    readonly property var nav: Nav                    // il riflettore del telecomando
 
     MainScreen {
         id: mainScreen

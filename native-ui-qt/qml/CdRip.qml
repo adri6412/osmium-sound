@@ -33,6 +33,8 @@ Item {
     readonly property bool bannerVisible: haveDisc && discid !== dismissed
     anchors.fill: parent
     visible: open
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.open && !root.closing }
     Component.onCompleted: Ui.cdrip = root
 
     Spring { id: sc; stiffness: 550; damping: 30; rate: Theme.motionRate }

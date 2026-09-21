@@ -4,11 +4,26 @@
 #pragma once
 #include <QObject>
 #include <QColor>
+#include <QEvent>
 #include <QHash>
 #include <QFileSystemWatcher>
+#include <QPointF>
 #include <QTimer>
 
 class QQuickWindow;
+class QWindow;
+
+// ─── helpers shared with remote.cpp ────────────────────────────────────────
+// A file's first line, and one bit of a /sys/class/input bitmap (hex words,
+// most significant first): the remote control classifies input devices with
+// the same two helpers this file uses to decide whether a keyboard is there.
+QString hifiSysfsRead(const QString &path);
+bool hifiSysfsBit(const QString &bitmap, int bit);
+// A mouse event through the QPA layer, like a real mouse. The test channel
+// and the remote control's OK button both press on the scene this way; see
+// the comment on the implementation for why a hand-built QMouseEvent is not
+// the same thing.
+void hifiSendMouse(QWindow *w, QEvent::Type type, const QPointF &p, Qt::MouseButton button = Qt::LeftButton);
 
 class Sys : public QObject {
     Q_OBJECT
@@ -52,6 +67,11 @@ public:
     Q_INVOKABLE QString conf(const QString &name, const QString &fallback = QString()) const;
     Q_INVOKABLE bool setConf(const QString &name, const QString &value) const;
     Q_INVOKABLE bool shot(const QString &path) const;
+    // A press (and release) on the scene at a point in window coordinates:
+    // how the remote control's OK button "touches" the control it has the
+    // highlight on. `holdMs` > 0 keeps the finger down that long, which is
+    // what opens a long-press menu.
+    Q_INVOKABLE void tapAt(qreal x, qreal y, int holdMs = 0);
     Q_INVOKABLE void rescanInput();
     void noteRealKey();               // un tasto lettera premuto davvero
     Q_INVOKABLE void quit() const;
@@ -67,9 +87,14 @@ public:
     Q_INVOKABLE QString boxShadow(qreal radius, qreal blur, qreal spread, const QColor &color);
     qint64 lastInput() const { return m_lastInput; }
     void noteInput();
+    // Un dito (o il mouse) davvero appoggiato sullo schermo: il riflettore del
+    // telecomando si spegne, perche' da qui in poi comanda il dito. Le
+    // pressioni che il telecomando stesso inietta (Sys::tapAt) non contano.
+    void notePointer();
 
 signals:
     void hasKeyboardChanged();
+    void pointerTouched();
     void pointerEnabledChanged();
     void lastInputChanged();
 
@@ -85,4 +110,5 @@ private:
     QTimer m_rescan;
     QQuickWindow *m_win = nullptr;
     qint64 m_lastInput = 0;
+    qint64 m_injectUntil = -1;      // finestra in cui le pressioni sono nostre
 };

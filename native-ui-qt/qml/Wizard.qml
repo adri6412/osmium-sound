@@ -14,6 +14,8 @@ Item {
     readonly property bool active: mode !== 0
     property bool dry: false
     visible: active
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.active }
     anchors.fill: parent
     // primo avvio
     property string ip: ""

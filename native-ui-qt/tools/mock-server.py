@@ -18,6 +18,7 @@ STATE = {
     "lms_mode": "local", "lms_host": "", "tz": "Europe/Rome", "device_name": "Osmium", "ota_channel": "dev", "lyrion_channel": "release",
     "audio": "hw:CARD=DAC,DEV=0", "shell_user": "", "pldir": "/srv/music/playlist", "skin": "osmium", "fmt": {"state": "idle"},
     "install": {"state": "idle"}, "cd": {"no_disc": True}, "cdrip": {"state": "idle"},
+    "bt_remotes": {"available": True, "supported": True, "adapter": True, "remotes": [], "found": []},
     # the top-bar connectivity icon: internet | lan | offline, wired | wireless | none
     "net": os.environ.get("MOCK_NET", "internet"), "net_type": os.environ.get("MOCK_NET_TYPE", "wired"),
     # Ricerca dei dispositivi in rete: uno con nome mDNS, uno che chiede la
@@ -391,6 +392,8 @@ class H(BaseHTTPRequestHandler):
             if u.path.startswith("/music/"): return self._file(COVER, "image/jpeg")
             if u.path.startswith("/plugins/"): return self._file(COVER, "image/png")
             return self._json({"ok": True})
+        if port == 8000 and u.path == "/bt_remotes":
+            return self._json(STATE["bt_remotes"])
         if port == 8000 and u.path in ("/anim_store", "/nowplaying_animation"):
             if ANIM_API is not None:
                 if u.path == "/anim_store":
@@ -511,6 +514,26 @@ class H(BaseHTTPRequestHandler):
                   "/vu_store/remove": lambda: VU_API.vu_store_remove(data.get("id")), "/vu_store/seen": lambda: VU_API.vu_store_mark_seen(),
                   "/vu_style": lambda: VU_API.set_vu_style(data.get("style"))}.get(u.path)
             if fn: return self._json(fn())
+        if port == 8000 and u.path.startswith("/bt_remotes"):
+            # telecomandi Bluetooth: accoppiamento finto, quanto basta a
+            # guardare la sezione Telecomando delle impostazioni
+            r = STATE["bt_remotes"]
+            if u.path == "/bt_remotes/scan":
+                time.sleep(1.0)
+                r["found"] = [{"mac": "AA:BB:CC:00:11:22", "name": "Osmium Remote", "input": True},
+                              {"mac": "AA:BB:CC:33:44:55", "name": "Cuffie da salotto", "input": False}]
+                return self._json(dict(r, success=True, message="Ricerca finita"))
+            if u.path == "/bt_remotes/add":
+                mac = str(data.get("mac") or "")
+                dev = next((d for d in r["found"] if d["mac"] == mac), None)
+                if dev:
+                    r["remotes"] = r["remotes"] + [{"mac": mac, "name": dev["name"], "connected": True}]
+                    r["found"] = [d for d in r["found"] if d["mac"] != mac]
+                return self._json(dict(r, success=True, message="Telecomando aggiunto"))
+            if u.path == "/bt_remotes/remove":
+                mac = str(data.get("mac") or "")
+                r["remotes"] = [d for d in r["remotes"] if d["mac"] != mac]
+                return self._json(dict(r, success=True, message="Telecomando dimenticato"))
         if port == 8000:
             if u.path == "/wifi_connect":
                 time.sleep(1.0)                      # nmcli takes its time

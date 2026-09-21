@@ -18,6 +18,8 @@ Item {
     property var field: null            // TextField_ collegato, se c'e'
     property var cb: null               // cb(confirmed, text)
     visible: active
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.active && !root.closing }
     anchors.fill: parent
 
     Spring { id: slide; stiffness: 320; damping: 24; rate: Theme.motionRate }      // 0 fuori, 1 a posto

@@ -19,12 +19,41 @@
 #include <QQuickWindow>
 #include <QTextStream>
 #include <QtDebug>
+#include <QMouseEvent>
+#include <QWindow>
 #include <fcntl.h>
 #include <linux/input.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#if __has_include(<qpa/qwindowsysteminterface.h>)
+#include <qpa/qwindowsysteminterface.h>
+#define HIFI_HAVE_QPA_MOUSE 1
+#endif
 
 static QElapsedTimer g_clock;
+
+// 🚨 Through the QPA layer, like a real mouse: a QMouseEvent built by hand and
+// sent straight to the window does not keep the press position and the grab
+// from one event to the next, so drags never turn into flicks. The header
+// ships with qt6-base-private-dev; without it this falls back to the plain
+// event, which is enough for a press and a release on the same point (what
+// the remote control's OK button does).
+void hifiSendMouse(QWindow *w, QEvent::Type type, const QPointF &p, Qt::MouseButton button) {
+    if (!w) return;
+    const Qt::MouseButtons held = type == QEvent::MouseButtonRelease ? Qt::NoButton : Qt::LeftButton;
+#ifdef HIFI_HAVE_QPA_MOUSE
+    static ulong ts = 5000;
+    ts += 16;
+    // a move carries NO button (like a real mouse): with one, Qt takes every
+    // move for a new press and the drag restarts at each event
+    const Qt::MouseButton btn = type == QEvent::MouseMove ? Qt::NoButton : button;
+    QWindowSystemInterface::handleMouseEvent<QWindowSystemInterface::SynchronousDelivery>(
+        w, ts, p, w->mapToGlobal(p.toPoint()), held, btn, type);
+#else
+    QMouseEvent ev(type, p, p, w->mapToGlobal(p.toPoint()), button, held, Qt::NoModifier);
+    QCoreApplication::sendEvent(w, &ev);
+#endif
+}
 
 Sys::Sys(const QString &assets, QObject *parent) : QObject(parent), m_assets(assets) {
     g_clock.start();
@@ -66,14 +95,15 @@ static bool testBit(const unsigned long *arr, int bit) {
 // Bluetooth), e il cui pezzo di ferro non sia anche un touchscreen.
 // Le tastiere interne dei portatili (i8042/I2C/SPI) restano fuori di
 // proposito: le copre il tasto lettera premuto davvero (Sys::noteRealKey).
-static QString sysfsRead(const QString &path) {
+QString hifiSysfsRead(const QString &path) {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
     return QString::fromLatin1(f.readAll()).trimmed();
 }
+static inline QString sysfsRead(const QString &path) { return hifiSysfsRead(path); }
 
 // I bitmap di sysfs sono parole esadecimali, la piu' significativa per prima.
-static bool sysfsBit(const QString &text, int bit) {
+bool hifiSysfsBit(const QString &text, int bit) {
     if (text.isEmpty()) return false;
     const QStringList words = text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
     const int wordBits = int(sizeof(unsigned long) * 8);
@@ -83,6 +113,7 @@ static bool sysfsBit(const QString &text, int bit) {
     const qulonglong w = words.at(idx).toULongLong(&ok, 16);
     return ok && ((w >> (bit % wordBits)) & 1ULL);
 }
+static inline bool sysfsBit(const QString &text, int bit) { return hifiSysfsBit(text, bit); }
 
 // Il pezzo di ferro a cui appartiene un dispositivo: un USB composto (touch +
 // "tastiera", oppure tastiera + touchpad, o un ricevitore senza fili) si
@@ -193,6 +224,25 @@ bool Sys::shot(const QString &path) const {
     if (ok) qInfo("sys: fotografia in %s", qPrintable(path.isEmpty() ? "/tmp/hifi-qt.png" : path));
     return ok;
 }
+// Il telecomando "tocca" il riquadro che ha il riflettore: una pressione e un
+// rilascio nel punto dato (coordinate della finestra), cosi' passano dallo
+// stesso percorso di un dito vero — animazione della pressione compresa.
+void Sys::tapAt(qreal x, qreal y, int holdMs) {
+    if (!m_win) return;
+    // le pressioni che seguono sono nostre: non devono spegnere il riflettore
+    m_injectUntil = g_clock.elapsed() + holdMs + 400;
+    const QPointF p(x, y);
+    hifiSendMouse(m_win, QEvent::MouseButtonPress, p);
+    if (holdMs > 0) {
+        // the long press that opens a row's menu: the finger stays down past
+        // MouseArea's pressAndHoldInterval (500 ms) without moving
+        QTimer::singleShot(holdMs, this, [this, p]() { hifiSendMouse(m_win, QEvent::MouseButtonRelease, p); });
+    } else {
+        hifiSendMouse(m_win, QEvent::MouseButtonRelease, p);
+    }
+    noteInput();
+}
+
 void Sys::quit() const { QCoreApplication::quit(); }
 qint64 Sys::now() const { return g_clock.elapsed(); }
 void Sys::log(const QString &s) const { qInfo("qml: %s", qPrintable(s)); }
@@ -204,6 +254,11 @@ void Sys::noteInput() {
     if (n - m_lastInput < 200) { m_lastInput = n; return; }   // non inondare i binding
     m_lastInput = n;
     emit lastInputChanged();
+}
+
+void Sys::notePointer() {
+    if (g_clock.elapsed() < m_injectUntil) return;
+    emit pointerTouched();
 }
 
 // ─── icone tinte ────────────────────────────────────────────────────────────

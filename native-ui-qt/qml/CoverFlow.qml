@@ -188,6 +188,16 @@ Item {
         property real vel: 0                     // albums per second, from the last moves
         readonly property real dragPx: root.cs * 0.45   // finger travel per album
         pressAndHoldInterval: 500
+        // Col telecomando questo riquadro e' la copertina davanti: OK la apre,
+        // come il dito che la tocca. Il riflettore sta intorno a quella, non
+        // intorno a tutta la fila.
+        property bool navigable: true
+        NavRing {
+            fill: false
+            radius: 6
+            x: root.cx - root.cs / 2 - 4; y: root.coverY - 4
+            width: root.cs + 8; height: root.cs + 8
+        }
         // which album is under x: the front cover, or a turned one by the
         // strip of it that stays uncovered by the nearer ones
         function hit(mx) {

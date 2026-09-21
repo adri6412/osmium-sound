@@ -13,6 +13,8 @@ Item {
     property int tries: 0
     signal picked()
     visible: state_ > 0
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.state_ > 0 }
     anchors.fill: parent
     z: 10
 

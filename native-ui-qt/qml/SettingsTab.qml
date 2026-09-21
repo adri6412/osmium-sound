@@ -34,6 +34,21 @@ Item {
     property string btNameEdit: ""
     property bool btBusy: false
     property bool btScanning: false
+    // Telecomando: la prova dei tasti e il Bluetooth della sua sezione.
+    // 🚨 `Remote.learning` non si accende a mano ma segue questa coppia: uscire
+    // dalla sezione con la prova accesa lascerebbe un apparecchio in cui il
+    // telecomando non comanda piu' niente, e nessuno capirebbe perche'.
+    property bool remoteTest: false
+    property bool remoteBusy: false
+    property bool remoteScanning: false
+    readonly property bool remoteSection: active >= 0 && active < secs.length && secs[active].id === "remote"
+    Binding { target: Remote; property: "learning"; value: root.remoteTest && root.remoteSection }
+    Connections {
+        target: Remote
+        function onLastKeyChanged() { if (root.remoteSection && root.remoteTest) root.rebuild() }
+        function onLearnDeviceChanged() { if (root.remoteSection) root.rebuild() }
+        function onDevicesChanged() { if (root.remoteSection) root.rebuild() }
+    }
     // Procedura guidata "aggiungi una cartella di rete". Sostituisce le quattro
     // caselle vuote (server/share/utente/password), che sono inutilizzabili per
     // chi non sa gia' cos'e' una condivisione SMB: prima si cercano da soli i
@@ -76,6 +91,7 @@ Item {
         { id: "sources", icon: "hard-drive", key: "settings.sections.sources" },
         { id: "audio", icon: "volume-2", key: "settings.sections.audio" },
         { id: "btSpeakers", icon: "bluetooth", key: "settings.sections.btSpeakers" },
+        { id: "remote", icon: "remote", key: "settings.sections.remote" },
         { id: "playback", icon: "sliders", key: "settings.sections.playback" },
         { id: "vuMeters", icon: "audio-lines", key: "settings.sections.vuMeters" },
         { id: "animations", icon: "disc-3", key: "settings.sections.animations" },
@@ -183,6 +199,22 @@ Item {
                     btSpeakers = d.speakers || []; btFound = d.found || []
                 }
                 root.btBusy = false; root.btScanning = false; root.rebuild()
+            }, 130000)
+        }
+        // Bluetooth remotes (api_server /bt_remotes), read only while the
+        // remote section is open — same reason as the speakers above.
+        // `rmSupported` is false on a device whose system half is older than
+        // this feature: the pairing would start and be torn down again.
+        property bool rmAvailable: false; property bool rmSupported: false; property bool rmAdapter: false
+        property var rmRemotes: []
+        property var rmFound: []
+        function loadRemotes() {
+            Api.get(api("/bt_remotes"), function(ok, d) {
+                if (ok && d && typeof d === "object") {
+                    rmAvailable = !!d.available; rmSupported = !!d.supported; rmAdapter = !!d.adapter
+                    rmRemotes = d.remotes || []; rmFound = d.found || []
+                }
+                root.remoteBusy = false; root.remoteScanning = false; root.rebuild()
             }, 130000)
         }
         // the store's list, with previews: separate from load(), which runs on
@@ -496,12 +528,14 @@ Item {
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
         btBand = -1; btNameEdit = ""; btBusy = false; btScanning = false
+        remoteTest = false; remoteBusy = false; remoteScanning = false
         wizReset()
         if (id === "timezone" && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
         if (id === "webRemote") cfg.mintToken()
         if (id === "multiroom" && cfg.lmsMode === "follow") cfg.loadDiscover()
         if (id === "multiroom") cfg.loadLibrary()
         if (id === "btSpeakers") { btBusy = true; cfg.loadBt() }
+        if (id === "remote") { remoteBusy = true; cfg.loadRemotes() }
         if (id === "vuMeters") cfg.loadStore(true)
         if (id === "animations") cfg.loadAnimStore(true)
         if (id === "thirdPartyNotices" && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
@@ -758,6 +792,7 @@ Item {
             case "library": secLibrary(); break
             case "multiroom": secMultiroom(); break
             case "btSpeakers": secBtSpeakers(); break
+            case "remote": secRemote(); break
             case "alarm": secAlarm(); break
             case "network": secNetwork(); break
             case "webRemote": secWebremote(); break
@@ -1363,6 +1398,111 @@ Item {
             r.icon = dev.audio ? "speaker" : "bluetooth"; r.hh = 60; r.style = "row"; r.dim = btBusy
         }
     }
+    // ── Telecomando ───────────────────────────────────────────────────────
+    // Un telecomando USB o Bluetooth comanda tutta l'interfaccia (remote.cpp
+    // legge i tasti, Nav.qml muove il riflettore). Qui si vede quello che c'e'
+    // attaccato, si prova cosa manda ogni tasto, e si accoppia un telecomando
+    // Bluetooth.
+    // Un telecomando Bluetooth collegato dovrebbe comparire anche fra i
+    // dispositivi di input: il nome che si vede li' e' quello del Bluetooth
+    // piu' il tipo ("G20S PRO" -> "G20S PRO Keyboard").
+    function remoteHasKeys(btName) {
+        if (!btName) return true
+        var devs = Remote.devices
+        for (var i = 0; i < devs.length; i++) {
+            var n = String(devs[i].name || "")
+            if (n.indexOf(btName) === 0 || btName.indexOf(n) === 0) return true
+        }
+        return false
+    }
+    function secRemote() {
+        help("settings.remote.help")
+
+        label("settings.remote.connected")
+        var devs = Remote.devices
+        if (!devs.length) helpText(Tr.t("settings.remote.none"), 13)
+        for (var i = 0; i < devs.length; i++) {
+            var d = devs[i]
+            var where = d.bus === "usb" ? Tr.t("settings.remote.viaUsb")
+                      : d.bus === "bluetooth" ? Tr.t("settings.remote.viaBluetooth")
+                      : Tr.t("settings.remote.viaOther")
+            var what = (d.grabbed || d.chosen) ? Tr.t("settings.remote.full") : Tr.t("settings.remote.mediaOnly")
+            var sub = where + " · " + what
+            if (d.chosen) sub += " · " + Tr.t("settings.remote.isMine")
+            var dr = info(String(d.name || ""), sub)
+            dr.style = "row"; dr.icon = d.bus === "bluetooth" ? "bluetooth-connected" : "usb"; dr.hh = 60
+            // 🚨 Tastiera e telecomando mandano gli stessi codici: dire qual e'
+            // il telecomando e' l'unico modo per non confonderli (remote.h).
+            mini(dr, Tr.t(d.chosen ? "settings.remote.notMine" : "settings.remote.mine"),
+                 "rm_mine", d.chosen ? "light" : "accent", false, String(d.name || ""))
+        }
+        if (devs.length > 1) help("settings.remote.mineHint", 12)
+
+        sep()
+        var t = toggle(Tr.t("settings.remote.test"), Tr.t("settings.remote.testHint"), remoteTest, "rm_test")
+        t.icon = "remote"
+        if (remoteTest) {
+            var k = Remote.lastKey
+            var heard = String(Remote.learnDevice || "")
+            if (!heard) helpText(Tr.t("settings.remote.pressAKey"), 13)
+            else {
+                // da qui in poi si ascolta lui solo, e quello che si assegna
+                // vale per lui solo
+                var li = info(Tr.t("settings.remote.listening"), heard); li.style = "row"; li.icon = "remote"
+                mini(li, Tr.t("settings.remote.listenAnother"), "rm_listen", "light", false, "")
+            }
+            if (heard && k && k.code) {
+                var ki = info(Tr.t("settings.remote.keyLabel"), String(k.key) + "  ·  " + k.code)
+                ki.mono = true; ki.style = "row"
+                var a = String(k.action || "")
+                var does = a ? Tr.t("settings.remote.actions." + a) : Tr.t("settings.remote.doesNothing")
+                if (Remote.isCustom(k.code, heard)) does += "  (" + Tr.t("settings.remote.custom") + ")"
+                info(Tr.t("settings.remote.doesLabel"), does).style = "row"
+                var asg = action(Tr.t("settings.remote.assign"), "rm_assign", "accent")
+                asg.hh = 44; asg.arg = String(k.code)
+                if (Remote.isCustom(k.code, heard)) {
+                    var un = action(Tr.t("settings.remote.unassign"), "rm_unassign", "light")
+                    un.hh = 40; un.arg = String(k.code)
+                }
+            }
+        }
+        note(Tr.t("settings.remote.keysBody"), "dark", "info", 12)
+
+        sep()
+        label("settings.remote.btTitle")
+        help("settings.remote.btHelp", 12)
+        if (!cfg.rmAvailable) { note(Tr.t("settings.remote.btUnavailable"), "dark", "info"); return }
+        if (!cfg.rmSupported) { note(Tr.t("settings.remote.btNeedsUpdate"), "dark", "info"); return }
+        if (remoteBusy && !cfg.rmRemotes.length && !cfg.rmFound.length) { helpText(Tr.t("common.loading"), 13); return }
+
+        if (!cfg.rmRemotes.length) helpText(Tr.t("settings.remote.btNone"), 13)
+        else {
+            label("settings.remote.btYours")
+            for (var j = 0; j < cfg.rmRemotes.length; j++) {
+                var rm = cfg.rmRemotes[j]
+                var rr = info(String(rm.name || rm.mac),
+                              rm.connected ? Tr.t("settings.remote.btConnected") : Tr.t("settings.remote.btNotConnected"))
+                rr.style = "row"; rr.icon = rm.connected ? "bluetooth-connected" : "bluetooth"; rr.hh = 60
+                mini(rr, Tr.t("settings.remote.btForget"), "rm_forget", "red", remoteBusy, rm.mac)
+                // 🚨 Collegato ma muto: succede quando il nucleo rifiuta il
+                // descrittore HID che il telecomando dichiara (capita con una
+                // copia in cache letta a meta'). Dirlo, e dire cosa fare, e'
+                // meglio di un telecomando che sembra a posto e non fa niente.
+                if (rm.connected && !remoteHasKeys(String(rm.name || "")))
+                    note(Tr.t("settings.remote.btNoKeys"), "dark", "alert-triangle", 12)
+            }
+        }
+        var sc = action(remoteScanning ? Tr.t("settings.remote.btSearching") : Tr.t("settings.remote.btSearch"), "rm_scan", "accent")
+        sc.icon = "bluetooth-searching"; sc.hh = 44; sc.dim = remoteScanning || remoteBusy
+        if (remoteScanning) { helpText(Tr.t("settings.remote.btSearchingHint"), 12); return }
+        if (!cfg.rmFound.length) { helpText(Tr.t("settings.remote.btFoundNone"), 13); return }
+        label("settings.remote.btFound")
+        for (var f = 0; f < cfg.rmFound.length; f++) {
+            var dev = cfg.rmFound[f]
+            var fr = option(String(dev.name || dev.mac), dev.mac, dev.mac, false, "rm_add")
+            fr.icon = "remote"; fr.hh = 60; fr.style = "row"; fr.dim = remoteBusy
+        }
+    }
     function secAlarm() {
         help("settings.alarm.help")
         if (remoteNote()) return
@@ -1670,6 +1810,22 @@ Item {
     }
     Timer { id: dimRefresh; interval: 150; onTriggered: root.rebuild() }
 
+    // Come per gli altoparlanti: ogni risposta di /bt_remotes/* porta lo stato
+    // intero, e c'e' un solo posto che lo apre e decide il messaggio.
+    function rmApply(ok, d) {
+        remoteBusy = false; remoteScanning = false
+        if (ok && d && typeof d === "object") {
+            if (d.available !== undefined) {
+                cfg.rmAvailable = !!d.available; cfg.rmSupported = !!d.supported; cfg.rmAdapter = !!d.adapter
+                cfg.rmRemotes = d.remotes || []; cfg.rmFound = d.found || []
+            }
+            if (d.message) { say(String(d.message), d.success === false); return }
+        } else {
+            say(Tr.t("settings.btSpeakers.opFailed"), true); return
+        }
+        rebuild()
+    }
+
     // Every /bt_speakers/* reply carries the full state, so there is exactly
     // one place that unpacks it — and exactly one place that decides whether
     // the message on screen is a complaint or a confirmation.
@@ -1785,6 +1941,39 @@ Item {
                 if (!ok) return
                 btBand = -1; btBusy = true
                 Api.post(A("/bt_speakers/remove"), { mac: arg }, function(ok2, d) { btApply(ok2, d) }, 60000)
+            })
+            return
+        case "rm_test": remoteTest = !row.on; break
+        case "rm_mine": Remote.setChosen(Remote.chosen === arg ? "" : arg); break
+        case "rm_listen": Remote.listenAgain(); break
+        case "rm_assign":
+            var code = Number(arg), dev = String(Remote.learnDevice || "")
+            var acts = Remote.actionNames()
+            var labels = [Tr.t("settings.remote.assignNothing")]
+            for (var ai = 0; ai < acts.length; ai++) labels.push(Tr.t("settings.remote.actions." + acts[ai]))
+            Ui.dialogs.pick(Tr.t("settings.remote.assignTitle"), labels, acts.indexOf(Remote.actionFor(code, dev)) + 1, function(i) {
+                if (i < 0) return
+                var done = Remote.assign(code, i === 0 ? "" : acts[i - 1], dev)
+                root.say(Tr.t(done ? "settings.remote.assigned" : "settings.remote.assignFailed"), !done)
+            })
+            return
+        case "rm_unassign":
+            Remote.forget(Number(arg), String(Remote.learnDevice || ""))
+            break
+        case "rm_scan":
+            remoteScanning = true; remoteBusy = true
+            Api.post(A("/bt_remotes/scan"), { seconds: 12 }, function(ok, d) { root.rmApply(ok, d) }, 60000)
+            break
+        case "rm_add":
+            remoteBusy = true
+            say(Tr.t("settings.remote.btPairing"))
+            Api.post(A("/bt_remotes/add"), { mac: arg }, function(ok, d) { root.rmApply(ok, d) }, 120000)
+            break
+        case "rm_forget":
+            Ui.dialogs.confirm(Tr.t("settings.remote.btForgetConfirm"), Tr.t("settings.remote.btForget"), true, function(ok) {
+                if (!ok) return
+                root.remoteBusy = true
+                Api.post(cfg.api("/bt_remotes/remove"), { mac: arg }, function(ok2, d) { root.rmApply(ok2, d) }, 60000)
             })
             return
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break

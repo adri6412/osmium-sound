@@ -140,6 +140,19 @@ Item {
     function openPerson(mbid, name) { if (!mbid) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, "", "mbid:" + mbid) }
     function openMenu(items, x, y) { ctx.open(items, x, y) }
     function closeMenu() { ctx.close() }
+    readonly property bool menuOpen: ctx.visible
+    // Il tasto "cerca" del telecomando: il campo di questa schermata se ce
+    // n'e' uno (il filtro di artisti e album), altrimenti quello della
+    // libreria, che sta nella home.
+    function focusSearch() {
+        showMusicTab()
+        if (view === LibraryModel.Home) { homeSearch.takeFocus(); return }
+        if (hasSearch) { search.takeFocus(); return }
+        navHome()
+        // la home compare adesso: il campo puo' prendere il fuoco al giro dopo
+        searchDelay.restart()
+    }
+    Timer { id: searchDelay; interval: 60; onTriggered: homeSearch.takeFocus() }
     // The guided tour: the album list (grid or Cover Flow), and the menu a
     // long press opens, on the first album, so it can be seen. Rectangles
     // in canvas coordinates (this panel starts at x 341, its content at

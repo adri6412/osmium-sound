@@ -16,6 +16,8 @@ Item {
     property bool loading: false
     property string loadError: ""
     visible: active || fade > 0
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.active }
     anchors.fill: parent
 
     Spring { id: sc; stiffness: 550; damping: 30; rate: Theme.motionRate }

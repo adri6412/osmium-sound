@@ -16,6 +16,8 @@ Item {
     property int step: 0
     readonly property int count: steps.length
     visible: active || fade > 0
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.active }
     anchors.fill: parent
     signal ended()
 
