@@ -2605,6 +2605,41 @@ class MetadataService:
         _log(f'archive moved to {target}')
         return self.settings()
 
+    def adopt_restored_db(self, source=None):
+        """A backup restore has just written the archive back at
+        CACHE_DIR/metadata.db. Take it from there.
+
+        Two things have to happen, and neither does by itself: the service is
+        still holding the database it had open before the restore (so it would
+        go on writing into the old file, and its write-ahead log — written
+        beside the *previous* database — must not be replayed over the new
+        one), and on a device that keeps the archive on a disk of the owner's
+        the restored file is sitting somewhere nothing reads. Returns where it
+        ended up."""
+        source = source or os.path.join(self.cache_dir, 'metadata.db')
+        with self._cache_lock:
+            cache, self._cache = self._cache, None
+            if cache is not None:
+                try:
+                    cache.close()
+                except sqlite3.Error:
+                    pass
+            self._dir = {'value': None, 'at': 0.0}
+            target_dir = self.effective_cache_dir()
+            target = os.path.join(target_dir, 'metadata.db')
+            if os.path.abspath(source) != os.path.abspath(target) and os.path.isfile(source):
+                os.makedirs(target_dir, mode=0o755, exist_ok=True)
+                shutil.move(source, target)
+            for suffix in ('-wal', '-shm'):
+                try:
+                    os.remove(target + suffix)
+                except OSError:
+                    pass
+        self._failures.clear()
+        self._people_ids.clear()
+        _log(f'restored archive adopted at {target}')
+        return target
+
     def settings(self):
         try:
             stats = self.cache.stats()

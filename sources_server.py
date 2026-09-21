@@ -3590,6 +3590,17 @@ def _restore_apply_side_effects(restored):
                     pass
         _run(["nmcli", "connection", "reload"], timeout=30)
         notes.append(_ht('restore.wifiReloaded', _hlang()))
+    if hb.METADATA_DB in restored:
+        # The archive of album and artist information was written back at its
+        # canonical path. The metadata service is still holding the database
+        # it had open before the restore, and on a device that keeps the
+        # archive on a disk of its owner's that file is somewhere nothing
+        # reads — hifi_metadata does both halves (see adopt_restored_db).
+        try:
+            hmeta.get_service().adopt_restored_db(hb.METADATA_DB)
+            notes.append(_ht('restore.metaArchiveAdopted', _hlang()))
+        except Exception as e:
+            print(f"[sources] restore side-effect (metadata archive) failed: {e}")
     if "/etc/hifi-player/webui.db" in restored:
         # The admin account changed underneath the running daemon; restart so
         # it reopens the database. No note here — restarting hifi-webui.service

@@ -8,6 +8,7 @@ substitution honest rather than a stub.
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import tarfile
 import tempfile
@@ -23,6 +24,20 @@ def _write(root, logical, content=b"x"):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "wb") as f:
         f.write(content)
+    return path
+
+
+def _write_db(root, logical, rows=1):
+    """A real (small) SQLite file: the album/artist archive and webui.db are
+    archived through SQLite's own backup API, which will not read a fake."""
+    path = os.path.join(root, logical.lstrip("/"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE IF NOT EXISTS entries (key TEXT PRIMARY KEY, value TEXT)")
+    con.executemany("INSERT OR REPLACE INTO entries VALUES (?, ?)",
+                    [(f"release:{i}", "x" * 200) for i in range(rows)])
+    con.commit()
+    con.close()
     return path
 
 
@@ -199,21 +214,68 @@ class BuildArchiveTests(FakeRootTestCase):
             logicals)
         self.assertNotIn("/var/lib/squeezeboxserver/cache/library.db", logicals)
 
-    def test_library_edits_are_kept_and_the_metadata_cache_is_not(self):
-        # The owner's corrections (hifi_metadata.py / hifi_tags.py) cannot be
-        # downloaded again; the information cache next to them can.
+    def test_library_edits_and_the_downloaded_archive_are_both_kept(self):
+        # The owner's corrections (hifi_metadata.py / hifi_tags.py) and the
+        # information downloaded for the whole library: days of slow, often
+        # refused look-ups, so a backup hands them back rather than making the
+        # device earn them again.
         _write(self.root, "/var/lib/hifi-player/metadata-edits/albums/0123abcd.json", b"{}")
         _write(self.root, "/var/lib/hifi-player/metadata-edits/tag-jobs/20260915-120000-abcdef.json", b"{}")
-        _write(self.root, "/var/lib/hifi-player/metadata/metadata.db", b"CACHE")
+        _write_db(self.root, hb.METADATA_DB)
+        _write(self.root, hb.METADATA_DB + "-wal", b"WAL")
         logicals = [lg for lg, _ in hb.iter_members(hb.UNATTENDED_CATEGORIES, self.root)]
         self.assertIn("/var/lib/hifi-player/metadata-edits/albums/0123abcd.json", logicals)
         self.assertIn("/var/lib/hifi-player/metadata-edits/tag-jobs/20260915-120000-abcdef.json", logicals)
-        self.assertNotIn("/var/lib/hifi-player/metadata/metadata.db", logicals)
+        self.assertIn(hb.METADATA_DB, logicals)
+        self.assertNotIn(hb.METADATA_DB + "-wal", logicals)   # belongs to the file it was written beside
+        self.assertTrue(hb.is_denied(hb.METADATA_DB + "-wal"))
         self.assertFalse(hb.is_denied("/var/lib/hifi-player/metadata-edits/albums/0123abcd.json"))
         self.assertIsNotNone(hb.restore_dest_for_member(
             "var/lib/hifi-player/metadata-edits/artists/x.json", ["core"], self.root))
+        self.assertIsNotNone(hb.restore_dest_for_member(
+            "var/lib/hifi-player/metadata/metadata.db", ["core"], self.root))
         self.assertIsNone(hb.restore_dest_for_member(
-            "var/lib/hifi-player/metadata/metadata.db", hb.ALL_CATEGORIES, self.root))
+            "var/lib/hifi-player/metadata/metadata.db-wal", hb.ALL_CATEGORIES, self.root))
+
+    def _rows_in(self, archive):
+        """How many entries the archived snapshot holds."""
+        with tarfile.open(archive) as tar:
+            raw = tar.extractfile(hb.METADATA_DB.lstrip("/")).read()
+        path = os.path.join(self.root, "check.db")
+        with open(path, "wb") as f:
+            f.write(raw)
+        con = sqlite3.connect(path)
+        try:
+            return con.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
+        finally:
+            con.close()
+            os.remove(path)
+
+    def test_the_archive_is_a_snapshot_and_is_read_from_the_disk_it_was_moved_to(self):
+        dest = os.path.join(self.root, "out.tar.gz")
+        _write_db(self.root, hb.METADATA_DB, rows=3)
+        hb.build_archive(dest, ["core"], self.root)
+        with tarfile.open(dest) as tar:
+            raw = tar.extractfile(hb.METADATA_DB.lstrip("/")).read()
+        self.assertTrue(raw.startswith(b"SQLite format 3"))
+        # nothing is left behind in the folder the snapshot was staged in
+        self.assertEqual([f for f in os.listdir(self.root) if f.endswith(".part")], [])
+
+        # the owner keeps it on a disk of their own: same name in the archive,
+        # read from where it really is
+        _write(self.root, "/etc/hifi-player/meta-cache-dir", b"/mnt/hifi-usb/MUSICA\n")
+        _write_db(self.root, "/mnt/hifi-usb/MUSICA/osmium-metadata/metadata.db", rows=9)
+        moved = dict(hb.iter_members(["core"], self.root))[hb.METADATA_DB]
+        self.assertTrue(moved.endswith("/mnt/hifi-usb/MUSICA/osmium-metadata/metadata.db"))
+        dest2 = os.path.join(self.root, "out2.tar.gz")
+        hb.build_archive(dest2, ["core"], self.root)
+        self.assertEqual(self._rows_in(dest2), 9)     # the disk's archive, not the old canonical one
+        self.assertEqual(self._rows_in(dest), 3)
+
+        # that disk is not there any more: the canonical copy is what travels
+        os.remove(os.path.join(self.root, "mnt/hifi-usb/MUSICA/osmium-metadata/metadata.db"))
+        back = dict(hb.iter_members(["core"], self.root))[hb.METADATA_DB]
+        self.assertTrue(back.endswith("/var/lib/hifi-player/metadata/metadata.db"))
 
     def test_server_uuid_is_stripped(self):
         _write(self.root, "/var/lib/squeezeboxserver/prefs/server.prefs",
