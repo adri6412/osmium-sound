@@ -1,12 +1,14 @@
 #!/bin/sh
 # Osmium Sound — aggiornamento IMMAGINE (schema A/B con RAUC).
 #
-#   hifi-image-update.sh stage <url|file> <versione>
-#       installa il bundle nello slot inattivo con `rauc install` (in streaming
-#       se è un URL: RAUC scarica solo i blocchi che scrive, niente file locale),
-#       sulla root legacy appena convertita semina prima /data e dopo scrive il
-#       selettore sulla ESP. Il sistema in uso non cambia: è il riavvio a far
-#       partire il nuovo slot (la fase "apply" del sequencer è vuota).
+#   hifi-image-update.sh stage <url|file> <versione> [sha256]
+#       installa il bundle nello slot inattivo con `rauc install`. Se è un URL
+#       lo scarica prima intero su /data (molto più veloce dello streaming, vedi
+#       ab_download in hifi-ab-lib.sh) e ripiega sullo streaming solo quando lì
+#       non c'è posto; sulla root legacy appena convertita semina prima /data e
+#       dopo scrive il selettore sulla ESP. Il sistema in uso non cambia: è
+#       il riavvio a far partire il nuovo slot (la fase "apply" del sequencer
+#       è vuota).
 #   hifi-image-update.sh apply <staged_dir> <versione>
 #       no-op (compatibilità col sequencer a due fasi).
 set -eu
@@ -43,8 +45,14 @@ case "$CMD" in
 stage)
     SRC="${2:-}"
     VERSION="${3:-unknown}"
+    SHA="${4:-}"
     [ -n "$SRC" ] || fail "Bundle URL or file missing" update.image.badSource
     case "$VERSION" in ''|*[!0-9A-Za-z._-]*) fail "Invalid version" ;; esac
+    case "$SHA" in
+        '') ;;
+        *[!0-9a-f]*) fail "Invalid checksum" update.image.badSource ;;
+        *) [ "${#SHA}" = 64 ] || fail "Invalid checksum" update.image.badSource ;;
+    esac
     case "$SRC" in
         https://*) modprobe nbd 2>/dev/null || true ;;
         http://*)  modprobe nbd 2>/dev/null || true ;;
@@ -76,8 +84,6 @@ stage)
     fi
 
     VJ="{\"version\":\"$VERSION\"}"
-    write_status downloading 10 "Installing system image $VERSION into the standby slot…" update.image.install "$VJ"
-
     # Avanzamento reale. RAUC stampa "46% Copying image to rootfs.1" una volta
     # sola e poi tace per tutta la copia (20-30 minuti in streaming): la barra
     # resterebbe ferma. Si misura invece quanto è stato scritto sullo slot di
@@ -88,6 +94,74 @@ stage)
     # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-ab-lib.sh
     # shellcheck disable=SC1091
     . /usr/local/sbin/hifi-ab-lib.sh
+
+    # Download first, install from the file (see ab_download in hifi-ab-lib.sh
+    # for the measurements). The partial file is named after the version and
+    # survives a failed attempt, so the next "Update now" resumes it; anything
+    # left over from other versions goes. The complete bundle is removed once
+    # RAUC is done with it, whatever the outcome.
+    BUNDLE=""
+    # Progress bar: download 10-60, writing the slot 60-90. When streaming the
+    # two happen together and writing gets the whole 10-90.
+    W_BASE=10; W_SPAN=80
+    case "$SRC" in
+    http://*|https://*)
+        total=0
+        if ab_mount_data 2>/dev/null && mkdir -p "$AB_DL_DIR" 2>/dev/null; then
+            total=$(ab_url_size "$SRC")
+            case "$total" in ''|*[!0-9]*) total=0 ;; esac
+        fi
+        part="$AB_DL_DIR/hifi-image-$VERSION.raucb.part"
+        if [ -d "$AB_DL_DIR" ]; then
+            for f in "$AB_DL_DIR"/*; do
+                if [ -e "$f" ] && [ "$f" != "$part" ]; then rm -f "$f"; fi
+            done
+        fi
+        have=0
+        [ -f "$part" ] && have=$(ab_dl_bytes "$part")
+        if [ "$total" -le 0 ]; then
+            echo "W: [hifi-image] bundle size unknown or /data unavailable: streaming it"
+        elif ! ab_dl_room "$AB_DL_DIR" $(( total - have )); then
+            echo "W: [hifi-image] not enough room on /data for a ${total}-byte bundle: streaming it"
+            rm -f "$part"
+        else
+            echo "I: [hifi-image] downloading ${total} bytes to $part (${have} already there)"
+            write_status downloading 10 "Downloading system image $VERSION… 0%" \
+                update.image.download "{\"version\":\"$VERSION\",\"pct\":0}"
+            dl_start=$(date +%s)
+            ab_download "$SRC" "$part" "$total" &
+            dl_pid=$!
+            last_pct=-1
+            while kill -0 "$dl_pid" 2>/dev/null; do
+                sleep 2
+                pct=$(( $(ab_dl_bytes "$part") * 100 / total ))
+                [ "$pct" -gt 100 ] && pct=100
+                if [ "$pct" != "$last_pct" ]; then
+                    last_pct=$pct
+                    write_status downloading $(( 10 + pct / 2 )) "Downloading system image $VERSION… ${pct}%" \
+                        update.image.download "{\"version\":\"$VERSION\",\"pct\":$pct}"
+                fi
+            done
+            dl_rc=0
+            wait "$dl_pid" || dl_rc=$?
+            [ "$dl_rc" = 0 ] || fail "Downloading the system image failed: check the network and try again" update.image.downloadFailed
+            dl_s=$(( $(date +%s) - dl_start ))
+            echo "I: [hifi-image] downloaded $(( (total - have) / 1048576 )) MiB in ${dl_s}s"
+            if ! ab_sha256_ok "$part" "$SHA"; then
+                rm -f "$part"
+                fail "The downloaded system image is damaged (checksum mismatch)" update.image.checksum
+            fi
+            BUNDLE="$AB_DL_DIR/hifi-image-$VERSION.raucb"
+            mv -f "$part" "$BUNDLE"
+            # Removes the bundle on every way out, fail() included.
+            trap 'rm -f "$BUNDLE"' EXIT
+            SRC=$BUNDLE
+            W_BASE=60; W_SPAN=30
+        fi
+        ;;
+    esac
+    write_status downloading "$W_BASE" "Installing system image $VERSION into the standby slot…" update.image.install "$VJ"
+
     # Slot di destinazione = la partizione hifi-root-* che NON è la root in
     # uso. Non si usa `rauc.slot=` dalla cmdline: sul primo avvio dopo la
     # conversione non c'è ancora (lo aggiunge finish in quello stesso boot) e
@@ -144,7 +218,7 @@ print(sum(sizes(json.load(sys.stdin).get("images", []))))' 2>/dev/null || echo 0
         case "$line" in
             *%*)
                 pct=$(printf '%s' "$line" | sed -n 's/^[[:space:]]*\([0-9]\{1,3\}\)%.*/\1/p')
-                [ -n "$pct" ] && write_status downloading $(( 10 + pct * 80 / 100 )) "Writing system image $VERSION… ${pct}%" \
+                [ -n "$pct" ] && write_status downloading $(( W_BASE + pct * W_SPAN / 100 )) "Writing system image $VERSION… ${pct}%" \
                     update.image.write "{\"version\":\"$VERSION\",\"pct\":$pct}"
                 ;;
         esac
@@ -162,7 +236,7 @@ print(sum(sizes(json.load(sys.stdin).get("images", []))))' 2>/dev/null || echo 0
         [ "$pct" -lt 0 ] && pct=0
         if [ "$pct" != "$last_pct" ]; then
             last_pct=$pct
-            write_status downloading $(( 10 + pct * 80 / 100 )) "Writing system image $VERSION… ${pct}%" \
+            write_status downloading $(( W_BASE + pct * W_SPAN / 100 )) "Writing system image $VERSION… ${pct}%" \
                 update.image.write "{\"version\":\"$VERSION\",\"pct\":$pct}"
         fi
     done
@@ -180,6 +254,10 @@ print(sum(sizes(json.load(sys.stdin).get("images", []))))' 2>/dev/null || echo 0
         if [ -r /run/hifi-stream-tune.summary ]; then
             echo "I: [hifi-image] $(cat /run/hifi-stream-tune.summary)"
         fi
+    fi
+    if [ -n "$BUNDLE" ]; then
+        rm -f "$BUNDLE"
+        BUNDLE=""
     fi
     [ "$rc" = 0 ] || fail "rauc install failed (rc=$rc): see /var/log/hifi/hifi-image-update.log" update.image.installFailed "{\"rc\":$rc}"
 
@@ -200,7 +278,7 @@ apply)
     write_status 'done' 100 "System image $VERSION ready" update.image.ready "{\"version\":\"$VERSION\"}"
     ;;
 *)
-    echo "Uso: $0 stage <url|file> <versione> | apply <staged_dir> <versione>" >&2
+    echo "Uso: $0 stage <url|file> <versione> [sha256] | apply <staged_dir> <versione>" >&2
     exit 64
     ;;
 esac

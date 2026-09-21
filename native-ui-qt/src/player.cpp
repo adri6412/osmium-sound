@@ -2,6 +2,7 @@
 #include "api.h"
 #include <QJSEngine>
 #include <QQmlEngine>
+#include <QRegularExpression>
 #include <QUrl>
 #include <QtDebug>
 #include <cmath>
@@ -21,6 +22,8 @@ Player::Player(QObject *parent) : QObject(parent) {
         if (now - m_lastSettings >= 5000) { m_lastSettings = now; pollSettings(); }
         if (now - m_lastUsb >= 4000) { m_lastUsb = now; pollUsb(); }
         if (now - m_lastOta >= 3000) { m_lastOta = now; pollOta(); }
+        // the service caches its answer for 10 s: asking more often is pointless
+        if (now - m_lastNet >= 15000) { m_lastNet = now; pollNet(); }
         // l'avanzamento scorre in locale fra un poll e l'altro (app.c)
         if (m_playing && m_duration > 0 && now - m_lastElapsedTick >= 500) {
             m_lastElapsedTick = now;
@@ -40,7 +43,8 @@ void Player::start() {
     pollSettings();
     pollUsb();
     pollOta();
-    m_lastSettings = m_lastUsb = m_lastOta = m_clock.elapsed();
+    pollNet();
+    m_lastSettings = m_lastUsb = m_lastOta = m_lastNet = m_clock.elapsed();
     m_tick.start();
 }
 
@@ -131,6 +135,7 @@ void Player::switchTo(const QString &id, const QString &name) {
     m_connected = true;
     m_artKey.clear();
     emit connectedChanged(); emit playerChanged();
+    m_favKey.clear();
     pollPrefs(); m_wantNow = true;
 }
 
@@ -207,7 +212,7 @@ static QString S(const QVariantMap &m, const char *k) { return m.value(k).toStri
 
 void Player::pollStatus() {
     m_statusInFlight = true;
-    Api::instance()->lmsRequest(m_playerId, {"status", "-", "1", "tags:aldoTINxcK"}, [this](bool ok, const QVariant &data, int) {
+    Api::instance()->lmsRequest(m_playerId, {"status", "-", "1", "tags:aldoTINxcKues"}, [this](bool ok, const QVariant &data, int) {
         m_statusInFlight = false;
         QVariantMap r = data.toMap().value("result").toMap();
         if (!ok || r.isEmpty()) {
@@ -225,6 +230,8 @@ void Player::pollStatus() {
             m_playerProvisional = true;
         }
         bool playing = S(r, "mode") == "play";
+        // a player that does not report it counts as on
+        bool power = !r.contains("power") || r.value("power").toInt() != 0;
         double elapsed = r.value("time").toDouble(), duration = r.value("duration").toDouble();
         int volume = r.value("mixer volume").toInt(), index = r.value("playlist_cur_index").toInt();
         int total = r.value("playlist_tracks").toInt(), repeat = r.value("playlist repeat").toInt();
@@ -234,33 +241,40 @@ void Player::pollStatus() {
         QVariantMap tr = pl.isEmpty() ? QVariantMap() : pl.first().toMap();
         QString title = S(tr, "title"), artist = S(tr, "artist"), album = S(tr, "album");
         QString coverid = S(tr, "coverid"), aurl = S(tr, "artwork_url"), bitrate = S(tr, "bitrate");
-        QString type = S(tr, "type"), id = S(tr, "id");
+        QString type = S(tr, "type"), id = S(tr, "id"), url = S(tr, "url"), rawTitle = title;
+        QString albumId = S(tr, "album_id"), artistId = S(tr, "artist_id");
         int ssize = tr.value("samplesize").toInt();
         double srate = tr.value("samplerate").toDouble();
         bool remote = tr.value("remote").toInt() != 0;
+        // an internet radio names its station here (tag N); the title and
+        // artist are the song playing on it
+        QString station = remote ? S(tr, "remote_title") : QString();
         if (duration == 0) duration = tr.value("duration").toDouble();
-        if (remote && artist.isEmpty()) {                 // "Artista - Titolo" nel solo title
-            int sep = title.indexOf(" - ");
+        if (remote && artist.isEmpty() && title != station) {  // "Artista - Titolo" nel solo title
+            int sep = title.indexOf(" - ");               // (not the station's own name, before a song is known)
             if (sep > 0) { artist = title.left(sep); title = title.mid(sep + 3); }
         }
 
         bool meta = title != m_title || artist != m_artist || album != m_album || type != m_type ||
                     ssize != m_sampleSize || srate != m_sampleRate || id != m_id || coverid != m_coverId ||
-                    remote != m_remote || bitrate != m_bitrate;
+                    remote != m_remote || bitrate != m_bitrate || url != m_url || albumId != m_albumId || artistId != m_artistId ||
+                    station != m_stationName;
         bool track = title != m_title || artist != m_artist || album != m_album;
         bool prog = std::fabs(elapsed - m_elapsed) > 0.4 || std::fabs(duration - m_duration) > 0.4;
-        bool ctl = playing != m_playing || volume != m_volume || shuffle != m_shuffle || repeat != m_repeat ||
+        bool ctl = playing != m_playing || power != m_power || volume != m_volume || shuffle != m_shuffle || repeat != m_repeat ||
                    sleep != m_sleepSecs || index != m_index || total != m_total;
         m_title = title; m_artist = artist; m_album = album; m_type = type; m_sampleSize = ssize; m_sampleRate = srate;
         m_id = id; m_coverId = coverid; m_artworkUrlLms = aurl; m_remote = remote; m_bitrate = bitrate; m_currentTitle = currentTitle;
+        m_url = url; m_rawTitle = rawTitle; m_albumId = albumId; m_artistId = artistId; m_stationName = station;
         m_elapsed = elapsed; m_duration = duration;
-        m_playing = playing; m_volume = volume; m_shuffle = shuffle; m_repeat = repeat; m_sleepSecs = sleep; m_index = index; m_total = total;
+        m_playing = playing; m_power = power; m_volume = volume; m_shuffle = shuffle; m_repeat = repeat; m_sleepSecs = sleep; m_index = index; m_total = total;
         m_lastElapsedTick = m_clock.elapsed();
         if (meta) { derive(); emit metaChanged(); }
         if (prog) emit progressChanged();
         if (ctl) { derive(); emit controlsChanged(); }
         if (track) emit trackChanged();
         updateArtwork();
+        checkFavorite();
     }, 8000);
 }
 
@@ -280,9 +294,94 @@ void Player::pollPrefs() {
             emit modeChanged();
         }, 4000);
     }
+    // Lyrion's mute is a flag of its own: the volume in `status` stays what it
+    // was, so the speaker icon needs this to know
+    Api::instance()->lmsRequest(m_playerId, {"mixer", "muting", "?"}, [this](bool ok, const QVariant &data, int) {
+        if (!ok) return;
+        QVariant v = data.toMap().value("result").toMap().value("_muting");
+        if (!v.isValid()) return;
+        bool m = v.toInt() != 0;
+        if (m != m_muted) { m_muted = m; emit controlsChanged(); }
+    }, 4000);
 }
 
 void Player::refreshPrefs() { if (m_connected) pollPrefs(); }
+
+// ─── preferiti ─────────────────────────────────────────────────────────────
+// Once per track: a local track is looked up by id, a stream by URL. The
+// answer also says where the favourite sits (`index`), which is what
+// `favorites delete` wants.
+void Player::checkFavorite() {
+    QString key = (!m_id.isEmpty() && !m_remote) ? m_id : m_url;
+    if (key.isEmpty()) {
+        m_favKey.clear();
+        if (m_favorite) { m_favorite = false; m_favIndex.clear(); emit favoriteChanged(); }
+        return;
+    }
+    if (key == m_favKey) return;
+    m_favKey = key;
+    favoriteExists(key, QJSValue());
+}
+
+void Player::favoriteExists(const QString &what, const QJSValue &cb) {
+    if (what.isEmpty() || m_playerId.isEmpty()) { callJs(cb, {false, QString()}); return; }
+    QJSValue f = cb;
+    const QString key = what;
+    Api::instance()->lmsRequest(m_playerId, {"favorites", "exists", what}, [this, f, key](bool ok, const QVariant &data, int) mutable {
+        QVariantMap r = data.toMap().value("result").toMap();
+        bool avail = ok && r.contains("exists");
+        bool ex = avail && r.value("exists").toInt() != 0;
+        QString idx = ex ? r.value("index").toString() : QString();
+        if (key == m_favKey && (avail != m_favAvail || ex != m_favorite || idx != m_favIndex)) {
+            m_favAvail = avail; m_favorite = ex; m_favIndex = idx;
+            emit favoriteChanged();
+        }
+        callJs(f, {ex, idx});
+    }, 6000);
+}
+
+void Player::favoriteAdd(const QString &url, const QString &title, const QString &type, const QString &icon, const QJSValue &cb) {
+    if (url.isEmpty() || m_playerId.isEmpty()) { callJs(cb, {false}); return; }
+    QVariantList params = {"favorites", "add", "url:" + url, "title:" + (title.isEmpty() ? url : title),
+                           "type:" + (type == "playlist" ? QString("playlist") : QString("audio"))};
+    if (!icon.isEmpty()) params << "icon:" + icon;
+    QJSValue f = cb;
+    Api::instance()->lmsRequest(m_playerId, params, [this, f, url](bool ok, const QVariant &data, int) mutable {
+        bool done = ok && data.toMap().value("result").toMap().value("count").toInt() > 0;
+        if (url == m_url || url == m_favKey) { m_favKey.clear(); checkFavorite(); }
+        callJs(f, {done});
+    }, 8000);
+}
+
+void Player::favoriteDelete(const QString &index, const QJSValue &cb) {
+    if (index.isEmpty() || m_playerId.isEmpty()) { callJs(cb, {false}); return; }
+    QJSValue f = cb;
+    Api::instance()->lmsRequest(m_playerId, {"favorites", "delete", "item_id:" + index}, [this, f](bool ok, const QVariant &, int) mutable {
+        m_favKey.clear(); checkFavorite();
+        callJs(f, {ok});
+    }, 8000);
+}
+
+void Player::toggleFavorite() {
+    if (!m_favAvail || m_playerId.isEmpty()) return;
+    if (m_favorite) {
+        if (m_favIndex.isEmpty()) return;
+        m_favorite = false; emit favoriteChanged();          // optimistic, the re-check follows
+        favoriteDelete(m_favIndex, QJSValue());
+    } else {
+        if (m_url.isEmpty()) return;
+        m_favorite = true; emit favoriteChanged();
+        favoriteAdd(m_url, m_rawTitle.isEmpty() ? m_title : m_rawTitle, "audio", QString(), QJSValue());
+    }
+}
+
+// The Now Playing animations the kiosk knows how to draw (assets/anim/<id>).
+// A built-in scene or one installed from the animation store: any id of the
+// store's shape (api_server _ANIM_ID_RE); the API only ever reports one it has.
+static bool isNpAnimation(const QString &v) {
+    static const QRegularExpression id(QStringLiteral("^[a-z0-9][a-z0-9_-]{0,40}$"));
+    return id.match(v).hasMatch();
+}
 
 void Player::pollSettings() {
     Api *a = Api::instance();
@@ -301,6 +400,13 @@ void Player::pollSettings() {
         const QString v = d.toMap().value("style").toString();
         if (!v.isEmpty() && v != m_vuStyle) { m_vuStyle = v; emit settingsChanged(); }
     }, 3000);
+    a->request("GET", a->apiBase() + "/nowplaying_animation", {}, [this](bool ok, const QVariant &d, int) {
+        if (!ok || d.typeId() != QMetaType::QVariantMap) return;
+        const QString v = d.toMap().value("animation").toString();
+        if (!isNpAnimation(v) || v == m_npAnimation) return;
+        m_npAnimation = v;
+        emit settingsChanged();
+    }, 3000);
 }
 void Player::refreshSettings() { pollSettings(); }
 
@@ -315,6 +421,13 @@ void Player::setVuEnabled(bool on) {
 void Player::setVuStyle(const QString &style) {
     if (style.isEmpty() || m_vuStyle == style) return;
     m_vuStyle = style;
+    emit settingsChanged();
+}
+
+// Same optimistic pattern as the VU skin; unknown ids are ignored.
+void Player::setNpAnimation(const QString &kind) {
+    if (!isNpAnimation(kind) || m_npAnimation == kind) return;
+    m_npAnimation = kind;
     emit settingsChanged();
 }
 
@@ -354,6 +467,24 @@ void Player::pollOta() {
         m_otaState = st; m_otaMsg = msg; m_otaKind = kind; m_otaPct = pct;
         emit otaChanged();
     }, 4000);
+}
+
+void Player::pollNet() {
+    Api *a = Api::instance();
+    a->request("GET", a->apiBase() + "/connectivity", {}, [this](bool ok, const QVariant &d, int) {
+        // the service not answering says nothing about the network: keep
+        // what we last knew (it restarts during an update, for one)
+        if (!ok || d.typeId() != QMetaType::QVariantMap) return;
+        QVariantMap m = d.toMap();
+        QString st = m.value("state", "offline").toString();
+        if (st != "internet" && st != "lan") st = "offline";
+        QString ty = m.value("type").toString();
+        if (ty != "wired" && ty != "wireless") ty = m_netType;      // offline: keep the last shape
+        QString ssid = m.value("ssid").toString(), ip = m.value("ip").toString();
+        if (st == m_netState && ty == m_netType && ssid == m_netSsid && ip == m_netIp) return;
+        m_netState = st; m_netType = ty; m_netSsid = ssid; m_netIp = ip;
+        emit netChanged();
+    }, 8000);
 }
 
 // ─── stato derivato (useLyrionPlayer.js / app.c derive()) ──────────────────
@@ -456,9 +587,13 @@ void Player::flushVolume() {
     }
 }
 void Player::toggleMute() {
-    // toggleMute in useLyrionPlayer.js: 0 -> 50, altrimenti -> 0
+    // Lyrion's own mute (`mixer muting`): the volume is kept and comes back
+    // as it was, instead of the old 0 <-> 50 jump. Explicit value rather than
+    // `toggle`, so a double tap cannot race the next poll.
     if (m_volumeFixed) return;
-    setVolume(m_volume > 0 ? 0 : 50, true);
+    m_muted = !m_muted;
+    emit controlsChanged();
+    cmd({"mixer", "muting", m_muted ? "1" : "0"});
 }
 void Player::setShuffle(int m) { m_shuffle = m; cmd({"playlist", "shuffle", QString::number(m)}); emit controlsChanged(); }
 void Player::setRepeat(int m)  { m_repeat = m;  cmd({"playlist", "repeat", QString::number(m)});  emit controlsChanged(); }

@@ -37,6 +37,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import hifi_backup as hb
+import hifi_metadata as hmeta
+import hifi_tags as htags
 from hifi_logging import tee_stdio_to_file
 from hifi_i18n import t as _ht
 # Every print() below keeps reaching the console/journald unchanged AND now also
@@ -248,6 +250,15 @@ def _run_json(cmd, timeout=30):
 
 
 # ─────────────────────────── SMB mounting ───────────────────────────
+def _smb_wants_rw(src):
+    """Is this SMB source meant to be writable? The one place that answers it.
+
+    Missing key = yes: read-write is the default for every source type, and a
+    source stored before that changed carries an explicit "rw" either way, so
+    nobody's deliberate read-only choice is overridden by this."""
+    return bool(src.get("rw", True))
+
+
 def mount_smb(src):
     """Mount one SMB source. Returns (ok, message, detail).
 
@@ -256,14 +267,22 @@ def mount_smb(src):
     "technical details" line -- handing someone NT_STATUS_LOGON_FAILURE as
     the whole error is exactly what this replaces.
 
-    Read-only by default (matches "add a NAS folder to browse into the
-    library" — most SMB sources are someone else's existing music
-    collection, not a target the appliance should be able to modify).
-    src["rw"]=True mounts read-write instead, with the same uid=/gid=
-    mapping the FAT-like adopted-disk mounts use (mount.cifs presents every
-    file under that uid/gid regardless of what wrote it, so unlike ext4
-    there's no post-write chown step needed) — opt-in, e.g. for CD-ripping
-    onto a NAS share (see _rip_writable_sources())."""
+    Read-write by default, like every other source type (adopted internal
+    and USB disks already mount rw): a share someone adds here is their own
+    NAS folder, and an appliance that cannot rip a CD onto it or delete a
+    file from it surprised owners far more often than the read-only default
+    protected anyone. The mount carries the same uid=/gid= mapping the
+    FAT-like adopted-disk mounts use (mount.cifs presents every file under
+    that uid/gid regardless of what wrote it, so unlike ext4 there's no
+    post-write chown step needed).
+
+    src["rw"]=False mounts read-only instead. So does a server that refuses
+    to hand the share over writable at all: rather than leave the owner
+    unable to add a share their NAS exports read-only, the read-only options
+    are tried before giving up, and src["rw"] is flipped to False so the
+    stored state tells the truth about what they got (the list shows it
+    read-only, and _rip_writable_sources() won't offer it as a rip
+    destination)."""
     server = src["server"].strip().strip("/")
     share = src["share"].strip().strip("/")
     username = src.get("username", "")
@@ -296,11 +315,13 @@ def mount_smb(src):
         return False, _ht('mount.smbUnreachable', _hlang(), server=server), ""
 
     unc = f"//{server}/{share}"
-    if src.get("rw"):
+    want_rw = _smb_wants_rw(src)
+    ro_opts = "uid=0,gid=0,iocharset=utf8,ro,file_mode=0644,dir_mode=0755"
+    passes = [(ro_opts, False)]
+    if want_rw:
         uid, gid = _ensure_samba_uid_gid()
-        base_opts = f"uid={uid},gid={gid},iocharset=utf8,rw,file_mode=0664,dir_mode=0775"
-    else:
-        base_opts = "uid=0,gid=0,iocharset=utf8,ro,file_mode=0644,dir_mode=0755"
+        rw_opts = f"uid={uid},gid={gid},iocharset=utf8,rw,file_mode=0664,dir_mode=0775"
+        passes = [(rw_opts, True), (ro_opts, False)]
 
     cred_path = None
     try:
@@ -316,13 +337,29 @@ def mount_smb(src):
             cred_opt = ",guest"
 
         last = ""
-        for vers in ("3.1.1", "3.0", "2.1", "1.0"):
-            opts = f"{base_opts}{cred_opt},vers={vers}"
-            r = _run(["mount", "-t", "cifs", unc, mountpoint, "-o", opts])
-            if r.returncode == 0:
-                return True, _ht('mount.mountedSmb', _hlang(), vers=vers), ""
-            last = (r.stderr or r.stdout).strip()
-        code = _smb_reason(last)
+        code = None
+        for base_opts, writable in passes:
+            for vers in ("3.1.1", "3.0", "2.1", "1.0"):
+                opts = f"{base_opts}{cred_opt},vers={vers}"
+                r = _run(["mount", "-t", "cifs", unc, mountpoint, "-o", opts])
+                if r.returncode == 0:
+                    if want_rw and not writable:
+                        # Writable was asked for and refused: keep the share
+                        # rather than the error, and record what it really is
+                        # (api_add_smb() saves this dict right after we
+                        # return, so the flip is persisted with it).
+                        src["rw"] = False
+                        return True, _ht('mount.mountedSmbRo', _hlang(), vers=vers), last
+                    return True, _ht('mount.mountedSmb', _hlang(), vers=vers), ""
+                last = (r.stderr or r.stdout).strip()
+            code = _smb_reason(last)
+            if code:
+                # A password, a share name or a server that isn't answering:
+                # the read-only pass would fail the same way, four mounts and
+                # four timeouts later. Only an unrecognised failure (which is
+                # what "mount error(30): Read-only file system" comes out as)
+                # is worth retrying without the write options.
+                break
         return False, (_m(code) if code else _ht('mount.genericFailed', _hlang())), last
     finally:
         if cred_path:
@@ -4222,6 +4259,16 @@ def _require_pair_token():
     return None
 
 
+# ─────────────────────────── Album and artist information ────────────
+# /api/meta/* (credits from MusicBrainz, texts from Wikipedia) lives in
+# hifi_metadata.py; mounted here so it shares this service's pairing check.
+hmeta.init_app(app, _require_pair_token)
+# /api/library/* (the Library editor: the tags inside the music files) lives in
+# hifi_tags.py. It writes only below the same roots every other file operation
+# here is confined to.
+htags.init_app(app, _require_pair_token, roots=ALLOWED_LOCAL_ROOTS)
+
+
 # ─────────────────────────── DSP status/control proxy ────────────────
 # api_server.py:8000 (root, unauthenticated, exposes reboot/shutdown/network
 # reconfig) is deliberately loopback-only — see the bind comment at the
@@ -5400,9 +5447,10 @@ def api_add_smb():
         "username": (data.get("username") or "").strip(),
         "password": data.get("password") or "",
         "mountpoint": os.path.join(MOUNT_ROOT, _slug(server, share)),
-        # Opt-in — see mount_smb()'s docstring. Off by default: most SMB
-        # sources are an existing NAS library the appliance should only read.
-        "rw": bool(data.get("rw")),
+        # On by default — see mount_smb()'s docstring. A caller that asks
+        # for read-only still gets it, and so does a share the server only
+        # lets us read (mount_smb() flips this back itself).
+        "rw": bool(data.get("rw", True)),
     }
     if defer:
         # current_paths() (and so both _lyrion_push_live() and the restart-
@@ -5718,7 +5766,7 @@ def api_set_smb_rw(sid):
         src = next((s for s in state["sources"] if s.get("id") == sid and s.get("type") == "smb"), None)
         if not src:
             return _err("msg.sourceNotFound", 404)
-        if src.get("rw", False) == rw:
+        if _smb_wants_rw(src) == rw:
             return jsonify({"success": True, "message": _m("msg.noChange")})
         src["rw"] = rw
         save_state(state)
@@ -6139,13 +6187,23 @@ def api_internal_format_status():
 # the job (ownership fix + Lyrion rescan). The Lyrion CD Player plugin only
 # *plays* discs; this archives them into the library as tagged FLAC.
 
-_cd_info_cache = {}  # discid -> metadata dict from MusicBrainz
+_cd_info_cache = {}  # freedb discid -> MusicBrainz lookup (see _cd_lookup), or a miss marker
+_cd_leadouts = {}    # freedb discid -> exact lead-out in frames (0: not available)
+# How long a disc that MusicBrainz does not know, or a lookup that failed, is
+# left alone. CdRip polls /api/cd/info every few seconds: without these, an
+# unknown disc or a device without internet would query MusicBrainz on every
+# single poll.
+_CD_UNKNOWN_HOLD = 600
+_CD_OFFLINE_HOLD = 120
+_CD_BUSY_HOLD = 15
 
 
 def _cd_toc():
     """Read the audio-CD TOC via cd-discid. Returns None when there is no
     readable audio disc. Output format: `discid ntracks off1 ... offN seconds`
-    (offsets in CD frames, 75/s, lead-in included)."""
+    (offsets in CD frames, 75/s, lead-in included). The exact lead-out, which
+    the MusicBrainz disc id needs, comes from a second `--musicbrainz` read
+    done once per disc."""
     try:
         r = _run(["cd-discid", CD_DEVICE], timeout=20)
     except Exception:
@@ -6163,75 +6221,202 @@ def _cd_toc():
         return None
     if ntracks < 1 or len(offsets) != ntracks:
         return None
+    discid = parts[0]
+    leadout = _cd_leadouts.get(discid)
+    if leadout is None:
+        if len(_cd_leadouts) > 32:
+            _cd_leadouts.clear()
+        leadout = _cd_leadouts[discid] = _cd_exact_leadout(ntracks, offsets, total_sec)
+    if not leadout:
+        # `seconds` is the lead-out divided by 75, so this is at most 74
+        # frames short: close enough for the fuzzy TOC search.
+        leadout = total_sec * 75
     lengths = []
     for i in range(ntracks):
-        if i + 1 < ntracks:
-            lengths.append(max(0, (offsets[i + 1] - offsets[i]) // 75))
-        else:
-            lengths.append(max(0, total_sec - offsets[i] // 75))
-    return {"discid": parts[0], "ntracks": ntracks, "offsets": offsets,
-            "total_sec": total_sec, "lengths": lengths}
+        end = offsets[i + 1] if i + 1 < ntracks else leadout
+        lengths.append(max(0, (end - offsets[i]) // 75))
+    return {"discid": discid, "ntracks": ntracks, "offsets": offsets,
+            "total_sec": total_sec, "lengths": lengths, "leadout": leadout}
+
+
+def _cd_exact_leadout(ntracks, offsets, total_sec):
+    """`cd-discid --musicbrainz` prints `ntracks off1 ... offN leadout`. Only
+    trusted when it agrees with the plain read; 0 otherwise."""
+    try:
+        r = _run(["cd-discid", "--musicbrainz", CD_DEVICE], timeout=20)
+        values = [int(x) for x in (r.stdout or "").split()] if r.returncode == 0 else []
+    except Exception:
+        return 0
+    if len(values) != ntracks + 2 or values[0] != ntracks or values[1:-1] != offsets:
+        return 0
+    leadout = values[-1]
+    return leadout if leadout // 75 == total_sec and leadout > offsets[-1] else 0
 
 
 def _mb_lookup(toc):
-    """Look the disc up on MusicBrainz by fuzzy TOC. Returns a metadata dict
-    or None (offline, unknown disc, malformed response...)."""
-    leadout = toc["total_sec"] * 75 + 150
-    toc_str = "+".join(str(x) for x in
-                       [1, toc["ntracks"], leadout] + toc["offsets"])
-    url = ("https://musicbrainz.org/ws/2/discid/-"
-           f"?toc={toc_str}&fmt=json&inc=artist-credits+recordings")
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "OsmiumSound/1.0 (https://osmiumsound.qd.je)"})
+    """Look the disc up on MusicBrainz: by disc id, falling back to the fuzzy
+    TOC search when the id is not known. Returns (lookup, None) or (None,
+    miss) with miss "unknown", "offline" or "busy". The lookup keeps every
+    plausible release (best first), each with the medium that matches the disc
+    — a box set that contains the same CD is a choice, not the answer."""
+    disc_id = hmeta.mb_disc_id(toc["offsets"], toc["leadout"])
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        data = hmeta.mb_get(f"discid/{disc_id}", toc=hmeta.cd_toc_string(toc["offsets"], toc["leadout"]),
+                            inc=hmeta.DISCID_INC, timeout=10, retries=1, max_wait=5)
+    except hmeta.NotFoundError:
+        return None, "unknown"
+    except hmeta.OfflineError as e:
+        print(f"[sources] musicbrainz lookup: offline ({e})")
+        return None, "offline"
     except Exception as e:
         print(f"[sources] musicbrainz lookup failed: {e}")
+        return None, "busy"
+    choices = hmeta.cd_choices(data, disc_id, hmeta.cd_toc_lengths_ms(toc["offsets"], toc["leadout"]))
+    seen, kept = set(), []
+    for c in choices:
+        mbid = c["release"].get("id")
+        if not mbid or mbid in seen:
+            continue
+        seen.add(mbid)
+        kept.append({"mbid": mbid, "rel": c["release"], "medium": int(c["medium"].get("position") or 1),
+                     "exact": c["exact"], "entry": hmeta.cd_release_entry(c)})
+        if len(kept) >= 15:
+            break
+    if not kept:
+        return None, "unknown"
+    return {"disc_id": disc_id, "choices": kept}, None
+
+
+_cd_lookup_lock = threading.Lock()
+
+
+def _cd_lookup(toc):
+    """The cached MusicBrainz lookup of the disc in the drive, or None while
+    it is unknown/unreachable (without asking again before the hold ends).
+    One lookup at a time: a poll that arrives while MusicBrainz is still
+    answering the previous one waits for that answer instead of sending the
+    same request again."""
+    def cached():
+        entry = _cd_info_cache.get(toc["discid"])
+        if entry is not None and ("miss" not in entry or time.monotonic() < entry["until"]):
+            return True, (None if "miss" in entry else entry)
+        return False, None
+
+    hit, value = cached()
+    if hit:
+        return value
+    with _cd_lookup_lock:
+        hit, value = cached()
+        if hit:
+            return value
+        return _cd_lookup_locked(toc)
+
+
+def _cd_lookup_locked(toc):
+    now = time.monotonic()
+    look, miss = _mb_lookup(toc)
+    if len(_cd_info_cache) > 32:
+        _cd_info_cache.clear()
+    if look is None:
+        hold = {"unknown": _CD_UNKNOWN_HOLD, "offline": _CD_OFFLINE_HOLD}.get(miss, _CD_BUSY_HOLD)
+        _cd_info_cache[toc["discid"]] = {"miss": miss, "until": now + hold}
         return None
-    releases = data.get("releases") or []
-    if not releases:
+    _cd_info_cache[toc["discid"]] = look
+    # Fetch the full lookup of the likeliest release now, while the user is
+    # still reading the form, so the rip itself does not wait for it.
+    threading.Thread(target=_cd_fetch_full, args=(look, look["choices"][0]["mbid"]),
+                     daemon=True, name="cd-full-lookup").start()
+    return look
+
+
+def _cd_fetch_full(look, mbid, timeout=15, retries=2, max_wait=30):
+    """The RELEASE_INC lookup of `mbid` (composer, lyricist and the rest),
+    kept in the disc's lookup and in the metadata cache. None on failure."""
+    full = look.setdefault("full", {})
+    if mbid in full:
+        return full[mbid]
+    try:
+        rel = hmeta.mb_get(f"release/{mbid}", inc=hmeta.RELEASE_INC,
+                           timeout=timeout, retries=retries, max_wait=max_wait)
+    except Exception as e:
+        print(f"[sources] full release lookup for tags skipped: {e}")
         return None
-    rel = releases[0]
-    artist = "".join(
-        (c.get("name") or "") + (c.get("joinphrase") or "")
-        for c in rel.get("artist-credit") or []
-    ) or "Unknown Artist"
-    titles = []
-    for medium in rel.get("media") or []:
+    full[mbid] = rel
+    try:
+        hmeta.get_service().remember_release(rel)
+    except Exception as e:
+        print(f"[sources] metadata cache unavailable: {e}")
+    return rel
+
+
+def _cd_metadata(toc, release=None):
+    """Metadata for `toc` from the cached lookup — the release `release`
+    (an MBID among the plausible ones) or the best one — padded with offline
+    fallbacks so callers always get artist/album and one title per track."""
+    look = _cd_lookup(toc)
+    choices = (look or {}).get("choices") or []
+    choice = None
+    if release:
+        choice = next((c for c in choices if c["mbid"] == str(release).strip().lower()), None)
+    if choice is None and choices:
+        choice = choices[0]
+    titles, artists = [], []
+    artist = album = year = ""
+    if choice:
+        rel = choice["rel"]
+        artist = hmeta.artist_credit_text(rel.get("artist-credit"))
+        album = rel.get("title") or ""
+        year = (rel.get("date") or "")[:4]
+        medium = next((m for m in rel.get("media") or []
+                       if int(m.get("position") or 0) == choice["medium"]), {})
         for tr in medium.get("tracks") or []:
-            titles.append(tr.get("title") or "")
-        if titles:
-            break  # first medium only: one physical disc in the drive
-    return {
-        "mbid": rel.get("id"),
-        "artist": artist,
-        "album": rel.get("title") or "Unknown Album",
-        "year": (rel.get("date") or "")[:4],
-        "titles": titles,
-    }
-
-
-def _cd_metadata(toc):
-    """MusicBrainz metadata for `toc` (cached), padded with offline fallbacks
-    so callers always get artist/album and one title per track."""
-    meta = _cd_info_cache.get(toc["discid"])
-    if meta is None:
-        meta = _mb_lookup(toc) or {}
-        if meta:
-            _cd_info_cache[toc["discid"]] = meta
-    titles = list(meta.get("titles") or [])
+            titles.append(tr.get("title") or (tr.get("recording") or {}).get("title") or "")
+            artists.append(hmeta.artist_credit_text(tr.get("artist-credit")) or artist)
     tracks = []
     for i in range(toc["ntracks"]):
         title = titles[i] if i < len(titles) and titles[i] else f"Track {i + 1:02d}"
         tracks.append({"num": i + 1, "title": title, "length": toc["lengths"][i]})
     return {
-        "mbid": meta.get("mbid"),
-        "artist": meta.get("artist") or "Unknown Artist",
-        "album": meta.get("album") or "Unknown Album",
-        "year": meta.get("year") or "",
+        "mbid": choice["mbid"] if choice else None,
+        "artist": artist or "Unknown Artist",
+        "album": album or "Unknown Album",
+        "year": year,
         "tracks": tracks,
+        "track_artists": artists,
+        "releases": [c["entry"] for c in choices],
+        "choice": choice,
+        "lookup": look,
     }
+
+
+def _cd_tag_plan(meta, artist):
+    """Album-wide and per-track tags for the rip (see hifi-rip-cd.py). Uses a
+    full release lookup when MusicBrainz answers in time — it carries the works
+    behind the recordings, hence composer and lyricist — and the discid
+    lookup already in hand otherwise. A track artist that differs from the
+    release artist (a compilation) is kept; the rest follow the artist the
+    user may have corrected in the form."""
+    choice = meta.get("choice")
+    if not choice:
+        return [], [None] * len(meta["tracks"]), [artist] * len(meta["tracks"])
+    rel = choice["rel"]
+    # Bounded: this runs inside the POST that starts the rip.
+    full = _cd_fetch_full(meta["lookup"], choice["mbid"], timeout=8, retries=0, max_wait=3)
+    if full and any(int(m.get("position") or 0) == choice["medium"] for m in full.get("media") or []):
+        rel = full
+    album_tags, track_tags, track_artists = hmeta.cd_tags(rel, choice["medium"])
+    if choice.get("exact") and (meta.get("lookup") or {}).get("disc_id"):
+        album_tags.append(("MUSICBRAINZ_DISCID", meta["lookup"]["disc_id"]))
+    mb_artist = hmeta.artist_credit_text(rel.get("artist-credit"))
+    if artist and artist != mb_artist:
+        album_tags = [(k, artist if k == "ALBUMARTIST" else v) for k, v in album_tags]
+    artists = []
+    for i in range(len(meta["tracks"])):
+        ta = track_artists[i] if i < len(track_artists) else ""
+        artists.append(ta if ta and ta != mb_artist else artist)
+    while len(track_tags) < len(meta["tracks"]):
+        track_tags.append([])
+    return album_tags, track_tags[:len(meta["tracks"])], artists
 
 
 def _rip_state():
@@ -6423,12 +6608,12 @@ def _rip_watcher():
 
 def _rip_writable_sources():
     """Sources the rip can write into: adopted (rw, hifimusic-owned) internal
-    or USB disks, plus any SMB share explicitly mounted read-write (opt-in —
-    see mount_smb())."""
+    or USB disks, plus any SMB share mounted read-write — which is the
+    default, but not one the server always allows (see mount_smb())."""
     out = []
     for s in load_state().get("sources", []):
         t = s.get("type")
-        if t not in ("internal", "usb") and not (t == "smb" and s.get("rw")):
+        if t not in ("internal", "usb") and not (t == "smb" and _smb_wants_rw(s)):
             continue
         mp = s.get("mountpoint") or ""
         if os.path.ismount(mp) and os.access(mp, os.W_OK):
@@ -6443,15 +6628,19 @@ def api_cd_info():
         return denied
     toc = _cd_toc()
     if not toc:
-        return jsonify({"no_disc": True})
-    meta = _cd_metadata(toc)
+        return jsonify({"no_disc": True, "releases": []})
+    meta = _cd_metadata(toc, request.args.get("release"))
     return jsonify({
         "no_disc": False,
         "discid": toc["discid"],
+        "mbid": meta["mbid"],
         "artist": meta["artist"],
         "album": meta["album"],
         "year": meta["year"],
         "tracks": meta["tracks"],
+        # Every release this disc may belong to (best first), for the edition
+        # choice: pass one back as `release` here or to /api/cd/rip.
+        "releases": meta["releases"],
         "destinations": [
             {"source_id": s.get("id"), "name": s.get("name") or s.get("label")}
             for s in _rip_writable_sources()
@@ -6481,7 +6670,7 @@ def api_cd_rip():
         else:
             return _err("msg.noWritableTarget", 400)
 
-    meta = _cd_metadata(toc)
+    meta = _cd_metadata(toc, data.get("release"))
     artist = str(data.get("artist") or meta["artist"]).strip() or "Unknown Artist"
     album = str(data.get("album") or meta["album"]).strip() or "Unknown Album"
     year = str(data.get("year") or meta["year"]).strip()[:4]
@@ -6502,7 +6691,7 @@ def api_cd_rip():
         try:
             req = urllib.request.Request(
                 f"https://coverartarchive.org/release/{meta['mbid']}/front-500",
-                headers={"User-Agent": "OsmiumSound/1.0 (https://osmiumsound.qd.je)"})
+                headers={"User-Agent": hmeta.user_agent()})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 cover = resp.read(5 * 1024 * 1024)
             with open(RIP_COVER, "wb") as f:
@@ -6510,6 +6699,12 @@ def api_cd_rip():
         except Exception:
             pass
 
+    # MusicBrainz identifiers and the rest of the Picard-style tags; the
+    # titles, artist, album and year above stay whatever the user confirmed.
+    album_tags, track_tags, track_artists = _cd_tag_plan(meta, artist)
+    for i, tr in enumerate(tracks):
+        tr["artist"] = track_artists[i] if i < len(track_artists) else artist
+        tr["tags"] = [list(t) for t in (track_tags[i] or [])] if i < len(track_tags) else []
     plan = {
         "device": CD_DEVICE,
         "root": src["mountpoint"],
@@ -6519,6 +6714,7 @@ def api_cd_rip():
         "discid": toc["discid"],
         "cover": RIP_COVER if os.path.exists(RIP_COVER) else "",
         "tracks": tracks,
+        "album_tags": [list(t) for t in album_tags],
     }
     with open(RIP_PLAN, "w") as f:
         json.dump(plan, f)
@@ -7171,7 +7367,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
     <div style="flex:1"><label data-i18n="sources.pass"></label><input id="smbPass" type="password" placeholder="••••••"></div></div>
     <div style="height:10px"></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--silver)">
-      <input type="checkbox" id="smbRw" style="width:auto"> <span data-i18n="sources.smbRw"></span>
+      <input type="checkbox" id="smbRw" style="width:auto" checked> <span data-i18n="sources.smbRw"></span>
     </label>
     <div style="height:12px"></div>
     <button class="ghost" onclick="addSmb()" data-i18n="sources.mountAndAdd"></button>
@@ -7330,7 +7526,7 @@ async function addSmb(){
   const m=document.getElementById('smbMsg'); m.textContent=T('sources.mounting');
   const r=await j('/api/sources/smb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   m.textContent=r.success?(T('sources.mounted')+' '+(r.message||'')):(r.message||T('sources.error')); m.className='msg '+(r.success?'ok':'bad');
-  if(r.success){smbPass.value='';document.getElementById('smbRw').checked=false;load();}
+  if(r.success){smbPass.value='';document.getElementById('smbRw').checked=true;load();}
 }
 async function rm(id){ await j('/api/sources/'+id,{method:'DELETE'}); load(); }
 async function setSmbRw(id,rw){
@@ -7625,6 +7821,10 @@ if __name__ == "__main__":
         regen_samba_shares()
     except Exception as e:
         print(f"[sources] regen_samba_shares error: {e}")
+    # Album/artist information: the library walk that fills the cache in the
+    # background (it waits a couple of minutes, and only runs while both the
+    # online information and the prefetch settings are on).
+    hmeta.start_background()
     # threaded=True so the USB/SMB mount scans and a slow Lyrion restart don't
     # serialise behind each other and block the phone/PC web UI.
     app.run(host="0.0.0.0", port=8080, threaded=True)

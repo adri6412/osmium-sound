@@ -180,7 +180,7 @@ export default function SourcesManager() {
   const [playlistdirDefault, setPlaylistdirDefault] = useState('');
   const [pldOpen, setPldOpen] = useState(false);
 
-  const [smb, setSmb] = useState({ server: '', share: '', username: '', password: '', rw: false });
+  const [smb, setSmb] = useState({ server: '', share: '', username: '', password: '', rw: true });
   const setSmbField = (k) => (e) => setSmb((s) => ({ ...s, [k]: e.target.value }));
   const serverRef = useKeyboardInput(smb.server, () => {});
   const shareRef = useKeyboardInput(smb.share, () => {});
@@ -249,7 +249,7 @@ export default function SourcesManager() {
     try {
       const r = await post('/api/sources/smb', smb);
       setMsg(r.success ? t('sources.mounted') : (r.message || t('common.error')));
-      if (r.success) { setSmb({ server: '', share: '', username: '', password: '', rw: false }); changed(); }
+      if (r.success) { setSmb({ server: '', share: '', username: '', password: '', rw: true }); changed(); }
     } catch (_) { setMsg(t('common.error')); } finally { setBusy(false); }
   };
 

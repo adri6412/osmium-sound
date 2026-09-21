@@ -177,7 +177,7 @@ run_step() {  # <kind> <version> <url> <sha> <sig>
         system) "$SYS_SCRIPT" stage "$3" "$4" "$2" ;;
         os)     "$OS_SCRIPT"  stage "$3" "$4" "$5" "$2" ;;
         ui)     "$UI_SCRIPT"  stage "$3" "$4" "$2" ;;
-        image)  "$IMG_SCRIPT" stage "$3" "$2" ;;
+        image)  "$IMG_SCRIPT" stage "$3" "$2" "$4" ;;
         *)      return 64 ;;
     esac
 }

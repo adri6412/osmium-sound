@@ -47,6 +47,23 @@ def fail(message, track=0, total=0):
     sys.exit(1)
 
 
+def extra_tags(pairs):
+    """`--tag=` options for (NAME, value) pairs from the plan: Vorbis comment
+    names are printable ASCII without '=', and a value never spans lines.
+    Repeated names are how FLAC carries multiple values (several artists)."""
+    out = []
+    for pair in pairs or []:
+        try:
+            name, value = pair
+        except (TypeError, ValueError):
+            continue
+        name = str(name or "").strip().upper()
+        value = " ".join(str(value or "").split())
+        if value and re.fullmatch(r"[A-Z0-9_]{1,64}", name):
+            out.append(f"--tag={name}={value}")
+    return out
+
+
 def safe_name(value, fallback):
     """Filesystem-safe file/dir component (also fine on exFAT)."""
     v = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", str(value or "")).strip(" .")
@@ -73,6 +90,9 @@ def main():
 
     artist = plan.get("artist") or "Unknown Artist"
     album = plan.get("album") or "Unknown Album"
+    # MusicBrainz ids, album artist, disc number, label... (sources_server's
+    # _cd_tag_plan); empty when the disc was not identified.
+    album_tags = extra_tags(plan.get("album_tags"))
     year = plan.get("year") or ""
     cover = plan.get("cover") or ""
     if cover and not os.path.isfile(cover):
@@ -96,14 +116,16 @@ def main():
         if r.returncode != 0 or not os.path.isfile(wav):
             shutil.rmtree(work, ignore_errors=True)
             fail(f"lettura traccia {num} fallita (disco rovinato?)", num, total)
+        track_artist = tr.get("artist") or artist
         cmd = ["flac", "--silent", "--best", "--force",
-               f"--tag=ARTIST={artist}", f"--tag=ALBUM={album}",
+               f"--tag=ARTIST={track_artist}", f"--tag=ALBUM={album}",
                f"--tag=TITLE={title}", f"--tag=TRACKNUMBER={num}",
                f"--tag=TRACKTOTAL={total}"]
         if year:
             cmd.append(f"--tag=DATE={year}")
         if plan.get("discid"):
             cmd.append(f"--tag=DISCID={plan['discid']}")
+        cmd += album_tags + extra_tags(tr.get("tags"))
         if cover:
             cmd.append(f"--picture={cover}")
         cmd += ["-o", flac, wav]

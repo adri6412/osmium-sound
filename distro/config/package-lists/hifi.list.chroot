@@ -104,6 +104,24 @@ ffmpeg
 # Squeezelite (Debian build has VISEXPORT; -v exports /dev/shm/squeezelite-*)
 squeezelite
 
+# Bluetooth speakers (Settings -> Bluetooth speakers). The appliance is an
+# A2DP *source*: it sends audio to a speaker or a pair of headphones, and each
+# paired one gets a squeezelite of its own so it shows up in Lyrion as a
+# player in its own right (hifi-bt-out.py / hifi-bt-player@.service).
+#   bluez                    the BlueZ daemon + bluetoothctl
+#   bluez-tools              bt-agent, the headless NoInputNoOutput pairing agent
+#   bluez-alsa-utils         the BlueALSA daemon itself
+#   libasound2-plugin-bluez  the ALSA PCM plugin squeezelite opens
+#                            (bluealsa:DEV=...) — without it there is a daemon
+#                            but no way for a player to reach it
+# None of it runs unless the owner turns Bluetooth on: the units ship
+# unenabled and hifi-bt-out.service (the one that IS enabled) leaves the
+# adapter powered down while the choice is off.
+bluez
+bluez-tools
+bluez-alsa-utils
+libasound2-plugin-bluez
+
 # NOTE: network audio receivers (AirPlay, UPnP/DLNA, Spotify Connect) are NOT
 # system packages — they are Lyrion plugins (ShairTunes2 / UPnP-DLNA / Spotty)
 # that route through Lyrion/squeezelite. Installed one-click from the Lyrion web
@@ -121,6 +139,10 @@ python3-yaml
 # back to pure Python if it's ever missing, but installing it keeps playback CPU
 # low on the mini-PC.
 python3-numpy
+# mutagen: reads and writes the tags of every common audio format for the
+# web admin's Library editor (hifi_tags.py). Without it only FLAC can be
+# edited (through metaflac, from the flac package above).
+python3-mutagen
 
 # Network shares (SMB mounting for music sources + serving internal disks)
 cifs-utils

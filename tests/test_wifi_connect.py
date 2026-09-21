@@ -63,7 +63,7 @@ class WifiConnectTests(unittest.TestCase):
             return _cp(cmd)
         return _cp(cmd)
 
-    def _connect(self, ssid, password, wifi_dev='wlan0', ip='192.168.1.40'):
+    def _connect(self, ssid, password, wifi_dev='wlan0', ip='192.168.1.40', band=''):
         self.enabled = []
         with patch.object(api_server, '_run', self._fake_run), \
              patch.object(api_server, '_first_device_of_type',
@@ -76,7 +76,7 @@ class WifiConnectTests(unittest.TestCase):
             # time.sleep is the retry backoff inside _wifi_join; api_server.time
             # is the stdlib module, so this is restored on exit rather than left
             # patched for the process.
-            return api_server.wifi_connect(ssid, password)
+            return api_server.wifi_connect(ssid, password, band)
 
     def _argv(self, *prefix):
         """The first recorded nmcli call starting with these arguments."""
@@ -166,6 +166,61 @@ class WifiConnectTests(unittest.TestCase):
         self.assertTrue(res['success'], res)
         self.assertEqual(self._argv('nmcli', 'device', 'wifi', 'connect'),
                          ['nmcli', 'device', 'wifi', 'connect', 'Cafe'])
+
+    # ── the band of a dual-band network ──────────────────────────────
+    # A home router broadcasts one SSID on 2.4 and 5 GHz; the scan list shows
+    # the two apart, and picking one has to mean something — without the band
+    # on the profile NetworkManager joins whichever half it likes.
+    def _band_arg(self, add):
+        if add is None or '802-11-wireless.band' not in add:
+            return None
+        return add[add.index('802-11-wireless.band') + 1]
+
+    def test_a_picked_band_is_written_onto_the_profile(self):
+        res = self._connect('HomeNet', 'hunter2hunter2', band='5')
+        self.assertTrue(res['success'], res)
+        self.assertEqual(self._band_arg(self._argv('nmcli', 'connection', 'add')), 'a')
+
+    def test_24_is_the_bg_band(self):
+        self._connect('HomeNet', 'hunter2hunter2', band='2.4')
+        self.assertEqual(self._band_arg(self._argv('nmcli', 'connection', 'add')), 'bg')
+
+    def test_6ghz_joins_on_the_same_band_setting_as_5(self):
+        # NetworkManager has no separate name for it: 'a' covers both.
+        self._connect('HomeNet', 'hunter2hunter2', band='6')
+        self.assertEqual(self._band_arg(self._argv('nmcli', 'connection', 'add')), 'a')
+
+    def test_no_band_leaves_the_profile_free_to_roam(self):
+        """The common case: one band, or an SSID typed by hand. Pinning there
+        would only give NetworkManager one more way to fail."""
+        self._connect('HomeNet', 'hunter2hunter2')
+        self.assertIsNone(self._band_arg(self._argv('nmcli', 'connection', 'add')))
+
+    def test_nonsense_band_is_ignored(self):
+        self._connect('HomeNet', 'hunter2hunter2', band='wifi6e')
+        self.assertIsNone(self._band_arg(self._argv('nmcli', 'connection', 'add')))
+
+    def test_a_saved_profile_keeps_its_secret_and_gets_the_band(self):
+        """No password typed: the stored secret must survive, so the band is
+        written onto the profile that is already there."""
+        self.profiles.add('HomeNet')
+        res = self._connect('HomeNet', '', band='2.4')
+        self.assertTrue(res['success'], res)
+        self.assertIsNone(self._argv('nmcli', 'connection', 'add'))
+        self.assertEqual(self._argv('nmcli', 'connection', 'modify'),
+                         ['nmcli', 'connection', 'modify', 'id', 'HomeNet',
+                          '802-11-wireless.band', 'bg'])
+        self.assertIsNotNone(self._argv('nmcli', 'connection', 'up', 'id', 'HomeNet'))
+
+    def test_an_open_network_on_a_chosen_band_gets_a_profile(self):
+        """The `device wifi connect` shorthand can't pin a band, so the join
+        goes through an explicit profile — with no security settings on it."""
+        res = self._connect('Cafe', '', band='5')
+        self.assertTrue(res['success'], res)
+        self.assertIsNone(self._argv('nmcli', 'device', 'wifi', 'connect'))
+        add = self._argv('nmcli', 'connection', 'add')
+        self.assertEqual(self._band_arg(add), 'a')
+        self.assertNotIn('802-11-wireless-security.key-mgmt', add)
 
     # ── failure handling ─────────────────────────────────────────────
     def test_activation_is_retried_once(self):

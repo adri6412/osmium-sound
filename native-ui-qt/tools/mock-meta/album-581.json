@@ -1,0 +1,759 @@
+{
+ "status": "ok",
+ "album_id": 581,
+ "match": {
+  "mbid": "e6479787-3839-4082-b133-de2e5a1bd574",
+  "release_group": "9def67c0-7709-33ee-88c4-abe54287ebe5",
+  "how": "search",
+  "score": 100,
+  "medium": null
+ },
+ "release": {
+  "title": "Moonlight Sonata / Pathétique Sonata / Appassionata Sonata",
+  "artist": "Ludwig van Beethoven; Vladimir Ashkenazy",
+  "date": "2008-05-26",
+  "first_release_date": "1983",
+  "type": "album",
+  "secondary_types": [],
+  "labels": [
+   {
+    "name": "Classic FM",
+    "catno": "CFM FW 007"
+   }
+  ],
+  "country": "GB",
+  "barcode": "028947665298",
+  "disc_count": 1,
+  "track_count": 9,
+  "url": "https://musicbrainz.org/release/e6479787-3839-4082-b133-de2e5a1bd574"
+ },
+ "credits": [
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "piano",
+   "credit": "",
+   "people": [
+    {
+     "name": "Vladimir Ashkenazy",
+     "mbid": "15a30428-87c4-455b-b7e8-71013237fea0",
+     "artist_id": 777
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "composition",
+   "role": "composer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ludwig van Beethoven",
+     "mbid": "1f9df192-a621-4f54-8850-2c5373b7eac9",
+     "artist_id": 660
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "production",
+   "role": "producer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "James Walker",
+     "mbid": "e4faae5f-df02-4ad2-9fae-5310b0dd810c",
+     "artist_id": null
+    },
+    {
+     "name": "Richard Beswick",
+     "mbid": "5fdf78b9-7428-441c-83dc-2360d293c6ab",
+     "artist_id": null
+    }
+   ],
+   "tracks": null
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Simon Eadon",
+     "mbid": "c3dd9cc7-634e-4ee5-8e45-d8997fa19917",
+     "artist_id": null
+    },
+    {
+     "name": "Stanley Goodall",
+     "mbid": "229623a1-29f3-4c14-87fa-1c955a2c479a",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "recording",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Dunkerley",
+     "mbid": "f2e6670c-eeef-4e73-a78e-b82ed04822f6",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "balance",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Simon Eadon",
+     "mbid": "c3dd9cc7-634e-4ee5-8e45-d8997fa19917",
+     "artist_id": null
+    },
+    {
+     "name": "Stanley Goodall",
+     "mbid": "229623a1-29f3-4c14-87fa-1c955a2c479a",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     5
+    ]
+   ]
+  }
+ ],
+ "tracks": [
+  {
+   "disc": 1,
+   "n": 1,
+   "title": "Moonlight: I. Adagio sostenuto",
+   "length_ms": 367093,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Vladimir Ashkenazy",
+       "mbid": "15a30428-87c4-455b-b7e8-71013237fea0",
+       "artist_id": 777
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ludwig van Beethoven",
+       "mbid": "1f9df192-a621-4f54-8850-2c5373b7eac9",
+       "artist_id": 660
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "James Walker",
+       "mbid": "e4faae5f-df02-4ad2-9fae-5310b0dd810c",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Dunkerley",
+       "mbid": "f2e6670c-eeef-4e73-a78e-b82ed04822f6",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 2,
+   "title": "Moonlight: II. Allegretto",
+   "length_ms": 132640,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Vladimir Ashkenazy",
+       "mbid": "15a30428-87c4-455b-b7e8-71013237fea0",
+       "artist_id": 777
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ludwig van Beethoven",
+       "mbid": "1f9df192-a621-4f54-8850-2c5373b7eac9",
+       "artist_id": 660
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "James Walker",
+       "mbid": "e4faae5f-df02-4ad2-9fae-5310b0dd810c",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Dunkerley",
+       "mbid": "f2e6670c-eeef-4e73-a78e-b82ed04822f6",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 3,
+   "title": "Moonlight: III. Presto",
+   "length_ms": 458106,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Vladimir Ashkenazy",
+       "mbid": "15a30428-87c4-455b-b7e8-71013237fea0",
+       "artist_id": 777
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ludwig van Beethoven",
+       "mbid": "1f9df192-a621-4f54-8850-2c5373b7eac9",
+       "artist_id": 660
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "James Walker",
+       "mbid": "e4faae5f-df02-4ad2-9fae-5310b0dd810c",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Dunkerley",
+       "mbid": "f2e6670c-eeef-4e73-a78e-b82ed04822f6",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 4,
+   "title": "Pathétique: I. Grave - Allegro di molto e con brio",
+   "length_ms": 513120,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Vladimir Ashkenazy",
+       "mbid": "15a30428-87c4-455b-b7e8-71013237fea0",
+       "artist_id": 777
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ludwig van Beethoven",
+       "mbid": "1f9df192-a621-4f54-8850-2c5373b7eac9",
+       "artist_id": 660
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Richard Beswick",
+       "mbid": "5fdf78b9-7428-441c-83dc-2360d293c6ab",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Stanley Goodall",
+       "mbid": "229623a1-29f3-4c14-87fa-1c955a2c479a",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 5,
+   "title": "Pathétique: II. Adagio cantabile",
+   "length_ms": 301733,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Vladimir Ashkenazy",
+       "mbid": "15a30428-87c4-455b-b7e8-71013237fea0",
+       "artist_id": 777
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ludwig van Beethoven",
+       "mbid": "1f9df192-a621-4f54-8850-2c5373b7eac9",
+       "artist_id": 660
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "James Walker",
+       "mbid": "e4faae5f-df02-4ad2-9fae-5310b0dd810c",
+       "artist_id": null
+      },
+      {
+       "name": "Richard Beswick",
+       "mbid": "5fdf78b9-7428-441c-83dc-2360d293c6ab",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Stanley Goodall",
+       "mbid": "229623a1-29f3-4c14-87fa-1c955a2c479a",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "balance",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Simon Eadon",
+       "mbid": "c3dd9cc7-634e-4ee5-8e45-d8997fa19917",
+       "artist_id": null
+      },
+      {
+       "name": "Stanley Goodall",
+       "mbid": "229623a1-29f3-4c14-87fa-1c955a2c479a",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 6,
+   "title": "Pathétique: III. Rondo (Allegro)",
+   "length_ms": 293146,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Vladimir Ashkenazy",
+       "mbid": "15a30428-87c4-455b-b7e8-71013237fea0",
+       "artist_id": 777
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ludwig van Beethoven",
+       "mbid": "1f9df192-a621-4f54-8850-2c5373b7eac9",
+       "artist_id": 660
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Richard Beswick",
+       "mbid": "5fdf78b9-7428-441c-83dc-2360d293c6ab",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Stanley Goodall",
+       "mbid": "229623a1-29f3-4c14-87fa-1c955a2c479a",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 7,
+   "title": "Appassionata: I. Allegro assai",
+   "length_ms": 580786,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Vladimir Ashkenazy",
+       "mbid": "15a30428-87c4-455b-b7e8-71013237fea0",
+       "artist_id": 777
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ludwig van Beethoven",
+       "mbid": "1f9df192-a621-4f54-8850-2c5373b7eac9",
+       "artist_id": 660
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "James Walker",
+       "mbid": "e4faae5f-df02-4ad2-9fae-5310b0dd810c",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Simon Eadon",
+       "mbid": "c3dd9cc7-634e-4ee5-8e45-d8997fa19917",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 8,
+   "title": "Appassionata: II. Andante con moto",
+   "length_ms": 395000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Vladimir Ashkenazy",
+       "mbid": "15a30428-87c4-455b-b7e8-71013237fea0",
+       "artist_id": 777
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ludwig van Beethoven",
+       "mbid": "1f9df192-a621-4f54-8850-2c5373b7eac9",
+       "artist_id": 660
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "James Walker",
+       "mbid": "e4faae5f-df02-4ad2-9fae-5310b0dd810c",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Simon Eadon",
+       "mbid": "c3dd9cc7-634e-4ee5-8e45-d8997fa19917",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 9,
+   "title": "Appassionata: III. Allegro ma non troppo",
+   "length_ms": 450293,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Vladimir Ashkenazy",
+       "mbid": "15a30428-87c4-455b-b7e8-71013237fea0",
+       "artist_id": 777
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ludwig van Beethoven",
+       "mbid": "1f9df192-a621-4f54-8850-2c5373b7eac9",
+       "artist_id": 660
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "James Walker",
+       "mbid": "e4faae5f-df02-4ad2-9fae-5310b0dd810c",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Simon Eadon",
+       "mbid": "c3dd9cc7-634e-4ee5-8e45-d8997fa19917",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "places": [
+  {
+   "role": "recorded_at",
+   "name": "All Saints’ Church",
+   "area": "Richmond upon Thames"
+  },
+  {
+   "role": "recorded_at",
+   "name": "Kingsway Hall",
+   "area": "London"
+  }
+ ],
+ "about": null,
+ "attribution": [
+  {
+   "source": "MusicBrainz",
+   "url": "https://musicbrainz.org/release/e6479787-3839-4082-b133-de2e5a1bd574",
+   "license": "CC0"
+  }
+ ]
+}

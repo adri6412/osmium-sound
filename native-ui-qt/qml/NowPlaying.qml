@@ -13,7 +13,16 @@ Item {
     // the VU needles come from this device's own DAC: meaningless while
     // driving another player (#99)
     readonly property bool effVu: viewVu && Player.vuEnabled && Player.isOwn
+    // with the VU meters off, a CD / vinyl / cassette may take their place
+    // (Settings → Animations); it is not tied to our own DAC, so no isOwn
+    readonly property bool animChosen: Player.npAnimation !== "" && Player.npAnimation !== "none"   // built in or from the store
+    readonly property bool effAnim: viewVu && !Player.vuEnabled && animChosen
     property bool shown: false                         // a video (VU attivi solo qui)
+    // Full screen (NpStage), from the button next to the clock: the meters
+    // when they are on, else the chosen animation; nothing when neither.
+    readonly property string stageMode: Player.vuEnabled ? (Player.isOwn ? "vu" : "") : (animChosen ? "anim" : "")
+    property bool stageOpen: false
+    readonly property bool staged: stageOpen && stageMode !== ""
     signal collapse()
     signal openQueue()
     signal openSleep()
@@ -21,17 +30,18 @@ Item {
     signal startScreensaver()
     signal toggleView()
     signal openPlaybackSetting(string which)
+    signal openSettings()
 
     readonly property real pad: 20
-    readonly property real leftW: (1024 - pad * 2) * 0.44
+    readonly property real leftW: (root.width - pad * 2) * 0.44
     readonly property real bodyY: 52
-    readonly property real bodyH: 600 - bodyY - pad
+    readonly property real bodyH: root.height - bodyY - pad
     readonly property real artSide: Math.min(leftW, 320)
     readonly property real ledW: Math.min(leftW, 368)
     readonly property real ledH: ledW * 175 / 897
     readonly property real artY: bodyY + (bodyH - (artSide + 32 + ledH)) / 2
     readonly property real rx: pad + leftW + 24
-    readonly property real rw: 1024 - rx - pad
+    readonly property real rw: root.width - rx - pad
 
     // Con i VU in movimento la scena si ridisegna ~30 volte al secondo: tutto
     // cio' che non si muove sta in uno strato cotto una volta (layer), cosi'
@@ -40,7 +50,8 @@ Item {
     Item {
         id: staticLayer
         anchors.fill: parent
-        layer.enabled: root.shown && root.effVu
+        visible: !root.staged
+        layer.enabled: root.shown && !root.staged && (root.effVu || root.effAnim)
         layer.textureSize: Qt.size(Math.round(width * root.devScale), Math.round(height * root.devScale))
         layer.smooth: true
         // Senza canale alpha: la schermata e' opaca (ha il suo fondo scuro), e
@@ -86,7 +97,7 @@ Item {
             source: bgSrc.status === Image.Ready ? bgSrc : bgPrev
             visible: bgSrc.status === Image.Ready || bgPrev.status === Image.Ready
             width: 400; height: 400
-            x: 512 - 640; y: 300 - 640
+            x: root.width / 2 - 640; y: root.height / 2 - 640
             scale: 3.2
             transformOrigin: Item.TopLeft
             // blur-lg (16) e' applicato PRIMA di scale-125: 20 punti effettivi a schermo
@@ -122,6 +133,35 @@ Item {
         }
         Tap { id: clockTap; onClicked: root.startScreensaver() }
     }
+    // full screen (big meters or the animation), then the two choosers: which
+    // VU meter look, which animation. The lit one says what plays on screen.
+    Row {
+        x: clockPill.x + clockPill.width + 10; y: 31 - 18
+        spacing: 8
+        RoundButton {
+            width: 36; height: 36
+            visible: root.stageMode !== ""
+            icon: "maximize-2"; iconSize: 18
+            onClicked: root.stageOpen = true
+        }
+        RoundButton {                             // the meters' looks (our own DAC only, like the meters)
+            width: 36; height: 36
+            visible: Player.isOwn
+            icon: "audio-lines"; iconSize: 18
+            bg: Player.vuEnabled ? Theme.goldA(0.3) : Theme.wa(0.10)
+            bgPress: Player.vuEnabled ? Theme.goldA(0.3) : Theme.wa(0.20)
+            fg: Player.vuEnabled ? Theme.gold : Theme.white
+            onClicked: chooser.open("vu")
+        }
+        RoundButton {                             // the animations
+            width: 36; height: 36
+            icon: "disc-3"; iconSize: 18
+            bg: !Player.vuEnabled && root.animChosen ? Theme.goldA(0.3) : Theme.wa(0.10)
+            bgPress: !Player.vuEnabled && root.animChosen ? Theme.goldA(0.3) : Theme.wa(0.20)
+            fg: !Player.vuEnabled && root.animChosen ? Theme.gold : Theme.white
+            onClicked: chooser.open("anim")
+        }
+    }
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         y: 31 - height / 2
@@ -129,26 +169,28 @@ Item {
         color: Player.isOwn ? Theme.silverA(0.7) : Theme.gold; font.family: Theme.font; font.pixelSize: 10; font.letterSpacing: 2.5
     }
     RoundButton {                                 // player da pilotare (#99)
-        x: 1024 - root.pad - 34 * 4 - 24; y: 14; width: 34; height: 34; icon: "speaker"; iconSize: 18
+        x: root.width - root.pad - 34 * 5 - 32; y: 14; width: 34; height: 34; icon: "speaker"; iconSize: 18
         bg: Player.isOwn ? Theme.wa(0.10) : Theme.goldA(0.3)
         bgPress: Player.isOwn ? Theme.wa(0.20) : Theme.goldA(0.3)
         fg: Player.isOwn ? Theme.white : Theme.gold
         onClicked: root.openPlayerPicker()
     }
-    RoundButton {                                 // VU <-> testi (nascosto se i VU sono spenti)
-        x: 1024 - root.pad - 34 * 3 - 16; y: 14; width: 34; height: 34
-        visible: Player.vuEnabled && Player.isOwn
-        icon: root.viewVu ? "mic-2" : "audio-lines"; iconSize: 18
+    RoundButton {                                 // VU or animation <-> lyrics (hidden when neither is available)
+        x: root.width - root.pad - 34 * 4 - 24; y: 14; width: 34; height: 34
+        visible: (Player.vuEnabled && Player.isOwn) || (!Player.vuEnabled && root.animChosen)
+        icon: root.viewVu ? "mic-2" : (Player.vuEnabled ? "audio-lines" : "disc-3"); iconSize: 18
         onClicked: root.toggleView()
     }
-    RoundButton { x: 1024 - root.pad - 34 * 2 - 8; y: 14; width: 34; height: 34; icon: "list-music"; iconSize: 18; onClicked: root.openQueue() }
+    RoundButton { x: root.width - root.pad - 34 * 3 - 16; y: 14; width: 34; height: 34; icon: "list-music"; iconSize: 18; onClicked: root.openQueue() }
     RoundButton {
-        x: 1024 - root.pad - 34; y: 14; width: 34; height: 34; icon: "moon"; iconSize: 18
+        x: root.width - root.pad - 34 * 2 - 8; y: 14; width: 34; height: 34; icon: "moon"; iconSize: 18
         bg: Player.sleepSecs > 0 ? Theme.goldA(0.3) : Theme.wa(0.10)
         bgPress: Player.sleepSecs > 0 ? Theme.goldA(0.3) : Theme.wa(0.20)
         fg: Player.sleepSecs > 0 ? Theme.gold : Theme.white
         onClicked: root.openSleep()
     }
+    // straight to Settings
+    RoundButton { x: root.width - root.pad - 34; y: 14; width: 34; height: 34; icon: "settings"; iconSize: 18; onClicked: root.openSettings() }
 
     // ─── copertina con ombra 0 20px 60px rgba(0,0,0,.7) e targa LED ────────
     Rectangle {
@@ -179,10 +221,10 @@ Item {
     LedBar {
         x: root.pad + (root.leftW - root.ledW) / 2; y: root.artY + root.artSide + 32
         width: root.ledW; devScale: root.devScale
-        // BitPerfect / ReplayGain describe THIS device's signal path: off
-        // while driving another player (the format LEDs stay, they are the
-        // stream's)
-        mode: Player.isOwn ? Player.ledMode : 0
+        // BitPerfect / ReplayGain follow the player being driven, like the
+        // format LEDs and the volume slider: the prefs behind ledMode are
+        // polled on the selected player, not on our own (#101)
+        mode: Player.ledMode
         onOpenSetting: (which) => root.openPlaybackSetting(which)
     }
 
@@ -206,13 +248,18 @@ Item {
         Item { width: 1; height: 6 }
         Text {
             width: parent.width; height: 28; verticalAlignment: Text.AlignVCenter
-            text: Player.artist || Tr.t("player.unknownArtist")
-            color: Theme.gold; font.family: Theme.font; font.pixelSize: 18; elide: Text.ElideRight
+            text: Player.artist || (Player.stationName !== "" ? "" : Tr.t("player.unknownArtist"))   // a radio with no song yet: nothing
+            color: npArtistTap.mix(Theme.gold, Theme.white); font.family: Theme.font; font.pixelSize: 18; elide: Text.ElideRight
+            // the artist's page (library tracks only)
+            Tap { id: npArtistTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
+                  enabled: Player.artistId !== ""; onClicked: Ui.app.openArtist(Player.artistId, Player.artist) }
         }
         Text {
             width: parent.width; height: 20; verticalAlignment: Text.AlignVCenter
             text: Player.album
-            color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 14; elide: Text.ElideRight
+            color: npAlbumTap.mix(Theme.silverA(0.7), Theme.white); font.family: Theme.font; font.pixelSize: 14; elide: Text.ElideRight
+            Tap { id: npAlbumTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
+                  enabled: Player.albumId !== ""; onClicked: Ui.app.openAlbum(Player.albumId, Player.album) }
         }
         Item { width: 1; height: 6; visible: Player.chip !== "" }
         Rectangle {                                // etichetta del formato
@@ -263,9 +310,9 @@ Item {
             readonly property real g: 12
             Item {                                 // shuffle
                 x: 9 - 20; y: controls.cy - 20; width: 40; height: 40
-                Icon { anchors.centerIn: parent; name: "shuffle"; size: 18
+                Icon { anchors.centerIn: parent; name: "shuffle"; size: 18; scale: shTap.tapScale
                        color: Player.shuffle > 0 ? Theme.gold : shTap.mix(Theme.silverA(0.6), Theme.white) }
-                Tap { id: shTap; onClicked: Player.cycleShuffle() }
+                Tap { id: shTap; tap: 0.88; onClicked: Player.cycleShuffle() }
             }
             Item {                                 // precedente (whileTap .9)
                 x: 30 + 12 - 22 + controls.g; y: controls.cy - 22; width: 44; height: 44
@@ -277,11 +324,20 @@ Item {
                 x: 66 + 2 * controls.g; y: controls.cy - 28; width: 56; height: 56
                 Glow { anchors.centerIn: parent; radius: 28; blur: 24; color: Theme.goldA(0.4) }
                 Rectangle { anchors.fill: parent; radius: 28; color: Theme.gold; scale: playTap.tapScale }
+                // Due icone che si scambiano in dissolvenza: cambiare `name` di
+                // colpo era uno scatto, e lo scarto ottico del triangolo
+                // saltava con lui. A riposo quella di sotto e' `visible: false`.
+                property real pf: Player.playing ? 1 : 0
+                Behavior on pf { NumberAnimation { duration: Theme.dur(110); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+                Icon {
+                    anchors.centerIn: parent; anchors.horizontalCenterOffset: 4
+                    name: "play"; filled: true; size: 26; color: Theme.black
+                    opacity: 1 - playBtn.pf; visible: opacity > 0.01; scale: playTap.tapScale
+                }
                 Icon {
                     anchors.centerIn: parent
-                    anchors.horizontalCenterOffset: Player.playing ? 0 : 4
-                    name: Player.playing ? "pause" : "play"; filled: true; size: 26; color: Theme.black
-                    scale: playTap.tapScale
+                    name: "pause"; filled: true; size: 26; color: Theme.black
+                    opacity: playBtn.pf; visible: opacity > 0.01; scale: playTap.tapScale
                 }
                 Tap { id: playTap; tap: 0.95; grow: 4; onClicked: Player.togglePlay() }
             }
@@ -292,16 +348,46 @@ Item {
             }
             Item {                                 // ripeti
                 x: 170 + 9 - 20 + 4 * controls.g; y: controls.cy - 20; width: 40; height: 40
-                Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 18
+                Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 18; scale: rpTap.tapScale
                        color: Player.repeat > 0 ? Theme.gold : rpTap.mix(Theme.silverA(0.6), Theme.white) }
-                Tap { id: rpTap; onClicked: Player.cycleRepeat() }
+                Tap { id: rpTap; tap: 0.88; onClicked: Player.cycleRepeat() }
+            }
+            Item {                                 // preferito (Lyrion Favorites): cuore pieno e oro se il brano lo e'
+                id: favBox
+                x: 170 + 9 - 20 + 4 * controls.g + 45; y: controls.cy - 20; width: 40; height: 40   // same pitch as next -> repeat
+                visible: Player.favoritesAvailable && Player.trackUrl !== ""
+                // lo scoppio quando si AGGIUNGE: 0 -> 1 -> 0 in poco piu' di
+                // un quarto di secondo, e finisce li'
+                property real pop: 0
+                SequentialAnimation {
+                    id: favBurst
+                    NumberAnimation { target: favBox; property: "pop"; from: 0; to: 1; duration: Theme.dur(90);  easing.type: Easing.OutQuad }
+                    NumberAnimation { target: favBox; property: "pop"; to: 0;         duration: Theme.dur(220); easing.type: Easing.OutCubic }
+                }
+                Icon { anchors.centerIn: parent; name: "heart"; filled: Player.isFavorite; size: 18
+                       scale: favTap.tapScale * (1 + 0.3 * favBox.pop)
+                       color: Player.isFavorite ? Theme.gold : favTap.mix(Theme.silverA(0.6), Theme.white) }
+                Tap {
+                    id: favTap; tap: 0.9
+                    onClicked: {
+                        var was = Player.isFavorite
+                        Player.toggleFavorite()
+                        // 🚨 Qui e non su onFavoriteChanged: quel segnale scatta
+                        // anche cambiando brano, e il cuore scoppierebbe da solo.
+                        // 🚨 E non mentre i VU o una scena girano: tutto questo
+                        // sta nello strato cotto, e animarlo li' ricuoce una
+                        // texture a schermo intero a ogni fotogramma.
+                        if (!was && Theme.lushMotion && !root.effVu && !root.effAnim) favBurst.restart()
+                        Ui.toast.say("heart", Tr.t(was ? "player.removedFromFavorites" : "player.addedToFavorites"))
+                    }
+                }
             }
             // volume, a destra: icona + barra 155 px
             Item {
                 x: parent.width - 180 + 8.5 - 18; y: controls.cy - 18; width: 36; height: 36
-                Icon { anchors.centerIn: parent; name: Player.volume === 0 ? "volume-x" : "volume-2"; size: 17
-                       color: Player.volumeFixed ? Theme.silverA(0.21) : Theme.silverA(0.7) }
-                Tap { onClicked: Player.toggleMute() }
+                Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 17; scale: muteTap.tapScale
+                       color: Player.volumeFixed ? Theme.silverA(0.21) : muteTap.mix(Theme.silverA(0.7), Theme.white) }
+                Tap { id: muteTap; tap: 0.88; grow: 4; onClicked: Player.toggleMute() }
             }
             Item {
                 id: volBar
@@ -325,16 +411,46 @@ Item {
 
     // ─── testi (nello strato: non si muovono da soli) ──────────────────────
     Lyrics {
-        x: root.rx; y: col.y + col.height; width: root.rw; height: 600 - root.pad - y
-        visible: !root.effVu; active: root.shown && !root.effVu
+        x: root.rx; y: col.y + col.height; width: root.rw; height: root.height - root.pad - y
+        visible: !root.effVu && !root.effAnim; active: root.shown && !root.effVu && !root.effAnim
     }
     }   // fine dello strato statico
 
     // ─── VU: fuori dallo strato, sono l'unica cosa che si muove ────────────
     VuPanel {
-        x: root.rx; y: col.y + col.height; width: root.rw; height: 600 - root.pad - y
-        visible: root.effVu; devScale: root.devScale
+        x: root.rx; y: col.y + col.height; width: root.rw; height: root.height - root.pad - y
+        visible: root.effVu && !root.staged; devScale: root.devScale
+    }
+    // the animation in the same box, also outside the layer. Loaded while the
+    // VU meters are off and one is chosen (so switching to the lyrics and back
+    // does not reload the pictures); it runs only while visible on screen.
+    NpAnimation {
+        x: root.rx; y: col.y + col.height; width: root.rw; height: root.height - root.pad - y
+        // unloaded while the full-screen stage runs its own copy
+        kind: Player.vuEnabled || root.staged ? "" : Player.npAnimation
+        visible: root.effAnim && !root.staged
+        active: root.shown && root.effAnim && !root.staged
+        devScale: root.devScale
     }
 
-    Binding { target: Vu; property: "active"; value: root.shown && root.effVu }
+    NpStage {
+        anchors.fill: parent
+        mode: root.staged ? root.stageMode : ""
+        shown: root.shown && root.staged
+        devScale: root.devScale
+        onClose: root.stageOpen = false
+    }
+    // the popup of the two chooser buttons (VU meter looks / animations)
+    NpChooser {
+        id: chooser
+        anchors.fill: parent
+        devScale: root.devScale
+        z: 10
+    }
+    onShownChanged: if (!shown) chooser.close()
+
+    // the meters run for the VU panels, and for the cassette deck's level
+    // meters, here or at full screen (only our own DAC has levels)
+    Binding { target: Vu; property: "active"; value: root.shown && Player.isOwn && (root.effVu || (root.staged && root.stageMode === "vu")
+                                                     || ((root.effAnim || root.staged) && Player.npAnimation === "cassette")) }
 }

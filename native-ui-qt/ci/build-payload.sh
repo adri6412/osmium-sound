@@ -49,6 +49,15 @@ done
 # api_server lists what is in there, so a new skin needs no other change.
 cp -r native-ui-qt/assets/vu "$QT/assets/"
 test -s "$QT/assets/vu/classic/skin.json" || { echo "::error::VU skins missing"; exit 1; }
+# Now Playing animations shown instead of the VU meters (Settings →
+# Animations): one folder of PNGs per scene, drawn by qml/Anim<Scene>.qml,
+# plus the 90s LCD shared by the full-screen panels (qml/LcdCd.qml, LcdTape.qml)
+# and the fluorescent display of the front-loading CD player (LcdCd.qml, vfd/)
+cp -r native-ui-qt/assets/anim "$QT/assets/"
+for scene in cd cdfront vinyl cassette lcd vfd; do
+  png=$(find "$QT/assets/anim/$scene" -maxdepth 1 -type f -name '*.png' -size +0 -print -quit 2>/dev/null || true)
+  test -n "$png" || { echo "::error::Now Playing animation \"$scene\" artwork missing"; exit 1; }
+done
 # the status plate under the cover (V3 bis, without DSP): Qt-only artwork.
 # src/assets/ledbar keeps the old plate for the Electron app the ISO still builds.
 cp native-ui-qt/assets/ledbar/*.png "$QT/assets/"

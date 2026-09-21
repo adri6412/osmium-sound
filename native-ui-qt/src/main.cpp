@@ -266,6 +266,7 @@ int main(int argc, char *argv[]) {
     qmlRegisterSingletonType(QUrl::fromLocalFile(base + "/qml/Theme.qml"), "Hifi.Ui", 1, 0, "Theme");
     qmlRegisterSingletonType(QUrl::fromLocalFile(base + "/qml/Tr.qml"), "Hifi.Ui", 1, 0, "Tr");
     qmlRegisterSingletonType(QUrl::fromLocalFile(base + "/qml/Ui.qml"), "Hifi.Ui", 1, 0, "Ui");
+    qmlRegisterSingletonType(QUrl::fromLocalFile(base + "/qml/Meta.qml"), "Hifi.Ui", 1, 0, "Meta");
     qmlRegisterUncreatableType<LibraryModel>("Hifi", 1, 0, "LibraryModel", "usare l'istanza Library");
 
     QQuickView view;

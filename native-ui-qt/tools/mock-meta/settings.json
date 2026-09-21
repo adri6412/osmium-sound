@@ -1,0 +1,14 @@
+{
+ "online": true,
+ "prefetch": true,
+ "cache": {
+  "albums": 8,
+  "artists": 6,
+  "bytes": 2805216
+ },
+ "prefetch_state": {
+  "running": true,
+  "done": 10,
+  "total": 373
+ }
+}

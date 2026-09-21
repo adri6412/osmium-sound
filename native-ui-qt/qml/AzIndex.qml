@@ -1,5 +1,6 @@
 // L'indice alfabetico laterale: 27 lettere, tocca o trascina per saltare.
 import QtQuick
+import Hifi
 import Hifi.Ui
 
 Item {
@@ -20,12 +21,19 @@ Item {
             font.family: Theme.font; font.pixelSize: 10; font.bold: true
         }
     }
+    // The bubble comes up with a scale and rides a spring from one letter to
+    // the next instead of jumping.
+    property real pop: 0
+    Behavior on pop { NumberAnimation { duration: Theme.dur(140); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Spring { id: byS; stiffness: 300; damping: 30; rate: Theme.motionRate }
+    readonly property real bubbleY: byS.value - 24
     // shadow-lg della bolla (48 px): 0 10px 15px -3px + 0 4px 6px -4px, nero al 10 %
-    BoxShadow { visible: root.down; targetX: -56; targetY: root.ratio * root.height - 24; targetW: 48; targetH: 48; radius: 24; blur: 15; spread: -3; offsetY: 10; color: Theme.blackA(0.1) }
-    BoxShadow { visible: root.down; targetX: -56; targetY: root.ratio * root.height - 24; targetW: 48; targetH: 48; radius: 24; blur: 6; spread: -4; offsetY: 4; color: Theme.blackA(0.1) }
+    BoxShadow { visible: root.pop > 0.01; opacity: root.pop; targetX: -56; targetY: root.bubbleY; targetW: 48; targetH: 48; radius: 24; blur: 15; spread: -3; offsetY: 10; color: Theme.blackA(0.1) }
+    BoxShadow { visible: root.pop > 0.01; opacity: root.pop; targetX: -56; targetY: root.bubbleY; targetW: 48; targetH: 48; radius: 24; blur: 6; spread: -4; offsetY: 4; color: Theme.blackA(0.1) }
     Rectangle {                                    // la bolla con la lettera
-        visible: root.down
-        x: -8 - 48; y: root.ratio * root.height - 24; width: 48; height: 48; radius: 24; color: Theme.gold
+        visible: root.pop > 0.01
+        x: -8 - 48; y: root.bubbleY; width: 48; height: 48; radius: 24; color: Theme.gold
+        opacity: root.pop; scale: 0.82 + 0.18 * root.pop; transformOrigin: Item.Center
         Text { anchors.centerIn: parent; text: root.cur; color: Theme.black; font.family: Theme.font; font.pixelSize: 20; font.bold: true }
     }
     MouseArea {
@@ -37,9 +45,11 @@ Item {
             var l = root.az.charAt(idx)
             if (l !== root.cur) { root.cur = l; root.letter(l) }
         }
-        onPressed: (m) => { root.down = true; root.cur = ""; point(m.y) }
-        onPositionChanged: (m) => { if (pressed) point(m.y) }
-        onReleased: root.down = false
-        onCanceled: root.down = false
+        // 🚨 set() and not `to` on the press: otherwise the bubble flies in
+        // from whichever letter was touched last time.
+        onPressed: (m) => { root.down = true; root.cur = ""; point(m.y); byS.set(root.ratio * root.height); root.pop = 1 }
+        onPositionChanged: (m) => { if (pressed) { point(m.y); byS.to = root.ratio * root.height } }
+        onReleased: { root.down = false; root.pop = 0 }
+        onCanceled: { root.down = false; root.pop = 0 }
     }
 }

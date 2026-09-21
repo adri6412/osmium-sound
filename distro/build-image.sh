@@ -163,6 +163,34 @@ in_chroot systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.servi
 # è quello del selettore sulla ESP.
 in_chroot systemctl mask grub-common.service grub-initrd-fallback.service >/dev/null 2>&1 || true
 
+# Boot speed. These masks have been in the field for months on single-root
+# devices through the OS migrations 0007, 0009, 0011 and 0031 — but an image
+# slot never runs an OS migration, so until now a freshly flashed appliance
+# paid all of them again. Measured with systemd-analyze blame on the mini PC:
+#
+#   • NetworkManager-wait-online   6.4s, and it is the ONLY one of these on the
+#     path to the picture: hifi-qt <- hifi-vumeter <- squeezelite <-
+#     network-online.target. The appliance does not need the network to be up
+#     before it draws: the app connects to Lyrion with retries.
+#   • systemd-binfmt               0.5s, but it gates sysinit.target and so
+#     everything after it. All it registers here is direct execution of .pyc
+#     files, which nothing on the appliance does.
+#   • networking.service           0.9s of ifupdown that only brings up
+#     loopback; every real interface belongs to NetworkManager.
+#   • e2scrub_reap / e2scrub_all   0.4s of periodic online-fsck plumbing.
+#   • keyboard-setup               0.7s for a text VT keymap nobody types on.
+#   • nmbd                         up to 9s idling for DHCP before it can bind,
+#     once the owner turns file sharing on. It only serves NetBIOS name
+#     resolution: SMB2/3 does not need it and \\hifiplayer.local already
+#     resolves over mDNS. samba-ad-dc self-skips but still spins up to do it.
+#
+# 🚨 Bluetooth is deliberately NOT masked here, unlike migration 0009: it is a
+# feature of the appliance now. 0009 also leaves its modprobe blacklist behind
+# when 0024 turns Bluetooth back on, which is a trap this image does not repeat.
+in_chroot systemctl mask NetworkManager-wait-online.service systemd-binfmt.service \
+    networking.service e2scrub_reap.service e2scrub_all.timer keyboard-setup.service \
+    nmbd.service samba-ad-dc.service >/dev/null 2>&1 || true
+
 # ── 2. ciò che in un'immagine non ha senso ─────────────────────────────
 log "rimozione degli hook apt/kernel e dei marcatori legacy"
 rm -f "$CH/etc/kernel/postinst.d/zzz-hifi-fix-efi-boot" "$CH/etc/apt/apt.conf.d/99-hifi-fix-efi-boot" \
@@ -250,8 +278,11 @@ fi
 # Si abilitano UNA ALLA VOLTA: in blocco, se una fallisce, systemctl non
 # installa nemmeno l'altra e l'errore resta nascosto (è successo alla prima
 # build). L'esito di systemctl viene riportato nel messaggio, non ingoiato.
-_out=$(in_chroot systemctl enable hifi-ext-refresh.service 2>&1) \
-    || die "systemctl enable hifi-ext-refresh.service: $_out"
+# 🚨 The TIMER, not the service: hifi-ext-refresh.service has no [Install] any
+# more, so enabling it by name fails the build. The rebuild runs three minutes
+# after boot instead of holding multi-user.target back while it downloads.
+_out=$(in_chroot systemctl enable hifi-ext-refresh.timer 2>&1) \
+    || die "systemctl enable hifi-ext-refresh.timer: $_out"
 if ! _out=$(in_chroot systemctl enable systemd-sysext.service 2>&1); then
     # alcune build di systemd la distribuiscono senza sezione [Install]:
     # in quel caso il collegamento si fa a mano, il risultato è lo stesso
@@ -265,8 +296,8 @@ fi
 # 🚨 -L, non -e: il collegamento creato dentro il chroot punta a un percorso
 # assoluto (/etc/systemd/system/...), che visto dall'host è pendente — con -e
 # il controllo fallisce anche quando l'unità è abilitata benissimo.
-[ -L "$CH/etc/systemd/system/multi-user.target.wants/hifi-ext-refresh.service" ] \
-    || die "hifi-ext-refresh.service non abilitata: gli add-on non verrebbero ricostruiti dopo un aggiornamento"
+[ -L "$CH/etc/systemd/system/timers.target.wants/hifi-ext-refresh.timer" ] \
+    || die "hifi-ext-refresh.timer non abilitato: gli add-on non verrebbero ricostruiti dopo un aggiornamento"
 if ! in_chroot systemctl is-enabled systemd-sysext.service >/dev/null 2>&1 \
    && [ ! -L "$CH/etc/systemd/system/sysinit.target.wants/systemd-sysext.service" ]; then
     die "systemd-sysext.service non abilitata: gli add-on non verrebbero mai montati"

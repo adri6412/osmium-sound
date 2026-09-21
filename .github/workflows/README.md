@@ -7,16 +7,17 @@ storage housekeeping. Tag/branch conventions and the release channels are in
 
 | Workflow | Trigger | Produces |
 |---|---|---|
-| [`build-ui-ota.yml`](build-ui-ota.yml) | push of a `v*` tag (not `companion-*`); manual | OTA bundles `hifi-qtui-`, `hifi-system-`, `hifi-os-` (+ sha256, OS signature), offline dev installer, GitHub Release, stable payloads also on `file.osmiumsound.it/ota/<tag>/`, OTA manifest on `gh-pages` (+ prod copy on file.osmiumsound.it) |
+| [`build-ui-ota.yml`](build-ui-ota.yml) | push of a `v*` tag (not `companion-*`); manual | OTA bundles `hifi-qtui-`, `hifi-system-`, `hifi-os-` (+ sha256, OS signature), offline dev installer, GitHub Release, payloads of every channel also on `file.osmiumsound.it/ota/<tag>/`, OTA manifest on `gh-pages` (+ a copy per channel on file.osmiumsound.it), then `prune-ota-r2.yml` |
 | [`build-iso.yml`](build-iso.yml) | manual (`workflow_dispatch`, tag as input) | `hifi-player-<tag>.iso` + `.sha256` + `.sha256.sig` + `latest.json` (artifact; optionally attached to the Release) |
 | [`build-companion-apk.yml`](build-companion-apk.yml) | push of a `companion-v*` tag; manual | signed APK, GitHub Release, unit-test/lint reports, self-hosted F-Droid repos on `gh-pages` |
 | [`build-flasher.yml`](build-flasher.yml) | manual | Osmium Flasher binaries (Windows `.exe`, Linux `.run`) as artifacts |
 | [`deploy-pages.yml`](deploy-pages.yml) | push to `main` touching `website/**`; manual | pushes `website/` to the `gh-pages` branch (served by Cloudflare Pages as osmiumsound.it) |
+| [`prune-ota-r2.yml`](prune-ota-r2.yml) | called by `build-ui-ota.yml` after `verify-release`; nightly; manual (dry run by default) | deletes from `file.osmiumsound.it/ota/` every release no channel's manifest names (`prune-ota-r2.py`) |
 | [`cleanup-actions-storage.yml`](cleanup-actions-storage.yml), [`Clean.yml`](Clean.yml) | manual | delete Actions caches / artifacts to free storage |
 
 Helper scripts live in [`../scripts/`](../scripts/): `make-ota-manifest.py`
-(OTA manifest for `gh-pages`) and `make-iso-manifest.py` (`latest.json` for
-the flasher). The repo-root [`tools/publish-iso.sh`](../../tools/publish-iso.sh)
+(OTA manifest for `gh-pages`), `make-iso-manifest.py` (`latest.json` for
+the flasher) and `prune-ota-r2.py` (what stays on file.osmiumsound.it/ota/). The repo-root [`tools/publish-iso.sh`](../../tools/publish-iso.sh)
 reproduces the ISO signing + manifest step by hand for an ISO already on disk.
 
 ---
@@ -64,16 +65,18 @@ or a manual run (artifacts only, no Release).
 9. Generates the offline dev installer `hifi-install-<ver>.sh`
    (`distro/dev-installer/install.sh.tmpl`): applies the same bundles over
    SSH, bypassing the rate-limited GitHub REST API during heavy dev iteration.
-10. Publishes everything to the GitHub Release for the tag; for a **stable**
+10. Publishes everything to the GitHub Release for the tag, and for **every**
     tag it also uploads the same files to `file.osmiumsound.it/ota/<tag>/`
     (Cloudflare R2, secrets `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` /
     `R2_SECRET_ACCESS_KEY`), checks each upload through R2's S3 API
     (`head-object`, size compared with the local file — Cloudflare answers 403
     to GitHub's runners on the public host), and points the prod manifest at
-    that host; `verify-release` then re-checks, again through the API, the
+    that host (manifest copy at `ota/latest-<channel>.json`); `verify-release` then re-checks, again through the API, the
     nine files, a range request on the `.raucb`, and the mirrored manifest,
     and only at the end probes the public host (a 403 there is a warning, any
-    other failure fails the run). dev/alpha builds stay on GitHub only.
+    other failure fails the run). Once it passes, `prune-ota-r2.yml` deletes
+    from the bucket every `ota/<tag>/` that no channel names any more (it also
+    runs nightly, and by hand with a dry run by default, once it is on `main`).
     `prerelease: ${{ contains(github.ref_name, '-') }}` — any tag with a hyphen
     (`-dev.N`, `-alphaM`) is a **prerelease**, which `/releases/latest` ignores,
     so prod devices never see it.

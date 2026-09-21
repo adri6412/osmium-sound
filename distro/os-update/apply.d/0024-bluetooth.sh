@@ -1,141 +1,83 @@
 # shellcheck shell=sh
-# 0024 — Bluetooth audio (A2DP sink) prerequisites + reconciliation.
+# 0024 — Bluetooth audio prerequisites, for devices still on the legacy
+# (non-image) layout.
 #
-# Lets the appliance appear as a Bluetooth speaker: a phone connects and
-# streams music straight to the DAC, no app/account needed (guest-friendly
-# input, matching Volumio/WiiM/Bluesound/Eversolo). OFF by default — this
-# migration only makes the toggle available, it never enables anything.
+# 🚨 The role changed. This migration used to set the appliance up as a
+# Bluetooth *speaker* (A2DP sink: a phone streams into the DAC). It is now an
+# A2DP *source* — it plays out to Bluetooth speakers and headphones, and each
+# paired one becomes a squeezelite player of its own in Lyrion, the way
+# piCorePlayer does it. The sink units are stopped and disabled here so the
+# two designs can't both hold the adapter on a device that is mid-conversion.
 #
-# 0009-faster-boot-2.sh blacklists btusb/bluetooth and masks bluetooth.service
-# on EVERY OS update (that migration is cumulative, so it reasserts its state
-# every run). This migration always runs AFTER 0009 (numeric order), so it is
-# the one place that re-applies the user's actual choice (persisted by
-# api_server.py in /etc/hifi-player/bluetooth.json) on top of 0009's default —
-# otherwise Bluetooth enabled from Settings would silently break on the very
-# next OS update.
+# What this migration still owns: packages, and turning OFF what must not run.
+# It no longer writes any unit file — hifi-bluealsa.service,
+# hifi-bt-agent.service, hifi-bt-out.service and hifi-bt-player@.service all
+# ship in the image and in the system OTA payload, which is applied BEFORE
+# this one (fixed order: system → os), so the files are already in place and
+# current by the time this runs. Writing them here as well would only give the
+# two channels a chance to disagree.
 #
-# The daemon (/usr/local/sbin/hifi-bt-watcher.py) and the aplay wrapper
-# (/usr/local/sbin/hifi-bt-aplay-run) are delivered by the *system* OTA
-# channel (same as hifi-room-measure.py / hifi-rip-cd.py) — this migration
-# only sets up packages, units, and enable/disable state.
+# What it no longer owns either: whether Bluetooth is running. That is
+# hifi-bt-out.service's job now, driven by /etc/hifi-player/bluetooth.json —
+# see that unit for why the choice cannot be an enable symlink any more. All
+# this does is make sure the supervisor itself is enabled.
 #
-# Idempotent: packages via ensure_pkg, units via ensure_file_content, and the
-# reconciliation step only touches systemd state when the persisted choice
-# actually differs from what's currently applied. Non-fatal: an offline device
-# just keeps the toggle "unavailable" until the packages land on a later run.
+# Idempotent: packages via ensure_pkg, and every systemctl call is guarded by
+# the state it would change. Non-fatal throughout: an offline device just
+# keeps Bluetooth unavailable until the packages land on a later run.
 
 ensure_pkg bluez || true
 ensure_pkg bluez-tools || true
 ensure_pkg bluez-alsa-utils || true
+# The ALSA PCM plugin squeezelite opens as bluealsa:DEV=<MAC>. Without it
+# there is a BlueALSA daemon but no way for a player to reach a speaker.
+ensure_pkg libasound2-plugin-bluez || true
 
-# ── Neutralise Debian's own auto-enabled units ───────────────────────
-# The bluez-alsa-utils package enables bluealsa.service/bluealsa-aplay.service
-# on install. We ship our own hifi-bluealsa/hifi-bt-aplay units instead (so
-# aplay's target device can be resolved dynamically at start — see
-# hifi-bt-aplay-run) — disable Debian's so they never fight ours for the
-# Bluetooth adapter or the DAC.
-for u in bluealsa.service bluealsa-aplay.service; do
+# ── Neutralise units that would fight ours ───────────────────────────
+# Debian's own bluealsa units (auto-enabled by the package), and the two units
+# from the old sink design, whose files may still exist from an earlier run.
+# These are stopped as well as disabled: nothing should be running them.
+for u in bluealsa.service bluealsa-aplay.service \
+         hifi-bt-aplay.service hifi-bt-watcher.service; do
     state=$(systemctl is-enabled "$u" 2>/dev/null) || state=""
     if [ -n "$state" ] && [ "$state" != "disabled" ] && [ "$state" != "masked" ]; then
-        systemctl disable --now "$u" >/dev/null 2>&1 && mark_changed "disabled stock $u"
+        systemctl disable --now "$u" >/dev/null 2>&1 && mark_changed "disabled $u"
+    elif [ "$(systemctl is-active "$u" 2>/dev/null)" = "active" ]; then
+        systemctl stop "$u" >/dev/null 2>&1 && mark_changed "stopped $u"
     fi
 done
 
-# Resolve the bluealsa daemon binary name (renamed bluealsa -> bluealsad in
-# newer bluez-alsa releases; Debian 12 bookworm ships "bluealsa").
-BLUEALSA_BIN=$(command -v bluealsad || command -v bluealsa || echo /usr/bin/bluealsa)
+# ── Stale autostart links from the version of this migration that
+#    enabled everything by hand ────────────────────────────────────────
+# A device that had Bluetooth ON under the sink design still carries
+# multi-user.target.wants symlinks for these two. Their unit files no longer
+# have an [Install] section, so the symlinks are orphans — but systemd still
+# honours them, and the adapter would come up at every boot no matter what the
+# owner chose. Disabled, NOT stopped: from here on hifi-bt-out.service decides
+# when they run, and on a box whose owner has Bluetooth on they should stay up
+# across this update.
+for u in hifi-bluealsa.service hifi-bt-agent.service; do
+    if [ -e "/etc/systemd/system/multi-user.target.wants/$u" ]; then
+        systemctl disable "$u" >/dev/null 2>&1 && mark_changed "unlinked stale autostart for $u"
+    fi
+done
 
-# ── Units (installed disabled; the toggle in Settings enables them) ──
-ensure_file_content /etc/systemd/system/hifi-bluealsa.service 644 root:root <<EOF
-[Unit]
-Description=HiFi Player - BlueALSA (Bluetooth A2DP sink)
-After=dbus.service bluetooth.service
-Requires=dbus.service
-
-[Service]
-Type=simple
-ExecStart=$BLUEALSA_BIN -p a2dp-sink
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-ensure_file_content /etc/systemd/system/hifi-bt-agent.service 644 root:root <<'EOF'
-[Unit]
-Description=HiFi Player - Bluetooth pairing agent (no PIN, headless)
-After=bluetooth.service
-Requires=bluetooth.service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/bt-agent -c NoInputNoOutput
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-ensure_file_content /etc/systemd/system/hifi-bt-aplay.service 644 root:root <<'EOF'
-[Unit]
-Description=HiFi Player - Bluetooth A2DP playback (phone -> DAC)
-After=hifi-bluealsa.service
-Requires=hifi-bluealsa.service
-
-[Service]
-Type=simple
-ExecStart=/usr/local/sbin/hifi-bt-aplay-run
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-ensure_file_content /etc/systemd/system/hifi-bt-watcher.service 644 root:root <<'EOF'
-[Unit]
-Description=HiFi Player - Bluetooth DAC handover + Now Playing metadata
-After=bluetooth.service hifi-bluealsa.service
-
-[Service]
-Type=simple
-ExecStart=/usr/local/sbin/hifi-bt-watcher.py
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-if migration_changed; then
+# ── The supervisor, which applies the owner's choice from here on ────
+# Enabled whether Bluetooth is on or off: with the choice off it starts
+# nothing and leaves the adapter powered down, and having it already running
+# is what lets the choice take effect without a reboot.
+if [ -f /etc/systemd/system/hifi-bt-out.service ]; then
     systemctl daemon-reload 2>/dev/null || true
+    if [ "$(systemctl is-enabled hifi-bt-out.service 2>/dev/null)" != "enabled" ]; then
+        systemctl enable --now hifi-bt-out.service >/dev/null 2>&1 \
+            && mark_changed "enabled hifi-bt-out.service"
+    elif [ "$(systemctl is-active hifi-bt-out.service 2>/dev/null)" != "active" ]; then
+        systemctl start hifi-bt-out.service >/dev/null 2>&1 || true
+    fi
 fi
 
-# ── Reconcile against the user's persisted choice ────────────────────
-# Mirrors the exact modprobe.d content 0009 writes (blacklist variant) so
-# ensure_file_content never churns between the two migrations when Bluetooth
-# is OFF (the common case).
-BT_STATE_FILE=/etc/hifi-player/bluetooth.json
-BT_ENABLED=0
-if [ -f "$BT_STATE_FILE" ] && grep -q '"enabled"[[:space:]]*:[[:space:]]*true' "$BT_STATE_FILE" 2>/dev/null; then
-    BT_ENABLED=1
-fi
-
-if [ "$BT_ENABLED" = 1 ]; then
-    ensure_file_content /etc/modprobe.d/hifi-no-bluetooth.conf 644 root:root <<'EOF'
-# Bluetooth is enabled (Settings -> Bluetooth) on this device.
-EOF
-    modprobe btusb 2>/dev/null || true
-    modprobe bluetooth 2>/dev/null || true
-    systemctl unmask bluetooth.service >/dev/null 2>&1 || true
-    for u in bluetooth.service hifi-bluealsa.service hifi-bt-agent.service hifi-bt-aplay.service hifi-bt-watcher.service; do
-        state=$(systemctl is-enabled "$u" 2>/dev/null) || state=""
-        if [ "$state" != "enabled" ]; then
-            systemctl enable --now "$u" >/dev/null 2>&1 && mark_changed "enabled $u (bluetooth on)"
-        fi
-    done
-fi
-# BT_ENABLED=0: nothing to do here — 0009 already wrote the blacklist variant
-# and masked bluetooth.service for this run.
+# 0009-faster-boot-2.sh blacklists btusb and masks bluetooth.service on every
+# run, which is the right default for a device whose owner never asked for
+# Bluetooth. It is NOT undone here: hifi-bt-out.py unmasks the unit and loads
+# the module itself, but only when the choice is actually on — so a device
+# with Bluetooth off keeps 0009's faster boot exactly as before.

@@ -28,9 +28,14 @@ log() { echo "I: [hifi-factory-reset] $*"; }
 # ── 1) stop services that hold user state ────────────────────────────
 log "stopping user-state services"
 for unit in smbd nmbd wsdd2 hifi-bluealsa hifi-bt-agent hifi-bt-aplay hifi-bt-watcher \
-            bluetooth camilladsp lyrionmusicserver hifi-backup; do
+            hifi-bt-out bluetooth camilladsp lyrionmusicserver hifi-backup; do
     systemctl stop "$unit" 2>/dev/null || true
 done
+# One squeezelite per paired Bluetooth speaker (hifi-bt-player@<mac>): the
+# instances are created on the fly, so they have to be swept by pattern rather
+# than named. hifi-bt-out is stopped above first, or it would start them again
+# between this line and the moment bluetooth.json is deleted further down.
+systemctl stop 'hifi-bt-player@*' 2>/dev/null || true
 # Both are re-enabled by sources_server.py the moment a disk is adopted again;
 # leaving them enabled here would announce a server with no shares after a reset.
 systemctl disable smbd wsdd2 2>/dev/null || true
@@ -94,7 +99,8 @@ for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bl
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
          github-support-pat lyrion-channel lms-skin \
          ui-language ui-refresh nowplaying-view nowplaying-autoexpand-seconds \
-         ota-autocheck player-enabled vu-meter-enabled; do
+         nowplaying-animation ota-autocheck player-enabled vu-meter-enabled \
+         meta-online meta-prefetch; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).
@@ -140,6 +146,21 @@ rm -rf /var/lib/hifi-player/update 2>/dev/null || true
 # VU meters downloaded from the store, with the store's cached list and
 # what the owner has already seen: a reset device starts from the built-in looks.
 rm -rf /var/lib/hifi-player/vu-skins /var/lib/hifi-player/vu-store 2>/dev/null || true
+# The same for the Now Playing animations downloaded from their store.
+rm -rf /var/lib/hifi-player/anim-scenes /var/lib/hifi-player/anim-store 2>/dev/null || true
+# Album and artist information fetched from MusicBrainz/Wikipedia
+# (hifi_metadata.py), and what the owner corrected by hand: edition and artist
+# choices, credit corrections, the journal of tag changes (hifi_tags.py).
+rm -rf /var/lib/hifi-player/metadata 2>/dev/null || true
+rm -rf /var/lib/hifi-player/metadata-edits 2>/dev/null || true
+# The owner may have moved that archive onto a disk of their own
+# (/etc/hifi-player/meta-cache-dir holds the mount point): take the folder we
+# made there too, and never anything else on their disk.
+META_DIR="$(cat /etc/hifi-player/meta-cache-dir 2>/dev/null || true)"
+case "$META_DIR" in
+  /*) mountpoint -q "$META_DIR" && rm -rf "${META_DIR%/}/osmium-metadata" 2>/dev/null || true ;;
+esac
+rm -f /etc/hifi-player/meta-cache-dir /etc/hifi-player/meta-keep 2>/dev/null || true
 rm -f /system-update 2>/dev/null || true
 
 # Stored backup generations (Settings -> Backup e ripristino). These can carry

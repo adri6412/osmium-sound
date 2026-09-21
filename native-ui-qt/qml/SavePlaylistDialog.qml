@@ -6,6 +6,11 @@ Rectangle {
     id: root
     property string name: ""
     property string msg: ""
+    // prompt mode: the same window asks for any name (rename a playlist or
+    // a favourite) and hands it to `cb` instead of saving the queue
+    property string title: ""
+    property var cb: null
+    readonly property bool prompt: cb !== null
     signal cancel()
     signal saved()
     width: 384
@@ -18,18 +23,19 @@ Rectangle {
     function doSave() {
         var nm = name.trim()
         if (!nm) return
+        if (prompt) { var f = cb; root.saved(); f(nm); return }
         Player.query(["playlist", "save", nm], function(ok, r) {
             if (!ok || (r && (r.writeError || r.error))) { root.msg = Tr.t("player.saveError"); return }
             root.saved()
         })
     }
 
-    Text { x: 20; y: 20; height: 17; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.saveAsPlaylist"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+    Text { x: 20; y: 20; height: 17; verticalAlignment: Text.AlignVCenter; text: root.prompt ? root.title : Tr.t("player.saveAsPlaylist"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
     TextField_ {
         id: field
         x: 20; y: 49; width: parent.width - 40; height: 46
         text: root.name
-        placeholder: Tr.t("player.playlistNamePlaceholder")
+        placeholder: root.prompt ? Tr.t("player.namePlaceholder") : Tr.t("player.playlistNamePlaceholder")
         focusBorder: true; restBorder: Theme.accent          // border-hifi-accent a riposo
         onTextEdited: (t) => { root.name = t; root.msg = "" }
         onAccepted: root.doSave()

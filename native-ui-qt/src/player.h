@@ -28,14 +28,25 @@ class Player : public QObject {
     Q_PROPERTY(QString artist READ artist NOTIFY metaChanged)
     Q_PROPERTY(QString album READ album NOTIFY metaChanged)
     Q_PROPERTY(QString trackId READ trackId NOTIFY metaChanged)
+    // the library album and artist of the track on air (empty for streams):
+    // Now Playing's album and artist lead to their pages
+    Q_PROPERTY(QString albumId READ albumId NOTIFY metaChanged)
+    Q_PROPERTY(QString artistId READ artistId NOTIFY metaChanged)
     Q_PROPERTY(QString coverId READ coverId NOTIFY metaChanged)
     Q_PROPERTY(bool remote READ remote NOTIFY metaChanged)
+    Q_PROPERTY(QString stationName READ stationName NOTIFY metaChanged)  // a stream's station (Lyrion's remote_title)
     Q_PROPERTY(QString type READ type NOTIFY metaChanged)
     Q_PROPERTY(int sampleSize READ sampleSize NOTIFY metaChanged)
     Q_PROPERTY(double sampleRate READ sampleRate NOTIFY metaChanged)
     Q_PROPERTY(QString bitrate READ bitrate NOTIFY metaChanged)
     Q_PROPERTY(QString chip READ chip NOTIFY metaChanged)          // "FLAC · 24bit · 96kHz"
     Q_PROPERTY(QString artworkUrl READ artworkUrl NOTIFY artworkChanged)
+    Q_PROPERTY(QString trackUrl READ trackUrl NOTIFY metaChanged)
+    // The track on air is one of Lyrion's favourites (`favorites exists`);
+    // a server without the Favorites plugin answers with an error and the
+    // heart is hidden (favoritesAvailable).
+    Q_PROPERTY(bool isFavorite READ isFavorite NOTIFY favoriteChanged)
+    Q_PROPERTY(bool favoritesAvailable READ favoritesAvailable NOTIFY favoriteChanged)
     // quanti pixel chiedere a Lyrion per la copertina: la sceglie Main.qml
     // dal modo video (600 sulla tela 1 a 1, fino a 1200 a 4K)
     Q_PROPERTY(int coverPx READ coverPx WRITE setCoverPx NOTIFY coverPxChanged)
@@ -47,7 +58,9 @@ class Player : public QObject {
     Q_PROPERTY(double duration READ duration NOTIFY progressChanged)
     // comandi
     Q_PROPERTY(bool playing READ playing NOTIFY controlsChanged)
+    Q_PROPERTY(bool power READ power NOTIFY controlsChanged)     // Lyrion's `power` of the player (true when not reported)
     Q_PROPERTY(int volume READ volume NOTIFY controlsChanged)
+    Q_PROPERTY(bool muted READ muted NOTIFY controlsChanged)     // Lyrion's own mute (`mixer muting`)
     Q_PROPERTY(int shuffle READ shuffle NOTIFY controlsChanged)
     Q_PROPERTY(int repeat READ repeat NOTIFY controlsChanged)
     Q_PROPERTY(int sleepSecs READ sleepSecs NOTIFY controlsChanged)
@@ -64,12 +77,24 @@ class Player : public QObject {
     Q_PROPERTY(bool vuEnabled READ vuEnabled WRITE setVuEnabled NOTIFY settingsChanged)
     // the VU meter skin (a folder in assets/vu/), chosen in Settings → Playback
     Q_PROPERTY(QString vuStyle READ vuStyle WRITE setVuStyle NOTIFY settingsChanged)
+    // the Now Playing animation shown instead of the VU meters when they are
+    // off: "none", "cd", "cdfront", "vinyl", "cassette" or the id of one
+    // downloaded from the animation store (Settings → Animations)
+    Q_PROPERTY(QString npAnimation READ npAnimation WRITE setNpAnimation NOTIFY settingsChanged)
     Q_PROPERTY(int autoexpandSecs READ autoexpandSecs NOTIFY settingsChanged)
     // aggiornamento in corso
     Q_PROPERTY(QString otaState READ otaState NOTIFY otaChanged)
     Q_PROPERTY(QString otaMessage READ otaMessage NOTIFY otaChanged)
     Q_PROPERTY(QString otaKind READ otaKind NOTIFY otaChanged)
     Q_PROPERTY(int otaPercent READ otaPercent NOTIFY otaChanged)
+    // connectivity for the top-bar icon (api_server /connectivity):
+    // "unknown" until the first answer, then "internet", "lan" or "offline";
+    // the type is the link's ("wired"/"wireless"), or the last one seen once
+    // the box is offline, so the icon keeps the shape the owner knows
+    Q_PROPERTY(QString netState READ netState NOTIFY netChanged)
+    Q_PROPERTY(QString netType READ netType NOTIFY netChanged)
+    Q_PROPERTY(QString netSsid READ netSsid NOTIFY netChanged)
+    Q_PROPERTY(QString netIp READ netIp NOTIFY netChanged)
 public:
     explicit Player(QObject *parent = nullptr);
     void start();
@@ -84,6 +109,8 @@ public:
     QString artist() const { return m_artist; }
     QString album() const { return m_album; }
     QString trackId() const { return m_id; }
+    QString albumId() const { return m_albumId; }
+    QString artistId() const { return m_artistId; }
     QString coverId() const { return m_coverId; }
     bool remote() const { return m_remote; }
     QString type() const { return m_type; }
@@ -92,6 +119,11 @@ public:
     QString bitrate() const { return m_bitrate; }
     QString chip() const { return m_chip; }
     QString artworkUrl() const { return m_artworkUrl; }
+    QString trackUrl() const { return m_url; }
+    QString stationName() const { return m_stationName; }
+    bool isFavorite() const { return m_favorite; }
+    bool favoritesAvailable() const { return m_favAvail; }
+    bool muted() const { return m_muted; }
     int coverPx() const { return m_coverPx; }
     void setCoverPx(int px);
     bool qPcm() const { return m_qPcm; }
@@ -100,6 +132,7 @@ public:
     double elapsed() const { return m_elapsed; }
     double duration() const { return m_duration; }
     bool playing() const { return m_playing; }
+    bool power() const { return m_power; }
     int volume() const { return m_volume; }
     int shuffle() const { return m_shuffle; }
     int repeat() const { return m_repeat; }
@@ -116,11 +149,17 @@ public:
     void setVuEnabled(bool on);
     QString vuStyle() const { return m_vuStyle; }
     void setVuStyle(const QString &style);
+    QString npAnimation() const { return m_npAnimation; }
+    void setNpAnimation(const QString &kind);
     int autoexpandSecs() const { return m_autoexpand; }
     QString otaState() const { return m_otaState; }
     QString otaMessage() const { return m_otaMsg; }
     QString otaKind() const { return m_otaKind; }
     int otaPercent() const { return m_otaPct; }
+    QString netState() const { return m_netState; }
+    QString netType() const { return m_netType; }
+    QString netSsid() const { return m_netSsid; }
+    QString netIp() const { return m_netIp; }
 
     // ─── comandi (stessi di lms.c) ────────────────────────────────────────
     Q_INVOKABLE void togglePlay();
@@ -131,6 +170,12 @@ public:
     Q_INVOKABLE void seekFraction(double f);
     Q_INVOKABLE void setVolume(int v, bool final = true);   // throttle 120 ms, come ui.c
     Q_INVOKABLE void toggleMute();
+    // ─── preferiti e preselezioni (Favorites plugin + jivefavorites) ──────
+    Q_INVOKABLE void toggleFavorite();                          // the track on air
+    // cb(exists, index): `what` is a URL (db:… included) or a track id
+    Q_INVOKABLE void favoriteExists(const QString &what, const QJSValue &cb);
+    Q_INVOKABLE void favoriteAdd(const QString &url, const QString &title, const QString &type, const QString &icon, const QJSValue &cb);   // cb(ok)
+    Q_INVOKABLE void favoriteDelete(const QString &index, const QJSValue &cb);   // cb(ok)
     Q_INVOKABLE void cycleShuffle();
     Q_INVOKABLE void cycleRepeat();
     Q_INVOKABLE void setShuffle(int m);
@@ -166,6 +211,8 @@ signals:
     void modeChanged();
     void settingsChanged();
     void otaChanged();
+    void netChanged();
+    void favoriteChanged();
     void usbMounted(const QString &label);
     void trackChanged();          // brano nuovo (titolo/artista/album diversi)
 
@@ -179,6 +226,8 @@ private:
     void pollSettings();
     void pollUsb();
     void pollOta();
+    void pollNet();
+    void checkFavorite();
     void derive();
     void updateArtwork();
     void flushVolume();
@@ -186,7 +235,8 @@ private:
 
     QTimer m_tick, m_statusTimer;
     QElapsedTimer m_clock;
-    qint64 m_lastStatus = 0, m_lastPrefs = 0, m_lastSettings = 0, m_lastUsb = 0, m_lastOta = 0, m_lastElapsedTick = 0;
+    qint64 m_lastStatus = 0, m_lastPrefs = 0, m_lastSettings = 0, m_lastUsb = 0, m_lastOta = 0, m_lastNet = 0, m_lastElapsedTick = 0;
+    QString m_netState = "unknown", m_netType, m_netSsid, m_netIp;
     bool m_statusInFlight = false, m_wantNow = false;
 
     bool m_connected = false;
@@ -201,10 +251,17 @@ private:
     qint64 m_lookupSince = 0, m_lastFind = 0, m_lastNameFetch = 0;
     QString m_title, m_artist, m_album, m_id, m_coverId, m_artworkUrlLms, m_type, m_bitrate, m_chip, m_currentTitle;
     QString m_artworkUrl, m_artKey;
+    QString m_url, m_rawTitle, m_stationName;      // the track's URL (favourites) and its title as Lyrion gives it
+    QString m_albumId, m_artistId;
+    // favourites: what the last `favorites exists` was about, and its answer
+    QString m_favKey, m_favIndex;
+    bool m_favorite = false, m_favAvail = true;
+    bool m_muted = false;
     bool m_remote = false, m_qPcm = false, m_qHires = false, m_qDsd = false;
     int m_sampleSize = 0;
     double m_sampleRate = 0, m_elapsed = 0, m_duration = 0;
     bool m_playing = false;
+    bool m_power = true;
     int m_volume = 0, m_shuffle = 0, m_repeat = 0, m_sleepSecs = 0, m_index = 0, m_total = 0;
     int m_ledMode = 0;
     int m_coverPx = 600;
@@ -212,6 +269,7 @@ private:
     QString m_prefRg = "0", m_prefTrType = "0", m_prefTrDur = "0", m_prefDigVol = "1";
     bool m_vuEnabled = true;
     QString m_vuStyle = "classic";
+    QString m_npAnimation = "none";
     int m_autoexpand = 0;
     QString m_otaState = "idle", m_otaMsg, m_otaKind;
     int m_otaPct = 0;

@@ -23,8 +23,10 @@ Item {
     property var items: []
     property int current: -1
     // wifi
-    property var networks: []       // [{ssid, security, signal}]
+    property var networks: []       // [{ssid, security, signal, band}]
+    property var dualSsids: ({})    // nome -> true quando la rete e' su piu' bande
     property string ssid: ""
+    property string band: ""        // banda scelta da un nome doppio (2.4 / 5 / 6)
     property string pass: ""
     property string err: ""
     property int wifiSel: -1
@@ -38,10 +40,10 @@ Item {
     property string luser: ""
     property string lpass: ""
 
-    Spring { id: sc; stiffness: 550; damping: 30 }
+    Spring { id: sc; stiffness: 550; damping: 30; rate: Theme.motionRate }
     property real fade: 0
-    Behavior on fade { NumberAnimation { id: fadeAnim; duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
-    Behavior on closeScale { NumberAnimation { duration: 200; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Behavior on fade { NumberAnimation { id: fadeAnim; duration: Theme.dur(300); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Behavior on closeScale { NumberAnimation { duration: Theme.dur(200); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
     property real closeScale: 1
 
     function openCommon(k) {
@@ -49,7 +51,7 @@ Item {
         wifiSel = -1; editingPass = false; err = ""
         sc.set(0.92); sc.to = 1.0
         closeScale = 1
-        fadeAnim.duration = 300; fade = 1
+        fadeAnim.duration = Theme.dur(300); fade = 1
     }
     function confirm(text, ok, dang, f) { openCommon(1); body = text || ""; okLabel = ok || Tr.t("common.confirm"); danger = !!dang; cb = f }
     function pick(t, list, cur, f) {
@@ -59,8 +61,27 @@ Item {
         Qt.callLater(function() { if (root.current >= 0) pickList.positionViewAtIndex(root.current, ListView.Center) })
     }
     function text(t, b) { openCommon(3); title = t || ""; body = b || "" }
-    function wifi(list, f) { openCommon(4); title = Tr.t("wizard.wifi.title"); networks = list || []; ssid = ""; pass = ""; cb = f }
-    function updateWifi(list) { if (kind === 4) networks = list || [] }
+    // `pre` ({ssid, pass, band, err}) reopens the window as it was after a
+    // failed attempt: the name and the key stay, the reason is written under
+    // them, and the owner corrects one character instead of starting over.
+    function wifi(list, f, pre) {
+        openCommon(4); title = Tr.t("wizard.wifi.title"); networks = list || []; dualSsids = markDual(networks); cb = f
+        pre = pre || {}
+        ssid = pre.ssid || ""; band = pre.band || ""; pass = pre.pass || ""; err = pre.err || ""
+        for (var i = 0; i < networks.length; i++) if (ssid && (networks[i].ssid || "") === ssid && (!band || (networks[i].band || "") === band)) { wifiSel = i; break }
+    }
+    function updateWifi(list) { if (kind === 4) { networks = list || []; dualSsids = markDual(networks) } }
+    // Quasi ogni router di casa trasmette lo stesso nome su 2.4 e 5 GHz: i nomi
+    // doppi sono i soli a cui serve (e per cui ha senso mandare) la banda.
+    function markDual(list) {
+        var seen = {}, dup = {}
+        for (var i = 0; i < list.length; i++) {
+            var s = list[i].ssid || ""
+            if (seen[s]) dup[s] = true
+            seen[s] = true
+        }
+        return dup
+    }
     function wifiError(m) { if (kind === 4) err = m || "" }
     function format(device, model, size, confirmWord, f) {
         openCommon(5); step = 0
@@ -88,13 +109,13 @@ Item {
         if (!active || closing) return
         closing = true
         closeScale = 0.92
-        fadeAnim.duration = 200; fade = 0
+        fadeAnim.duration = Theme.dur(200); fade = 0
     }
     Timer { interval: 30; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.kind = 0; root.closing = false } }
 
     function finishOk(ok) { var f = cb; close(); if (f) f(ok) }
     function finishPick(i) { var f = cb; close(); if (f) f(i) }
-    function finishWifi(ok) { var f = cb; var s = ssid, p = pass; close(); if (f) f(ok ? s : null, ok ? p : null) }
+    function finishWifi(ok) { var f = cb; var s = ssid, p = pass, b = band; close(); if (f) f(ok ? s : null, ok ? p : null, ok ? b : "") }
     function finishLogin(ok) { var f = cb; var u = luser.trim(), p = lpass; close(); if (f) f(ok ? u : null, ok ? p : null) }
     function finishPower(act) { var f = cb; close(); if (f) f(act) }
     function backdrop() {
@@ -131,8 +152,8 @@ Item {
         id: card
         readonly property real cw: root.kind === 3 ? 512 : root.kind === 4 ? 384 : 448
         readonly property real ipad: root.kind === 4 ? 20 : 24
-        width: Math.min(cw, 1024 - 48)
-        height: Math.min(content.implicitHeight, 600 - 24)
+        width: Math.min(cw, root.width - 48)
+        height: Math.min(content.implicitHeight, root.height - 24)
         anchors.centerIn: parent
         radius: 16
         color: root.kind === 4 ? Theme.dark : Theme.light
@@ -180,7 +201,7 @@ Item {
                 ListView {
                     id: pickList
                     width: parent.width
-                    height: Math.min(root.items.length * 44, 600 - 220)
+                    height: Math.min(root.items.length * 44, root.height - 220)
                     clip: true
                     model: root.items
                     boundsBehavior: Flickable.StopAtBounds
@@ -213,7 +234,7 @@ Item {
                 Text { text: root.title; color: Theme.white; font.family: Theme.font; font.pixelSize: 18; font.bold: true; height: 28; verticalAlignment: Text.AlignVCenter }
                 Item { width: 1; height: 16 }
                 Flickable {
-                    width: parent.width; height: 600 * 3 / 5; clip: true
+                    width: parent.width; height: root.height * 3 / 5; clip: true
                     contentHeight: bodyText.height
                     boundsBehavior: Flickable.StopAtBounds
                     Text { id: bodyText; width: parent.width; text: root.body; wrapMode: Text.Wrap; color: Theme.silver; font.family: Theme.font; font.pixelSize: 14; lineHeight: 20; lineHeightMode: Text.FixedHeight }
@@ -243,6 +264,7 @@ Item {
                         model: root.networks
                         boundsBehavior: Flickable.StopAtBounds
                         delegate: Item {
+                            id: netItem
                             required property var modelData
                             required property int index
                             readonly property bool sel: index === root.wifiSel
@@ -250,9 +272,25 @@ Item {
                             Rectangle { anchors.fill: parent; color: Theme.goldA(0.1); visible: parent.sel }        // bg-hifi-gold/10
                             Rectangle { visible: index > 0; width: parent.width; height: 1; color: Theme.wa(0.05) }   // divide-white/5
                             Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; name: "wifi"; size: 14; color: parent.sel ? Theme.gold : Theme.silver }
-                            Text { x: 32; width: parent.width - 60; anchors.verticalCenter: parent.verticalCenter; text: modelData.ssid || ""; elide: Text.ElideRight; color: parent.sel ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                            Row {
+                                id: netName
+                                x: 32; width: parent.width - 60; spacing: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                Text { width: Math.min(implicitWidth, netName.width - (tag.visible ? tag.width + 6 : 0) - (savedTag.visible ? savedTag.width + 6 : 0)); text: netItem.modelData.ssid || ""; elide: Text.ElideRight; color: netItem.sel ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
+                                BandTag { id: tag; band: root.dualSsids[netItem.modelData.ssid || ""] ? (netItem.modelData.band || "") : ""; on: netItem.sel; anchors.verticalCenter: parent.verticalCenter }
+                                // "Saved", as Android puts it: NetworkManager still has the key
+                                // for this network, so a touch on the row joins it without asking
+                                Rectangle {
+                                    id: savedTag
+                                    visible: !!netItem.modelData.saved
+                                    width: visible ? savedText.implicitWidth + 12 : 0; height: 18; radius: 4
+                                    color: netItem.sel ? Theme.goldA(0.15) : Theme.wa(0.06)
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    Text { id: savedText; anchors.centerIn: parent; text: Tr.t("settings.network.saved"); color: netItem.sel ? Theme.goldA(0.9) : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 10 }
+                                }
+                            }
                             Icon { visible: !!modelData.security; x: parent.width - 20; anchors.verticalCenter: parent.verticalCenter; name: "lock"; size: 12; color: parent.sel ? Theme.goldA(0.6) : Theme.silverA(0.6) }   // opacity-60 sul colore ereditato
-                            Tap { onClicked: { root.wifiSel = index; root.ssid = modelData.ssid || ""; root.err = "" } }
+                            Tap { onClicked: { root.wifiSel = index; root.ssid = modelData.ssid || ""; root.band = root.dualSsids[modelData.ssid || ""] ? (modelData.band || "") : ""; root.err = ""; if (modelData.saved) { root.pass = ""; root.finishWifi(true) } } }
                         }
                     }
                 }
@@ -260,15 +298,20 @@ Item {
                 TextField_ {
                     id: ssidField
                     width: parent.width; height: 40; textSize: 14; padding: 12
-                    text: root.ssid; placeholder: Tr.t("wizard.wifi.title")
+                    text: root.ssid; placeholder: Tr.t("wizard.wifi.title"); vkButton: true
                     color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)   // focus:border-hifi-gold/50
-                    onTextEdited: (t) => root.ssid = t
+                    // Un nome scritto a mano non e' piu' la riga toccata: nessuna
+                    // banda da fissare.
+                    onTextEdited: (t) => { root.ssid = t; root.band = "" }
                 }
                 Item { width: 1; height: 8 }
                 TextField_ {
                     id: passField
                     width: parent.width; height: 40; textSize: 14; padding: 12
-                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder"); password: true
+                    // In chiaro: la chiave si scrive una volta sola, sulla tastiera
+                    // a schermo, e un carattere sbagliato dietro i pallini e' il
+                    // motivo piu' comune di una connessione fallita.
+                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder"); vkButton: true
                     color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)
                     onTextEdited: (t) => root.pass = t
                 }

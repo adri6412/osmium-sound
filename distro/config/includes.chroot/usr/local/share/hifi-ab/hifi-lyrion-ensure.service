@@ -18,6 +18,14 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+# 🚨 The image masks NetworkManager-wait-online (see build-image.sh), so
+# network-online.target above is reached at once and no longer promises an
+# address. Almost every boot this unit exits before touching the network — it
+# only downloads when Lyrion is genuinely missing from /data, ~90 MB — but on
+# that one boot it needs the LAN to be really up. The leading dash is
+# deliberate: if nm-online is absent or times out, the unit runs anyway and
+# hifi-lyrion-update.sh still has curl --retry 3.
+ExecStartPre=-/usr/bin/nm-online -s -q --timeout=30
 ExecStart=/usr/local/sbin/hifi-lyrion-ensure.sh
 TimeoutStartSec=1800
 

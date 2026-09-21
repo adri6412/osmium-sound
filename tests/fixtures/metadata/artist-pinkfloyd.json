@@ -1,0 +1,303 @@
+{
+ "aliases": [
+  {
+   "begin": null,
+   "end": null,
+   "ended": false,
+   "locale": null,
+   "name": "Floyd",
+   "primary": null,
+   "sort-name": "Floyd",
+   "type": "Search hint",
+   "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e"
+  },
+  {
+   "begin": null,
+   "end": null,
+   "ended": false,
+   "locale": null,
+   "name": "Pink Floid",
+   "primary": null,
+   "sort-name": "Pink Floid",
+   "type": "Search hint",
+   "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e"
+  },
+  {
+   "begin": null,
+   "end": null,
+   "ended": false,
+   "locale": "en",
+   "name": "Pink Floyd",
+   "primary": true,
+   "sort-name": "Pink Floyd",
+   "type": "Artist name",
+   "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc"
+  }
+ ],
+ "area": {
+  "disambiguation": "",
+  "id": "9d5dd675-3cf4-4296-9e39-67865ebee758",
+  "iso-3166-2-codes": [
+   "GB-ENG"
+  ],
+  "name": "England",
+  "sort-name": "England",
+  "type": null,
+  "type-id": null
+ },
+ "begin-area": {
+  "disambiguation": "Greater London",
+  "id": "f03d09b3-39dc-4083-afd6-159e3f0d462f",
+  "name": "London",
+  "sort-name": "London",
+  "type": null,
+  "type-id": null
+ },
+ "country": "GB",
+ "disambiguation": "",
+ "end-area": null,
+ "gender": null,
+ "gender-id": null,
+ "id": "83d91898-7763-47d7-b03b-b92132375c47",
+ "ipis": [],
+ "isnis": [
+  "0000000109397559"
+ ],
+ "life-span": {
+  "begin": "1965",
+  "end": "2014",
+  "ended": true
+ },
+ "name": "Pink Floyd",
+ "relations": [
+  {
+   "artist": {
+    "country": "GB",
+    "disambiguation": "",
+    "id": "12327d75-47d5-45d9-84c2-3760b9210c17",
+    "name": "Syd Barrett",
+    "sort-name": "Barrett, Syd",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-credits": {},
+   "attribute-ids": {
+    "guitar": "63021302-86cd-4aee-80df-2270d54f4978",
+    "lead vocals": "8e2a3255-87c2-4809-a174-98cb3704f1a5",
+    "original": "4fd3b255-a7d7-4424-9a63-40fa543b601c"
+   },
+   "attribute-values": {},
+   "attributes": [
+    "guitar",
+    "lead vocals",
+    "original"
+   ],
+   "begin": "1965",
+   "direction": "backward",
+   "end": "1968-04",
+   "ended": true,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "member of band",
+   "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821"
+  },
+  {
+   "artist": {
+    "country": "GB",
+    "disambiguation": "Pink Floyd keyboardist",
+    "id": "6f7e36da-79d8-4219-990d-8e9224d04ebc",
+    "name": "Richard Wright",
+    "sort-name": "Wright, Richard",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-credits": {},
+   "attribute-ids": {
+    "keyboard": "95b0c3d2-9606-4ef5-a019-9b7437f3adda",
+    "lead vocals": "8e2a3255-87c2-4809-a174-98cb3704f1a5",
+    "original": "4fd3b255-a7d7-4424-9a63-40fa543b601c"
+   },
+   "attribute-values": {},
+   "attributes": [
+    "keyboard",
+    "lead vocals",
+    "original"
+   ],
+   "begin": "1965",
+   "direction": "backward",
+   "end": "1981",
+   "ended": true,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "member of band",
+   "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821"
+  },
+  {
+   "artist": {
+    "country": "GB",
+    "disambiguation": "",
+    "id": "0f50beab-d77d-4f0f-ac26-0b87d3e9b11b",
+    "name": "Roger Waters",
+    "sort-name": "Waters, Roger",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-credits": {},
+   "attribute-ids": {
+    "bass guitar": "17f9f065-2312-4a24-8309-6f6dd63e2e33",
+    "lead vocals": "8e2a3255-87c2-4809-a174-98cb3704f1a5",
+    "original": "4fd3b255-a7d7-4424-9a63-40fa543b601c"
+   },
+   "attribute-values": {},
+   "attributes": [
+    "bass guitar",
+    "lead vocals",
+    "original"
+   ],
+   "begin": "1965",
+   "direction": "backward",
+   "end": "1985",
+   "ended": true,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "member of band",
+   "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821"
+  },
+  {
+   "artist": {
+    "country": "GB",
+    "disambiguation": "of Pink Floyd",
+    "id": "d6c37074-0155-46a3-8af2-338a4f625afc",
+    "name": "Nick Mason",
+    "sort-name": "Mason, Nick",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-credits": {},
+   "attribute-ids": {
+    "drums (drum set)": "12092505-6ee1-46af-a15a-b5b468b6b155",
+    "original": "4fd3b255-a7d7-4424-9a63-40fa543b601c",
+    "percussion": "8e9abdf1-0afc-4544-b201-c6fa768d01f4"
+   },
+   "attribute-values": {},
+   "attributes": [
+    "drums (drum set)",
+    "original",
+    "percussion"
+   ],
+   "begin": "1965",
+   "direction": "backward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "member of band",
+   "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821"
+  },
+  {
+   "artist": {
+    "country": "GB",
+    "disambiguation": "Pink Floyd",
+    "id": "1dce970e-34bc-48b2-ab51-48d87544a4c2",
+    "name": "David Gilmour",
+    "sort-name": "Gilmour, David",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-credits": {},
+   "attribute-ids": {
+    "guitar": "63021302-86cd-4aee-80df-2270d54f4978",
+    "lead vocals": "8e2a3255-87c2-4809-a174-98cb3704f1a5",
+    "slide guitar": "41d2c709-81e2-415c-9456-a0a3d14f48bd"
+   },
+   "attribute-values": {},
+   "attributes": [
+    "guitar",
+    "lead vocals",
+    "slide guitar"
+   ],
+   "begin": "1968-02-18",
+   "direction": "backward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "member of band",
+   "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821"
+  },
+  {
+   "artist": {
+    "country": "GB",
+    "disambiguation": "Pink Floyd keyboardist",
+    "id": "6f7e36da-79d8-4219-990d-8e9224d04ebc",
+    "name": "Richard Wright",
+    "sort-name": "Wright, Richard",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-credits": {},
+   "attribute-ids": {
+    "keyboard": "95b0c3d2-9606-4ef5-a019-9b7437f3adda",
+    "lead vocals": "8e2a3255-87c2-4809-a174-98cb3704f1a5"
+   },
+   "attribute-values": {},
+   "attributes": [
+    "keyboard",
+    "lead vocals"
+   ],
+   "begin": "1987",
+   "direction": "backward",
+   "end": "2008-09-15",
+   "ended": true,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "member of band",
+   "type-id": "5be4c609-9afa-4ea0-910b-12ffb71e3821"
+  },
+  {
+   "attribute-ids": {},
+   "attribute-values": {},
+   "attributes": [],
+   "begin": null,
+   "direction": "forward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "url",
+   "type": "official homepage",
+   "type-id": "fe33d22f-c3b0-4d68-bd53-a856badf2b15",
+   "url": {
+    "id": "09fbca8d-af08-4cb4-8ce5-072af469755f",
+    "resource": "https://www.pinkfloyd.com/"
+   }
+  },
+  {
+   "attribute-ids": {},
+   "attribute-values": {},
+   "attributes": [],
+   "begin": null,
+   "direction": "forward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "url",
+   "type": "wikidata",
+   "type-id": "689870a4-a1e4-4912-b17f-7b2664215698",
+   "url": {
+    "id": "ffcce356-db91-4607-81a0-a59cdf976a44",
+    "resource": "https://www.wikidata.org/wiki/Q2306"
+   }
+  }
+ ],
+ "sort-name": "Pink Floyd",
+ "type": "Group",
+ "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+}

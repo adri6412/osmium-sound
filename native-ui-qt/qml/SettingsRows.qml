@@ -18,6 +18,7 @@ Column {
         switch (r.type) {
         case "option": case "info": case "label": case "src": case "alarm": case "grid": return r.gap !== undefined ? r.gap : 8
         case "dir": return 4
+        case "diag": return r.sub ? 2 : 10
         case "band": return 8
         case "sep": return 16
         default: return r.gap !== undefined ? r.gap : 16
@@ -86,6 +87,8 @@ Column {
                     case "box": return cBox
                     case "vuskin": return cVuSkin
                     case "vustore": return cVuStore
+                    case "animcard": return cAnimCard
+                    case "diag": return cDiag
                     }
                     return cHelp
                 }
@@ -105,7 +108,8 @@ Column {
         opacity: m.dim ? 0.5 : 1                            // disabled:opacity-50 su TUTTO il pulsante
         Icon { visible: !!m.icon; anchors.centerIn: parent; name: m.icon || ""; size: 16; color: root.btnFg(m.style) }
         Text { id: miniText; visible: !m.icon; anchors.centerIn: parent; text: m.label || ""; font.family: Theme.font; font.pixelSize: 12; color: root.btnFg(m.style) }
-        Tap { id: mTap; enabled: !m.dim; grow: 4; onClicked: root.ctl.activate(row, m.act, m.arg) }
+        scale: mTap.tapScale
+        Tap { id: mTap; tap: 0.95; enabled: !m.dim; grow: 4; onClicked: root.ctl.activate(row, m.act, m.arg) }
     }
     component MiniRow: Row {
         property var row: ({})
@@ -114,11 +118,23 @@ Column {
         Repeater { model: row.mini || []; MiniButton { required property var modelData; m: modelData; row: parent.row } }
     }
     component Switch_: Rectangle {
+        id: sw
         property bool on: false
         property bool dim: false
         width: 44; height: 24; radius: 12
-        color: dim ? Qt.rgba(on ? Theme.gold.r : Theme.accent.r, on ? Theme.gold.g : Theme.accent.g, on ? Theme.gold.b : Theme.accent.b, 0.55) : (on ? Theme.gold : Theme.accent)
-        Rectangle { x: on ? 24 : 4; y: 4; width: 16; height: 16; radius: 8; color: Theme.white; Behavior on x { NumberAnimation { duration: 120 } } }
+        // one spring for the knob and for the track: the colour makes
+        // exactly the same travel instead of snapping half way
+        color: {
+            var c = Theme.mix(Theme.accent, Theme.gold, knobS.value)
+            return dim ? Qt.rgba(c.r, c.g, c.b, 0.55) : c
+        }
+        Rectangle { x: 4 + 20 * knobS.value; y: 4; width: 16; height: 16; radius: 8; color: Theme.white }
+        Spring { id: knobS; stiffness: 320; damping: 30; rate: Theme.motionRate; to: sw.on ? 1 : 0 }
+        // 🚨 SettingsTab.rebuild() makes ALL the rows again, on every round
+        // of polling too: without this each rebuild would replay the slide of
+        // every switch that is already on. set() is Q_INVOKABLE, not a QML
+        // write: it does not break the binding on `to`.
+        Component.onCompleted: knobS.set(sw.on ? 1 : 0)
     }
 
     // ─── i tipi di riga ────────────────────────────────────────────────────
@@ -518,6 +534,58 @@ Column {
             Tap { id: vsTap; tap: 0.97; onClicked: root.ctl.activate(vs.row, vs.row.act) }
         }
     }
+    // a Now Playing animation to choose (Settings → Animations): a still of
+    // the scene, or for "none" the lyrics icon, with its name below; the same
+    // look as the VU skin cards
+    Component { id: cAnimCard
+        Item {
+            id: an
+            property var row: ({})
+            readonly property bool sel: !!row.sel
+            readonly property bool none: (row.arg || "") === "none"
+            width: parent.width
+            height: 8 + apv.height + 36
+            Rectangle {
+                anchors.fill: parent; radius: 8
+                scale: anTap.tapScale
+                color: an.sel ? Theme.goldA(0.1) : anTap.mix(Theme.dark, Theme.light)
+                border.width: an.sel ? 2 : 1; border.color: an.sel ? Theme.gold : Theme.accent
+                Rectangle {
+                    id: apv
+                    x: 8; y: 8; width: parent.width - 16; height: Math.round(width / 2); radius: 6
+                    color: Theme.blackA(0.3); clip: true
+                    // a still: live false, never active, nothing ever runs
+                    NpAnimation {
+                        anchors.fill: parent
+                        visible: !an.none
+                        kind: an.none ? "" : (an.row.arg || "")
+                        live: false
+                        active: false
+                        devScale: root.ctl ? root.ctl.devScale : 1
+                    }
+                    Column {
+                        visible: an.none
+                        anchors.centerIn: parent
+                        spacing: 8
+                        Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "mic-2"; size: 32; color: Theme.silverA(0.5) }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: Math.min(implicitWidth, apv.width - 16); elide: Text.ElideRight
+                            text: Tr.t("settings.animations.noneHelp")
+                            color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12
+                        }
+                    }
+                }
+                Text {
+                    x: 12; y: apv.y + apv.height; width: parent.width - 24 - (an.sel ? 22 : 0); height: 36; verticalAlignment: Text.AlignVCenter
+                    text: an.row.label || ""; elide: Text.ElideRight
+                    color: an.sel ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: an.sel
+                }
+                Icon { visible: an.sel; x: parent.width - 30; y: apv.y + apv.height + 9; name: "check-circle-2"; size: 18; color: Theme.gold }
+            }
+            Tap { id: anTap; tap: 0.97; onClicked: root.ctl.activate(an.row, an.row.act) }
+        }
+    }
     // a skin of the VU meter store: its preview, name, author and size, and
     // one button for what can be done with it (download, update, remove)
     Component { id: cVuStore
@@ -549,7 +617,7 @@ Column {
                         fillMode: Image.PreserveAspectFit; smooth: true; asynchronous: true
                         sourceSize.width: Math.round(width * (root.ctl ? root.ctl.devScale : 1))
                     }
-                    Icon { visible: !vt.row.preview; anchors.centerIn: parent; name: "gauge"; size: 32; color: Theme.silverA(0.4) }
+                    Icon { visible: !vt.row.preview; anchors.centerIn: parent; name: vt.row.icon || "gauge"; size: 32; color: Theme.silverA(0.4) }
                     Rectangle {
                         visible: !!vt.row.isNew || vt.st === "update"
                         x: 8; y: 8; height: 22; width: badge.implicitWidth + 16; radius: 11; color: Theme.gold
@@ -624,6 +692,56 @@ Column {
         }
     }
     // riquadro scuro attorno a un gruppo di righe (bg-hifi-dark p-3)
+    // one step of the network check: status mark, name, detail on the right
+    // and, below, the reason when it isn't simply OK. `sub` = a source of
+    // the step above (the update server's main, backup and GitHub).
+    Component { id: cDiag
+        Item {
+            id: dg
+            property var row: ({})
+            readonly property bool sub: !!row.sub
+            readonly property real lx: sub ? 30 : 0
+            readonly property color tint: row.status === "ok" ? Theme.green500 : row.status === "warn" ? Theme.yellow400
+                                        : row.status === "fail" ? Theme.red400 : Theme.silverA(0.5)
+            width: parent.width
+            height: row.extra ? why.y + why.height + 2 : head.height
+            Item {
+                id: head
+                width: parent.width; height: dg.sub ? 22 : dg.row.plain ? 32 : 26
+                Icon { visible: dg.row.status === "ok" || dg.row.status === "warn" || dg.row.status === "fail"
+                       x: dg.lx; anchors.verticalCenter: parent.verticalCenter; size: dg.sub ? 14 : 18; color: dg.tint
+                       name: dg.row.status === "ok" ? "check-circle-2" : dg.row.status === "warn" ? "alert-triangle" : "alert-circle" }
+                Rectangle { visible: dg.row.status === "skip"; x: dg.lx + 2; anchors.verticalCenter: parent.verticalCenter
+                            width: dg.sub ? 10 : 14; height: width; radius: width / 2; color: "transparent"; border.width: 1.5; border.color: dg.tint }
+                Spinner { visible: dg.row.status === "run"; active: visible && dg.visible; x: dg.lx + 1; anchors.verticalCenter: parent.verticalCenter
+                          radius: dg.sub ? 6 : 8; thickness: 2 }
+                Text {
+                    id: stepName
+                    x: dg.lx + (dg.sub ? 22 : 28); anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, parent.width - x - 12 - Math.min(val.implicitWidth, parent.width * 0.45))
+                    text: dg.row.label || ""; elide: Text.ElideRight
+                    color: dg.sub ? Theme.silver : Theme.white; font.family: Theme.font; font.pixelSize: dg.sub ? 12 : 15
+                }
+                Text {
+                    id: val
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, parent.width - stepName.x - stepName.width - 12)
+                    horizontalAlignment: Text.AlignRight; elide: Text.ElideLeft
+                    // plain: the status in words, in the status colour (the simple view)
+                    text: dg.row.value || ""; color: dg.row.plain && dg.row.status !== "skip" ? dg.tint : Theme.silverA(0.8)
+                    font.family: dg.row.plain ? Theme.font : Theme.mono; font.pixelSize: dg.row.plain ? 14 : dg.sub ? 11 : 12
+                }
+            }
+            Text {
+                id: why
+                visible: !!dg.row.extra
+                x: stepName.x; y: head.height + 2; width: parent.width - x; wrapMode: Text.Wrap
+                text: dg.row.extra || ""
+                color: dg.row.status === "ok" || dg.row.status === "skip" ? Theme.silverA(0.6) : dg.tint
+                font.family: Theme.font; font.pixelSize: dg.sub ? 11 : 12; lineHeight: dg.sub ? 15 : 16; lineHeightMode: Text.FixedHeight
+            }
+        }
+    }
     Component { id: cBox
         Rectangle {
             id: bx

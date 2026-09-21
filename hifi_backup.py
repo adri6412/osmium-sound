@@ -115,6 +115,7 @@ DENY_FILES = frozenset((
 ))
 DENY_PREFIXES = (
     "/var/lib/hifi-player/backups/",   # no backups inside backups
+    "/var/lib/hifi-player/metadata/",  # web info cache: re-downloadable, up to 100 MB
     "/etc/ssh/",                       # host keys are machine identity
 )
 
@@ -177,6 +178,12 @@ CATEGORIES = {
             ("file", "/var/lib/hifi-player/dsp-target"),
             ("file", "/var/lib/hifi-player/roomcorr-result.json"),
             ("dir", "/etc/camilladsp/filters", ()),
+            # What the owner corrected by hand in the Library editor: edition
+            # and artist choices, credit corrections (hifi_metadata.py) and the
+            # journal that lets a tag change be undone (hifi_tags.py). Unlike
+            # the web information cache next to it (denied above), none of it
+            # can be downloaded again.
+            ("dir", "/var/lib/hifi-player/metadata-edits", ()),
         ],
     },
     "sources": {

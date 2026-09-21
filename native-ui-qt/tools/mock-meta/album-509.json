@@ -1,0 +1,5039 @@
+{
+ "status": "ok",
+ "album_id": 509,
+ "match": {
+  "mbid": "f878b56a-0837-4d63-a4f5-01b3f34907cc",
+  "release_group": "de9bf827-a9b0-348b-a7c9-556c03c3fb07",
+  "how": "search",
+  "score": 95,
+  "medium": null
+ },
+ "release": {
+  "title": "American Idiot",
+  "artist": "Green Day",
+  "date": "2024-10-25",
+  "first_release_date": "2004-09-20",
+  "type": "album",
+  "secondary_types": [],
+  "labels": [
+   {
+    "name": "Reprise Records",
+    "catno": "[none]"
+   }
+  ],
+  "country": "XW",
+  "barcode": "093624862680",
+  "disc_count": 4,
+  "track_count": 57,
+  "url": "https://musicbrainz.org/release/f878b56a-0837-4d63-a4f5-01b3f34907cc"
+ },
+ "credits": [
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "drums (drum set)",
+   "credit": "",
+   "people": [
+    {
+     "name": "Tré Cool",
+     "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     11
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     2,
+     10
+    ],
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "bass guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Mike Dirnt",
+     "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     11
+    ],
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "electric bass guitar",
+   "credit": "bass",
+   "people": [
+    {
+     "name": "Mike Dirnt",
+     "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     2,
+     8
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     2,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "electric guitar",
+   "credit": "guitar",
+   "people": [
+    {
+     "name": "Billie Joe Armstrong",
+     "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     2,
+     8
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     2,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Billie Joe Armstrong",
+     "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+     "artist_id": null
+    },
+    {
+     "name": "Jason White",
+     "mbid": "f9b2a692-b74b-44c2-9bd8-db3119665b33",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     11
+    ],
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "piano",
+   "credit": "",
+   "people": [
+    {
+     "name": "Jason Freese",
+     "mbid": "33864d96-253a-458f-a293-8cc3bf935586",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "acoustic guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Jason Freese",
+     "mbid": "33864d96-253a-458f-a293-8cc3bf935586",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "membranophone",
+   "credit": "",
+   "people": [
+    {
+     "name": "Tré Cool",
+     "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     2,
+     8
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "saxophone",
+   "credit": "",
+   "people": [
+    {
+     "name": "Jason Freese",
+     "mbid": "33864d96-253a-458f-a293-8cc3bf935586",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "timpani",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ron Blake",
+     "mbid": "a3d48a8e-5b1e-4d26-95c4-458a71e12c17",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "lead vocals",
+   "credit": "",
+   "people": [
+    {
+     "name": "Billie Joe Armstrong",
+     "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+     "artist_id": null
+    },
+    {
+     "name": "Mike Dirnt",
+     "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     11
+    ],
+    [
+     2,
+     8
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     2,
+     10
+    ],
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "background vocals",
+   "credit": "",
+   "people": [
+    {
+     "name": "Mike Dirnt",
+     "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+     "artist_id": null
+    },
+    {
+     "name": "Jason Freese",
+     "mbid": "33864d96-253a-458f-a293-8cc3bf935586",
+     "artist_id": null
+    },
+    {
+     "name": "Jason White",
+     "mbid": "f9b2a692-b74b-44c2-9bd8-db3119665b33",
+     "artist_id": null
+    },
+    {
+     "name": "Ron Blake",
+     "mbid": "a3d48a8e-5b1e-4d26-95c4-458a71e12c17",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     11
+    ],
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "background vocals",
+   "credit": "vocals",
+   "people": [
+    {
+     "name": "Tré Cool",
+     "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+     "artist_id": null
+    },
+    {
+     "name": "Mike Dirnt",
+     "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+     "artist_id": null
+    },
+    {
+     "name": "Billie Joe Armstrong",
+     "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     2,
+     8
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     2,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "guest",
+   "credit": "",
+   "people": [
+    {
+     "name": "Kathleen Hanna",
+     "mbid": "4638653b-a279-42d6-bd8c-b2bcb9a19f77",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "composer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Green Day",
+     "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+     "artist_id": 748
+    },
+    {
+     "name": "Billie Joe Armstrong",
+     "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+     "artist_id": null
+    },
+    {
+     "name": "Mike Dirnt",
+     "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+     "credited_as": "Michael Pritchard",
+     "artist_id": null
+    },
+    {
+     "name": "Tré Cool",
+     "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+     "credited_as": "Frank Wright III",
+     "artist_id": null
+    },
+    {
+     "name": "Brian May",
+     "mbid": "6d24f102-5c43-453a-8664-4ee092f441cf",
+     "artist_id": null
+    },
+    {
+     "name": "Freddie Mercury",
+     "mbid": "022589ac-7177-460d-a178-9976cf70e29f",
+     "artist_id": 749
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     2
+    ],
+    [
+     2,
+     3
+    ],
+    [
+     2,
+     4
+    ],
+    [
+     2,
+     5
+    ],
+    [
+     2,
+     6
+    ],
+    [
+     2,
+     7
+    ],
+    [
+     2,
+     8
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     2,
+     10
+    ],
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ],
+    [
+     4,
+     1
+    ],
+    [
+     4,
+     2
+    ],
+    [
+     4,
+     3
+    ],
+    [
+     4,
+     4
+    ],
+    [
+     4,
+     5
+    ],
+    [
+     4,
+     6
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     4,
+     8
+    ],
+    [
+     4,
+     9
+    ],
+    [
+     4,
+     10
+    ],
+    [
+     4,
+     11
+    ],
+    [
+     4,
+     12
+    ],
+    [
+     4,
+     13
+    ],
+    [
+     4,
+     14
+    ],
+    [
+     4,
+     15
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "lyricist",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Billie Joe Armstrong",
+     "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+     "artist_id": null
+    },
+    {
+     "name": "Mike Dirnt",
+     "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+     "credited_as": "Michael Ryan Pritchard",
+     "artist_id": null
+    },
+    {
+     "name": "Tré Cool",
+     "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+     "artist_id": null
+    },
+    {
+     "name": "Brian May",
+     "mbid": "6d24f102-5c43-453a-8664-4ee092f441cf",
+     "artist_id": null
+    },
+    {
+     "name": "Freddie Mercury",
+     "mbid": "022589ac-7177-460d-a178-9976cf70e29f",
+     "artist_id": 749
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     2
+    ],
+    [
+     2,
+     3
+    ],
+    [
+     2,
+     4
+    ],
+    [
+     2,
+     5
+    ],
+    [
+     2,
+     6
+    ],
+    [
+     2,
+     7
+    ],
+    [
+     2,
+     8
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     2,
+     10
+    ],
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ],
+    [
+     4,
+     1
+    ],
+    [
+     4,
+     2
+    ],
+    [
+     4,
+     3
+    ],
+    [
+     4,
+     4
+    ],
+    [
+     4,
+     5
+    ],
+    [
+     4,
+     6
+    ],
+    [
+     4,
+     7
+    ],
+    [
+     4,
+     8
+    ],
+    [
+     4,
+     9
+    ],
+    [
+     4,
+     10
+    ],
+    [
+     4,
+     11
+    ],
+    [
+     4,
+     12
+    ],
+    [
+     4,
+     13
+    ],
+    [
+     4,
+     14
+    ],
+    [
+     4,
+     15
+    ]
+   ]
+  },
+  {
+   "group": "production",
+   "role": "producer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Green Day",
+     "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+     "artist_id": 748
+    },
+    {
+     "name": "Rob Cavallo",
+     "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     2,
+     8
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     2,
+     10
+    ],
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Doug McKean",
+     "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+     "artist_id": null
+    },
+    {
+     "name": "Chris Dugan",
+     "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+     "artist_id": null
+    },
+    {
+     "name": "Reto Peter",
+     "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     2,
+     8
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     2,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "assistant",
+   "credit": "",
+   "people": [
+    {
+     "name": "Brian Vibberts",
+     "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+     "artist_id": null
+    },
+    {
+     "name": "Greg Burns",
+     "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+     "artist_id": null
+    },
+    {
+     "name": "Jimmy Hoyson",
+     "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+     "artist_id": null
+    },
+    {
+     "name": "Joe Brown",
+     "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+     "artist_id": null
+    },
+    {
+     "name": "Reto Peter",
+     "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     2,
+     9
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "additional",
+   "credit": "",
+   "people": [
+    {
+     "name": "Chris Dugan",
+     "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+     "artist_id": null
+    },
+    {
+     "name": "Reto Peter",
+     "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "recording",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "John Harris",
+     "mbid": "829786c1-5730-4f67-96d7-68b8d1a25f23",
+     "artist_id": null
+    },
+    {
+     "name": "Kevin Lemoine",
+     "mbid": "153f45b5-6baa-4389-84d3-47a775a23488",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "mix",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Chris Lord‐Alge",
+     "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+     "artist_id": null
+    },
+    {
+     "name": "Tim James",
+     "mbid": "75044baa-a942-43c7-9946-5157e7e9c577",
+     "artist_id": null
+    },
+    {
+     "name": "Chris Dugan",
+     "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     2,
+     8
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     2,
+     10
+    ],
+    [
+     2,
+     13
+    ],
+    [
+     2,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "mix",
+   "attr": "assistant",
+   "credit": "",
+   "people": [
+    {
+     "name": "Dmitar Krnjaic",
+     "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ]
+   ]
+  }
+ ],
+ "tracks": [
+  {
+   "disc": 1,
+   "n": 1,
+   "title": "American Idiot",
+   "length_ms": 174000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 2,
+   "title": "Jesus of Suburbia: I. Jesus of Suburbia / II. City of the Damned / III. I Don’t Care / IV. Dearly Beloved / V. Tales of Another Broken Home",
+   "length_ms": 548000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 3,
+   "title": "Holiday",
+   "length_ms": 232000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 4,
+   "title": "Boulevard of Broken Dreams",
+   "length_ms": 262000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 5,
+   "title": "Are We the Waiting",
+   "length_ms": 162000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 6,
+   "title": "St. Jimmy",
+   "length_ms": 176000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 7,
+   "title": "Give Me Novacaine",
+   "length_ms": 205000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 8,
+   "title": "She’s a Rebel",
+   "length_ms": 120000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 9,
+   "title": "Extraordinary Girl",
+   "length_ms": 213000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 10,
+   "title": "Letterbomb",
+   "length_ms": 245000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "guest",
+     "credit": "",
+     "people": [
+      {
+       "name": "Kathleen Hanna",
+       "mbid": "4638653b-a279-42d6-bd8c-b2bcb9a19f77",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 11,
+   "title": "Wake Me Up When September Ends",
+   "length_ms": 285000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "credited_as": "Michael Pritchard",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "credited_as": "Frank Wright III",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 12,
+   "title": "Homecoming: I. The Death of St. Jimmy / II. East 12th St. / III. Nobody Likes You / IV. Rock and Roll Girlfriend / V. We’re Coming Home Again",
+   "length_ms": 558000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 13,
+   "title": "Whatsername",
+   "length_ms": 254000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      },
+      {
+       "name": "Rob Cavallo",
+       "mbid": "1651ffc1-92c0-4441-b87f-e73fbd013790",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Doug McKean",
+       "mbid": "b75a9ba6-23e6-42da-85a7-fbe3eb8ef348",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "additional",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian Vibberts",
+       "mbid": "7a59f861-013d-4664-b0cf-5c01b09283b5",
+       "artist_id": null
+      },
+      {
+       "name": "Greg Burns",
+       "mbid": "63b2e4e1-e81a-4b3a-a7d1-081757f4965d",
+       "artist_id": null
+      },
+      {
+       "name": "Jimmy Hoyson",
+       "mbid": "87a604ff-3b9a-45bb-a38a-43199f369f38",
+       "artist_id": null
+      },
+      {
+       "name": "Joe Brown",
+       "mbid": "daaba564-74c6-42c7-be72-f8b739e609e6",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Dmitar Krnjaic",
+       "mbid": "60176006-71d8-4a3a-94df-1855d3a067b1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 1,
+   "title": "American Idiot (live at Makuhari Messe, Tokyo, Japan, 3/19/05)",
+   "length_ms": 258000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 2,
+   "title": "Jesus of Suburbia (live at Makuhari Messe, Tokyo, Japan, 3/19/05)",
+   "length_ms": 562000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 3,
+   "title": "Holiday (live at Makuhari Messe, Tokyo, Japan, 3/19/05)",
+   "length_ms": 273000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 4,
+   "title": "Are We the Waiting (live at Makuhari Messe, Tokyo, Japan, 3/19/05)",
+   "length_ms": 198000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 5,
+   "title": "St. Jimmy (live at Makuhari Messe, Tokyo, Japan, 3/19/05)",
+   "length_ms": 177000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 6,
+   "title": "Boulevard of Broken Dreams (live at Makuhari Messe, Tokyo, Japan, 3/19/05)",
+   "length_ms": 281000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 7,
+   "title": "Favorite Son",
+   "length_ms": 126000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 8,
+   "title": "Shoplifter",
+   "length_ms": 110000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "bass",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "guitar",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "membranophone",
+     "credit": "",
+     "people": [
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "vocals",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "credited_as": "Michael Ryan Pritchard",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "credited_as": "Frank Edwin Wright III",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      },
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Tim James",
+       "mbid": "75044baa-a942-43c7-9946-5157e7e9c577",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 9,
+   "title": "Governator",
+   "length_ms": 151000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "bass",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "guitar",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "vocals",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "credited_as": "Michael Ryan Pritchard",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "credited_as": "Frank Edwin Wright III",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "credited_as": "Michael Ryan Pritchard",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Dugan",
+       "mbid": "fce0272e-8706-4b4a-a0b8-613db73f0efa",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 10,
+   "title": "Too Much Too Soon",
+   "length_ms": 210000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar",
+     "credit": "bass",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "guitar",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "vocals",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "credited_as": "Michael Ryan Pritchard",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "credited_as": "Frank Edwin Wright III",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Reto Peter",
+       "mbid": "6a5b39e8-b451-4908-a0d8-68d2e3951627",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Tim James",
+       "mbid": "75044baa-a942-43c7-9946-5157e7e9c577",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 11,
+   "title": "Are We the Waiting (live from VH1 Storytellers)",
+   "length_ms": 178000,
+   "credits": []
+  },
+  {
+   "disc": 2,
+   "n": 12,
+   "title": "St. Jimmy (live from VH1 Storytellers)",
+   "length_ms": 186000,
+   "credits": []
+  },
+  {
+   "disc": 2,
+   "n": 13,
+   "title": "Give Me Novacaine (live from VH1 Storytellers)",
+   "length_ms": 216000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Jason White",
+       "mbid": "f9b2a692-b74b-44c2-9bd8-db3119665b33",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jason Freese",
+       "mbid": "33864d96-253a-458f-a293-8cc3bf935586",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Harris",
+       "mbid": "829786c1-5730-4f67-96d7-68b8d1a25f23",
+       "artist_id": null
+      },
+      {
+       "name": "Kevin Lemoine",
+       "mbid": "153f45b5-6baa-4389-84d3-47a775a23488",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 2,
+   "n": 14,
+   "title": "Homecoming (live from VH1 Storytellers)",
+   "length_ms": 565000,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jason Freese",
+       "mbid": "33864d96-253a-458f-a293-8cc3bf935586",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "bass guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Jason White",
+       "mbid": "f9b2a692-b74b-44c2-9bd8-db3119665b33",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jason Freese",
+       "mbid": "33864d96-253a-458f-a293-8cc3bf935586",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "saxophone",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jason Freese",
+       "mbid": "33864d96-253a-458f-a293-8cc3bf935586",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "timpani",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ron Blake",
+       "mbid": "a3d48a8e-5b1e-4d26-95c4-458a71e12c17",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jason Freese",
+       "mbid": "33864d96-253a-458f-a293-8cc3bf935586",
+       "artist_id": null
+      },
+      {
+       "name": "Jason White",
+       "mbid": "f9b2a692-b74b-44c2-9bd8-db3119665b33",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      },
+      {
+       "name": "Ron Blake",
+       "mbid": "a3d48a8e-5b1e-4d26-95c4-458a71e12c17",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Harris",
+       "mbid": "829786c1-5730-4f67-96d7-68b8d1a25f23",
+       "artist_id": null
+      },
+      {
+       "name": "Kevin Lemoine",
+       "mbid": "153f45b5-6baa-4389-84d3-47a775a23488",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Chris Lord‐Alge",
+       "mbid": "51c65e0d-76d7-4c93-9a18-2e72e36415ba",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 3,
+   "n": 1,
+   "title": "American Idiot",
+   "length_ms": 173000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 2,
+   "title": "American Idiot (alt. version)",
+   "length_ms": 155000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 3,
+   "title": "Jesus of Suburbia",
+   "length_ms": 142000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 4,
+   "title": "Holiday/Blvd. of Broken Dreams",
+   "length_ms": 503000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 5,
+   "title": "Are We We Are/St. Jimmy Opera",
+   "length_ms": 338000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 6,
+   "title": "Novacaine",
+   "length_ms": 214000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 7,
+   "title": "She’s a Rebel",
+   "length_ms": 135000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 8,
+   "title": "Radio Baghdad",
+   "length_ms": 215000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 9,
+   "title": "Cluster Bomb",
+   "length_ms": 168000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 10,
+   "title": "Wake Me Up When September Ends",
+   "length_ms": 300000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 11,
+   "title": "Homecoming (Nobody Likes You)",
+   "length_ms": 619000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 12,
+   "title": "Everyone’s Breaking Down",
+   "length_ms": 231000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 13,
+   "title": "Just Another Year",
+   "length_ms": 115000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 14,
+   "title": "Lowlife",
+   "length_ms": 224000,
+   "credits": []
+  },
+  {
+   "disc": 3,
+   "n": 15,
+   "title": "Whatsername",
+   "length_ms": 245000,
+   "credits": []
+  },
+  {
+   "disc": 4,
+   "n": 1,
+   "title": "American Idiot",
+   "length_ms": 272000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 2,
+   "title": "Jesus of Suburbia",
+   "length_ms": 577000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 3,
+   "title": "Holiday",
+   "length_ms": 250000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 4,
+   "title": "Boulevard of Broken Dreams",
+   "length_ms": 274000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 5,
+   "title": "Are We the Waiting",
+   "length_ms": 160000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 6,
+   "title": "St. Jimmy",
+   "length_ms": 194000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 7,
+   "title": "Give Me Novacaine",
+   "length_ms": 224000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 8,
+   "title": "She’s a Rebel",
+   "length_ms": 115000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 9,
+   "title": "Extraordinary Girl",
+   "length_ms": 211000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 10,
+   "title": "Letterbomb",
+   "length_ms": 260000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 11,
+   "title": "Wake Me Up When September Ends",
+   "length_ms": 296000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "credited_as": "Michael Pritchard",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "credited_as": "Frank Wright III",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 12,
+   "title": "Homecoming",
+   "length_ms": 598000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      },
+      {
+       "name": "Mike Dirnt",
+       "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+       "artist_id": null
+      },
+      {
+       "name": "Tré Cool",
+       "mbid": "0dcee02c-5d2c-4f5c-9d60-d58a4df32d9e",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 13,
+   "title": "Whatsername",
+   "length_ms": 302000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 14,
+   "title": "Minority",
+   "length_ms": 404000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Green Day",
+       "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+       "artist_id": 748
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Billie Joe Armstrong",
+       "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 4,
+   "n": 15,
+   "title": "We Are the Champions",
+   "length_ms": 316000,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian May",
+       "mbid": "6d24f102-5c43-453a-8664-4ee092f441cf",
+       "artist_id": null
+      },
+      {
+       "name": "Freddie Mercury",
+       "mbid": "022589ac-7177-460d-a178-9976cf70e29f",
+       "artist_id": 749
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brian May",
+       "mbid": "6d24f102-5c43-453a-8664-4ee092f441cf",
+       "artist_id": null
+      },
+      {
+       "name": "Freddie Mercury",
+       "mbid": "022589ac-7177-460d-a178-9976cf70e29f",
+       "artist_id": 749
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "places": [
+  {
+   "role": "mixed_at",
+   "name": "Image Recording Studios",
+   "area": "Los Angeles"
+  },
+  {
+   "role": "recorded_at",
+   "name": "幕張メッセ",
+   "area": "Nakase"
+  },
+  {
+   "role": "recorded_at",
+   "name": "Irving Plaza",
+   "area": "Union Square"
+  }
+ ],
+ "about": {
+  "text": "American Idiot is the seventh studio album by the American rock band Green Day, released on September 21, 2004, by Reprise Records. The album was produced by Rob Cavallo in collaboration with the group. Recording sessions for American Idiot took place at Studio 880 in Oakland and Ocean Way Recording in Hollywood, both in California, between 2003 and 2004. A concept album, dubbed a \"punk rock opera\" by the band members, American Idiot follows the story of Jesus of Suburbia, a lower-middle-class American adolescent anti-hero. The album expresses the disillusionment and dissent of a generation that came of age in a period shaped by tumultuous events such as 9/11 and the Iraq War.\n\nFollowing the disappointing sales of their previous album Warning (2000), the band took a break and then began what they had planned to be their next album, Cigarettes and Valentines. However, recording was cut short when the master tapes were stolen; following this, the band made the decision to start their next album from scratch. The result was a more societally critical, politically charged record that returned to the band's punk rock sound following the more folk and power pop-inspired Warning. Additionally, the band underwent an \"image change\", wearing red-and-black uniforms onstage, to add more theatrical presence to performances and press events.\n\nThe album charted in 27 countries, reaching number one on the Billboard 200, a first for the group. It has sold over 23 million copies worldwide, making it the second-best-selling album for the band (behind their 1994 major-label debut, Dookie) and one of the best-selling albums of the decade and all time. It is also the best selling rock album of the 21st century in the United Kingdom. It was certified 6× Platinum by the Recording Industry Association of America (RIAA) in 2013. The album spawned five successful singles: the title track, \"Holiday\", \"Wake Me Up When September Ends\", \"Jesus of Suburbia\", and the Grammy Award for Record of the Year-winner \"Boulevard of Broken Dreams\".\n\nAmerican Idiot was a critical and commercial success upon release. It was nominated for Album of the Year and won the award for Best Rock Album at the 2005 Grammy Awards. It was also nominated for Best Album at the Europe Music Awards and the Billboard Music Awards, winning the former. Its success inspired a Broadway musical, a documentary, and an unmade feature film adaptation. Rolling Stone placed it at 225 on their 2012 list of the \"500 Greatest Albums of All Time\", and it was 248 on the 2020 update of the list.",
+  "lang": "en",
+  "title": "American Idiot",
+  "url": "https://en.wikipedia.org/wiki/American_Idiot",
+  "source": "Wikipedia",
+  "license": "CC BY-SA 4.0"
+ },
+ "attribution": [
+  {
+   "source": "MusicBrainz",
+   "url": "https://musicbrainz.org/release/f878b56a-0837-4d63-a4f5-01b3f34907cc",
+   "license": "CC0"
+  }
+ ]
+}

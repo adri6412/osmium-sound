@@ -171,7 +171,8 @@ apply)
     # normalise CRLF + perms for the things we just shipped
     for f in /usr/local/bin/api_server.py /usr/local/bin/vu_meter_daemon.py \
              /usr/local/bin/sources_server.py /usr/local/bin/webui_server.py \
-             /usr/local/bin/hifi_logging.py; do
+             /usr/local/bin/hifi_logging.py /usr/local/bin/hifi_metadata.py \
+             /usr/local/bin/hifi_tags.py; do
         [ -f "$f" ] && { sed -i 's/\r$//' "$f"; chmod +x "$f"; }
     done
     chmod +x /usr/local/sbin/hifi-*.sh /usr/local/sbin/hifi-*.py 2>/dev/null || true
@@ -187,6 +188,17 @@ apply)
     # the end of the whole update-mode session, and every service simply comes
     # up fresh with the new code already in place.
     write_status applying 90 "Registrazione servizi…"
+    # Bluetooth speakers: hifi-bt-out.service is the only Bluetooth unit that
+    # is ever enabled, and it is what applies the owner's choice at boot and
+    # keeps the speakers connected (see the unit for why the choice cannot be
+    # an enable symlink). A new build of it has to be picked up here, or the
+    # device keeps running the old one until its next reboot. Restarting it is
+    # safe mid-playback: it re-reads the state file and leaves the player
+    # units that are already up alone.
+    if [ -f /etc/systemd/system/hifi-bt-out.service ]; then
+        systemctl enable hifi-bt-out.service 2>/dev/null || true
+        systemctl restart hifi-bt-out.service 2>/dev/null || true
+    fi
     if [ -f /etc/systemd/system/hifi-webui.service ]; then
         systemctl enable hifi-webui.service 2>/dev/null || true
     fi
@@ -247,7 +259,8 @@ full)
 
     for f in /usr/local/bin/api_server.py /usr/local/bin/vu_meter_daemon.py \
              /usr/local/bin/sources_server.py /usr/local/bin/webui_server.py \
-             /usr/local/bin/hifi_logging.py; do
+             /usr/local/bin/hifi_logging.py /usr/local/bin/hifi_metadata.py \
+             /usr/local/bin/hifi_tags.py; do
         [ -f "$f" ] && { sed -i 's/\r$//' "$f"; chmod +x "$f"; }
     done
     chmod +x /usr/local/sbin/hifi-*.sh /usr/local/sbin/hifi-*.py 2>/dev/null || true
@@ -260,6 +273,17 @@ full)
     for svc in hifi-vumeter hifi-sources squeezelite; do
         systemctl restart "$svc" 2>/dev/null || true
     done
+    # Bluetooth speakers: hifi-bt-out.service is the only Bluetooth unit that
+    # is ever enabled, and it is what applies the owner's choice at boot and
+    # keeps the speakers connected (see the unit for why the choice cannot be
+    # an enable symlink). A new build of it has to be picked up here, or the
+    # device keeps running the old one until its next reboot. Restarting it is
+    # safe mid-playback: it re-reads the state file and leaves the player
+    # units that are already up alone.
+    if [ -f /etc/systemd/system/hifi-bt-out.service ]; then
+        systemctl enable hifi-bt-out.service 2>/dev/null || true
+        systemctl restart hifi-bt-out.service 2>/dev/null || true
+    fi
     if [ -f /etc/systemd/system/hifi-webui.service ]; then
         systemctl enable hifi-webui.service 2>/dev/null || true
         systemctl restart hifi-webui.service 2>/dev/null || true

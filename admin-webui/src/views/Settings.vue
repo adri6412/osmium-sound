@@ -8,6 +8,10 @@ import Toggle from '../components/Toggle.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
 import VuSkinPreview from '../components/VuSkinPreview.vue';
+import animCd from '../assets/anim/cd.jpg';
+import animCdfront from '../assets/anim/cdfront.jpg';
+import animVinyl from '../assets/anim/vinyl.jpg';
+import animCassette from '../assets/anim/cassette.jpg';
 
 const host = location.hostname;
 const route = useRoute();
@@ -18,6 +22,7 @@ const { t, lang } = useI18n();
 const sections = computed(() => [
   { key: 'network',   label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
   { key: 'audio',     label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
+  { key: 'btSpeakers', label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
   { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
   // 'dsp' is deliberately NOT listed here — the feature (and its room-correction
   // sub-flow) is being held back for a future paid tier. The card markup below
@@ -31,7 +36,10 @@ const sections = computed(() => [
   // A section of its own, like the kiosk's Settings → VU meter: the switch,
   // the styles with a preview each, and the store.
   { key: 'vuMeters',  label: t('settings.sections.vuMeters.label'),  desc: t('settings.sections.vuMeters.desc') },
-  { key: 'display',   label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
+  // What the kiosk draws in place of the meters when they are off. Only the
+  // choice lives here: the animations themselves exist on the device screen.
+  { key: 'animations', label: t('settings.sections.animations.label'), desc: t('settings.sections.animations.desc') },
+  { key: 'display',  label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
   { key: 'timezone',  label: t('settings.sections.timezone.label'),  desc: t('settings.sections.timezone.desc') },
   { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
   { key: 'companion', label: t('settings.sections.companion.label'), desc: t('settings.sections.companion.desc') },
@@ -41,7 +49,10 @@ const sections = computed(() => [
   { key: 'language',  label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
   { key: 'system',    label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
   { key: 'debug',     label: t('settings.sections.debug.label'),     desc: t('settings.sections.debug.desc') },
+  // Reached from System and Updates ("Check the network"), not listed itself.
+  { key: 'netCheck',  label: t('settings.sections.netCheck.label'),  desc: t('settings.sections.netCheck.desc'), hidden: true },
 ]);
+const listedSections = computed(() => sections.value.filter(s => !s.hidden));
 // 'multiroom' was this section's key before it became "Lyrion Music Server";
 // keep old bookmarks and the kiosk's deep links working. 'dsp' is held back
 // (see the sections list above) — redirect a hand-typed ?open=dsp back to the
@@ -50,6 +61,8 @@ const normalizeSection = (k) => (k === 'multiroom' ? 'lyrion' : k === 'dsp' ? ''
 const open = ref(normalizeSection(route.query.open));
 watch(() => route.query.open, (v) => { open.value = normalizeSection(v); });
 function goto(k) { router.replace({ query: k ? { open: k } : {} }); }
+// the network check's back link returns to the section it was opened from
+function goBack() { goto(open.value === 'netCheck' ? normalizeSection(route.query.from) : ''); }
 function title(k) { const s = sections.value.find(x => x.key === k); return s ? s.label : ''; }
 
 const msg = ref(''); const err = ref(false);
@@ -134,7 +147,21 @@ async function toggleKdump(enable) {
 
 // ── network ──────────────────────────────────────────────────────
 const net = ref({}); const wifi = ref([]); const ssid = ref(''); const wifiPass = ref('');
+// The band picked from a dual-band row ('2.4' / '5' / '6'), '' when the name
+// was typed by hand or exists on one band only: almost every home router
+// broadcasts the same name on 2.4 and 5 GHz, and without this the two rows
+// would be the same row.
+const wifiBand = ref('');
 const netBusy = ref(false);
+const dualSsids = computed(() => {
+  const seen = new Set(), dual = new Set();
+  for (const n of wifi.value) { if (seen.has(n.ssid)) dual.add(n.ssid); seen.add(n.ssid); }
+  return dual;
+});
+function pickNet(n) {
+  ssid.value = n.ssid;
+  wifiBand.value = dualSsids.value.has(n.ssid) ? (n.band || '') : '';
+}
 async function loadNet() { const r = await api.sys('network_status'); if (r.ok) net.value = r.data; }
 async function scanWifi() {
   netBusy.value = true; const r = await api.sys('wifi_scan'); netBusy.value = false;
@@ -142,7 +169,7 @@ async function scanWifi() {
 }
 async function connectWifi() {
   netBusy.value = true; say(t('settings.network.connecting'));
-  const r = await api.sysPost('wifi_connect', { ssid: ssid.value, password: wifiPass.value });
+  const r = await api.sysPost('wifi_connect', { ssid: ssid.value, password: wifiPass.value, band: wifiBand.value });
   netBusy.value = false;
   if (r.ok && r.data.success !== false) { say(t('settings.network.connected')); loadNet(); }
   else say(bodyMsg(r, t('settings.network.connectFailed')), true);
@@ -371,6 +398,75 @@ async function saveShellAccount() {
   say(bodyMsg(r, ok ? t('settings.services.sshLoginSaved') : t('settings.services.sshLoginFailed')), !ok);
   if (ok) { shell.password = ''; loadShell(); }
 }
+// ── Bluetooth speakers (A2DP source) ─────────────────────────────
+// Pair a speaker or a pair of headphones and it becomes a Lyrion player of
+// its own — its own name, its own queue — next to the device's built-in
+// player, which keeps the DAC to itself throughout. api_server does the
+// pairing and the connecting; a supervisor on the device does the rest (and
+// the reconnecting), so everything here is: send a command, take the state
+// that comes back.
+const bt = reactive({
+  available: false, enabled: false, adapter: false, speakers: [], found: [],
+  busy: false, scanning: false, open: '', name: '',
+});
+let btPoll = null;
+function applyBt(d) {
+  bt.available = !!d.available; bt.enabled = !!d.enabled; bt.adapter = !!d.adapter;
+  bt.speakers = d.speakers || []; bt.found = d.found || [];
+}
+async function loadBt() {
+  const r = await api.sys('bt_speakers');
+  if (r.ok && r.data && r.data.available !== undefined) applyBt(r.data);
+}
+// Every /bt_speakers/* reply carries the whole state, so one helper unpacks
+// them all — and one place decides what the owner is told.
+async function btCall(path, body) {
+  bt.busy = true;
+  const r = await api.sysPost(path, body || {});
+  bt.busy = false; bt.scanning = false;
+  if (r.ok && r.data && r.data.available !== undefined) {
+    applyBt(r.data);
+    if (r.data.message) say(r.data.message, r.data.success === false);
+    return r.data.success !== false;
+  }
+  say(bodyMsg(r, t('settings.btSpeakers.opFailed')), true);
+  return false;
+}
+const setBt = (v) => btCall('bt_speakers/enable', { enable: v });
+async function btScan() { bt.scanning = true; await btCall('bt_speakers/scan', { seconds: 12 }); }
+const btAdd = (mac) => btCall('bt_speakers/add', { mac });
+const btConnect = (sp) => btCall('bt_speakers/connect', { mac: sp.mac, connect: !sp.connected });
+const btAuto = (sp) => btCall('bt_speakers/update', { mac: sp.mac, autoconnect: !sp.autoconnect });
+function btRename(sp) {
+  const name = (bt.name || '').trim();
+  if (!name || name === sp.player) return;
+  return btCall('bt_speakers/update', { mac: sp.mac, player: name });
+}
+async function btForget(sp) {
+  if (!confirm(t('settings.btSpeakers.forgetConfirm', { name: sp.player || sp.name }))) return;
+  bt.open = '';
+  await btCall('bt_speakers/remove', { mac: sp.mac });
+}
+function btToggle(sp) {
+  bt.open = bt.open === sp.mac ? '' : sp.mac;
+  bt.name = sp.player || '';
+}
+function btState(sp) {
+  if (!sp.enabled) return t('settings.btSpeakers.switchedOff');
+  if (sp.playing) return t('settings.btSpeakers.ready');
+  if (sp.connected) return t('settings.btSpeakers.connecting');
+  return t('settings.btSpeakers.notConnected');
+}
+// Only polled while the section is open, and never on top of a command in
+// flight: with the adapter up, answering it runs bluetoothctl once per known
+// device.
+watch(open, (k) => {
+  if (btPoll) { clearInterval(btPoll); btPoll = null; }
+  if (k !== 'btSpeakers') return;
+  loadBt();
+  btPoll = setInterval(() => { if (!bt.busy) loadBt(); }, 5000);
+}, { immediate: true });
+
 // ── Tailscale — join the owner's own tailnet, exposing every port on this
 // appliance (web UI, Lyrion, SMB, ...) from anywhere that tailnet reaches, so
 // the music library stays reachable away from home. Not the old remote-support
@@ -731,6 +827,82 @@ async function setVuStyle(style) {
   else say(bodyMsg(r, t('settings.vuMeters.failed')), true);
 }
 
+// ── Now-playing animation ──────────────────────────────────────────
+// A CD, vinyl record or cassette the kiosk shows where the VU meters would be,
+// only while they are off. The two settings stay independent on the device,
+// so this just stores the pick. Choices come from the device: the built-in
+// ones this page has a name for, then those downloaded from the animation
+// store, named by their own anim.json.
+const NP_ANIMATION_IDS = ['none', 'cd', 'cdfront', 'vinyl', 'cassette'];
+const npAnimation = ref('none');
+const npAnimations = ref(NP_ANIMATION_IDS);
+const npStoreAnims = ref([]);
+async function loadNpAnimation() {
+  const r = await api.sys('nowplaying_animation');
+  if (!r.ok) return;
+  npAnimation.value = r.data.animation || 'none';
+  npStoreAnims.value = Array.isArray(r.data.store) ? r.data.store : [];
+  const known = (r.data.choices || []).filter((id) => NP_ANIMATION_IDS.includes(id));
+  if (known.length) npAnimations.value = known.concat(npStoreAnims.value.map((a) => a.id));
+}
+// the stills of the built-in scenes, as the kiosk draws them on its own
+// cards (NpAnimation with live: false, captured from the kiosk); a store
+// animation shows the preview its catalogue entry carries
+const NP_ANIMATION_PREVIEWS = { cd: animCd, cdfront: animCdfront, vinyl: animVinyl, cassette: animCassette };
+function npAnimPreview(id) {
+  if (NP_ANIMATION_PREVIEWS[id]) return NP_ANIMATION_PREVIEWS[id];
+  const a = animStore.animations.find((x) => x.id === id);
+  return (a && a.preview) || null;
+}
+function npAnimLabel(id) {
+  if (NP_ANIMATION_IDS.includes(id)) return t('settings.animations.choice.' + id);
+  const a = npStoreAnims.value.find((x) => x.id === id);
+  return (a && a.name && (a.name[lang.value] || a.name.en)) || id;
+}
+
+// ── Animation store ────────────────────────────────────────────────
+// More animations published by Osmium Sound, downloaded and checked by the
+// device itself, like the VU meter store below. A finished install refreshes
+// the choices above.
+const animStore = reactive({ animations: [], checking: false, busy: false, error: null, loaded: false });
+const animStoreSeen = ref(false);
+let animStorePoll = null;
+async function loadAnimStore(markSeen) {
+  const r = await api.sys('anim_store');
+  if (!r.ok) { animStore.loaded = true; animStore.checking = false; animStore.busy = false; return; }
+  const wasBusy = animStore.busy;
+  Object.assign(animStore, { animations: r.data.animations || [], checking: !!r.data.checking, busy: !!r.data.busy, error: r.data.error || null, loaded: true });
+  if (wasBusy && !animStore.busy) loadNpAnimation();
+  if (markSeen && animStore.animations.length) { api.sysPost('anim_store/seen', {}); animStoreSeen.value = true; }
+  if ((animStore.checking || animStore.busy) && !animStorePoll) animStorePoll = setInterval(() => loadAnimStore(false), 1500);
+  if (!animStore.checking && !animStore.busy && animStorePoll) { clearInterval(animStorePoll); animStorePoll = null; }
+}
+function animStoreName(a) { return (a.name && (a.name[lang.value] || a.name.en)) || a.id; }
+async function installAnim(a) {
+  const r = await api.sysPost('anim_store/install', { id: a.id });
+  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.animations.storeFailed')), true);
+  loadAnimStore(false);
+}
+async function removeAnim(a) {
+  if (!window.confirm(t('settings.animations.removeConfirm', { name: animStoreName(a) }))) return;
+  const r = await api.sysPost('anim_store/remove', { id: a.id });
+  if (!r.ok || r.data.success === false) say(bodyMsg(r, t('settings.animations.storeFailed')), true);
+  loadNpAnimation(); loadAnimStore(false);
+}
+const animStoreNew = computed(() => (animStoreSeen.value ? 0 : animStore.animations.filter((a) => a.new || a.update).length));
+watch(open, (k) => { if (k === 'animations') loadAnimStore(true); }, { immediate: true });
+async function checkAnimStore() {
+  await api.sysPost('anim_store/check', {});
+  animStore.checking = true;
+  loadAnimStore(false);
+}
+async function setNpAnimation(animation) {
+  if (animation === npAnimation.value) return;
+  const r = await api.sysPost('nowplaying_animation', { animation });
+  if (r.ok && r.data.success !== false) { npAnimation.value = r.data.animation; say(bodyMsg(r, t('settings.animations.saved'))); }
+  else say(bodyMsg(r, t('settings.animations.failed')), true);
+}
+
 // ── VU meter store ─────────────────────────────────────────────────
 // More looks published by Osmium Sound, downloaded by the device itself (the
 // list is signed and checked there). Re-read while the device checks the
@@ -866,6 +1038,66 @@ const changelog = reactive({ open: false, version: '', notes: '' });
 function changelogAvailable() {
   return Object.keys(kinds).some(k => upd[k] && upd[k].update_available && upd[k].notes);
 }
+// ── network check (api_server /network_check) ────────────────────
+// Walks the way an update check goes — link, router, internet, DNS, clock,
+// update server, download — and says at which step it stops. Reached from
+// System and Updates; the result is language-neutral, the words are here.
+const NC_STEPS = ['link', 'router', 'internet', 'dns', 'clock', 'ota', 'download'];
+const nc = reactive({ busy: false, failed: false, data: null, advanced: false });
+// What the owner sees: four plain steps, each the worst of the checks behind
+// it. The seven checks with addresses and timings are "advanced".
+const NC_GROUPS = [
+  { id: 'device', steps: ['link'] }, { id: 'router', steps: ['router'] },
+  { id: 'internet', steps: ['internet', 'dns', 'clock'] }, { id: 'server', steps: ['ota', 'download'] },
+];
+const NC_WARN_VERDICTS = ['link', 'router', 'internet', 'dns', 'clock', 'ota'];
+function openNetCheck() { router.replace({ query: { open: 'netCheck', from: open.value } }); }
+async function runNetCheck() {
+  if (nc.busy) return;
+  nc.busy = true; nc.failed = false;
+  const r = await api.sys('network_check');
+  nc.busy = false;
+  if (r.ok && r.data && Array.isArray(r.data.steps)) nc.data = r.data;
+  else nc.failed = true;
+}
+watch(open, (v) => { if (v === 'netCheck') runNetCheck(); }, { immediate: true });
+const ncStep = (id) => (nc.busy || !nc.data ? null : nc.data.steps.find(s => s.id === id)) || { status: nc.busy ? 'run' : 'skip' };
+const ncVerdict = () => {
+  if (!nc.data) return '';
+  return nc.data.verdict === 'ok' && nc.data.warn ? 'warn' : nc.data.verdict;
+};
+// a caveat has a sentence of its own for the step it comes from
+const ncVerdictText = () => {
+  const v = ncVerdict();
+  return v === 'warn' && NC_WARN_VERDICTS.includes(nc.data.warn)
+    ? t(`settings.netCheck.verdictWarn.${nc.data.warn}`) : t(`settings.netCheck.verdict.${v}`);
+};
+const NC_RANK = { run: 5, fail: 4, warn: 3, ok: 2, skip: 1 };
+const ncGroup = (g) => g.steps.map(id => ncStep(id).status).reduce((w, st) => (NC_RANK[st] > NC_RANK[w] ? st : w), 'skip');
+const ncMark = { ok: '✓', warn: '!', fail: '✕', skip: '○', run: '…' };
+function ncSkew(sec) {
+  const a = Math.abs(sec);
+  if (a < 3600) return `${Math.round(a / 60)} min`;
+  if (a < 86400) return `${Math.round(a / 3600)} h`;
+  return `${Math.round(a / 86400)} ${t('settings.lyrion.days')}`;
+}
+function ncReason(s) {
+  const e = s.error;
+  if (!e) return '';
+  if (e === 'http') return t('settings.netCheck.err.http', { code: s.http });
+  if (e === 'packetLoss') return t('settings.netCheck.err.packetLoss', { loss: s.loss });
+  if (e === 'clockOff') return s.skew !== undefined ? t('settings.netCheck.err.clockOff', { time: ncSkew(s.skew) }) : t('settings.netCheck.err.clockWrong');
+  if (e === 'dnsPartial') return `${t('settings.netCheck.err.dnsPartial')} ${(s.failed || []).join(', ')}`;
+  return t(`settings.netCheck.err.${e}`);
+}
+function ncDetail(s) {
+  const parts = [];
+  if (s.detail) parts.push(s.detail);
+  if (s.kbps) parts.push(s.kbps >= 1024 ? `${(s.kbps / 1024).toFixed(1)} MB/s` : `${s.kbps} KB/s`);
+  return parts.join(' · ');
+}
+const ncTime = () => (nc.data ? new Date(nc.data.at * 1000).toLocaleTimeString(lang.value === 'it' ? 'it-IT' : 'en-GB') : '');
+
 function showChangelog() {
   const withNotes = Object.keys(kinds).map(k => upd[k]).find(u => u && u.update_available && u.notes);
   if (!withNotes) return;
@@ -1251,7 +1483,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
+  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadNpAnimation(); loadAnimStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1260,7 +1492,8 @@ onMounted(async () => {
 });
 onUnmounted(() => {
   if (lyrionPoll) clearInterval(lyrionPoll); if (skinPoll) clearInterval(skinPoll); if (tailscalePoll) clearInterval(tailscalePoll);
-  if (timezonePoll) clearInterval(timezonePoll); if (vuStorePoll) clearInterval(vuStorePoll);
+  if (timezonePoll) clearInterval(timezonePoll); if (vuStorePoll) clearInterval(vuStorePoll); if (animStorePoll) clearInterval(animStorePoll);
+  if (btPoll) clearInterval(btPoll);
   window.dispatchEvent(new CustomEvent('hifi-settings-active', { detail: false }));
 });
 </script>
@@ -1272,9 +1505,9 @@ onUnmounted(() => {
     <h2 class="page">{{ t('settings.title') }}</h2>
     <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
     <div class="card" style="padding: 6px 16px;">
-      <div v-for="s in sections" :key="s.key" class="net between" @click="goto(s.key)">
+      <div v-for="s in listedSections" :key="s.key" class="net between" @click="goto(s.key)">
         <span>
-          <span style="display:block;">{{ s.label }}<span v-if="s.key === 'vuMeters' && vuStoreNew" class="dot-new"></span></span>
+          <span style="display:block;">{{ s.label }}<span v-if="(s.key === 'vuMeters' && vuStoreNew) || (s.key === 'animations' && animStoreNew)" class="dot-new"></span></span>
           <span class="muted">{{ s.desc }}</span>
         </span>
         <span class="silver" style="font-size: 18px;">›</span>
@@ -1284,7 +1517,7 @@ onUnmounted(() => {
 
   <!-- single open section -->
   <template v-else>
-    <a class="backlink" href="#" @click.prevent="goto('')">← {{ t('settings.backToSettings') }}</a>
+    <a class="backlink" href="#" @click.prevent="goBack()">← {{ open === 'netCheck' && route.query.from ? title(normalizeSection(route.query.from)) : t('settings.backToSettings') }}</a>
     <h2 class="page">{{ title(open) }}</h2>
     <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
 
@@ -1296,13 +1529,18 @@ onUnmounted(() => {
         <button class="secondary" :disabled="netBusy" @click="scanWifi">{{ t('settings.network.scanWifi') }}</button>
         <button class="secondary" :disabled="netBusy" @click="wired">{{ t('settings.network.useWired') }}</button>
       </div>
-      <div v-for="n in wifi" :key="n.ssid" class="net between" @click="ssid = n.ssid">
-        <span>{{ n.ssid }} <span class="check" v-if="n.in_use">✓</span></span>
+      <div v-for="n in wifi" :key="n.ssid + '|' + (n.band || '')" class="net between" @click="pickNet(n)">
+        <span>{{ n.ssid }}
+          <span class="band" v-if="n.band && dualSsids.has(n.ssid)">{{ n.band }} GHz</span>
+          <span class="check" v-if="n.in_use">✓</span></span>
         <span class="muted">{{ n.signal }}%</span>
       </div>
       <template v-if="wifi.length || ssid">
-        <label>{{ t('settings.network.ssidLabel') }}</label><input v-model="ssid" />
-        <label>{{ t('settings.network.passwordLabel') }}</label><input v-model="wifiPass" type="password" />
+        <label>{{ t('settings.network.ssidLabel') }}</label><input v-model="ssid" @input="wifiBand = ''" />
+        <!-- In clear on purpose: a Wi-Fi key is long, typed once, and a typo
+             hidden behind dots is the commonest reason a join fails. -->
+        <label>{{ t('settings.network.passwordLabel') }}</label>
+        <input v-model="wifiPass" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
         <div style="margin-top: 12px;"><button :disabled="netBusy" @click="connectWifi">{{ t('settings.network.connect') }}</button></div>
       </template>
 
@@ -1346,6 +1584,74 @@ onUnmounted(() => {
       <label>{{ t('settings.audio.playerName') }}</label>
       <div class="row"><input v-model="playerName" /><button class="secondary fit" @click="saveName">{{ t('common.save') }}</button></div>
       <p class="sub" style="margin-top: 4px;">{{ t('settings.audio.playerNameHint') }}</p>
+    </div>
+
+    <!-- Bluetooth speakers: pair one and it turns into a player of its own,
+         next to the built-in one. The DAC is untouched throughout. -->
+    <div class="card" v-if="open === 'btSpeakers'">
+      <p class="sub">{{ t('settings.btSpeakers.help') }}</p>
+      <p class="sub" v-if="!bt.available">{{ t('settings.btSpeakers.unavailable') }}</p>
+      <template v-else>
+        <div class="between item">
+          <span>{{ t('settings.btSpeakers.enable') }}
+            <span class="muted">{{ t('settings.btSpeakers.enableHint') }}</span>
+          </span>
+          <Toggle :model-value="bt.enabled" :disabled="bt.busy" @update:model-value="setBt" />
+        </div>
+
+        <template v-if="bt.enabled">
+          <p class="sub" v-if="!bt.adapter">{{ t('settings.btSpeakers.noAdapter') }}</p>
+          <template v-else>
+            <label>{{ t('settings.btSpeakers.yours') }}</label>
+            <p class="sub" v-if="!bt.speakers.length">{{ t('settings.btSpeakers.none') }}</p>
+            <template v-for="sp in bt.speakers" :key="sp.mac">
+              <div class="net between" @click="btToggle(sp)">
+                <span>
+                  <span style="display:block;">{{ sp.player || sp.name }}</span>
+                  <span class="muted">{{ btState(sp) }}</span>
+                </span>
+                <span class="check">{{ bt.open === sp.mac ? '▾' : '▸' }}</span>
+              </div>
+              <div v-if="bt.open === sp.mac" style="padding: 0 4px 10px;">
+                <label>{{ t('settings.btSpeakers.playerName') }}</label>
+                <div class="row">
+                  <input v-model="bt.name" />
+                  <button class="secondary fit" :disabled="bt.busy" @click="btRename(sp)">{{ t('common.save') }}</button>
+                </div>
+                <p class="sub">{{ t('settings.btSpeakers.playerNameHint') }}</p>
+                <div class="between item">
+                  <span>{{ t('settings.btSpeakers.autoconnect') }}
+                    <span class="muted">{{ t('settings.btSpeakers.autoconnectHint') }}</span>
+                  </span>
+                  <Toggle :model-value="sp.autoconnect" :disabled="bt.busy" @update:model-value="() => btAuto(sp)" />
+                </div>
+                <div class="row" style="margin-top: 10px;">
+                  <button class="secondary" :disabled="bt.busy" @click="btConnect(sp)">
+                    {{ sp.connected ? t('settings.btSpeakers.disconnect') : t('settings.btSpeakers.connect') }}
+                  </button>
+                  <button class="danger fit" :disabled="bt.busy" @click="btForget(sp)">{{ t('settings.btSpeakers.forget') }}</button>
+                </div>
+                <p class="sub" style="margin-top: 6px;">{{ t('settings.btSpeakers.address') }}: <span class="silver">{{ sp.mac }}</span></p>
+              </div>
+            </template>
+
+            <label>{{ t('settings.btSpeakers.found') }}</label>
+            <p class="sub">{{ t('settings.btSpeakers.searchHint') }}</p>
+            <button :disabled="bt.busy" @click="btScan">
+              {{ bt.scanning ? t('settings.btSpeakers.searching') : t('settings.btSpeakers.search') }}
+            </button>
+            <p class="sub" v-if="bt.scanning">{{ t('settings.btSpeakers.searchingHint') }}</p>
+            <p class="sub" v-else-if="!bt.found.length">{{ t('settings.btSpeakers.foundNone') }}</p>
+            <div v-for="d in bt.found" :key="d.mac" class="net between" @click="btAdd(d.mac)">
+              <span>
+                <span style="display:block;">{{ d.name || d.mac }}</span>
+                <span class="muted">{{ d.audio ? d.mac : t('settings.btSpeakers.notAudio') }}</span>
+              </span>
+              <span class="check">+</span>
+            </div>
+          </template>
+        </template>
+      </template>
     </div>
 
     <!-- Sources (native — talks directly to sources_server.py through
@@ -1572,6 +1878,10 @@ onUnmounted(() => {
         </span>
         <Toggle :model-value="vuMeter" @update:model-value="setVuMeter" />
       </div>
+      <!-- meters off: the screen can show an animation instead, picked in its own section -->
+      <p v-if="!vuMeter" class="muted" style="margin: 12px 0 0;">{{ t('settings.vuMeters.animationHint') }}
+        <a href="#" @click.prevent="goto('animations')">{{ t('settings.vuMeters.chooseAnimation') }}</a>
+      </p>
 
       <template v-if="vuMeter && vuStyles.length > 1">
         <label style="margin-top: 16px;">{{ t('settings.vuMeters.style') }}</label>
@@ -1614,6 +1924,58 @@ onUnmounted(() => {
       </div>
       <button v-if="vuStore.loaded && !vuStore.checking && !vuStore.busy" class="ghost" style="margin-top: 12px;" @click="checkVuStore">
         {{ t('settings.vuMeters.storeCheck') }}
+      </button>
+    </div>
+
+    <!-- Animations: only the pick, a still of each; the animations run on the kiosk alone -->
+    <div class="card" v-if="open === 'animations'">
+      <p class="sub">{{ t('settings.animations.help') }}</p>
+      <template v-if="vuMeter">
+        <p class="muted" style="margin: 0 0 12px;">{{ t('settings.animations.vuOnNote') }}</p>
+        <button class="secondary" @click="setVuMeter(false)">{{ t('settings.animations.turnOffVu') }}</button>
+      </template>
+      <template v-else>
+        <div class="vu-grid">
+          <button v-for="a in npAnimations" :key="a" type="button" class="vu-skin" :class="{ sel: npAnimation === a }"
+                  @click="setNpAnimation(a)">
+            <span class="anim-preview">
+              <img v-if="npAnimPreview(a)" :src="npAnimPreview(a)" :alt="npAnimLabel(a)" loading="lazy" />
+              <span v-else-if="a === 'none'" class="muted">{{ t('settings.animations.noneHelp') }}</span>
+            </span>
+            <span class="vu-skin-name">
+              <span>{{ npAnimLabel(a) }}</span>
+              <span v-if="npAnimation === a" class="check">✓</span>
+            </span>
+          </button>
+        </div>
+      </template>
+
+      <label style="margin-top: 18px;">{{ t('settings.animations.storeTitle') }}</label>
+      <p class="muted" style="margin: 0 0 10px;">{{ t('settings.animations.storeHelp') }}</p>
+      <p v-if="animStore.error" class="muted" style="color: #f0b4b4;">{{ animStore.error.message }}</p>
+      <p v-if="!animStore.animations.length && (!animStore.loaded || animStore.checking)" class="muted">{{ t('settings.animations.storeLoading') }}</p>
+      <p v-else-if="!animStore.animations.length && !animStore.error" class="muted">{{ t('settings.animations.storeEmpty') }}</p>
+      <div class="vu-grid">
+        <div v-for="a in animStore.animations" :key="a.id" class="vu-card" :class="{ fresh: a.new }">
+          <div class="vu-preview anim">
+            <img v-if="a.preview" :src="a.preview" :alt="animStoreName(a)" />
+            <span v-if="a.new" class="pill gold vu-badge">{{ t('settings.vuMeters.badgeNew') }}</span>
+            <span v-else-if="a.update" class="pill gold vu-badge">{{ t('settings.vuMeters.badgeUpdate') }}</span>
+          </div>
+          <strong>{{ animStoreName(a) }}</strong>
+          <span class="muted">{{ [a.author, vuStoreSize(a.size)].filter(Boolean).join(' · ') }}</span>
+          <span v-if="a.jobError" class="muted" style="color: #f0b4b4;">{{ a.jobError.message }}</span>
+          <button v-if="a.job === 'downloading' || a.job === 'installing'" disabled>
+            {{ a.job === 'downloading' ? t('settings.vuMeters.downloading') : t('settings.vuMeters.installing') }}
+          </button>
+          <button v-else-if="!a.supported" class="secondary" disabled>{{ t('settings.vuMeters.unsupported') }}</button>
+          <button v-else-if="a.update" @click="installAnim(a)">{{ t('settings.vuMeters.update') }}</button>
+          <button v-else-if="a.installed" class="secondary" @click="removeAnim(a)">{{ t('settings.vuMeters.remove') }}</button>
+          <button v-else @click="installAnim(a)">{{ t('settings.vuMeters.install') }}</button>
+        </div>
+      </div>
+      <button v-if="animStore.loaded && !animStore.checking && !animStore.busy" class="ghost" style="margin-top: 12px;" @click="checkAnimStore">
+        {{ t('settings.animations.storeCheck') }}
       </button>
     </div>
 
@@ -1721,6 +2083,55 @@ onUnmounted(() => {
       </div>
       <div class="row" style="margin-top: 10px;" v-if="changelogAvailable()">
         <button class="ghost" @click="showChangelog">{{ t('settings.updates.whatsNew') }}</button>
+      </div>
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.netCheck.openHelp') }}</p>
+        <button class="secondary" style="display: inline-block;" @click="openNetCheck">{{ t('settings.netCheck.open') }}</button>
+      </div>
+    </div>
+
+    <!-- Network check: reached from Updates and System -->
+    <div class="card" v-if="open === 'netCheck'">
+      <p class="sub">{{ t('settings.netCheck.help') }}</p>
+      <div v-if="nc.busy" class="msg">{{ t('settings.netCheck.running') }}</div>
+      <div v-else-if="nc.failed" class="msg err">{{ t('settings.netCheck.failed') }}</div>
+      <div v-else-if="nc.data" class="msg nc-verdict" :class="ncVerdict()">{{ ncVerdictText() }}</div>
+      <div v-for="g in NC_GROUPS" :key="g.id" class="item nc-step nc-plain">
+        <span class="nc-mark" :class="ncGroup(g)">{{ ncMark[ncGroup(g)] }}</span>
+        <span class="nc-body between">
+          <span>{{ t(`settings.netCheck.groups.${g.id}`) }}</span>
+          <span class="nc-state" :class="ncGroup(g)">{{ t(`settings.netCheck.status.${ncGroup(g)}`) }}</span>
+        </span>
+      </div>
+      <div class="row" style="margin-top: 12px;">
+        <button :disabled="nc.busy" @click="runNetCheck">{{ nc.busy ? t('settings.netCheck.running') : (nc.data ? t('settings.netCheck.again') : t('settings.netCheck.run')) }}</button>
+        <button class="ghost" @click="nc.advanced = !nc.advanced">{{ nc.advanced ? t('settings.netCheck.advancedHide') : t('settings.netCheck.advanced') }}</button>
+      </div>
+      <div v-if="nc.advanced" class="nc-advanced">
+      <template v-for="id in NC_STEPS" :key="id">
+        <div class="item nc-step">
+          <span class="nc-mark" :class="ncStep(id).status">{{ ncMark[ncStep(id).status] }}</span>
+          <span class="nc-body">
+            <span class="between">
+              <span>{{ t(`settings.netCheck.steps.${id}`) }}</span>
+              <span class="muted nc-detail">{{ ncDetail(ncStep(id)) }}</span>
+            </span>
+            <span v-if="ncStep(id).error" class="nc-why" :class="ncStep(id).status">{{ ncReason(ncStep(id)) }}</span>
+            <span v-else-if="ncStep(id).status === 'skip' && nc.data" class="nc-why">{{ t('settings.netCheck.status.skip') }}</span>
+            <span v-for="src in (id === 'ota' && ncStep(id).sources) || []" :key="src.id" class="nc-src">
+              <span class="nc-mark" :class="src.status">{{ ncMark[src.status] }}</span>
+              <span class="nc-body">
+                <span class="between">
+                  <span>{{ t(`settings.netCheck.sources.${src.id}`) }}</span>
+                  <span class="muted nc-detail">{{ src.host }}<template v-if="src.ms !== undefined"> · {{ src.ms }} ms</template></span>
+                </span>
+                <span v-if="src.error" class="nc-why" :class="src.status">{{ ncReason(src) }}</span>
+              </span>
+            </span>
+          </span>
+        </div>
+      </template>
+      <p class="muted" v-if="nc.data && !nc.busy" style="margin-top: 10px;">{{ t('settings.netCheck.lastRun', { time: ncTime() }) }} · {{ nc.data.channel }}</p>
       </div>
     </div>
 
@@ -1851,6 +2262,10 @@ onUnmounted(() => {
       <div class="row">
         <button class="secondary" @click="reboot">{{ t('settings.system.reboot') }}</button>
         <button class="secondary" @click="shutdown">{{ t('settings.system.shutdown') }}</button>
+      </div>
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.netCheck.openHelp') }}</p>
+        <button class="secondary" style="display: inline-block;" @click="openNetCheck">{{ t('settings.netCheck.open') }}</button>
       </div>
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
         <p class="sub">{{ t('settings.system.supportBundleHint') }}</p>

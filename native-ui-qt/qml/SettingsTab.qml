@@ -26,6 +26,14 @@ Item {
     // la barra dei tab per decidere se controllare gli aggiornamenti
     property bool autoCheck: Sys.conf("ota-autocheck", "1") !== "0"
     property bool smbShowPw: false
+    // Bluetooth speakers: which speaker's panel is open, and the name being
+    // typed into it. The name is held here rather than written straight back
+    // to cfg because a rebuild would otherwise throw away a half-typed word
+    // every time the five-second refresh lands.
+    property int btBand: -1
+    property string btNameEdit: ""
+    property bool btBusy: false
+    property bool btScanning: false
     // Procedura guidata "aggiungi una cartella di rete". Sostituisce le quattro
     // caselle vuote (server/share/utente/password), che sono inutilizzabili per
     // chi non sa gia' cos'e' una condivisione SMB: prima si cercano da soli i
@@ -35,7 +43,7 @@ Item {
     property bool wizManual: false
     property string wizHost: ""; property string wizName: ""; property string wizShare: ""
     property string wizUser: ""; property string wizPw: ""
-    property bool wizRw: false; property bool wizBusy: false
+    property bool wizRw: true; property bool wizBusy: false
     property string wizErr: ""; property string wizDetail: ""; property bool wizDetailOpen: false
     property var wizShares: []           // [{name, comment}]
     property bool wizNeedsAuth: false
@@ -49,6 +57,13 @@ Item {
     property bool fmtWatch: false
     property var timezones: []
     property var thirdParty: null
+    // network check (api_server /network_check): the last result, and the
+    // section it was opened from, where the back arrow returns
+    property var nc: null
+    property bool ncBusy: false
+    property bool ncFailed: false
+    property bool ncAdvanced: false      // addresses, timings and sources, for whoever helps the owner
+    property string backTo: ""
 
     // Sections are addressed by id, never by position: a new one moves every
     // index after it (openSection() also takes the id)
@@ -60,8 +75,12 @@ Item {
         { id: "language", icon: "globe", key: "settings.sections.language" },
         { id: "sources", icon: "hard-drive", key: "settings.sections.sources" },
         { id: "audio", icon: "volume-2", key: "settings.sections.audio" },
+        { id: "btSpeakers", icon: "bluetooth", key: "settings.sections.btSpeakers" },
         { id: "playback", icon: "sliders", key: "settings.sections.playback" },
         { id: "vuMeters", icon: "audio-lines", key: "settings.sections.vuMeters" },
+        { id: "animations", icon: "disc-3", key: "settings.sections.animations" },
+        { id: "uiMotion", icon: "move", key: "settings.sections.uiMotion" },
+        { id: "library", icon: "library", key: "settings.sections.library" },
         { id: "multiroom", icon: "speaker", key: "settings.sections.multiroom" },
         { id: "alarm", icon: "alarm-clock", key: "settings.sections.alarm" },
         { id: "network", icon: "wifi", key: "settings.sections.network" },
@@ -76,7 +95,10 @@ Item {
         { id: "systemInfo", icon: "info", key: "settings.sections.systemInfo" },
         { id: "updates", icon: "download", key: "settings.sections.updates" },
         { id: "systemControls", icon: "power", key: "settings.sections.systemControls" },
-        { id: "thirdPartyNotices", icon: "scroll-text", key: "settings.sections.thirdPartyNotices" }]
+        { id: "thirdPartyNotices", icon: "scroll-text", key: "settings.sections.thirdPartyNotices" },
+        // reached from System info and Updates, not listed on its own
+        { id: "netCheck", icon: "network", key: "settings.sections.netCheck", hidden: true }]
+    readonly property var listedSecs: secs.filter(function(s) { return !s.hidden })
 
     Component.onCompleted: Ui.settings = root
 
@@ -95,22 +117,38 @@ Item {
         property string displayMode: "gui"; property string uiResolution: "auto"; property string uiRefresh: "native"; property bool uiRefreshSupported: false
         property string timezone: ""
         property bool vuMeter: true; property int autoexpand: 0; property bool playerEnabled: true
+        // Bluetooth speakers (api_server /bt_speakers). btSpeakers are the ones
+        // set up as players, btFound whatever else the last search saw.
+        property bool btAvailable: false; property bool btEnabled: false; property bool btAdapter: false
+        property var btSpeakers: []
+        property var btFound: []
         property var vuStyles: []                                   // [{id, name:{en,it}}]; the choice is Player.vuStyle
+        property string npAnimation: "none"                         // Now Playing animation with the VU meters off
         // VU meter store (api_server /vu_store): the full list only while the
         // section is open, the count of news for the dot on its row always
         property var vuStore: ({ skins: [], checking: false, busy: false, error: null, loaded: false })
         property int vuStoreNew: 0
+        // the animation store (api_server /anim_store), the same way; storeAnims
+        // are the animations downloaded from it, offered next to the built-in ones
+        property var animStore: ({ animations: [], checking: false, busy: false, error: null, loaded: false })
+        property int animStoreNew: 0
+        property var storeAnims: []                                 // [{id, name:{en,it}, scene}]
         property string otaChannel: "prod"; property var otaChannels: ["prod", "dev"]
         property string audioCur: ""; property var audio: []          // [{id,name}]
         property string lmsMode: "local"; property string lmsHost: ""; property string playerName: ""; property string lyrionChannel: "release"
         property string lmsSkin: "unset"; property string skinState: ""; property string skinMsg: ""
         property string lyrInstalled: ""; property var lyrChVer: ["", "", ""]; property string lyrStatus: ""; property int lyrPct: 0; property bool lyrRunning: false
         property var disc: []                                       // [{name, ip}]
+        // the server's library: totals, last scan, a scan in progress
+        property var lib: ({ albums: -1, artists: -1, songs: -1, duration: 0, lastScan: 0, scanning: false, progress: "", pct: -1 })
+        // album and artist information from the web (sources_server /api/meta/settings)
+        property var meta: ({ available: false, online: true, prefetch: true, keep: true, albums: 0, artists: 0, bytes: 0,
+                              running: false, done: 0, total: 0, location: "", detached: false, places: [] })
         property var players: []                                    // [{id,name,sync}]
         property var alarms: []                                     // [{id,time,on}]
         property string netType: ""; property string netSsid: ""; property string netIp: ""; property string netDev: ""; property string netSubnet: ""; property bool netConnected: false
         property var ifaces: []                                     // [{name,addr,wifi,active}]
-        property var wifi: []                                       // [{ssid,security,signal}]
+        property var wifi: []                                       // [{ssid,security,signal,band}]
         property var upd: [{cur: "", latest: "", avail: false}, {cur: "", latest: "", avail: false}, {cur: "", latest: "", avail: false}]
         property bool updChecking: false; property bool updCheckFailed: false
         property string otaState: ""; property string otaMsg: ""; property int otaPct: 0
@@ -135,6 +173,18 @@ Item {
                 if (--pending === 0 && g === gen) { loaded = true; root.dataChanged() }
             }, 5000)
         }
+        // Bluetooth, read only while its own section is open: with the adapter
+        // up, answering it runs bluetoothctl once per known device, which is
+        // not something load() should do on every settings change.
+        function loadBt() {
+            Api.get(api("/bt_speakers"), function(ok, d) {
+                if (ok && d && typeof d === "object") {
+                    btAvailable = !!d.available; btEnabled = !!d.enabled; btAdapter = !!d.adapter
+                    btSpeakers = d.speakers || []; btFound = d.found || []
+                }
+                root.btBusy = false; root.btScanning = false; root.rebuild()
+            }, 130000)
+        }
         // the store's list, with previews: separate from load(), which runs on
         // every settings change and would carry the images each time
         function loadStore(markSeen) {
@@ -146,6 +196,18 @@ Item {
                 vuStore = d
                 if (wasBusy && !d.busy) get(api("/vu_style"), function(v) { vuStyles = v.styles || [] })
                 if (markSeen && d.skins.length) Api.post(api("/vu_store/seen"), {}, function() { vuStoreNew = 0 }, 5000)
+                root.rebuild()
+            }, 10000)
+        }
+        function loadAnimStore(markSeen) {
+            Api.get(api("/anim_store"), function(ok, d) {
+                if (!ok || !d || typeof d !== "object") { animStore = Object.assign({}, animStore, { loaded: true, checking: false, busy: false }); root.rebuild(); return }
+                var wasBusy = animStore.busy
+                d.loaded = true
+                d.animations = d.animations || []
+                animStore = d
+                if (wasBusy && !d.busy) get(api("/nowplaying_animation"), function(v) { storeAnims = v.store || [] })
+                if (markSeen && d.animations.length) Api.post(api("/anim_store/seen"), {}, function() { animStoreNew = 0 }, 5000)
                 root.rebuild()
             }, 10000)
         }
@@ -180,6 +242,31 @@ Item {
             })(i)
         }
         function str(d, k, fb) { return d[k] !== undefined && d[k] !== null ? String(d[k]) : (fb || "") }
+        // Library totals and scan state come from Lyrion itself (server
+        // queries, no player needed): `serverstatus` for the scan, `info
+        // total` for the counts. Apart from load()'s pending count, so a
+        // server that is slow to answer never holds the page in "loading".
+        function loadLibrary() {
+            var out = Object.assign({}, lib), left = 5
+            function done() { if (--left === 0) { lib = out; root.dataChanged() } }
+            Player.queryServer(["serverstatus", "0", "0"], function(ok, r) {
+                if (ok && r) {
+                    out.lastScan = Number(r.lastscan || 0)
+                    out.scanning = Number(r.rescan || 0) !== 0
+                    out.progress = r.progressname ? String(r.progressname) : ""
+                    var tot = Number(r.progresstotal || 0)
+                    out.pct = out.scanning && tot > 0 ? Math.min(100, Math.round(100 * Number(r.progressdone || 0) / tot)) : -1
+                }
+                done()
+            })
+            var ents = ["albums", "artists", "songs", "duration"]
+            for (var i = 0; i < ents.length; i++) (function(e) {
+                Player.queryServer(["info", "total", e, "?"], function(ok, r) {
+                    if (ok && r && r["_" + e] !== undefined) out[e] = Number(r["_" + e])
+                    done()
+                })
+            })(ents[i])
+        }
         function load() {
             gen++
             get(api("/system_info"), function(d) {
@@ -196,6 +283,8 @@ Item {
             get(api("/pointer_status"), function(d) { pointerEnabled = d.enabled !== false; pointerAvailable = d.available !== false })
             get(api("/vu_meter"), function(d) { vuMeter = d.enabled !== false })
             get(api("/vu_style"), function(d) { vuStyles = d.styles || [] })
+            get(api("/nowplaying_animation"), function(d) { npAnimation = str(d, "animation", "none"); storeAnims = d.store || [] })
+            get(api("/anim_store?summary=1"), function(d) { animStoreNew = Number(d.new || 0) + Number(d.updates || 0) })
             get(api("/vu_store?summary=1"), function(d) { vuStoreNew = Number(d.new || 0) + Number(d.updates || 0) })
             get(api("/player_enabled"), function(d) { playerEnabled = d.enabled !== false })
             get(api("/ui_refresh"), function(d) { uiRefreshSupported = !!d.supported; uiRefresh = str(d, "mode", "native") })
@@ -230,6 +319,20 @@ Item {
             get(src("/api/lms_skin"), function(d) { lmsSkin = str(d, "skin", "unset") })
             get(src("/api/lms_skin_status"), function(d) { skinState = str(d, "state"); skinMsg = str(d, "message") })
             get(src("/api/sources"), function(d) { sources = d.sources || [] })
+            loadLibrary()
+            get(src("/api/meta/settings"), function(d) {
+                if (d.online === undefined) return
+                var c = d.cache || {}, st = d.prefetch_state || {}
+                var places = (d.locations || []).map(function(x) {
+                    return { path: String(x.path || ""), kind: String(x.kind || ""), label: String(x.label || ""),
+                             usable: !!x.usable, reason: String(x.reason || ""), current: !!x.current,
+                             free: Number(x.free || 0), total: Number(x.total || 0) }
+                })
+                meta = { available: true, online: !!d.online, prefetch: !!d.prefetch, keep: d.keep !== false,
+                         albums: Number(c.albums || 0), artists: Number(c.artists || 0),
+                         bytes: Number(c.bytes || 0), running: !!st.running, done: Number(st.done || 0), total: Number(st.total || 0),
+                         location: String(c.location || ""), detached: !!c.detached, places: places }
+            })
             get(src("/api/usb"), function(d) { usb = d.disks || [] })
             get(src("/api/internal/disks"), function(d) {
                 var out = []
@@ -283,7 +386,7 @@ Item {
         }
         function loadWifi() {
             Api.get(api("/wifi_scan"), function(ok, d) {
-                wifi = ok && d && d.networks ? d.networks.map(function(n) { return { ssid: String(n.ssid || ""), security: String(n.security || ""), signal: Number(n.signal || 0) } }) : []
+                wifi = ok && d && d.networks ? d.networks.map(function(n) { return { ssid: String(n.ssid || ""), security: String(n.security || ""), signal: Number(n.signal || 0), band: String(n.band || ""), saved: !!n.saved } }) : []
                 if (Ui.dialogs) Ui.dialogs.updateWifi(wifi)
             }, 20000)
         }
@@ -327,7 +430,9 @@ Item {
         function onPlayerChanged() { if (root.active >= 0) root.rebuild() }
     }
     signal dataChanged()
+    property bool netReloading: false
     onDataChanged: {
+        if (netReloading) { netReloading = false; msg = "" }
         if (active >= 0) rebuild()
         if (Ui.dialogs && Ui.dialogs.active) Ui.dialogs.formatStatus(cfg.fmtState, cfg.fmtMsg, cfg.fmtPct)
     }
@@ -346,23 +451,59 @@ Item {
                            function(ok) { if (ok) apply() })
     }
     Timer { id: reloadLater; interval: 400; onTriggered: cfg.load() }
+    // while Lyrion scans, the Library rows follow it (only with that section open)
+    Timer { interval: 2000; repeat: true; running: cfg.lib.scanning && root.active >= 0 && root.secs[root.active].id === "multiroom"; onTriggered: cfg.loadLibrary() }
+    function fmtDuration(sec) {
+        var d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60)
+        if (d > 0) return d + " " + Tr.t("settings.lyrion.days") + " " + h + " h"
+        if (h > 0) return h + " h " + m + " min"
+        return m + " min"
+    }
+    function fmtWhen(ts) { return Qt.formatDateTime(new Date(ts * 1000), I18n.lang === "it" ? "dd/MM/yyyy HH:mm" : "yyyy-MM-dd HH:mm") }
     function setPref(name, value) { Player.cmd(["playerpref", name, value]) }
 
     function enter() { cfg.load(); goRoot() }
     function say(text, err) { msg = text; msgErr = !!err; rebuild() }
-    function goRoot() { active = -1; msg = ""; pendAct = ""; rows = []; page.contentY = 0; appear() }
+    // Settings → Network → "Connect to Wi-Fi". The answer decides the message:
+    // before, the page said "now using Wi-Fi" the moment the request left,
+    // whatever NetworkManager made of it. A failed attempt reopens the window
+    // with the name and the key still in and the reason under them, so one
+    // wrong character is corrected instead of typed all over again.
+    function wifiAsk(pre) {
+        cfg.loadWifi()
+        Ui.dialogs.wifi(cfg.wifi, function(ssid, pw, band) {
+            if (!ssid) return
+            say(Tr.tf("settings.network.connecting", "ssid", ssid))
+            // band is set only when the same name is on more than one band:
+            // only then is the profile pinned to one of them. nmcli can take
+            // up to 45 s to give up, so the request waits for it.
+            Api.post(cfg.api("/wifi_connect"), { ssid: ssid, password: pw || "", band: band || "" }, function(ok, d) {
+                cfg.load()
+                if (ok && d && d.success) { say(Tr.tf("settings.network.switchedToWifi", "ssid", ssid)); return }
+                var why = Tr.tf("settings.network.connectFailed", "ssid", ssid)
+                say(why, true)
+                wifiAsk({ ssid: ssid, pass: pw || "", band: band || "", err: why })
+            }, 60000)
+        }, pre)
+    }
+    function goRoot() { active = -1; msg = ""; pendAct = ""; backTo = ""; rows = []; page.contentY = 0; appear() }
+    function goBack() { if (backTo) openSection(backTo); else goRoot() }
     function openSection(i, mark) {
         if (typeof i === "string") i = secIndex(i)
         if (i < 0 || i >= secs.length) return
         var id = secs[i].id
-        active = i; msg = ""; pendAct = ""; countdown = 0
+        active = i; msg = ""; pendAct = ""; countdown = 0; backTo = ""
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
+        btBand = -1; btNameEdit = ""; btBusy = false; btScanning = false
         wizReset()
         if (id === "timezone" && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
         if (id === "webRemote") cfg.mintToken()
         if (id === "multiroom" && cfg.lmsMode === "follow") cfg.loadDiscover()
+        if (id === "multiroom") cfg.loadLibrary()
+        if (id === "btSpeakers") { btBusy = true; cfg.loadBt() }
         if (id === "vuMeters") cfg.loadStore(true)
+        if (id === "animations") cfg.loadAnimStore(true)
         if (id === "thirdPartyNotices" && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
         rebuild(); page.contentY = 0; appear()
         if (mark) { pendingMark = mark; markTimer.restart() }
@@ -396,7 +537,7 @@ Item {
     // ─── procedura guidata "cartella di rete" ──────────────────────────────
     function wizReset() {
         wiz = -1; wizManual = false; wizHost = ""; wizName = ""; wizShare = ""
-        wizUser = ""; wizPw = ""; wizRw = false; wizBusy = false
+        wizUser = ""; wizPw = ""; wizRw = true; wizBusy = false
         wizErr = ""; wizDetail = ""; wizDetailOpen = false
         wizShares = []; wizNeedsAuth = false; wizCanList = true; wizNoClient = false
         scanState = ""; scanPct = 0; scanHosts = []
@@ -528,8 +669,8 @@ Item {
     }
 
     function appear() { fadeAnim.restart() }
-    NumberAnimation { id: fadeAnim; target: body; property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
-    Keys.onEscapePressed: if (active >= 0) goRoot()
+    NumberAnimation { id: fadeAnim; target: body; property: "opacity"; from: 0; to: 1; duration: Theme.dur(120); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
+    Keys.onEscapePressed: if (active >= 0) goBack()
 
     // ─── costruzione delle righe ───────────────────────────────────────────
     property var _stack: []
@@ -562,6 +703,21 @@ Item {
     function dir(name, act) { return push({ type: "dir", label: name, arg: name, act: act }) }
     function miniRow() { return push({ type: "mini", mini: [] }) }
     function box(fn) { var b = push({ type: "box", children: [] }); begin(b.children); fn(); end(); return b }
+
+    // A place the downloaded information may be kept, as the owner reads it:
+    // "USB disk «MUSIC»" and how much room is left on it.
+    function metaPlaceName(p) {
+        if (p.kind === "internal") return Tr.t("settings.lyrion.metaHere")
+        if (p.kind === "data") return Tr.t("settings.lyrion.metaData")
+        var key = p.kind === "usb" ? "metaUsb" : p.kind === "network" ? "metaNetwork" : "metaDisk"
+        return Tr.tf("settings.lyrion." + key, "name", p.label)
+    }
+    function metaPlaceRoom(p) {
+        if (!p.usable)
+            return Tr.t(p.reason === "network" ? "settings.lyrion.metaNoNetwork"
+                        : p.reason === "readonly" ? "settings.lyrion.metaReadonly" : "settings.lyrion.metaGone")
+        return p.total > 0 ? Tr.tf("settings.lyrion.metaFree", "size", humanSize(p.free)) : ""
+    }
 
     function humanSize(bytes) {
         var gb = bytes / (1024 * 1024 * 1024)
@@ -597,7 +753,11 @@ Item {
             case "audio": secAudio(); break
             case "playback": secPlayback(); break
             case "vuMeters": secVuMeters(); break
+            case "animations": secAnimations(); break
+            case "uiMotion": secUiMotion(); break
+            case "library": secLibrary(); break
             case "multiroom": secMultiroom(); break
+            case "btSpeakers": secBtSpeakers(); break
             case "alarm": secAlarm(); break
             case "network": secNetwork(); break
             case "webRemote": secWebremote(); break
@@ -612,10 +772,16 @@ Item {
             case "updates": secUpdates(); break
             case "systemControls": secSysctl(); break
             case "thirdPartyNotices": secThirdparty(); break
+            case "netCheck": secNetcheck(); break
             }
             if (msg) note(msg, msgErr ? "red" : "dark")
         }
+        // a rebuild hands the Repeater a new array: while the old rows are
+        // gone the page is empty and the Flickable snaps to the top. Put the
+        // reader back where they were (a periodic reload must not scroll).
+        var cy = page.contentY
         rows = _cur
+        Qt.callLater(function() { page.contentY = Math.max(0, Math.min(cy, page.contentHeight - page.height)) })
     }
 
     // ── sezioni ────────────────────────────────────────────────────────────
@@ -901,6 +1067,10 @@ Item {
     function secVuMeters() {
         help("settings.vuMeters.help")
         toggle(Tr.t("settings.playback.vuMeter"), Tr.t("settings.playback.vuMeterHelp"), cfg.vuMeter, "vumeter")
+        if (!cfg.vuMeter) {                    // their place can go to an animation
+            note(Tr.t("settings.vuMeters.animationsHint"), "dark", "disc-3")
+            grid([acell(Tr.t("settings.vuMeters.chooseAnimation"), "open_animations", "accent", { icon: "disc-3", hh: 44 })])
+        }
         var lang = I18n.lang
         if (cfg.vuMeter && cfg.vuStyles.length > 1) {
             label("settings.playback.vuStyle", 14); help("settings.playback.vuStyleHelp", 12)
@@ -944,6 +1114,84 @@ Item {
         }
         if (vs.loaded && !vs.checking && !vs.busy)
             grid([acell(Tr.t("settings.vuMeters.storeCheck"), "vu_check", "accent", { icon: "rotate-cw", hh: 44 })])
+    }
+    // Now Playing animations: a CD, a vinyl record or a cassette in the VU
+    // meters' place. Only with the VU meters off; while they are on, a note
+    // and the button to turn them off. Each card is a still of the scene.
+    function secAnimations() {
+        help("settings.animations.help")
+        var lang = I18n.lang
+        if (cfg.vuMeter) {
+            note(Tr.t("settings.animations.vuOn"), "dark")
+            action(Tr.t("settings.animations.turnOffVu"), "anim_vu_off", "accent")
+        } else {
+            // the built-in scenes, then the ones downloaded from the store
+            var kinds = ["none", "cd", "cdfront", "vinyl", "cassette"].map(function(k) {
+                return { id: k, label: Tr.t("settings.animations." + k) }
+            })
+            for (var s = 0; s < cfg.storeAnims.length; s++) {
+                var nm = cfg.storeAnims[s].name || {}
+                kinds.push({ id: cfg.storeAnims[s].id, label: String(nm[lang] || nm.en || cfg.storeAnims[s].id) })
+            }
+            for (var i = 0; i < kinds.length; i += 2) {
+                var cards = []
+                for (var j = i; j < i + 2; j++)
+                    cards.push(j < kinds.length
+                               ? { type: "animcard", label: kinds[j].label, arg: kinds[j].id,
+                                   sel: Player.npAnimation === kinds[j].id, act: "np_anim" }
+                               : { type: "help", label: "" })
+                grid(cards)
+            }
+        }
+        animStoreRows(lang)
+    }
+    // How much the interface itself moves under a finger. Takes effect at
+    // once, nothing to restart: Theme.motionRate divides every duration and
+    // sets the rate of every spring.
+    function secUiMotion() {
+        help("settings.uiMotion.help")
+        var OPT = ["full", "reduced", "none"]
+        for (var i = 0; i < OPT.length; i++) {
+            var r = option(Tr.t("settings.uiMotion.option." + OPT[i]), Tr.t("settings.uiMotion.optionHelp." + OPT[i]),
+                           OPT[i], Theme.motionLevel === OPT[i], "ui_motion")
+            r.style = "border"; r.hh = 62
+        }
+    }
+    // More animations to download: a card per scene of the store
+    function animStoreRows(lang) {
+        var as = cfg.animStore
+        label("settings.animations.storeTitle", 14); help("settings.animations.storeHelp", 12)
+        if (as.error) note(as.error.message || "", as.animations.length ? "dark" : "red")
+        if (!as.animations.length) {
+            if (!as.loaded || as.checking) note(Tr.t("settings.animations.storeLoading"), "dark")
+            else if (!as.error) note(Tr.t("settings.animations.storeEmpty"), "dark")
+        }
+        var cards = []
+        for (var i = 0; i < as.animations.length; i++) {
+            var k = as.animations[i], nm = k.name || {}
+            var mb = (Number(k.size || 0) / 1048576).toFixed(1).replace(".", lang === "it" ? "," : ".") + " MB"
+            var state = k.job === "downloading" ? "downloading" : k.job === "installing" ? "installing"
+                      : !k.supported ? "unsupported" : k.update ? "update" : k.installed ? "installed" : "available"
+            cards.push({ type: "vustore", label: String(nm[lang] || nm.en || k.id), arg: k.id, preview: k.preview || "", icon: "disc-3",
+                         meta: [k.author || "", mb].filter(function(x) { return !!x }).join(" · "),
+                         state: state, isNew: !!k.new, err: k.jobError ? String(k.jobError.message || "") : "",
+                         act: state === "installed" ? "anim_remove" : "anim_install" })
+            if (cards.length === 2 || i === as.animations.length - 1) {
+                if (cards.length === 1) cards.push({ type: "help", label: "" })
+                grid(cards); cards = []
+            }
+        }
+        if (as.loaded && !as.checking && !as.busy)
+            grid([acell(Tr.t("settings.animations.storeCheck"), "anim_check", "accent", { icon: "rotate-cw", hh: 44 })])
+    }
+    // The library: how the albums are shown, a grid of cards or Cover Flow
+    // (the same choice as the button in the crumb bar of the album list)
+    function secLibrary() {
+        help("settings.library.help")
+        label("settings.library.albumView", 14); help("settings.library.albumViewHelp", 12)
+        var av = Ui.app ? Ui.app.albumView : "grid"
+        grid([cell(Tr.t("settings.library.viewGrid"), "grid", av === "grid", "album_view", { hh: 44 }),
+              cell(Tr.t("settings.library.viewCoverflow"), "coverflow", av === "coverflow", "album_view", { hh: 44 })])
     }
     function playerPrefs() {
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")
@@ -1015,11 +1263,105 @@ Item {
             note(cfg.skinMsg || Tr.t(serr ? "settings.lyrion.skinFailed" : "settings.lyrion.skinInstalling"), serr ? "red" : "dark")
         }
         sep()
+        // the library: what the server has indexed, and a refresh on demand
+        label("settings.lyrion.libraryTitle").mark = "library"; help("settings.lyrion.libraryHelp", 12)
+        var L = cfg.lib
+        if (L.albums >= 0) {
+            info(Tr.t("settings.lyrion.libAlbums"), String(L.albums)).mono = true
+            info(Tr.t("settings.lyrion.libArtists"), String(L.artists)).mono = true
+            info(Tr.t("settings.lyrion.libSongs"), String(L.songs)).mono = true
+            if (L.duration > 0) info(Tr.t("settings.lyrion.libDuration"), fmtDuration(L.duration)).mono = true
+        }
+        info(Tr.t("settings.lyrion.lastScan"), L.lastScan > 0 ? fmtWhen(L.lastScan) : Tr.t("settings.lyrion.never")).mono = true
+        if (L.scanning) {
+            note(Tr.t("settings.lyrion.scanning") + (L.pct >= 0 ? " " + L.pct + "%" : "") + (L.progress ? " · " + L.progress : ""), "dark")
+            var ab = action(Tr.t("settings.lyrion.abortScan"), "lib_abort", "darkred"); ab.hh = 40
+        } else {
+            var rs = action(Tr.t("settings.lyrion.rescan"), "lib_rescan", "gold"); rs.bold = true; rs.hh = 44; rs.icon = "refresh-cw"
+        }
+        sep()
+        // credits, biographies and album details from MusicBrainz and Wikipedia
+        if (cfg.meta.available) {
+            label("settings.lyrion.metaTitle").mark = "meta"; help("settings.lyrion.metaHelp", 12)
+            toggle(Tr.t("settings.lyrion.metaOnline"), "", cfg.meta.online, "meta_online")
+            if (cfg.meta.online) toggle(Tr.t("settings.lyrion.metaPrefetch"), Tr.t("settings.lyrion.metaPrefetchHelp"), cfg.meta.prefetch, "meta_prefetch")
+            if (cfg.meta.online && cfg.meta.prefetch && cfg.meta.total > 0)
+                info(Tr.t("settings.lyrion.metaProgress"), Tr.tf("settings.lyrion.metaProgressValue", "done", String(cfg.meta.done)).replace("{total}", String(cfg.meta.total))).mono = true
+            if (cfg.meta.albums > 0 || cfg.meta.artists > 0) {
+                info(Tr.t("settings.lyrion.metaSaved"), Tr.tf("settings.lyrion.metaSavedValue", "albums", String(cfg.meta.albums))
+                     .replace("{artists}", String(cfg.meta.artists)).replace("{size}", Meta.bytes(cfg.meta.bytes))).mono = true
+                var mc = action(Tr.t("settings.lyrion.metaClear"), "meta_clear", "accent"); mc.hh = 40; mc.icon = "trash-2"
+            }
+            toggle(Tr.t("settings.lyrion.metaKeep"), Tr.t("settings.lyrion.metaKeepHelp"), cfg.meta.keep, "meta_keep")
+            // where that archive is kept: this device, or a disk of the owner's
+            if (cfg.meta.places.length > 1) {
+                labelText(Tr.t("settings.lyrion.metaWhere"), 15)
+                help("settings.lyrion.metaWhereHelp", 12)
+                for (var mp = 0; mp < cfg.meta.places.length; mp++) {
+                    var pl = cfg.meta.places[mp]
+                    option(metaPlaceName(pl), metaPlaceRoom(pl), pl.path, pl.current, "meta_where").dim = !pl.usable && !pl.current
+                }
+            }
+            if (cfg.meta.detached) note(Tr.t("settings.lyrion.metaWhereAway"), "amber", "alert-triangle", 12)
+            sep()
+        }
         if (remoteNote()) return
         if (!havePlayer) { note(Tr.t("settings.playback.noPlayer"), "dark"); return }
         if (!cfg.players.length) { note(Tr.t("settings.multiroom.noOthers"), "dark"); return }
         for (var p = 0; p < cfg.players.length; p++) {
             var t = toggle(cfg.players[p].name, "", cfg.players[p].sync, "sync_toggle", cfg.players[p].id); t.icon = "speaker"
+        }
+    }
+    // ── Bluetooth speakers ────────────────────────────────────────────────
+    // Pair a speaker here and it becomes a Lyrion player of its own, with its
+    // own name and its own queue, next to this device's built-in player — so
+    // it can be grouped with it, or play something else entirely. The DAC is
+    // never involved: nothing here changes what the built-in player does.
+    function secBtSpeakers() {
+        help("settings.btSpeakers.help")
+        if (!cfg.btAvailable) { note(Tr.t("settings.btSpeakers.unavailable"), "dark", "info"); return }
+        var sw = toggle(Tr.t("settings.btSpeakers.enable"), Tr.t("settings.btSpeakers.enableHint"), cfg.btEnabled, "bt_enable")
+        sw.dim = btBusy
+        if (!cfg.btEnabled) return
+        if (btBusy && !cfg.btSpeakers.length && !cfg.btFound.length) { helpText(Tr.t("common.loading"), 13); return }
+        if (!cfg.btAdapter) { note(Tr.t("settings.btSpeakers.noAdapter"), "red", "alert-triangle"); return }
+
+        label("settings.btSpeakers.yours")
+        if (!cfg.btSpeakers.length) helpText(Tr.t("settings.btSpeakers.none"), 13)
+        for (var i = 0; i < cfg.btSpeakers.length; i++) {
+            var sp = cfg.btSpeakers[i]
+            var state = !sp.enabled ? Tr.t("settings.btSpeakers.switchedOff")
+                      : sp.playing ? Tr.t("settings.btSpeakers.ready")
+                      : sp.connected ? Tr.t("settings.btSpeakers.connecting")
+                      : Tr.t("settings.btSpeakers.notConnected")
+            var b = bandRow(sp.connected ? "bluetooth-connected" : "bluetooth",
+                            String(sp.player || sp.name || sp.mac), state, btBand === i, "bt_band", String(i), false)
+            if (btBand !== i) continue
+            begin(b.children)
+            help("settings.btSpeakers.playerNameHint", 12)
+            input(Tr.t("settings.btSpeakers.playerName"), btNameEdit, "bt_name", false, sp.mac)
+            var ren = action(Tr.t("settings.btSpeakers.rename"), "bt_rename", "accent"); ren.hh = 40; ren.arg = sp.mac
+            toggle(Tr.t("settings.btSpeakers.autoconnect"), Tr.t("settings.btSpeakers.autoconnectHint"), !!sp.autoconnect, "bt_auto", sp.mac)
+            grid([acell(sp.connected ? Tr.t("settings.btSpeakers.disconnect") : Tr.t("settings.btSpeakers.connect"),
+                        sp.connected ? "bt_disconnect" : "bt_connect", "light", { hh: 40, arg: sp.mac }),
+                  acell(Tr.t("settings.btSpeakers.forget"), "bt_forget", "red", { hh: 40, arg: sp.mac })])
+            var addr = info(Tr.t("settings.btSpeakers.address"), sp.mac); addr.mono = true; addr.px = 12; addr.hh = 36
+            end()
+        }
+
+        sep()
+        label("settings.btSpeakers.found")
+        help("settings.btSpeakers.searchHint", 12)
+        var sc = action(btScanning ? Tr.t("settings.btSpeakers.searching") : Tr.t("settings.btSpeakers.search"),
+                        "bt_scan", "accent")
+        sc.icon = "bluetooth-searching"; sc.hh = 44; sc.dim = btScanning || btBusy
+        if (btScanning) helpText(Tr.t("settings.btSpeakers.searchingHint"), 12)
+        else if (!cfg.btFound.length) helpText(Tr.t("settings.btSpeakers.foundNone"), 13)
+        for (var j = 0; j < cfg.btFound.length; j++) {
+            var dev = cfg.btFound[j]
+            var sub = dev.audio ? dev.mac : Tr.t("settings.btSpeakers.notAudio")
+            var r = option(String(dev.name || dev.mac), sub, dev.mac, false, "bt_add")
+            r.icon = dev.audio ? "speaker" : "bluetooth"; r.hh = 60; r.style = "row"; r.dim = btBusy
         }
     }
     function secAlarm() {
@@ -1146,6 +1488,10 @@ Item {
         info(Tr.t("settings.info.deviceIp"), cfg.deviceIp || cfg.localIp || Tr.t("settings.info.notAvailable")).style = "seg"
         info(Tr.t("settings.info.platform"), cfg.platform + " (" + cfg.arch + ")").style = "seg"
         info(Tr.t("settings.info.apiStatus"), Tr.t(cfg.apiOk ? "settings.info.connected" : "settings.info.disconnected")).style = "seg"
+        netCheckEntry(false)
+        sep()
+        // the guided tour of the interface, again on demand
+        action(Tr.t("settings.info.replayTutorial"), "tutorial", "accent")
         sep()
         helpText("Osmium Sound " + cfg.version, 12).center = true
         // ogni interfaccia dice con cosa è fatta: questa è Qt/QML, non Electron
@@ -1178,6 +1524,8 @@ Item {
         if (any) { var up = action(Tr.t("settings.updates.updateNow"), "upd_apply", "gold"); up.bold = true; up.hh = 56; up.icon = "download"; help("settings.updates.orderNote", 12) }
         if (cfg.otaState && cfg.otaState !== "idle") note(cfg.otaPct > 0 ? cfg.otaMsg + " (" + cfg.otaPct + "%)" : cfg.otaMsg, "dark")
         toggle(Tr.t("settings.updates.autoCheck"), "", autoCheck, "upd_autocheck")
+        // a failed check is exactly when the owner needs it: stand it out
+        netCheckEntry(cfg.updCheckFailed && !cfg.updChecking)
     }
     function secSysctl() {
         var rb = action(Tr.t("settings.controls.reboot"), "reboot", "orange"); rb.icon = "rotate-cw"; rb.bold = true; rb.hh = 56
@@ -1186,6 +1534,107 @@ Item {
         sep().tone = "red"                                   // border-t border-red-500/20
         help("settings.factory.help", 12)
         var fr = action(Tr.t("settings.factory.button"), "factory_reset", "darkred"); fr.icon = "alert-triangle"; fr.bold = true; fr.hh = 56
+    }
+    // ─── network check ─────────────────────────────────────────────────────
+    function netCheckEntry(prominent) {
+        var b = action(Tr.t("settings.netCheck.open"), "netcheck_open", prominent ? "accent" : "dark"); b.icon = "network"; b.hh = 48
+        help("settings.netCheck.openHelp", 12)
+    }
+    function openNetCheck() {
+        var from = secs[active].id
+        openSection("netCheck")
+        backTo = from
+        runNetCheck()
+    }
+    function runNetCheck() {
+        if (ncBusy) return
+        ncBusy = true; ncFailed = false
+        rebuild()
+        Api.get(cfg.api("/network_check"), function(ok, d) {
+            ncBusy = false
+            if (ok && d && d.steps) nc = d
+            else ncFailed = true
+            rebuild()
+        }, 45000)
+    }
+    function fmtSkew(sec) {
+        var a = Math.abs(sec)
+        if (a < 3600) return Math.round(a / 60) + " min"
+        if (a < 86400) return Math.round(a / 3600) + " h"
+        return Math.round(a / 86400) + " " + Tr.t("settings.lyrion.days")
+    }
+    // the reason a step or a source failed, in words
+    function ncReason(s) {
+        var e = s.error
+        if (!e) return ""
+        if (e === "http") return Tr.tf("settings.netCheck.err.http", "code", s.http)
+        if (e === "packetLoss") return Tr.tf("settings.netCheck.err.packetLoss", "loss", s.loss)
+        if (e === "clockOff") return s.skew !== undefined ? Tr.tf("settings.netCheck.err.clockOff", "time", fmtSkew(s.skew)) : Tr.t("settings.netCheck.err.clockWrong")
+        if (e === "dnsPartial") return Tr.t("settings.netCheck.err.dnsPartial") + " " + (s.failed || []).join(", ")
+        return Tr.t("settings.netCheck.err." + e)
+    }
+    function ncDetail(s) {
+        var parts = []
+        if (s.detail) parts.push(String(s.detail))
+        if (s.kbps) parts.push(s.kbps >= 1024 ? (s.kbps / 1024).toFixed(1) + " MB/s" : s.kbps + " KB/s")
+        return parts.join(" · ")
+    }
+    // What the owner sees: four plain steps, each the worst of the checks
+    // behind it; the seven checks with their numbers are "advanced".
+    readonly property var ncGroups: [
+        { id: "device", steps: ["link"] }, { id: "router", steps: ["router"] },
+        { id: "internet", steps: ["internet", "dns", "clock"] }, { id: "server", steps: ["ota", "download"] }]
+    function ncStep(res, id) {
+        if (res) for (var j = 0; j < res.steps.length; j++) if (res.steps[j].id === id) return res.steps[j]
+        return { id: id, status: ncBusy ? "run" : "skip" }
+    }
+    function ncWorst(res, ids) {
+        var rank = { run: 5, fail: 4, warn: 3, ok: 2, skip: 1 }, worst = "skip"
+        for (var i = 0; i < ids.length; i++) {
+            var st = ncStep(res, ids[i]).status
+            if ((rank[st] || 0) > rank[worst]) worst = st
+        }
+        return worst
+    }
+    function secNetcheck() {
+        help("settings.netCheck.help")
+        var STEPS = ["link", "router", "internet", "dns", "clock", "ota", "download"]
+        var res = ncBusy ? null : nc
+        if (ncBusy) note(Tr.t("settings.netCheck.running"), "dark")
+        else if (ncFailed) note(Tr.t("settings.netCheck.failed"), "red", "alert-circle")
+        else if (res) {
+            var v = res.verdict === "ok" && res.warn ? "warn" : res.verdict
+            // a caveat has a sentence of its own for the step it comes from
+            var vt = v === "warn" && ["link", "router", "internet", "dns", "clock", "ota"].indexOf(res.warn) >= 0
+                   ? Tr.t("settings.netCheck.verdictWarn." + res.warn) : Tr.t("settings.netCheck.verdict." + v)
+            note(vt, v === "ok" ? "gold" : v === "warn" ? "amber" : "red",
+                 v === "ok" ? "check-circle-2" : v === "warn" ? "alert-triangle" : "alert-circle")
+        }
+        box(function() {
+            for (var g = 0; g < ncGroups.length; g++) {
+                var st = ncWorst(res, ncGroups[g].steps)
+                push({ type: "diag", plain: true, label: Tr.t("settings.netCheck.groups." + ncGroups[g].id), status: st,
+                       value: Tr.t("settings.netCheck.status." + st) })
+            }
+        })
+        var b = action(Tr.t(nc ? "settings.netCheck.again" : "settings.netCheck.run"), "netcheck_run", "accent"); b.icon = "rotate-cw"; b.hh = 48; b.dim = ncBusy
+        var a = action(Tr.t(ncAdvanced ? "settings.netCheck.advancedHide" : "settings.netCheck.advanced"), "netcheck_adv", "dark")
+        a.icon = ncAdvanced ? "chevron-up" : "chevron-down"; a.hh = 40; a.px = 14
+        if (!ncAdvanced) return
+        box(function() {
+            for (var i = 0; i < STEPS.length; i++) {
+                var s = ncStep(res, STEPS[i])
+                push({ type: "diag", label: Tr.t("settings.netCheck.steps." + STEPS[i]), status: s.status,
+                       value: ncDetail(s), extra: s.status === "skip" && res ? Tr.t("settings.netCheck.status.skip") : ncReason(s) })
+                if (STEPS[i] === "ota" && s.sources) for (var k = 0; k < s.sources.length; k++) {
+                    var src = s.sources[k]
+                    push({ type: "diag", sub: true, label: Tr.t("settings.netCheck.sources." + src.id), status: src.status,
+                           value: src.host + (src.ms !== undefined ? " · " + src.ms + " ms" : ""),
+                           extra: src.status === "ok" ? "" : ncReason(src) })
+                }
+            }
+        })
+        if (res) helpText(Tr.tf("settings.netCheck.lastRun", "time", Qt.formatDateTime(new Date(res.at * 1000), "HH:mm:ss")) + " · " + String(res.channel || ""), 12).center = true
     }
     function secThirdparty() {
         if (!thirdParty) { note(Tr.t("common.loading"), "dark"); return }
@@ -1215,11 +1664,39 @@ Item {
         case "player_name": nameEdit = text; break
         case "lms_host": hostEdit = text; break
         case "pick_new": pickNew = text; break
+        case "bt_name": btNameEdit = text; break
         }
         // le righe dipendenti (pulsante "applica" attivo/spento) si rifanno subito
         dimRefresh.restart()
     }
     Timer { id: dimRefresh; interval: 150; onTriggered: root.rebuild() }
+
+    // Every /bt_speakers/* reply carries the full state, so there is exactly
+    // one place that unpacks it — and exactly one place that decides whether
+    // the message on screen is a complaint or a confirmation.
+    function btApply(ok, d) {
+        btBusy = false; btScanning = false
+        if (ok && d && typeof d === "object") {
+            if (d.available !== undefined) {
+                cfg.btAvailable = !!d.available; cfg.btEnabled = !!d.enabled; cfg.btAdapter = !!d.adapter
+                cfg.btSpeakers = d.speakers || []; cfg.btFound = d.found || []
+            }
+            if (d.message) { say(String(d.message), d.success === false); return }
+        } else {
+            say(Tr.t("settings.btSpeakers.opFailed"), true); return
+        }
+        rebuild()
+    }
+    // While the section is open, follow a speaker that is switching itself on
+    // (or off) without making the owner tap anything. Held back while a
+    // command is in flight, and while the on-screen keyboard is up — a
+    // rebuild there would throw away what is being typed.
+    Timer {
+        interval: 5000; repeat: true
+        running: root.active >= 0 && root.secs[root.active].id === "btSpeakers"
+                 && !root.btBusy && !(Ui.vk && Ui.vk.active)
+        onTriggered: cfg.loadBt()
+    }
     function fieldCommit(row) { rebuild() }
 
     // ─── azioni ────────────────────────────────────────────────────────────
@@ -1262,8 +1739,66 @@ Item {
                 post(A("/timezone"), { timezone: timezones[i] }); cfg.timezone = timezones[i]; rebuild()
             })
             return
+        // ── Bluetooth speakers ───────────────────────────────────────
+        // Every one of these answers with the whole new state (the endpoints
+        // return get_bt_speakers()), so the reply is applied straight away
+        // instead of waiting for the next poll — pairing takes long enough
+        // that a second round trip would be felt.
+        case "bt_enable":
+            btBusy = true
+            Api.post(A("/bt_speakers/enable"), { enable: !row.on }, function(ok, d) { btApply(ok, d) }, 40000)
+            break
+        case "bt_band":
+            var idx = Number(arg)
+            btBand = (btBand === idx) ? -1 : idx
+            // the field starts on the name the speaker actually has
+            btNameEdit = btBand >= 0 && cfg.btSpeakers[btBand] ? String(cfg.btSpeakers[btBand].player || "") : ""
+            break
+        case "bt_scan":
+            btScanning = true; btBusy = true
+            Api.post(A("/bt_speakers/scan"), { seconds: 12 }, function(ok, d) { btApply(ok, d) }, 60000)
+            break
+        case "bt_add":
+            btBusy = true
+            say(Tr.t("settings.btSpeakers.pairing"))
+            Api.post(A("/bt_speakers/add"), { mac: arg }, function(ok, d) { btApply(ok, d) }, 120000)
+            break
+        case "bt_connect":
+        case "bt_disconnect":
+            btBusy = true
+            Api.post(A("/bt_speakers/connect"), { mac: arg, connect: act === "bt_connect" },
+                     function(ok, d) { btApply(ok, d) }, 90000)
+            break
+        case "bt_auto":
+            btBusy = true
+            Api.post(A("/bt_speakers/update"), { mac: arg, autoconnect: !row.on },
+                     function(ok, d) { btApply(ok, d) }, 40000)
+            break
+        case "bt_rename":
+            if (!btNameEdit.trim()) return
+            btBusy = true
+            Api.post(A("/bt_speakers/update"), { mac: arg, player: btNameEdit.trim() },
+                     function(ok, d) { btApply(ok, d) }, 40000)
+            break
+        case "bt_forget":
+            Ui.dialogs.confirm(Tr.t("settings.btSpeakers.forgetConfirm"),
+                               Tr.t("settings.btSpeakers.forget"), true, function(ok) {
+                if (!ok) return
+                btBand = -1; btBusy = true
+                Api.post(A("/bt_speakers/remove"), { mac: arg }, function(ok2, d) { btApply(ok2, d) }, 60000)
+            })
+            return
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break
         case "vu_style": post(A("/vu_style"), { style: arg }); Player.vuStyle = arg; break
+        case "open_animations": openSection("animations"); return
+        case "ui_motion": Sys.setConf("ui-motion", arg); Theme.motionLevel = arg; break
+        case "anim_vu_off": post(A("/vu_meter"), { enable: false }); cfg.vuMeter = false; Player.vuEnabled = false; break
+        case "np_anim":
+            post(A("/nowplaying_animation"), { animation: arg }); cfg.npAnimation = arg; Player.npAnimation = arg
+            // a freshly chosen animation is what Now Playing shows next, even
+            // if the lyrics were the last view picked there
+            if (arg !== "none" && Ui.app && !Ui.app.viewVu) { Ui.app.viewVu = true; Sys.setConf("nowplaying-view", "vu") }
+            break
         case "vu_install":
             if (row.state === "downloading" || row.state === "installing" || row.state === "unsupported") return
             Api.post(A("/vu_store/install"), { id: arg }, function(ok, d) {
@@ -1286,6 +1821,30 @@ Item {
             Api.post(A("/vu_store/check"), {}, function() { cfg.loadStore(false) }, 12000)
             cfg.vuStore = Object.assign({}, cfg.vuStore, { checking: true })
             break
+        case "anim_install":
+            if (row.state === "downloading" || row.state === "installing" || row.state === "unsupported") return
+            Api.post(A("/anim_store/install"), { id: arg }, function(ok, d) {
+                if (d && d.success === false) say(String(d.message || ""), true)
+                cfg.loadAnimStore(false)
+            }, 12000)
+            cfg.animStore = Object.assign({}, cfg.animStore, { busy: true })
+            break
+        case "anim_remove":
+            Ui.dialogs.confirm(Tr.tf("settings.animations.removeConfirm", "name", row.label), Tr.t("settings.vuMeters.remove"), true, function(ok) {
+                if (!ok) return
+                Api.post(A("/anim_store/remove"), { id: arg }, function(ok2, d) {
+                    if (d && d.success === false) say(String(d.message || ""), true)
+                    else if (Player.npAnimation === arg) Player.npAnimation = "none"
+                    cfg.load(); cfg.loadAnimStore(false)
+                }, 12000)
+            })
+            return
+        case "anim_check":
+            Api.post(A("/anim_store/check"), {}, function() { cfg.loadAnimStore(false) }, 12000)
+            cfg.animStore = Object.assign({}, cfg.animStore, { checking: true })
+            break
+        case "album_view": if (Ui.app) Ui.app.setAlbumView(arg); break
+        case "tutorial": if (Ui.app) Ui.app.startTutorial(); return
         case "autoexpand": post(A("/nowplaying_autoexpand"), { seconds: parseInt(arg) }); cfg.autoexpand = parseInt(arg); Player.refreshSettings(); break
         case "transition": setPref("transitionType", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
         case "transdur": setPref("transitionDuration", arg); Player.refreshPrefs(); say(Tr.t("settings.playback.saved")); break
@@ -1348,6 +1907,26 @@ Item {
         case "lyrion_channel": post(A("/lyrion_channel"), { channel: arg }); cfg.lyrionChannel = arg; break
         case "lyrion_install": post(A("/lyrion_update/apply"), { channel: cfg.lyrionChannel }); say(Tr.t("settings.multiroom.server.update")); break
         case "lyrion_check": cfg.load(); break
+        case "lib_rescan":
+            Player.queryServer(["rescan"], function() { cfg.loadLibrary() })
+            cfg.lib = Object.assign({}, cfg.lib, { scanning: true, pct: -1, progress: "" })
+            say(Tr.t("settings.lyrion.rescanStarted")); break
+        case "meta_online": post(S("/api/meta/settings"), { online: !row.on }); cfg.meta = Object.assign({}, cfg.meta, { online: !row.on }); break
+        case "meta_prefetch": post(S("/api/meta/settings"), { prefetch: !row.on }); cfg.meta = Object.assign({}, cfg.meta, { prefetch: !row.on }); break
+        case "meta_clear": post(S("/api/meta/cache/clear"), {}); say(Tr.t("settings.lyrion.metaCleared")); break
+        case "meta_keep": post(S("/api/meta/settings"), { keep: !row.on }); cfg.meta = Object.assign({}, cfg.meta, { keep: !row.on }); break
+        case "meta_where":
+            // the archive travels with the choice, so this can take a moment
+            if (arg === cfg.meta.location) return
+            say(Tr.t("settings.lyrion.metaMoving"))
+            post(S("/api/meta/settings"), { cache_location: arg }, function(ok, d) {
+                say(ok ? Tr.t("settings.lyrion.metaMoved")
+                       : ((d && d.message) || Tr.t("settings.lyrion.metaMoveFailed")), !ok)
+            })
+            break
+        case "lib_abort":
+            Player.queryServer(["abortscan"], function() { cfg.loadLibrary() })
+            say(Tr.t("settings.lyrion.scanAborted")); break
         case "ota_channel": {
             if (cfg.otaChannel === arg) return
             var apply = function() { post(A("/ota_channel"), { channel: arg }); cfg.otaChannel = arg; rebuild() }
@@ -1355,22 +1934,28 @@ Item {
             apply(); return
         }
         case "upd_check": msg = ""; cfg.load(); break
+        case "netcheck_open": openNetCheck(); return
+        case "netcheck_run": runNetCheck(); return
+        case "netcheck_adv": ncAdvanced = !ncAdvanced; rebuild(); return
         case "upd_apply": post(A("/update/apply_all"), {}); say(Tr.t("settings.updates.updating")); break
         case "upd_changelog":
             // il titolo porta la versione, come in Settings.jsx
             Ui.dialogs.text(Tr.tf("settings.updates.changelogTitle", "version", cfg.upd[0].latest || cfg.upd[0].cur), cfg.changelog)
             return
         case "upd_autocheck": autoCheck = !autoCheck; Sys.setConf("ota-autocheck", autoCheck ? "1" : "0"); if (Ui.app && Ui.app.main) Ui.app.main.browser.checkUpdates(); break
-        case "wifi_panel":
-            cfg.loadWifi()
-            Ui.dialogs.wifi(cfg.wifi, function(ssid, pw) {
-                if (!ssid) return
-                post(A("/wifi_connect"), { ssid: ssid, password: pw || "" })
-                say(Tr.tf("settings.network.switchedToWifi", "ssid", ssid))
-            })
+        case "wifi_panel": wifiAsk(); return
+        case "wired_dhcp":
+            say(Tr.t("settings.network.connectingWired"))
+            Api.post(A("/wired_dhcp"), {}, function(ok, d) {
+                cfg.load()
+                if (ok && d && d.success) say(Tr.t("settings.network.switchedToWired"))
+                else say(Tr.t("settings.network.wiredFailed"), true)
+            }, 60000)
             return
-        case "wired_dhcp": post(A("/wired_dhcp"), {}); say(Tr.t("settings.network.switchedToWired")); break
-        case "net_reload": cfg.load(); say(Tr.t("settings.network.loading")); break
+        // "Reload data": the note goes away when the reload has landed (it
+        // used to stay on the page until the section was left)
+        // (flag raised AFTER load(): its first dataChanged can fire synchronously)
+        case "net_reload": cfg.load(); netReloading = true; say(Tr.t("settings.network.loading")); return
         case "net_iface": return
         case "src_rw": {
             var wantRw = true
@@ -1521,6 +2106,11 @@ Item {
         running: root.visible && root.active >= 0 && root.secs[root.active].id === "vuMeters" && (cfg.vuStore.checking || cfg.vuStore.busy)
         onTriggered: cfg.loadStore(false)
     }
+    Timer {
+        interval: 1500; repeat: true
+        running: root.visible && root.active >= 0 && root.secs[root.active].id === "animations" && (cfg.animStore.checking || cfg.animStore.busy)
+        onTriggered: cfg.loadAnimStore(false)
+    }
     // mentre il disco si formatta lo stato va riletto da solo
     Timer { interval: 2000; repeat: true; running: root.fmtWatch; onTriggered: { if (!Ui.dialogs.active) root.fmtWatch = false; else cfg.load() } }
 
@@ -1556,7 +2146,7 @@ Item {
                 visible: root.atRoot
                 x: 32; y: rootHead.y + rootHead.height + 32; width: parent.width - 64; spacing: 8
                 Repeater {
-                    model: root.secs
+                    model: root.listedSecs
                     Item {
                         id: secRow
                         required property var modelData
@@ -1572,10 +2162,10 @@ Item {
                                         Icon { anchors.centerIn: parent; name: secRow.modelData.id === "displayMode" && cfg.displayMode === "headless" ? "monitor-off" : secRow.modelData.icon; size: 22; color: Theme.gold } }
                             Text { x: 66; width: parent.width - 66 - 46; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(secRow.modelData.key); elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 18 }
                             // news in the VU meter store: new skins or updates of downloaded ones
-                            Rectangle { visible: secRow.modelData.id === "vuMeters" && cfg.vuStoreNew > 0; x: parent.width - 16 - 22 - 20; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: Theme.gold }
+                            Rectangle { visible: (secRow.modelData.id === "vuMeters" && cfg.vuStoreNew > 0) || (secRow.modelData.id === "animations" && cfg.animStoreNew > 0); x: parent.width - 16 - 22 - 20; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: Theme.gold }
                             Icon { x: parent.width - 16 - 22; anchors.verticalCenter: parent.verticalCenter; name: "chevron-right"; size: 22; color: Theme.silver }
                         }
-                        Tap { id: sTap; onClicked: root.openSection(secRow.index) }
+                        Tap { id: sTap; onClicked: root.openSection(secRow.modelData.id) }
                     }
                 }
             }
@@ -1587,7 +2177,7 @@ Item {
                 Item {
                     width: 44; height: 36
                     Icon { x: 0; anchors.verticalCenter: parent.verticalCenter; name: "chevron-left"; size: 32; color: Theme.gold }
-                    Tap { grow: 8; onClicked: root.goRoot() }
+                    Tap { grow: 8; onClicked: root.goBack() }
                 }
                 Text { x: 44; width: parent.width - 44; height: 36; verticalAlignment: Text.AlignVCenter; text: root.active >= 0 ? Tr.t(root.secs[root.active].key) : ""; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 30; font.bold: true }
             }
@@ -1608,9 +2198,9 @@ Item {
                 color: "transparent"; border.width: 2; border.color: Theme.gold
                 SequentialAnimation {
                     id: markFlashAnim
-                    NumberAnimation { target: markFlash; property: "opacity"; to: 1; duration: 150 }
-                    PauseAnimation { duration: 700 }
-                    NumberAnimation { target: markFlash; property: "opacity"; to: 0; duration: 500 }
+                    NumberAnimation { target: markFlash; property: "opacity"; to: 1; duration: Theme.dur(150) }
+                    PauseAnimation { duration: Theme.dur(700) }
+                    NumberAnimation { target: markFlash; property: "opacity"; to: 0; duration: Theme.dur(500) }
                 }
             }
         }

@@ -22,6 +22,10 @@ class Spring : public QObject {
     Q_PROPERTY(double mass MEMBER m_mass)
     Q_PROPERTY(double restDelta MEMBER m_restDelta)
     Q_PROPERTY(double restSpeed MEMBER m_restSpeed)
+    // How fast time runs for this spring: 1 as written, 2 twice as fast, 0 no
+    // movement at all (setTo jumps straight to the target). Bound to
+    // Theme.motionRate so the interface motion setting reaches the springs too.
+    Q_PROPERTY(double rate MEMBER m_rate)
     Q_PROPERTY(bool running READ running NOTIFY runningChanged)
 public:
     explicit Spring(QObject *parent = nullptr);
@@ -46,5 +50,6 @@ private:
     double m_v = 0, m_to = 0, m_vel = 0;
     double m_stiff = 200, m_damp = 26, m_mass = 1;
     double m_restDelta = 0.001, m_restSpeed = 0.05;
+    double m_rate = 1;
     bool m_running = false;
 };

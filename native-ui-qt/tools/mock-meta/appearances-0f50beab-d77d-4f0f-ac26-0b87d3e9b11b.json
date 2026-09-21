@@ -1,0 +1,43 @@
+{
+ "status": "ok",
+ "albums": [
+  {
+   "album_id": 704,
+   "title": "Dark Side Of The Moon",
+   "artist": "Pink Floyd",
+   "artwork_track_id": "ccb8507a",
+   "roles": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": ""
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": ""
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric bass guitar"
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "synthesizer"
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "tape"
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals"
+    }
+   ]
+  }
+ ]
+}

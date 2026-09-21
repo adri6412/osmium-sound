@@ -382,10 +382,38 @@ def _wired_connected():
     return False
 
 
+def _wifi_band(freq):
+    """'2.4', '5' or '6' from the frequency nmcli prints ('2462 MHz'), '' when
+    it makes no sense. Same rule as api_server._wifi_band — a router that puts
+    one SSID on both bands must not come back as one unchoosable row."""
+    try:
+        mhz = int(str(freq).strip().split()[0])
+    except (TypeError, ValueError, IndexError):
+        return ''
+    if 2400 <= mhz < 2500:
+        return '2.4'
+    if 4900 <= mhz < 5925:
+        return '5'
+    if 5925 <= mhz <= 7125:
+        return '6'
+    return ''
+
+
+def _wifi_band_args(band):
+    """`802-11-wireless.band` for a band picked from the scan list, nothing
+    otherwise (see api_server._wifi_band_args)."""
+    if band == '2.4':
+        return ['802-11-wireless.band', 'bg']
+    if band in ('5', '6'):
+        return ['802-11-wireless.band', 'a']
+    return []
+
+
 def _scan_wifi():
-    """Return a cached-friendly list of {ssid, signal, security, in_use}."""
+    """Return a cached-friendly list of {ssid, signal, security, band, in_use}."""
     if FAKE:
-        return [{'ssid': 'FakeNet', 'signal': 80, 'security': 'WPA2', 'in_use': False}]
+        return [{'ssid': 'FakeNet', 'signal': 80, 'security': 'WPA2', 'band': '2.4', 'in_use': False},
+                {'ssid': 'FakeNet', 'signal': 66, 'security': 'WPA2', 'band': '5', 'in_use': False}]
     _nmcli(['device', 'wifi', 'rescan'], timeout=20)
     # `rescan` only requests a scan and returns immediately -- results land
     # asynchronously a few seconds later. Reading the list right away worked
@@ -401,21 +429,35 @@ def _scan_wifi():
     # whatever list is captured here is final for the whole setup flow.
     nets = []
     for _ in range(8):
-        rc, out, _ = _nmcli(['-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
+        rc, out, _ = _nmcli(['-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY,FREQ', 'device', 'wifi', 'list'])
         nets = []
         if rc == 0:
-            seen = set()
+            # One row per SSID *and band* (it used to be one per SSID, which
+            # threw the 5 GHz half of every home router away). Several access
+            # points on the same band still collapse into one row: those are
+            # the ones nobody can choose between.
+            seen = {}
             for line in out.splitlines():
                 # nmcli -t escapes ':' inside fields as '\:'; split on unescaped ':'
                 parts = re.split(r'(?<!\\):', line)
-                if len(parts) < 4:
+                if len(parts) < 5:
                     continue
                 ssid = parts[1].replace('\\:', ':')
-                if not ssid or ssid in seen:
+                if not ssid:
                     continue
-                seen.add(ssid)
-                nets.append({'ssid': ssid, 'signal': int(parts[2] or 0),
-                             'security': parts[3] or '', 'in_use': parts[0].strip() == '*'})
+                band = _wifi_band(parts[4])
+                signal = int(parts[2] or 0)
+                prev = seen.get((ssid, band))
+                if prev is not None:
+                    if signal > prev['signal']:
+                        prev['signal'] = signal
+                        prev['security'] = parts[3] or ''
+                    prev['in_use'] = prev['in_use'] or parts[0].strip() == '*'
+                    continue
+                net = {'ssid': ssid, 'signal': signal, 'security': parts[3] or '',
+                       'band': band, 'in_use': parts[0].strip() == '*'}
+                seen[(ssid, band)] = net
+                nets.append(net)
         if nets:
             break
         time.sleep(1.5)
@@ -472,8 +514,12 @@ def _ap_ssid(dev):
     return f'Osmium-Setup-{suffix}'
 
 
-def _connect_wifi(ssid, password, ap_fallback=True):
+def _connect_wifi(ssid, password, ap_fallback=True, band=''):
     """Try to join, and on failure delete the stale profile.
+
+    `band` ('2.4' / '5' / '6') is the band the owner picked from a dual-band
+    SSID; it pins the profile to that half of the router, which is the whole
+    point of showing the two rows apart.
 
     `ap_fallback` (only True for the post-setup network-loss recovery
     caller): also drop any AP before joining and, on failure, re-raise it so
@@ -513,6 +559,7 @@ def _connect_wifi(ssid, password, ap_fallback=True):
     if password:
         add_args += ['802-11-wireless-security.key-mgmt', 'wpa-psk',
                      '802-11-wireless-security.psk', password]
+    add_args += _wifi_band_args(band)
     rc, _, err = _nmcli(add_args)
     if rc != 0:
         return False, (err.strip() or _wt('network.connectFailed', _lang())), None
@@ -920,6 +967,9 @@ _AUTH_ROUTES = {
     ('/api/system/stats', 'GET'): '/system_stats',
     ('/api/system/network_status', 'GET'): '/network_status',
     ('/api/system/network_info', 'GET'): '/network_info',
+    # Settings → System / Updates: where along the way to the update server
+    # the network breaks (router, internet, DNS, clock, OTA host).
+    ('/api/system/network_check', 'GET'): '/network_check',
     ('/api/system/wifi_scan', 'GET'): '/wifi_scan',
     ('/api/system/wifi_connect', 'POST'): '/wifi_connect',
     ('/api/system/wired_dhcp', 'POST'): '/wired_dhcp',
@@ -977,11 +1027,27 @@ _AUTH_ROUTES = {
     ('/api/system/vu_meter', 'POST'): '/vu_meter',
     ('/api/system/vu_style', 'GET'): '/vu_style',
     ('/api/system/vu_style', 'POST'): '/vu_style',
+    ('/api/system/nowplaying_animation', 'GET'): '/nowplaying_animation',
+    ('/api/system/nowplaying_animation', 'POST'): '/nowplaying_animation',
     ('/api/system/vu_store', 'GET'): '/vu_store',
     ('/api/system/vu_store/check', 'POST'): '/vu_store/check',
     ('/api/system/vu_store/install', 'POST'): '/vu_store/install',
     ('/api/system/vu_store/remove', 'POST'): '/vu_store/remove',
     ('/api/system/vu_store/seen', 'POST'): '/vu_store/seen',
+    ('/api/system/anim_store', 'GET'): '/anim_store',
+    ('/api/system/anim_store/check', 'POST'): '/anim_store/check',
+    ('/api/system/anim_store/install', 'POST'): '/anim_store/install',
+    ('/api/system/anim_store/remove', 'POST'): '/anim_store/remove',
+    ('/api/system/anim_store/seen', 'POST'): '/anim_store/seen',
+    # Bluetooth speakers (A2DP source): pair one and it becomes a Lyrion
+    # player of its own, next to this device's built-in one.
+    ('/api/system/bt_speakers', 'GET'): '/bt_speakers',
+    ('/api/system/bt_speakers/enable', 'POST'): '/bt_speakers/enable',
+    ('/api/system/bt_speakers/scan', 'POST'): '/bt_speakers/scan',
+    ('/api/system/bt_speakers/add', 'POST'): '/bt_speakers/add',
+    ('/api/system/bt_speakers/remove', 'POST'): '/bt_speakers/remove',
+    ('/api/system/bt_speakers/update', 'POST'): '/bt_speakers/update',
+    ('/api/system/bt_speakers/connect', 'POST'): '/bt_speakers/connect',
     ('/api/system/pointer_status', 'GET'): '/pointer_status',
     ('/api/system/pointer_set', 'POST'): '/pointer_set',
     ('/api/system/nowplaying_autoexpand', 'GET'): '/nowplaying_autoexpand',
@@ -1120,12 +1186,43 @@ def _frame_ancestors():
     return f"'self' http://{host}:9000 https://{host}:9000"
 
 
+def _is_page_load():
+    """True for a top-level navigation (the HTML document itself), as opposed
+    to a subresource or an API call. Browsers say so outright (Chrome 76,
+    Firefox 90, Safari 16.4 and up); the Accept header is the fallback for
+    anything older, and it separates them just as well — a document asks for
+    text/html, an XHR/fetch for */* and an image for image/*. A page inside a
+    frame counts: it too precedes every subresource of its own page (the
+    Settings admin is opened in an iframe by Lyrion's Material skin)."""
+    dest = request.headers.get('Sec-Fetch-Dest')
+    if dest:
+        return dest in ('document', 'iframe', 'frame')
+    return 'text/html' in request.headers.get('Accept', '')
+
+
 @app.after_request
 def _set_csrf_cookie(resp):
     # Ensure a CSRF cookie exists so the SPA can read + echo it. Not HttpOnly by
     # design (double-submit needs JS to read it). Not Secure either: plain
     # HTTP, no TLS (see the module docstring's security-model note).
-    if not request.cookies.get('csrf'):
+    #
+    # Only a page load and /api/csrf mint one. Minting on *every* cookie-less
+    # response looks more forgiving but is exactly what produced the
+    # intermittent "Missing or invalid CSRF token": a cold page load fires a
+    # burst of parallel calls (the route guard, the update poll, the ~30
+    # loaders in Settings, one skin.json and several images per VU meter
+    # card), all of them cookie-less, so each one came back with a *different*
+    # token and the last response to land redefined the cookie under requests
+    # whose header had already been read. The VU meters and animations
+    # sections POST .../seen on their own the moment they open — right inside
+    # that window, which is why those two pages were the ones that failed. A
+    # page load cannot race anything (it precedes every subresource of its own
+    # page), and /api/csrf is asked for one at a time (see primeCsrf in
+    # admin-webui/src/api.js). The test is on the REQUEST, not on the reply's
+    # type: index.html is served no-cache, so a browser that has it revalidates
+    # and gets a 304 — which carries no Content-Type at all.
+    if not request.cookies.get('csrf') \
+            and (request.path == '/api/csrf' or _is_page_load()):
         resp.set_cookie('csrf', secrets.token_urlsafe(24), samesite='Strict',
                         secure=False, httponly=False)
     # One framing policy for every response, so the whole admin (including the
@@ -1146,6 +1243,19 @@ def _set_csrf_cookie(resp):
         resp.headers['Pragma'] = 'no-cache'
         resp.headers['Expires'] = '0'
     return resp
+
+
+@app.route('/api/csrf', methods=['GET'])
+def csrf_bootstrap():
+    """Give a browser that has no CSRF cookie one, on its own.
+
+    The page it loaded normally brings the token with it (_set_csrf_cookie
+    above), so this is the recovery path for the cases where it cannot: an
+    index.html answered 304 from the browser cache after the session cookie
+    was dropped, a restored tab, a page opened before this daemon was up.
+    Pre-auth on purpose — the login POST needs a token too.
+    """
+    return jsonify({'success': True})
 
 
 def _require_session():
@@ -1304,9 +1414,10 @@ def provision_wifi_connect():
     data = request.get_json(silent=True) or {}
     ssid = (data.get('ssid') or '').strip()
     password = data.get('password') or ''
+    band = _picked_band(data.get('band'))
     # Reply first: the join itself (with its scan-and-retry dance) can take a
     # while, and the on-screen panel just needs to know it started.
-    threading.Thread(target=_bg_connect, args=(ssid, password), daemon=True).start()
+    threading.Thread(target=_bg_connect, args=(ssid, password, band), daemon=True).start()
     return jsonify({'success': True, 'dropping_ap': True})
 
 
@@ -1322,14 +1433,20 @@ def provision_wifi_rescan():
     return jsonify({'success': True, 'networks': nets})
 
 
-def _bg_connect(ssid, password):
+def _picked_band(value):
+    """The band a client asked for, or '' for anything we don't recognise."""
+    band = (value or '').strip()
+    return band if band in ('2.4', '5', '6') else ''
+
+
+def _bg_connect(ssid, password, band=''):
     with _prov_lock:
         state = _load_prov_state()
         state['stage'] = 'connecting'
         state['ssid_attempt'] = ssid
         state['error'] = None
         _save_prov_state(state)
-        ok, err, ap = _connect_wifi(ssid, password, ap_fallback=False)
+        ok, err, ap = _connect_wifi(ssid, password, ap_fallback=False, band=band)
         state = _load_prov_state()
         if ok:
             state['stage'] = 'network-ok'
@@ -1802,13 +1919,14 @@ def netrecovery_wifi_connect():
     data = request.get_json(silent=True) or {}
     ssid = (data.get('ssid') or '').strip()
     password = data.get('password') or ''
+    band = _picked_band(data.get('band'))
     # Reply first (the AP is about to drop; the phone must know to expect it).
-    threading.Thread(target=_bg_netrecovery_connect, args=(ssid, password), daemon=True).start()
+    threading.Thread(target=_bg_netrecovery_connect, args=(ssid, password, band), daemon=True).start()
     return jsonify({'success': True, 'dropping_ap': True})
 
 
-def _bg_netrecovery_connect(ssid, password):
-    ok, err, ap = _connect_wifi(ssid, password)
+def _bg_netrecovery_connect(ssid, password, band=''):
+    ok, err, ap = _connect_wifi(ssid, password, band=band)
     with _net_lock:
         if ok:
             # Connected: _connect_wifi already tore the AP down; the network
@@ -1842,6 +1960,12 @@ def _handle_proxy(local_path, method):
     data, status = _proxy(API_BASE, api_path, method=method, body=body,
                           timeout=220 if 'debug_kdump' in api_path  # may apt-get install kdump-tools
                           else 200 if 'tailscale_install' in api_path
+                          # Bluetooth talks to hardware that answers when it
+                          # feels like it: a scan runs for its full window, and
+                          # pairing waits on a speaker whose button someone
+                          # still has to press. api_server bounds each of these
+                          # itself — this only has to outlast it.
+                          else 120 if api_path.startswith('/bt_speakers')
                           # Joining a Wi-Fi network or bringing the cable up
                           # ends in a DHCP wait, so these outlast the default
                           # budget on any slow network — and cutting them off
@@ -1850,7 +1974,9 @@ def _handle_proxy(local_path, method):
                           else 90 if 'apply' in api_path or 'dsp' in api_path
                           or 'tailscale' in api_path or 'ssh' in api_path
                           or 'wifi_connect' in api_path or 'wired_dhcp' in api_path
-                          or 'debug_plymouth' in api_path else 15)
+                          or 'debug_plymouth' in api_path
+                          # probes with their own timeouts, up to ~35 s in all
+                          else 45 if api_path == '/network_check' else 15)
     return jsonify(data), status
 
 
@@ -1903,7 +2029,7 @@ def factory_reset():
 # auth (not cookies) also means these routes are CSRF-immune by design.
 _SOURCES_FWD_PREFIXES = ('/api/sources', '/api/usb', '/api/internal', '/api/apply',
                          '/api/backup', '/api/restore', '/api/cd', '/api/dsp', '/api/local',
-                         '/api/playlistdir')
+                         '/api/playlistdir', '/api/meta')
 _PAIR_TOKENS_FILE = '/etc/hifi-pairing-tokens.json'
 
 
@@ -2043,6 +2169,31 @@ def lms_skin_status_proxy():
     if denied:
         return denied
     return _forward_to_sources('/api/lms_skin_status')
+
+
+# Album and artist information (/api/meta/*, hifi_metadata.py via
+# sources_server): the web admin's Library card reads and changes its settings
+# and clears its cache through here, with the session as the gate — the
+# /api/meta prefix above is the pairing-token door for the phone.
+@app.route('/api/system/meta/<path:rest>', methods=['GET', 'POST'])
+def meta_proxy(rest):
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/meta/' + rest)
+
+
+# The Library editor (/library): the tags inside the music files
+# (/api/library/*, hifi_tags.py via sources_server), same session gate. Covers
+# come through here as images, content type and all: the admin page may be
+# HTTPS and Lyrion is plain HTTP on another port, so the browser could not
+# load them from there.
+@app.route('/api/system/library/<path:rest>', methods=['GET', 'POST'])
+def library_proxy(rest):
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/library/' + rest)
 
 
 # Playlist folder (Sources -> Advanced). Same story as lms_skin: it is a Lyrion
@@ -2287,6 +2438,25 @@ def root():
     return _serve_spa('index.html')
 
 
+@app.route('/library', methods=['GET'])
+@app.route('/library/', methods=['GET'])
+def library_page():
+    # The Library editor: a second page of the same Vite build (library.html
+    # next to index.html in DIST_DIR), same origin, session and CSRF cookie;
+    # it checks the login itself, like the admin. Never during setup or a
+    # network recovery: those own the whole site (see root()).
+    if _provisioning() or _net_recovery['active']:
+        return redirect('/', code=302)
+    if request.path.endswith('/'):
+        # The build's asset paths are relative (base './'): from /library/ they
+        # would resolve under /library/assets/, which is not where they are.
+        qs = request.query_string.decode('utf-8')
+        return redirect('/library' + (f'?{qs}' if qs else ''), code=302)
+    if os.path.isfile(os.path.join(DIST_DIR, 'library.html')):
+        return send_from_directory(DIST_DIR, 'library.html')
+    return _serve_spa('index.html')
+
+
 @app.route('/<path:subpath>', methods=['GET'])
 def spa(subpath):
     return _serve_spa(subpath)
@@ -2320,6 +2490,7 @@ _CAPTIVE_CSS = """
  select{-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%23aab' d='M5 7l5 6 5-6z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:14px;padding-right:36px}
  .muted{color:#889;font-size:13px}
  .net{padding:10px;border-bottom:1px solid #262b35;cursor:pointer} .row{display:flex;justify-content:space-between}
+ .band{color:#c8a24a;border:1px solid #3a3320;border-radius:4px;padding:1px 5px;font-size:11px;margin-left:6px;white-space:nowrap}
  .langbar{text-align:right;margin-bottom:8px} .langbar a{color:#889;font-size:13px;text-decoration:none;margin-left:10px}
  .langbar a.active{color:#c8a24a;font-weight:600}
  .bar{height:8px;border-radius:4px;background:#12151b;overflow:hidden;margin:10px 0}
@@ -2383,9 +2554,12 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
  <label id="lbl-wifi">Wi-Fi network</label>
  <div id="nets"></div>
  <label id="lbl-ssid">Or enter the network name (SSID)</label>
- <input id="ssid" placeholder="Network name">
+ <input id="ssid" placeholder="Network name" oninput="pickedBand=''">
  <label id="lbl-pass">Wi-Fi password</label>
- <input id="pass" type="password" placeholder="Password">
+ <!-- Shown in clear on purpose: a Wi-Fi key is long, typed once, on a phone
+      held by whoever owns the network, and a typo behind dots is the single
+      most common reason a join fails. -->
+ <input id="pass" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Password">
  <button onclick="connect()" id="btn-connect">Connect via Wi-Fi</button>
  <button class="sec" id="btn-wired" onclick="useWired()">I'm connected via cable (Ethernet)</button>
  <p class="muted" id="netmsg"></p>
@@ -2605,8 +2779,8 @@ SETUP_CAPTIVE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-
 
 <script>
 var STRINGS={
- en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreOverlayTitle:'Restoring from backup…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',netIntro:'Connect this device to your home network so it can finish setting up and be reachable from your phone/PC afterwards.',stepLabel:'Step {n} of {total}',audioIntro:'Pick the DAC / output device this player should send audio to. You can change this later from Settings.',lyrionIntro:'Choose where your music library lives: on this device, or on a Lyrion server you already run elsewhere on your network.',timezoneIntro:'Used for the clock, alarms and any scheduled tasks on this device.',updateRequired:'Update required',updateNow:'Update now',updateChecking:'Checking for updates…',updateAutoStarting:'An update is available and required — starting it now…',updateApplying:'Updating — this can take a few minutes…',updateDoneRebooting:'Update complete. Rebooting…',updateFailed:'Update check/install failed. Retrying is required to continue setup.',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',lyrionDownloading:'Downloading Lyrion Music Server…',lyrionRestarting:'Restarting Lyrion Music Server…',lyrionInstallFailed:'Lyrion install failed.',continueAnyway:'Continue anyway',skinTitle:'Web player look',skinHelp:"Choose the look of Lyrion's web player (the page you open from a browser or phone). Osmium matches this device's interface.",skinOsmium:'Osmium (recommended)',skinMaterial:'Material',skinInstalling:'Installing the Material web interface…',skinApplying:'Applying the skin…',skinDone:'Skin applied.',skinFailed:"Couldn't apply the skin. Check the network connection and try again.",lmsPlugins:'Music services',lmsPluginsHelp:'Choose what to add to your music server. You can add or remove these later from Lyrion.',lmsPluginsGo:'Install and continue',lmsPluginsSkip:'Skip, add nothing',nextBtn:'Next',plgPageOf:'Page {n} of {total}',plgLater:'You can add or remove these later from Lyrion.',grp_streaming:'Streaming services',grpd_streaming:'Do you have a subscription? Tick the services you want to listen to on this device.',grp_radio:'Internet radio',grpd_radio:'Extras for listening to radio stations over the internet.',grp_info:'About your music',grpd_info:'More details on artists and albums while you listen.',analyticsTick:'Send anonymous usage statistics',lmsPluginsInstalling:'Installing the selected services…',lmsPluginsApplying:'Finishing the music server setup…',lmsPluginsDone:'Music server ready.',lmsPluginsFailed:"Couldn't finish the music server setup.",plg_MusicArtistInfo:'Artist and album info',plgd_MusicArtistInfo:'Biographies, album reviews and lyrics inside the player.',plg_Spotty:'Spotify',plgd_Spotty:'Play your Spotify Premium account through this player.',plg_TIDAL:'TIDAL',plgd_TIDAL:'Listen with your TIDAL subscription.',plg_Qobuz:'Qobuz',plgd_Qobuz:'Listen with your Qobuz subscription.',plg_Deezer:'Deezer',plgd_Deezer:'Listen with your Deezer subscription.',plg_RadioNowPlaying:'Radio track info',plgd_RadioNowPlaying:'Shows the track and cover art playing on internet radio.',plg_RadioNet:'Radio.net',plgd_RadioNet:'Browse the Radio.net internet radio directory.',analytics:'Help improve Lyrion (optional)',analyticsHelp:'Every couple of days, sends an anonymous ID, the version and operating system, the list of active plugins and how many tracks and players you have to the Lyrion community (stats.lms-community.org). No personal data, no track titles. You can change this later from Lyrion.',sources:'Music sources',sourcesAskIntro:'Do you want to set up sources like a NAS or an internal hard disk? External devices (USB) already mount automatically — nothing to do for those.',sourcesYes:'Yes, set up sources',sourcesNo:'No, skip this',sourcesTypeIntro:'Choose what to add. You can add more than one before continuing.',addNas:'Network drive (NAS)',addInternal:'Internal disk',sourcesDone:'Done, continue',sourcesFinishing:'Finishing…',backBtn:'Back',cancelBtn:'Cancel',smbWizIntro:"Music kept on a NAS or another computer. The player looks for them on your network; you only have to pick one.",smbSearching:'Looking for devices on your network',smbNothing:'Nothing found. Check that the other device is switched on and on the same network, or type its address yourself.',smbSearchAgain:'Search again',smbTypeIt:"I'll type it myself",smbAddress:'Name or address of the device',smbManualHint:'For example nas.local or 192.168.1.20.',smbOnDevice:'On {device}',smbAuthHint:'This device wants to know who you are. Use the same username and password you use on it.',smbSignIn:'Sign in',smbSignInTo:'Sign in to {device}',smbUserLabel:'Username',smbWrongPassword:'Wrong username or password. Try again.',smbChangeUser:'Change',smbLoadingShares:'Reading the shared folders…',smbShareLabel:'Shared folder name',smbTypeShareHint:'Type it exactly as it appears on the other device.',smbNoShares:'This device is not sharing any folder.',smbNeedPassword:'It asks for a password',smbDevice:'Device',smbFolder:'Folder',smbAllowWrite:'Let the player write into this folder',smbWriteHint:'Needed to copy CDs onto it. Leave it off if the folder only has to be listened to.',smbAddNow:'Add this folder',smbListFailed:'Could not read the shared folders from this device.',smbOpenFailed:'Could not open this folder.',smbShowDetail:'Technical details',smbNoClientHint:'This player cannot read the list of shared folders yet: update it and it will offer them next time.',smbConnecting:'Connecting…',smbConnected:'Connected!',smbFolderTitle:'Choose what to add',smbFolderIntro:'Use the whole share, or open a folder to use just part of it.',smbFolderUp:'Up',smbFolderUse:'Use this folder',smbFolderNoSubfolders:'No subfolders here.',smbFolderSaving:'Saving…',internalIntro:'Pick a disk to use for your music library.',internalLoading:'Loading…',internalNone:'No internal disks found.',internalAlreadyUsed:'Already in use',internalUseBtn:'Use this disk',internalFormatBtn:'Format this disk',internalAdopting:'Adding…',formatTitle:'Format disk',formatFs:'Filesystem',formatLabel:'Disk name',formatWarn:'This will ERASE ALL DATA on {disk}.',formatConfirmMsg:'Type {label} below to confirm.',formatGo:'Format now',formatting:'Formatting — this can take a while…',formatDoneMsg:'Done — the disk is ready to use.',continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:'Setup complete. Opening the web player…',rebootTitle:'Rebooting…',rebootGoingDown:'The device is restarting.',rebootComingBack:'Waiting for the device to come back online.',rebootAuto:'This page will reconnect automatically — no need to refresh.',error:'Error: '},
- it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreOverlayTitle:'Ripristino da backup in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',netIntro:'Collega questo dispositivo alla tua rete di casa così può completare la configurazione ed essere raggiungibile da telefono/PC in seguito.',stepLabel:'Passo {n} di {total}',audioIntro:'Scegli il DAC / dispositivo di uscita a cui questo player deve inviare l\\'audio. Puoi cambiarlo in seguito dalle Impostazioni.',lyrionIntro:'Scegli dove vive la tua libreria musicale: su questo dispositivo, oppure su un server Lyrion che hai già altrove sulla tua rete.',timezoneIntro:'Usato per l\\'orologio, le sveglie e qualsiasi attività pianificata su questo dispositivo.',updateRequired:'Aggiornamento richiesto',updateNow:'Aggiorna ora',updateChecking:'Controllo aggiornamenti…',updateAutoStarting:'È disponibile un aggiornamento obbligatorio — avvio in corso…',updateApplying:'Aggiornamento in corso — può richiedere qualche minuto…',updateDoneRebooting:'Aggiornamento completato. Riavvio in corso…',updateFailed:'Controllo/installazione aggiornamento fallito. È necessario riprovare per continuare il setup.',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',lyrionDownloading:'Scaricamento di Lyrion Music Server…',lyrionRestarting:'Riavvio di Lyrion Music Server…',lyrionInstallFailed:'Installazione di Lyrion non riuscita.',continueAnyway:'Continua comunque',skinTitle:'Aspetto del player web',skinHelp:"Scegli l'aspetto del player web di Lyrion (la pagina che apri da browser o telefono). Osmium è coerente con l'interfaccia di questo dispositivo.",skinOsmium:'Osmium (consigliata)',skinMaterial:'Material',skinInstalling:"Installazione dell'interfaccia web Material…",skinApplying:'Applicazione della skin…',skinDone:'Skin applicata.',skinFailed:'Impossibile applicare la skin. Controlla la rete e riprova.',lmsPlugins:'Servizi musicali',lmsPluginsHelp:'Scegli cosa aggiungere al tuo server musicale. Puoi aggiungerli o rimuoverli in seguito da Lyrion.',lmsPluginsGo:'Installa e continua',lmsPluginsSkip:'Salta, non aggiungere nulla',nextBtn:'Avanti',plgPageOf:'Pagina {n} di {total}',plgLater:'Puoi aggiungerli o toglierli in seguito da Lyrion.',grp_streaming:'Servizi di streaming',grpd_streaming:'Hai un abbonamento? Spunta i servizi che vuoi ascoltare su questo apparecchio.',grp_radio:'Radio via internet',grpd_radio:'Aggiunte per ascoltare le stazioni radio via internet.',grp_info:'Informazioni sulla musica',grpd_info:'Più dettagli su artisti e album mentre ascolti.',analyticsTick:'Invia statistiche anonime di utilizzo',lmsPluginsInstalling:'Installazione dei servizi selezionati…',lmsPluginsApplying:'Completamento della configurazione del server musicale…',lmsPluginsDone:'Server musicale pronto.',lmsPluginsFailed:'Impossibile completare la configurazione del server musicale.',plg_MusicArtistInfo:'Info artisti e album',plgd_MusicArtistInfo:'Biografie, recensioni e testi dentro al player.',plg_Spotty:'Spotify',plgd_Spotty:'Riproduci il tuo account Spotify Premium su questo player.',plg_TIDAL:'TIDAL',plgd_TIDAL:'Ascolta con il tuo abbonamento TIDAL.',plg_Qobuz:'Qobuz',plgd_Qobuz:'Ascolta con il tuo abbonamento Qobuz.',plg_Deezer:'Deezer',plgd_Deezer:'Ascolta con il tuo abbonamento Deezer.',plg_RadioNowPlaying:'Info brani radio',plgd_RadioNowPlaying:'Mostra brano e copertina di quello che sta passando in radio.',plg_RadioNet:'Radio.net',plgd_RadioNet:'Sfoglia la directory di radio internet Radio.net.',analytics:'Aiuta a migliorare Lyrion (facoltativo)',analyticsHelp:"Ogni due giorni invia alla community di Lyrion (stats.lms-community.org) un identificativo anonimo, la versione e il sistema operativo, l'elenco dei plugin attivi e quanti brani e player hai. Nessun dato personale, nessun titolo dei brani. Puoi cambiare idea più avanti da Lyrion.",sources:'Sorgenti musicali',sourcesAskIntro:'Vuoi configurare sorgenti come un NAS o un disco rigido interno? I dispositivi esterni (USB) si montano già automaticamente — per quelli non serve fare nulla.',sourcesYes:'Sì, configura le sorgenti',sourcesNo:'No, salta questo passaggio',sourcesTypeIntro:'Scegli cosa aggiungere. Puoi aggiungerne più di una prima di continuare.',addNas:'Unità di rete (NAS)',addInternal:'Disco interno',sourcesDone:'Fatto, continua',sourcesFinishing:'Completamento in corso…',backBtn:'Indietro',cancelBtn:'Annulla',smbWizIntro:"La musica tenuta su un NAS o su un altro computer. Il lettore la cerca da solo sulla tua rete: a te basta scegliere.",smbSearching:'Cerco i dispositivi sulla tua rete',smbNothing:"Non ho trovato niente. Controlla che l'altro dispositivo sia acceso e sulla stessa rete, oppure scrivi tu il suo indirizzo.",smbSearchAgain:'Cerca ancora',smbTypeIt:'Lo scrivo io',smbAddress:'Nome o indirizzo del dispositivo',smbManualHint:'Per esempio nas.local oppure 192.168.1.20.',smbOnDevice:'Su {device}',smbAuthHint:'Questo dispositivo vuole sapere chi sei. Usa lo stesso nome utente e la stessa password che usi su di esso.',smbSignIn:'Accedi',smbSignInTo:'Accedi a {device}',smbUserLabel:'Nome utente',smbWrongPassword:'Nome utente o password sbagliati. Riprova.',smbChangeUser:'Cambia',smbLoadingShares:'Leggo le cartelle condivise…',smbShareLabel:'Nome della cartella condivisa',smbTypeShareHint:"Scrivilo esattamente come appare sull'altro dispositivo.",smbNoShares:'Questo dispositivo non condivide nessuna cartella.',smbNeedPassword:'Chiede una password',smbDevice:'Dispositivo',smbFolder:'Cartella',smbAllowWrite:'Permetti al lettore di scrivere in questa cartella',smbWriteHint:'Serve per copiarci i CD. Lascialo spento se la cartella deve solo essere ascoltata.',smbAddNow:'Aggiungi questa cartella',smbListFailed:'Non sono riuscito a leggere le cartelle condivise di questo dispositivo.',smbOpenFailed:'Non sono riuscito ad aprire questa cartella.',smbShowDetail:'Dettagli tecnici',smbNoClientHint:"Questo lettore non sa ancora leggere l'elenco delle cartelle condivise: aggiornalo e la prossima volta te le proporrà.",smbConnecting:'Connessione in corso…',smbConnected:'Connesso!',smbFolderTitle:'Scegli cosa aggiungere',smbFolderIntro:"Usa l'intera condivisione, oppure apri una cartella per usarne solo una parte.",smbFolderUp:'Su',smbFolderUse:'Usa questa cartella',smbFolderNoSubfolders:'Nessuna sottocartella qui.',smbFolderSaving:'Salvataggio…',internalIntro:'Scegli un disco da usare per la tua libreria musicale.',internalLoading:'Caricamento…',internalNone:'Nessun disco interno trovato.',internalAlreadyUsed:'Già in uso',internalUseBtn:'Usa questo disco',internalFormatBtn:'Formatta questo disco',internalAdopting:'Aggiunta in corso…',formatTitle:'Formatta disco',formatFs:'Filesystem',formatLabel:'Nome del disco',formatWarn:'Questo CANCELLERÀ TUTTI I DATI su {disk}.',formatConfirmMsg:'Digita {label} qui sotto per confermare.',formatGo:'Formatta ora',formatting:"Formattazione in corso — può richiedere un po' di tempo…",formatDoneMsg:'Fatto — il disco è pronto all\\'uso.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Apro il player web…',rebootTitle:'Riavvio in corso…',rebootGoingDown:'Il dispositivo si sta riavviando.',rebootComingBack:'In attesa che il dispositivo torni online.',rebootAuto:'Questa pagina si ricollegherà automaticamente — non serve aggiornarla.',error:'Errore: '}
+ en:{restoreIntro:'Setting up a new device? Restore a previous backup, or start fresh.',fresh:'Start fresh',restoreFile:'Backup file',restorePass:'Passphrase (if the backup is encrypted)',restore:'Restore from backup',restoring:'Restoring…',restoreOverlayTitle:'Restoring from backup…',restoreDone:'Restore complete. Rebooting to apply it — reconnect in about a minute.',restoreFailed:'Restore failed.',restoreNoFile:'Choose a backup file first.',wifi:'Wi-Fi network',ssid:'Or enter the network name (SSID)',pass:'Wi-Fi password',connect:'Connect via Wi-Fi',wired:"I'm connected via cable (Ethernet)",connecting:'Connecting… the setup Wi-Fi will turn off. Reconnect your phone to your home network, then open http://hifiplayer.local to continue setup where you left off.',noCable:'No cable detected',netIntro:'Connect this device to your home network so it can finish setting up and be reachable from your phone/PC afterwards.',stepLabel:'Step {n} of {total}',audioIntro:'Pick the DAC / output device this player should send audio to. You can change this later from Settings.',lyrionIntro:'Choose where your music library lives: on this device, or on a Lyrion server you already run elsewhere on your network.',timezoneIntro:'Used for the clock, alarms and any scheduled tasks on this device.',updateRequired:'Update required',updateNow:'Update now',updateChecking:'Checking for updates…',updateAutoStarting:'An update is available and required — starting it now…',updateApplying:'Updating — this can take a few minutes…',updateDoneRebooting:'Update complete. Rebooting…',updateFailed:'Update check/install failed. Retrying is required to continue setup.',devname:'Name this player',devnameHelp:'Used as its network name (e.g. "livingroom" → livingroom.local) and its Bluetooth/multiroom name. Letters, numbers and dashes only — leave empty to keep the default.',devnameSaving:'Saving…',mode:'Device mode',modeGui:'With screen (touchscreen)',modeHeadless:'Headless (no screen)',modeOff:'Server only (player off)',modeHelp:'In headless/server-only you manage everything from this web interface.',pointer:'Mouse pointer',pointerHelp:"Show the mouse cursor on screen? Leave it off for a touchscreen — turn it on if you're driving this device with a mouse.",pointerHide:'Touchscreen (hide pointer)',pointerShow:'Mouse (show pointer)',audio:'Audio output',audioContinue:'Continue',lyrion:'Music server (Lyrion)',lyrionLocal:'Use this device as the server',lyrionFollow:'Use a server already on my network',lyrionHost:'Server address',lyrionUse:'Use this server',lyrionInstall:'Install Lyrion',lyrionChecking:'Checking whether Lyrion Music Server is installed…',lyrionMissing:"Lyrion Music Server isn't installed yet.",lyrionInstalling:'Installing Lyrion Music Server…',lyrionDownloading:'Downloading Lyrion Music Server…',lyrionRestarting:'Restarting Lyrion Music Server…',lyrionInstallFailed:'Lyrion install failed.',continueAnyway:'Continue anyway',skinTitle:'Web player look',skinHelp:"Choose the look of Lyrion's web player (the page you open from a browser or phone). Osmium matches this device's interface.",skinOsmium:'Osmium (recommended)',skinMaterial:'Material',skinInstalling:'Installing the Material web interface…',skinApplying:'Applying the skin…',skinDone:'Skin applied.',skinFailed:"Couldn't apply the skin. Check the network connection and try again.",lmsPlugins:'Music services',lmsPluginsHelp:'Choose what to add to your music server. You can add or remove these later from Lyrion.',lmsPluginsGo:'Install and continue',lmsPluginsSkip:'Skip, add nothing',nextBtn:'Next',plgPageOf:'Page {n} of {total}',plgLater:'You can add or remove these later from Lyrion.',grp_streaming:'Streaming services',grpd_streaming:'Do you have a subscription? Tick the services you want to listen to on this device.',grp_radio:'Internet radio',grpd_radio:'Extras for listening to radio stations over the internet.',grp_info:'About your music',grpd_info:'More details on artists and albums while you listen.',analyticsTick:'Send anonymous usage statistics',lmsPluginsInstalling:'Installing the selected services…',lmsPluginsApplying:'Finishing the music server setup…',lmsPluginsDone:'Music server ready.',lmsPluginsFailed:"Couldn't finish the music server setup.",plg_MusicArtistInfo:'Artist and album info',plgd_MusicArtistInfo:'Biographies, album reviews and lyrics inside the player.',plg_Spotty:'Spotify',plgd_Spotty:'Play your Spotify Premium account through this player.',plg_TIDAL:'TIDAL',plgd_TIDAL:'Listen with your TIDAL subscription.',plg_Qobuz:'Qobuz',plgd_Qobuz:'Listen with your Qobuz subscription.',plg_Deezer:'Deezer',plgd_Deezer:'Listen with your Deezer subscription.',plg_RadioNowPlaying:'Radio track info',plgd_RadioNowPlaying:'Shows the track and cover art playing on internet radio.',plg_RadioNet:'Radio.net',plgd_RadioNet:'Browse the Radio.net internet radio directory.',analytics:'Help improve Lyrion (optional)',analyticsHelp:'Every couple of days, sends an anonymous ID, the version and operating system, the list of active plugins and how many tracks and players you have to the Lyrion community (stats.lms-community.org). No personal data, no track titles. You can change this later from Lyrion.',sources:'Music sources',sourcesAskIntro:'Do you want to set up sources like a NAS or an internal hard disk? External devices (USB) already mount automatically — nothing to do for those.',sourcesYes:'Yes, set up sources',sourcesNo:'No, skip this',sourcesTypeIntro:'Choose what to add. You can add more than one before continuing.',addNas:'Network drive (NAS)',addInternal:'Internal disk',sourcesDone:'Done, continue',sourcesFinishing:'Finishing…',backBtn:'Back',cancelBtn:'Cancel',smbWizIntro:"Music kept on a NAS or another computer. The player looks for them on your network; you only have to pick one.",smbSearching:'Looking for devices on your network',smbNothing:'Nothing found. Check that the other device is switched on and on the same network, or type its address yourself.',smbSearchAgain:'Search again',smbTypeIt:"I'll type it myself",smbAddress:'Name or address of the device',smbManualHint:'For example nas.local or 192.168.1.20.',smbOnDevice:'On {device}',smbAuthHint:'This device wants to know who you are. Use the same username and password you use on it.',smbSignIn:'Sign in',smbSignInTo:'Sign in to {device}',smbUserLabel:'Username',smbWrongPassword:'Wrong username or password. Try again.',smbChangeUser:'Change',smbLoadingShares:'Reading the shared folders…',smbShareLabel:'Shared folder name',smbTypeShareHint:'Type it exactly as it appears on the other device.',smbNoShares:'This device is not sharing any folder.',smbNeedPassword:'It asks for a password',smbDevice:'Device',smbFolder:'Folder',smbAllowWrite:'Let the player write into this folder',smbWriteHint:'Lets the player save into it — needed to copy CDs onto it. Turn it off if the folder only has to be listened to.',smbAddNow:'Add this folder',smbListFailed:'Could not read the shared folders from this device.',smbOpenFailed:'Could not open this folder.',smbShowDetail:'Technical details',smbNoClientHint:'This player cannot read the list of shared folders yet: update it and it will offer them next time.',smbConnecting:'Connecting…',smbConnected:'Connected!',smbFolderTitle:'Choose what to add',smbFolderIntro:'Use the whole share, or open a folder to use just part of it.',smbFolderUp:'Up',smbFolderUse:'Use this folder',smbFolderNoSubfolders:'No subfolders here.',smbFolderSaving:'Saving…',internalIntro:'Pick a disk to use for your music library.',internalLoading:'Loading…',internalNone:'No internal disks found.',internalAlreadyUsed:'Already in use',internalUseBtn:'Use this disk',internalFormatBtn:'Format this disk',internalAdopting:'Adding…',formatTitle:'Format disk',formatFs:'Filesystem',formatLabel:'Disk name',formatWarn:'This will ERASE ALL DATA on {disk}.',formatConfirmMsg:'Type {label} below to confirm.',formatGo:'Format now',formatting:'Formatting — this can take a while…',formatDoneMsg:'Done — the disk is ready to use.',continueBtn:'Continue',timezone:'Time zone',tzSave:'Save and continue',account:'Web admin account',accountHelp:"Used to log into this device's web interface (http://…) from now on.",username:'Username',password:'Password',confirmPassword:'Confirm password',createAccount:'Create account',creating:'Creating…',accountMismatch:'Passwords do not match.',accountTooShort:'Username needs at least 3 characters, password at least 8.',finishGui:'Screen mode set. Setup is complete — press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network. The device will then start its normal on-screen interface.',finishHeadless:'Headless mode set. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishOff:'Server-only mode set — this device will not play audio locally. Press "Complete setup" below: the hotspot will turn off, reconnect your phone to your network and open http://hifiplayer.local',finishBtn:'Complete setup',finishDone:'Setup complete — hotspot off. Open http://hifiplayer.local from your network.',finishToLyrion:'Setup complete. Opening the web player…',rebootTitle:'Rebooting…',rebootGoingDown:'The device is restarting.',rebootComingBack:'Waiting for the device to come back online.',rebootAuto:'This page will reconnect automatically — no need to refresh.',error:'Error: '},
+ it:{restoreIntro:'Stai configurando un nuovo dispositivo? Ripristina un backup precedente, oppure inizia da zero.',fresh:'Inizia da zero',restoreFile:'File di backup',restorePass:'Passphrase (se il backup è cifrato)',restore:'Ripristina da backup',restoring:'Ripristino in corso…',restoreOverlayTitle:'Ripristino da backup in corso…',restoreDone:'Ripristino completato. Riavvio in corso per applicarlo — riconnettiti tra circa un minuto.',restoreFailed:'Ripristino non riuscito.',restoreNoFile:'Scegli prima un file di backup.',wifi:'Rete Wi-Fi',ssid:'Oppure inserisci il nome (SSID)',pass:'Password Wi-Fi',connect:'Connetti via Wi-Fi',wired:'Sono connesso via cavo (Ethernet)',connecting:'Connessione in corso… il Wi-Fi di setup si spegnerà. Riconnetti il telefono alla tua rete di casa, poi apri http://hifiplayer.local per continuare la configurazione da dove l\\'hai lasciata.',noCable:'Nessun cavo rilevato',netIntro:'Collega questo dispositivo alla tua rete di casa così può completare la configurazione ed essere raggiungibile da telefono/PC in seguito.',stepLabel:'Passo {n} di {total}',audioIntro:'Scegli il DAC / dispositivo di uscita a cui questo player deve inviare l\\'audio. Puoi cambiarlo in seguito dalle Impostazioni.',lyrionIntro:'Scegli dove vive la tua libreria musicale: su questo dispositivo, oppure su un server Lyrion che hai già altrove sulla tua rete.',timezoneIntro:'Usato per l\\'orologio, le sveglie e qualsiasi attività pianificata su questo dispositivo.',updateRequired:'Aggiornamento richiesto',updateNow:'Aggiorna ora',updateChecking:'Controllo aggiornamenti…',updateAutoStarting:'È disponibile un aggiornamento obbligatorio — avvio in corso…',updateApplying:'Aggiornamento in corso — può richiedere qualche minuto…',updateDoneRebooting:'Aggiornamento completato. Riavvio in corso…',updateFailed:'Controllo/installazione aggiornamento fallito. È necessario riprovare per continuare il setup.',devname:'Dai un nome a questo player',devnameHelp:'Usato come nome di rete (es. "salotto" → salotto.local) e come nome Bluetooth/multiroom. Solo lettere, numeri e trattini — lascia vuoto per mantenere quello predefinito.',devnameSaving:'Salvataggio…',mode:'Modalità dispositivo',modeGui:'Con schermo (touchscreen)',modeHeadless:'Headless (senza schermo)',modeOff:'Solo server (player spento)',modeHelp:'In headless/solo server gestisci tutto da questa interfaccia web.',pointer:'Puntatore del mouse',pointerHelp:'Mostrare il cursore del mouse a schermo? Lascialo spento per un touchscreen — accendilo se usi il dispositivo con un mouse.',pointerHide:'Touchscreen (nascondi puntatore)',pointerShow:'Mouse (mostra puntatore)',audio:'Uscita audio',audioContinue:'Continua',lyrion:'Server musicale (Lyrion)',lyrionLocal:'Usa questo dispositivo come server',lyrionFollow:'Usa un server già presente sulla rete',lyrionHost:'Indirizzo del server',lyrionUse:'Usa questo server',lyrionInstall:'Installa Lyrion',lyrionChecking:'Verifica se Lyrion Music Server è installato…',lyrionMissing:'Lyrion Music Server non è ancora installato.',lyrionInstalling:'Installazione di Lyrion Music Server…',lyrionDownloading:'Scaricamento di Lyrion Music Server…',lyrionRestarting:'Riavvio di Lyrion Music Server…',lyrionInstallFailed:'Installazione di Lyrion non riuscita.',continueAnyway:'Continua comunque',skinTitle:'Aspetto del player web',skinHelp:"Scegli l'aspetto del player web di Lyrion (la pagina che apri da browser o telefono). Osmium è coerente con l'interfaccia di questo dispositivo.",skinOsmium:'Osmium (consigliata)',skinMaterial:'Material',skinInstalling:"Installazione dell'interfaccia web Material…",skinApplying:'Applicazione della skin…',skinDone:'Skin applicata.',skinFailed:'Impossibile applicare la skin. Controlla la rete e riprova.',lmsPlugins:'Servizi musicali',lmsPluginsHelp:'Scegli cosa aggiungere al tuo server musicale. Puoi aggiungerli o rimuoverli in seguito da Lyrion.',lmsPluginsGo:'Installa e continua',lmsPluginsSkip:'Salta, non aggiungere nulla',nextBtn:'Avanti',plgPageOf:'Pagina {n} di {total}',plgLater:'Puoi aggiungerli o toglierli in seguito da Lyrion.',grp_streaming:'Servizi di streaming',grpd_streaming:'Hai un abbonamento? Spunta i servizi che vuoi ascoltare su questo apparecchio.',grp_radio:'Radio via internet',grpd_radio:'Aggiunte per ascoltare le stazioni radio via internet.',grp_info:'Informazioni sulla musica',grpd_info:'Più dettagli su artisti e album mentre ascolti.',analyticsTick:'Invia statistiche anonime di utilizzo',lmsPluginsInstalling:'Installazione dei servizi selezionati…',lmsPluginsApplying:'Completamento della configurazione del server musicale…',lmsPluginsDone:'Server musicale pronto.',lmsPluginsFailed:'Impossibile completare la configurazione del server musicale.',plg_MusicArtistInfo:'Info artisti e album',plgd_MusicArtistInfo:'Biografie, recensioni e testi dentro al player.',plg_Spotty:'Spotify',plgd_Spotty:'Riproduci il tuo account Spotify Premium su questo player.',plg_TIDAL:'TIDAL',plgd_TIDAL:'Ascolta con il tuo abbonamento TIDAL.',plg_Qobuz:'Qobuz',plgd_Qobuz:'Ascolta con il tuo abbonamento Qobuz.',plg_Deezer:'Deezer',plgd_Deezer:'Ascolta con il tuo abbonamento Deezer.',plg_RadioNowPlaying:'Info brani radio',plgd_RadioNowPlaying:'Mostra brano e copertina di quello che sta passando in radio.',plg_RadioNet:'Radio.net',plgd_RadioNet:'Sfoglia la directory di radio internet Radio.net.',analytics:'Aiuta a migliorare Lyrion (facoltativo)',analyticsHelp:"Ogni due giorni invia alla community di Lyrion (stats.lms-community.org) un identificativo anonimo, la versione e il sistema operativo, l'elenco dei plugin attivi e quanti brani e player hai. Nessun dato personale, nessun titolo dei brani. Puoi cambiare idea più avanti da Lyrion.",sources:'Sorgenti musicali',sourcesAskIntro:'Vuoi configurare sorgenti come un NAS o un disco rigido interno? I dispositivi esterni (USB) si montano già automaticamente — per quelli non serve fare nulla.',sourcesYes:'Sì, configura le sorgenti',sourcesNo:'No, salta questo passaggio',sourcesTypeIntro:'Scegli cosa aggiungere. Puoi aggiungerne più di una prima di continuare.',addNas:'Unità di rete (NAS)',addInternal:'Disco interno',sourcesDone:'Fatto, continua',sourcesFinishing:'Completamento in corso…',backBtn:'Indietro',cancelBtn:'Annulla',smbWizIntro:"La musica tenuta su un NAS o su un altro computer. Il lettore la cerca da solo sulla tua rete: a te basta scegliere.",smbSearching:'Cerco i dispositivi sulla tua rete',smbNothing:"Non ho trovato niente. Controlla che l'altro dispositivo sia acceso e sulla stessa rete, oppure scrivi tu il suo indirizzo.",smbSearchAgain:'Cerca ancora',smbTypeIt:'Lo scrivo io',smbAddress:'Nome o indirizzo del dispositivo',smbManualHint:'Per esempio nas.local oppure 192.168.1.20.',smbOnDevice:'Su {device}',smbAuthHint:'Questo dispositivo vuole sapere chi sei. Usa lo stesso nome utente e la stessa password che usi su di esso.',smbSignIn:'Accedi',smbSignInTo:'Accedi a {device}',smbUserLabel:'Nome utente',smbWrongPassword:'Nome utente o password sbagliati. Riprova.',smbChangeUser:'Cambia',smbLoadingShares:'Leggo le cartelle condivise…',smbShareLabel:'Nome della cartella condivisa',smbTypeShareHint:"Scrivilo esattamente come appare sull'altro dispositivo.",smbNoShares:'Questo dispositivo non condivide nessuna cartella.',smbNeedPassword:'Chiede una password',smbDevice:'Dispositivo',smbFolder:'Cartella',smbAllowWrite:'Permetti al lettore di scrivere in questa cartella',smbWriteHint:'Permette al lettore di salvarci dentro: serve per copiarci i CD. Spegnilo se la cartella deve solo essere ascoltata.',smbAddNow:'Aggiungi questa cartella',smbListFailed:'Non sono riuscito a leggere le cartelle condivise di questo dispositivo.',smbOpenFailed:'Non sono riuscito ad aprire questa cartella.',smbShowDetail:'Dettagli tecnici',smbNoClientHint:"Questo lettore non sa ancora leggere l'elenco delle cartelle condivise: aggiornalo e la prossima volta te le proporrà.",smbConnecting:'Connessione in corso…',smbConnected:'Connesso!',smbFolderTitle:'Scegli cosa aggiungere',smbFolderIntro:"Usa l'intera condivisione, oppure apri una cartella per usarne solo una parte.",smbFolderUp:'Su',smbFolderUse:'Usa questa cartella',smbFolderNoSubfolders:'Nessuna sottocartella qui.',smbFolderSaving:'Salvataggio…',internalIntro:'Scegli un disco da usare per la tua libreria musicale.',internalLoading:'Caricamento…',internalNone:'Nessun disco interno trovato.',internalAlreadyUsed:'Già in uso',internalUseBtn:'Usa questo disco',internalFormatBtn:'Formatta questo disco',internalAdopting:'Aggiunta in corso…',formatTitle:'Formatta disco',formatFs:'Filesystem',formatLabel:'Nome del disco',formatWarn:'Questo CANCELLERÀ TUTTI I DATI su {disk}.',formatConfirmMsg:'Digita {label} qui sotto per confermare.',formatGo:'Formatta ora',formatting:"Formattazione in corso — può richiedere un po' di tempo…",formatDoneMsg:'Fatto — il disco è pronto all\\'uso.',continueBtn:'Continua',timezone:'Fuso orario',tzSave:'Salva e continua',account:'Account amministratore web',accountHelp:"Usato per accedere all'interfaccia web di questo dispositivo (http://…) da ora in poi.",username:'Nome utente',password:'Password',confirmPassword:'Conferma password',createAccount:'Crea account',creating:'Creazione…',accountMismatch:'Le password non coincidono.',accountTooShort:'Nome utente di almeno 3 caratteri, password di almeno 8.',finishGui:'Modalità con schermo impostata. Il setup è completo — premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete. Il dispositivo avvierà poi la sua normale interfaccia a schermo.',finishHeadless:'Modalità headless impostata. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishOff:'Modalità solo server impostata — questo dispositivo non riprodurrà audio in locale. Premi "Completa setup" qui sotto: l\\'hotspot si spegnerà, riconnetti il telefono alla tua rete e apri http://hifiplayer.local',finishBtn:'Completa setup',finishDone:'Setup completato — hotspot spento. Apri http://hifiplayer.local dalla tua rete.',finishToLyrion:'Setup completato. Apro il player web…',rebootTitle:'Riavvio in corso…',rebootGoingDown:'Il dispositivo si sta riavviando.',rebootComingBack:'In attesa che il dispositivo torni online.',rebootAuto:'Questa pagina si ricollegherà automaticamente — non serve aggiornarla.',error:'Errore: '}
 };
 // Chosen once, up front, on step-lang -- persisted so it survives the
 // network step's own reload (Wi-Fi hands off from the setup hotspot to the
@@ -2760,10 +2934,7 @@ if(STRINGS[LANG]){applyStrings();show('step-restore')}
 
 function load(){if(netPhaseDone)return;fetch('/api/provision/status').then(function(r){return r.json()}).then(function(s){
   if(!s.pending){return}
-  var n=document.getElementById('nets');n.innerHTML='';
-  (s.networks||[]).forEach(function(net){var d=document.createElement('div');d.className='net';
-    d.innerHTML='<div class="row"><span>'+net.ssid+'</span><span class="muted">'+net.signal+'%</span></div>';
-    d.onclick=function(){document.getElementById('ssid').value=net.ssid};n.appendChild(d)});
+  fillNets(s.networks||[]);
   if(s.error){document.getElementById('netmsg').textContent=S.error+s.error}
   if(s.stage==='network-ok'){netPhaseDone=true;checkMandatoryUpdate()}
 })}
@@ -2945,7 +3116,27 @@ function waitForReboot(){
   checkDown();
 }
 
-function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value};
+// The band the owner picked from the list. Kept only while the name in the
+// box is still the one they tapped: a hand-typed SSID carries no band, and a
+// band is only sent at all when the same name really is on two of them --
+// pinning a profile that has nowhere else to go just gives NetworkManager one
+// more way to fail.
+var pickedBand='';
+function fillNets(list){
+  var n=document.getElementById('nets');n.innerHTML='';
+  var dual={};list.forEach(function(net){dual[net.ssid]=(dual[net.ssid]||0)+1});
+  list.forEach(function(net){
+    var d=document.createElement('div');d.className='net';
+    var row=document.createElement('div');row.className='row';
+    var name=document.createElement('span');name.textContent=net.ssid;
+    // One SSID on 2.4 and 5 GHz would otherwise be two identical rows.
+    if(net.band&&dual[net.ssid]>1){var b=document.createElement('span');b.className='band';b.textContent=net.band+' GHz';name.appendChild(b)}
+    var sig=document.createElement('span');sig.className='muted';sig.textContent=net.signal+'%';
+    row.appendChild(name);row.appendChild(sig);d.appendChild(row);
+    d.onclick=function(){document.getElementById('ssid').value=net.ssid;pickedBand=dual[net.ssid]>1?(net.band||''):''};
+    n.appendChild(d)});
+}
+function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value,band:pickedBand};
   document.getElementById('netmsg').textContent=hostMsg(S.connecting);
   jpost('/api/provision/wifi_connect',b)}
 function useWired(){jpost('/api/provision/use_wired',{}).then(function(res){
@@ -3332,7 +3523,7 @@ function sourcesAsk(yes){
 var smb={},smbScanTimer=null,smbLoginRetry=null;
 function smbReset(){
   smbStopScan();
-  smb={step:0,manual:false,host:'',name:'',share:'',username:'',password:'',rw:false,busy:false,
+  smb={step:0,manual:false,host:'',name:'',share:'',username:'',password:'',rw:true,busy:false,
        err:'',detail:'',needsAuth:false,canList:true,noClient:false,
        scanState:'',scanProgress:0,hosts:[],shares:[]};
 }
@@ -3857,6 +4048,7 @@ NET_RECOVERY_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8
  label{display:block;font-size:13px;color:#aab;margin:8px 0 4px} input,button{width:100%;padding:12px;border-radius:8px;border:1px solid #333;background:#12151b;color:#eee;font-size:15px;box-sizing:border-box}
  button{background:#c8a24a;color:#111;font-weight:600;border:0;margin-top:12px} .muted{color:#889;font-size:13px}
  .net{padding:10px;border-bottom:1px solid #262b35;cursor:pointer} .row{display:flex;justify-content:space-between}
+ .band{color:#c8a24a;border:1px solid #3a3320;border-radius:4px;padding:1px 5px;font-size:11px;margin-left:6px;white-space:nowrap}
  .langbar{text-align:right;margin-bottom:8px} .langbar a{color:#889;font-size:13px;text-decoration:none;margin-left:10px}
  .langbar a.active{color:#c8a24a;font-weight:600}
 </style></head><body>
@@ -3869,9 +4061,12 @@ NET_RECOVERY_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8
  <label id="lbl-wifi">Wi-Fi network</label>
  <div id="nets"></div>
  <label id="lbl-ssid">Or enter the network name (SSID)</label>
- <input id="ssid" placeholder="Network name">
+ <input id="ssid" placeholder="Network name" oninput="pickedBand=''">
  <label id="lbl-pass">Wi-Fi password</label>
- <input id="pass" type="password" placeholder="Password">
+ <!-- Shown in clear on purpose: a Wi-Fi key is long, typed once, on a phone
+      held by whoever owns the network, and a typo behind dots is the single
+      most common reason a join fails. -->
+ <input id="pass" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Password">
  <button onclick="connect()" id="btn-connect">Connect</button>
  <p class="muted" id="netmsg"></p>
 </div>
@@ -3893,13 +4088,30 @@ document.getElementById('btn-connect').textContent=S.connect;
 function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||'','X-UI-Lang':LANG}}
 function load(){fetch('/api/netrecovery/status',{headers:h()}).then(function(r){return r.json()}).then(function(s){
   if(!s.active){location.href='/';return}
-  var n=document.getElementById('nets');n.innerHTML='';
-  (s.networks||[]).forEach(function(net){var d=document.createElement('div');d.className='net';
-    d.innerHTML='<div class="row"><span>'+net.ssid+'</span><span class="muted">'+net.signal+'%</span></div>';
-    d.onclick=function(){document.getElementById('ssid').value=net.ssid};n.appendChild(d)});
+  fillNets(s.networks||[]);
   if(s.error){document.getElementById('netmsg').textContent=S.error+s.error}
 })}
-function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value};
+// The band the owner picked from the list. Kept only while the name in the
+// box is still the one they tapped: a hand-typed SSID carries no band, and a
+// band is only sent at all when the same name really is on two of them --
+// pinning a profile that has nowhere else to go just gives NetworkManager one
+// more way to fail.
+var pickedBand='';
+function fillNets(list){
+  var n=document.getElementById('nets');n.innerHTML='';
+  var dual={};list.forEach(function(net){dual[net.ssid]=(dual[net.ssid]||0)+1});
+  list.forEach(function(net){
+    var d=document.createElement('div');d.className='net';
+    var row=document.createElement('div');row.className='row';
+    var name=document.createElement('span');name.textContent=net.ssid;
+    // One SSID on 2.4 and 5 GHz would otherwise be two identical rows.
+    if(net.band&&dual[net.ssid]>1){var b=document.createElement('span');b.className='band';b.textContent=net.band+' GHz';name.appendChild(b)}
+    var sig=document.createElement('span');sig.className='muted';sig.textContent=net.signal+'%';
+    row.appendChild(name);row.appendChild(sig);d.appendChild(row);
+    d.onclick=function(){document.getElementById('ssid').value=net.ssid;pickedBand=dual[net.ssid]>1?(net.band||''):''};
+    n.appendChild(d)});
+}
+function connect(){var b={ssid:document.getElementById('ssid').value,password:document.getElementById('pass').value,band:pickedBand};
   document.getElementById('netmsg').textContent=S.connecting;
   fetch('/api/netrecovery/wifi_connect',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},h()),body:JSON.stringify(b)})}
 setInterval(load,3000);load();

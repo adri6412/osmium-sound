@@ -27,6 +27,8 @@ sudo cp "$SRC"/icons/*.svg "$DEST/icons/"
 sudo cp -r "$ASSETS_SRC"/. "$ASSETS/"
 # VU meter skins live with the Qt sources, not in the shared asset folder
 [ -d "$(dirname "$0")/assets/vu" ] && sudo cp -r "$(dirname "$0")/assets/vu" "$ASSETS/"
+# Now Playing animations (CD, vinyl, cassette), same reason
+[ -d "$(dirname "$0")/assets/anim" ] && sudo cp -r "$(dirname "$0")/assets/anim" "$ASSETS/"
 # and the status plate under the cover, over the shared (older) one
 [ -d "$(dirname "$0")/assets/ledbar" ] && sudo cp "$(dirname "$0")"/assets/ledbar/*.png "$ASSETS/"
 sudo cp "$LOCALES_SRC"/*.json "$LOCALES/"

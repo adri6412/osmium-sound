@@ -1,0 +1,38 @@
+[Unit]
+# Osmium Sound — one squeezelite per Bluetooth speaker.
+#
+# %i is the speaker's Bluetooth address with '-' in place of ':' (systemd
+# instance names travel through too many escaping layers for a raw MAC to be
+# worth the risk). hifi-bt-player-run.py turns it back into an address, looks
+# the speaker up in /etc/hifi-player/bluetooth.json and execs squeezelite onto
+# bluealsa:DEV=<MAC>,PROFILE=a2dp.
+#
+# The result is what piCorePlayer does: the speaker appears in Lyrion as a
+# player of its own, with its own name and its own queue, alongside this
+# device's built-in player.
+#
+# Started by hifi-bt-out.service once the speaker is actually connected — the
+# ALSA PCM does not exist before that, so starting it earlier would only earn
+# a restart loop.
+Description=Osmium Sound - Bluetooth speaker player (%i)
+After=hifi-bluealsa.service
+BindsTo=hifi-bluealsa.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/sbin/hifi-bt-player-run.py %i
+Restart=always
+RestartSec=5
+# squeezelite exits on SIGTERM readily enough, but it can be inside an ALSA
+# write to a speaker that has just walked out of range. Never worth a stalled
+# shutdown.
+TimeoutStopSec=10
+
+# Same reasoning as squeezelite.service: this process feeds an audio sink, and
+# an underrun is audible. Lower weights than the local player though — the DAC
+# is the product, a Bluetooth speaker is the extra.
+Nice=-5
+CPUAccounting=yes
+IOAccounting=yes
+CPUWeight=500
+IOWeight=500

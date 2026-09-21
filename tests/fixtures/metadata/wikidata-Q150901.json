@@ -1,0 +1,25 @@
+{
+ "entities": {
+  "Q150901": {
+   "id": "Q150901",
+   "sitelinks": {
+    "enwiki": {
+     "badges": [
+      "Q17437796"
+     ],
+     "site": "enwiki",
+     "title": "The Dark Side of the Moon"
+    },
+    "itwiki": {
+     "badges": [
+      "Q17437796"
+     ],
+     "site": "itwiki",
+     "title": "The Dark Side of the Moon"
+    }
+   },
+   "type": "item"
+  }
+ },
+ "success": 1
+}

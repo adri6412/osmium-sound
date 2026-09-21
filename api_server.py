@@ -6,6 +6,9 @@ import shutil
 import signal
 import sys
 import socket
+import ssl
+import errno
+import email.utils
 import platform
 import re
 import json
@@ -91,11 +94,12 @@ OTA_REPO = os.environ.get('HIFI_OTA_REPO', 'adri6412/hifi-media-player')
 # that fallback, then use the fast path again from then on.
 OTA_MANIFEST_BASE = os.environ.get('HIFI_OTA_MANIFEST_BASE',
                                    'https://osmium-sound.pages.dev/ota')
-# Stable releases are served from file.osmiumsound.it (Cloudflare R2, the
-# host the ISO and the flasher come from) and the release workflow drops a
-# copy of the prod manifest next to the payloads. Read that copy when Pages
-# is unreachable, before resorting to the rate-limited GitHub API. Prod only:
-# dev/alpha builds live on GitHub alone.
+# Releases are served from file.osmiumsound.it (Cloudflare R2, the host the
+# ISO and the flasher come from) and the release workflow drops a copy of each
+# channel's manifest next to the payloads (ota/latest-<channel>.json). Read
+# that copy when Pages is unreachable, before resorting to the rate-limited
+# GitHub API. Stable releases since 2.5.24, every channel since 2.5.25; the
+# name stays for the HIFI_OTA_PROD_MIRROR_BASE override.
 OTA_PROD_MIRROR_BASE = os.environ.get('HIFI_OTA_PROD_MIRROR_BASE',
                                       'https://file.osmiumsound.it/ota')
 # OTA release channel: 'prod' tracks GitHub's /releases/latest (stable releases
@@ -153,8 +157,9 @@ OS_SCRIPT = '/usr/local/sbin/hifi-os-update.sh'
 OS_STATUS_FILE = '/run/hifi-os-status.json'
 OS_PREFIX = 'hifi-os-'
 # Immagine RAUC (schema A/B): un solo bundle che porta UI + componenti di
-# sistema + OS; lo installa RAUC nello slot inattivo in streaming dall'asset
-# della Release, senza passare dal disco (vedi hifi-image-update.sh).
+# sistema + OS; hifi-image-update.sh lo scarica intero su /data e lo fa
+# installare a RAUC nello slot inattivo, oppure lo fa leggere a RAUC in
+# streaming dall'asset della Release quando su /data non c'è posto.
 IMAGE_PREFIX = 'hifi-image-'
 IMAGE_STATUS_FILE = '/run/hifi-image-status.json'
 IMAGE_SCRIPT = '/usr/local/sbin/hifi-image-update.sh'
@@ -333,8 +338,15 @@ def close_all_apps_and_restart():
 def get_system_info():
     try:
         hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
-        
+        # The host name is normally in /etc/hosts; when it is not, this goes
+        # out to DNS, which hangs or fails without a network — and the
+        # interface list, the one thing the network page needs while the
+        # box is offline, must not go down with it.
+        try:
+            local_ip = socket.gethostbyname(hostname)
+        except Exception:
+            local_ip = 'Unknown'
+
         # Ottieni tutte le interfacce di rete
         import psutil
         network_interfaces = []
@@ -941,6 +953,463 @@ def get_network_status():
     typ = 'wireless' if dtype == 'wifi' else ('wired' if dtype == 'ethernet' else 'none')
     return {'type': typ, 'ip': ip, 'ssid': ssid, 'connected': bool(ip), 'device': device}
 
+# ──────────────────────────────────────────────────────────────────
+#  Network check ("network doctor"): walks the same path an update
+#  check takes — the box's own link, the router, the internet, name
+#  lookup, the clock (TLS needs it), the update server and the host
+#  the download comes from — and says at which hop it breaks, so the
+#  owner can tell "my Wi-Fi" from "my router" from "Osmium's server".
+#  Settings → System info / Updates, on the kiosk and in the web admin.
+#
+#  Every result is language-neutral (ids, codes, addresses, numbers):
+#  the UIs turn them into sentences.
+# ──────────────────────────────────────────────────────────────────
+NETCHECK_STEPS = ('link', 'router', 'internet', 'dns', 'clock', 'ota', 'download')
+# Raw IPs on purpose: this step must not depend on name lookup, which has
+# a step of its own. 443 rather than ICMP, since that is what the update
+# check needs and plenty of networks drop ping to the outside.
+_NETCHECK_IP_TARGETS = (('1.1.1.1', 443), ('8.8.8.8', 443), ('9.9.9.9', 443))
+_NETCHECK_LOCK = threading.Lock()
+_NETCHECK_UA = 'hifi-player-ota'
+
+def _netcheck_error(exc):
+    """(reason code, HTTP status or None) for a failed probe."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return 'http', exc.code
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+    if isinstance(reason, socket.gaierror):
+        return 'dns', None
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        return 'tlsCert', None
+    if isinstance(reason, ssl.SSLError):
+        return 'tls', None
+    if isinstance(reason, TimeoutError) or 'timed out' in str(reason):
+        return 'timeout', None
+    if isinstance(reason, ConnectionRefusedError):
+        return 'refused', None
+    if isinstance(reason, ConnectionResetError):
+        return 'reset', None
+    if isinstance(reason, OSError) and reason.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH):
+        return 'unreachable', None
+    return 'other', None
+
+def _netcheck_parallel(tasks, timeout):
+    """Run {key: fn} side by side and wait at most `timeout` seconds overall.
+    Daemon threads, so a probe stuck in a call without its own timeout
+    (getaddrinfo) can't hold the answer back: it is reported as timed out."""
+    results = {}
+    def run(key, fn):
+        try:
+            results[key] = fn()
+        except Exception as e:
+            results[key] = e
+    threads = [threading.Thread(target=run, args=(k, fn), daemon=True) for k, fn in tasks.items()]
+    for th in threads:
+        th.start()
+    deadline = time.monotonic() + timeout
+    for th in threads:
+        th.join(max(0.0, deadline - time.monotonic()))
+    return {k: results.get(k, TimeoutError('timed out')) for k in tasks}
+
+def _netcheck_link():
+    device, dtype = _active_device()
+    if not device:
+        return {'status': 'fail', 'error': 'noLink'}
+    out = {'device': device, 'type': 'wireless' if dtype == 'wifi' else 'wired',
+           'ip': _device_ip(device), 'status': 'ok'}
+    parts = [device]
+    if dtype == 'wifi':
+        out['ssid'] = _active_ssid()
+        try:
+            r = _run(['nmcli', '-t', '-f', 'IN-USE,SIGNAL', 'device', 'wifi', 'list',
+                      'ifname', device, '--rescan', 'no'], timeout=5)
+            for line in r.stdout.strip().split('\n'):
+                f = _terse_split(line)
+                if len(f) >= 2 and f[0] == '*' and f[1].isdigit():
+                    out['signal'] = int(f[1])
+        except Exception:
+            pass
+        if out.get('ssid'):
+            parts.append(out['ssid'])
+        if out.get('signal') is not None:
+            parts.append(f"{out['signal']}%")
+            if out['signal'] < 35:
+                out.update(status='warn', error='weakSignal')
+    if not out['ip']:
+        out.update(status='fail', error='noAddress')
+    elif out['ip'].startswith('169.254.'):
+        # link-local: the cable/Wi-Fi is up but nobody handed out an address
+        out.update(status='fail', error='noDhcp')
+    if out['ip']:
+        parts.append(out['ip'])
+    out['detail'] = ' · '.join(parts)
+    return out
+
+def _default_gateway():
+    r = _run(['ip', '-4', 'route', 'show', 'default'], timeout=5)
+    for line in r.stdout.splitlines():
+        m = re.search(r'\bvia (\S+)', line)
+        if m:
+            return m.group(1)
+    return None
+
+def _netcheck_router():
+    gw = _default_gateway()
+    if not gw:
+        return {'status': 'fail', 'error': 'noGateway'}
+    out = {'gateway': gw, 'detail': gw}
+    r = _run(['ping', '-n', '-q', '-c', '3', '-i', '0.2', '-W', '1', gw], timeout=8)
+    m = re.search(r'(\d+) packets transmitted, (\d+) received', r.stdout)
+    sent, got = (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+    if got:
+        rtt = re.search(r'= [\d.]+/([\d.]+)/', r.stdout)
+        if rtt:
+            out['ms'] = round(float(rtt.group(1)), 1)
+            out['detail'] = f"{gw} · {out['ms']} ms"
+        out['loss'] = round(100 * (sent - got) / sent) if sent else 0
+        out['status'] = 'warn' if got < sent else 'ok'
+        if got < sent:
+            out['error'] = 'packetLoss'
+        return out
+    # Some routers ignore ping. If it answered ARP it is there all the same.
+    n = _run(['ip', 'neigh', 'show', gw], timeout=5).stdout
+    if 'lladdr' in n and not re.search(r'\b(FAILED|INCOMPLETE)\b', n):
+        out.update(status='ok', error='noPing')
+        return out
+    out.update(status='fail', error='noAnswer')
+    return out
+
+def _netcheck_tcp(host, port, timeout=4):
+    t0 = time.monotonic()
+    with socket.create_connection((host, port), timeout=timeout):
+        pass
+    return round((time.monotonic() - t0) * 1000)
+
+def _netcheck_internet():
+    res = _netcheck_parallel({f'{h}:{p}': (lambda h=h, p=p: _netcheck_tcp(h, p))
+                              for h, p in _NETCHECK_IP_TARGETS}, 6)
+    ok = [(k, v) for k, v in res.items() if isinstance(v, int)]
+    if ok:
+        k, ms = min(ok, key=lambda kv: kv[1])
+        return {'status': 'ok', 'ms': ms, 'detail': f"{k.split(':')[0]} · {ms} ms"}
+    code, _ = _netcheck_error(next(iter(res.values())))
+    return {'status': 'fail', 'error': code,
+            'detail': ' · '.join(h for h, _ in _NETCHECK_IP_TARGETS)}
+
+def _netcheck_hosts():
+    """The hosts an update check and its download talk to."""
+    hosts = [urllib.parse.urlparse(OTA_MANIFEST_BASE).hostname,
+             urllib.parse.urlparse(OTA_PROD_MIRROR_BASE).hostname,
+             'api.github.com', 'github.com']
+    return [h for i, h in enumerate(hosts) if h and h not in hosts[:i]]
+
+def _netcheck_dns():
+    device, _ = _active_device()
+    servers = _device_ipv4_runtime(device)['dns'] if device else []
+    hosts = _netcheck_hosts()
+    res = _netcheck_parallel({h: (lambda h=h: socket.getaddrinfo(h, 443, proto=socket.IPPROTO_TCP))
+                              for h in hosts}, 6)
+    failed = [h for h, v in res.items() if isinstance(v, Exception)]
+    out = {'servers': servers, 'failed': failed, 'detail': ', '.join(servers) if servers else ''}
+    if len(failed) == len(hosts):
+        code, _ = _netcheck_error(res[hosts[0]])
+        out.update(status='fail', error='dns' if code == 'dns' else code)
+    elif failed:
+        out.update(status='warn', error='dnsPartial')
+    else:
+        out['status'] = 'ok'
+    return out
+
+def _netcheck_ntp():
+    try:
+        v = _run(['timedatectl', 'show', '-p', 'NTPSynchronized', '--value'], timeout=5).stdout.strip()
+        return v == 'yes'
+    except Exception:
+        return None
+
+def _netcheck_fetch(url, headers=None, limit=1 << 20, timeout=8):
+    """GET `url`; returns (info dict, body bytes or None). Never raises."""
+    host = urllib.parse.urlparse(url).hostname
+    info = {'host': host, 'url': url}
+    req = urllib.request.Request(url, headers={'User-Agent': _NETCHECK_UA, **(headers or {})})
+    t0 = time.monotonic()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read(limit)
+            info['http'] = resp.status
+            info['date'] = resp.headers.get('Date')
+            final = urllib.parse.urlparse(resp.geturl()).hostname
+            if final and final != host:
+                info['via'] = final
+        info['ms'] = round((time.monotonic() - t0) * 1000)
+        info['bytes'] = len(body)
+        info['status'] = 'ok'
+        return info, body
+    except Exception as e:
+        code, http = _netcheck_error(e)
+        info.update(status='fail', error=code, ms=round((time.monotonic() - t0) * 1000))
+        if http:
+            info['http'] = http
+        return info, None
+
+def _netcheck_ota(channel):
+    """The update check's own sources, in the order the device tries them
+    (see _fetch_release()). Returns (step, first manifest that answered,
+    the Date headers seen — for the clock step)."""
+    sources = {'pages': f'{OTA_MANIFEST_BASE}/latest-{channel}.json',
+               'mirror': f'{OTA_PROD_MIRROR_BASE}/latest-{channel}.json'}
+    # /rate_limit tells whether the last-resort fallback would work, and
+    # doesn't count against the 60 requests an hour itself
+    sources['github'] = 'https://api.github.com/rate_limit'
+    res = _netcheck_parallel({k: (lambda u=u: _netcheck_fetch(u)) for k, u in sources.items()}, 12)
+    rows, manifest, dates = [], None, []
+    for key in sources:
+        r = res[key]
+        if isinstance(r, Exception):
+            code, _ = _netcheck_error(r)
+            info, body = {'host': urllib.parse.urlparse(sources[key]).hostname,
+                          'status': 'fail', 'error': code}, None
+        else:
+            info, body = r
+        info['id'] = key
+        if info.get('date'):
+            dates.append(info['date'])
+        if body is not None:
+            try:
+                data = json.loads(body)
+            except Exception:
+                data = None
+            if key == 'github':
+                core = ((data or {}).get('resources') or {}).get('core') or {}
+                info['remaining'] = core.get('remaining')
+                if core.get('remaining') == 0:
+                    info.update(status='warn', error='rateLimited')
+            elif not (isinstance(data, dict) and data.get('tag_name')):
+                info.update(status='fail', error='badManifest')
+            else:
+                info['tag'] = data['tag_name']
+                manifest = manifest or data
+        info.pop('date', None)
+        rows.append(info)
+    by_id = {r['id']: r for r in rows}
+    if by_id['pages']['status'] == 'ok':
+        status, error = 'ok', None
+    elif manifest is not None or by_id['github']['status'] == 'ok':
+        # the device gets there through a fallback: updates still work
+        status, error = 'warn', 'fallback'
+    else:
+        status, error = 'fail', 'otaDown'
+    step = {'status': status, 'channel': channel, 'sources': rows,
+            'detail': by_id['pages'].get('tag') or ''}
+    if error:
+        step['error'] = error
+    return step, manifest, dates
+
+def _netcheck_download(manifest):
+    """First MiB of the payload this device would download: the same host,
+    redirects and speed the real update gets."""
+    if not manifest:
+        return {'status': 'skip'}
+    image = _image_mode() or _ab_ready()
+    wanted = [(IMAGE_PREFIX, '.raucb')] if image else [(p, '.tar.gz') for p in OTA_UI_PREFIX] + [(SYS_PREFIX, '.tar.gz')]
+    assets = manifest.get('assets') or []
+    asset = next((a for pfx, sfx in wanted for a in assets
+                  if str(a.get('name', '')).startswith(pfx) and str(a.get('name', '')).endswith(sfx)
+                  and a.get('browser_download_url')), None)
+    if not asset:
+        return {'status': 'skip'}
+    info, body = _netcheck_fetch(asset['browser_download_url'], headers={'Range': 'bytes=0-1048575'},
+                                 timeout=15)
+    out = {'status': info['status'], 'host': info['host'], 'asset': asset.get('name')}
+    for k in ('via', 'http', 'ms', 'error'):
+        if info.get(k) is not None:
+            out[k] = info[k]
+    if body is not None and info.get('ms'):
+        out['kbps'] = round(len(body) / 1024 / (info['ms'] / 1000))
+    out['detail'] = info.get('via') or info['host']
+    return out
+
+def _netcheck_clock(ntp, dates):
+    """The clock against the Date header of the servers that answered: TLS
+    certificates are refused by a box whose clock is far off. What counts is
+    that measured offset, not the NTP flag: the image may run no NTP client
+    at all and keep good time from the RTC (`ntp` is reported, not judged)."""
+    out = {'ntp': ntp, 'detail': time.strftime('%Y-%m-%d %H:%M'), 'status': 'ok'}
+    skews = []
+    for d in dates:
+        try:
+            skews.append(time.time() - email.utils.parsedate_to_datetime(d).timestamp())
+        except Exception:
+            pass
+    if skews:
+        skew = round(min(skews, key=abs))
+        out['skew'] = skew
+        out['detail'] += f' · {skew:+d} s'
+        if abs(skew) > 3600:
+            out.update(status='fail', error='clockOff')
+        elif abs(skew) > 120:
+            out.update(status='warn', error='clockOff')
+    elif time.gmtime().tm_year < 2025:
+        out.update(status='fail', error='clockOff')
+    return out
+
+def network_check():
+    with _NETCHECK_LOCK:
+        channel = get_ota_channel()
+        steps = {'link': _netcheck_link()}
+        if steps['link']['status'] == 'fail':
+            # no address, nothing further can work: don't list seven failures
+            for k in NETCHECK_STEPS[1:]:
+                steps[k] = {'status': 'skip'}
+        else:
+            res = _netcheck_parallel({'router': _netcheck_router, 'internet': _netcheck_internet,
+                                      'dns': _netcheck_dns, 'ntp': _netcheck_ntp,
+                                      'ota': lambda: _netcheck_ota(channel)}, 20)
+            for k in ('router', 'internet', 'dns'):
+                v = res[k]
+                steps[k] = v if isinstance(v, dict) else {'status': 'fail', 'error': _netcheck_error(v)[0]}
+            ota = res['ota']
+            manifest, dates = None, []
+            if isinstance(ota, tuple):
+                steps['ota'], manifest, dates = ota
+            else:
+                steps['ota'] = {'status': 'fail', 'error': _netcheck_error(ota)[0], 'channel': channel}
+            ntp = res['ntp'] if isinstance(res['ntp'], bool) else None
+            steps['clock'] = _netcheck_clock(ntp, dates)
+            try:
+                steps['download'] = _netcheck_download(manifest)
+            except Exception as e:
+                steps['download'] = {'status': 'fail', 'error': _netcheck_error(e)[0]}
+            # A later hop that works proves the earlier one does too: a router
+            # that ignores ping, or a network that blocks the raw-IP probes
+            # but lets the update server through, is not where the fault is.
+            ota_ok = steps['ota']['status'] != 'fail'
+            if steps['router']['status'] == 'fail' and steps['router'].get('gateway') \
+                    and (steps['internet']['status'] == 'ok' or ota_ok):
+                steps['router'].update(status='ok', error='noPing')
+            if steps['internet']['status'] == 'fail' and ota_ok:
+                steps['internet'].update(status='warn', error='blockedIps')
+        out = [dict(steps[k], id=k) for k in NETCHECK_STEPS]
+        verdict = next((s['id'] for s in out if s['status'] == 'fail'), None)
+        warn = next((s['id'] for s in out if s['status'] == 'warn'), None)
+        return {'success': True, 'channel': channel, 'at': int(time.time()),
+                'verdict': verdict or 'ok', 'warn': warn, 'steps': out}
+
+# ──────────────────────────────────────────────────────────────────
+#  Connectivity at a glance: the three states an OS's tray icon shows
+#  ("internet", "lan" = only the local network, "offline"), for the
+#  kiosk's top bar. Cheap on purpose (one ping, one TCP connect, a
+#  couple of seconds at worst) and cached, since the UI asks every
+#  few seconds; the full story is the network check above.
+# ──────────────────────────────────────────────────────────────────
+CONNECTIVITY_TTL = 10        # seconds a result is served from the cache
+_CONNECTIVITY_LOCK = threading.Lock()
+_connectivity_cache = {'at': 0.0, 'result': None}
+
+def _conn_router_ok(gw):
+    """Whether the gateway answers: one ping, or, failing that, a live ARP
+    entry (plenty of routers ignore ping)."""
+    try:
+        r = _run(['ping', '-n', '-q', '-c', '1', '-W', '1', gw], timeout=4)
+        if re.search(r'packets transmitted, [1-9]\d* received', r.stdout):
+            return True
+        n = _run(['ip', 'neigh', 'show', gw], timeout=3).stdout
+        return 'lladdr' in n and not re.search(r'\b(FAILED|INCOMPLETE)\b', n)
+    except Exception:
+        return False
+
+def _conn_internet_ok():
+    """Whether at least one of the raw-IP HTTPS targets answers a TCP connect."""
+    res = _netcheck_parallel({f'{h}:{p}': (lambda h=h, p=p: _netcheck_tcp(h, p, timeout=2))
+                              for h, p in _NETCHECK_IP_TARGETS}, 2.5)
+    return any(isinstance(v, int) for v in res.values())
+
+def _connectivity_probe():
+    device, dtype = _active_device()
+    ip = _device_ip(device) if device else None
+    typ = 'wireless' if dtype == 'wifi' else ('wired' if dtype == 'ethernet' else 'none')
+    out = {'state': 'offline', 'type': typ, 'device': device, 'ip': ip,
+           'ssid': _active_ssid() if dtype == 'wifi' else None, 'gateway': None, 'router': False}
+    if not ip:
+        return out
+    try:
+        gw = _default_gateway()
+    except Exception:
+        gw = None
+    out['gateway'] = gw
+    res = _netcheck_parallel({'router': (lambda: _conn_router_ok(gw)) if gw else (lambda: False),
+                              'internet': _conn_internet_ok}, 4)
+    out['router'] = res['router'] is True
+    if res['internet'] is True:
+        # a reply from the outside proves the router works, ping or not
+        out.update(state='internet', router=True)
+    elif out['router']:
+        out['state'] = 'lan'
+    # an address but a router that neither answers nor shows in ARP: the
+    # link is up but leads nowhere, which for the owner is "offline"
+    return out
+
+def get_connectivity(force=False):
+    now = time.monotonic()
+    with _CONNECTIVITY_LOCK:
+        c = _connectivity_cache
+        if not force and c['result'] is not None and now - c['at'] < CONNECTIVITY_TTL:
+            return dict(c['result'])
+        try:
+            res = _connectivity_probe()
+        except Exception as e:
+            logging.warning('connectivity probe failed: %s', e)
+            res = {'state': 'offline', 'type': 'none', 'device': None, 'ip': None,
+                   'ssid': None, 'gateway': None, 'router': False}
+        res['at'] = int(time.time())
+        c['result'] = res
+        c['at'] = time.monotonic()
+        return dict(res)
+
+def _wifi_band(freq):
+    """'2.4', '5' or '6' from the frequency nmcli prints ('2462 MHz'), '' when
+    it makes no sense.
+
+    A home router almost always broadcasts the same SSID on 2.4 and 5 GHz, and
+    a scan list that shows that name twice with nothing to tell the two rows
+    apart is unusable — hence the band on every network, and the band the
+    owner picked carried all the way down to the profile (see
+    _wifi_band_args)."""
+    try:
+        mhz = int(str(freq).strip().split()[0])
+    except (TypeError, ValueError, IndexError):
+        return ''
+    if 2400 <= mhz < 2500:
+        return '2.4'
+    if 4900 <= mhz < 5925:
+        return '5'
+    if 5925 <= mhz <= 7125:
+        return '6'
+    return ''
+
+
+def _signal_int(value):
+    """The SIGNAL column as a number; nmcli prints it as text and can leave it
+    empty."""
+    try:
+        return int(str(value).strip() or 0)
+    except ValueError:
+        return 0
+
+
+def _wifi_band_args(band):
+    """`802-11-wireless.band` for a band the owner picked from the scan list.
+
+    Only set when the UI says the choice was a real one (an SSID that appears
+    on more than one band): pinning a profile that has nowhere else to go
+    would only give NetworkManager one more way to fail."""
+    if band == '2.4':
+        return ['802-11-wireless.band', 'bg']
+    if band in ('5', '6'):
+        return ['802-11-wireless.band', 'a']
+    return []
+
+
 def wifi_scan():
     try:
         _run(['nmcli', 'device', 'wifi', 'rescan'], timeout=12)
@@ -954,29 +1423,52 @@ def wifi_scan():
         # background scans to fall back on -- but that cache doesn't exist
         # yet right after boot, so don't trust the first read blindly.
         for attempt in range(6):
-            r = _run(['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list'])
-            networks = []
+            r = _run(['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY,FREQ', 'device', 'wifi', 'list'])
+            # One row per band, not per access point: a mesh or a repeater puts
+            # the same SSID on the same band several times over, and those are
+            # the rows nobody can choose between. Strongest signal wins.
+            by_band = {}
+            order = []
             for line in r.stdout.strip().split('\n'):
                 if not line:
                     continue
                 parts = _terse_split(line)
-                if len(parts) < 4:
+                if len(parts) < 5:
                     continue
-                in_use, ssid, signal_, security = parts[0], parts[1], parts[2], parts[3]
+                in_use, ssid, signal_, security, freq = parts[0], parts[1], parts[2], parts[3], parts[4]
                 if not ssid:
                     continue
-                networks.append({
+                net = {
                     'ssid': ssid,
                     'signal': signal_,
                     'security': security,
                     'in_use': in_use == '*',
-                })
+                    'band': _wifi_band(freq),
+                }
+                key = (ssid, net['band'])
+                prev = by_band.get(key)
+                if prev is None:
+                    by_band[key] = net
+                    order.append(key)
+                else:
+                    if _signal_int(net['signal']) > _signal_int(prev['signal']):
+                        prev.update(signal=net['signal'], security=net['security'])
+                    prev['in_use'] = prev['in_use'] or net['in_use']
+            networks = [by_band[k] for k in order]
             if networks or attempt == 5:
                 break
             time.sleep(1)
     except Exception:
         log.exception("wifi_scan failed")
         return {'networks': [], 'error': _t('network.scanFailed', _lang())}
+    # "Saved", as a phone shows it: NetworkManager still has a profile (and
+    # so the key) for these, and the UI joins them without asking for it.
+    try:
+        saved = set(_connection_ids_for_device_type('wifi'))
+    except Exception:
+        saved = set()
+    for net in networks:
+        net['saved'] = net['ssid'] in saved
     return {'networks': networks}
 
 def _scan_security(ssid):
@@ -1053,7 +1545,7 @@ def _preserved_ipv4_args(conn):
     return args
 
 
-def _wifi_join(ssid, password, dev):
+def _wifi_join(ssid, password, dev, band=''):
     """Join `ssid`, returning the CompletedProcess of the step that decided it.
 
     When a password is given the connection profile is built here
@@ -1070,11 +1562,24 @@ def _wifi_join(ssid, password, dev):
 
     With no password there is nothing to write, so a saved profile is
     activated as it stands (its stored secret is still good) and only a
-    network we have no profile for goes through the shorthand."""
+    network we have no profile for goes through the shorthand.
+
+    `band` is the band the owner picked from a dual-band SSID: without it
+    NetworkManager joins whichever of the two it likes, which would make the
+    two rows in the list the same row."""
+    band_args = _wifi_band_args(band)
     if not password:
         if _wifi_profile_exists(ssid):
+            # The stored secret is still good — only the chosen band has to be
+            # written onto the profile before it comes up.
+            if band_args:
+                _run(['nmcli', 'connection', 'modify', 'id', ssid] + band_args)
             return _run(['nmcli', 'connection', 'up', 'id', ssid], timeout=45)
-        return _run(['nmcli', 'device', 'wifi', 'connect', ssid], timeout=45)
+        if not band_args:
+            return _run(['nmcli', 'device', 'wifi', 'connect', ssid], timeout=45)
+        # An open network on a chosen band: the shorthand can't pin one, so
+        # build the profile here too (_wifi_security_args gives nothing back
+        # for an empty password, which is exactly what an open AP wants).
 
     sec_args = _wifi_security_args(ssid, password)
     # Read before the delete, write back into the replacement: the admin web UI
@@ -1085,7 +1590,7 @@ def _wifi_join(ssid, password, dev):
     add = ['nmcli', 'connection', 'add', 'type', 'wifi', 'con-name', ssid, 'ssid', ssid]
     if dev:
         add += ['ifname', dev]
-    r = _run(add + sec_args + ip_args)
+    r = _run(add + sec_args + band_args + ip_args)
     if r.returncode != 0:
         return r
     # Association can still fail transiently on marginal signal, so one retry
@@ -1105,7 +1610,7 @@ def _wifi_join(ssid, password, dev):
     return r
 
 
-def wifi_connect(ssid, password):
+def wifi_connect(ssid, password, band=''):
     if not ssid:
         return {'success': False, 'code': 'network.ssidMissing', 'message': _t('network.ssidMissing', _lang())}
     # ssid/password are passed as argv to nmcli (no shell), but a value that
@@ -1117,10 +1622,12 @@ def wifi_connect(ssid, password):
         if value and not safe_arg.fullmatch(value):
             return {'success': False, 'code': 'network.invalidField',
                     'message': _t('network.invalidField', _lang(), label=label)}
+    if band not in ('', '2.4', '5', '6'):
+        band = ''
     dev = _first_device_of_type('wifi')
     _ensure_networkmanager_state(dev)
     try:
-        r = _wifi_join(ssid, password, dev)
+        r = _wifi_join(ssid, password, dev, band)
     except subprocess.TimeoutExpired:
         return {'success': False, 'code': 'network.connectTimeout',
                 'message': _t('network.connectTimeout', _lang())}
@@ -2236,6 +2743,10 @@ SUPPORT_JOURNAL_UNITS = [
     # where the conversion is armed and carried out, and a bundle that does not
     # name them leaves "why is it still on the old layout" unanswerable.
     'hifi-rauc-config', 'hifi-ab-finish', 'hifi-ab-image', 'hifi-ab-firstboot',
+    # Bluetooth speakers: the supervisor's journal is where a speaker that
+    # never reconnects leaves its trail (bluetoothd's own log alone does not
+    # say which player unit was started or why one wasn't).
+    'hifi-bt-out',
     'bluetooth', 'NetworkManager',
 ]
 # Config worth including — never secrets/keys. Mirrors the allow-list spirit of
@@ -3403,6 +3914,66 @@ def set_vu_style(style):
     return {'success': True, 'style': style}
 
 # ──────────────────────────────────────────────────────────────────
+#  Now-playing animation: a turning CD (top-loading, or the 90s front-loading
+#  player 'cdfront'), vinyl record or cassette the kiosk draws where the VU
+#  meters would be. The interface shows it only while the
+#  VU meters are switched off; the two settings stay independent here, so
+#  turning the meters back on and off again brings the chosen animation back.
+#  Persisted like the VU choices above (reachable from the web admin on a
+#  headless unit); ABSENT, unreadable or unknown content means "none".
+# ──────────────────────────────────────────────────────────────────
+NOWPLAYING_ANIMATION_FILE = '/etc/hifi-player/nowplaying-animation'
+# the scenes the interface ships; the animation store adds more (below)
+NOWPLAYING_ANIMATION_BUILTIN = ('none', 'cd', 'cdfront', 'vinyl', 'cassette')
+NOWPLAYING_ANIMATION_CHOICES = NOWPLAYING_ANIMATION_BUILTIN
+NOWPLAYING_ANIMATION_DEFAULT = 'none'
+
+
+def nowplaying_animation_choices():
+    """Built-in ids, then those installed from the animation store."""
+    return list(NOWPLAYING_ANIMATION_BUILTIN) + [a['id'] for a in list_store_animations()]
+
+# Error text for a refused id, added to the shared catalogue (hifi_i18n.py)
+# unless it already carries one, so _t() below answers in both languages.
+_I18N_MESSAGES.setdefault('prefs.animationUnknown',
+                          {'en': 'That animation is not available', 'it': 'Questa animazione non è disponibile'})
+
+def get_nowplaying_animation():
+    """Return { animation, choices, store }: store lists the installed store
+    animations with their names and scene file, for the settings screens."""
+    animation = NOWPLAYING_ANIMATION_DEFAULT
+    try:
+        with open(NOWPLAYING_ANIMATION_FILE) as f:
+            animation = f.read(64).strip()
+    except Exception:
+        pass
+    store = list_store_animations()
+    choices = list(NOWPLAYING_ANIMATION_BUILTIN) + [a['id'] for a in store]
+    if animation not in choices:
+        animation = NOWPLAYING_ANIMATION_DEFAULT
+    return {'animation': animation, 'choices': choices, 'store': store}
+
+def set_nowplaying_animation(animation):
+    """Persist the animation choice. A built-in id or an installed store one;
+    'none' is stored like any other, the way the switches above store "off".
+    Leaves the VU meter switch alone: the interface does the gating."""
+    if not isinstance(animation, str) or animation.strip() not in nowplaying_animation_choices():
+        return {'success': False, 'animation': get_nowplaying_animation()['animation'],
+                'code': 'prefs.animationUnknown', 'message': _t('prefs.animationUnknown', _lang())}
+    animation = animation.strip()
+    try:
+        os.makedirs(os.path.dirname(NOWPLAYING_ANIMATION_FILE), exist_ok=True)
+        tmp = NOWPLAYING_ANIMATION_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(animation + '\n')
+        os.replace(tmp, NOWPLAYING_ANIMATION_FILE)
+    except Exception:
+        log.exception("set_nowplaying_animation: persist failed")
+        return {'success': False, 'animation': get_nowplaying_animation()['animation'],
+                'code': 'prefs.saveFailed', 'message': _t('prefs.saveFailed', _lang())}
+    return {'success': True, 'animation': animation}
+
+# ──────────────────────────────────────────────────────────────────
 #  VU meter store: more skins, downloaded on demand from
 #  file.osmiumsound.it/vu/. The catalogue (index.json) carries a detached
 #  Ed25519 signature made with the same key as the OS updates and checked
@@ -3461,25 +4032,27 @@ def _vu_msg(code):
     return {'code': code, 'message': _t(code, _lang())}
 
 
-def _vu_http_get(url, limit, timeout=30):
+def _vu_http_get(url, limit, timeout=30, agent='OsmiumSound-VU/1.0'):
     # an explicit User-Agent: some static hosts refuse urllib's default one
-    req = urllib.request.Request(url, headers={'User-Agent': 'OsmiumSound-VU/1.0'})
+    req = urllib.request.Request(url, headers={'User-Agent': agent})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read(limit + 1)
     except (urllib.error.URLError, OSError, ValueError) as e:
-        log.info("vu store: GET %s failed: %s", url, e)
+        log.info("store: GET %s failed: %s", url, e)
         raise _VuStoreError('vuStore.downloadFailed')
     if len(data) > limit:
         raise _VuStoreError('vuStore.verifyFailed')
     return data
 
 
-def _vu_verify_signature(data, sig):
+def _vu_verify_signature(data, sig, pubkey=None):
     """Ed25519 over the exact catalogue bytes, like hifi-os-update.sh does for
-    the OS bundles. No key, no openssl or a bad signature all mean no."""
-    if not os.path.isfile(VU_STORE_PUBKEY):
-        log.warning("vu store: no public key at %s, catalogue refused", VU_STORE_PUBKEY)
+    the OS bundles. No key, no openssl or a bad signature all mean no. The
+    animation store checks its own catalogue with the same function."""
+    pubkey = pubkey or VU_STORE_PUBKEY
+    if not os.path.isfile(pubkey):
+        log.warning("store: no public key at %s, catalogue refused", pubkey)
         return False
     with _tempfile.TemporaryDirectory(prefix='hifi-vu-sig-') as d:
         fdata, fsig = os.path.join(d, 'index.json'), os.path.join(d, 'index.json.sig')
@@ -3488,7 +4061,7 @@ def _vu_verify_signature(data, sig):
         with open(fsig, 'wb') as f:
             f.write(sig)
         try:
-            r = subprocess.run(['openssl', 'pkeyutl', '-verify', '-pubin', '-inkey', VU_STORE_PUBKEY,
+            r = subprocess.run(['openssl', 'pkeyutl', '-verify', '-pubin', '-inkey', pubkey,
                                 '-rawin', '-in', fdata, '-sigfile', fsig],
                                capture_output=True, timeout=20)
         except (OSError, subprocess.SubprocessError) as e:
@@ -3922,6 +4495,479 @@ def vu_store_mark_seen():
     return {'success': True}
 
 # ──────────────────────────────────────────────────────────────────
+#  Now-playing animation store: more animations, downloaded on demand from
+#  file.osmiumsound.it/anim/, the same way as the VU meter skins above: a
+#  catalogue (index.json) with a detached Ed25519 signature made with the OS
+#  update key and checked against ota-pubkey.pem, then every package
+#  (.animpak) and preview checked against the sha256 the catalogue names.
+#
+#  Unlike a skin, an animation is a scene: QML the kiosk loads and runs, with
+#  its images. That is accepted because it arrives exactly like an update of
+#  the interface does - signed with the same key, so it carries the same trust
+#  and nothing else is ever loaded (no manual upload, no other source). A
+#  package holds anim.json (id, version, format, name, the scene's file) and
+#  flat .qml / .png / .jpg / .json files; ANIM_SCENE_FORMAT is the scene
+#  contract of the interface shipped next to this API (the inputs NpAnimation
+#  gives a scene), newer entries are listed as needing an update.
+#
+#  Installed animations live on the data partition, next to the store skins,
+#  and are refreshed like them: at start, every ANIM_STORE_REFRESH, and on a
+#  GET older than ANIM_STORE_STALE; a refresh brings the installed ones up to
+#  the listed version. The four animations the interface ships stay built in.
+# ──────────────────────────────────────────────────────────────────
+ANIM_STORE_URL = os.environ.get('HIFI_ANIM_STORE_URL', 'https://file.osmiumsound.it/anim/')
+ANIM_STORE_DIR = os.environ.get('HIFI_ANIM_STORE_DIR', '/var/lib/hifi-player/anim-scenes')
+ANIM_STORE_STATE_DIR = os.environ.get('HIFI_ANIM_STORE_STATE_DIR', '/var/lib/hifi-player/anim-store')
+ANIM_STORE_PUBKEY = os.environ.get('HIFI_ANIM_STORE_PUBKEY', '/etc/hifi-player/ota-pubkey.pem')
+ANIM_SCENE_FORMAT = 1
+ANIM_STORE_REFRESH = 12 * 3600
+ANIM_STORE_STALE = 600
+ANIM_STORE_FIRST_CHECK = 150
+ANIM_STORE_SIG_RETRY = 5
+ANIM_INDEX_MAX = 1024 * 1024
+ANIM_PACK_MAX = 40 * 1024 * 1024
+ANIM_PACK_UNPACKED_MAX = 80 * 1024 * 1024
+ANIM_PACK_FILES_MAX = 64
+ANIM_PREVIEW_MAX = 1024 * 1024
+ANIM_QML_MAX = 512 * 1024
+# QML files may start with a capital: a scene's own components are types
+_ANIM_FILE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.(png|jpg|json|qml)$')
+_ANIM_PACK_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{0,80}\.animpak$')
+_ANIM_ID_RE = _VU_STYLE_RE
+_ANIM_AGENT = 'OsmiumSound-Anim/1.0'
+
+_anim_store_lock = threading.Lock()
+_anim_store = {'catalog': None, 'checked': 0, 'error': None, 'checking': False, 'loaded': False, 'jobs': {}}
+
+
+class _AnimStoreError(Exception):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def _anim_msg(code):
+    return {'code': code, 'message': _t(code, _lang())}
+
+
+def _anim_get(url, limit):
+    """_vu_http_get with this store's error codes."""
+    try:
+        return _vu_http_get(url, limit, agent=_ANIM_AGENT)
+    except _VuStoreError as e:
+        raise _AnimStoreError(e.code.replace('vuStore.', 'animStore.'))
+
+
+def _anim_parse_index(raw):
+    """The catalogue's entries, validated, highest version per id."""
+    try:
+        doc = json.loads(raw.decode('utf-8'))
+    except (UnicodeDecodeError, ValueError):
+        raise _AnimStoreError('animStore.catalogInvalid')
+    anims = doc.get('animations') if isinstance(doc, dict) else None
+    if not isinstance(anims, list):
+        raise _AnimStoreError('animStore.catalogInvalid')
+    out = {}
+    for e in anims:
+        if not isinstance(e, dict):
+            continue
+        aid, ver, fmt = e.get('id'), e.get('version'), e.get('format', 1)
+        name = e.get('name')
+        if not (isinstance(aid, str) and _ANIM_ID_RE.match(aid) and isinstance(ver, int) and not isinstance(ver, bool)
+                and ver >= 1 and isinstance(fmt, int) and fmt >= 1 and isinstance(name, dict)
+                and isinstance(name.get('en'), str) and name.get('en')):
+            continue
+        pack, size, sha = e.get('file'), e.get('size'), str(e.get('sha256') or '').lower()
+        if not (isinstance(pack, str) and _ANIM_PACK_RE.match(pack) and isinstance(size, int)
+                and 0 < size <= ANIM_PACK_MAX and _VU_SHA_RE.match(sha)):
+            continue
+        entry = {'id': aid, 'version': ver, 'format': fmt,
+                 'name': {'en': name['en'][:60], 'it': str(name.get('it') or name['en'])[:60]},
+                 'author': str(e.get('author') or '')[:80], 'license': str(e.get('license') or '')[:80],
+                 'file': pack, 'size': size, 'sha256': sha, 'preview': None}
+        pv, pvs, pvsize = e.get('preview'), str(e.get('previewSha256') or '').lower(), e.get('previewSize')
+        if (isinstance(pv, str) and _VU_PREVIEW_RE.match(pv) and _VU_SHA_RE.match(pvs)
+                and isinstance(pvsize, int) and 0 < pvsize <= ANIM_PREVIEW_MAX):
+            entry['preview'] = {'file': pv, 'sha256': pvs, 'size': pvsize}
+        if aid not in out or out[aid]['version'] < ver:
+            out[aid] = entry
+    return sorted(out.values(), key=lambda x: x['id'])
+
+
+def _anim_preview_path(entry):
+    return os.path.join(ANIM_STORE_STATE_DIR, 'previews', entry['preview']['sha256'] + '.jpg')
+
+
+def _anim_read_meta(aid):
+    """anim.json of an installed animation, or None."""
+    try:
+        with open(os.path.join(ANIM_STORE_DIR, aid, 'anim.json'), encoding='utf-8') as f:
+            meta = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(meta, dict) or not isinstance(meta.get('scene'), str) \
+            or not os.path.isfile(os.path.join(ANIM_STORE_DIR, aid, meta['scene'])):
+        return None
+    return meta
+
+
+def _anim_installed_store():
+    """{id: version} of the animations unpacked from the store."""
+    out = {}
+    try:
+        names = os.listdir(ANIM_STORE_DIR)
+    except OSError:
+        return out
+    for aid in names:
+        if not _ANIM_ID_RE.match(aid) or aid in NOWPLAYING_ANIMATION_BUILTIN:
+            continue
+        meta = _anim_read_meta(aid)
+        if meta is None:
+            continue
+        v = meta.get('version', 0)
+        out[aid] = v if isinstance(v, int) and not isinstance(v, bool) else 0
+    return out
+
+
+def list_store_animations():
+    """The installed store animations, [{id, name:{en,it}, scene}], in their
+    declared order: what the kiosk offers next to the built-in ones and
+    loads from ANIM_STORE_DIR/<id>/<scene>."""
+    out = []
+    for aid in _anim_installed_store():
+        meta = _anim_read_meta(aid) or {}
+        name = meta.get('name') if isinstance(meta.get('name'), dict) else {}
+        order = meta.get('order', 50)
+        out.append({'id': aid, 'name': {'en': str(name.get('en') or aid), 'it': str(name.get('it') or name.get('en') or aid)},
+                    'scene': meta.get('scene'), 'order': order if isinstance(order, int) and not isinstance(order, bool) else 50})
+    out.sort(key=lambda a: (a['order'], a['id']))
+    return [{'id': a['id'], 'name': a['name'], 'scene': a['scene']} for a in out]
+
+
+def _anim_seen_ids():
+    try:
+        with open(os.path.join(ANIM_STORE_STATE_DIR, 'seen.json'), encoding='utf-8') as f:
+            v = json.load(f)
+        return set(x for x in v if isinstance(x, str)) if isinstance(v, list) else set()
+    except (OSError, ValueError):
+        return set()
+
+
+def _anim_check_meta(meta, entry, names):
+    """anim.json of a package: the id/version the catalogue promised, a
+    format this interface runs and a scene file inside the package."""
+    if not isinstance(meta, dict) or meta.get('id') != entry['id'] or meta.get('version') != entry['version']:
+        return False
+    fmt = meta.get('format', 1)
+    if not isinstance(fmt, int) or isinstance(fmt, bool) or fmt > ANIM_SCENE_FORMAT:
+        return False
+    scene = meta.get('scene')
+    if not (isinstance(scene, str) and scene.endswith('.qml') and scene in names):
+        return False
+    name = meta.get('name')
+    return isinstance(name, dict) and isinstance(name.get('en'), str) and bool(name.get('en'))
+
+
+def _anim_unpack(data, entry):
+    """Unpack a verified .animpak into ANIM_STORE_DIR/<id>, replacing an older
+    copy only once the new one is complete."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+        infos = zf.infolist()
+    except (zipfile.BadZipFile, ValueError):
+        raise _AnimStoreError('animStore.invalidPackage')
+    if not infos or len(infos) > ANIM_PACK_FILES_MAX:
+        raise _AnimStoreError('animStore.invalidPackage')
+    names, total = set(), 0
+    for info in infos:
+        mode = (info.external_attr >> 16) & 0o170000
+        if (info.is_dir() or not _ANIM_FILE_RE.match(info.filename) or info.filename in names
+                or mode not in (0, 0o100000)):
+            raise _AnimStoreError('animStore.invalidPackage')
+        names.add(info.filename)
+        total += info.file_size
+    if total > ANIM_PACK_UNPACKED_MAX or 'anim.json' not in names:
+        raise _AnimStoreError('animStore.invalidPackage')
+    try:
+        files = {n: zf.read(n) for n in names}
+        meta = json.loads(files['anim.json'].decode('utf-8'))
+    except (zipfile.BadZipFile, UnicodeDecodeError, ValueError, OSError, RuntimeError):
+        raise _AnimStoreError('animStore.invalidPackage')
+    if not _anim_check_meta(meta, entry, names):
+        raise _AnimStoreError('animStore.invalidPackage')
+    for n, blob in files.items():
+        if n.endswith('.png') and not blob.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise _AnimStoreError('animStore.invalidPackage')
+        if n.endswith('.jpg') and not blob.startswith(b'\xff\xd8\xff'):
+            raise _AnimStoreError('animStore.invalidPackage')
+        if n.endswith('.qml'):
+            try:
+                if len(blob) > ANIM_QML_MAX or '\x00' in blob.decode('utf-8'):
+                    raise _AnimStoreError('animStore.invalidPackage')
+            except UnicodeDecodeError:
+                raise _AnimStoreError('animStore.invalidPackage')
+    aid = entry['id']
+    dest = os.path.join(ANIM_STORE_DIR, aid)
+    tmp = os.path.join(ANIM_STORE_DIR, '.tmp-' + aid)
+    old = os.path.join(ANIM_STORE_DIR, '.old-' + aid)
+    try:
+        os.makedirs(ANIM_STORE_DIR, exist_ok=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(old, ignore_errors=True)
+        os.makedirs(tmp)
+        for n, blob in files.items():
+            with open(os.path.join(tmp, n), 'wb') as f:
+                f.write(blob)
+        if os.path.isdir(dest):
+            os.rename(dest, old)
+        os.rename(tmp, dest)
+        shutil.rmtree(old, ignore_errors=True)
+    except OSError:
+        log.exception("anim store: unpacking %s failed", aid)
+        shutil.rmtree(tmp, ignore_errors=True)
+        if not os.path.isdir(dest) and os.path.isdir(old):
+            os.rename(old, dest)
+        raise _AnimStoreError('animStore.installFailed')
+
+
+def _anim_install_entry(entry):
+    """Download, verify and unpack one catalogue entry (job state in
+    _anim_store['jobs']). True when installed."""
+    aid = entry['id']
+    try:
+        data = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, entry['file']), entry['size'])
+        if len(data) != entry['size'] or _hashlib.sha256(data).hexdigest() != entry['sha256']:
+            raise _AnimStoreError('animStore.verifyFailed')
+        with _anim_store_lock:
+            _anim_store['jobs'][aid] = {'state': 'installing'}
+        _anim_unpack(data, entry)
+    except _AnimStoreError as e:
+        log.warning("anim store: %s v%s not installed: %s", aid, entry['version'], e.code)
+        with _anim_store_lock:
+            _anim_store['jobs'][aid] = {'state': 'error', 'code': e.code}
+        return False
+    with _anim_store_lock:
+        _anim_store['jobs'].pop(aid, None)
+    log.info("anim store: %s v%s installed", aid, entry['version'])
+    return True
+
+
+def _anim_store_load_cached():
+    """The last verified catalogue from disk, re-verified."""
+    with _anim_store_lock:
+        if _anim_store['loaded']:
+            return
+        _anim_store['loaded'] = True
+    try:
+        with open(os.path.join(ANIM_STORE_STATE_DIR, 'index.json'), 'rb') as f:
+            raw = f.read(ANIM_INDEX_MAX + 1)
+        with open(os.path.join(ANIM_STORE_STATE_DIR, 'index.json.sig'), 'rb') as f:
+            sig = f.read(4096)
+        mtime = os.path.getmtime(os.path.join(ANIM_STORE_STATE_DIR, 'index.json'))
+    except OSError:
+        return
+    if len(raw) > ANIM_INDEX_MAX or not _vu_verify_signature(raw, sig, ANIM_STORE_PUBKEY):
+        return
+    try:
+        catalog = _anim_parse_index(raw)
+    except _AnimStoreError:
+        return
+    with _anim_store_lock:
+        if _anim_store['catalog'] is None:
+            _anim_store['catalog'] = catalog
+            _anim_store['checked'] = min(mtime, time.time() - ANIM_STORE_STALE - 1)
+
+
+def _anim_store_refresh():
+    """Fetch and verify the catalogue and its previews, then bring the
+    animations installed from the store up to date. One at a time."""
+    with _anim_store_lock:
+        if _anim_store['checking']:
+            return
+        _anim_store['checking'] = True
+    error = None
+    catalog = None
+    try:
+        raw = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, 'index.json'), ANIM_INDEX_MAX)
+        sig = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, 'index.json.sig'), 4096)
+        if not _vu_verify_signature(raw, sig, ANIM_STORE_PUBKEY):
+            # the list and its signature are uploaded one after the other
+            time.sleep(ANIM_STORE_SIG_RETRY)
+            raw = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, 'index.json'), ANIM_INDEX_MAX)
+            sig = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, 'index.json.sig'), 4096)
+            if not _vu_verify_signature(raw, sig, ANIM_STORE_PUBKEY):
+                raise _AnimStoreError('animStore.signatureInvalid')
+        catalog = _anim_parse_index(raw)
+        for entry in catalog:
+            if not entry['preview'] or os.path.isfile(_anim_preview_path(entry)):
+                continue
+            try:
+                blob = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, entry['preview']['file']), entry['preview']['size'])
+            except _AnimStoreError:
+                continue
+            if _hashlib.sha256(blob).hexdigest() == entry['preview']['sha256'] and blob.startswith(b'\xff\xd8\xff'):
+                _vu_write_atomic(_anim_preview_path(entry), blob)
+        try:
+            _vu_write_atomic(os.path.join(ANIM_STORE_STATE_DIR, 'index.json'), raw)
+            _vu_write_atomic(os.path.join(ANIM_STORE_STATE_DIR, 'index.json.sig'), sig)
+        except OSError:
+            log.exception("anim store: could not keep the catalogue on disk")
+    except _AnimStoreError as e:
+        error = 'animStore.catalogUnavailable' if e.code == 'animStore.downloadFailed' else e.code
+    except Exception:
+        log.exception("anim store: refresh failed")
+        error = 'animStore.catalogUnavailable'
+    with _anim_store_lock:
+        if catalog is not None:
+            _anim_store['catalog'] = catalog
+        _anim_store['error'] = error
+        _anim_store['checked'] = time.time()
+        _anim_store['loaded'] = True
+    try:
+        if catalog is not None:
+            installed = _anim_installed_store()
+            for entry in catalog:
+                if (entry['id'] in installed and entry['id'] not in NOWPLAYING_ANIMATION_BUILTIN
+                        and entry['version'] > installed[entry['id']] and entry['format'] <= ANIM_SCENE_FORMAT):
+                    with _anim_store_lock:
+                        if entry['id'] in _anim_store['jobs'] and _anim_store['jobs'][entry['id']].get('state') != 'error':
+                            continue
+                        _anim_store['jobs'][entry['id']] = {'state': 'downloading'}
+                    _anim_install_entry(entry)
+    finally:
+        with _anim_store_lock:
+            _anim_store['checking'] = False
+
+
+def _anim_store_refresh_async():
+    threading.Thread(target=_anim_store_refresh, daemon=True, name='anim-store-refresh').start()
+
+
+def _anim_store_background():
+    time.sleep(ANIM_STORE_FIRST_CHECK)
+    while True:
+        try:
+            _anim_store_refresh()
+        except Exception:
+            log.exception("anim store: periodic check failed")
+        time.sleep(ANIM_STORE_REFRESH)
+
+
+def _anim_find_entry(aid):
+    with _anim_store_lock:
+        for entry in _anim_store['catalog'] or []:
+            if entry['id'] == aid:
+                return entry
+    return None
+
+
+def get_anim_store(summary=False):
+    """The store as the settings screens show it. summary=True only counts
+    what is new (for a badge) and never carries the previews."""
+    _anim_store_load_cached()
+    with _anim_store_lock:
+        stale = not _anim_store['checking'] and time.time() - _anim_store['checked'] > ANIM_STORE_STALE
+        catalog = list(_anim_store['catalog'] or [])
+        jobs = {k: dict(v) for k, v in _anim_store['jobs'].items()}
+        error, checked = _anim_store['error'], _anim_store['checked']
+    if stale:
+        _anim_store_refresh_async()
+    installed, seen = _anim_installed_store(), _anim_seen_ids()
+    items = []
+    for entry in catalog:
+        aid = entry['id']
+        if aid in NOWPLAYING_ANIMATION_BUILTIN:
+            continue
+        have = installed.get(aid)
+        supported = entry['format'] <= ANIM_SCENE_FORMAT
+        item = {'id': aid, 'version': entry['version'], 'name': entry['name'], 'author': entry['author'],
+                'license': entry['license'], 'size': entry['size'], 'supported': supported,
+                'installed': have is not None, 'installedVersion': have,
+                'update': have is not None and supported and entry['version'] > have,
+                'new': have is None and supported and aid not in seen}
+        job = jobs.get(aid)
+        if job:
+            item['job'] = job['state']
+            if job.get('code'):
+                item['jobError'] = _anim_msg(job['code'])
+        if not summary:
+            item['preview'] = None
+            if entry['preview']:
+                try:
+                    with open(_anim_preview_path(entry), 'rb') as f:
+                        item['preview'] = 'data:image/jpeg;base64,' + _base64.b64encode(f.read()).decode('ascii')
+                except OSError:
+                    pass
+        items.append(item)
+    if summary:
+        return {'new': sum(1 for i in items if i['new']), 'updates': sum(1 for i in items if i['update'])}
+    with _anim_store_lock:
+        checking = _anim_store['checking']
+    return {'animations': items, 'checking': checking or stale, 'checked': int(checked),
+            'error': _anim_msg(error) if error else None,
+            'busy': any(i.get('job') in ('downloading', 'installing') for i in items)}
+
+
+def anim_store_check():
+    _anim_store_refresh_async()
+    return {'success': True, 'checking': True}
+
+
+def anim_store_install(aid):
+    aid = str(aid or '').strip()
+    _anim_store_load_cached()
+    entry = _anim_find_entry(aid) if _ANIM_ID_RE.match(aid) else None
+    if entry is None:
+        return {'success': False, **_anim_msg('animStore.unknown')}
+    if aid in NOWPLAYING_ANIMATION_BUILTIN:
+        return {'success': False, **_anim_msg('animStore.builtin')}
+    if entry['format'] > ANIM_SCENE_FORMAT:
+        return {'success': False, **_anim_msg('animStore.unsupported')}
+    if _anim_installed_store().get(aid) == entry['version']:
+        return {'success': True, 'installed': True}
+    with _anim_store_lock:
+        if _anim_store['jobs'].get(aid, {}).get('state') in ('downloading', 'installing'):
+            return {'success': False, **_anim_msg('animStore.busy')}
+        _anim_store['jobs'][aid] = {'state': 'downloading'}
+    threading.Thread(target=_anim_install_entry, args=(entry,), daemon=True, name='anim-store-install').start()
+    return {'success': True, 'started': True}
+
+
+def anim_store_remove(aid):
+    aid = str(aid or '').strip()
+    if not _ANIM_ID_RE.match(aid) or aid not in _anim_installed_store():
+        return {'success': False, **_anim_msg('animStore.notInstalled')}
+    with _anim_store_lock:
+        if _anim_store['jobs'].get(aid, {}).get('state') in ('downloading', 'installing'):
+            return {'success': False, **_anim_msg('animStore.busy')}
+        _anim_store['jobs'].pop(aid, None)
+    try:
+        shutil.rmtree(os.path.join(ANIM_STORE_DIR, aid))
+    except OSError:
+        log.exception("anim store: removing %s failed", aid)
+        return {'success': False, **_anim_msg('animStore.removeFailed')}
+    # the animation in use is gone: back to none rather than a stale choice
+    try:
+        with open(NOWPLAYING_ANIMATION_FILE) as f:
+            if f.read().strip() == aid:
+                os.remove(NOWPLAYING_ANIMATION_FILE)
+    except OSError:
+        pass
+    return {'success': True}
+
+
+def anim_store_mark_seen():
+    _anim_store_load_cached()
+    with _anim_store_lock:
+        ids = [e['id'] for e in _anim_store['catalog'] or []]
+    seen = _anim_seen_ids() | set(ids)
+    try:
+        _vu_write_atomic(os.path.join(ANIM_STORE_STATE_DIR, 'seen.json'), json.dumps(sorted(seen)).encode('utf-8'))
+    except OSError:
+        return {'success': False, **_anim_msg('prefs.saveFailed')}
+    return {'success': True}
+
+# ──────────────────────────────────────────────────────────────────
 #  Now-playing auto-expand (kiosk-only UI behaviour, like the VU meter
 #  above): how long after a song starts playing the kiosk should
 #  automatically open the fullscreen now-playing view on its own, if the
@@ -4172,13 +5218,13 @@ def set_provision_mode(mode, source='screen'):
                 'message': _t('provisioning.notActive', _lang())}
     return body
 
-def provision_wifi_connect(ssid, password):
+def provision_wifi_connect(ssid, password, band=''):
     """Kick off the same Wi-Fi join webui_server's captive portal uses, from
     the on-screen manual network-setup panel. The AP drops immediately on
     webui's side; the kiosk keeps polling /provision_status to see it
     through 'connecting' -> 'network-ok'/'failed'."""
     body, status = _proxy_webui('/api/provision/wifi_connect', method='POST',
-                                body={'ssid': ssid, 'password': password})
+                                body={'ssid': ssid, 'password': password, 'band': band})
     if body is None:
         return {'success': False, 'code': 'provisioning.notActive',
                 'message': _t('provisioning.notActive', _lang())}
@@ -5024,232 +6070,467 @@ def delete_dsp_preset(name):
     return {'success': True, **get_dsp_presets(), 'message': _t('dspPreset.deleted', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
-#  Bluetooth audio (A2DP sink) — OPTIONAL, OFF by default. Lets the
-#  appliance appear as a Bluetooth speaker: a phone connects and streams
-#  straight to the DAC, no app/account needed (guest-friendly input, the
-#  same idea as Volumio/WiiM/Bluesound/Eversolo). See OS migration
-#  0024-bluetooth.sh for the systemd units/prerequisites, and
-#  distro/config/includes.chroot/usr/local/sbin/hifi-bt-{aplay-run,
-#  watcher.py} (delivered by the system OTA channel) for the runtime DAC
-#  handover + Now Playing metadata.
+#  Bluetooth speakers (A2DP source) — OPTIONAL, OFF by default. Lets
+#  the appliance play OUT to a Bluetooth speaker or a pair of
+#  headphones. Each paired speaker gets a squeezelite instance of its
+#  own (hifi-bt-player@<mac>.service), so it shows up in Lyrion as a
+#  player in its own right, with its own name and its own queue,
+#  alongside this device's built-in player — the same arrangement
+#  piCorePlayer offers, and it is what makes a Bluetooth speaker
+#  groupable with the main player for multiroom.
 #
-#  Concurrency with squeezelite/CamillaDSP: Bluetooth "wins". When a phone
-#  starts actively streaming, hifi-bt-watcher.py pauses the local Lyrion
-#  player (and stops CamillaDSP if it was running, same release-before-open
-#  ordering as the DSP toggle above) so the real DAC is free, then restarts
-#  hifi-bt-aplay.service to open it. That handover reacts to live BlueZ
-#  D-Bus signals from the watcher daemon; this section only turns the whole
-#  subsystem on/off, reports status, and — since Bluetooth carries no cover
-#  art worth trusting (BlueZ's AVRCP art support is unreliable) — resolves
-#  one from an online lookup for the UI's Now Playing overlay.
+#  Nothing here touches the DAC: the built-in player keeps playing
+#  through it while a Bluetooth speaker plays something else. The two
+#  are separate Lyrion players, not two outputs fighting over one card.
+#
+#  🚨 This section does NOT start or stop anything. It writes the
+#  owner's choice to /etc/hifi-player/bluetooth.json and signals
+#  hifi-bt-out.service, which owns the whole runtime: bluetoothd,
+#  BlueALSA (in a2dp-source role), the pairing agent, reconnecting a
+#  speaker that was switched off, and one player unit per connected
+#  speaker. The reason the choice cannot simply be `systemctl enable`
+#  is the A/B image scheme — unit enablement does not survive an image
+#  swap, the state file does (it is seeded by hifi-ab-seed.sh and it is
+#  in the backup). See that unit and hifi-bt-out.py.
+#
+#  What this section does do synchronously is the parts that are a
+#  conversation with the hardware and that the user is waiting on:
+#  scanning, pairing and an explicit connect/disconnect.
 # ──────────────────────────────────────────────────────────────────
-BT_UNITS = ('bluetooth.service', 'hifi-bluealsa.service', 'hifi-bt-agent.service',
-            'hifi-bt-aplay.service', 'hifi-bt-watcher.service')
 BT_STATE_FILE = '/etc/hifi-player/bluetooth.json'
-BT_NOW_PLAYING_FILE = '/run/hifi-bt/now-playing.json'
-BT_CAMILLA_STOPPED_FLAG = '/run/hifi-bt/camilla-stopped'
-BT_APLAY_SCRIPT = '/usr/local/sbin/hifi-bt-aplay-run'
+BT_STATUS_FILE = '/run/hifi-bt/output.json'
+BT_SUPERVISOR = 'hifi-bt-out.service'
+BT_PLAYER_UNIT = 'hifi-bt-player@{}.service'
+BT_BLUEALSA_UNIT = 'hifi-bluealsa.service'
+# The ALSA plugin squeezelite opens as bluealsa:DEV=<MAC>. The daemon alone is
+# not enough — see the system-bundle/OS-migration split in 0024-bluetooth.sh,
+# where the two halves of this feature can legitimately arrive one update
+# apart, and a half-installed feature must report itself unavailable.
+BT_ALSA_PLUGIN_GLOB = '/usr/lib/*/alsa-lib/libasound_module_pcm_bluealsa.so'
 _BT_MAC_RE = re.compile(r'^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$')
+# The A2DP sink service a speaker or a pair of headphones advertises. Anything
+# without it (a keyboard, a phone, a fitness band) can be paired but will
+# never play, so the UI is told which is which.
+_BT_SINK_UUID = '0000110b'
 _bt_apply_lock = threading.Lock()
 
-def _bt_available():
-    return (_unit_exists('hifi-bluealsa.service')
-            and shutil.which('bluetoothctl') is not None
-            and os.path.exists(BT_APLAY_SCRIPT))
 
-def _read_bt_state():
+def _bt_available():
+    return (shutil.which('bluetoothctl') is not None
+            and _unit_exists(BT_SUPERVISOR)
+            and _unit_exists(BT_BLUEALSA_UNIT)
+            and bool(glob.glob(BT_ALSA_PLUGIN_GLOB)))
+
+
+def _bt_read_doc():
+    """The whole state document. Kept in the file the sink design already
+    used, so backup/restore ("bluetooth" category, which also carries
+    /var/lib/bluetooth and therefore the pairing keys) keeps working
+    unchanged, and so does a restore made before this feature existed."""
     try:
         with open(BT_STATE_FILE) as f:
-            return bool(json.load(f).get('enabled'))
+            doc = json.load(f)
+        if not isinstance(doc, dict):
+            return {'enabled': False, 'speakers': []}
+        doc.setdefault('enabled', False)
+        if not isinstance(doc.get('speakers'), list):
+            doc['speakers'] = []
+        return doc
     except Exception:
-        return False
+        return {'enabled': False, 'speakers': []}
 
-def _write_bt_state(enabled):
+
+def _bt_write_doc(doc):
     os.makedirs(os.path.dirname(BT_STATE_FILE), exist_ok=True)
     tmp = BT_STATE_FILE + '.tmp'
     with open(tmp, 'w') as f:
-        json.dump({'enabled': bool(enabled)}, f)
+        json.dump(doc, f, indent=1)
     os.replace(tmp, BT_STATE_FILE)
 
-def _bt_paired_devices():
-    """[{mac, name, connected}], best-effort — empty on any failure so a
-    flaky bluetoothctl call never breaks the whole status response."""
+
+def _read_bt_state():
+    """Just the master switch. Kept as its own function because
+    set_device_name() (which renames the adapter along with the player) calls
+    it, and because that is all most callers want."""
+    return bool(_bt_read_doc().get('enabled'))
+
+
+def _bt_kick():
+    """Tell the supervisor to re-read the state file now rather than at its
+    next poll, so the UI's follow-up status request isn't answered from a
+    snapshot taken before the change."""
+    try:
+        subprocess.run(['systemctl', 'kill', '-s', 'HUP', BT_SUPERVISOR],
+                       capture_output=True, timeout=10)
+    except Exception:
+        pass
+
+
+def _bt_snapshot():
+    """What the supervisor last saw. Reading a small file beats running
+    bluetoothctl on every status poll from three UIs at once."""
+    try:
+        with open(BT_STATUS_FILE) as f:
+            snap = json.load(f)
+        return snap if isinstance(snap, dict) else {}
+    except Exception:
+        return {}
+
+
+def _bt_player_mac(mac):
+    """A stable, unique player id for the speaker's squeezelite.
+
+    Lyrion keys a player (its name, its volume, which group it is in) on this
+    id, so it has to survive reboots and updates — and it must not collide
+    with another Osmium paired to the same speaker, which is why this device's
+    machine-id goes into the hash and not just the speaker's address. The
+    first byte is forced to locally-administered/unicast so the result can
+    never look like a real manufacturer's address."""
+    try:
+        with open('/etc/machine-id') as f:
+            seed = f.read().strip()
+    except Exception:
+        seed = socket.gethostname()
+    digest = _hashlib.sha256((seed + '|' + mac.upper()).encode()).digest()
+    b = bytearray(digest[:6])
+    b[0] = (b[0] & 0xFE) | 0x02
+    return ':'.join('%02X' % x for x in b)
+
+
+def _bt_clean_name(name, fallback='Bluetooth'):
+    """A player name safe to hand to squeezelite and to show in Lyrion.
+    Spaces are fine (it reaches squeezelite through execv, one argv entry),
+    control characters are not."""
+    name = re.sub(r'[\x00-\x1f\x7f]', '', str(name or '')).strip()
+    return (name[:40] or fallback)
+
+
+def _bt_instance(mac):
+    """'F4:2B:7D:63:98:D7' -> 'f4-2b-7d-63-98-d7', the systemd instance name."""
+    return mac.replace(':', '-').lower()
+
+
+def _bt_device_info(mac):
+    """{name, paired, trusted, connected, audio} for one device, from BlueZ."""
+    info = {'mac': mac, 'name': '', 'paired': False, 'trusted': False,
+            'connected': False, 'audio': False}
+    try:
+        r = subprocess.run(['bluetoothctl', 'info', mac],
+                           capture_output=True, text=True, timeout=10)
+        text = r.stdout or ''
+    except Exception:
+        return info
+    m = re.search(r'^\s*(?:Alias|Name):\s*(.+)$', text, re.M)
+    if m:
+        info['name'] = m.group(1).strip()
+    info['paired'] = 'Paired: yes' in text
+    info['trusted'] = 'Trusted: yes' in text
+    info['connected'] = 'Connected: yes' in text
+    info['audio'] = _BT_SINK_UUID in text.lower()
+    return info
+
+
+def _bt_known_devices():
+    """Everything BlueZ currently knows about: paired devices plus whatever
+    the last scan turned up. Best-effort — an empty list on failure is a UI
+    that says "nothing found", not a broken page."""
     devices = []
     try:
-        r = subprocess.run(['bluetoothctl', 'devices', 'Paired'],
+        r = subprocess.run(['bluetoothctl', 'devices'],
                            capture_output=True, text=True, timeout=10)
-        lines = (r.stdout or '').splitlines()
-        if r.returncode != 0 or not lines:
-            # Older bluez CLIs don't support the "Paired" filter argument.
-            r = subprocess.run(['bluetoothctl', 'paired-devices'],
-                               capture_output=True, text=True, timeout=10)
-            lines = (r.stdout or '').splitlines()
-        for line in lines:
-            m = re.match(r'Device\s+([0-9A-Fa-f:]{17})\s+(.*)', line.strip())
+        for line in (r.stdout or '').splitlines():
+            m = re.match(r'Device\s+([0-9A-Fa-f:]{17})\s*(.*)', line.strip())
             if not m:
                 continue
-            mac, name = m.group(1), m.group(2)
-            info = subprocess.run(['bluetoothctl', 'info', mac],
-                                  capture_output=True, text=True, timeout=10)
-            devices.append({'mac': mac, 'name': name,
-                            'connected': 'Connected: yes' in (info.stdout or '')})
+            mac = m.group(1).upper()
+            info = _bt_device_info(mac)
+            if not info['name']:
+                info['name'] = m.group(2).strip() or mac
+            devices.append(info)
     except Exception:
-        log.exception("_bt_paired_devices failed")
+        log.exception("_bt_known_devices failed")
     return devices
 
-def get_bluetooth_status():
-    try:
-        ac = subprocess.run(['systemctl', 'is-active', 'bluetooth.service'],
-                           capture_output=True, text=True, timeout=10)
-        active = ac.stdout.strip() == 'active'
-        discoverable = False
-        if active:
-            show = subprocess.run(['bluetoothctl', 'show'],
-                                  capture_output=True, text=True, timeout=10)
-            discoverable = 'Discoverable: yes' in (show.stdout or '')
-        return {'available': _bt_available(), 'enabled': _read_bt_state(), 'active': active,
-                'discoverable': discoverable, 'devices': _bt_paired_devices() if active else []}
-    except Exception:
-        log.exception("get_bluetooth_status failed")
-        return {'available': False, 'enabled': False, 'active': False, 'discoverable': False,
-                'devices': [], 'error': _t('bluetooth.statusUnavailable', _lang())}
 
-def set_bluetooth(enable):
-    """Enable or disable the whole Bluetooth subsystem (persists). Serialized
-    so an enable/disable double-click can't interleave with itself."""
+def get_bt_speakers():
+    """Status for the Bluetooth speakers screen: the master switch, the
+    configured speakers with their live state, and whatever else is in range
+    from the last scan."""
+    try:
+        doc = _bt_read_doc()
+        enabled = bool(doc.get('enabled'))
+        snap = _bt_snapshot()
+        live = {str(s.get('mac', '')).upper(): s for s in (snap.get('speakers') or [])}
+
+        speakers = []
+        for sp in doc.get('speakers') or []:
+            mac = str(sp.get('mac', '')).upper()
+            if not _BT_MAC_RE.match(mac):
+                continue
+            state = live.get(mac, {})
+            speakers.append({
+                'mac': mac,
+                'name': sp.get('name') or mac,
+                'player': sp.get('player') or sp.get('name') or mac,
+                'enabled': bool(sp.get('enabled', True)),
+                'autoconnect': bool(sp.get('autoconnect', True)),
+                'codec': sp.get('codec') or '',
+                'connected': bool(state.get('connected')),
+                'playing': bool(state.get('playing')),
+            })
+
+        # In range but not set up yet. Only meaningful while the adapter is
+        # up; with Bluetooth off BlueZ has nothing to tell us.
+        configured = {s['mac'] for s in speakers}
+        found = []
+        if enabled:
+            for dev in _bt_known_devices():
+                if dev['mac'] not in configured:
+                    found.append(dev)
+
+        return {'available': _bt_available(), 'enabled': enabled,
+                'adapter': bool(snap.get('adapter')) if enabled else False,
+                'speakers': speakers, 'found': found}
+    except Exception:
+        log.exception("get_bt_speakers failed")
+        return {'available': False, 'enabled': False, 'adapter': False,
+                'speakers': [], 'found': [],
+                'error': _t('bluetooth.statusUnavailable', _lang())}
+
+
+def _bt_fail(code, **extra):
+    out = {'success': False, 'code': code, 'message': _t(code, _lang())}
+    out.update(extra)
+    return out
+
+
+def _bt_ok(code, **extra):
+    out = {'success': True, 'code': code, 'message': _t(code, _lang())}
+    out.update(extra)
+    out.update(get_bt_speakers())
+    return out
+
+
+def set_bt_enabled(enable):
+    """Turn the whole Bluetooth side on or off. Serialized so a double-tap
+    can't interleave with itself."""
     if enable and not _bt_available():
-        return {'success': False, 'available': False, 'enabled': False, 'active': False,
-                'discoverable': False, 'devices': [],
-                'code': 'bluetooth.unavailableUpdate', 'message': _t('bluetooth.unavailableUpdate', _lang())}
+        return _bt_fail('bluetooth.unavailableUpdate', **get_bt_speakers())
     with _bt_apply_lock:
-        _write_bt_state(enable)
+        doc = _bt_read_doc()
+        doc['enabled'] = bool(enable)
         try:
-            if enable:
-                subprocess.run(['modprobe', 'btusb'], capture_output=True, timeout=15)
-                subprocess.run(['modprobe', 'bluetooth'], capture_output=True, timeout=15)
-                subprocess.run(['sudo', 'systemctl', 'unmask', 'bluetooth.service'],
-                               capture_output=True, text=True, timeout=15)
-                for unit in BT_UNITS:
-                    r = subprocess.run(['sudo', 'systemctl', 'enable', '--now', unit],
-                                       capture_output=True, text=True, timeout=30)
-                    if r.returncode != 0:
-                        log.error("set_bluetooth enable %s failed: %s", unit, (r.stderr or '').strip())
-                # hifi-bt-watcher.py sets power/pairable/alias once the adapter
-                # comes up — give it a moment before the UI's first status poll.
-                for _ in range(10):
-                    r = subprocess.run(['bluetoothctl', 'list'],
-                                       capture_output=True, text=True, timeout=5)
-                    if (r.stdout or '').strip():
-                        break
-                    time.sleep(1)
-            else:
-                for unit in reversed(BT_UNITS):
-                    subprocess.run(['sudo', 'systemctl', 'disable', '--now', unit],
-                                   capture_output=True, text=True, timeout=30)
-                subprocess.run(['sudo', 'systemctl', 'mask', 'bluetooth.service'],
-                               capture_output=True, text=True, timeout=15)
-                # Never leave DSP off just because Bluetooth is being turned off.
-                if os.path.exists(BT_CAMILLA_STOPPED_FLAG):
-                    _run(['systemctl', 'start', DSP_UNIT], timeout=30)
-                    try:
-                        os.remove(BT_CAMILLA_STOPPED_FLAG)
-                    except OSError:
-                        pass
-                subprocess.run(['modprobe', '-r', 'btusb'], capture_output=True, timeout=15)
+            _bt_write_doc(doc)
         except Exception:
-            log.exception("set_bluetooth failed")
-            status = get_bluetooth_status()
-            status['success'] = False
-            status['code'] = 'bluetooth.opFailed'
-            status['message'] = _t('bluetooth.opFailed', _lang())
-            return status
-    status = get_bluetooth_status()
-    status['success'] = True
-    status['message'] = _t('bluetooth.enabled' if enable else 'bluetooth.disabled', _lang())
-    return status
+            log.exception("set_bt_enabled: could not persist the choice")
+            return _bt_fail('bluetooth.opFailed', **get_bt_speakers())
+        _bt_kick()
+        if enable:
+            # The supervisor has to start bluetoothd and power the adapter up
+            # before the screen's first status poll means anything.
+            for _ in range(15):
+                time.sleep(1)
+                if _bt_snapshot().get('adapter'):
+                    break
+    return _bt_ok('bluetooth.enabled' if enable else 'bluetooth.disabled')
 
-def set_bt_discoverable():
+
+def bt_scan(seconds=10):
+    """Look for speakers in range. Blocking on purpose: the screen shows a
+    spinner and the answer is the list, which is easier to get right than a
+    progress endpoint for something that takes ten seconds."""
     if not _bt_available():
-        return {'success': False, 'code': 'bluetooth.unavailable',
-                'message': _t('bluetooth.unavailable', _lang())}
+        return _bt_fail('bluetooth.unavailable')
+    if not _read_bt_state():
+        return _bt_fail('bluetooth.turnOnFirst')
     try:
-        subprocess.run(['bluetoothctl', 'discoverable-timeout', '120'],
-                       capture_output=True, text=True, timeout=10)
-        r = subprocess.run(['bluetoothctl', 'discoverable', 'on'],
-                           capture_output=True, text=True, timeout=10)
-        if r.returncode != 0:
-            return {'success': False, 'code': 'bluetooth.cannotMakeVisible',
-                    'message': _t('bluetooth.cannotMakeVisible', _lang())}
+        seconds = max(3, min(int(seconds or 10), 30))
+    except (TypeError, ValueError):
+        seconds = 10
+    if not _bt_snapshot().get('adapter'):
+        return _bt_fail('bluetooth.noAdapter', **get_bt_speakers())
+    try:
+        # --timeout makes bluetoothctl run discovery for that long and then
+        # stop it, which matters: discovery left running eats airtime and is
+        # audible as stutter on a speaker that is already playing.
+        subprocess.run(['bluetoothctl', '--timeout', str(seconds), 'scan', 'on'],
+                       capture_output=True, text=True, timeout=seconds + 15)
     except Exception:
-        log.exception("set_bt_discoverable failed")
-        return {'success': False, 'code': 'bluetooth.cannotMakeVisible',
-                'message': _t('bluetooth.cannotMakeVisible', _lang())}
-    return {'success': True, 'seconds': 120, 'message': _t('bluetooth.visibleFor2Min', _lang())}
+        log.exception("bt_scan failed")
+        return _bt_fail('bluetooth.scanFailed', **get_bt_speakers())
+    return _bt_ok('bluetooth.scanDone')
 
-def bt_forget(mac):
-    """Unpair/remove a device. MAC comes straight from a network request, so
-    it's validated against a strict address pattern before ever reaching a
-    shell-adjacent subprocess argument."""
+
+def bt_add_speaker(mac, player=None):
+    """Pair, trust and set a speaker up as a player, in one step.
+
+    Trusting matters as much as pairing here: a trusted speaker may reconnect
+    by itself when it is switched on, and BlueZ accepts it without asking
+    anyone. The MAC comes straight off a network request, so it is checked
+    against a strict address pattern before it reaches a subprocess argument."""
+    if not _bt_available():
+        return _bt_fail('bluetooth.unavailable')
     if not mac or not _BT_MAC_RE.match(mac):
-        return {'success': False, 'code': 'bluetooth.invalidAddress',
-                'message': _t('bluetooth.invalidAddress', _lang())}
-    try:
-        r = subprocess.run(['bluetoothctl', 'remove', mac],
-                           capture_output=True, text=True, timeout=10)
-        if r.returncode != 0:
-            return {'success': False, 'code': 'bluetooth.deviceNotFound',
-                    'message': _t('bluetooth.deviceNotFound', _lang())}
-    except Exception:
-        log.exception("bt_forget failed")
-        return {'success': False, 'code': 'bluetooth.forgetFailed',
-                'message': _t('bluetooth.forgetFailed', _lang())}
-    return {'success': True, 'devices': _bt_paired_devices(), 'message': _t('bluetooth.forgotten', _lang())}
+        return _bt_fail('bluetooth.invalidAddress')
+    if not _read_bt_state():
+        return _bt_fail('bluetooth.turnOnFirst')
+    mac = mac.upper()
 
-# Cover art never arrives over Bluetooth (AVRCP art support in BlueZ is
-# experimental/unreliable, and cars/phones mostly rely on their own
-# proprietary stacks for it) — best-effort online lookup by title+artist
-# instead. Tiny in-memory cache so repeated Now Playing polls during the
-# same track don't refetch; capped so a long BT listening session (many
-# different tracks) can't grow it unbounded.
-_bt_cover_cache = {}
-_BT_COVER_CACHE_MAX = 200
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        if any(str(s.get('mac', '')).upper() == mac for s in doc['speakers']):
+            return _bt_fail('bluetooth.alreadyAdded', **get_bt_speakers())
 
-def _bt_cover_lookup(title, artist, album):
-    key = (title or '', artist or '', album or '')
-    if key == ('', '', ''):
-        return None
-    if key in _bt_cover_cache:
-        return _bt_cover_cache[key]
-    cover = None
-    try:
-        term = urllib.parse.quote(f'{artist} {title}'.strip())
-        url = f'https://itunes.apple.com/search?term={term}&media=music&entity=song&limit=1'
-        req = urllib.request.Request(url, headers={'User-Agent': 'OsmiumSound/1.0'})
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            data = json.loads(resp.read())
-        results = data.get('results') or []
-        if results:
-            # ...100x100bb.jpg -> a larger cover; still tiny/fast over LAN.
-            art = results[0].get('artworkUrl100')
-            if art:
-                cover = art.replace('100x100bb', '600x600bb')
-    except Exception:
-        cover = None  # offline / no match / rate-limited — fine, just no art
-    if len(_bt_cover_cache) >= _BT_COVER_CACHE_MAX:
-        _bt_cover_cache.clear()
-    _bt_cover_cache[key] = cover
-    return cover
+        info = _bt_device_info(mac)
+        if not info['paired']:
+            try:
+                # Discovery must stop before pairing: BlueZ will not pair while
+                # the adapter is still hopping around looking for devices.
+                subprocess.run(['bluetoothctl', 'scan', 'off'],
+                               capture_output=True, text=True, timeout=10)
+                r = subprocess.run(['bluetoothctl', 'pair', mac],
+                                   capture_output=True, text=True, timeout=60)
+            except Exception:
+                log.exception("bt_add_speaker: pair failed")
+                return _bt_fail('bluetooth.pairFailed', **get_bt_speakers())
+            info = _bt_device_info(mac)
+            if not info['paired']:
+                log.error("bt pair %s failed: %s", mac, (r.stdout or r.stderr or '').strip()[-200:])
+                return _bt_fail('bluetooth.pairFailed', **get_bt_speakers())
 
-def get_bluetooth_now_playing():
+        subprocess.run(['bluetoothctl', 'trust', mac], capture_output=True, timeout=15)
+
+        name = _bt_clean_name(info['name'] or player or mac, mac)
+        doc['speakers'].append({
+            'mac': mac,
+            'name': name,
+            'player': _bt_clean_name(player or name, name),
+            'player_mac': _bt_player_mac(mac),
+            'enabled': True,
+            'autoconnect': True,
+            'codec': '',
+        })
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_add_speaker: could not persist the speaker")
+            return _bt_fail('bluetooth.opFailed', **get_bt_speakers())
+    _bt_kick()
+    # The supervisor connects it and starts its player; give it one cycle so
+    # the reply already shows the speaker as connected.
+    time.sleep(3)
+    return _bt_ok('bluetooth.speakerAdded')
+
+
+def bt_remove_speaker(mac):
+    """Forget a speaker: its player goes away and BlueZ drops the pairing."""
+    if not mac or not _BT_MAC_RE.match(mac):
+        return _bt_fail('bluetooth.invalidAddress')
+    mac = mac.upper()
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        before = len(doc['speakers'])
+        doc['speakers'] = [s for s in doc['speakers']
+                           if str(s.get('mac', '')).upper() != mac]
+        if len(doc['speakers']) == before:
+            return _bt_fail('bluetooth.deviceNotFound', **get_bt_speakers())
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_remove_speaker: could not persist")
+            return _bt_fail('bluetooth.opFailed', **get_bt_speakers())
+    # Stop the player first, then unpair: removing a device out from under a
+    # squeezelite that still has its PCM open is how you get a hung ALSA
+    # handle instead of a clean exit.
+    _bt_kick()
+    time.sleep(1)
     try:
-        with open(BT_NOW_PLAYING_FILE) as f:
-            np = json.load(f)
+        subprocess.run(['systemctl', 'stop', BT_PLAYER_UNIT.format(_bt_instance(mac))],
+                       capture_output=True, timeout=30)
+        subprocess.run(['bluetoothctl', 'remove', mac], capture_output=True, timeout=20)
     except Exception:
-        np = {}
-    if not np.get('active'):
-        return {'active': False}
-    np['cover_url'] = _bt_cover_lookup(np.get('title'), np.get('artist'), np.get('album'))
-    return np
+        log.exception("bt_remove_speaker: unpair failed")
+    _bt_kick()
+    return _bt_ok('bluetooth.forgotten')
+
+
+def bt_update_speaker(mac, fields):
+    """Rename a speaker's player, or switch it off without forgetting it."""
+    if not mac or not _BT_MAC_RE.match(mac):
+        return _bt_fail('bluetooth.invalidAddress')
+    mac = mac.upper()
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        target = None
+        for s in doc['speakers']:
+            if str(s.get('mac', '')).upper() == mac:
+                target = s
+                break
+        if target is None:
+            return _bt_fail('bluetooth.deviceNotFound', **get_bt_speakers())
+        if 'player' in fields:
+            target['player'] = _bt_clean_name(fields['player'], target.get('name') or mac)
+        if 'enabled' in fields:
+            target['enabled'] = bool(fields['enabled'])
+        if 'autoconnect' in fields:
+            target['autoconnect'] = bool(fields['autoconnect'])
+        if 'codec' in fields:
+            codec = re.sub(r'[^A-Za-z0-9_-]', '', str(fields.get('codec') or ''))[:16]
+            target['codec'] = codec
+        target.setdefault('player_mac', _bt_player_mac(mac))
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_update_speaker: could not persist")
+            return _bt_fail('bluetooth.opFailed', **get_bt_speakers())
+    # A rename or a codec change only reaches Lyrion when squeezelite restarts
+    # with the new arguments; the supervisor does that on its next pass, but
+    # restarting it here means the new name is already there when the screen
+    # refreshes.
+    unit = BT_PLAYER_UNIT.format(_bt_instance(mac))
+    try:
+        if subprocess.run(['systemctl', 'is-active', unit],
+                          capture_output=True, text=True, timeout=10).stdout.strip() == 'active':
+            subprocess.run(['systemctl', 'restart', unit], capture_output=True, timeout=30)
+    except Exception:
+        log.exception("bt_update_speaker: player restart failed")
+    _bt_kick()
+    return _bt_ok('bluetooth.saved')
+
+
+def bt_connect(mac, connect=True):
+    """Connect or disconnect a speaker by hand. Disconnecting also parks the
+    automatic retry (autoconnect off), because a speaker the owner just
+    disconnected reconnecting fifteen seconds later is not a feature."""
+    if not mac or not _BT_MAC_RE.match(mac):
+        return _bt_fail('bluetooth.invalidAddress')
+    if not _read_bt_state():
+        return _bt_fail('bluetooth.turnOnFirst')
+    mac = mac.upper()
+    try:
+        r = subprocess.run(['bluetoothctl', 'connect' if connect else 'disconnect', mac],
+                           capture_output=True, text=True, timeout=40)
+    except Exception:
+        log.exception("bt_connect failed")
+        return _bt_fail('bluetooth.connectFailed' if connect else 'bluetooth.opFailed',
+                        **get_bt_speakers())
+    ok = _bt_device_info(mac)['connected'] == bool(connect)
+    if not ok and connect:
+        log.error("bt connect %s failed: %s", mac, (r.stdout or r.stderr or '').strip()[-200:])
+        return _bt_fail('bluetooth.connectFailed', **get_bt_speakers())
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        for s in doc['speakers']:
+            if str(s.get('mac', '')).upper() == mac:
+                s['autoconnect'] = bool(connect)
+                break
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_connect: could not persist autoconnect")
+    _bt_kick()
+    time.sleep(2)
+    return _bt_ok('bluetooth.connected' if connect else 'bluetooth.disconnected')
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
@@ -5458,7 +6739,7 @@ _RELEASE_CACHE_LOCK = threading.Lock()
 
 def _fetch_pages_manifest(channel, base=None):
     """Read the channel's static manifest from GitHub Pages (or from `base`,
-    the file.osmiumsound.it mirror of the prod manifest). Returns a release-
+    its file.osmiumsound.it mirror). Returns a release-
     shaped dict ({tag_name, assets:[…]}) or None if unavailable/empty."""
     url = f'{base or OTA_MANIFEST_BASE}/latest-{channel}.json'
     req = urllib.request.Request(url, headers={'User-Agent': 'hifi-player-ota'})
@@ -5518,16 +6799,15 @@ def _fetch_release(channel):
         except Exception:
             log.warning("Pages manifest fetch failed for channel %s; falling back to API", channel)
 
-        # 2. Stable channel: the copy of the manifest next to the payloads on
+        # 2. The copy of the manifest next to the payloads on
         #    file.osmiumsound.it (same host the download comes from anyway).
-        if channel == 'prod':
-            try:
-                release = _fetch_pages_manifest(channel, OTA_PROD_MIRROR_BASE)
-                if release:
-                    _RELEASE_CACHE[channel] = (now, release)
-                    return release
-            except Exception:
-                log.warning("mirror manifest fetch failed for channel prod; falling back to API")
+        try:
+            release = _fetch_pages_manifest(channel, OTA_PROD_MIRROR_BASE)
+            if release:
+                _RELEASE_CACHE[channel] = (now, release)
+                return release
+        except Exception:
+            log.warning("mirror manifest fetch failed for channel %s; falling back to API", channel)
 
         # 3. Fallback: the rate-limited GitHub REST API.
         try:
@@ -7015,6 +8295,14 @@ def api_configure_network():
 def api_network_status():
     return jsonify(get_network_status())
 
+@app.route('/network_check', methods=['GET'])
+def api_network_check():
+    return jsonify(network_check())
+
+@app.route('/connectivity', methods=['GET'])
+def api_connectivity():
+    return jsonify(get_connectivity(force=request.args.get('force') == '1'))
+
 @app.route('/wifi_scan', methods=['GET'])
 def api_wifi_scan():
     return jsonify(wifi_scan())
@@ -7022,7 +8310,8 @@ def api_wifi_scan():
 @app.route('/wifi_connect', methods=['POST'])
 def api_wifi_connect():
     data = request.get_json(silent=True) or {}
-    return jsonify(wifi_connect(data.get('ssid'), data.get('password', '')))
+    return jsonify(wifi_connect(data.get('ssid'), data.get('password', ''),
+                                (data.get('band') or '').strip()))
 
 @app.route('/wired_dhcp', methods=['POST'])
 def api_wired_dhcp():
@@ -7204,6 +8493,18 @@ def api_set_vu_style():
     data = request.get_json(silent=True) or {}
     return jsonify(set_vu_style(data.get('style')))
 
+@app.route('/nowplaying_animation', methods=['GET'])
+def api_nowplaying_animation():
+    return jsonify(get_nowplaying_animation())
+
+@app.route('/nowplaying_animation', methods=['POST'])
+def api_set_nowplaying_animation():
+    data = request.get_json(silent=True)
+    result = set_nowplaying_animation(data.get('animation') if isinstance(data, dict) else None)
+    if result['success']:
+        return jsonify(result)
+    return jsonify(result), (400 if result.get('code') == 'prefs.animationUnknown' else 500)
+
 @app.route('/vu_store', methods=['GET'])
 def api_vu_store():
     return jsonify(get_vu_store(summary=request.args.get('summary') == '1'))
@@ -7225,6 +8526,28 @@ def api_vu_store_remove():
 @app.route('/vu_store/seen', methods=['POST'])
 def api_vu_store_seen():
     return jsonify(vu_store_mark_seen())
+
+@app.route('/anim_store', methods=['GET'])
+def api_anim_store():
+    return jsonify(get_anim_store(summary=request.args.get('summary') == '1'))
+
+@app.route('/anim_store/check', methods=['POST'])
+def api_anim_store_check():
+    return jsonify(anim_store_check())
+
+@app.route('/anim_store/install', methods=['POST'])
+def api_anim_store_install():
+    data = request.get_json(silent=True) or {}
+    return jsonify(anim_store_install(data.get('id')))
+
+@app.route('/anim_store/remove', methods=['POST'])
+def api_anim_store_remove():
+    data = request.get_json(silent=True) or {}
+    return jsonify(anim_store_remove(data.get('id')))
+
+@app.route('/anim_store/seen', methods=['POST'])
+def api_anim_store_seen():
+    return jsonify(anim_store_mark_seen())
 
 @app.route('/vu_meter', methods=['POST'])
 def api_set_vu_meter():
@@ -7263,7 +8586,8 @@ def api_provision_mode():
 def api_provision_wifi_connect():
     data = request.get_json(silent=True) or {}
     return jsonify(provision_wifi_connect((data.get('ssid') or '').strip(),
-                                          data.get('password') or ''))
+                                          data.get('password') or '',
+                                          (data.get('band') or '').strip()))
 
 @app.route('/provision_wifi_rescan', methods=['POST'])
 def api_provision_wifi_rescan():
@@ -7413,27 +8737,49 @@ def api_tidal_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_tidal(bool(data.get('enable'))))
 
+# ── Bluetooth speakers (A2DP source) ──────────────────────────────
+# /bluetooth_status keeps its old path: it is the one Bluetooth route that
+# ever had callers outside this file, and answering it with the new shape
+# costs nothing. The sink-era routes (/bluetooth_discoverable,
+# /bluetooth_now_playing) are gone with the sink role itself.
 @app.route('/bluetooth_status', methods=['GET'])
-def api_bluetooth_status():
-    return jsonify(get_bluetooth_status())
+@app.route('/bt_speakers', methods=['GET'])
+def api_bt_speakers():
+    return jsonify(get_bt_speakers())
 
 @app.route('/bluetooth_set', methods=['POST'])
-def api_bluetooth_set():
+@app.route('/bt_speakers/enable', methods=['POST'])
+def api_bt_enable():
     data = request.get_json(silent=True) or {}
-    return jsonify(set_bluetooth(bool(data.get('enable'))))
+    return jsonify(set_bt_enabled(bool(data.get('enable'))))
 
-@app.route('/bluetooth_discoverable', methods=['POST'])
-def api_bluetooth_discoverable():
-    return jsonify(set_bt_discoverable())
+@app.route('/bt_speakers/scan', methods=['POST'])
+def api_bt_scan():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_scan(data.get('seconds', 10)))
+
+@app.route('/bt_speakers/add', methods=['POST'])
+def api_bt_add():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_add_speaker(data.get('mac'), data.get('player')))
 
 @app.route('/bluetooth_forget', methods=['POST'])
-def api_bluetooth_forget():
+@app.route('/bt_speakers/remove', methods=['POST'])
+def api_bt_remove():
     data = request.get_json(silent=True) or {}
-    return jsonify(bt_forget(data.get('mac')))
+    return jsonify(bt_remove_speaker(data.get('mac')))
 
-@app.route('/bluetooth_now_playing', methods=['GET'])
-def api_bluetooth_now_playing():
-    return jsonify(get_bluetooth_now_playing())
+@app.route('/bt_speakers/update', methods=['POST'])
+def api_bt_update():
+    data = request.get_json(silent=True) or {}
+    fields = {k: data[k] for k in ('player', 'enabled', 'autoconnect', 'codec')
+              if k in data}
+    return jsonify(bt_update_speaker(data.get('mac'), fields))
+
+@app.route('/bt_speakers/connect', methods=['POST'])
+def api_bt_connect():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_connect(data.get('mac'), bool(data.get('connect', True))))
 
 @app.route('/show_global_keyboard', methods=['POST'])
 def api_show_global_keyboard():
@@ -7456,4 +8802,5 @@ if __name__ == '__main__':
     _startup_network_recovery()
     threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
     threading.Thread(target=_vu_store_background, daemon=True, name='vu-store').start()
+    threading.Thread(target=_anim_store_background, daemon=True, name='anim-store').start()
     app.run(host='127.0.0.1', port=8000, threaded=True)

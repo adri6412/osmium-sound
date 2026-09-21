@@ -1,0 +1,2869 @@
+{
+ "status": "ok",
+ "album_id": 630,
+ "match": {
+  "mbid": "1ccbf130-10da-4abf-8e44-a5c3150c89d1",
+  "release_group": "a42ff415-3f04-4ae9-a953-1a7983d87654",
+  "how": "search",
+  "score": 100,
+  "medium": null
+ },
+ "release": {
+  "title": "Django Unchained: Original Motion Picture Soundtrack",
+  "artist": "Various Artists",
+  "date": "2012-12-18",
+  "first_release_date": "2012-12-18",
+  "type": "album",
+  "secondary_types": [
+   "soundtrack"
+  ],
+  "labels": [
+   {
+    "name": "Loma Vista Recordings",
+    "catno": "B0017950-02"
+   },
+   {
+    "name": "Republic Records",
+    "catno": "B0017950-02"
+   }
+  ],
+  "country": "US",
+  "barcode": "602537256426",
+  "disc_count": 1,
+  "track_count": 23,
+  "url": "https://musicbrainz.org/release/1ccbf130-10da-4abf-8e44-a5c3150c89d1"
+ },
+ "credits": [
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "bass",
+   "credit": "",
+   "people": [
+    {
+     "name": "Joe Macho",
+     "mbid": "e22c3e89-d4df-4dfa-8129-2bee3c36ed05",
+     "artist_id": null
+    },
+    {
+     "name": "Wu10",
+     "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+     "credited_as": "Kelvin Wooten",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "percussion",
+   "credit": "",
+   "people": [
+    {
+     "name": "George Devens",
+     "mbid": "bd54bc20-ba84-47a4-aad3-6b21985c8727",
+     "artist_id": null
+    },
+    {
+     "name": "Wu10",
+     "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+     "credited_as": "Kelvin Wooten",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "piano",
+   "credit": "",
+   "people": [
+    {
+     "name": "Tommy West",
+     "mbid": "f936fdfd-c7ae-4029-8b13-3942a98ab51e",
+     "artist_id": null
+    },
+    {
+     "name": "Wu10",
+     "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+     "credited_as": "Kelvin Wooten",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "acoustic guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Elayna Boynton",
+     "mbid": "af76d3f7-3146-4848-822d-c4204f94a694",
+     "artist_id": null
+    },
+    {
+     "name": "Wu10",
+     "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+     "credited_as": "Kelvin Wooten",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "acoustic guitar",
+   "credit": "lead acoustic guitar",
+   "people": [
+    {
+     "name": "Maury Muehleisen",
+     "mbid": "09e278d4-bdd2-4997-b62e-dc76de40c2bd",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "drums (drum set)",
+   "credit": "",
+   "people": [
+    {
+     "name": "Rick Marotta",
+     "mbid": "0568ec58-e7ca-49e9-b01a-7e3fc2b7ebe2",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "electric guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Wu10",
+     "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+     "credited_as": "Kelvin Wooten",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "foot stomps",
+   "credit": "stomps",
+   "people": [
+    {
+     "name": "Brother Dege",
+     "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+     "credited_as": "Dege Legg",
+     "artist_id": 848
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Charlie Burrel",
+     "mbid": "c22df534-abb1-48fd-8aad-aec918457a76",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     12
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "guitar",
+   "credit": "rhythm guitar",
+   "people": [
+    {
+     "name": "Tommy West",
+     "mbid": "f936fdfd-c7ae-4029-8b13-3942a98ab51e",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "handclaps",
+   "credit": "claps",
+   "people": [
+    {
+     "name": "Brother Dege",
+     "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+     "credited_as": "Dege Legg",
+     "artist_id": 848
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "resonator guitar",
+   "credit": "dobro",
+   "people": [
+    {
+     "name": "Brother Dege",
+     "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+     "credited_as": "Dege Legg",
+     "artist_id": 848
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "slide guitar",
+   "credit": "",
+   "people": [
+    {
+     "name": "Brother Dege",
+     "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+     "credited_as": "Dege Legg",
+     "artist_id": 848
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "instrument",
+   "attr": "wurlitzer electric piano",
+   "credit": "Wurlitzer",
+   "people": [
+    {
+     "name": "Wu10",
+     "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+     "credited_as": "Kelvin Wooten",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "spoken vocals",
+   "credit": "Django",
+   "people": [
+    {
+     "name": "Jamie Foxx",
+     "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     20
+    ],
+    [
+     1,
+     22
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Brother Dege",
+     "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+     "credited_as": "Dege Legg",
+     "artist_id": 848
+    },
+    {
+     "name": "Jim Croce",
+     "mbid": "fcfa9543-e113-4ef9-9ef6-455ba4cbe7af",
+     "artist_id": 841
+    },
+    {
+     "name": "Rick Ross",
+     "mbid": "13bcb2bb-db37-4397-baf5-e0f085be2d64",
+     "artist_id": 842
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "spoken vocals",
+   "credit": "Dr. King Schultz",
+   "people": [
+    {
+     "name": "Christoph Waltz",
+     "mbid": "a9feede1-5089-4497-81ec-6dfa51878a69",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "spoken vocals",
+   "credit": "Stephen",
+   "people": [
+    {
+     "name": "Samuel L. Jackson",
+     "mbid": "a1c82f09-cc3a-4c94-a518-cba50d9bfab1",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     20
+    ],
+    [
+     1,
+     22
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "background vocals",
+   "credit": "",
+   "people": [
+    {
+     "name": "Anthony Hamilton",
+     "mbid": "af7f5e8e-ac05-4d55-b860-a4dc72c78e66",
+     "artist_id": null
+    },
+    {
+     "name": "Elayna Boynton",
+     "mbid": "af76d3f7-3146-4848-822d-c4204f94a694",
+     "artist_id": null
+    },
+    {
+     "name": "Jim Croce",
+     "mbid": "fcfa9543-e113-4ef9-9ef6-455ba4cbe7af",
+     "artist_id": 841
+    },
+    {
+     "name": "Maury Muehleisen",
+     "mbid": "09e278d4-bdd2-4997-b62e-dc76de40c2bd",
+     "artist_id": null
+    },
+    {
+     "name": "Tommy West",
+     "mbid": "f936fdfd-c7ae-4029-8b13-3942a98ab51e",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "lead vocals",
+   "credit": "",
+   "people": [
+    {
+     "name": "Anthony Hamilton",
+     "mbid": "af7f5e8e-ac05-4d55-b860-a4dc72c78e66",
+     "artist_id": null
+    },
+    {
+     "name": "Elayna Boynton",
+     "mbid": "af76d3f7-3146-4848-822d-c4204f94a694",
+     "artist_id": null
+    },
+    {
+     "name": "Elisa",
+     "mbid": "8d173bdf-c83e-42d7-8355-c8d6f0d10c0e",
+     "artist_id": 845
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     16
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "spoken vocals",
+   "credit": "Big Daddy",
+   "people": [
+    {
+     "name": "Don Johnson",
+     "mbid": "35d9971a-6042-4fc2-b7ef-29d76a59e590",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     7
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "spoken vocals",
+   "credit": "Billy Crash",
+   "people": [
+    {
+     "name": "Walton Goggins",
+     "mbid": "10addb39-2d15-4eab-94d6-9a18fd4541f0",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     12
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "spoken vocals",
+   "credit": "Calvin Candie",
+   "people": [
+    {
+     "name": "Leonardo DiCaprio",
+     "mbid": "d99c2fa8-7e28-4b9d-9edd-c97443f3cca9",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     14
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "spoken vocals",
+   "credit": "Daughtrey Sheriff Bill Sharp",
+   "people": [
+    {
+     "name": "Don Straud",
+     "mbid": "94b8e020-d986-48d3-a183-3aff15381fe9",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     9
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "vocal",
+   "attr": "spoken vocals",
+   "credit": "Dickey Speck",
+   "people": [
+    {
+     "name": "James Russo",
+     "mbid": "31feb0c7-c0cd-4042-bb61-a6bb18ef6888",
+     "artist_id": 832
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "performer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "2Pac",
+     "mbid": "382f1005-e9ab-4684-afd4-0bdae4ee37f2",
+     "artist_id": null
+    },
+    {
+     "name": "Elisa",
+     "mbid": "8d173bdf-c83e-42d7-8355-c8d6f0d10c0e",
+     "artist_id": 845
+    },
+    {
+     "name": "James Brown",
+     "mbid": "20ff3303-4fe2-4a47-a1b6-291e26aa3438",
+     "artist_id": null
+    },
+    {
+     "name": "John Legend",
+     "mbid": "75a72702-a5ef-4513-bca5-c5b944903546",
+     "artist_id": 847
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     16
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     18
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "performer",
+   "attr": "guest solo",
+   "credit": "",
+   "people": [
+    {
+     "name": "Pat Metheny",
+     "mbid": "7daac7f9-8fcc-485f-a14f-f8091d98cf25",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     13
+    ]
+   ]
+  },
+  {
+   "group": "performer",
+   "role": "conductor",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Luis Bacalov",
+     "mbid": "500053c3-d673-4768-94d0-9e02aea5d0bf",
+     "artist_id": 839
+    },
+    {
+     "name": "Riz Ortolani",
+     "mbid": "e592c35e-86f5-4d90-9a3e-c5261031413d",
+     "artist_id": 675
+    },
+    {
+     "name": "Terence P. Minogue",
+     "mbid": "42a10af4-9b42-4f40-8091-1c53339e8b58",
+     "credited_as": "Terence Minogue",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "composer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Ennio Morricone",
+     "mbid": "a16e47f5-aa54-47fe-87e4-bb8af91a9fdd",
+     "artist_id": 834
+    },
+    {
+     "name": "Luis Bacalov",
+     "mbid": "500053c3-d673-4768-94d0-9e02aea5d0bf",
+     "artist_id": 839
+    },
+    {
+     "name": "Brother Dege",
+     "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+     "credited_as": "Dege Legg",
+     "artist_id": 848
+    },
+    {
+     "name": "Charles Fox",
+     "mbid": "d74e306c-14fe-4816-a821-b2ec554f9edb",
+     "artist_id": null
+    },
+    {
+     "name": "Jamie Foxx",
+     "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+     "artist_id": null
+    },
+    {
+     "name": "Jerry Goldsmith",
+     "mbid": "db403e3d-4753-45d6-8fcb-94db03e882e1",
+     "artist_id": null
+    },
+    {
+     "name": "Riz Ortolani",
+     "mbid": "e592c35e-86f5-4d90-9a3e-c5261031413d",
+     "credited_as": "Riziero Ortolani",
+     "artist_id": 675
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     11
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     13
+    ],
+    [
+     1,
+     15
+    ],
+    [
+     1,
+     16
+    ],
+    [
+     1,
+     19
+    ],
+    [
+     1,
+     21
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "lyricist",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Luis Bacalov",
+     "mbid": "500053c3-d673-4768-94d0-9e02aea5d0bf",
+     "artist_id": 839
+    },
+    {
+     "name": "Brother Dege",
+     "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+     "credited_as": "Dege Legg",
+     "artist_id": 848
+    },
+    {
+     "name": "Elisa",
+     "mbid": "8d173bdf-c83e-42d7-8355-c8d6f0d10c0e",
+     "credited_as": "Elisa Toffoli",
+     "artist_id": 845
+    },
+    {
+     "name": "Jamie Foxx",
+     "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+     "artist_id": null
+    },
+    {
+     "name": "Norman Gimbel",
+     "mbid": "4b68c65a-8cb5-4c03-bb58-c1b1cf5eced1",
+     "artist_id": null
+    },
+    {
+     "name": "Rick Ross",
+     "mbid": "13bcb2bb-db37-4397-baf5-e0f085be2d64",
+     "artist_id": 842
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     16
+    ],
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "writer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Quentin Tarantino",
+     "mbid": "7e323fa7-14b3-42fd-a569-488fb3f386c1",
+     "artist_id": null
+    },
+    {
+     "name": "Anthony Hamilton",
+     "mbid": "af7f5e8e-ac05-4d55-b860-a4dc72c78e66",
+     "artist_id": null
+    },
+    {
+     "name": "Elayna Boynton",
+     "mbid": "af76d3f7-3146-4848-822d-c4204f94a694",
+     "artist_id": null
+    },
+    {
+     "name": "Franco Micalizzi",
+     "mbid": "aa02934c-1ae5-4130-be27-e6aec81d6281",
+     "artist_id": null
+    },
+    {
+     "name": "John Legend",
+     "mbid": "75a72702-a5ef-4513-bca5-c5b944903546",
+     "credited_as": "John Stephens",
+     "artist_id": 847
+    },
+    {
+     "name": "Lally Stott",
+     "mbid": "a4301fcd-44f1-43ce-b5a7-09303831f9a8",
+     "artist_id": null
+    },
+    {
+     "name": "Paul Epworth",
+     "mbid": "65380f7e-cb7a-4594-ae44-28ff55160746",
+     "artist_id": null
+    },
+    {
+     "name": "Wu10",
+     "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+     "credited_as": "Kelvin Wooten",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     20
+    ],
+    [
+     1,
+     22
+    ],
+    [
+     1,
+     23
+    ]
+   ]
+  },
+  {
+   "group": "composition",
+   "role": "arranger",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Terence P. Minogue",
+     "mbid": "42a10af4-9b42-4f40-8091-1c53339e8b58",
+     "credited_as": "Terence Minogue",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     10
+    ]
+   ]
+  },
+  {
+   "group": "production",
+   "role": "producer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Maurizio Buttazzoni",
+     "mbid": "e4b17487-f6df-4efd-b4f7-6fcd1865ae78",
+     "artist_id": null
+    },
+    {
+     "name": "Sergio Bassetti",
+     "mbid": "6f18febc-35ee-49b2-b163-eb12374403cd",
+     "artist_id": null
+    },
+    {
+     "name": "Brainz Dimilo",
+     "mbid": "54bd631e-0092-4236-beb9-00ce515180e7",
+     "credited_as": "Ainz “Brainz” Dimilo",
+     "artist_id": null
+    },
+    {
+     "name": "Brother Dege",
+     "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+     "credited_as": "Dege Legg",
+     "artist_id": 848
+    },
+    {
+     "name": "Jamie Foxx",
+     "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+     "artist_id": null
+    },
+    {
+     "name": "Paul Epworth",
+     "mbid": "65380f7e-cb7a-4594-ae44-28ff55160746",
+     "artist_id": null
+    },
+    {
+     "name": "Primo",
+     "mbid": "9dc2733a-6cc8-4e33-bac3-a65a54536c67",
+     "artist_id": null
+    },
+    {
+     "name": "Tony Daigle",
+     "mbid": "834befd5-fbd9-4010-9df4-4c55fc709df5",
+     "artist_id": null
+    },
+    {
+     "name": "Wu10",
+     "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+     "credited_as": "Kelvin Wooten",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     8
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "production",
+   "role": "producer",
+   "attr": "co",
+   "credit": "",
+   "people": [
+    {
+     "name": "Daniel Beard",
+     "mbid": "bfebce9c-e2b0-48f9-93d4-4b678f30ca21",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "engineer",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Isaiah Pryor",
+     "mbid": "5285d702-ce81-40ca-99d8-45ac04c5297b",
+     "artist_id": null
+    },
+    {
+     "name": "Phillip “Logann” Scott III",
+     "mbid": "1818f677-a2bf-4583-9ee5-59ba57e72f72",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     12
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "recording",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Brother Dege",
+     "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+     "credited_as": "Dege Legg",
+     "artist_id": 848
+    },
+    {
+     "name": "Daniel Beard",
+     "mbid": "bfebce9c-e2b0-48f9-93d4-4b678f30ca21",
+     "artist_id": null
+    },
+    {
+     "name": "Wu10",
+     "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+     "credited_as": "Kelvin Wooten",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "mix",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Brother Dege",
+     "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+     "credited_as": "Dege Legg",
+     "artist_id": 848
+    },
+    {
+     "name": "Claudio Cueni",
+     "mbid": "ded037e5-d640-4959-960a-1c9a605c7938",
+     "artist_id": null
+    },
+    {
+     "name": "Daniel Beard",
+     "mbid": "bfebce9c-e2b0-48f9-93d4-4b678f30ca21",
+     "artist_id": null
+    },
+    {
+     "name": "Duane Allen",
+     "mbid": "1af9993d-7410-46ca-a94b-14c2994f285e",
+     "artist_id": null
+    },
+    {
+     "name": "Jaycen Joshua",
+     "mbid": "ead18ab2-410b-4778-960d-f417f3bb2a40",
+     "artist_id": null
+    },
+    {
+     "name": "Primo",
+     "mbid": "9dc2733a-6cc8-4e33-bac3-a65a54536c67",
+     "artist_id": null
+    },
+    {
+     "name": "Tony Daigle",
+     "mbid": "834befd5-fbd9-4010-9df4-4c55fc709df5",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     12
+    ],
+    [
+     1,
+     17
+    ],
+    [
+     1,
+     19
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "mix",
+   "attr": "assistant",
+   "credit": "",
+   "people": [
+    {
+     "name": "Trehy Harris",
+     "mbid": "f07f988b-d14e-4ae4-b71b-c9feac57fa68",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     12
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "programming",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Wu10",
+     "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+     "credited_as": "Kelvin Wooten",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     6
+    ]
+   ]
+  },
+  {
+   "group": "engineering",
+   "role": "editor",
+   "attr": "",
+   "credit": "",
+   "people": [
+    {
+     "name": "Claudio Cueni",
+     "mbid": "ded037e5-d640-4959-960a-1c9a605c7938",
+     "artist_id": null
+    }
+   ],
+   "tracks": [
+    [
+     1,
+     17
+    ]
+   ]
+  }
+ ],
+ "tracks": [
+  {
+   "disc": 1,
+   "n": 1,
+   "title": "Winged",
+   "length_ms": 8573,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Dickey Speck",
+     "people": [
+      {
+       "name": "James Russo",
+       "mbid": "31feb0c7-c0cd-4042-bb61-a6bb18ef6888",
+       "artist_id": 832
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Quentin Tarantino",
+       "mbid": "7e323fa7-14b3-42fd-a569-488fb3f386c1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 2,
+   "title": "Django",
+   "length_ms": 174026,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "conductor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Luis Bacalov",
+       "mbid": "500053c3-d673-4768-94d0-9e02aea5d0bf",
+       "artist_id": 839
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Luis Bacalov",
+       "mbid": "500053c3-d673-4768-94d0-9e02aea5d0bf",
+       "artist_id": 839
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Luis Bacalov",
+       "mbid": "500053c3-d673-4768-94d0-9e02aea5d0bf",
+       "artist_id": 839
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Maurizio Buttazzoni",
+       "mbid": "e4b17487-f6df-4efd-b4f7-6fcd1865ae78",
+       "artist_id": null
+      },
+      {
+       "name": "Sergio Bassetti",
+       "mbid": "6f18febc-35ee-49b2-b163-eb12374403cd",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 3,
+   "title": "The Braying Mule",
+   "length_ms": 153186,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ennio Morricone",
+       "mbid": "a16e47f5-aa54-47fe-87e4-bb8af91a9fdd",
+       "artist_id": 834
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 4,
+   "title": "“In that Case Django, After You...”",
+   "length_ms": 38760,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Django",
+     "people": [
+      {
+       "name": "Jamie Foxx",
+       "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Dr. King Schultz",
+     "people": [
+      {
+       "name": "Christoph Waltz",
+       "mbid": "a9feede1-5089-4497-81ec-6dfa51878a69",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Quentin Tarantino",
+       "mbid": "7e323fa7-14b3-42fd-a569-488fb3f386c1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 5,
+   "title": "Lo chiamavano King (His Name Is King)",
+   "length_ms": 118560,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Luis Bacalov",
+       "mbid": "500053c3-d673-4768-94d0-9e02aea5d0bf",
+       "artist_id": 839
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Luis Bacalov",
+       "mbid": "500053c3-d673-4768-94d0-9e02aea5d0bf",
+       "artist_id": 839
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 6,
+   "title": "Freedom",
+   "length_ms": 236653,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Elayna Boynton",
+       "mbid": "af76d3f7-3146-4848-822d-c4204f94a694",
+       "artist_id": null
+      },
+      {
+       "name": "Wu10",
+       "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+       "credited_as": "Kelvin Wooten",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "bass",
+     "credit": "",
+     "people": [
+      {
+       "name": "Wu10",
+       "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+       "credited_as": "Kelvin Wooten",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "electric guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Wu10",
+       "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+       "credited_as": "Kelvin Wooten",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "Wu10",
+       "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+       "credited_as": "Kelvin Wooten",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Wu10",
+       "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+       "credited_as": "Kelvin Wooten",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "wurlitzer electric piano",
+     "credit": "Wurlitzer",
+     "people": [
+      {
+       "name": "Wu10",
+       "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+       "credited_as": "Kelvin Wooten",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Anthony Hamilton",
+       "mbid": "af7f5e8e-ac05-4d55-b860-a4dc72c78e66",
+       "artist_id": null
+      },
+      {
+       "name": "Elayna Boynton",
+       "mbid": "af76d3f7-3146-4848-822d-c4204f94a694",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Anthony Hamilton",
+       "mbid": "af7f5e8e-ac05-4d55-b860-a4dc72c78e66",
+       "artist_id": null
+      },
+      {
+       "name": "Elayna Boynton",
+       "mbid": "af76d3f7-3146-4848-822d-c4204f94a694",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Anthony Hamilton",
+       "mbid": "af7f5e8e-ac05-4d55-b860-a4dc72c78e66",
+       "artist_id": null
+      },
+      {
+       "name": "Elayna Boynton",
+       "mbid": "af76d3f7-3146-4848-822d-c4204f94a694",
+       "artist_id": null
+      },
+      {
+       "name": "Wu10",
+       "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+       "credited_as": "Kelvin Wooten",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Wu10",
+       "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+       "credited_as": "Kelvin Wooten",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "co",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Beard",
+       "mbid": "bfebce9c-e2b0-48f9-93d4-4b678f30ca21",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Beard",
+       "mbid": "bfebce9c-e2b0-48f9-93d4-4b678f30ca21",
+       "artist_id": null
+      },
+      {
+       "name": "Wu10",
+       "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+       "credited_as": "Kelvin Wooten",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Daniel Beard",
+       "mbid": "bfebce9c-e2b0-48f9-93d4-4b678f30ca21",
+       "artist_id": null
+      },
+      {
+       "name": "Duane Allen",
+       "mbid": "1af9993d-7410-46ca-a94b-14c2994f285e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "programming",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Wu10",
+       "mbid": "5f5f74e0-7e5f-467f-b3a8-9383fd8b788a",
+       "credited_as": "Kelvin Wooten",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 7,
+   "title": "Five-Thousand-Dollar Nigga’s and Gummy Mouth Bitches",
+   "length_ms": 56386,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Big Daddy",
+     "people": [
+      {
+       "name": "Don Johnson",
+       "mbid": "35d9971a-6042-4fc2-b7ef-29d76a59e590",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Dr. King Schultz",
+     "people": [
+      {
+       "name": "Christoph Waltz",
+       "mbid": "a9feede1-5089-4497-81ec-6dfa51878a69",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Quentin Tarantino",
+       "mbid": "7e323fa7-14b3-42fd-a569-488fb3f386c1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 8,
+   "title": "La corsa (2nd version)",
+   "length_ms": 138840,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "conductor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Luis Bacalov",
+       "mbid": "500053c3-d673-4768-94d0-9e02aea5d0bf",
+       "artist_id": 839
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Luis Bacalov",
+       "mbid": "500053c3-d673-4768-94d0-9e02aea5d0bf",
+       "artist_id": 839
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Maurizio Buttazzoni",
+       "mbid": "e4b17487-f6df-4efd-b4f7-6fcd1865ae78",
+       "artist_id": null
+      },
+      {
+       "name": "Sergio Bassetti",
+       "mbid": "6f18febc-35ee-49b2-b163-eb12374403cd",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 9,
+   "title": "Sneaky Schultz and the Demise of Sharp",
+   "length_ms": 34266,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Daughtrey Sheriff Bill Sharp",
+     "people": [
+      {
+       "name": "Don Straud",
+       "mbid": "94b8e020-d986-48d3-a183-3aff15381fe9",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Quentin Tarantino",
+       "mbid": "7e323fa7-14b3-42fd-a569-488fb3f386c1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 10,
+   "title": "I’ve Got a Name",
+   "length_ms": 195053,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "acoustic guitar",
+     "credit": "lead acoustic guitar",
+     "people": [
+      {
+       "name": "Maury Muehleisen",
+       "mbid": "09e278d4-bdd2-4997-b62e-dc76de40c2bd",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "bass",
+     "credit": "",
+     "people": [
+      {
+       "name": "Joe Macho",
+       "mbid": "e22c3e89-d4df-4dfa-8129-2bee3c36ed05",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "drums (drum set)",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rick Marotta",
+       "mbid": "0568ec58-e7ca-49e9-b01a-7e3fc2b7ebe2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "guitar",
+     "credit": "rhythm guitar",
+     "people": [
+      {
+       "name": "Tommy West",
+       "mbid": "f936fdfd-c7ae-4029-8b13-3942a98ab51e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "percussion",
+     "credit": "",
+     "people": [
+      {
+       "name": "George Devens",
+       "mbid": "bd54bc20-ba84-47a4-aad3-6b21985c8727",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "piano",
+     "credit": "",
+     "people": [
+      {
+       "name": "Tommy West",
+       "mbid": "f936fdfd-c7ae-4029-8b13-3942a98ab51e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jim Croce",
+       "mbid": "fcfa9543-e113-4ef9-9ef6-455ba4cbe7af",
+       "artist_id": 841
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "background vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jim Croce",
+       "mbid": "fcfa9543-e113-4ef9-9ef6-455ba4cbe7af",
+       "artist_id": 841
+      },
+      {
+       "name": "Maury Muehleisen",
+       "mbid": "09e278d4-bdd2-4997-b62e-dc76de40c2bd",
+       "artist_id": null
+      },
+      {
+       "name": "Tommy West",
+       "mbid": "f936fdfd-c7ae-4029-8b13-3942a98ab51e",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "conductor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Terence P. Minogue",
+       "mbid": "42a10af4-9b42-4f40-8091-1c53339e8b58",
+       "credited_as": "Terence Minogue",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Charles Fox",
+       "mbid": "d74e306c-14fe-4816-a821-b2ec554f9edb",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Norman Gimbel",
+       "mbid": "4b68c65a-8cb5-4c03-bb58-c1b1cf5eced1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "arranger",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Terence P. Minogue",
+       "mbid": "42a10af4-9b42-4f40-8091-1c53339e8b58",
+       "credited_as": "Terence Minogue",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 11,
+   "title": "I giorni dell’ira (Days of Anger)",
+   "length_ms": 185800,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "conductor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Riz Ortolani",
+       "mbid": "e592c35e-86f5-4d90-9a3e-c5261031413d",
+       "artist_id": 675
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Riz Ortolani",
+       "mbid": "e592c35e-86f5-4d90-9a3e-c5261031413d",
+       "credited_as": "Riziero Ortolani",
+       "artist_id": 675
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 12,
+   "title": "100 Black Coffins",
+   "length_ms": 223893,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Charlie Burrel",
+       "mbid": "c22df534-abb1-48fd-8aad-aec918457a76",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Rick Ross",
+       "mbid": "13bcb2bb-db37-4397-baf5-e0f085be2d64",
+       "artist_id": 842
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Billy Crash",
+     "people": [
+      {
+       "name": "Walton Goggins",
+       "mbid": "10addb39-2d15-4eab-94d6-9a18fd4541f0",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Django",
+     "people": [
+      {
+       "name": "Jamie Foxx",
+       "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jamie Foxx",
+       "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jamie Foxx",
+       "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+       "artist_id": null
+      },
+      {
+       "name": "Rick Ross",
+       "mbid": "13bcb2bb-db37-4397-baf5-e0f085be2d64",
+       "artist_id": 842
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brainz Dimilo",
+       "mbid": "54bd631e-0092-4236-beb9-00ce515180e7",
+       "credited_as": "Ainz “Brainz” Dimilo",
+       "artist_id": null
+      },
+      {
+       "name": "Jamie Foxx",
+       "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "engineer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Isaiah Pryor",
+       "mbid": "5285d702-ce81-40ca-99d8-45ac04c5297b",
+       "artist_id": null
+      },
+      {
+       "name": "Phillip “Logann” Scott III",
+       "mbid": "1818f677-a2bf-4583-9ee5-59ba57e72f72",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jaycen Joshua",
+       "mbid": "ead18ab2-410b-4778-960d-f417f3bb2a40",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "assistant",
+     "credit": "",
+     "people": [
+      {
+       "name": "Trehy Harris",
+       "mbid": "f07f988b-d14e-4ae4-b71b-c9feac57fa68",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 13,
+   "title": "Nicaragua",
+   "length_ms": 209173,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "performer",
+     "attr": "guest solo",
+     "credit": "",
+     "people": [
+      {
+       "name": "Pat Metheny",
+       "mbid": "7daac7f9-8fcc-485f-a14f-f8091d98cf25",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Jerry Goldsmith",
+       "mbid": "db403e3d-4753-45d6-8fcb-94db03e882e1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 14,
+   "title": "Hildi’s Hot Box",
+   "length_ms": 76146,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Calvin Candie",
+     "people": [
+      {
+       "name": "Leonardo DiCaprio",
+       "mbid": "d99c2fa8-7e28-4b9d-9edd-c97443f3cca9",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Dr. King Schultz",
+     "people": [
+      {
+       "name": "Christoph Waltz",
+       "mbid": "a9feede1-5089-4497-81ec-6dfa51878a69",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Stephen",
+     "people": [
+      {
+       "name": "Samuel L. Jackson",
+       "mbid": "a1c82f09-cc3a-4c94-a518-cba50d9bfab1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Quentin Tarantino",
+       "mbid": "7e323fa7-14b3-42fd-a569-488fb3f386c1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 15,
+   "title": "Sister Sara’s Theme",
+   "length_ms": 87040,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ennio Morricone",
+       "mbid": "a16e47f5-aa54-47fe-87e4-bb8af91a9fdd",
+       "artist_id": 834
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 16,
+   "title": "Ancora qui",
+   "length_ms": 308346,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "lead vocals",
+     "credit": "",
+     "people": [
+      {
+       "name": "Elisa",
+       "mbid": "8d173bdf-c83e-42d7-8355-c8d6f0d10c0e",
+       "artist_id": 845
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "performer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Elisa",
+       "mbid": "8d173bdf-c83e-42d7-8355-c8d6f0d10c0e",
+       "artist_id": 845
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ennio Morricone",
+       "mbid": "a16e47f5-aa54-47fe-87e4-bb8af91a9fdd",
+       "artist_id": 834
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Elisa",
+       "mbid": "8d173bdf-c83e-42d7-8355-c8d6f0d10c0e",
+       "credited_as": "Elisa Toffoli",
+       "artist_id": 845
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 17,
+   "title": "Unchained (The Payback/Untouchable)",
+   "length_ms": 171573,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "performer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "2Pac",
+       "mbid": "382f1005-e9ab-4684-afd4-0bdae4ee37f2",
+       "artist_id": null
+      },
+      {
+       "name": "James Brown",
+       "mbid": "20ff3303-4fe2-4a47-a1b6-291e26aa3438",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Claudio Cueni",
+       "mbid": "ded037e5-d640-4959-960a-1c9a605c7938",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "editor",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Claudio Cueni",
+       "mbid": "ded037e5-d640-4959-960a-1c9a605c7938",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 18,
+   "title": "Who Did That to You?",
+   "length_ms": 228813,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "performer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Legend",
+       "mbid": "75a72702-a5ef-4513-bca5-c5b944903546",
+       "artist_id": 847
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "John Legend",
+       "mbid": "75a72702-a5ef-4513-bca5-c5b944903546",
+       "credited_as": "John Stephens",
+       "artist_id": 847
+      },
+      {
+       "name": "Paul Epworth",
+       "mbid": "65380f7e-cb7a-4594-ae44-28ff55160746",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Paul Epworth",
+       "mbid": "65380f7e-cb7a-4594-ae44-28ff55160746",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 19,
+   "title": "Too Old to Die Young",
+   "length_ms": 223213,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "foot stomps",
+     "credit": "stomps",
+     "people": [
+      {
+       "name": "Brother Dege",
+       "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+       "credited_as": "Dege Legg",
+       "artist_id": 848
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "handclaps",
+     "credit": "claps",
+     "people": [
+      {
+       "name": "Brother Dege",
+       "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+       "credited_as": "Dege Legg",
+       "artist_id": 848
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "resonator guitar",
+     "credit": "dobro",
+     "people": [
+      {
+       "name": "Brother Dege",
+       "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+       "credited_as": "Dege Legg",
+       "artist_id": 848
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "instrument",
+     "attr": "slide guitar",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brother Dege",
+       "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+       "credited_as": "Dege Legg",
+       "artist_id": 848
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brother Dege",
+       "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+       "credited_as": "Dege Legg",
+       "artist_id": 848
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brother Dege",
+       "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+       "credited_as": "Dege Legg",
+       "artist_id": 848
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "lyricist",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brother Dege",
+       "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+       "credited_as": "Dege Legg",
+       "artist_id": 848
+      }
+     ]
+    },
+    {
+     "group": "production",
+     "role": "producer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brother Dege",
+       "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+       "credited_as": "Dege Legg",
+       "artist_id": 848
+      },
+      {
+       "name": "Primo",
+       "mbid": "9dc2733a-6cc8-4e33-bac3-a65a54536c67",
+       "artist_id": null
+      },
+      {
+       "name": "Tony Daigle",
+       "mbid": "834befd5-fbd9-4010-9df4-4c55fc709df5",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "recording",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brother Dege",
+       "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+       "credited_as": "Dege Legg",
+       "artist_id": 848
+      }
+     ]
+    },
+    {
+     "group": "engineering",
+     "role": "mix",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Brother Dege",
+       "mbid": "c33bad43-1d00-48ad-850f-5585e3f583cd",
+       "credited_as": "Dege Legg",
+       "artist_id": 848
+      },
+      {
+       "name": "Primo",
+       "mbid": "9dc2733a-6cc8-4e33-bac3-a65a54536c67",
+       "artist_id": null
+      },
+      {
+       "name": "Tony Daigle",
+       "mbid": "834befd5-fbd9-4010-9df4-4c55fc709df5",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 20,
+   "title": "Stephen the Poker Player",
+   "length_ms": 62453,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Django",
+     "people": [
+      {
+       "name": "Jamie Foxx",
+       "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Stephen",
+     "people": [
+      {
+       "name": "Samuel L. Jackson",
+       "mbid": "a1c82f09-cc3a-4c94-a518-cba50d9bfab1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Quentin Tarantino",
+       "mbid": "7e323fa7-14b3-42fd-a569-488fb3f386c1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 21,
+   "title": "Un monumento",
+   "length_ms": 151426,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "composer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Ennio Morricone",
+       "mbid": "a16e47f5-aa54-47fe-87e4-bb8af91a9fdd",
+       "artist_id": 834
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 22,
+   "title": "Six Shots Two Guns",
+   "length_ms": 5346,
+   "credits": [
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Django",
+     "people": [
+      {
+       "name": "Jamie Foxx",
+       "mbid": "15a5da16-8b89-4047-aefe-81473c97b5b2",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "performer",
+     "role": "vocal",
+     "attr": "spoken vocals",
+     "credit": "Stephen",
+     "people": [
+      {
+       "name": "Samuel L. Jackson",
+       "mbid": "a1c82f09-cc3a-4c94-a518-cba50d9bfab1",
+       "artist_id": null
+      }
+     ]
+    },
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Quentin Tarantino",
+       "mbid": "7e323fa7-14b3-42fd-a569-488fb3f386c1",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "disc": 1,
+   "n": 23,
+   "title": "Trinity (Titoli)",
+   "length_ms": 183800,
+   "credits": [
+    {
+     "group": "composition",
+     "role": "writer",
+     "attr": "",
+     "credit": "",
+     "people": [
+      {
+       "name": "Franco Micalizzi",
+       "mbid": "aa02934c-1ae5-4130-be27-e6aec81d6281",
+       "artist_id": null
+      },
+      {
+       "name": "Lally Stott",
+       "mbid": "a4301fcd-44f1-43ce-b5a7-09303831f9a8",
+       "artist_id": null
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "places": [
+  {
+   "role": "mixed_at",
+   "name": "Musiek Studio",
+   "area": ""
+  },
+  {
+   "role": "recorded_at",
+   "name": "Woodaworx Studio",
+   "area": "Athens"
+  },
+  {
+   "role": "recorded_at",
+   "name": "The Hit Factory",
+   "area": "Manhattan"
+  },
+  {
+   "role": "mixed_at",
+   "name": "Larrabee Sound Studios",
+   "area": "North Hollywood"
+  },
+  {
+   "role": "mixed_at",
+   "name": "Electric Comoland",
+   "area": "Lafayette"
+  },
+  {
+   "role": "produced_at",
+   "name": "Electric Comoland",
+   "area": "Lafayette"
+  }
+ ],
+ "about": {
+  "text": "Django Unchained is the soundtrack to Quentin Tarantino's motion picture Django Unchained. It was originally released on December 18, 2012. The soundtrack uses a variety of music genres, though with an especially heavy influence from Spaghetti Western soundtracks.\n\nTracks composed for the film are \"100 Black Coffins\" by Rick Ross and produced by and featuring Jamie Foxx, \"Who Did That To You?\" by John Legend, \"Freedom\" by Anthony Hamilton and Elayna Boynton, \"Ancora qui\" by Ennio Morricone and Elisa. These four songs were all eligible for an Academy Award nomination in the Best Original Song category, but none of them were nominated.\n\nThe soundtrack also includes seven tracks that are dialogue excerpts from the film. It was nominated for a Grammy Award for Best Compilation Soundtrack for Visual Media.",
+  "lang": "en",
+  "title": "Django Unchained (soundtrack)",
+  "url": "https://en.wikipedia.org/wiki/Django_Unchained_(soundtrack)",
+  "source": "Wikipedia",
+  "license": "CC BY-SA 4.0"
+ },
+ "attribution": [
+  {
+   "source": "MusicBrainz",
+   "url": "https://musicbrainz.org/release/1ccbf130-10da-4abf-8e44-a5c3150c89d1",
+   "license": "CC0"
+  }
+ ]
+}

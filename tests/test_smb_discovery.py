@@ -6,7 +6,10 @@ can act on. That mapping is the whole point of the redesign — a wrong bucket
 sends the owner to fix the password when the share name is what is wrong —
 so it is pinned down here rather than only tried by hand against one NAS.
 """
+import os
+import shutil
 import subprocess
+import tempfile
 import unittest
 
 import sources_server as ss
@@ -213,6 +216,85 @@ class ScanTargetTests(unittest.TestCase):
         finally:
             ss._run_json = orig
         self.assertEqual((selves, targets), (set(), []))
+
+
+class MountOptionTests(unittest.TestCase):
+    """What a share is asked to be, and what happens when the server says no.
+
+    Read-write is the default for every source type, SMB included: the only
+    thing that still turns a share read-only is the owner asking for it, or
+    the other device refusing to hand it over writable.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="hifi-smb-mount-")
+        self.calls = []
+        self.saved = (ss.MOUNT_ROOT, ss._run, ss._smb_reachable, ss._ensure_samba_uid_gid)
+        ss.MOUNT_ROOT = self.tmp
+        ss._smb_reachable = lambda server, timeout=5: True
+        ss._ensure_samba_uid_gid = lambda: (1001, 902)
+
+    def tearDown(self):
+        (ss.MOUNT_ROOT, ss._run, ss._smb_reachable, ss._ensure_samba_uid_gid) = self.saved
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _src(self, **extra):
+        src = {"server": "nas.local", "share": "Music",
+               "mountpoint": os.path.join(self.tmp, "nas-music")}
+        src.update(extra)
+        return src
+
+    def _answers(self, fn):
+        """Drive mount(8): fn(attempt_number) -> CompletedProcess."""
+        def run(cmd, timeout=30):
+            self.calls.append(cmd)
+            return fn(len(self.calls))
+        ss._run = run
+
+    def _opts(self, call):
+        return call[call.index("-o") + 1]
+
+    def test_a_new_share_is_mounted_writable(self):
+        # No "rw" key at all: that is what a source added by a caller which
+        # never heard of the flag looks like, and it must still be writable.
+        self._answers(lambda n: _completed())
+        ok, msg, _detail = ss.mount_smb(self._src())
+        self.assertTrue(ok)
+        self.assertIn(",rw,", self._opts(self.calls[0]))
+        self.assertIn("uid=1001,gid=902", self._opts(self.calls[0]))
+        self.assertNotIn("read-only", msg.lower())
+
+    def test_read_only_is_still_there_for_the_asking(self):
+        self._answers(lambda n: _completed())
+        src = self._src(rw=False)
+        ok, _msg, _detail = ss.mount_smb(src)
+        self.assertTrue(ok)
+        self.assertIn(",ro,", self._opts(self.calls[0]))
+        self.assertEqual(src["rw"], False)
+
+    def test_a_share_the_server_wont_write_is_added_read_only(self):
+        # Every writable attempt refused, the first read-only one taken: the
+        # owner gets the share instead of an error, and the source remembers
+        # it is read-only so nothing promises a write that would fail.
+        self._answers(lambda n: _completed(rc=32, stderr="mount error(30): Read-only file system")
+                      if n <= 4 else _completed())
+        src = self._src()
+        ok, msg, _detail = ss.mount_smb(src)
+        self.assertTrue(ok)
+        self.assertEqual(len(self.calls), 5)
+        self.assertIn(",ro,", self._opts(self.calls[4]))
+        self.assertIs(src["rw"], False)
+        self.assertIn("read-only", msg.lower())
+
+    def test_a_wrong_password_is_not_retried_read_only(self):
+        # Four protocol versions and no more: a second pass would only cost
+        # the owner four more timeouts to reach the same sentence.
+        self._answers(lambda n: _completed(rc=32, stderr="mount error: NT_STATUS_LOGON_FAILURE"))
+        ok, msg, detail = ss.mount_smb(self._src())
+        self.assertFalse(ok)
+        self.assertEqual(len(self.calls), 4)
+        self.assertEqual(msg, ss._m("msg.smbBadCredentials"))
+        self.assertIn("LOGON_FAILURE", detail)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,42 @@
+[Unit]
+# Osmium Sound — Bluetooth pairing agent.
+#
+# A headless box has no keypad and no display, so it pairs as
+# NoInputNoOutput: speakers and headphones use "Just Works" pairing, which
+# needs no PIN on either side. Without a registered agent BlueZ refuses to
+# pair at all, so this is what makes "Search" -> tap a speaker work in
+# Settings.
+#
+# Started by hifi-bt-out.service, never enabled — same reason as
+# hifi-bluealsa.service: an enable symlink does not survive an A/B image swap.
+Description=Osmium Sound - Bluetooth pairing agent (no PIN, headless)
+After=bluetooth.service
+Requires=bluetooth.service
+BindsTo=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bt-agent -c NoInputNoOutput
+Restart=always
+RestartSec=3
+
+# 🚨 bt-agent does NOT stop on SIGTERM, and not by accident: bluez-tools wires
+# its signal handlers up crossed (src/bt-agent.c, unchanged since 2017) —
+#
+#     g_unix_signal_add(SIGTERM, usr1_signal_handler, NULL);
+#     g_unix_signal_add(SIGINT,  term_signal_handler, NULL);
+#     g_unix_signal_add(SIGUSR1, term_signal_handler, NULL);
+#
+# so SIGTERM lands in the handler that logs "SIGUSR1 received" and returns
+# G_SOURCE_CONTINUE, i.e. it deliberately keeps running, every time. systemd
+# then waits out the full 90-second default before resorting to SIGKILL, and
+# what the owner sees is an appliance that will not switch off: "A stop job is
+# running for Osmium Sound - Bluetooth pairing agent (1min 30s)".
+#
+# SIGINT is the signal that actually reaches term_signal_handler and quits the
+# main loop — and it exits cleanly that way, unregistering the agent from
+# BlueZ on the way out, which SIGKILL would not. TimeoutStopSec is the belt
+# and braces: whatever a future bluez-tools does with its signals, this unit
+# can never hold a shutdown for more than five seconds again.
+KillSignal=SIGINT
+TimeoutStopSec=5

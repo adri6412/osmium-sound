@@ -1,0 +1,35 @@
+[Unit]
+# Osmium Sound — Bluetooth speaker supervisor.
+#
+# The ONE Bluetooth unit that is enabled in the image (hook 0400). Everything
+# else in the chain — bluetooth.service, hifi-bluealsa.service,
+# hifi-bt-agent.service and one hifi-bt-player@<speaker> per paired speaker —
+# is started and stopped by this daemon according to
+# /etc/hifi-player/bluetooth.json.
+#
+# 🚨 That indirection is deliberate: on the A/B image scheme unit ENABLEMENT
+# does not survive an image swap (hifi-ab-seed.sh seeds /etc from an
+# allow-list that carries the state files, not the systemd symlinks), so any
+# choice expressed as `systemctl enable` would quietly undo itself on the next
+# update. The choice lives in the state file, this daemon enforces it at every
+# boot, and api_server.py only has to write the file and SIGHUP this unit.
+#
+# Idle and cheap when Bluetooth is off: the poll loop does nothing but re-read
+# one small file, and the adapter is left powered down.
+Description=Osmium Sound - Bluetooth speakers (connection + player supervisor)
+After=network.target dbus.service
+Wants=dbus.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/sbin/hifi-bt-out.py
+Restart=always
+RestartSec=5
+# The poll loop can be inside a `bluetoothctl connect` when the shutdown
+# arrives: the SIGTERM handler is reached at once, but the connect attempt it
+# is waiting on has its own 30-second budget. Rather than let that show up as
+# a stalled shutdown, cap the wait — there is nothing here worth finishing.
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

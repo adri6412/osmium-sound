@@ -18,6 +18,8 @@ class Sys : public QObject {
     Q_PROPERTY(QString assets READ assets CONSTANT)
     // skins downloaded from the VU meter store (api_server VU_STORE_DIR)
     Q_PROPERTY(QString vuStore READ vuStore CONSTANT)
+    // Now Playing animations downloaded from their store (api_server ANIM_STORE_DIR)
+    Q_PROPERTY(QString animStore READ animStore CONSTANT)
     Q_PROPERTY(QString configDir READ configDir CONSTANT)
     Q_PROPERTY(bool devMode READ devMode CONSTANT)
     Q_PROPERTY(QString forcedWizard READ forcedWizard CONSTANT)
@@ -33,6 +35,7 @@ public:
     void setPointerEnabled(bool on);
     QString assets() const { return m_assets; }
     QString vuStore() const { return qEnvironmentVariable("HIFI_VU_STORE_DIR", QStringLiteral("/var/lib/hifi-player/vu-skins")); }
+    QString animStore() const { return qEnvironmentVariable("HIFI_ANIM_STORE_DIR", QStringLiteral("/var/lib/hifi-player/anim-scenes")); }
     QString configDir() const { return m_configDir; }
     bool devMode() const { return m_dev; }
     QString forcedWizard() const { return m_forcedWizard; }

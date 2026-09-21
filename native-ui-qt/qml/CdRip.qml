@@ -12,6 +12,13 @@ Item {
     property string artist: ""
     property string album: ""
     property var tracks: []
+    // the MusicBrainz releases the disc may be (/api/cd/info `releases`), the
+    // one in use and the one picked by hand; picking refills artist, album and
+    // titles from that release
+    property var releases: []
+    property string release: ""
+    property string pickedRelease: ""
+    property bool refill: false
     property var dests: []              // [{id,name}]
     property int destSel: 0
     property string state: ""
@@ -28,14 +35,14 @@ Item {
     visible: open
     Component.onCompleted: Ui.cdrip = root
 
-    Spring { id: sc; stiffness: 550; damping: 30 }
+    Spring { id: sc; stiffness: 550; damping: 30; rate: Theme.motionRate }
     property real fade: 0
-    Behavior on fade { NumberAnimation { duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    Behavior on fade { NumberAnimation { duration: Theme.dur(300); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
     property real closeScale: 1
-    Behavior on closeScale { NumberAnimation { duration: 200 } }
+    Behavior on closeScale { NumberAnimation { duration: Theme.dur(200) } }
 
     function loadInfo() {
-        Api.get(Api.srcBase + "/api/cd/info", function(ok, d) {
+        Api.get(Api.srcBase + "/api/cd/info" + (pickedRelease ? "?release=" + encodeURIComponent(pickedRelease) : ""), function(ok, d) {
             // disco tolto: lo stato della copia precedente non vale piu', e il
             // prossimo disco dev'essere trattato come nuovo
             if (!ok || !d || typeof d !== "object" || d.no_disc) {
@@ -44,8 +51,12 @@ Item {
                 return
             }
             var id = String(d.discid || "")
-            if (id !== root.discid) {
+            if (id !== root.discid && root.discid !== "") root.pickedRelease = ""
+            root.releases = d.releases || []
+            if (id !== root.discid || root.refill) {
+                root.refill = false
                 root.discid = id
+                root.release = String(d.mbid || "")
                 root.artist = String(d.artist || ""); root.album = String(d.album || "")
                 root.tracks = (d.tracks || []).map(function(t) { return String(t.title || "") }).slice(0, 40)
                 root.destSel = 0
@@ -77,16 +88,35 @@ Item {
     Timer { interval: 40; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.open = false; root.closing = false } }
     function dismissBanner() { dismissed = discid }
     function eject() { Api.post(Api.srcBase + "/api/cd/eject", {}, function() { root.loadStatus() }); haveDisc = false; state = ""; close() }
+    function releaseLabel(r) {
+        if (!r) return ""
+        return [Meta.date(r.date), r.country, [r.label, r.catno].filter(function(x) { return !!x }).join(" "),
+                r.track_count ? Tr.tf("player.page.editionTracks", "count", String(r.track_count)) : "",
+                Number(r.disc_count) > 1 ? Tr.tf("player.cd.editionDisc", "n", String(r.disc_position)).replace("{total}", String(r.disc_count)) : ""]
+               .filter(function(x) { return !!x }).join(" · ")
+    }
+    function pickRelease() {
+        var cur = -1
+        for (var i = 0; i < releases.length; i++) if (String(releases[i].mbid) === release) cur = i
+        Ui.dialogs.pick(Tr.t("player.cd.edition"), releases.map(function(r) { return (r.title || "") + " — " + releaseLabel(r) }), cur, function(i) {
+            if (i < 0 || i >= root.releases.length) return
+            root.pickedRelease = String(root.releases[i].mbid)
+            root.refill = true
+            root.loadInfo()
+        })
+    }
     function startRip() {
         if (!dests.length) return
-        Api.post(Api.srcBase + "/api/cd/rip", { source_id: dests[destSel].id, artist: artist, album: album, tracks: tracks }, function() { root.loadStatus() })
+        var body = { source_id: dests[destSel].id, artist: artist, album: album, tracks: tracks }
+        if (release) body.release = release
+        Api.post(Api.srcBase + "/api/cd/rip", body, function() { root.loadStatus() })
         state = "starting"; ripping = true; total = tracks.length
     }
 
     Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, 0.7 * root.fade); MouseArea { anchors.fill: parent; onClicked: if (!root.ripping) root.close() } }
     Rectangle {
         id: card
-        width: Math.min(512, 1024 - 48); height: 600 * 0.85
+        width: Math.min(512, root.width - 48); height: root.height * 0.85
         anchors.centerIn: parent
         radius: 16; color: Theme.panel; border.width: 1; border.color: Theme.border
         opacity: root.fade; scale: sc.value * root.closeScale
@@ -135,9 +165,24 @@ Item {
             readonly property real foot: 20 + 42 + 12 + (root.dests.length ? 40 : 24)
             TextField_ { x: 20; y: 52; width: (parent.width - 40 - 8) / 2; height: 36; textSize: 14; padding: 12; restBorder: Theme.accent; text: root.artist; placeholder: Tr.t("player.cd.artist"); onTextEdited: (t) => root.artist = t }
             TextField_ { x: 20 + (parent.width - 40 - 8) / 2 + 8; y: 52; width: (parent.width - 40 - 8) / 2; height: 36; textSize: 14; padding: 12; restBorder: Theme.accent; text: root.album; placeholder: Tr.t("player.cd.album"); onTextEdited: (t) => root.album = t }
+            // which edition the tags come from, when MusicBrainz knows more than one
+            Rectangle {
+                id: relRow
+                visible: root.releases.length > 1
+                x: 20; y: 96; width: parent.width - 40; height: 34; radius: 8
+                color: Theme.dark; border.width: 1; border.color: Theme.accent
+                Text { id: relLab; x: 10; anchors.verticalCenter: parent.verticalCenter; text: Tr.t("player.cd.edition"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
+                Text {
+                    x: relLab.x + relLab.implicitWidth + 8; width: parent.width - x - 30; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight
+                    text: { for (var i = 0; i < root.releases.length; i++) if (String(root.releases[i].mbid) === root.release) return root.releaseLabel(root.releases[i]); return "" }
+                    color: Theme.white; font.family: Theme.font; font.pixelSize: 12
+                }
+                Icon { x: parent.width - 24; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 16; color: Theme.silver }
+                Tap { onClicked: root.pickRelease() }
+            }
             ListView {
                 id: trackList
-                x: 20; y: 96; width: parent.width - 40; height: parent.height - 96 - parent.foot
+                x: 20; y: relRow.visible ? 138 : 96; width: parent.width - 40; height: parent.height - y - parent.foot
                 clip: true; model: root.tracks.length
                 boundsBehavior: Flickable.StopAtBounds
                 delegate: Item {

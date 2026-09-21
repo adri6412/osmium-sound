@@ -1,25 +1,37 @@
-// Feedback al tocco, nelle due forme della UI Electron: la tinta di hover /
-// transition-colors (150 ms) e la scala whileTap (molla). Si mette dentro il
-// controllo, riempiendolo; `grow` allarga l'area sensibile oltre il disegno.
+// Touch feedback, in the two shapes of the Electron UI: the hover /
+// transition-colors tint (150 ms) and the whileTap scale (a spring). It goes
+// inside the control, filling it; `grow` widens the touch area past the
+// drawing.
+// 🚨 Inside a list this is not the one to use but RowTap.qml, which drops
+// `held` as soon as the gesture turns into a scroll.
 import QtQuick
 import Hifi
 import Hifi.Ui
 
 MouseArea {
     id: ma
-    property real tap: 1.0            // scala a fondo corsa (0.9, 0.95...)
+    property real tap: 1.0            // scale at full press (0.9, 0.95...)
     property int  grow: 0
-    // 0..1: quanto e' "premuto" per la tinta (anche al passaggio del mouse)
-    readonly property real press: pressed || (hoverEnabled && containsMouse) ? 1 : 0
+    // Who is holding the finger down. Normally `pressed`; RowTap drops it when
+    // the finger starts to scroll, so the box fades away instead of staying
+    // lit under a moving list.
+    property bool held: pressed
+    // The tint on mouse-over too: it goes off inside the lists.
+    property bool hoverTint: true
+    // 0..1: how "pressed" it is for the tint (mouse-over included)
+    readonly property real press: held || (hoverEnabled && hoverTint && containsMouse) ? 1 : 0
     property real pressAnim: press
-    // scala corrente, da usare in `scale` del disegno
-    readonly property real tapScale: 1 + (tap - 1) * sp.value
+    // the current scale, to use in the drawing's `scale`. With the movement
+    // turned off there is no scale at all: a 2 % jump with no travel is only
+    // a defect.
+    readonly property real tapScale: Theme.motionRate > 0 ? 1 + (tap - 1) * sp.value : 1
     anchors.fill: parent
     anchors.margins: -grow
     hoverEnabled: Sys.pointerEnabled
-    Behavior on pressAnim { NumberAnimation { duration: 150; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
-    Spring { id: sp; stiffness: 550; damping: 30 }
-    onPressedChanged: sp.to = pressed ? 1 : 0
-    // tinta fra riposo e premuto
+    Behavior on pressAnim { NumberAnimation { duration: Theme.dur(Theme.tTap); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut } }
+    // 🚨 `to` is a binding now, no longer an onPressedChanged: RowTap changes
+    // `held` even when `pressed` does not (the finger starts scrolling).
+    Spring { id: sp; stiffness: 550; damping: 30; rate: Theme.motionRate; to: ma.held ? 1 : 0 }
+    // tint between rest and pressed
     function mix(rest, pressedColor) { return Theme.mix(rest, pressedColor, pressAnim) }
 }

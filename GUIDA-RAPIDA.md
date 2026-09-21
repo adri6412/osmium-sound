@@ -79,13 +79,20 @@ scelto).
 ## 🎮 Come si usa
 
 - **Libreria / Radio / App**: l'interfaccia per Lyrion Music Server —
-  libreria locale, radio internet, Scopri (mix casuali, artisti simili,
-  biografie) e servizi di streaming (Deezer, Qobuz, TIDAL, Spotify e altri)
-  tramite i **plugin di Lyrion**. I plugin scelti in fase di configurazione
+  libreria locale (artisti, album, generi, anni, compositori, novità,
+  cartelle, playlist, preferiti, con una casella di ricerca su tutta la
+  libreria), radio internet, Scopri (mix
+  casuali, artisti simili, biografie) e servizi di streaming (Deezer, Qobuz,
+  TIDAL, Spotify e altri) tramite i **plugin di Lyrion**. Album e artisti
+  hanno una pagina tutta loro (brani, crediti, membri del gruppo, biografia —
+  i dettagli online da MusicBrainz e Wikipedia). Tieni premuta una
+  riga per fare di più: aggiungi alla coda, riproduci dopo, preferito,
+  vai all'album o all'artista, rinomina o elimina una playlist. I plugin scelti in fase di configurazione
   sono già pronti; gli altri si installano dalla web UI di Lyrion
   (Impostazioni → Plugin) e compaiono da soli, senza aggiornare l'app.
 - **In riproduzione**: copertina grande, trasporto e volume, VU meter analogico
-  opzionale, indicatore bit-perfect / ReplayGain.
+  opzionale (o, se è spento, un'animazione di CD, vinile o musicassetta scelta
+  in Impostazioni → Animazioni), indicatore bit-perfect / ReplayGain.
 - **CD**: inserisci un CD audio per riprodurlo, oppure rippalo in FLAC
   taggati dentro una delle tue sorgenti.
 - **Impostazioni** (a schermo): lingua, Lyrion (server, aspetto del player

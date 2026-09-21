@@ -11,7 +11,29 @@ function csrfToken() {
   return m ? decodeURIComponent(m[1]) : '';
 }
 
-async function req(path, { method = 'GET', body } = {}) {
+// The page load normally brings the token with it. When it hasn't (an
+// index.html answered 304 from cache after the session cookie was dropped, a
+// restored tab), the admin would otherwise open with a burst of calls that all
+// leave cookie-less — the route guard, the update poll, the ~30 loaders in
+// Settings — and ask the server for a token each; the last answer to land wins
+// the cookie, under requests whose header was read before it. /api/csrf is the
+// one door that mints (see _set_csrf_cookie in webui_server.py), and this holds
+// every call until the single request through it has answered. Should it come
+// back with the jar still empty (cookies blocked, daemon down), the gate steps
+// aside rather than serialising the admin forever.
+let priming = null;
+let primeGaveUp = false;
+function primeCsrf() {
+  if (csrfToken() || primeGaveUp) return null;
+  if (!priming) {
+    priming = fetch('/api/csrf', { credentials: 'same-origin', cache: 'no-store' })
+      .catch(() => {})
+      .then(() => { priming = null; if (!csrfToken()) primeGaveUp = true; });
+  }
+  return priming;
+}
+
+async function req(path, { method = 'GET', body, retried = false } = {}) {
   const headers = {};
   // `no-store`: never read an API reply from the HTTP cache and never write
   // one into it. Belt-and-braces with the no-store headers webui_server sends
@@ -26,7 +48,10 @@ async function req(path, { method = 'GET', body } = {}) {
   // there) return `message` text in the language the owner actually picked,
   // instead of always Italian.
   headers['X-UI-Lang'] = lang.value;
-  if (method !== 'GET') headers['X-CSRF-Token'] = csrfToken();
+  if (method !== 'GET') {
+    await primeCsrf();
+    headers['X-CSRF-Token'] = csrfToken();
+  }
   let res, data;
   try {
     res = await fetch(path, opts);
@@ -37,6 +62,13 @@ async function req(path, { method = 'GET', body } = {}) {
     data = await res.json();
   } catch (_) {
     data = {};
+  }
+  // Two documents priming at the same instant (the admin and the Library
+  // editor, or a second tab) can still leave header and cookie one token apart.
+  // The guard refuses the request before the route runs, so nothing happened on
+  // the device: read the cookie again and send it once more.
+  if (res.status === 403 && data && data.code === 'auth.csrfInvalid' && !retried) {
+    return req(path, { method, body, retried: true });
   }
   return { ok: res.ok, status: res.status, data };
 }
@@ -67,6 +99,8 @@ export const api = {
     return (r.data && (r.data._p2 ?? r.data[pref])) ?? null;
   },
   lyrionSetPref: (playerMac, pref, value) => lyrionRequest(playerMac, ['playerpref', pref, value]),
+  // server-scoped commands (no player): serverstatus, info total, rescan…
+  lyrionQuery: (command) => lyrionRequest('', command),
 
   // auth
   authStatus: () => req('/api/auth/status'),
@@ -78,8 +112,10 @@ export const api = {
 
   // provisioning
   provisionStatus: () => req('/api/provision/status'),
-  provisionWifiConnect: (ssid, password) =>
-    req('/api/provision/wifi_connect', { method: 'POST', body: { ssid, password } }),
+  // `band` ('2.4' / '5' / '6') only when the same name is on more than one of
+  // them and the owner picked one — see webui_server._picked_band.
+  provisionWifiConnect: (ssid, password, band = '') =>
+    req('/api/provision/wifi_connect', { method: 'POST', body: { ssid, password, band } }),
   provisionClaimMode: (mode) =>
     req('/api/provision/claim_mode', { method: 'POST', body: { mode, source: 'web' } }),
   provisionFinalize: () => req('/api/provision/finalize', { method: 'POST' }),
@@ -100,6 +136,7 @@ export const api = {
   dspFirUpload: async (file) => {
     const body = new FormData();
     body.append('file', file);
+    await primeCsrf();
     const headers = { 'X-CSRF-Token': csrfToken() };
     let res, data;
     try {
@@ -130,6 +167,7 @@ export const api = {
     body.append('file', file);
     if (passphrase) body.append('passphrase', passphrase);
     if (categories) body.append('categories', categories.join(','));
+    await primeCsrf();
     const headers = { 'X-CSRF-Token': csrfToken() };
     let res, data;
     try {

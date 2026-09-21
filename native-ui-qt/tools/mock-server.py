@@ -10,13 +10,16 @@ from urllib.parse import urlparse, parse_qs
 HERE = os.path.dirname(os.path.abspath(__file__))
 COVER = os.environ.get("MOCK_COVER", os.path.join(HERE, "..", "..", "logo osmium.jpg"))
 STATE = {
-    "mode": "play", "time": 116.0, "duration": 330.0, "volume": 40, "index": 2, "shuffle": 0, "repeat": 0, "sleep": 0,
+    "mode": "play", "time": 116.0, "duration": 330.0, "volume": 40, "index": 2, "shuffle": 0, "repeat": 0, "sleep": 0, "power": 1,
     "prefs": {"replayGainMode": "0", "transitionType": "0", "transitionDuration": "0", "digitalVolumeControl": "1"},
-    "vu": True, "vu_style": os.environ.get("MOCK_VU_STYLE", "classic"), "autoexpand": 0, "ota": {"state": "idle"}, "lang": "it",
+    "vu": os.environ.get("MOCK_VU", "1") != "0", "vu_style": os.environ.get("MOCK_VU_STYLE", "classic"),
+    "np_animation": os.environ.get("MOCK_NP_ANIMATION", "none"), "autoexpand": 0, "ota": {"state": "idle"}, "lang": "it",
     "display_mode": "gui", "ui_resolution": "auto", "ui_refresh": "native", "pointer": True, "ssh": False, "player_enabled": True,
     "lms_mode": "local", "lms_host": "", "tz": "Europe/Rome", "device_name": "Osmium", "ota_channel": "dev", "lyrion_channel": "release",
     "audio": "hw:CARD=DAC,DEV=0", "shell_user": "", "pldir": "/srv/music/playlist", "skin": "osmium", "fmt": {"state": "idle"},
     "install": {"state": "idle"}, "cd": {"no_disc": True}, "cdrip": {"state": "idle"},
+    # the top-bar connectivity icon: internet | lan | offline, wired | wireless | none
+    "net": os.environ.get("MOCK_NET", "internet"), "net_type": os.environ.get("MOCK_NET_TYPE", "wired"),
     # Ricerca dei dispositivi in rete: uno con nome mDNS, uno che chiede la
     # password (192.168.0.60) e uno trovato solo dalla sonda sulla porta.
     "smbscan": {"t0": 0.0, "hosts": [
@@ -31,6 +34,10 @@ QUEUE = [("Rosanna", "TOTO", "TOTO IV"), ("Africa", "TOTO", "TOTO IV"), ("Hold t
 T0 = time.time()
 # Scenarios (env):
 #   MOCK_LONG_QUEUE=1        40 tracks in the queue (scrolling tests, #100)
+#   MOCK_NET=lan|offline     the top-bar connectivity icon (default internet);
+#   MOCK_NET_TYPE=wireless   wired by default, `none` = no link at all
+#   MOCK_WIFI_FAIL=1         Settings → Network → "Connect to Wi-Fi" fails
+#   MOCK_WIRED_FAIL=1        ... and so does "Use wired"
 #   MOCK_SHARED_LMS=N        somebody else's Lyrion (#99): the list holds a
 #                            phone player from the start, our "Osmium" only
 #                            shows up N seconds after the mock started (LAN
@@ -42,12 +49,28 @@ T0 = time.time()
 #                            HIFI_VU_STORE_DIR / HIFI_VU_STORE_STATE_DIR /
 #                            HIFI_VU_SKINS_DIR (a local catalogue signed with
 #                            a test key); without it the store is empty
+#   MOCK_VU=0                start with the VU meters off
+#   MOCK_NP_ANIMATION=cd     the Now Playing animation (none, cd, cdfront,
+#                            vinyl, cassette) shown with the VU meters off
+#   MOCK_ANIM_STORE=1        the animation store and the animation choice run
+#                            on the real api_server.py code: configure it with
+#                            HIFI_ANIM_STORE_URL / HIFI_ANIM_STORE_PUBKEY /
+#                            HIFI_ANIM_STORE_DIR / HIFI_ANIM_STORE_STATE_DIR
+#                            (the kiosk in the chroot must see the same
+#                            folder as its /var/lib/hifi-player/anim-scenes)
+NP_ANIMATIONS = ("none", "cd", "cdfront", "vinyl", "cassette")
 VU_API = None
 if os.environ.get("MOCK_VU_STORE"):
     sys.path.insert(0, os.path.join(HERE, "..", ".."))
     import api_server as VU_API
     VU_API.VU_STYLE_FILE = os.environ.get("MOCK_VU_STYLE_FILE", "/tmp/hifi-mock-vu-style")
     VU_API.VU_STORE_FIRST_CHECK = 0
+ANIM_API = None
+if os.environ.get("MOCK_ANIM_STORE"):
+    sys.path.insert(0, os.path.join(HERE, "..", ".."))
+    import api_server as ANIM_API
+    ANIM_API.NOWPLAYING_ANIMATION_FILE = os.environ.get("MOCK_NP_ANIMATION_FILE", "/tmp/hifi-mock-np-animation")
+    ANIM_API.ANIM_STORE_FIRST_CHECK = 0
 if os.environ.get("MOCK_LONG_QUEUE"):
     QUEUE = [(f"{t[0]} ({i + 1})", t[1], t[2]) for i in range(8) for t in QUEUE]
 #   MOCK_PLAYERS=1           two more players on the server (a phone and
@@ -65,6 +88,18 @@ OTHER = {
 }
 PHONE = {"playerid": "de:ad:be:ef:00:01", "name": "iPhone di Ale", "ip": "192.168.0.23:51234", "connected": 1}
 OWN = {"playerid": "aa:bb:cc:dd:ee:ff", "name": "Osmium", "ip": "127.0.0.1:41234", "connected": 1}
+# favourites (Favorites plugin) and the library scan, as Lyrion answers
+# them; MOCK_SCAN=N makes a rescan last N s
+FAVS = [
+    {"id": "0", "name": "Radio Paradise", "url": "http://stream.radioparadise.com/flac", "isaudio": 1, "hasitems": 0, "type": "audio"},
+    {"id": "1", "name": "TOTO IV", "url": "db:album.title=TOTO%20IV&contributor.name=TOTO", "isaudio": 1, "hasitems": 0, "type": "playlist"},
+    {"id": "2", "name": "Serate", "isaudio": 0, "hasitems": 1, "type": "link"},
+]
+MUTE = {"on": 0}
+SCAN = {"until": 0.0, "last": T0 - 3600 * 5}
+SCAN_SECS = float(os.environ.get("MOCK_SCAN", "12") or 12)
+GENRES = ["Rock", "Jazz", "Classica", "Elettronica", "Ambient"]
+YEARS = [1982, 1973, 1985, 2001, 2019, 0]
 
 def players_now():
     if not SHARED_LMS:
@@ -77,9 +112,42 @@ def status_now():
         STATE["time"] = min(STATE["duration"], STATE["time"] + (time.time() - T0) % 1 * 0)
     return STATE
 
+# Le tre specie di voce che restituisce un plugin, per provare il menu a
+# pressione lunga: musica da suonare, un contenitore di musica (album, playlist)
+# e un nodo di navigazione. Lyrion mette presetParams.favorites_url solo sulle
+# prime due, ed e' da li' che la UI capisce quali sono musica.
+def plugin_item(cmd, i):
+    kind = i % 3
+    o = {"id": f"{cmd}.{i}", "name": f"{cmd} voce {i + 1}",
+         "hasitems": 0 if kind == 0 else 1,
+         "isaudio": 1 if kind == 0 else 0,
+         "type": "audio" if kind == 0 else "link"}
+    if kind == 0:
+        o["url"] = f"http://mock/{cmd}/{i}.mp3"
+        o["presetParams"] = {"favorites_url": o["url"], "favorites_title": o["name"]}
+    elif kind == 1:
+        o["presetParams"] = {"favorites_url": f"{cmd}://album/{i}", "favorites_title": o["name"]}
+    return o
+
+
+# La stessa voce in forma di menu Jive: si porta dietro le azioni, `add` accoda
+# e `add-hold` fa suonare dopo.
+def menu_item(cmd, i):
+    it = {"id": f"{cmd}.{i}", "text": f"{cmd} voce {i + 1}",
+          "actions": {"go": {"cmd": [cmd, "items"], "params": {"item_id": f"{cmd}.{i}"}}}}
+    if i % 3 != 2:
+        it["actions"]["add"] = {"cmd": [cmd, "playlist", "add"], "params": {"item_id": f"{cmd}.{i}"}}
+        it["actions"]["add-hold"] = {"cmd": [cmd, "playlist", "insert"], "params": {"item_id": f"{cmd}.{i}"}}
+        it["presetParams"] = {"favorites_url": f"{cmd}://item/{i}", "favorites_title": it["text"]}
+    return it
+
+
 def rpc(player, params):
     cmd = params[0] if params else ""
     r = {}
+    # the transport commands, in the log (to check what the UI sends)
+    if cmd in ("play", "pause", "stop", "power") or params[:2] == ["playlist", "index"] or (params[:2] == ["mixer", "volume"] and params[2:3] != ["?"]):
+        print("mock: player", player, params, flush=True)
     if cmd == "players":
         pl = players_now()
         r = {"count": len(pl), "players_loop": pl}
@@ -94,13 +162,27 @@ def rpc(player, params):
                  "playlist_cur_index": 0, "playlist_tracks": 1, "playlist repeat": 0, "playlist shuffle": 0, "will_sleep_in": 0,
                  "playlist_loop": [{"id": 2001, "title": o["title"], "artist": o["artist"], "album": o["album"], "coverid": "1001",
                                     "bitrate": "1411kbps", "type": "flc", "samplesize": 16, "samplerate": 44100, "duration": 300.0, "remote": 0}]}
+        elif len(params) > 1 and params[1] == "-" and STATE.get("radio"):
+            # an internet radio, as Lyrion reports one (radio.de stream on the Dell,
+            # 2026-09-18): no album, no duration, the station in remote_title
+            rd = STATE["radio"]
+            owner = next((p["name"] for p in players_now() if p["playerid"] == player), "Osmium")
+            r = {"player_name": owner, "mode": STATE["mode"], "time": STATE["time"], "mixer volume": STATE["volume"],
+                 "power": STATE["power"], "remote": 1, "current_title": " - ".join(x for x in (rd.get("artist"), rd.get("title")) if x),
+                 "playlist_cur_index": "0", "playlist_tracks": 1, "playlist repeat": 0, "playlist shuffle": 0, "will_sleep_in": 0,
+                 "playlist_loop": [{"id": "-94761577295040", "title": rd.get("title", ""), "artist": rd.get("artist", ""),
+                                    "remote_title": rd.get("station", ""), "coverid": "-94761577295040", "type": "mp3",
+                                    "url": rd.get("url", "https://ella.stream46.radiohost.de/ella-piano-trios_mp3-192"),
+                                    "duration": "0", "remote": 1, "bitrate": "192kbps"}]}
         elif len(params) > 1 and params[1] == "-":
             t = QUEUE[STATE["index"] % len(QUEUE)]
             owner = next((p["name"] for p in players_now() if p["playerid"] == player), "Osmium")
             r = {"player_name": owner, "mode": STATE["mode"], "time": STATE["time"], "duration": STATE["duration"], "mixer volume": STATE["volume"],
+                 "power": STATE["power"],
                  "playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE), "playlist repeat": STATE["repeat"],
                  "playlist shuffle": STATE["shuffle"], "will_sleep_in": STATE["sleep"],
-                 "playlist_loop": [{"id": 1001 + STATE["index"], "title": t[0], "artist": t[1], "album": t[2], "coverid": "1001",
+                 "playlist_loop": [{"id": 1001 + STATE["index"], "title": t[0], "artist": t[1], "album": t[2], "coverid": "1001", "album_id": 1 + STATE["index"] % 24, "artist_id": 1,
+                                    "url": "file:///srv/music/%d.dsf" % STATE["index"],
                                     "bitrate": "2822kHz", "type": "dsf", "samplesize": 1, "samplerate": 2822400, "duration": STATE["duration"], "remote": 0}]}
         else:
             r = {"playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE),
@@ -115,39 +197,146 @@ def rpc(player, params):
         if cmd == "play": o["mode"] = "play"
         elif cmd == "pause": o["mode"] = "pause" if params[1:2] == ["1"] else "play"
         else: o["volume"] = int(params[2])
-    elif cmd == "play": STATE["mode"] = "play"
+    elif cmd == "play": STATE["mode"] = "play"; STATE["power"] = 1          # play turns the player on, as Lyrion
     elif cmd == "pause": STATE["mode"] = "pause" if params[1:2] == ["1"] else "play"
+    elif cmd == "stop": STATE["mode"] = "stop"; STATE["time"] = 0.0
+    elif cmd == "power":
+        if params[1:2] and params[1] != "?":
+            STATE["power"] = int(params[1])
+            if not STATE["power"]: STATE["mode"] = "stop"
+        r = {"_power": STATE["power"]}
     elif cmd == "time": STATE["time"] = float(params[1])
-    elif cmd == "mixer": STATE["volume"] = int(params[2])
+    elif cmd == "mixer":
+        if params[1] == "muting":
+            if params[2] == "?": r = {"_muting": MUTE["on"]}
+            else: MUTE["on"] = (1 - MUTE["on"]) if params[2] == "toggle" else int(params[2])
+        elif params[2] != "?": STATE["volume"] = int(params[2])
     elif cmd == "sleep": STATE["sleep"] = int(params[1])
     elif cmd == "playlist":
         sub = params[1]
         if sub == "index":
             v = params[2]
             STATE["index"] = (STATE["index"] + int(v)) % len(QUEUE) if v[0] in "+-" else int(v)
+            STATE["time"] = 0.0                    # another track starts from the beginning
         elif sub == "shuffle": STATE["shuffle"] = int(params[2])
         elif sub == "repeat": STATE["repeat"] = int(params[2])
         elif sub == "delete": QUEUE.pop(int(params[2]))
         elif sub == "move": QUEUE.insert(int(params[3]), QUEUE.pop(int(params[2])))
         elif sub == "clear": QUEUE.clear()
         elif sub == "save": r = {"__playlist_id": 9}
+        elif sub == "play":
+            STATE["mode"] = "play"
+            print("mock: playlist play", params[2:], flush=True)
     elif cmd == "musicartistinfo":
         r = {"lyrics": "Meet you all the way<br>Rosanna, yeah<br><br>All I wanna do when I wake up in the morning<br>is see your eyes<br>" * 8}
     elif cmd == "artists":
-        r = {"artists_loop": [{"id": i + 1, "artist": a} for i, a in enumerate(ARTISTS)], "count": len(ARTISTS)}
+        def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
+        names = ARTISTS[-4:] if any(p == "role_id:COMPOSER" for p in params) else ARTISTS
+        if arg("artist_id:"): names = [a for a in ARTISTS if str(ARTISTS.index(a) + 1) == arg("artist_id:")]
+        r = {"artists_loop": [{"id": ARTISTS.index(a) + 1, "artist": a, "favorites_url": "db:contributor.name=" + a} for a in names], "count": len(names)}
+    elif cmd == "roles":
+        # the artist page asks which roles an artist has: albums, and some as composer
+        def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
+        aid = int(arg("artist_id:") or 0)
+        roles = [{"role_id": 1, "role_name": "ARTIST"}] + ([{"role_id": 2, "role_name": "COMPOSER"}] if aid > len(ARTISTS) - 4 else []) + [{"role_id": 6, "role_name": "TRACKARTIST"}]
+        r = {"roles_loop": roles, "count": len(roles)}
     elif cmd == "albums":
-        aid = next((p.split(":")[1] for p in params if isinstance(p, str) and p.startswith("artist_id:")), None)
-        loop = [{"id": i, "album": al, "artist": ar, "artwork_track_id": str(1000 + i)} for i, al, ar, arid in ALBUMS if not aid or str(arid) == aid]
+        def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
+        aid, gid, year, sort, alid, role = arg("artist_id:"), arg("genre_id:"), arg("year:"), arg("sort:"), arg("album_id:"), arg("role_id:") or ""
+        rows = [(i, al, ar, arid) for i, al, ar, arid in ALBUMS if not aid or str(arid) == aid]
+        if alid: rows = [x for x in ALBUMS if str(x[0]) == alid]
+        if gid: rows = [x for x in rows if x[0] % len(GENRES) == int(gid) - 1]
+        if year: rows = [x for x in rows if YEARS[x[0] % len(YEARS)] == int(year)]
+        if sort == "new": rows = list(reversed(rows))[:6]
+        if aid and role:
+            # ARTIST: the artist's own albums; COMPOSER / TRACKARTIST: two others each
+            if "ARTIST" in role.split(","): pass
+            elif role == "COMPOSER": rows = [x for x in ALBUMS if x[3] != int(aid)][:2]
+            elif role == "TRACKARTIST": rows = [x for x in ALBUMS if x[3] != int(aid)][2:5]
+            else: rows = []
+        if sort == "yearalbum": rows = sorted(rows, key=lambda x: YEARS[x[0] % len(YEARS)])
+        # album 3 has no cover (artwork_track_id missing), album 5 is on two discs, 7 is a compilation
+        loop = [{"id": i, "album": al, "artist": ar, "artist_id": arid, "artists": ar, "artist_ids": str(arid), "year": YEARS[i % len(YEARS)],
+                 "disccount": 2 if i == 5 else 1, "compilation": 1 if i == 7 else 0, "release_type": "ALBUM",
+                 **({} if i == 3 else {"artwork_track_id": str(1000 + i)}),
+                 "favorites_url": "db:album.title=%s&contributor.name=%s" % (al, ar)} for i, al, ar, arid in rows]
         r = {"albums_loop": loop, "count": len(loop)}
+    elif cmd == "genres":
+        r = {"genres_loop": [{"id": i + 1, "genre": g, "favorites_url": "db:genre.name=" + g} for i, g in enumerate(GENRES)], "count": len(GENRES)}
+    elif cmd == "years":
+        r = {"years_loop": [{"year": y, "favorites_url": "db:year.id=%d" % y} for y in sorted(YEARS, reverse=True)], "count": len(YEARS)}
+    elif cmd == "search":
+        term = next((p[5:] for p in params if isinstance(p, str) and p.startswith("term:")), "").lower()
+        arts = [{"contributor_id": i + 1, "contributor": a} for i, a in enumerate(ARTISTS) if term in a.lower()]
+        albs = [{"album_id": i, "album": al} for i, al, ar, arid in ALBUMS if term in al.lower()][:8]
+        trks = [{"track_id": 2000 + i, "track": t} for i, t in enumerate(["Rosanna", "Africa", "Hold the Line", "Time", "Money", "Rosanna (live)"]) if term in t.lower()]
+        r = {"contributors_loop": arts, "albums_loop": albs, "tracks_loop": trks, "contributors_count": len(arts), "albums_count": len(albs), "tracks_count": len(trks), "count": len(arts) + len(albs) + len(trks)}
     elif cmd == "titles":
-        r = {"titles_loop": [{"id": 2000 + i, "title": f"Brano {i + 1}", "artist": "Toto", "duration": 200 + i * 7} for i in range(14)]}
+        alid = next((p[9:] for p in params if isinstance(p, str) and p.startswith("album_id:")), None)
+        al = next((x for x in ALBUMS if str(x[0]) == alid), None) if alid else None
+        if al:
+            # an album's tracks with the per-role tags (A + S) and the format of the files
+            i, name, ar, arid = al
+            n = 12 if i == 5 else 8
+            loop = []
+            for k in range(n):
+                disc = 1 + (k >= 6) if i == 5 else 1
+                t = {"id": 5000 + i * 100 + k, "title": f"Brano {k + 1} di {name}", "tracknum": (k % 6) + 1 if i == 5 else k + 1, "disc": disc,
+                     "duration": 180 + k * 23, "artist": ar, "artist_ids": str(arid), "album_id": i, "type": "flc", "samplesize": 24, "samplerate": 96000,
+                     "url": "file:///srv/music/%d/%d.flac" % (i, k), "composer": "Ludovico Einaudi" if k < 3 else "Nils Frahm", "composer_ids": "4" if k < 3 else "10"}
+                if i == 7:
+                    other = ARTISTS[(k + 2) % len(ARTISTS)]
+                    t.update({"trackartist": other, "trackartist_ids": str(ARTISTS.index(other) + 1)})
+                if k == 1:
+                    t.update({"conductor": "Beethoven", "conductor_ids": "12"})
+                loop.append(t)
+            r = {"titles_loop": loop, "count": len(loop)}
+        else:
+            r = {"titles_loop": [{"id": 2000 + i, "title": f"Brano {i + 1}", "artist": "Toto", "duration": 200 + i * 7, "album_id": (i % 24) + 1, "artist_id": 1, "url": "file:///srv/music/toto/%d.flac" % i, "favorites_url": "file:///srv/music/toto/%d.flac" % i} for i in range(14)]}
     elif cmd == "musicfolder":
         r = {"folder_loop": [{"id": 1, "filename": "Musica", "type": "folder"}, {"id": 2, "filename": "USB", "type": "folder"}, {"id": 3, "filename": "brano.flac", "type": "track"}]}
     elif cmd == "playlists":
         if params[1:2] == ["tracks"]:
-            r = {"playlisttracks_loop": [{"id": 3000 + i, "title": f"Playlist brano {i + 1}", "artist": "Vari"} for i in range(6)]}
+            r = {"playlisttracks_loop": [{"id": 3000 + i, "title": f"Playlist brano {i + 1}", "artist": "Vari", "url": "file:///srv/music/pl/%d.flac" % i} for i in range(6)]}
+        elif params[1:2] == ["rename"]:
+            new = next((p[8:] for p in params if isinstance(p, str) and p.startswith("newname:")), "")
+            if new.lower() == "serata": r = {"overwritten_playlist_id": 2}
+            elif not any(p == "dry_run:1" for p in params): print("mock: playlist renamed", params[2:], flush=True)
+        elif params[1:2] in (["delete"], ["edit"]):
+            print("mock: playlists", params[1:], flush=True)
         else:
-            r = {"playlists_loop": [{"id": 1, "playlist": "Preferiti"}, {"id": 2, "playlist": "Serata"}]}
+            r = {"playlists_loop": [{"id": 1, "playlist": "Preferiti", "url": "file:///srv/music/playlist/preferiti.m3u"}, {"id": 2, "playlist": "Serata", "url": "file:///srv/music/playlist/serata.m3u"}]}
+    elif cmd == "favorites":
+        sub = params[1] if len(params) > 1 else ""
+        def arg(k): return next((p[len(k):] for p in params if isinstance(p, str) and p.startswith(k)), None)
+        if sub == "playlist":
+            print("mock: favorites", params[1:], flush=True)
+        elif sub == "items":
+            r = {"loop_loop": [dict(f) for f in FAVS], "count": len(FAVS)}
+        elif sub == "exists":
+            what = params[2] if len(params) > 2 else ""
+            idx = next((f["id"] for f in FAVS if f.get("url") == what or (what.isdigit() and f.get("url", "").endswith("/%d.dsf" % (int(what) - 1001)))), None)
+            r = {"exists": 1 if idx is not None else 0, "index": idx or 0}
+        elif sub == "add":
+            FAVS.append({"id": str(len(FAVS)), "name": arg("title:") or arg("url:"), "url": arg("url:"), "isaudio": 1, "hasitems": 0, "type": arg("type:") or "audio"})
+            r = {"count": 1}
+        elif sub == "delete":
+            i = arg("item_id:"); FAVS[:] = [f for f in FAVS if f["id"] != i]
+            for n, f in enumerate(FAVS): f["id"] = str(n)
+        elif sub == "rename":
+            i = arg("item_id:")
+            for f in FAVS:
+                if f["id"] == i: f["name"] = arg("title:")
+        elif sub == "move":
+            a, b = int(arg("from_id:")), int(arg("to_id:"))
+            FAVS.insert(b, FAVS.pop(a))
+            for n, f in enumerate(FAVS): f["id"] = str(n)
+    elif cmd == "info" and params[1:2] == ["total"]:
+        r = {"_" + params[2]: {"albums": 312, "artists": 148, "genres": len(GENRES), "songs": 4021, "duration": 986543}[params[2]]}
+    elif cmd == "rescanprogress":
+        r = {"rescan": 1, "steps": "directory", "directory": int(100 * (1 - (SCAN["until"] - time.time()) / SCAN_SECS))} if time.time() < SCAN["until"] else {"rescan": 0}
+    elif cmd == "abortscan":
+        SCAN["until"] = 0.0
     elif cmd == "radios":
         r = {"radioss_loop": [{"cmd": "local", "name": "Radio locali", "icon": "/plugins/cache/icons/local.png"}, {"cmd": "tunein", "name": "TuneIn", "icon": "/plugins/cache/icons/tunein.png"}]}
     elif cmd == "apps":
@@ -161,16 +350,27 @@ def rpc(player, params):
             {"id": "qobuz", "node": "home", "text": "Qobuz", "weight": 5, "icon": "/plugins/cache/icons/qobuz.png", "actions": {"go": {"cmd": ["qobuz", "items"], "params": {"menu": "qobuz"}}}},
         ]}
     elif cmd in ("local", "tunein", "qobuz", "favorites", "search"):
-        r = {"loop_loop": [{"id": f"{cmd}.{i}", "name": f"{cmd} voce {i + 1}", "hasitems": 1 if i % 3 else 0, "isaudio": 0 if i % 3 else 1, "type": "link" if i % 3 else "audio"} for i in range(9)],
-             "item_loop": [{"id": f"{cmd}.{i}", "text": f"{cmd} voce {i + 1}", "actions": {"go": {"cmd": [cmd, "items"], "params": {"item_id": f"{cmd}.{i}"}}}} for i in range(9)]}
+        # <plugin> playlist add|insert|play item_id:… — quello che manda il menu
+        # a pressione lunga dentro un'app
+        if params[1:2] == ["playlist"]:
+            print("mock:", cmd, params[1:], flush=True)
+        else:
+            r = {"loop_loop": [plugin_item(cmd, i) for i in range(9)],
+                 "item_loop": [menu_item(cmd, i) for i in range(9)]}
     elif cmd == "playlistcontrol":
         pass
     elif cmd == "serverstatus":
+        scanning = time.time() < SCAN["until"]
+        if not scanning and SCAN["until"] > 0: SCAN["last"] = SCAN["until"]; SCAN["until"] = 0.0
         r = {"players_loop": [{"playerid": "aa:bb:cc:dd:ee:ff", "name": "Osmium"}, {"playerid": "11:22:33:44:55:66", "name": "Cucina"}, {"playerid": "77:88:99:aa:bb:cc", "name": "Camera"}],
-             "rescan": 0, "progressdone": 0, "progresstotal": 0}
+             "lastscan": int(SCAN["last"]), "rescan": 1 if scanning else 0}
+        if scanning:
+            r.update({"progressname": "Cartelle", "progressdone": int(SCAN_SECS - (SCAN["until"] - time.time())), "progresstotal": int(SCAN_SECS)})
     elif cmd == "alarms":
         r = {"alarms_loop": [{"id": "a1", "time": 7 * 3600 + 30 * 60, "enabled": 1}, {"id": "a2", "time": 9 * 3600, "enabled": 0}]}
-    elif cmd == "alarm" or cmd == "sync" or cmd == "rescan":
+    elif cmd == "rescan":
+        SCAN["until"] = time.time() + SCAN_SECS
+    elif cmd == "alarm" or cmd == "sync":
         pass
     return {"id": 1, "method": "slim.request", "params": [player, params], "result": r}
 
@@ -191,6 +391,14 @@ class H(BaseHTTPRequestHandler):
             if u.path.startswith("/music/"): return self._file(COVER, "image/jpeg")
             if u.path.startswith("/plugins/"): return self._file(COVER, "image/png")
             return self._json({"ok": True})
+        if port == 8000 and u.path in ("/anim_store", "/nowplaying_animation"):
+            if ANIM_API is not None:
+                if u.path == "/anim_store":
+                    return self._json(ANIM_API.get_anim_store(summary="summary=1" in (u.query or "")))
+                return self._json(ANIM_API.get_nowplaying_animation())
+            if u.path == "/anim_store":
+                return self._json({"new": 0, "updates": 0} if "summary=1" in (u.query or "") else
+                                  {"animations": [], "checking": False, "busy": False, "error": None, "checked": 0})
         if port == 8000 and u.path in ("/vu_store", "/vu_style"):
             if VU_API is None:
                 if u.path == "/vu_store":
@@ -203,16 +411,21 @@ class H(BaseHTTPRequestHandler):
         if port == 8000:
             table = {
                 "/vu_meter": {"enabled": STATE["vu"]}, "/nowplaying_autoexpand": {"seconds": STATE["autoexpand"]},
+                "/nowplaying_animation": {"animation": STATE["np_animation"], "choices": list(NP_ANIMATIONS)},
                 "/vu_style": {"style": STATE["vu_style"], "styles": [{"id": "classic", "name": {"en": "Classic", "it": "Classico"}},
                                                                   {"id": "modulometer", "name": {"en": "Modulometer", "it": "Modulometro"}},
                                                                   {"id": "amber", "name": {"en": "Amber", "it": "Ambra"}},
                                                                   {"id": "ice-blue", "name": {"en": "Ice Blue", "it": "Blu ghiaccio"}},
                                                                   {"id": "exposed", "name": {"en": "Exposed", "it": "A vista"}},
                                                                   {"id": "panoramic", "name": {"en": "Panoramic", "it": "Panoramico"}}]},
-                "/update/status": STATE["ota"], "/boot_mode": {"mode": "live"}, "/provision_status": {"pending": False, "completed": True},
+                "/update/status": STATE["ota"], "/boot_mode": {"mode": "live"}, "/provision_status": {"pending": False, "completed": True, "networks": [{"ssid": "CasaWiFi", "security": "WPA2", "signal": 78, "band": "2.4"}, {"ssid": "CasaWiFi", "security": "WPA2", "signal": 64, "band": "5"}, {"ssid": "Ospiti", "security": "", "signal": 40, "band": "2.4"}]},
                 "/player_name": {"name": "Osmium"}, "/ui_language": {"lang": STATE["lang"]},
                 "/display_mode": {"mode": STATE["display_mode"]}, "/ui_resolution": {"mode": STATE["ui_resolution"]}, "/ui_refresh": {"supported": True, "mode": STATE["ui_refresh"]},
                 "/network_status": {"connected": True, "type": "wired", "ssid": None, "ip": "192.168.0.133", "device": "eth0"},
+                "/connectivity": {"state": STATE["net"], "type": STATE["net_type"], "ssid": "CasaWiFi" if STATE["net_type"] == "wireless" else None,
+                                  "ip": None if STATE["net"] == "offline" and STATE["net_type"] == "none" else "192.168.0.133",
+                                  "device": None if STATE["net_type"] == "none" else ("wlan0" if STATE["net_type"] == "wireless" else "eth0"),
+                                  "gateway": "192.168.0.1", "router": STATE["net"] != "offline", "at": int(time.time())},
                 "/network_info": {"hostname": "osmium", "ip": "192.168.0.133", "netmask": "255.255.255.0"},
                 "/system_info": {"hostname": "osmium", "platform": "Debian 13", "arch": "x86_64", "local_ip": "192.168.0.133", "version": "2.5.24-dev.2",
                                  "network_interfaces": [{"name": "eth0", "address": "192.168.0.133", "active": True}, {"name": "wlan0", "address": "192.168.0.140", "active": False}]},
@@ -232,7 +445,9 @@ class H(BaseHTTPRequestHandler):
                 "/discover_lms": {"servers": [{"name": "NAS Lyrion", "ip": "192.168.0.50"}, {"name": "Osmium", "ip": "192.168.0.133"}]},
                 "/install/status": STATE["install"],
                 "/install/disks": {"disks": [{"path": "/dev/sda", "model": "Samsung SSD 870", "transport": "sata", "size": 500107862016}, {"path": "/dev/nvme0n1", "model": "WD Black SN770", "transport": "nvme", "size": 1000204886016}, {"path": "/dev/mmcblk0boot0", "model": "eMMC", "size": 4000000}]},
-                "/wifi_scan": {"networks": [{"ssid": "CasaWiFi", "security": "WPA2", "signal": 78}, {"ssid": "Ospiti", "security": "", "signal": 40}, {"ssid": "Vicino", "security": "WPA2", "signal": 20}]},
+                # CasaWiFi sta su tutte e due le bande, come quasi ogni router di casa:
+                # e' il caso che l'elenco deve saper distinguere.
+                "/wifi_scan": {"networks": [{"ssid": "CasaWiFi", "security": "WPA2", "signal": 78, "band": "2.4", "saved": True}, {"ssid": "CasaWiFi", "security": "WPA2", "signal": 64, "band": "5", "saved": True}, {"ssid": "Ospiti", "security": "", "signal": 40, "band": "2.4"}, {"ssid": "Vicino", "security": "WPA2", "signal": 20, "band": "5"}]},
             }
             if u.path in table: return self._json(table[u.path])
             return self._json({"success": False, "error": "mock: " + u.path}, 404)
@@ -271,6 +486,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"success": True, "state": "done" if done else "running",
                                    "progress": 100 if done else min(95, int(el * 30)),
                                    "hosts": hosts, "tools": {"shares": True, "mdns": True}})
+            if u.path.startswith("/api/meta/"): return self._json(*meta_get(u.path, q))
             if u.path == "/api/cd/info": return self._json(STATE["cd"])
             if u.path == "/api/cd/rip/status": return self._json(STATE["cdrip"])
             if u.path in table: return self._json(table[u.path])
@@ -283,14 +499,39 @@ class H(BaseHTTPRequestHandler):
             return self._json(rpc(pl, params))
         try: data = json.loads(body or b"{}")
         except Exception: data = {}
+        if port == 8000 and ANIM_API is not None and (u.path.startswith("/anim_store") or u.path == "/nowplaying_animation"):
+            fn = {"/anim_store/check": lambda: ANIM_API.anim_store_check(),
+                  "/anim_store/install": lambda: ANIM_API.anim_store_install(data.get("id")),
+                  "/anim_store/remove": lambda: ANIM_API.anim_store_remove(data.get("id")),
+                  "/anim_store/seen": lambda: ANIM_API.anim_store_mark_seen(),
+                  "/nowplaying_animation": lambda: ANIM_API.set_nowplaying_animation(data.get("animation"))}.get(u.path)
+            if fn: return self._json(fn())
         if port == 8000 and VU_API is not None and (u.path.startswith("/vu_store") or u.path == "/vu_style"):
             fn = {"/vu_store/check": lambda: VU_API.vu_store_check(), "/vu_store/install": lambda: VU_API.vu_store_install(data.get("id")),
                   "/vu_store/remove": lambda: VU_API.vu_store_remove(data.get("id")), "/vu_store/seen": lambda: VU_API.vu_store_mark_seen(),
                   "/vu_style": lambda: VU_API.set_vu_style(data.get("style"))}.get(u.path)
             if fn: return self._json(fn())
         if port == 8000:
+            if u.path == "/wifi_connect":
+                time.sleep(1.0)                      # nmcli takes its time
+                if os.environ.get("MOCK_WIFI_FAIL"):
+                    return self._json({"success": False, "code": "network.connectFailed",
+                                       "message": "Error: Connection activation failed: (7) Secrets were required, but not provided."})
+                STATE["net"] = "internet"; STATE["net_type"] = "wireless"
+                return self._json({"success": True, "message": "ok", "ip": "192.168.0.140"})
+            if u.path == "/wired_dhcp":
+                if os.environ.get("MOCK_WIRED_FAIL"):
+                    return self._json({"success": False, "code": "network.cableNotConnected", "message": "no carrier"})
+                STATE["net_type"] = "wired"
+                return self._json({"success": True, "code": "network.wiredConnected", "ip": "192.168.0.133"})
             if u.path == "/vu_meter": STATE["vu"] = bool(data.get("enable", data.get("enabled", True)))
             if u.path == "/vu_style": STATE["vu_style"] = str(data.get("style") or "classic")
+            if u.path == "/nowplaying_animation":
+                kind = data.get("animation")
+                if kind not in NP_ANIMATIONS:
+                    return self._json({"success": False, "error": "unknown animation"}, 400)
+                STATE["np_animation"] = kind
+                return self._json({"success": True, "animation": kind})
             if u.path == "/nowplaying_autoexpand": STATE["autoexpand"] = int(data.get("seconds", 0))
             if u.path == "/ui_language": STATE["lang"] = data.get("lang", "en")
             if u.path == "/display_mode": STATE["display_mode"] = data.get("mode", "gui")
@@ -311,6 +552,11 @@ class H(BaseHTTPRequestHandler):
                 threading.Timer(5.0, lambda: STATE.__setitem__("install", {"state": "done", "message": "", "progress": 100})).start()
             if u.path == "/mock/cd": STATE["cd"] = data
             if u.path == "/mock/ota": STATE["ota"] = data
+            if u.path == "/mock/radio":            # {"title","artist","station"} plays a radio, {} goes back
+                STATE["radio"] = data or None
+            if u.path == "/mock/track":            # {"duration": s, "time": s}: another track length
+                for k in ("duration", "time"):
+                    if k in data: STATE[k] = float(data[k])
         if port == 8080:
             if u.path == "/api/pair/token": return self._json({"token": "abc123def456"})
             if u.path == "/api/sources/smb/discover":
@@ -345,6 +591,21 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/api/cd/rip":
                 STATE["cdrip"] = {"state": "ripping", "message": "Copia in corso", "progress": 30, "track": 2, "total": len(data.get("tracks", []))}
                 threading.Timer(6.0, lambda: STATE.__setitem__("cdrip", {"state": "done", "message": "Copia completata", "progress": 100})).start()
+            if u.path == "/api/meta/settings":
+                for k in ("online", "prefetch", "keep"):
+                    if k in data: META["settings"][k] = bool(data[k])
+                if "cache_location" in data:
+                    where = str(data["cache_location"] or "")
+                    place = next((p for p in META_PLACES if p["path"] == where), None)
+                    if place is None or not place["usable"]:
+                        return self._json({"success": False, "status": "error", "code": "meta.cacheDirNetwork",
+                                           "message": "Una cartella di rete non pu\u00f2 tenere questo archivio."}, 400)
+                    META["settings"]["location"] = where
+                return self._json(meta_settings())
+            if u.path == "/api/meta/cache/clear": META["seen"].clear(); return self._json({"ok": True})
+            if u.path == "/api/meta/album/pin":
+                print("mock: meta pin", data, flush=True)
+                META["seen"].discard("album-%s" % data.get("album_id")); return self._json({"status": "pending"})
             if u.path == "/api/cd/eject": STATE["cd"] = {"no_disc": True}; STATE["cdrip"] = {"state": "idle"}
             if u.path == "/api/playlistdir": STATE["pldir"] = data.get("path", STATE["pldir"])
             if u.path == "/api/lms_skin": STATE["skin"] = data.get("skin", "unset")
@@ -354,6 +615,90 @@ class H(BaseHTTPRequestHandler):
         return self._json({"success": True, "ok": True, "data": data})
     do_DELETE = do_POST
     do_PUT = do_POST
+
+# /api/meta (sources_server + hifi_metadata.py): real-shaped answers saved from
+# MusicBrainz/Wikipedia in tools/mock-meta/ (album-<id>.json, artist-<id>.json,
+# person-<mbid>.json, candidates-<id>.json, settings.json). An id without its
+# own file gets the first one of its kind. The first request for each entity
+# answers "pending", like the real service while it looks things up.
+#   MOCK_META=off      the service says "disabled"
+#   MOCK_META=offline  the service says "offline"
+#   MOCK_META=nomatch  nothing found for any album or artist
+META_DIR = os.path.join(HERE, "mock-meta")
+META = {"seen": set(), "settings": {"online": True, "prefetch": True, "keep": True, "location": ""}}
+# where the downloaded information may be kept, as the device reports it
+META_PLACES = [{"id": "default", "path": "", "kind": "internal", "label": "", "usable": True, "reason": "",
+                "total": 120 * 1024 ** 3, "free": 96 * 1024 ** 3},
+               {"id": "/mnt/hifi-usb/MUSIC", "path": "/mnt/hifi-usb/MUSIC", "kind": "usb", "label": "MUSIC",
+                "usable": True, "reason": "", "total": 2000 * 1024 ** 3, "free": 1700 * 1024 ** 3},
+               {"id": "/mnt/hifi-sources/nas", "path": "/mnt/hifi-sources/nas", "kind": "network", "label": "nas",
+                "usable": False, "reason": "network"}]
+MOCK_META = os.environ.get("MOCK_META", "")
+
+def meta_file(kind, key):
+    try:
+        names = sorted(f for f in os.listdir(META_DIR) if f.startswith(kind + "-") and f.endswith(".json"))
+    except OSError:
+        return None
+    pick = "%s-%s.json" % (kind, key)
+    if pick in names:
+        names = [pick]
+    # an id without its own file borrows one that has data (not the nomatch example)
+    for name in names:
+        with open(os.path.join(META_DIR, name), encoding="utf-8") as f:
+            d = json.load(f)
+        if len(names) == 1 or d.get("status", "ok") == "ok":
+            return d
+    return None
+
+def meta_settings():
+    base = meta_file("settings", "") or {"cache": {"albums": 120, "artists": 48, "bytes": 3456789}, "prefetch_state": {"running": True, "done": 120, "total": 312}}
+    out = dict(base, **META["settings"])
+    where = out.pop("location", "")
+    out["cache"] = dict(out.get("cache", {}), location=where, detached=False,
+                        dir=(where + "/osmium-metadata") if where else "/var/lib/hifi-player/metadata")
+    out["locations"] = [dict(p, current=p["path"] == where) for p in META_PLACES]
+    return out
+
+def meta_get(path, q):
+    one = lambda k: (q.get(k) or [""])[0]
+    if path == "/api/meta/settings":
+        return meta_settings(), 200
+    if MOCK_META == "off":
+        return {"status": "disabled"}, 200
+    if MOCK_META == "offline":
+        return {"status": "offline"}, 200
+    kind, key = {"/api/meta/album": ("album", one("album_id")), "/api/meta/artist": ("artist", one("artist_id")),
+                 "/api/meta/person": ("person", one("mbid")), "/api/meta/album/candidates": ("candidates", one("album_id")),
+                 "/api/meta/appearances": ("appearances", one("mbid"))}.get(path, (None, None))
+    if not kind:
+        return {"status": "error", "message": "mock: " + path}, 404
+    seen = "%s-%s" % (kind, key)
+    if kind in ("album", "artist", "person") and seen not in META["seen"]:
+        META["seen"].add(seen)
+        return {"status": "pending"}, 200
+    if MOCK_META == "nomatch" and kind != "appearances":
+        return {"status": "nomatch", "candidates": []} if kind == "candidates" else {"status": "nomatch"}, 200
+    d = meta_file(kind, key)
+    if kind == "appearances" and d is None:
+        # albums whose saved credits name this person
+        albums = []
+        for f in sorted(os.listdir(META_DIR)) if os.path.isdir(META_DIR) else []:
+            if not f.startswith("album-"):
+                continue
+            with open(os.path.join(META_DIR, f), encoding="utf-8") as fh:
+                a = json.load(fh)
+            roles = [{"group": c.get("group"), "role": c.get("role"), "attr": c.get("attr", "")} for c in a.get("credits", [])
+                     if any(p.get("mbid") == key for p in c.get("people", []))]
+            if roles:
+                albums.append({"album_id": a.get("album_id"), "title": (a.get("release") or {}).get("title", ""), "artist": (a.get("release") or {}).get("artist", ""), "roles": roles})
+        return {"status": "ok", "albums": albums}, 200
+    if d is None:
+        return ({"status": "ok", "current": None, "pinned": None, "candidates": []} if kind == "candidates" else {"status": "nomatch"}), 200
+    d = dict(d)
+    if kind == "album": d["album_id"] = int(key or 0)
+    if kind == "artist": d["artist_id"] = int(key or 0)
+    return d, 200
 
 def serve(port):
     ThreadingHTTPServer.allow_reuse_address = True

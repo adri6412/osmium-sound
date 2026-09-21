@@ -1,0 +1,22 @@
+[Unit]
+Description=Osmium Sound — rebuild user add-ons a few minutes after boot
+ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
+ConditionPathExists=/var/lib/hifi-player/ext
+# A live session has nothing to configure and nothing to watch over: the
+# single-filesystem ISO boots the very same image the appliances run, so
+# without this line these units would start there too.
+ConditionKernelCommandLine=!boot=live
+
+[Timer]
+# Late enough that the interface is up, the network is really there (the
+# rebuild downloads) and nothing is competing for the disk any more. An add-on
+# only needs rebuilding on the first boot after an image update, and on that
+# one boot it was already absent for the length of the rebuild — waiting three
+# minutes for it changes nothing anyone can see.
+OnBootSec=3min
+AccuracySec=30s
+# A missed run is not worth catching up: the next boot's OnBootSec covers it.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

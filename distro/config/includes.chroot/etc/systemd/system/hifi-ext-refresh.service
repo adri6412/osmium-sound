@@ -1,11 +1,10 @@
 [Unit]
 Description=Osmium Sound — rebuild user add-ons for the image that is running now
 Documentation=man:systemd-sysext(8)
-# Only on image systems, and only once there is a network to re-download with.
+# Only on image systems, and only where there are add-ons to rebuild.
 ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
 ConditionPathExists=/var/lib/hifi-player/ext
-After=systemd-sysext.service network-online.target
-Wants=network-online.target
+After=systemd-sysext.service
 # A live session has nothing to configure and nothing to watch over: the
 # single-filesystem ISO boots the very same image the appliances run, so
 # without this line these units would start there too.
@@ -18,6 +17,15 @@ ExecStart=/usr/local/sbin/hifi-ext.sh refresh
 # hifi-ext.sh list says so. systemd refuses a stale extension by itself.
 SuccessExitStatus=0 1
 TimeoutStartSec=900
+# The rebuild is 'apt-get update', a download and dpkg-deb -x. Nothing about it
+# is urgent, and it used to run while the Qt interface and squeezelite were
+# still coming up, taking CPU and disk from both on a mini PC. Last in line for
+# each now: it finishes when it finishes.
+Nice=19
+IOSchedulingClass=idle
 
-[Install]
-WantedBy=multi-user.target
+# 🚨 No [Install] section on purpose — hifi-ext-refresh.timer starts this, the
+# same arrangement hifi-boot-watchdog and hifi-mdns-keepalive use. Pulled in by
+# WantedBy=multi-user.target it inherited an implicit Before=multi-user.target,
+# so the whole boot counted as unfinished for as long as the rebuild took:
+# 2 min 19 s on an appliance in the field. build-image.sh enables the timer.

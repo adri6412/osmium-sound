@@ -18,6 +18,15 @@ Rectangle {
     property bool active: input.activeFocus
     signal textEdited(string t)
     signal accepted()
+    // Confirming the on-screen keyboard also counts as Enter: for the search
+    // fields, where "done typing" is the search itself (opt-in, the other
+    // fields keep their own confirm button)
+    property bool acceptOnVkConfirm: false
+    // A keyboard key at the right end that opens the on-screen keyboard no
+    // matter what: with a physical keyboard detected (a USB receiver, a
+    // remote, one letter typed once) the field alone would never offer it,
+    // and a Wi-Fi password has to be typeable from the touch screen.
+    property bool vkButton: false
     radius: 8; color: Theme.dark
     border.width: 1
     border.color: input.activeFocus && focusBorder ? focusColor : restBorder
@@ -37,7 +46,7 @@ Rectangle {
 
     TextInput {
         id: input
-        x: root.padding; width: parent.width - root.padding * 2; height: parent.height
+        x: root.padding; width: parent.width - root.padding * 2 - (vkKey.visible ? vkKey.width : 0); height: parent.height
         verticalAlignment: TextInput.AlignVCenter
         text: root.text
         echoMode: root.password ? TextInput.Password : TextInput.Normal
@@ -59,5 +68,13 @@ Rectangle {
     MouseArea {
         anchors.fill: parent
         onClicked: { input.forceActiveFocus(); root.openVk() }
+    }
+    Item {
+        id: vkKey
+        visible: root.vkButton
+        width: visible ? root.textSize + 20 : 0; height: parent.height
+        x: parent.width - width - root.padding / 2
+        Icon { anchors.centerIn: parent; name: "keyboard"; size: root.textSize + 4; color: vkTap.mix(Theme.silverA(0.5), Theme.gold); scale: vkTap.tapScale }
+        Tap { id: vkTap; tap: 0.9; onClicked: { input.forceActiveFocus(); root.vkOpen(root) } }
     }
 }

@@ -154,7 +154,7 @@ jobs:
           rm -rf "$ROOT"
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
           # Python API + daemons
-          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py hifi_i18n.py "$ROOT/usr/local/bin/"
+          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py hifi_i18n.py hifi_metadata.py hifi_tags.py "$ROOT/usr/local/bin/"
           # Web-admin Vue build (served by webui_server.py from /opt/hifi-webui/dist).
           # REQUIRED: a missing/empty dist here means every device that applies
           # this system bundle loses the web-admin UI, silently. Fail instead.
@@ -266,6 +266,8 @@ jobs:
           bash tests/test-lyrion-ensure.sh
           echo "== streaming read-ahead (shell) =="
           bash tests/test-stream-tune.sh
+          echo "== image bundle download (shell) =="
+          bash tests/test-bundle-fetch.sh
           echo "== music off the legacy root (shell) =="
           bash tests/test-ab-media.sh
           echo "== second chance at the A/B switch (shell) =="
@@ -273,12 +275,22 @@ jobs:
           echo "== update plan (python) =="
           python3 -m pip install --quiet flask flask-cors
           python3 tests/test_update_plan.py
+          echo "== what stays on file.osmiumsound.it (python) =="
+          python3 tests/test_prune_ota_r2.py
           echo "== timezone (python) =="
           python3 tests/test_timezone.py
           echo "== static IPv4 (python) =="
           python3 tests/test_static_ipv4.py
           echo "== lyrion server role (python) =="
           python3 tests/test_lms_role.py
+          echo "== album/artist information + CD lookup (python) =="
+          python3 tests/test_metadata.py
+          echo "== library editor: tags inside the files (python) =="
+          python3 tests/test_tags.py
+          echo "== bluetooth speakers (python) =="
+          python3 tests/test_bt_speakers.py
+          echo "== web admin: who gets a CSRF token (python) =="
+          python3 tests/test_csrf.py
 
       - name: Stage LMS skin assets into the OS payload
         # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately
@@ -343,6 +355,7 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-image-update.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-stream-tune.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-bluealsa-run.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-ext.sh \
             distro/config/includes.chroot/usr/local/bin/apt \
             distro/config/includes.chroot/usr/local/sbin/hifi-factory-reset.sh \
@@ -351,6 +364,7 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-lyrion-ensure.sh \
             tests/test-ext-guardian.sh tests/test-apt-shim.sh tests/test-factory-reset.sh \
             tests/test-lyrion-ensure.sh tests/test-stream-tune.sh tests/test-ab-media.sh \
+            tests/test-bundle-fetch.sh \
             tests/test-ab-image.sh distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
@@ -506,7 +520,8 @@ jobs:
   # In un container Debian 13 (live-build, rauc 1.13). Parte dopo il job dei
   # bundle (riusa il payload Qt) e alla fine RIPUBBLICA il manifest del canale
   # con l'asset hifi-image-<ver>.raucb: gli apparecchi convertiti lo vedono
-  # come step `image` (RAUC lo installa in streaming), i legacy lo ignorano.
+  # come step `image` (lo scaricano su /data e RAUC lo installa), i legacy lo
+  # ignorano.
   image:
     runs-on: ubuntu-latest
     needs: build-ui-ota
@@ -632,19 +647,20 @@ jobs:
             hifi-image-*.raucb.sha256
             hifi-image-*.info.txt
             hifi-image-*.build-info.txt
-      # Stable releases are ALSO served from file.osmiumsound.it (Cloudflare
-      # R2, the host the ISO and the flasher already come from): GitHub's
-      # release CDN resets connections from some networks and is slow for the
-      # range-streamed .raucb install. The GitHub Release above stays complete
-      # as the mirror and as the fallback of devices that cannot reach the
-      # manifest. dev/alpha builds stay on GitHub only.
+      # Every release, of every channel, is ALSO served from
+      # file.osmiumsound.it (Cloudflare R2, the host the ISO and the flasher
+      # already come from): GitHub's release CDN resets connections from some
+      # networks and is several times slower (the same 1 GB image: 43 s from
+      # R2, ~4 min from GitHub, measured on the Dell). The GitHub Release above
+      # stays complete as the fallback of devices that cannot reach the
+      # manifest. Only the newest release of each channel stays in the bucket
+      # (prune-ota-r2 at the end of this run).
       # Layout: ota/<tag>/<asset>, asset names untouched (the OS signature is
       # bound to the file name on the device). Immutable per tag, so the CDN
       # may cache the payloads for good; the manifest below goes out no-cache.
       # A missing upload fails the job: the manifest must never point at a
       # file that is not there.
-      - name: Upload the stable release to file.osmiumsound.it
-        if: ${{ !contains(github.ref_name, '-') }}
+      - name: Upload the release to file.osmiumsound.it
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -657,7 +673,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_ENDPOINT" ]; then
-            echo "::error::R2 secrets (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT) are not set: a stable release cannot be published"
+            echo "::error::R2 secrets (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT) are not set: the release cannot be published"
             exit 1
           fi
           ctype() {
@@ -685,7 +701,7 @@ jobs:
             [ "$SIZE" = "$(stat -c %s "$f")" ] \
               || { echo "::error::ota/$TAG/$f is $SIZE bytes in the bucket, $(stat -c %s "$f") here"; exit 1; }
           done
-          echo "stable release $TAG is on $PUBLIC_BASE/ota/$TAG/"
+          echo "release $TAG is on $PUBLIC_BASE/ota/$TAG/"
       - name: Rebuild the OTA Pages manifest with the image asset
         id: manifest
         run: |
@@ -696,19 +712,20 @@ jobs:
             *-*)           CH=dev ;;
             *)             CH=prod ;;
           esac
-          # stable: the manifest sends the devices to file.osmiumsound.it
-          # (uploaded and checked in the step above); dev/alpha: GitHub
-          if [ "$CH" = prod ]; then export OTA_ASSET_BASE="https://file.osmiumsound.it/ota/$V"; fi
+          # the manifest sends the devices to file.osmiumsound.it (uploaded
+          # and checked in the step above), whatever the channel
+          export OTA_ASSET_BASE="https://file.osmiumsound.it/ota/$V"
+          echo "channel=$CH" >> "$GITHUB_OUTPUT"
           UI=$(ls hifi-qtui-*.tar.gz hifi-ui-*.tar.gz 2>/dev/null | head -n 1)
           RAUCB=$(ls hifi-image-*.raucb | head -n 1)
           EXTRA_ASSETS="$RAUCB $RAUCB.sha256" python3 .github/scripts/make-ota-manifest.py \
             "$V" "${{ github.repository }}" "$CH" "$UI" "hifi-system-$V.tar.gz" "hifi-os-$V.tar.gz" CHANGELOG_RELEASE.md
           cat "manifest-out/latest-$CH.json"
-      # A copy of the stable manifest next to the payloads: a device that has
-      # this release (api_server: OTA_PROD_MIRROR_BASE) reads it when the
-      # Pages manifest is unreachable, before resorting to the GitHub API.
-      - name: Mirror the stable manifest next to the payloads
-        if: ${{ !contains(github.ref_name, '-') }}
+      # A copy of the channel's manifest next to the payloads: a device
+      # (api_server: OTA_PROD_MIRROR_BASE, every channel since 2.5.25) reads it
+      # when the Pages manifest is unreachable, before resorting to the GitHub
+      # API. prune-ota-r2 also reads it to know what must stay.
+      - name: Mirror the manifest next to the payloads
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -716,12 +733,13 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: osmium-sound-iso-beta
+          CH: ${{ steps.manifest.outputs.channel }}
         run: |
           set -euo pipefail
-          aws s3 cp manifest-out/latest-prod.json "s3://$R2_BUCKET/ota/latest-prod.json" --endpoint-url "$R2_ENDPOINT" \
+          aws s3 cp "manifest-out/latest-$CH.json" "s3://$R2_BUCKET/ota/latest-$CH.json" --endpoint-url "$R2_ENDPOINT" \
             --content-type application/json --cache-control no-cache --only-show-errors
           # read back through the API, for the same reason as the upload check
-          aws s3api get-object --bucket "$R2_BUCKET" --key ota/latest-prod.json --endpoint-url "$R2_ENDPOINT" /tmp/mirror.json >/dev/null
+          aws s3api get-object --bucket "$R2_BUCKET" --key "ota/latest-$CH.json" --endpoint-url "$R2_ENDPOINT" /tmp/mirror.json >/dev/null
           python3 -c 'import json; d=json.load(open("/tmp/mirror.json")); print("mirror manifest:", d["tag_name"])'
       - name: Publish the manifest
         uses: peaceiris/actions-gh-pages@v4
@@ -780,7 +798,7 @@ jobs:
             exit 1
           fi
           echo "release $TAG serves both the old and the new layout, and is visible"
-          # Stable releases are downloaded from file.osmiumsound.it: the same
+          # Every release is downloaded from file.osmiumsound.it: the same
           # nine files must answer there, the .raucb must take range requests
           # (rauc streams it), and the manifest a stable device reads must
           # point at that host — otherwise the fleet gets "up to date" forever
@@ -790,7 +808,11 @@ jobs:
           # Cloudflare answers 403 to GitHub's runners on the public host (this
           # is what failed v2.5.24 with every file in place). The public host is
           # still probed at the end, where only a 403 is forgiven.
-          case "$TAG" in *-*) exit 0 ;; esac
+          case "$TAG" in
+            *-alpha[0-9]*) CH=alpha ;;
+            *-*)           CH=dev ;;
+            *)             CH=prod ;;
+          esac
           BASE="https://file.osmiumsound.it/ota/$TAG"
           MISSING=""
           for want in \
@@ -811,7 +833,7 @@ jobs:
             echo "::error::hifi-image-$TAG.raucb does not serve range requests (Content-Range: ${RANGE:-none}): rauc cannot stream it"
             exit 1
           fi
-          aws s3api get-object --bucket "$R2_BUCKET" --key ota/latest-prod.json --endpoint-url "$R2_ENDPOINT" /tmp/mirror.json >/dev/null
+          aws s3api get-object --bucket "$R2_BUCKET" --key "ota/latest-$CH.json" --endpoint-url "$R2_ENDPOINT" /tmp/mirror.json >/dev/null
           python3 - "$TAG" "$BASE" <<'PY'
           import json, sys
           tag, base = sys.argv[1], sys.argv[2]
@@ -825,7 +847,7 @@ jobs:
           # The public host, best effort from here: 403 is Cloudflare turning
           # the runner away (devices on home connections are served); anything
           # else means the bucket is not published the way devices need.
-          for url in "$BASE/hifi-image-$TAG.raucb" https://file.osmiumsound.it/ota/latest-prod.json; do
+          for url in "$BASE/hifi-image-$TAG.raucb" "https://file.osmiumsound.it/ota/latest-$CH.json"; do
             CODE=$(curl -s -o /dev/null -I -w '%{http_code}' "$url" || true)
             case "$CODE" in
               200) : ;;
@@ -834,3 +856,14 @@ jobs:
             esac
           done
           echo "release $TAG is complete on file.osmiumsound.it"
+
+  # Only the newest release of each channel stays on file.osmiumsound.it, and
+  # only once this one is verified complete: a broken release must not take
+  # the previous, working one of its channel away.
+  prune-ota-r2:
+    needs: verify-release
+    if: ${{ needs.verify-release.result == 'success' && !contains(github.ref, 'companion') }}
+    uses: ./.github/workflows/prune-ota-r2.yml
+    with:
+      keep: ${{ github.ref_name }}
+    secrets: inherit
