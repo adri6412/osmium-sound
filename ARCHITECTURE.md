@@ -559,9 +559,10 @@ Wikipedia text is shown with its CC BY-SA attribution. One worker thread with
 a priority queue (a page on screen before the background prefetch) keeps
 MusicBrainz at one request per 1.1 s with back-off on 503; answers are cached
 in SQLite under `/var/lib/hifi-player/metadata/`. What was downloaded stays
-there until the owner clears it (`meta-keep`, on when missing); with keep off
-it is the old 60 days and a 100 MB cap that only drops the big re-downloadable
-lookups. A "not found" is re-checked after a week either way. The archive can
+there until the owner clears it — no expiry, no size cap, nothing evicted (the
+old 60 days and 100 MB are gone, and so is the eviction code: on a library of
+any size they only meant downloading the same thing twice). A "not found" is
+re-checked after a week: nothing was downloaded for it to lose. The archive can
 live on a disk of the owner's instead: `meta-cache-dir` holds the mount point
 they picked (`cache_locations()` offers every mount under `/data`, `/mnt`,
 `/media`, `/srv`, one per filesystem, a network share listed but refused — the
@@ -570,8 +571,8 @@ changing the setting carries `metadata.db` over rather than downloading
 everything again. The mount point, not the folder: a disk that is away leaves
 the service on `/var/lib/hifi-player/metadata` instead of writing onto a bare
 mount point, and plugging it back in is enough. Settings:
-`/etc/hifi-player/meta-online`, `meta-prefetch`, `meta-keep` (all on when
-missing) and `meta-cache-dir`. The CD ripper shares the same throttled client.
+`/etc/hifi-player/meta-online` and `meta-prefetch` (both on when missing) and
+`meta-cache-dir`. The CD ripper shares the same throttled client.
 Tests: `tests/test_metadata.py`.
 
 Manual corrections (the web admin's Library editor, `/library`) live in

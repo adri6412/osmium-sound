@@ -871,8 +871,6 @@
       "metaProgressValue": "{done} album su {total}",
       "metaClear": "Cancella le informazioni salvate",
       "metaCleared": "Informazioni salvate cancellate",
-      "metaKeep": "Conserva quello che hai scaricato",
-      "metaKeepHelp": "Resta finché non lo cancelli tu. Se lo spegni, dopo due mesi viene cercato di nuovo e oltre i 100 MB le informazioni più vecchie vengono tolte.",
       "metaWhere": "Dove tenerle",
       "metaWhereHelp": "Se cambi, quello che hai già scaricato ci viene spostato: non si riscarica niente.",
       "metaWhereAway": "Il disco che hai scelto non è collegato. Per ora le informazioni stanno su questo apparecchio; ricollegalo e ci tornano.",

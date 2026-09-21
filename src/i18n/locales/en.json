@@ -871,8 +871,6 @@
       "metaProgressValue": "{done} of {total} albums",
       "metaClear": "Clear saved information",
       "metaCleared": "Saved information cleared",
-      "metaKeep": "Keep what was downloaded",
-      "metaKeepHelp": "It stays until you clear it. With this off it is looked up again after two months, and the oldest is dropped once it passes 100 MB.",
       "metaWhere": "Where to keep it",
       "metaWhereHelp": "Change this and what has already been downloaded moves there — nothing is downloaded again.",
       "metaWhereAway": "The disk you chose is not connected. For now the information is kept on this device; plug the disk back in and it goes back to it.",

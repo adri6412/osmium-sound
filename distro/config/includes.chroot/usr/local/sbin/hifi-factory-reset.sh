@@ -160,7 +160,7 @@ META_DIR="$(cat /etc/hifi-player/meta-cache-dir 2>/dev/null || true)"
 case "$META_DIR" in
   /*) mountpoint -q "$META_DIR" && rm -rf "${META_DIR%/}/osmium-metadata" 2>/dev/null || true ;;
 esac
-rm -f /etc/hifi-player/meta-cache-dir /etc/hifi-player/meta-keep 2>/dev/null || true
+rm -f /etc/hifi-player/meta-cache-dir 2>/dev/null || true
 rm -f /system-update 2>/dev/null || true
 
 # Stored backup generations (Settings -> Backup e ripristino). These can carry
