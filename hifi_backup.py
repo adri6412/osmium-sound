@@ -171,6 +171,9 @@ CATEGORIES = {
         "secret": False,
         "entries": [
             ("file", "/etc/hifi-player/pointer-enabled"),
+            # Which key of a remote control does what, when the owner has
+            # changed one from the standard (native-ui-qt/src/remote.cpp).
+            ("file", "/etc/hifi-player/remote-keys.json"),
             ("file", "/etc/hifi-player/dsp.json"),
             ("file", "/etc/hifi-player/dsp-presets.json"),
             ("file", "/etc/hifi-player/ota-channel"),

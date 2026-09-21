@@ -6112,6 +6112,10 @@ _BT_MAC_RE = re.compile(r'^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$')
 # without it (a keyboard, a phone, a fitness band) can be paired but will
 # never play, so the UI is told which is which.
 _BT_SINK_UUID = '0000110b'
+# What a remote control advertises: HID over Bluetooth classic (0x1124) or
+# over BLE (0x1812, "HID over GATT"). A remote is the opposite case to a
+# speaker — it is an input device, and it plays nothing.
+_BT_HID_UUIDS = ('00001124', '00001812')
 _bt_apply_lock = threading.Lock()
 
 
@@ -6135,9 +6139,14 @@ def _bt_read_doc():
         doc.setdefault('enabled', False)
         if not isinstance(doc.get('speakers'), list):
             doc['speakers'] = []
+        # Bluetooth remotes live in the same document as the speakers: they
+        # share the radio, the pairing keys and the backup category, and a
+        # restore made before remotes existed must still parse.
+        if not isinstance(doc.get('remotes'), list):
+            doc['remotes'] = []
         return doc
     except Exception:
-        return {'enabled': False, 'speakers': []}
+        return {'enabled': False, 'speakers': [], 'remotes': []}
 
 
 def _bt_write_doc(doc):
@@ -6227,6 +6236,7 @@ def _bt_device_info(mac):
     info['trusted'] = 'Trusted: yes' in text
     info['connected'] = 'Connected: yes' in text
     info['audio'] = _BT_SINK_UUID in text.lower()
+    info['input'] = any(u in text.lower() for u in _BT_HID_UUIDS)
     return info
 
 
@@ -6531,6 +6541,229 @@ def bt_connect(mac, connect=True):
     _bt_kick()
     time.sleep(2)
     return _bt_ok('bluetooth.connected' if connect else 'bluetooth.disconnected')
+
+# ──────────────────────────────────────────────────────────────────
+#  Bluetooth remotes
+#
+#  A remote control is an input device, not an output: once paired and
+#  trusted it talks straight to the kernel's HID layer and shows up as
+#  a /dev/input node, which the on-screen interface reads by itself
+#  (native-ui-qt/src/remote.cpp). Nothing here has to run while it is
+#  being used — this is only the pairing, and forgetting.
+#
+#  🚨 Two things make this different from the speakers:
+#
+#  1. The radio. Bluetooth is off on a device whose owner never asked
+#     for it (the boot is quicker that way), and the supervisor is the
+#     one that turns it on. A remote has to be paired BEFORE there is
+#     a remote to keep the radio on for, so a scan opens a pairing
+#     window in the state file (`remote_pairing_until`) which the
+#     supervisor honours like any other reason to be up. Once one
+#     remote is saved, the radio stays up for it.
+#
+#  2. Never paging them. A speaker that is off gets connection
+#     attempts; a remote does NOT. It reconnects by itself the moment
+#     a key is pressed, and paging one that is asleep would take the
+#     radio away from a speaker that is playing (see hifi-bt-out.py).
+# ──────────────────────────────────────────────────────────────────
+BT_PAIRING_WINDOW = 180          # seconds the radio stays up for pairing
+
+
+def _bt_remotes_available():
+    """Pairing a remote needs BlueZ and the supervisor — and nothing else.
+    The speakers' extra requirements (BlueALSA, the ALSA plugin) are about
+    playing audio, which a remote never does."""
+    return shutil.which('bluetoothctl') is not None and _unit_exists(BT_SUPERVISOR)
+
+
+def _bt_remotes_supported():
+    """True when the supervisor on this device knows about remotes.
+
+    The api_server half of this feature travels in an app update, the
+    supervisor half in the image: on a device where the image is older, a
+    pairing window would be ignored and the radio torn down mid-pairing. The
+    new supervisor always writes a `remotes` key in its snapshot, so its
+    presence is the honest answer to "can this device do it yet"."""
+    return 'remotes' in _bt_snapshot()
+
+
+def _bt_open_pairing_window(seconds=BT_PAIRING_WINDOW):
+    """Ask the supervisor for the radio, and wait until it is actually up."""
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        doc['remote_pairing_until'] = int(time.time()) + int(seconds)
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt remotes: could not persist the pairing window")
+            return False
+    _bt_kick()
+    for _ in range(20):
+        if _bt_snapshot().get('adapter'):
+            return True
+        time.sleep(1)
+    return False
+
+
+def get_bt_remotes():
+    """Status for the remote control screen: the remotes this device is
+    paired with, and whatever else the last scan saw."""
+    try:
+        doc = _bt_read_doc()
+        snap = _bt_snapshot()
+        live = {str(r.get('mac', '')).upper(): r for r in (snap.get('remotes') or [])}
+        remotes = []
+        for rm in doc.get('remotes') or []:
+            mac = str(rm.get('mac', '')).upper()
+            if not _BT_MAC_RE.match(mac):
+                continue
+            remotes.append({
+                'mac': mac,
+                'name': rm.get('name') or mac,
+                'connected': bool(live.get(mac, {}).get('connected')),
+            })
+
+        # In range but not paired yet. Speakers are left out: they have a
+        # screen of their own, and pairing one here would set up nothing.
+        known = {r['mac'] for r in remotes}
+        known |= {str(s.get('mac', '')).upper() for s in (doc.get('speakers') or [])}
+        found = []
+        if snap.get('adapter'):
+            for dev in _bt_known_devices():
+                if dev['mac'] not in known and not dev.get('audio'):
+                    found.append(dev)
+
+        return {'available': _bt_remotes_available(),
+                'supported': _bt_remotes_supported(),
+                'adapter': bool(snap.get('adapter')),
+                'remotes': remotes, 'found': found}
+    except Exception:
+        log.exception("get_bt_remotes failed")
+        return {'available': False, 'supported': False, 'adapter': False,
+                'remotes': [], 'found': [],
+                'error': _t('bluetooth.statusUnavailable', _lang())}
+
+
+def _bt_remote_ok(code, **extra):
+    out = {'success': True, 'code': code, 'message': _t(code, _lang())}
+    out.update(extra)
+    out.update(get_bt_remotes())
+    return out
+
+
+def _bt_remote_fail(code, **extra):
+    out = {'success': False, 'code': code, 'message': _t(code, _lang())}
+    out.update(extra)
+    out.update(get_bt_remotes())
+    return out
+
+
+def bt_remotes_scan(seconds=12):
+    """Look for a remote in pairing mode. Blocking, like the speakers' scan:
+    the screen shows a spinner and the answer is the list."""
+    if not _bt_remotes_available():
+        return _bt_remote_fail('bluetooth.unavailable')
+    if not _bt_remotes_supported():
+        return _bt_remote_fail('bluetooth.remoteNeedsUpdate')
+    try:
+        seconds = max(3, min(int(seconds or 12), 30))
+    except (TypeError, ValueError):
+        seconds = 12
+    if not _bt_open_pairing_window():
+        return _bt_remote_fail('bluetooth.noAdapter')
+    try:
+        subprocess.run(['bluetoothctl', '--timeout', str(seconds), 'scan', 'on'],
+                       capture_output=True, text=True, timeout=seconds + 15)
+    except Exception:
+        log.exception("bt_remotes_scan failed")
+        return _bt_remote_fail('bluetooth.scanFailed')
+    return _bt_remote_ok('bluetooth.scanDone')
+
+
+def bt_remote_add(mac):
+    """Pair and trust a remote, and remember it.
+
+    Trusting is what makes it work afterwards: BlueZ lets a trusted device
+    reconnect by itself, without anyone to approve it — which is exactly what
+    a remote does when a key is pressed after a night in a drawer."""
+    if not _bt_remotes_available():
+        return _bt_remote_fail('bluetooth.unavailable')
+    if not _bt_remotes_supported():
+        return _bt_remote_fail('bluetooth.remoteNeedsUpdate')
+    if not mac or not _BT_MAC_RE.match(mac):
+        return _bt_remote_fail('bluetooth.invalidAddress')
+    mac = mac.upper()
+    if not _bt_open_pairing_window():
+        return _bt_remote_fail('bluetooth.noAdapter')
+
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        if any(str(r.get('mac', '')).upper() == mac for r in doc['remotes']):
+            return _bt_remote_fail('bluetooth.remoteAlreadyAdded')
+
+        info = _bt_device_info(mac)
+        if not info['paired']:
+            try:
+                # Discovery has to stop before pairing: BlueZ will not pair
+                # while the adapter is still hopping around looking.
+                subprocess.run(['bluetoothctl', 'scan', 'off'],
+                               capture_output=True, text=True, timeout=10)
+                r = subprocess.run(['bluetoothctl', 'pair', mac],
+                                   capture_output=True, text=True, timeout=60)
+            except Exception:
+                log.exception("bt_remote_add: pair failed")
+                return _bt_remote_fail('bluetooth.remotePairFailed')
+            info = _bt_device_info(mac)
+            if not info['paired']:
+                log.error("bt remote pair %s failed: %s", mac,
+                          (r.stdout or r.stderr or '').strip()[-200:])
+                return _bt_remote_fail('bluetooth.remotePairFailed')
+
+        subprocess.run(['bluetoothctl', 'trust', mac], capture_output=True, timeout=15)
+        # A remote does connect on request the first time: it is awake right
+        # now, and connecting is what makes the kernel create its input node
+        # without waiting for the first key press.
+        try:
+            subprocess.run(['bluetoothctl', 'connect', mac], capture_output=True, timeout=30)
+        except Exception:
+            log.exception("bt_remote_add: first connect failed")
+
+        doc['remotes'].append({'mac': mac, 'name': _bt_clean_name(info['name'] or mac, mac)})
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_remote_add: could not persist the remote")
+            return _bt_remote_fail('bluetooth.opFailed')
+    _bt_kick()
+    time.sleep(2)
+    return _bt_remote_ok('bluetooth.remoteAdded')
+
+
+def bt_remote_remove(mac):
+    """Forget a remote: BlueZ drops the pairing and the radio is free to go
+    back down if nothing else needs it."""
+    if not mac or not _BT_MAC_RE.match(mac):
+        return _bt_remote_fail('bluetooth.invalidAddress')
+    mac = mac.upper()
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        before = len(doc['remotes'])
+        doc['remotes'] = [r for r in doc['remotes']
+                          if str(r.get('mac', '')).upper() != mac]
+        if len(doc['remotes']) == before:
+            return _bt_remote_fail('bluetooth.remoteNotFound')
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_remote_remove: could not persist")
+            return _bt_remote_fail('bluetooth.opFailed')
+    try:
+        subprocess.run(['bluetoothctl', 'remove', mac], capture_output=True, timeout=20)
+    except Exception:
+        log.exception("bt_remote_remove: unpair failed")
+    _bt_kick()
+    return _bt_remote_ok('bluetooth.remoteForgotten')
+
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
@@ -8780,6 +9013,29 @@ def api_bt_update():
 def api_bt_connect():
     data = request.get_json(silent=True) or {}
     return jsonify(bt_connect(data.get('mac'), bool(data.get('connect', True))))
+
+# ── telecomandi Bluetooth ────────────────────────────────────────────
+# Solo accoppiare e dimenticare: quando il telecomando e' accoppiato, i
+# tasti li legge da se' l'interfaccia dallo /dev/input che il nucleo
+# crea (native-ui-qt/src/remote.cpp), senza passare da qui.
+@app.route('/bt_remotes', methods=['GET'])
+def api_bt_remotes():
+    return jsonify(get_bt_remotes())
+
+@app.route('/bt_remotes/scan', methods=['POST'])
+def api_bt_remotes_scan():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_remotes_scan(data.get('seconds', 12)))
+
+@app.route('/bt_remotes/add', methods=['POST'])
+def api_bt_remotes_add():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_remote_add(data.get('mac')))
+
+@app.route('/bt_remotes/remove', methods=['POST'])
+def api_bt_remotes_remove():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_remote_remove(data.get('mac')))
 
 @app.route('/show_global_keyboard', methods=['POST'])
 def api_show_global_keyboard():

@@ -289,6 +289,8 @@ jobs:
           python3 tests/test_tags.py
           echo "== bluetooth speakers (python) =="
           python3 tests/test_bt_speakers.py
+          echo "== bluetooth remote controls (python) =="
+          python3 tests/test_bt_remotes.py
           echo "== web admin: who gets a CSRF token (python) =="
           python3 tests/test_csrf.py
 

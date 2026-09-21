@@ -30,6 +30,7 @@ if hifi_suite_is trixie; then
     for p in \
         qt6-qpa-plugins \
         kbd \
+        libqt6dbus6 \
         qml6-module-qtquick \
         qml6-module-qtquick-window \
         qml6-module-qtquick-effects \

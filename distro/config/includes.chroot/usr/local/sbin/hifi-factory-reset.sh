@@ -100,7 +100,7 @@ for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bl
          github-support-pat lyrion-channel lms-skin \
          ui-language ui-refresh nowplaying-view nowplaying-autoexpand-seconds \
          nowplaying-animation ota-autocheck player-enabled vu-meter-enabled \
-         meta-online meta-prefetch; do
+         meta-online meta-prefetch remote-keys.json; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).

@@ -146,7 +146,8 @@ class StateFileTests(BtTestCase):
 
     def test_missing_file_means_off(self):
         self.assertFalse(api_server._read_bt_state())
-        self.assertEqual(api_server._bt_read_doc(), {'enabled': False, 'speakers': []})
+        self.assertEqual(api_server._bt_read_doc(),
+                         {'enabled': False, 'speakers': [], 'remotes': []})
 
     def test_a_sink_era_state_file_still_reads(self):
         """Devices that used the old "appliance as a Bluetooth speaker" build
@@ -154,6 +155,8 @@ class StateFileTests(BtTestCase):
         self._write_state({'enabled': True})
         self.assertTrue(api_server._read_bt_state())
         self.assertEqual(api_server._bt_read_doc()['speakers'], [])
+        # nor does one written before remotes existed
+        self.assertEqual(api_server._bt_read_doc()['remotes'], [])
 
     def test_rubbish_in_the_file_is_off_rather_than_an_exception(self):
         with open(api_server.BT_STATE_FILE, 'w') as f:

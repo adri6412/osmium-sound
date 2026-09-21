@@ -246,6 +246,9 @@ pciutils
 # Non c'era, e senza di lui l'interfaccia non partiva proprio (schermo nero).
 kbd
 qt6-qpa-plugins
+# 🚨 Il ponte per i telecomandi Bluetooth (btghid.cpp) parla con BlueZ via
+# D-Bus: senza questa libreria l'interfaccia non si avvia proprio.
+libqt6dbus6
 # 🚨 WebP, TIFF e compagnia: senza questi Qt non sa decodificare quelle
 # copertine e in griglia restavano nere, mentre Chromium le leggeva da sé.
 qt6-image-formats-plugins

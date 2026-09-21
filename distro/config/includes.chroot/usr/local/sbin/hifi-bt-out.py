@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Osmium Sound — Bluetooth speaker supervisor.
+"""Osmium Sound — Bluetooth supervisor (speakers and remotes).
 
 The only Bluetooth unit that is enabled at boot. It reads the owner's choice
 from /etc/hifi-player/bluetooth.json and makes the rest of the stack match:
@@ -34,8 +34,22 @@ and "could not ask" — and nothing is ever torn down on the third. The passes
 are ordered to match: every speaker's state is read first, while the radio is
 quiet, and only then is at most ONE connection attempt made.
 
+🚨 The radio is up for THREE reasons, not one: the owner turned Bluetooth
+output on, a Bluetooth remote is paired, or a pairing window is open (a scan
+from the remote control screen, which has to work before there is any remote
+to keep the radio up for). Without the last one the supervisor would tear
+BlueZ down in the middle of the very scan that is looking for a remote.
+
+🚨 A remote is NEVER paged. A speaker that is switched off gets connection
+attempts with a backoff; a remote does not, and must not: it reconnects by
+itself the moment a key is pressed, and paging one that is asleep would take
+the radio away from a speaker that is playing perfectly well.
+
 A snapshot of what it sees goes to /run/hifi-bt/output.json for api_server to
-serve without having to run bluetoothctl on every status poll.
+serve without having to run bluetoothctl on every status poll. 🚨 That
+snapshot always carries a "remotes" key, even when there are none: api_server
+reads its presence as "this device's system half knows about remotes", and
+refuses to start a pairing it could not keep alive otherwise.
 """
 import json
 import os
@@ -60,6 +74,7 @@ RUNDIR = "/run/hifi-bt"
 STATUS_FILE = os.path.join(RUNDIR, "output.json")
 
 BLUEZ_UNIT = "bluetooth.service"
+BLUEZ_CONF = "/etc/bluetooth/main.conf"
 AGENT_UNIT = "hifi-bt-agent.service"
 BLUEALSA_UNIT = "hifi-bluealsa.service"
 PLAYER_UNIT = "hifi-bt-player@{}.service"
@@ -158,6 +173,27 @@ def instance(mac):
     return mac.replace(":", "-").lower()
 
 
+def remotes_of(state):
+    """The paired remotes in the state file, cleaned up."""
+    out = []
+    for rm in state.get("remotes") or []:
+        if not isinstance(rm, dict):
+            continue
+        mac = str(rm.get("mac") or "").upper()
+        if not re.match(r"^[0-9A-F]{2}(:[0-9A-F]{2}){5}$", mac):
+            continue
+        out.append({"mac": mac, "name": str(rm.get("name") or "")})
+    return out
+
+
+def pairing_open(state):
+    """True while the remote control screen has asked for the radio."""
+    try:
+        return float(state.get("remote_pairing_until") or 0) > time.time()
+    except (TypeError, ValueError):
+        return False
+
+
 def speakers_of(state):
     out_ = []
     for s in (state.get("speakers") or []):
@@ -240,6 +276,7 @@ class Supervisor:
         self.quiet_since = {}     # mac -> when the answers stopped coming
         self.state_cache = None   # the last state file that parsed
         self.stamps = {}          # unit -> restart fingerprint
+        self.was_wanted = None    # was the radio up last pass, for one log line
 
     # ── The owner's choice ───────────────────────────────────────────
     def read_state(self):
@@ -283,13 +320,60 @@ class Supervisor:
         self.stamps.clear()
 
     # ── Bluetooth on ─────────────────────────────────────────────────
-    def bring_up(self):
-        """Adapter powered and BlueALSA running. False if the box has no
-        Bluetooth hardware at all, which is not an error — plenty of these
-        appliances are wired-only."""
+    def ensure_bluez_config(self):
+        """🚨 I telecomandi Bluetooth: perche' il ponte dell'interfaccia
+        (native-ui-qt/src/btghid.cpp) possa leggere i tasti, BlueZ deve
+        esportare su D-Bus anche le caratteristiche che i suoi plugin interni
+        rivendicano — quelle HID lo sono. Di serie le espone in sola lettura e
+        la sottoscrizione alle notifiche viene rifiutata in silenzio, quindi il
+        telecomando risulta collegato e non fa niente.
+
+        Serve a TUTTI i telecomandi BLE che il nucleo rifiuta, non solo a un
+        modello: il difetto e' nella mappa dei tasti letta a meta' (vedi
+        btghid.cpp). Ritorna True se il file e' stato cambiato."""
+        want = "ExportClaimedServices = read-write"
+        try:
+            with open(BLUEZ_CONF) as f:
+                text = f.read()
+        except Exception:
+            return False
+        if re.search(r"^\s*ExportClaimedServices\s*=\s*read-write\s*$", text, re.M):
+            return False
+        if re.search(r"^\s*ExportClaimedServices\s*=", text, re.M):
+            new = re.sub(r"^\s*ExportClaimedServices\s*=.*$", want, text, flags=re.M)
+        elif re.search(r"^\s*#\s*ExportClaimedServices\s*=", text, re.M):
+            new = re.sub(r"^\s*#\s*ExportClaimedServices\s*=.*$", want, text, count=1, flags=re.M)
+        else:
+            new = text.rstrip("\n") + "\n\n[GATT]\n" + want + "\n"
+        try:
+            tmp = BLUEZ_CONF + ".tmp"
+            with open(tmp, "w") as f:
+                f.write(new)
+            os.replace(tmp, BLUEZ_CONF)
+        except Exception:
+            log(f"{BLUEZ_CONF} non si scrive: i telecomandi Bluetooth potrebbero restare muti")
+            return False
+        log("BlueZ: esportazione delle caratteristiche rivendicate attivata (telecomandi)")
+        return True
+
+    def bring_up(self, audio=True):
+        """Adapter powered, and BlueALSA running when there is audio to play.
+        False if the box has no Bluetooth hardware at all, which is not an
+        error — plenty of these appliances are wired-only.
+
+        🚨 `audio` is false when the radio is up only for a remote: BlueALSA
+        in that case would register an A2DP endpoint nobody uses, and its
+        restarts would drop links for no reason."""
         for unit in SINK_UNITS:
             if unit_active(unit):
                 stop_unit(unit)
+        # La configurazione prima del demone: cambiarla dopo vorrebbe dire
+        # riavviarlo, e un riavvio di bluetoothd porta giu' ogni cassa collegata.
+        changed = self.ensure_bluez_config()
+        if changed and unit_active(BLUEZ_UNIT):
+            log("BlueZ riavviato per applicare la configurazione nuova")
+            run(["systemctl", "restart", BLUEZ_UNIT], 20)
+            time.sleep(1)
         if not unit_active(BLUEZ_UNIT):
             # The old boot-speed migration masks bluetooth.service and
             # blacklists btusb on legacy (pre-image) devices. Undo just enough
@@ -303,8 +387,13 @@ class Supervisor:
             return False
         if not adapter_powered():
             run(["bluetoothctl", "power", "on"], 15)
+        # The agent is up in both cases: it is what lets a pairing go through
+        # on a box with no keypad, remote or speaker alike.
         start_unit(AGENT_UNIT)
-        start_unit(BLUEALSA_UNIT)
+        if audio:
+            start_unit(BLUEALSA_UNIT)
+        elif unit_active(BLUEALSA_UNIT):
+            stop_unit(BLUEALSA_UNIT)
         return True
 
     def watch_restarts(self):
@@ -425,19 +514,33 @@ class Supervisor:
         state = self.read_state()
         enabled = bool(state.get("enabled"))
         speakers = speakers_of(state)
+        remotes = remotes_of(state)
+        pairing = pairing_open(state)
+        # tre ragioni per tenere acceso il radio, non una
+        wanted = enabled or bool(remotes) or pairing
 
         if enabled != self.was_enabled:
             log(f"Bluetooth output is now {'on' if enabled else 'off'}")
             self.was_enabled = enabled
+        if wanted != self.was_wanted:
+            why = ("speakers" if enabled else "") + ("+remotes" if remotes else "") + ("+pairing" if pairing else "")
+            log(f"Bluetooth radio {'up' if wanted else 'down'} ({why.strip('+') or 'nothing asked for it'})")
+            self.was_wanted = wanted
 
-        if not enabled:
+        if not wanted:
             self.tear_down()
             write_status({"enabled": False, "adapter": False, "bluealsa": False,
-                          "speakers": [], "updated": time.time()})
+                          "speakers": [], "remotes": [], "updated": time.time()})
             return
 
-        up = self.bring_up()
+        up = self.bring_up(audio=enabled)
         self.watch_restarts()
+        # 🚨 Bluetooth output off but the radio up for a remote: the speakers
+        # in the file are not "speakers to run" — their players must stay
+        # stopped, or switching the output off would not have switched
+        # anything off.
+        if not enabled:
+            speakers = []
         self.prune([s["mac"] for s in speakers])
 
         # Pass one: read every speaker's state while the radio is quiet.
@@ -460,6 +563,14 @@ class Supervisor:
                 states[sp["mac"]] = self.try_connect(sp)
                 self.apply_player(sp, states[sp["mac"]])
 
+        # I telecomandi: si guarda soltanto se sono collegati. Nessun tentativo
+        # di collegamento, mai — vedi l'intestazione.
+        remote_rows = []
+        for rm in remotes:
+            seen = self.observe(rm["mac"]) if up else self.seen.get(rm["mac"])
+            remote_rows.append({"mac": rm["mac"], "name": rm.get("name") or "",
+                                "connected": bool(seen), "stale": seen is None})
+
         rows = []
         for sp in speakers:
             mac = sp["mac"]
@@ -478,9 +589,10 @@ class Supervisor:
                 # support log can tell a stale row from a fresh one.
                 "stale": connected is None or mac in self.quiet_since,
             })
-        write_status({"enabled": True, "adapter": up,
+        write_status({"enabled": enabled, "adapter": up,
                       "bluealsa": unit_active(BLUEALSA_UNIT),
-                      "speakers": rows, "updated": time.time()})
+                      "speakers": rows, "remotes": remote_rows,
+                      "pairing": pairing, "updated": time.time()})
 
 
 def main():

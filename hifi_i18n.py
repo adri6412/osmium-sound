@@ -299,6 +299,21 @@ MESSAGES = {
     'bluetooth.connected': {'en': 'Speaker connected', 'it': 'Altoparlante collegato'},
     'bluetooth.disconnected': {'en': 'Speaker disconnected', 'it': 'Altoparlante scollegato'},
     'bluetooth.saved': {'en': 'Saved', 'it': 'Salvato'},
+    # telecomandi Bluetooth: gli stessi passi degli altoparlanti, ma i messaggi
+    # parlano di un telecomando (chi accoppia un telecomando non vuole leggere
+    # "altoparlante non trovato")
+    'bluetooth.remoteNeedsUpdate': {
+        'en': 'This device cannot pair a Bluetooth remote yet: install the latest update',
+        'it': 'Questo apparecchio non può ancora accoppiare un telecomando Bluetooth: installa l\'ultimo aggiornamento'},
+    'bluetooth.remoteNotFound': {'en': 'Remote not found', 'it': 'Telecomando non trovato'},
+    'bluetooth.remoteAlreadyAdded': {'en': 'This remote is already in the list',
+                                     'it': 'Questo telecomando è già nell\'elenco'},
+    'bluetooth.remotePairFailed': {
+        'en': 'Could not pair with the remote: put it in pairing mode and try again',
+        'it': 'Non sono riuscito ad accoppiare il telecomando: mettilo in accoppiamento e riprova'},
+    'bluetooth.remoteAdded': {'en': 'Remote added: press a key to use it',
+                              'it': 'Telecomando aggiunto: premi un tasto per usarlo'},
+    'bluetooth.remoteForgotten': {'en': 'Remote forgotten', 'it': 'Telecomando dimenticato'},
 
     # ── OTA channel ──────────────────────────────────────────────────
     'ota.invalidChannel': {'en': 'Invalid channel', 'it': 'Canale non valido'},
