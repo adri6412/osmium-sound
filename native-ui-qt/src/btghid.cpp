@@ -36,6 +36,8 @@ const QString UUID_REPORT_REF = QStringLiteral("00002908-0000-1000-8000-00805f9b
 // finisce in un paio di secondi, e intervenire prima vuol dire creare un
 // doppione del dispositivo che stava per funzionare.
 const qint64 GRACE_MS = 6000;
+// quanto si aspetta prima di riprovare un ponte che non e' riuscito
+const qint64 RETRY_MS = 30000;
 // 🚨 Quanti rapporti si leggono per ogni risveglio del descrittore. Un
 // telecomando che parla in continuazione (i sensori di movimento di certi
 // telecomandi Android) teneva il ciclo dentro `read` e l'interfaccia si
@@ -81,12 +83,17 @@ void setField(__u8 *dst, size_t len, const QString &s) {
 BtGattHid::BtGattHid(QObject *parent) : QObject(parent) {
     qDBusRegisterMetaType<InterfaceMap>();
     qDBusRegisterMetaType<ManagedObjects>();
-    connect(&m_poll, &QTimer::timeout, this, &BtGattHid::poll);
-    m_poll.setInterval(4000);
+}
+
+void BtGattHid::begin() {
+    if (m_poll) return;
+    m_poll = new QTimer(this);
+    connect(m_poll, &QTimer::timeout, this, &BtGattHid::poll);
+    m_poll->setInterval(4000);
     // 🚨 Il giro costa una chiamata a BlueZ ogni quattro secondi e basta: si
     // guarda solo l'elenco degli oggetti, nessuna radio, nessuna paginazione.
     // Senza Bluetooth in funzione la chiamata fallisce e non si fa nulla.
-    m_poll.start();
+    m_poll->start();
     poll();
 }
 
@@ -160,7 +167,7 @@ void BtGattHid::poll() {
             }
             continue;
         }
-        if (m_failed.contains(path)) continue;
+        if (QDateTime::currentMSecsSinceEpoch() - m_failed.value(path, -RETRY_MS) < RETRY_MS) continue;
         if (kernelHandles(mac)) continue;         // funziona da se': non si tocca
         // gli si lascia il tempo di farcela da solo
         if (QDateTime::currentMSecsSinceEpoch() - m_seen.value(path) < GRACE_MS) continue;
@@ -182,7 +189,8 @@ void BtGattHid::poll() {
     // chi si e' scollegato
     const QStringList had = m_bridges.keys();
     for (const QString &p : had) if (!alive.contains(p)) stop(p);
-    for (const QString &p : m_failed) if (!alive.contains(p)) m_failed.removeAll(p);
+    const QStringList tried = m_failed.keys();
+    for (const QString &p : tried) if (!alive.contains(p)) m_failed.remove(p);
     const QStringList seen = m_seen.keys();
     for (const QString &p : seen) if (!alive.contains(p)) m_seen.remove(p);
 }
@@ -218,17 +226,22 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
         if (uuid == UUID_REPORT_MAP) mapPath = it.key();
         else if (uuid == UUID_REPORT) reportChars.append({ it.key(), m });
     }
-    if (mapPath.isEmpty() || reportChars.isEmpty()) { m_failed << devPath; return; }
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (mapPath.isEmpty() || reportChars.isEmpty()) { m_failed.insert(devPath, now); return; }
 
     const QByteArray rd = readCharacteristic(mapPath);
     if (rd.size() > int(HID_MAX_DESCRIPTOR_SIZE)) {
         qWarning("btghid: %s: mappa dei tasti troppo lunga (%lld byte)", qPrintable(name), (long long)rd.size());
-        m_failed << devPath;
+        m_failed.insert(devPath, now);
         return;
     }
     if (rd.isEmpty() || !balanced(rd)) {
-        qWarning("btghid: %s: mappa dei tasti illeggibile (%lld byte)", qPrintable(name), (long long)rd.size());
-        m_failed << devPath;
+        // 🚨 Solo la prima volta nel giornale: si riprova ogni mezzo minuto, e
+        // una riga per tentativo riempirebbe il registro di un apparecchio con
+        // un telecomando che non ce la fa.
+        if (!m_failed.contains(devPath))
+            qWarning("btghid: %s: mappa dei tasti illeggibile (%lld byte), riprovo", qPrintable(name), (long long)rd.size());
+        m_failed.insert(devPath, now);
         return;
     }
     qInfo("btghid: %s (%s): mappa dei tasti di %lld byte, letta a blocchi",
@@ -256,13 +269,13 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
         rep.id = id;
         b.reports.append(rep);
     }
-    if (b.reports.isEmpty()) { m_failed << devPath; return; }
+    if (b.reports.isEmpty()) { m_failed.insert(devPath, now); return; }
 
     // 3. il dispositivo HID nostro
     b.uhid = ::open("/dev/uhid", O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (b.uhid < 0) {
         qWarning("btghid: /dev/uhid non si apre (%s)", strerror(errno));
-        m_failed << devPath;
+        m_failed.insert(devPath, now);
         return;
     }
     quint32 vid = 0, pid = 0;
@@ -287,7 +300,7 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
     ev.u.create2.version = 0;
     ev.u.create2.country = 0;
     memcpy(ev.u.create2.rd_data, rd.constData(), size_t(rd.size()));
-    if (!uhidSend(b.uhid, ev)) { ::close(b.uhid); m_failed << devPath; return; }
+    if (!uhidSend(b.uhid, ev)) { ::close(b.uhid); m_failed.insert(devPath, now); return; }
     b.created = true;
     b.uhidNotifier = new QSocketNotifier(b.uhid, QSocketNotifier::Read, this);
     connect(b.uhidNotifier, &QSocketNotifier::activated, this, [this, devPath]() { onUhidEvent(devPath); });
@@ -312,6 +325,7 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
     }
     int live = 0;
     for (const Report &r : bb.reports) if (r.fd >= 0) live++;
+    m_failed.remove(devPath);
     qInfo("btghid: %s: ponte attivo, %d rapporti in ascolto su %lld",
           qPrintable(name), live, (long long)bb.reports.size());
     emit bridgedChanged();

@@ -15,6 +15,13 @@
 // /dev/input normale, e tutto il resto dell'interfaccia (remote.cpp, la
 // navigazione, la mappatura dei tasti) non sa nemmeno che e' successo.
 //
+// 🚨 Tutto questo gira in un THREAD SUO. Le chiamate a BlueZ sono bloccanti e
+// con un telecomando chiacchierone ci mettono: su un apparecchio in campo sono
+// passati 28 secondi fra "mappa letta" e "ponte attivo", ventotto secondi di
+// schermo fermo. Qui dentro non si tocca la scena: si parla con BlueZ, si
+// scrive su /dev/uhid, e quando il ponte cambia stato si avvisa il resto con
+// un segnale (che Qt consegna al thread dell'interfaccia).
+//
 // 🚨 Si interviene SOLO sui dispositivi che il nucleo ha rifiutato: se il
 // telecomando funziona da se', qui non si tocca niente. E siccome "ce l'ha
 // fatta" si vede solo dopo che BlueZ ha finito il suo giro, si aspetta qualche
@@ -46,7 +53,12 @@ public:
     // tratta come telecomandi veri (li ha creati il nucleo, ma sappiamo che
     // dietro c'e' il nostro ponte).
     QStringList bridgedNames() const;
-    Q_INVOKABLE void rescan() { poll(); }
+
+public slots:
+    // Si chiama quando il thread parte: timer e primo giro devono nascere
+    // dentro il thread che li fara' girare, non in quello che ci ha costruiti.
+    void begin();
+    void rescan() { poll(); }
 
 signals:
     void bridgedChanged();
@@ -77,7 +89,11 @@ private:
     void onUhidEvent(const QString &devPath);
 
     QHash<QString, Bridge> m_bridges;     // devPath -> ponte
-    QStringList m_failed;                 // dispositivi su cui abbiamo gia' rinunciato
+    // 🚨 Non una rinuncia ma un rinvio: un tentativo fallito (il telecomando si
+    // e' appena collegato e BlueZ non ha ancora tutto) non deve lasciare
+    // l'apparecchio senza telecomando fino allo scollegamento. devPath ->
+    // quando abbiamo provato l'ultima volta.
+    QHash<QString, qint64> m_failed;
     QHash<QString, qint64> m_seen;        // devPath -> da quando e' collegato (ms)
-    QTimer m_poll;
+    QTimer *m_poll = nullptr;             // nasce in begin(), nel thread giusto
 };

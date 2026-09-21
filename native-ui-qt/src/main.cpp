@@ -35,6 +35,7 @@
 #include <QQuickItem>
 #include <QQuickView>
 #include <QScreen>
+#include <QThread>
 #include <QTimer>
 #include <QWheelEvent>
 #include <QWindow>
@@ -285,8 +286,15 @@ int main(int argc, char *argv[]) {
     // Il ponte per i telecomandi Bluetooth che il nucleo rifiuta (btghid.h):
     // quando ne rimette in piedi uno, nasce un /dev/input nuovo e Remote deve
     // andarselo a prendere subito.
+    // 🚨 In un thread suo: le chiamate a BlueZ bloccano, e bloccando il thread
+    // dell'interfaccia lo schermo resta fermo (misurato: 28 secondi con un
+    // telecomando Xiaomi). Il segnale torna al thread dell'interfaccia da solo.
     BtGattHid btghid;
+    QThread btThread;
+    btghid.moveToThread(&btThread);
+    QObject::connect(&btThread, &QThread::started, &btghid, &BtGattHid::begin);
     QObject::connect(&btghid, &BtGattHid::bridgedChanged, &remote, &Remote::rescan);
+    btThread.start();
     QObject::connect(&remote, &Remote::action, &sys, [&sys]() { sys.noteInput(); });
     VuMeter vu;
     LibraryModel library;
@@ -360,5 +368,8 @@ int main(int argc, char *argv[]) {
     bool ok = false;
     int secs = qEnvironmentVariableIntValue("HIFI_QT_SECONDS", &ok);
     if (ok && secs > 0) QTimer::singleShot(secs * 1000, &app, &QGuiApplication::quit);
-    return app.exec();
+    const int rc = app.exec();
+    btThread.quit();
+    btThread.wait(3000);
+    return rc;
 }
