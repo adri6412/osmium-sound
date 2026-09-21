@@ -24,10 +24,10 @@ Shape of the thing:
     device follows (squeezelite's -s), or HIFI_META_LMS_URL.
   * Cache — SQLite in /var/lib/hifi-player/metadata (HIFI_META_CACHE_DIR),
     or in `osmium-metadata` on a disk the owner picked (meta-cache-dir).
-    What was downloaded stays until the owner clears it ("keep", the default);
-    with keep off it goes back to the old 60 days and a size cap with
-    least-recently-used eviction. A "not found" is re-checked after a week
-    either way: nothing was downloaded to lose.
+    What was downloaded stays until the owner clears it: nothing expires,
+    nothing is evicted. A "not found" is re-checked after a week — nothing
+    was downloaded for it to lose, and MusicBrainz may know the album by
+    then.
   * Edits — what the owner decided by hand (the edition or artist picked,
     corrections to credits, members and texts), one JSON file per album
     fingerprint or artist in /var/lib/hifi-player/metadata-edits
@@ -96,11 +96,9 @@ WIKI_SPACING = 0.5
 OFFLINE_HOLD = 30.0       # after a network failure, fail fast for this long
 MAX_BODY = 8 * 1024 * 1024
 
-DATA_TTL = 60 * 86400          # only with "keep" off: otherwise data never goes stale
-NEGATIVE_TTL = 7 * 86400
+NEGATIVE_TTL = 7 * 86400  # how long a "not found" stands before it is asked again
 FAILURE_HOLD = 60.0       # a failed job is reported (offline/error) this long
 BUSY_RETRY = 10.0         # a job that found MusicBrainz busy is tried again after this
-CACHE_MAX_BYTES = 100 * 1024 * 1024
 
 PRIO_INTERACTIVE = 0
 PRIO_BACKGROUND = 5
@@ -1807,10 +1805,8 @@ class Cache:
         album_id INTEGER PRIMARY KEY, title TEXT, artist TEXT, fingerprint TEXT, updated REAL);
     """
 
-    def __init__(self, directory, max_bytes=CACHE_MAX_BYTES, clock=None):
-        # max_bytes None or 0: nothing is ever evicted (the "keep" setting).
+    def __init__(self, directory, clock=None):
         self.directory = directory
-        self.max_bytes = max_bytes
         self._clock = clock or time.time
         self._lock = threading.RLock()
         os.makedirs(directory, mode=0o755, exist_ok=True)
@@ -1821,7 +1817,6 @@ class Cache:
             self._db.execute('PRAGMA journal_mode=WAL')
             self._db.execute('PRAGMA synchronous=NORMAL')
             self._db.executescript(self.SCHEMA)
-        self._writes = 0
 
     def close(self):
         with self._lock:
@@ -1851,41 +1846,10 @@ class Cache:
             self._db.execute('INSERT OR REPLACE INTO entries(key, value, fetched, accessed, negative, size) '
                              'VALUES (?,?,?,?,?,?)', (key, text, now, now, 1 if negative else 0,
                                                      len(text.encode('utf-8'))))
-            self._writes += 1
-            if self.max_bytes and self._writes % 20 == 0:
-                self.evict()
 
     def delete(self, key):
         with self._lock:
             self._db.execute('DELETE FROM entries WHERE key=?', (key,))
-
-    # What eviction may drop: the big, re-downloadable lookups. The small
-    # answers that say an album or artist is resolved (match:, artistmatch:)
-    # stay, or on a library too big for the cap the prefetch would find the
-    # oldest albums "unresolved" again after every pass and download them
-    # over and over; their releases come back on demand when a page opens.
-    EVICTABLE = ('release:', 'search:', 'rgreleases:', 'wiki:', 'artist:', 'light:')
-
-    def evict(self):
-        if not self.max_bytes:
-            return 0
-        with self._lock:
-            total = self._db.execute('SELECT COALESCE(SUM(size), 0) FROM entries').fetchone()[0]
-            if total <= self.max_bytes:
-                return 0
-            target = int(self.max_bytes * 0.9)
-            removed = 0
-            where = ' OR '.join('key LIKE ?' for _ in self.EVICTABLE)
-            rows = self._db.execute(f'SELECT key, size FROM entries WHERE {where} ORDER BY accessed ASC',
-                                    [p + '%' for p in self.EVICTABLE]).fetchall()
-            for key, size in rows:
-                if total <= target:
-                    break
-                self._db.execute('DELETE FROM entries WHERE key=?', (key,))
-                total -= size
-                removed += 1
-            self._db.execute('PRAGMA incremental_vacuum')
-            return removed
 
     def checkpoint(self):
         """Fold the write-ahead log back into the database file, so moving it
@@ -2387,8 +2351,7 @@ class MetadataService:
                     pass
                 self._cache = None
             if self._cache is None:
-                self._cache = Cache(wanted,
-                                    max_bytes=None if self.keep_enabled() else CACHE_MAX_BYTES)
+                self._cache = Cache(wanted)
                 try:
                     self.edits.migrate_pins(self._cache)
                 except Exception as e:  # noqa: BLE001 — the cache must open anyway
@@ -2520,12 +2483,6 @@ class MetadataService:
     def prefetch_enabled(self):
         return self._flag('meta-prefetch')
 
-    def keep_enabled(self):
-        """On (the default): what was downloaded stays until the owner clears
-        it — nothing goes stale, nothing is evicted to stay under a size cap.
-        Off: the old behaviour, 60 days and 100 MB."""
-        return self._flag('meta-keep')
-
     def _write_flag(self, name, value):
         os.makedirs(self.etc_dir, exist_ok=True)
         path = os.path.join(self.etc_dir, name)
@@ -2648,17 +2605,6 @@ class MetadataService:
         _log(f'archive moved to {target}')
         return self.settings()
 
-    def _apply_keep(self):
-        """The open database follows the setting without a restart."""
-        cache = self._cache
-        if cache is None:
-            return
-        cache.max_bytes = None if self.keep_enabled() else CACHE_MAX_BYTES
-        try:
-            cache.evict()
-        except sqlite3.Error as e:
-            _log(f'evict failed: {e}')
-
     def settings(self):
         try:
             stats = self.cache.stats()
@@ -2673,19 +2619,16 @@ class MetadataService:
         stats['free'] = room.get('free', 0)
         stats['total'] = room.get('total', 0)
         return {'online': self.online_enabled(), 'prefetch': self.prefetch_enabled(),
-                'keep': self.keep_enabled(), 'cache': stats, 'locations': self.cache_locations(),
+                'cache': stats, 'locations': self.cache_locations(),
                 'prefetch_state': dict(self._prefetch)}
 
-    def set_settings(self, online=None, prefetch=None, keep=None, cache_location=None):
+    def set_settings(self, online=None, prefetch=None, cache_location=None):
         if online is not None:
             self._write_flag('meta-online', bool(online))
             if online:
                 self.client.reset()
         if prefetch is not None:
             self._write_flag('meta-prefetch', bool(prefetch))
-        if keep is not None:
-            self._write_flag('meta-keep', bool(keep))
-            self._apply_keep()
         self._settings_event.set()
         if cache_location is not None:
             return self.set_cache_location(cache_location)
@@ -2699,17 +2642,16 @@ class MetadataService:
         return {'ok': True}
 
     # cached data helpers
-    def _fresh(self, key, ttl=DATA_TTL):
-        """(value, negative, stale) or None. With "keep" on, only a "not
-        found" ever goes stale: nothing was downloaded for it, and a week
-        later MusicBrainz may well know the album."""
+    def _fresh(self, key):
+        """(value, negative, stale) or None. Only a "not found" ever goes
+        stale: nothing was downloaded for it, and a week later MusicBrainz
+        may well know the album. What the device did download stays until the
+        owner clears it."""
         hit = self.cache.get(key)
         if hit is None:
             return None
         value, age, negative = hit
-        if negative:
-            return value, negative, age > NEGATIVE_TTL
-        return value, negative, False if self.keep_enabled() else age > ttl
+        return value, negative, negative and age > NEGATIVE_TTL
 
     def _mb(self, ctx, path, **params):
         ctx.check()
@@ -3201,7 +3143,7 @@ class MetadataService:
 
     def _search_releases(self, ctx, query):
         key = 'search:' + hashlib.sha1(query.encode('utf-8')).hexdigest()[:24]
-        hit = self._fresh(key, ttl=NEGATIVE_TTL)
+        hit = self._fresh(key)
         if hit is not None and not hit[2]:
             return [dict(c) for c in hit[0]]
         data = self._mb(ctx, 'release', query=query, limit=25)
@@ -3328,7 +3270,7 @@ class MetadataService:
                 rg = rel_hit[0].get('release_group') or rg
         editions = []
         if rg:
-            eh = self._fresh(f'rgreleases:{rg}', ttl=NEGATIVE_TTL)
+            eh = self._fresh(f'rgreleases:{rg}')
             if eh is None or eh[2]:
                 s, _m = self._ensure(key, job, PRIO_INTERACTIVE)
                 if status == 'ok':
@@ -3370,7 +3312,7 @@ class MetadataService:
             rg = (model or {}).get('release_group')
         if not rg:
             return
-        eh = self._fresh(f'rgreleases:{rg}', ttl=NEGATIVE_TTL)
+        eh = self._fresh(f'rgreleases:{rg}')
         if eh is not None and not eh[2]:
             return
         data = self._mb(ctx, 'release', **{'release-group': rg, 'inc': 'labels+media', 'limit': 100})
@@ -3649,7 +3591,7 @@ class MetadataService:
         if not query:
             return out
         ckey = 'search:artists:' + hashlib.sha1(query.encode('utf-8')).hexdigest()[:24]
-        hit = self._fresh(ckey, ttl=NEGATIVE_TTL)
+        hit = self._fresh(ckey)
         if hit is None or hit[2]:
             status, message = self._ensure(f'artistcand:{ckey}',
                                            lambda ctx, _q=query, _k=ckey: self._job_search_artists(ctx, _q, _k, 25),
@@ -3697,7 +3639,7 @@ class MetadataService:
             return out
         digest = hashlib.sha1(query.encode('utf-8')).hexdigest()[:24]
         ckey = 'search:people:' + digest
-        hit = self._fresh(ckey, ttl=NEGATIVE_TTL)
+        hit = self._fresh(ckey)
         if hit is not None and not hit[2]:
             out['musicbrainz'] = [{k: c.get(k) for k in ('mbid', 'name', 'disambiguation', 'type')}
                                   for c in hit[0]] if not hit[1] else []
@@ -4098,14 +4040,13 @@ def init_app(app, require_auth, service_getter=None):
             data = request.get_json(silent=True) or {}
             online = data.get('online')
             prefetch = data.get('prefetch')
-            keep = data.get('keep')
             where = data.get('cache_location')
-            if any(v is not None and not isinstance(v, bool) for v in (online, prefetch, keep)):
-                return _bad('online/prefetch/keep must be booleans')
+            if any(v is not None and not isinstance(v, bool) for v in (online, prefetch)):
+                return _bad('online/prefetch must be booleans')
             if where is not None and not isinstance(where, str):
                 return _bad('cache_location must be a string')
             try:
-                return jsonify(svc().set_settings(online=online, prefetch=prefetch, keep=keep,
+                return jsonify(svc().set_settings(online=online, prefetch=prefetch,
                                                   cache_location=where))
             except CacheMoveError as e:
                 return _fail(e.code, **e.fields)

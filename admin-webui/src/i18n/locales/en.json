@@ -133,8 +133,6 @@
       "progressValue": "{done} of {total}",
       "saved": "Saved on this device",
       "savedValue": "{albums} albums, {artists} artists · {size}",
-      "keep": "Keep it until I delete it",
-      "keepHint": "with this off it is refreshed after two months, and the oldest goes once it passes 100 MB",
       "where": "Where to keep it",
       "whereHint": "Change this and what has already been downloaded moves there — nothing is downloaded again.",
       "whereAway": "The disk you chose is not connected. For now the information is kept on this device; plug the disk back in and it goes back to it.",

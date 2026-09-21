@@ -592,7 +592,7 @@ class H(BaseHTTPRequestHandler):
                 STATE["cdrip"] = {"state": "ripping", "message": "Copia in corso", "progress": 30, "track": 2, "total": len(data.get("tracks", []))}
                 threading.Timer(6.0, lambda: STATE.__setitem__("cdrip", {"state": "done", "message": "Copia completata", "progress": 100})).start()
             if u.path == "/api/meta/settings":
-                for k in ("online", "prefetch", "keep"):
+                for k in ("online", "prefetch"):
                     if k in data: META["settings"][k] = bool(data[k])
                 if "cache_location" in data:
                     where = str(data["cache_location"] or "")
@@ -625,7 +625,7 @@ class H(BaseHTTPRequestHandler):
 #   MOCK_META=offline  the service says "offline"
 #   MOCK_META=nomatch  nothing found for any album or artist
 META_DIR = os.path.join(HERE, "mock-meta")
-META = {"seen": set(), "settings": {"online": True, "prefetch": True, "keep": True, "location": ""}}
+META = {"seen": set(), "settings": {"online": True, "prefetch": True, "location": ""}}
 # where the downloaded information may be kept, as the device reports it
 META_PLACES = [{"id": "default", "path": "", "kind": "internal", "label": "", "usable": True, "reason": "",
                 "total": 120 * 1024 ** 3, "free": 96 * 1024 ** 3},

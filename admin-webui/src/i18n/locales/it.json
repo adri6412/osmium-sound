@@ -133,8 +133,6 @@
       "progressValue": "{done} su {total}",
       "saved": "Salvate su questo apparecchio",
       "savedValue": "{albums} album, {artists} artisti · {size}",
-      "keep": "Tienile finché non le cancello io",
-      "keepHint": "se lo spegni si rinfrescano dopo due mesi e le più vecchie vengono tolte oltre i 100 MB",
       "where": "Dove tenerle",
       "whereHint": "Se cambi, quello che hai già scaricato ci viene spostato: non si riscarica niente.",
       "whereAway": "Il disco che hai scelto non è collegato. Per ora le informazioni stanno su questo apparecchio; ricollegalo e ci tornano.",

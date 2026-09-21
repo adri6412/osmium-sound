@@ -292,10 +292,6 @@ const gpu = computed(() => [
       <span class="muted">{{ t('dashboard.meta.saved') }}</span>
       <span class="silver">{{ t('dashboard.meta.savedValue', { albums: meta.cache.albums, artists: meta.cache.artists, size: fmtBytes(meta.cache.bytes) }) }}</span>
     </div>
-    <div class="between item">
-      <span>{{ t('dashboard.meta.keep') }} <span class="muted">{{ t('dashboard.meta.keepHint') }}</span></span>
-      <Toggle :model-value="meta.keep" :disabled="metaBusy" @update:model-value="(v) => setMeta('keep', v)" />
-    </div>
     <label>{{ t('dashboard.meta.where') }}</label>
     <select :value="meta.cache.location || ''" :disabled="metaBusy"
             @change="setMetaWhere($event.target.value)">

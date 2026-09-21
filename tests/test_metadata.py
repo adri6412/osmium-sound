@@ -638,13 +638,10 @@ class CacheTests(unittest.TestCase):
         self.cache.put('match:n', {'mbid': None}, negative=True)
         self.assertEqual(svc._fresh('release:a'), ({'x': 1}, False, False))
         self.clock.t += hm.NEGATIVE_TTL + 1
-        self.assertTrue(svc._fresh('match:n')[2])          # negative: stale after 7 days
-        self.assertFalse(svc._fresh('release:a')[2])       # data: still fresh
-        self.clock.t += hm.DATA_TTL
-        # keep is on by default: what was downloaded never goes stale
+        self.assertTrue(svc._fresh('match:n')[2])          # negative: asked again after 7 days
+        # what was downloaded never goes stale, however old it is
+        self.clock.t += 10 * 365 * 86400
         self.assertFalse(svc._fresh('release:a')[2])
-        svc.set_settings(keep=False)
-        self.assertTrue(svc._fresh('release:a')[2])
         self.assertIsNone(svc._fresh('nothing'))
 
     def test_clear_keeps_pins(self):
@@ -660,21 +657,19 @@ class CacheTests(unittest.TestCase):
         self.cache.set_pin('fp2', 6, None)
         self.assertIsNone(self.cache.get_pin('fp2'))
 
-    def test_stats_and_eviction(self):
+    def test_stats_and_nothing_is_ever_thrown_away(self):
         self.cache.put('match:a', {'mbid': 'x'})
         self.cache.put('match:b', {'mbid': None}, negative=True)
         self.cache.put('artist:x', {'name': 'X'})
         stats = self.cache.stats()
         self.assertEqual((stats['albums'], stats['artists']), (1, 1))
         self.assertGreater(stats['bytes'], 0)
-        self.cache.max_bytes = 5000
-        for i in range(10):
+        # however much goes in, and however long ago: only clear() empties it
+        for i in range(60):
             self.clock.t += 10
-            self.cache.put(f'release:{i}', {'blob': 'x' * 1000})
-        self.cache.evict()
-        self.assertIsNone(self.cache.get('release:0'))     # least recently used went first
-        self.assertIsNotNone(self.cache.get('release:9'))
-        # the small "resolved" answers are never evicted, even the oldest
+            self.cache.put(f'release:{i}', {'blob': 'x' * 20000})
+        self.assertIsNotNone(self.cache.get('release:0'))
+        self.assertIsNotNone(self.cache.get('release:59'))
         self.assertIsNotNone(self.cache.get('match:a'))
 
 
@@ -787,13 +782,6 @@ class CacheLocationTests(unittest.TestCase):
         self.svc._dir = {'value': None, 'at': 0.0}
         self.assertEqual(self.svc.cache.get('release:a')[0], {'x': 1})
 
-    def test_keep_decides_whether_anything_is_ever_thrown_away(self):
-        self.assertIsNone(self.svc.cache.max_bytes)
-        self.svc.set_settings(keep=False)
-        self.assertEqual(self.svc.cache.max_bytes, hm.CACHE_MAX_BYTES)
-        self.svc.set_settings(keep=True)
-        self.assertIsNone(self.svc.cache.max_bytes)
-        self.assertTrue(self.svc.settings()['keep'])
 
 
 # ── the service, end to end with fakes ───────────────────────────────
@@ -917,7 +905,6 @@ class ServiceTests(unittest.TestCase):
     def test_settings_default_on_and_persisted(self):
         s = self.svc.settings()
         self.assertTrue(s['online'] and s['prefetch'])
-        self.assertTrue(s['keep'])
         self.assertEqual(set(s['cache']),
                          {'albums', 'artists', 'bytes', 'dir', 'location', 'detached', 'free', 'total'})
         self.assertEqual(set(s['prefetch_state']), {'running', 'done', 'total'})
@@ -1449,8 +1436,8 @@ class RoutesTests(unittest.TestCase):
             def settings(self):
                 return {'online': True}
 
-            def set_settings(self, online=None, prefetch=None, keep=None, cache_location=None):
-                calls.append(('set', online, prefetch, keep, cache_location))
+            def set_settings(self, online=None, prefetch=None, cache_location=None):
+                calls.append(('set', online, prefetch, cache_location))
                 if cache_location == '/nope':
                     raise hm.CacheMoveError('meta.cacheDirNetwork')
                 return {'online': online}
@@ -1468,12 +1455,11 @@ class RoutesTests(unittest.TestCase):
         self.assertEqual(calls[:2], [('album', 7, 'it'), ('album', 7, 'en')])
         self.assertEqual(c.get('/api/meta/album').status_code, 400)
         self.assertEqual(c.post('/api/meta/settings', json={'online': 'yes'}).status_code, 400)
-        self.assertEqual(c.post('/api/meta/settings', json={'keep': 'yes'}).status_code, 400)
         self.assertEqual(c.post('/api/meta/settings', json={'cache_location': 3}).status_code, 400)
         c.post('/api/meta/settings', json={'prefetch': False})
-        self.assertEqual(calls[-1], ('set', None, False, None, None))
-        c.post('/api/meta/settings', json={'keep': True, 'cache_location': '/mnt/x'})
-        self.assertEqual(calls[-1], ('set', None, None, True, '/mnt/x'))
+        self.assertEqual(calls[-1], ('set', None, False, None))
+        c.post('/api/meta/settings', json={'cache_location': '/mnt/x'})
+        self.assertEqual(calls[-1], ('set', None, None, '/mnt/x'))
         r = c.post('/api/meta/settings', json={'cache_location': '/nope'}, headers={'X-UI-Lang': 'it'})
         self.assertEqual((r.status_code, r.get_json()['code']), (400, 'meta.cacheDirNetwork'))
         self.assertIn('cartella di rete', r.get_json()['message'])
