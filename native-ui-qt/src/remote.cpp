@@ -127,7 +127,8 @@ const char *const kActions[] = {
     "playPause", "play", "pause", "stop", "next", "prev", "forward", "rewind",
     "volumeUp", "volumeDown", "mute",
     "up", "down", "left", "right", "ok", "back", "home", "menu", "pageUp", "pageDown",
-    "nowPlaying", "queue", "search", "favorite", "shuffle", "standby", "eject",
+    "nowPlaying", "fullScreen", "nextVu", "nextAnimation",
+    "queue", "search", "favorite", "shuffle", "standby", "eject",
 };
 
 // I tasti Qt: la stessa tabella, ma dal lato di chi li riceve gia' tradotti.
@@ -165,7 +166,8 @@ bool mediaOnly(const QString &a) {
         || a == "next" || a == "prev" || a == "forward" || a == "rewind"
         || a == "volumeUp" || a == "volumeDown" || a == "mute"
         || a == "nowPlaying" || a == "queue" || a == "favorite"
-        || a == "shuffle" || a == "eject" || a == "standby";
+        || a == "shuffle" || a == "eject" || a == "standby"
+        || a == "fullScreen" || a == "nextVu" || a == "nextAnimation";
 }
 
 }  // namespace

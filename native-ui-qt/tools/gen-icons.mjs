@@ -8,6 +8,11 @@
 //
 //   node tools/gen-icons.mjs [--all]
 //
+// 🚨 `icons/vu-meter.svg` NON viene da lucide: è il disegno del grafico
+// (l'icona dei VU meter del Now Playing), ricalcato a mano dal suo PNG in un
+// tracciato fill-rule="evenodd". Questo script non lo tocca — non cancellarlo
+// credendo che si rigeneri.
+//
 // Senza --all tiene solo le icone citate dai file .qml (sono ~1300 in tutto,
 // 11 MB: nel repo ci stanno solo quelle che servono davvero).
 import fs from 'node:fs';

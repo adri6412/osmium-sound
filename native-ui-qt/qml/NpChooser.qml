@@ -29,37 +29,62 @@ Item {
         var nm = o.name || {}
         return String(nm[I18n.lang] || nm.en || o.id)
     }
-    function open(m) {
-        mode = m; items = []; loading = true; loadError = ""
-        sc.set(0.92); sc.to = 1.0
-        fade = 1
-        forceActiveFocus()
+    // The list of looks: what the popup shows, and what a remote's key steps
+    // through. cb(null) = the list did not come.
+    function load(m, cb) {
         var gen = ++root.gen
         if (m === "vu") {
             Api.get(api("/vu_style"), function(ok, d) {
                 if (gen !== root.gen) return
-                loading = false
-                if (!ok || !d) { loadError = Tr.t("player.chooser.loadError"); return }
+                if (!ok || !d) { cb(null); return }
                 var st = d.styles || [], out = []
                 for (var i = 0; i < st.length; i++) out.push({ id: String(st[i].id), label: nameOf(st[i]) })
-                items = out
+                cb(out)
             })
         } else {
             // the built-in scenes first, then the ones downloaded from the store
             var out = ["cd", "cdfront", "vinyl", "cassette"].map(function(k) { return { id: k, label: Tr.t("settings.animations." + k) } })
             Api.get(api("/nowplaying_animation"), function(ok, d) {
                 if (gen !== root.gen) return
-                loading = false
                 var st = (ok && d && d.store) ? d.store : []
                 for (var i = 0; i < st.length; i++) out.push({ id: String(st[i].id), label: nameOf(st[i]) })
-                items = out
+                cb(out)
             })
         }
     }
+    function open(m) {
+        mode = m; items = []; loading = true; loadError = ""
+        sc.set(0.92); sc.to = 1.0
+        fade = 1
+        forceActiveFocus()
+        load(m, function(list) {
+            loading = false
+            if (!list) { loadError = Tr.t("player.chooser.loadError"); return }
+            items = list
+        })
+    }
+    // From a remote's key: the next look in the same list, applied straight
+    // away — the popup never opens, the name of what came up is the toast.
+    // The one in use is the one Now Playing shows, so from an animation the
+    // VU key starts over from the first meter, and the other way round.
+    function cycle(m) {
+        load(m, function(list) {
+            if (!list || !list.length) return
+            var cur = m === "vu" ? (Player.vuEnabled ? Player.vuStyle : "")
+                                 : (Player.vuEnabled ? "" : Player.npAnimation)
+            var i = -1
+            for (var k = 0; k < list.length; k++) if (list[k].id === cur) i = k
+            var nx = list[(i + 1) % list.length]
+            root.choose(nx.id, m)
+            if (Ui.toast) Ui.toast.say(m === "vu" ? "vu-meter" : "disc-3", nx.label)
+        })
+    }
     property int gen: 0
     function close() { if (!active) return; mode = ""; gen++; fade = 0 }
-    function choose(id) {
-        if (mode === "vu") {
+    // `m` only for the remote, which applies a look with the popup closed:
+    // without it `mode` is "" and every key would land on the animations.
+    function choose(id, m) {
+        if ((m || mode) === "vu") {
             // the look, and the meters on if they were off (Now Playing then
             // shows them instead of the animation)
             if (!Player.vuEnabled) Api.post(api("/vu_meter"), { enable: true })

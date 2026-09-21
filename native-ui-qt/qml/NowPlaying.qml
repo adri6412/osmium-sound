@@ -43,6 +43,19 @@ Item {
     readonly property real rx: pad + leftW + 24
     readonly property real rw: root.width - rx - pad
 
+    // ─── dal telecomando ───────────────────────────────────────────────────
+    // Lo stesso che fanno i pulsanti dell'intestazione, per i tasti che
+    // l'utente puo' assegnare (Impostazioni -> Telecomando). Schermo intero
+    // con niente da mostrare non fa nulla e lo dice a chi ha chiamato.
+    function toggleStage() {
+        if (stageOpen) { stageOpen = false; return true }
+        if (stageMode === "") return false
+        stageOpen = true
+        return true
+    }
+    // il prossimo skin dei VU / la prossima animazione, senza aprire la scelta
+    function cycleLook(kind) { chooser.cycle(kind) }
+
     // Con i VU in movimento la scena si ridisegna ~30 volte al secondo: tutto
     // cio' che non si muove sta in uno strato cotto una volta (layer), cosi'
     // il fotogramma e' una sola quad piu' gli aghi — misurato sul Dell:
@@ -116,50 +129,55 @@ Item {
 
     // ─── intestazione ──────────────────────────────────────────────────────
     RoundButton { x: root.pad; y: 12; width: 38; height: 38; icon: "chevron-down"; iconSize: 22; onClicked: root.collapse() }
-
-    Rectangle {                                   // l'orologio: tocco = salvaschermo
-        id: clockPill
-        x: root.pad + root.leftW / 2 - width / 2
-        y: 31 - height / 2
-        width: clockText.implicitWidth + 32; height: 36
-        radius: 18
-        color: clockTap.mix(Theme.wa(0.10), Theme.wa(0.25))
-        Text {
-            id: clockText
-            anchors.centerIn: parent
-            text: Qt.formatTime(new Date(), "HH:mm")
-            color: Theme.white; font.family: Theme.font; font.pixelSize: 20; font.letterSpacing: 0.5; font.weight: Font.Medium
-            Timer { interval: 5000; running: root.shown; repeat: true; triggeredOnStart: true; onTriggered: clockText.text = Qt.formatTime(new Date(), "HH:mm") }
-        }
-        Tap { id: clockTap; onClicked: root.startScreensaver() }
+    // full screen (big meters or the animation), right next to the button
+    // that puts the player back into its bar: the two do opposite things
+    RoundButton {
+        x: root.pad + 46; y: 12; width: 38; height: 38
+        visible: root.stageMode !== ""
+        icon: "maximize-2"; iconSize: 20
+        onClicked: root.stageOpen = true
     }
-    // full screen (big meters or the animation), then the two choosers: which
-    // VU meter look, which animation. The lit one says what plays on screen.
+
+    // The clock and the two choosers — which VU meter look, which animation —
+    // are one block, centred on the cover underneath (the cover and the LED
+    // plate sit on the same axis). The lit one says what plays on screen.
     Row {
-        x: clockPill.x + clockPill.width + 10; y: 31 - 18
-        spacing: 8
-        RoundButton {
-            width: 36; height: 36
-            visible: root.stageMode !== ""
-            icon: "maximize-2"; iconSize: 18
-            onClicked: root.stageOpen = true
+        x: root.pad + (root.leftW - width) / 2
+        y: 31 - 18
+        spacing: 10
+        Rectangle {                               // l'orologio: tocco = salvaschermo
+            id: clockPill
+            width: clockText.implicitWidth + 32; height: 36
+            radius: 18
+            color: clockTap.mix(Theme.wa(0.10), Theme.wa(0.25))
+            Text {
+                id: clockText
+                anchors.centerIn: parent
+                text: Qt.formatTime(new Date(), "HH:mm")
+                color: Theme.white; font.family: Theme.font; font.pixelSize: 20; font.letterSpacing: 0.5; font.weight: Font.Medium
+                Timer { interval: 5000; running: root.shown; repeat: true; triggeredOnStart: true; onTriggered: clockText.text = Qt.formatTime(new Date(), "HH:mm") }
+            }
+            Tap { id: clockTap; onClicked: root.startScreensaver() }
         }
-        RoundButton {                             // the meters' looks (our own DAC only, like the meters)
-            width: 36; height: 36
-            visible: Player.isOwn
-            icon: "audio-lines"; iconSize: 18
-            bg: Player.vuEnabled ? Theme.goldA(0.3) : Theme.wa(0.10)
-            bgPress: Player.vuEnabled ? Theme.goldA(0.3) : Theme.wa(0.20)
-            fg: Player.vuEnabled ? Theme.gold : Theme.white
-            onClicked: chooser.open("vu")
-        }
-        RoundButton {                             // the animations
-            width: 36; height: 36
-            icon: "disc-3"; iconSize: 18
-            bg: !Player.vuEnabled && root.animChosen ? Theme.goldA(0.3) : Theme.wa(0.10)
-            bgPress: !Player.vuEnabled && root.animChosen ? Theme.goldA(0.3) : Theme.wa(0.20)
-            fg: !Player.vuEnabled && root.animChosen ? Theme.gold : Theme.white
-            onClicked: chooser.open("anim")
+        Row {
+            spacing: 8
+            RoundButton {                         // the meters' looks (our own DAC only, like the meters)
+                width: 36; height: 36
+                visible: Player.isOwn
+                icon: "vu-meter"; iconSize: 18
+                bg: Player.vuEnabled ? Theme.goldA(0.3) : Theme.wa(0.10)
+                bgPress: Player.vuEnabled ? Theme.goldA(0.3) : Theme.wa(0.20)
+                fg: Player.vuEnabled ? Theme.gold : Theme.white
+                onClicked: chooser.open("vu")
+            }
+            RoundButton {                         // the animations
+                width: 36; height: 36
+                icon: "disc-3"; iconSize: 18
+                bg: !Player.vuEnabled && root.animChosen ? Theme.goldA(0.3) : Theme.wa(0.10)
+                bgPress: !Player.vuEnabled && root.animChosen ? Theme.goldA(0.3) : Theme.wa(0.20)
+                fg: !Player.vuEnabled && root.animChosen ? Theme.gold : Theme.white
+                onClicked: chooser.open("anim")
+            }
         }
     }
     Text {
@@ -178,7 +196,7 @@ Item {
     RoundButton {                                 // VU or animation <-> lyrics (hidden when neither is available)
         x: root.width - root.pad - 34 * 4 - 24; y: 14; width: 34; height: 34
         visible: (Player.vuEnabled && Player.isOwn) || (!Player.vuEnabled && root.animChosen)
-        icon: root.viewVu ? "mic-2" : (Player.vuEnabled ? "audio-lines" : "disc-3"); iconSize: 18
+        icon: root.viewVu ? "mic-2" : (Player.vuEnabled ? "vu-meter" : "disc-3"); iconSize: 18
         onClicked: root.toggleView()
     }
     RoundButton { x: root.width - root.pad - 34 * 3 - 16; y: 14; width: 34; height: 34; icon: "list-music"; iconSize: 18; onClicked: root.openQueue() }

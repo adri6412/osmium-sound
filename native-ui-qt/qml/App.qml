@@ -130,6 +130,17 @@ Item {
             toast.say(Player.muted ? "volume-2" : "volume-x", Tr.t(Player.muted ? "remote.soundOn" : "remote.muted"))
             return
         case "nowPlaying": setExpanded(!expanded); return
+        // Schermo intero: il player si apre da solo se era chiuso. Senza VU e
+        // senza animazione non c'e' niente da mostrare grande, e il tasto tace.
+        case "fullScreen":
+            if (overlays.busy) overlays.close()
+            if (!expanded) setExpanded(true)
+            np.toggleStage()
+            return
+        // il prossimo skin dei VU / la prossima animazione, anche dalla
+        // libreria: il riquadro dice il nome di quello che e' venuto su
+        case "nextVu": if (Player.isOwn) np.cycleLook("vu"); return
+        case "nextAnimation": np.cycleLook("anim"); return
         case "queue": if (overlays.busy) overlays.close(); else overlays.openQueue(); return
         case "search": setExpanded(false); mainScreen.browser.focusSearch(); return
         case "favorite": if (Player.favoritesAvailable) Player.toggleFavorite(); return
