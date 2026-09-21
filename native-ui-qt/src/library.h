@@ -33,6 +33,10 @@ class LibraryModel : public QAbstractListModel {
     Q_PROPERTY(int totalCount READ totalCount NOTIFY countChanged)
     Q_PROPERTY(QString filter READ filter WRITE setFilter NOTIFY filterChanged)
     Q_PROPERTY(int seq READ seq NOTIFY stateChanged)
+    // 🚨 goes up at every change of the visible rows (load, filter, reorder):
+    // whoever reads a row with get() instead of a delegate has no other way
+    // to know the row under that number is a different one now.
+    Q_PROPERTY(int rev READ rev NOTIFY revChanged)
     Q_PROPERTY(QString playerId MEMBER m_playerId)
 public:
     // The new views sit at the end so the numbers the QML compares against
@@ -59,6 +63,7 @@ public:
     int count() const { return m_order.size(); }
     int totalCount() const { return m_items.size(); }
     int seq() const { return m_seq; }
+    int rev() const { return m_rev; }
     QString filter() const { return m_filter; }
     void setFilter(const QString &f);
 
@@ -77,15 +82,17 @@ signals:
     void stateChanged();
     void countChanged();
     void filterChanged();
+    void revChanged();
     void loaded();
 
 private:
     void parse(int view, const QString &cmd, const QVariantMap &result);
     void applyOrderFilter();
+    void bumpRev() { m_rev++; emit revChanged(); }
     static QString fold(const QString &s);
     QVector<LibItem> m_items;
     QVector<int> m_order;
-    int m_state = 0, m_view = 0, m_seq = 0;
+    int m_state = 0, m_view = 0, m_seq = 0, m_rev = 0;
     bool m_serverOrder = false;     // keep Lyrion's order (sort:new, search results)
     QString m_filter, m_playerId;
 };

@@ -58,15 +58,24 @@ Item {
     function scrollToRow(row) { goTo(row, true) }
     function scrollTop() { goTo(0, true) }
     // a new list starts at its first album; a shorter one keeps us inside
-    property int gen: 0
     Connections {
         target: Library
-        function onLoaded() { root.gen++; root.opening = false; if (root.pos > root.count - 1) root.goTo(0, true) }
+        function onLoaded() { root.opening = false; if (root.pos > root.count - 1) root.goTo(0, true) }
         function onCountChanged() { if (root.pos > root.count - 1) root.goTo(Math.max(0, root.count - 1), true) }
+        // the filter of the search bar rebuilds the list under us: back to
+        // the first album that matches, instead of wherever we stood
+        function onFilterChanged() { root.goTo(0, true) }
     }
 
+    // 🚨 a slot reads its album with Library.get(), a CALL: nothing would make
+    // it read again when the list changes without the slot's own numbers
+    // changing (typing in the filter leaves pos and the slots where they are).
+    // Library.rev goes up at every rebuild, so the bindings below take it as a
+    // dependency: without it the covers stay those of the list before.
+    readonly property int rev: Library.rev
+
     // the album in front: its title and artist under the row
-    readonly property var curItem: (root.gen, root.count > 0 ? Library.get(root.cur) : null)
+    readonly property var curItem: (root.rev, root.count > 0 ? Library.get(root.cur) : null)
 
     Rectangle { anchors.fill: parent; color: Theme.dark }
 
@@ -87,7 +96,7 @@ Item {
                 readonly property real d: k - root.pos
                 readonly property real a: Math.max(-1, Math.min(1, d))            // -1..1: how far turned
                 readonly property bool has: k >= 0 && k < root.count
-                readonly property var it: (root.gen, has ? Library.get(k) : null)
+                readonly property var it: (root.rev, has ? Library.get(k) : null)
                 readonly property bool front: Math.abs(d) < 0.5
                 visible: has && Math.abs(d) <= root.side + 0.5 && opacity > 0.002
                 // the row makes way for the album that opens (the flying

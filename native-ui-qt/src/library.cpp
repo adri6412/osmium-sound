@@ -94,6 +94,7 @@ void LibraryModel::clear() {
     m_state = 0;
     emit stateChanged();
     emit countChanged();
+    bumpRev();
 }
 
 // Traduce un'azione del protocollo "menu" (cmd + params) nei parametri
@@ -206,7 +207,7 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
         break;
     default:
         beginResetModel(); m_items.clear(); m_order.clear(); endResetModel();
-        m_state = 2; emit stateChanged(); emit countChanged(); emit loaded();
+        m_state = 2; emit stateChanged(); emit countChanged(); bumpRev(); emit loaded();
         return;
     }
     Api::instance()->lmsRequest(m_playerId, params, [this, seq, view, s1](bool ok, const QVariant &data, int) {
@@ -353,7 +354,12 @@ void LibraryModel::applyOrderFilter() {
     beginResetModel();
     m_order = order;
     endResetModel();
+    // 🚨 count FIRST, rev after: whoever reads a row by its number looks at
+    // count to know the number is still there. The other way round it reads
+    // row 5 of a list that has just become two rows long (an empty row, and a
+    // QML warning for every slot of the Cover Flow).
     emit countChanged();
+    bumpRev();
 }
 
 void LibraryModel::setFilter(const QString &f) {

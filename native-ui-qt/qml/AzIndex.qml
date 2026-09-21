@@ -17,7 +17,7 @@ Item {
             readonly property string l: root.az.charAt(index)
             x: 16 - width / 2; y: 4 + index * (root.height - 8) / 26 - height / 2
             text: l
-            color: root.down && root.cur === l ? Theme.gold : (Library.count, Library.hasLetter(l)) ? Theme.silverA(0.7) : Theme.silverA(0.2)
+            color: root.down && root.cur === l ? Theme.gold : (Library.rev, Library.hasLetter(l)) ? Theme.silverA(0.7) : Theme.silverA(0.2)
             font.family: Theme.font; font.pixelSize: 10; font.bold: true
         }
     }
