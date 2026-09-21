@@ -289,6 +289,8 @@ jobs:
           python3 tests/test_tags.py
           echo "== bluetooth speakers (python) =="
           python3 tests/test_bt_speakers.py
+          echo "== web admin: who gets a CSRF token (python) =="
+          python3 tests/test_csrf.py
 
       - name: Stage LMS skin assets into the OS payload
         # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately

@@ -1186,12 +1186,43 @@ def _frame_ancestors():
     return f"'self' http://{host}:9000 https://{host}:9000"
 
 
+def _is_page_load():
+    """True for a top-level navigation (the HTML document itself), as opposed
+    to a subresource or an API call. Browsers say so outright (Chrome 76,
+    Firefox 90, Safari 16.4 and up); the Accept header is the fallback for
+    anything older, and it separates them just as well — a document asks for
+    text/html, an XHR/fetch for */* and an image for image/*. A page inside a
+    frame counts: it too precedes every subresource of its own page (the
+    Settings admin is opened in an iframe by Lyrion's Material skin)."""
+    dest = request.headers.get('Sec-Fetch-Dest')
+    if dest:
+        return dest in ('document', 'iframe', 'frame')
+    return 'text/html' in request.headers.get('Accept', '')
+
+
 @app.after_request
 def _set_csrf_cookie(resp):
     # Ensure a CSRF cookie exists so the SPA can read + echo it. Not HttpOnly by
     # design (double-submit needs JS to read it). Not Secure either: plain
     # HTTP, no TLS (see the module docstring's security-model note).
-    if not request.cookies.get('csrf'):
+    #
+    # Only a page load and /api/csrf mint one. Minting on *every* cookie-less
+    # response looks more forgiving but is exactly what produced the
+    # intermittent "Missing or invalid CSRF token": a cold page load fires a
+    # burst of parallel calls (the route guard, the update poll, the ~30
+    # loaders in Settings, one skin.json and several images per VU meter
+    # card), all of them cookie-less, so each one came back with a *different*
+    # token and the last response to land redefined the cookie under requests
+    # whose header had already been read. The VU meters and animations
+    # sections POST .../seen on their own the moment they open — right inside
+    # that window, which is why those two pages were the ones that failed. A
+    # page load cannot race anything (it precedes every subresource of its own
+    # page), and /api/csrf is asked for one at a time (see primeCsrf in
+    # admin-webui/src/api.js). The test is on the REQUEST, not on the reply's
+    # type: index.html is served no-cache, so a browser that has it revalidates
+    # and gets a 304 — which carries no Content-Type at all.
+    if not request.cookies.get('csrf') \
+            and (request.path == '/api/csrf' or _is_page_load()):
         resp.set_cookie('csrf', secrets.token_urlsafe(24), samesite='Strict',
                         secure=False, httponly=False)
     # One framing policy for every response, so the whole admin (including the
@@ -1212,6 +1243,19 @@ def _set_csrf_cookie(resp):
         resp.headers['Pragma'] = 'no-cache'
         resp.headers['Expires'] = '0'
     return resp
+
+
+@app.route('/api/csrf', methods=['GET'])
+def csrf_bootstrap():
+    """Give a browser that has no CSRF cookie one, on its own.
+
+    The page it loaded normally brings the token with it (_set_csrf_cookie
+    above), so this is the recovery path for the cases where it cannot: an
+    index.html answered 304 from the browser cache after the session cookie
+    was dropped, a restored tab, a page opened before this daemon was up.
+    Pre-auth on purpose — the login POST needs a token too.
+    """
+    return jsonify({'success': True})
 
 
 def _require_session():
