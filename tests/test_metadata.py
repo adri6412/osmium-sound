@@ -762,6 +762,36 @@ class CacheLocationTests(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.here, 'metadata.db')))
         self.assertFalse(os.path.exists(os.path.join(moved, 'metadata.db')))
 
+    def test_a_restored_archive_is_taken_from_where_the_backup_put_it(self):
+        # A restore writes the database back at the canonical path, whatever
+        # this device does with it afterwards.
+        self.svc.cache.put('release:old', {'x': 0})
+        self.svc.set_cache_location(self.disk)
+        moved = os.path.join(self.disk, hm.CACHE_FOLDER, 'metadata.db')
+        self.assertTrue(os.path.exists(moved))
+        # a leftover write-ahead log of the database that is being replaced
+        open(moved + '-wal', 'wb').write(b'STALE')
+        restored = os.path.join(self.here, 'metadata.db')
+        os.makedirs(self.here, exist_ok=True)
+        donor = hm.Cache(os.path.join(self.tmp, 'donor'))
+        donor.put('release:restored', {'x': 1})
+        donor.checkpoint()
+        donor.close()
+        shutil.copyfile(os.path.join(self.tmp, 'donor', 'metadata.db'), restored)
+
+        where = self.svc.adopt_restored_db(restored)
+
+        self.assertEqual(where, moved)                      # onto the disk the owner picked
+        self.assertFalse(os.path.exists(restored))
+        self.assertFalse(os.path.exists(moved + '-wal'))    # never replayed over the new one
+        self.assertEqual(self.svc.cache.get('release:restored')[0], {'x': 1})
+        self.assertIsNone(self.svc.cache.get('release:old'))
+        # and with the archive kept on the device itself it is just reopened
+        self.svc.set_cache_location('')
+        self.svc.cache.put('release:later', {'x': 2})
+        self.assertEqual(self.svc.adopt_restored_db(), os.path.join(self.here, 'metadata.db'))
+        self.assertEqual(self.svc.cache.get('release:later')[0], {'x': 2})
+
     def test_a_disk_taken_away_does_not_write_onto_its_mount_point(self):
         self.svc.cache.put('release:a', {'x': 1})
         self.svc.set_cache_location(self.disk)

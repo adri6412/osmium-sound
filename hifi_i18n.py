@@ -497,6 +497,8 @@ MESSAGES = {
     'restore.camillaRestarted': {'en': 'CamillaDSP restarted', 'it': 'CamillaDSP riavviato'},
     'restore.wifiReloaded': {'en': 'Wi-Fi networks reloaded', 'it': 'Reti Wi-Fi ricaricate'},
     'restore.smbResynced': {'en': 'SMB credentials resynced', 'it': 'Credenziali SMB risincronizzate'},
+    'restore.metaArchiveAdopted': {'en': 'Album and artist information put back',
+                                   'it': 'Informazioni su album e artisti rimesse a posto'},
     'restore.timezoneApplied': {'en': 'Timezone re-applied ({tz})', 'it': 'Fuso orario riapplicato ({tz})'},
     'restore.hostnameApplied': {'en': 'Hostname re-applied ({name})', 'it': 'Nome host riapplicato ({name})'},
 

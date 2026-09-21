@@ -139,7 +139,11 @@ on both the archiving and the restoring side. Restoring those would only ever
 fight the updater or clone one device's session identity onto another.
 
 **Categories**: `core` (audio output, pointer, OTA/Lyrion channel, display
-mode, UI resolution, skin, hostname, time zone), `sources` (the music
+mode, UI resolution, skin, hostname, time zone, the Library editor's
+corrections and the album/artist archive downloaded from MusicBrainz and
+Wikipedia — read from whichever disk the owner keeps it on, archived as a
+SQLite snapshot streamed from disk rather than held in memory, and put back
+where that device keeps it by `MetadataService.adopt_restored_db`), `sources` (the music
 source list — kept in every backup, but with SMB passwords redacted unless
 encrypted), `lyrion` (prefs + playlists, *not* the scanned library cache,
 which Lyrion rebuilds on its own), `network` (Wi-Fi profiles only — Ethernet
@@ -570,7 +574,9 @@ database needs real locking), the folder inside it is `osmium-metadata`, and
 changing the setting carries `metadata.db` over rather than downloading
 everything again. The mount point, not the folder: a disk that is away leaves
 the service on `/var/lib/hifi-player/metadata` instead of writing onto a bare
-mount point, and plugging it back in is enough. Settings:
+mount point, and plugging it back in is enough. Backups carry it (category
+`core`): re-downloadable in theory, but it is days of rate-limited, often-503
+look-ups over a whole library — see [Backup & restore](#backup--restore). Settings:
 `/etc/hifi-player/meta-online` and `meta-prefetch` (both on when missing) and
 `meta-cache-dir`. The CD ripper shares the same throttled client.
 Tests: `tests/test_metadata.py`.

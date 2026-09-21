@@ -112,12 +112,42 @@ DENY_FILES = frozenset((
     "/var/lib/dbus/machine-id",
     # The OS migration ledger is history, not configuration.
     "/var/lib/hifi-player/os-migrations",
+    # The album/artist archive IS backed up (see "core"), but only as the
+    # snapshot SQLite itself takes: its write-ahead log belongs to the
+    # database file it was written beside, and restoring a stale one over a
+    # fresh snapshot is how a database gets corrupted.
+    "/var/lib/hifi-player/metadata/metadata.db-wal",
+    "/var/lib/hifi-player/metadata/metadata.db-shm",
 ))
 DENY_PREFIXES = (
     "/var/lib/hifi-player/backups/",   # no backups inside backups
-    "/var/lib/hifi-player/metadata/",  # web info cache: re-downloadable, up to 100 MB
     "/etc/ssh/",                       # host keys are machine identity
 )
+
+
+# The archive's canonical home. The owner may keep it on a disk of their
+# own instead (hifi_metadata.py's meta-cache-dir, which holds the mount point
+# and puts the database in `osmium-metadata` inside it) — a backup reads it
+# from there and still files it under this name, so a restore always knows
+# where to put it back.
+METADATA_DB = "/var/lib/hifi-player/metadata/metadata.db"
+META_CACHE_DIR_SETTING = "/etc/hifi-player/meta-cache-dir"
+META_CACHE_FOLDER = "osmium-metadata"
+
+
+def _metadata_db_real(root="/"):
+    """The file to read for METADATA_DB: the disk the owner picked when it is
+    there and holds the archive, the canonical path otherwise."""
+    try:
+        with open(_abs(root, META_CACHE_DIR_SETTING)) as f:
+            where = f.read().strip()
+    except OSError:
+        where = ""
+    if where.startswith("/"):
+        moved = _abs(root, os.path.join(where.rstrip("/"), META_CACHE_FOLDER, "metadata.db"))
+        if os.path.isfile(moved):
+            return moved
+    return _abs(root, METADATA_DB)
 
 
 def is_denied(logical):
@@ -184,6 +214,15 @@ CATEGORIES = {
             # the web information cache next to it (denied above), none of it
             # can be downloaded again.
             ("dir", "/var/lib/hifi-player/metadata-edits", ()),
+            # The album and artist information downloaded from MusicBrainz and
+            # Wikipedia. It used to be left out as "re-downloadable", and on
+            # paper it still is — but nothing expires it any more, it is the
+            # work of days of slow, rate-limited, often-503 look-ups over a
+            # whole library, and a restore that hands it back is the whole
+            # point of having it. Read from wherever the owner keeps it
+            # (_metadata_db_real), archived under this one name, and taken as
+            # a proper SQLite snapshot while the service goes on using it.
+            ("file", METADATA_DB),
         ],
     },
     "sources": {
@@ -268,26 +307,64 @@ def selected_categories(requested, encrypted):
 # A transform returns the bytes to archive for a given source file, or None to
 # skip it. This is where formats that cannot simply be copied get handled.
 
-def _transform_sqlite(src, _ctx):
+class _FileMember:
+    """A member whose bytes stay on disk until tar takes them.
+
+    Everything else here is small enough to hold in memory, but the album and
+    artist archive can run to hundreds of megabytes on a big library, and this
+    box has neither the RAM to spare for a copy of it nor a `/tmp` (tmpfs, so
+    RAM again) to stage it in. The snapshot is written next to the archive
+    being built and read back in chunks."""
+
+    CHUNK = 1024 * 1024
+
+    def __init__(self, path):
+        self.path = path
+
+    def add_to(self, tar, arc, mtime=None):
+        """Write it as `arc` and return its sha256; the file goes either way."""
+        try:
+            digest = hashlib.sha256()
+            with open(self.path, "rb") as f:
+                for block in iter(lambda: f.read(self.CHUNK), b""):
+                    digest.update(block)
+            info = tarfile.TarInfo(arc)
+            info.size = os.path.getsize(self.path)
+            info.mode = 0o600
+            if mtime is not None:
+                info.mtime = mtime
+            with open(self.path, "rb") as f:
+                tar.addfile(info, f)
+            return digest.hexdigest()
+        finally:
+            try:
+                os.unlink(self.path)
+            except OSError:
+                pass
+
+
+def _transform_sqlite(src, ctx):
     """Consistent snapshot of a live SQLite file without stopping its daemon.
 
-    webui.db is open and possibly mid-transaction in hifi-webui; a byte copy can
-    catch a torn WAL state. sqlite3's own backup API takes a proper snapshot,
-    which is why nothing here has to be stopped for the backup to be safe.
+    webui.db is open and possibly mid-transaction in hifi-webui, and so is the
+    album/artist archive in the metadata service; a byte copy can catch a torn
+    WAL state. sqlite3's own backup API takes a proper snapshot, which is why
+    nothing here has to be stopped for the backup to be safe. The snapshot
+    lands beside the archive being built (`ctx["tmpdir"]`), never in tmpfs.
     """
     with sqlite3.connect(f"file:{src}?mode=ro", uri=True) as srccon:
-        fd, tmp = tempfile.mkstemp(suffix=".db")
+        fd, tmp = tempfile.mkstemp(suffix=".db.part", dir=ctx.get("tmpdir") or None)
         os.close(fd)
         try:
             with sqlite3.connect(tmp) as dstcon:
                 srccon.backup(dstcon)
-            with open(tmp, "rb") as f:
-                return f.read()
-        finally:
+        except Exception:
             try:
                 os.unlink(tmp)
             except OSError:
                 pass
+            raise
+        return _FileMember(tmp)
 
 
 def _transform_sources(src, ctx):
@@ -365,7 +442,7 @@ def _transform_lyrion_prefs(src, ctx):
 
 
 def _transform_for(logical):
-    if logical == "/etc/hifi-player/webui.db":
+    if logical in ("/etc/hifi-player/webui.db", METADATA_DB):
         return _transform_sqlite
     if logical == "/etc/hifi-sources.json":
         return _transform_sources
@@ -394,7 +471,7 @@ def iter_members(categories, root="/"):
                 logical = entry[1]
                 if is_denied(logical):
                     continue
-                real = _abs(root, logical)
+                real = _metadata_db_real(root) if logical == METADATA_DB else _abs(root, logical)
                 if os.path.isfile(real) and not os.path.islink(real):
                     yield logical, real
             else:
@@ -442,7 +519,7 @@ def build_archive(dest_path, categories, root="/", encrypted=False, extra=None):
     that, after any encryption step, so an aborted build can never leave behind
     a directory that looks complete.
     """
-    ctx = {"encrypted": encrypted, "notes": []}
+    ctx = {"encrypted": encrypted, "notes": [], "tmpdir": os.path.dirname(dest_path) or "."}
     members = {}
     manifest = dict(extra or {})
     tmp = dest_path + ".part"
@@ -461,8 +538,12 @@ def build_archive(dest_path, categories, root="/", encrypted=False, extra=None):
                 ctx["notes"].append(f"unreadable:{logical}:{e.__class__.__name__}")
                 continue
             arc = logical.lstrip("/")
-            _add_member(tar, arc, data, int(os.path.getmtime(real)))
-            members[arc] = hashlib.sha256(data).hexdigest()
+            mtime = int(os.path.getmtime(real))
+            if isinstance(data, _FileMember):
+                members[arc] = data.add_to(tar, arc, mtime)
+            else:
+                _add_member(tar, arc, data, mtime)
+                members[arc] = hashlib.sha256(data).hexdigest()
 
         manifest.update({"schema": SCHEMA, "categories": list(categories),
                          "members": members, "notes": ctx["notes"]})
