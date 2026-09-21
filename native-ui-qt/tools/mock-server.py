@@ -592,8 +592,15 @@ class H(BaseHTTPRequestHandler):
                 STATE["cdrip"] = {"state": "ripping", "message": "Copia in corso", "progress": 30, "track": 2, "total": len(data.get("tracks", []))}
                 threading.Timer(6.0, lambda: STATE.__setitem__("cdrip", {"state": "done", "message": "Copia completata", "progress": 100})).start()
             if u.path == "/api/meta/settings":
-                for k in ("online", "prefetch"):
+                for k in ("online", "prefetch", "keep"):
                     if k in data: META["settings"][k] = bool(data[k])
+                if "cache_location" in data:
+                    where = str(data["cache_location"] or "")
+                    place = next((p for p in META_PLACES if p["path"] == where), None)
+                    if place is None or not place["usable"]:
+                        return self._json({"success": False, "status": "error", "code": "meta.cacheDirNetwork",
+                                           "message": "Una cartella di rete non pu\u00f2 tenere questo archivio."}, 400)
+                    META["settings"]["location"] = where
                 return self._json(meta_settings())
             if u.path == "/api/meta/cache/clear": META["seen"].clear(); return self._json({"ok": True})
             if u.path == "/api/meta/album/pin":
@@ -618,7 +625,14 @@ class H(BaseHTTPRequestHandler):
 #   MOCK_META=offline  the service says "offline"
 #   MOCK_META=nomatch  nothing found for any album or artist
 META_DIR = os.path.join(HERE, "mock-meta")
-META = {"seen": set(), "settings": {"online": True, "prefetch": True}}
+META = {"seen": set(), "settings": {"online": True, "prefetch": True, "keep": True, "location": ""}}
+# where the downloaded information may be kept, as the device reports it
+META_PLACES = [{"id": "default", "path": "", "kind": "internal", "label": "", "usable": True, "reason": "",
+                "total": 120 * 1024 ** 3, "free": 96 * 1024 ** 3},
+               {"id": "/mnt/hifi-usb/MUSIC", "path": "/mnt/hifi-usb/MUSIC", "kind": "usb", "label": "MUSIC",
+                "usable": True, "reason": "", "total": 2000 * 1024 ** 3, "free": 1700 * 1024 ** 3},
+               {"id": "/mnt/hifi-sources/nas", "path": "/mnt/hifi-sources/nas", "kind": "network", "label": "nas",
+                "usable": False, "reason": "network"}]
 MOCK_META = os.environ.get("MOCK_META", "")
 
 def meta_file(kind, key):
@@ -639,7 +653,12 @@ def meta_file(kind, key):
 
 def meta_settings():
     base = meta_file("settings", "") or {"cache": {"albums": 120, "artists": 48, "bytes": 3456789}, "prefetch_state": {"running": True, "done": 120, "total": 312}}
-    return dict(base, **META["settings"])
+    out = dict(base, **META["settings"])
+    where = out.pop("location", "")
+    out["cache"] = dict(out.get("cache", {}), location=where, detached=False,
+                        dir=(where + "/osmium-metadata") if where else "/var/lib/hifi-player/metadata")
+    out["locations"] = [dict(p, current=p["path"] == where) for p in META_PLACES]
+    return out
 
 def meta_get(path, q):
     one = lambda k: (q.get(k) or [""])[0]

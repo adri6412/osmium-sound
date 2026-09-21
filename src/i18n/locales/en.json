@@ -870,7 +870,24 @@
       "metaProgress": "Prepared",
       "metaProgressValue": "{done} of {total} albums",
       "metaClear": "Clear saved information",
-      "metaCleared": "Saved information cleared"
+      "metaCleared": "Saved information cleared",
+      "metaKeep": "Keep what was downloaded",
+      "metaKeepHelp": "It stays until you clear it. With this off it is looked up again after two months, and the oldest is dropped once it passes 100 MB.",
+      "metaWhere": "Where to keep it",
+      "metaWhereHelp": "Change this and what has already been downloaded moves there — nothing is downloaded again.",
+      "metaWhereAway": "The disk you chose is not connected. For now the information is kept on this device; plug the disk back in and it goes back to it.",
+      "metaHere": "On this device",
+      "metaData": "In this device's data space",
+      "metaDisk": "Disk “{name}”",
+      "metaUsb": "USB disk “{name}”",
+      "metaNetwork": "Network folder “{name}”",
+      "metaFree": "{size} free",
+      "metaNoNetwork": "A network folder cannot hold it",
+      "metaReadonly": "Read only",
+      "metaGone": "Not connected",
+      "metaMoving": "Moving the information…",
+      "metaMoved": "Information moved",
+      "metaMoveFailed": "The information could not be moved"
     },
     "sources": {
       "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Changes take effect right away."

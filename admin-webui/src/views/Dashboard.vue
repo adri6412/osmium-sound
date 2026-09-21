@@ -63,6 +63,7 @@ async function abortScan() {
 const meta = ref(null);
 const metaBusy = ref(false);
 const metaCleared = ref(false);
+const metaWhereError = ref('');
 
 async function loadMeta() {
   const r = await api.get('/api/system/meta/settings');
@@ -74,6 +75,31 @@ async function setMeta(key, value) {
   const r = await api.post('/api/system/meta/settings', { [key]: value });
   if (r.ok && r.data && typeof r.data.online === 'boolean') meta.value = r.data;
   metaBusy.value = false;
+}
+
+// Where the downloaded information is kept. The list comes from the device
+// (its own storage first, then every disk mounted on it); picking another one
+// carries the archive over rather than downloading it all again, so it can
+// take a moment on a big library.
+async function setMetaWhere(value) {
+  metaBusy.value = true;
+  metaWhereError.value = '';
+  const r = await api.post('/api/system/meta/settings', { cache_location: value });
+  if (r.ok && r.data && typeof r.data.online === 'boolean') meta.value = r.data;
+  else metaWhereError.value = (r.data && r.data.message) || t('dashboard.meta.whereFailed');
+  metaBusy.value = false;
+  if (!r.ok) await loadMeta();
+}
+
+function metaPlace(p) {
+  const name = { internal: 'placeHere', data: 'placeData', usb: 'placeUsb', network: 'placeNetwork' }[p.kind]
+    || 'placeDisk';
+  const label = t('dashboard.meta.' + name, { name: p.label });
+  if (!p.usable) {
+    const why = { network: 'placeNoNetwork', readonly: 'placeReadonly' }[p.reason] || 'placeAway';
+    return label + ' — ' + t('dashboard.meta.' + why);
+  }
+  return p.total ? label + ' — ' + t('dashboard.meta.placeFree', { size: fmtGb(p.free / 1024 ** 3) }) : label;
 }
 
 async function clearMeta() {
@@ -266,6 +292,19 @@ const gpu = computed(() => [
       <span class="muted">{{ t('dashboard.meta.saved') }}</span>
       <span class="silver">{{ t('dashboard.meta.savedValue', { albums: meta.cache.albums, artists: meta.cache.artists, size: fmtBytes(meta.cache.bytes) }) }}</span>
     </div>
+    <div class="between item">
+      <span>{{ t('dashboard.meta.keep') }} <span class="muted">{{ t('dashboard.meta.keepHint') }}</span></span>
+      <Toggle :model-value="meta.keep" :disabled="metaBusy" @update:model-value="(v) => setMeta('keep', v)" />
+    </div>
+    <label>{{ t('dashboard.meta.where') }}</label>
+    <select :value="meta.cache.location || ''" :disabled="metaBusy"
+            @change="setMetaWhere($event.target.value)">
+      <option v-for="p in (meta.locations || [])" :key="p.id" :value="p.path"
+              :disabled="!p.usable && !p.current">{{ metaPlace(p) }}</option>
+    </select>
+    <p class="sub" style="margin: 8px 0 0">{{ t('dashboard.meta.whereHint') }}</p>
+    <div class="msg" v-if="meta.cache.detached">{{ t('dashboard.meta.whereAway') }}</div>
+    <div class="msg err" v-if="metaWhereError">{{ metaWhereError }}</div>
     <div class="row" style="margin-top: 12px">
       <button class="secondary" :disabled="metaBusy" @click="clearMeta">{{ t('dashboard.meta.clear') }}</button>
     </div>

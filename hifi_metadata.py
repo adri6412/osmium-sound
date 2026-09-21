@@ -22,9 +22,12 @@ Shape of the thing:
     loop, gzip, a size cap.
   * Lyrion — the few JSON-RPC queries needed, against whichever server the
     device follows (squeezelite's -s), or HIFI_META_LMS_URL.
-  * Cache — SQLite in /var/lib/hifi-player/metadata (HIFI_META_CACHE_DIR):
-    60 days for data, 7 for "not found", a size cap with least-recently-used
-    eviction. Everything in it can be downloaded again.
+  * Cache — SQLite in /var/lib/hifi-player/metadata (HIFI_META_CACHE_DIR),
+    or in `osmium-metadata` on a disk the owner picked (meta-cache-dir).
+    What was downloaded stays until the owner clears it ("keep", the default);
+    with keep off it goes back to the old 60 days and a size cap with
+    least-recently-used eviction. A "not found" is re-checked after a week
+    either way: nothing was downloaded to lose.
   * Edits — what the owner decided by hand (the edition or artist picked,
     corrections to credits, members and texts), one JSON file per album
     fingerprint or artist in /var/lib/hifi-player/metadata-edits
@@ -44,6 +47,7 @@ import itertools
 import json
 import os
 import re
+import shutil
 import socket
 import sqlite3
 import threading
@@ -56,6 +60,27 @@ import urllib.request
 # ── configuration ────────────────────────────────────────────────────
 CACHE_DIR = '/var/lib/hifi-player/metadata'
 EDITS_DIR_NAME = 'metadata-edits'      # next to CACHE_DIR: /var/lib/hifi-player/metadata-edits
+# The owner can keep the downloaded information on a disk of their own: this
+# setting holds the mount point they picked ('' = this device's own storage),
+# and the database goes in CACHE_FOLDER inside it. The mount point, not the
+# folder: a disk that is unplugged is then plainly not mounted, and the
+# service falls back to CACHE_DIR instead of writing onto the empty
+# mountpoint of the root filesystem.
+CACHE_DIR_SETTING = 'meta-cache-dir'
+CACHE_FOLDER = 'osmium-metadata'
+# Mount points offered as a destination: the data partition itself, and
+# whatever is mounted *inside* these — the internal and USB disks the device
+# adopted, network shares (offered, then refused: see NETWORK_FS). Not /mnt or
+# /media themselves: on this appliance both are tmpfs, holders for the real
+# mounts underneath.
+CACHE_MOUNT_ROOTS = ('/data', '/mnt', '/media', '/srv')
+# SQLite needs real file locking: over cifs/nfs the database would corrupt or
+# simply refuse to open, so a network folder is shown but cannot be picked.
+NETWORK_FS = ('cifs', 'smb', 'smb2', 'smb3', 'nfs', 'nfs4', 'fuse.sshfs', 'davfs', 'ftpfs', '9p')
+# Filesystems that are no place for it: RAM (gone at the next boot), the
+# read-only system image, the overlays the system keeps for itself.
+SKIP_FS = ('tmpfs', 'ramfs', 'devtmpfs', 'squashfs', 'overlay', 'overlayfs', 'proc', 'sysfs',
+           'autofs', 'iso9660', 'udf', 'cgroup', 'cgroup2')
 ETC_DIR = '/etc/hifi-player'
 SQUEEZELITE_DEFAULT = '/etc/default/squeezelite'
 VERSION_FILES = ('/etc/hifi-player/UI_VERSION', '/opt/hifi-media-player/UI_VERSION',
@@ -71,7 +96,7 @@ WIKI_SPACING = 0.5
 OFFLINE_HOLD = 30.0       # after a network failure, fail fast for this long
 MAX_BODY = 8 * 1024 * 1024
 
-DATA_TTL = 60 * 86400
+DATA_TTL = 60 * 86400          # only with "keep" off: otherwise data never goes stale
 NEGATIVE_TTL = 7 * 86400
 FAILURE_HOLD = 60.0       # a failed job is reported (offline/error) this long
 BUSY_RETRY = 10.0         # a job that found MusicBrainz busy is tried again after this
@@ -1783,6 +1808,7 @@ class Cache:
     """
 
     def __init__(self, directory, max_bytes=CACHE_MAX_BYTES, clock=None):
+        # max_bytes None or 0: nothing is ever evicted (the "keep" setting).
         self.directory = directory
         self.max_bytes = max_bytes
         self._clock = clock or time.time
@@ -1826,7 +1852,7 @@ class Cache:
                              'VALUES (?,?,?,?,?,?)', (key, text, now, now, 1 if negative else 0,
                                                      len(text.encode('utf-8'))))
             self._writes += 1
-            if self._writes % 20 == 0:
+            if self.max_bytes and self._writes % 20 == 0:
                 self.evict()
 
     def delete(self, key):
@@ -1841,6 +1867,8 @@ class Cache:
     EVICTABLE = ('release:', 'search:', 'rgreleases:', 'wiki:', 'artist:', 'light:')
 
     def evict(self):
+        if not self.max_bytes:
+            return 0
         with self._lock:
             total = self._db.execute('SELECT COALESCE(SUM(size), 0) FROM entries').fetchone()[0]
             if total <= self.max_bytes:
@@ -1858,6 +1886,15 @@ class Cache:
                 removed += 1
             self._db.execute('PRAGMA incremental_vacuum')
             return removed
+
+    def checkpoint(self):
+        """Fold the write-ahead log back into the database file, so moving it
+        elsewhere means moving one file."""
+        with self._lock:
+            try:
+                self._db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+            except sqlite3.DatabaseError:
+                pass
 
     def clear(self):
         """Everything except the manual pins."""
@@ -2168,14 +2205,140 @@ class _Ctx:
             raise _Yield()
 
 
+class CacheMoveError(Exception):
+    """A destination that cannot hold the archive. `code` is an i18n key, so
+    the owner reads why in their own language."""
+
+    def __init__(self, code, **fields):
+        super().__init__(code)
+        self.code = code
+        self.fields = fields
+
+
+def _unescape_mount(text):
+    """/proc/mounts writes a space as \\040 and so on."""
+    out, i = [], 0
+    while i < len(text):
+        chunk = text[i + 1:i + 4]
+        if text[i] == '\\' and len(chunk) == 3 and chunk.isdigit():
+            try:
+                out.append(chr(int(chunk, 8)))
+                i += 4
+                continue
+            except ValueError:
+                pass
+        out.append(text[i])
+        i += 1
+    return ''.join(out)
+
+
+def read_mounts():
+    """[(mount point, filesystem type)], as the kernel sees them."""
+    out = []
+    try:
+        with open('/proc/mounts') as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 3:
+                    out.append((_unescape_mount(parts[1]), parts[2]))
+    except OSError:
+        pass
+    return out
+
+
+def _fs_usage(path):
+    """Room on the filesystem holding `path`, {} when it cannot be read."""
+    try:
+        st = os.statvfs(path)
+    except (OSError, ValueError):
+        return {}
+    total = st.f_blocks * st.f_frsize
+    if total <= 0:
+        return {}
+    return {'total': total, 'free': st.f_bavail * st.f_frsize,
+            'readonly': bool(st.f_flag & getattr(os, 'ST_RDONLY', 1))}
+
+
+def _room_for(path):
+    """Room on the filesystem a folder would land on — the folder itself may
+    not have been made yet (nothing downloaded so far)."""
+    while True:
+        usage = _fs_usage(path)
+        if usage:
+            return usage
+        parent = os.path.dirname(path)
+        if parent == path:
+            return {}
+        path = parent
+
+
+def _device_of(path):
+    """The filesystem a folder is on — two mount points on the same one are
+    the same place, and only one of them is worth offering."""
+    while True:
+        try:
+            return os.stat(path).st_dev
+        except OSError:
+            parent = os.path.dirname(path)
+            if parent == path:
+                return None
+            path = parent
+
+
+def _location_kind(path):
+    """What to call this place on screen: a USB disk, an internal one, the
+    data partition, a network folder."""
+    for prefix, kind in (('/mnt/hifi-usb/', 'usb'), ('/media/', 'usb'),
+                         ('/mnt/hifi-internal/', 'disk'), ('/mnt/hifi-sources/', 'network')):
+        if path.startswith(prefix):
+            return kind
+    return 'data' if path == '/data' else 'disk'
+
+
+def _move_db(source, target):
+    """Carry metadata.db from one folder to the other: copy first, remove the
+    original last, so a failure halfway leaves the archive where it was. A
+    database already sitting in `target` (the owner moved away from this disk
+    and came back) makes way for the one in use."""
+    os.makedirs(target, mode=0o755, exist_ok=True)
+    src = os.path.join(source, 'metadata.db')
+    if not os.path.exists(src):
+        return
+    usage = _fs_usage(target)
+    if usage and usage.get('free', 0) < os.path.getsize(src) + 8 * 1024 * 1024:
+        raise CacheMoveError('meta.cacheDirNoSpace')
+    tmp = os.path.join(target, 'metadata.db.part')
+    try:
+        shutil.copyfile(src, tmp)
+        os.replace(tmp, os.path.join(target, 'metadata.db'))
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise CacheMoveError('meta.cacheDirFailed', detail=str(e))
+    for suffix in ('', '-wal', '-shm'):
+        try:
+            os.remove(src + suffix)
+        except OSError:
+            pass
+    try:
+        os.rmdir(source)
+    except OSError:
+        pass
+
+
 def _lang_ok(lang):
     return lang if lang in ('it', 'en') else 'en'
 
 
 class MetadataService:
     def __init__(self, cache_dir=None, etc_dir=None, lyrion=None, client=None, clock=None,
-                 start_worker=True, edits_dir=None):
+                 start_worker=True, edits_dir=None, mounts=None):
+        # cache_dir is where the archive lives unless the owner picked a disk
+        # of their own (CACHE_DIR_SETTING): see effective_cache_dir().
         self.cache_dir = cache_dir or os.environ.get('HIFI_META_CACHE_DIR') or CACHE_DIR
+        self._mounts = mounts or read_mounts
         self.etc_dir = etc_dir or os.environ.get('HIFI_META_ETC_DIR') or ETC_DIR
         # Next to the cache (/var/lib/hifi-player/metadata-edits on a device),
         # unless given: a test that moves the cache moves the edits with it.
@@ -2183,6 +2346,7 @@ class MetadataService:
             os.path.join(os.path.dirname(os.path.abspath(self.cache_dir)), EDITS_DIR_NAME)
         self.lyrion = lyrion or Lyrion()
         self.client = client or CLIENT
+        self._dir = {'value': None, 'at': 0.0}
         self._clock = clock or time.time
         self._cache = None
         self._edits = None
@@ -2202,11 +2366,29 @@ class MetadataService:
             self._start_worker()
 
     # plumbing
+    def _wanted_dir(self, ttl=5.0):
+        """effective_cache_dir(), re-read at most every few seconds: this is
+        on the path of every cache lookup."""
+        now = time.monotonic()
+        if self._dir['value'] is None or now - self._dir['at'] > ttl:
+            self._dir = {'value': self.effective_cache_dir(), 'at': now}
+        return self._dir['value']
+
     @property
     def cache(self):
         with self._cache_lock:
+            wanted = self._wanted_dir()
+            if self._cache is not None and self._cache.directory != wanted:
+                # the disk was taken away under us, or plugged back in
+                _log(f'archive folder is now {wanted}')
+                try:
+                    self._cache.close()
+                except sqlite3.Error:
+                    pass
+                self._cache = None
             if self._cache is None:
-                self._cache = Cache(self.cache_dir)
+                self._cache = Cache(wanted,
+                                    max_bytes=None if self.keep_enabled() else CACHE_MAX_BYTES)
                 try:
                     self.edits.migrate_pins(self._cache)
                 except Exception as e:  # noqa: BLE001 — the cache must open anyway
@@ -2338,6 +2520,12 @@ class MetadataService:
     def prefetch_enabled(self):
         return self._flag('meta-prefetch')
 
+    def keep_enabled(self):
+        """On (the default): what was downloaded stays until the owner clears
+        it — nothing goes stale, nothing is evicted to stay under a size cap.
+        Off: the old behaviour, 60 days and 100 MB."""
+        return self._flag('meta-keep')
+
     def _write_flag(self, name, value):
         os.makedirs(self.etc_dir, exist_ok=True)
         path = os.path.join(self.etc_dir, name)
@@ -2346,23 +2534,161 @@ class MetadataService:
             f.write('1\n' if value else '0\n')
         os.replace(tmp, path)
 
+    def _write_text(self, name, value):
+        os.makedirs(self.etc_dir, exist_ok=True)
+        path = os.path.join(self.etc_dir, name)
+        tmp = path + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write((value or '') + '\n')
+        os.replace(tmp, path)
+
+    # ── where the downloaded information is kept ──
+    def cache_location(self):
+        """The mount point the owner picked, '' for this device's own
+        storage."""
+        try:
+            with open(os.path.join(self.etc_dir, CACHE_DIR_SETTING)) as f:
+                text = f.read().strip()
+        except OSError:
+            return ''
+        return text.rstrip('/') if text.startswith('/') else ''
+
+    def _mount_points(self):
+        return dict(self._mounts())
+
+    def effective_cache_dir(self):
+        """Where the archive really is. A disk that is not mounted any more
+        (unplugged, or not ready yet at boot) sends it back to this device's
+        own storage: writing onto a bare mount point would quietly fill the
+        system disk instead, and the setting stays as the owner left it so
+        plugging the disk back in is all it takes."""
+        location = self.cache_location()
+        if not location or location not in self._mount_points():
+            return self.cache_dir
+        return os.path.join(location, CACHE_FOLDER)
+
+    def cache_locations(self):
+        """Every place the archive may go: this device's own storage first,
+        then each disk mounted on it. A network folder is listed with
+        `usable` false rather than hidden, so a screen can say why."""
+        current = self.cache_location()
+        mounts = self._mount_points()
+        here = {'id': 'default', 'path': '', 'kind': 'internal', 'label': '',
+                'usable': True, 'reason': '', 'current': not current or current not in mounts}
+        here.update(_room_for(self.cache_dir))
+        out = [here]
+        seen = {_device_of(self.cache_dir)}
+        for mp in sorted(mounts):
+            if mp != '/data' and not any(mp.startswith(root + '/') for root in CACHE_MOUNT_ROOTS):
+                continue
+            if mounts[mp] in SKIP_FS:
+                continue
+            usable, reason = True, ''
+            if mounts[mp] in NETWORK_FS:
+                usable, reason = False, 'network'
+            usage = _fs_usage(mp)
+            if usable:
+                device = _device_of(mp)
+                if device in seen:
+                    continue            # the same filesystem under another name
+                seen.add(device)
+                if not usage:
+                    usable, reason = False, 'unavailable'
+                elif usage.get('readonly'):
+                    usable, reason = False, 'readonly'
+            item = {'id': mp, 'path': mp, 'kind': _location_kind(mp),
+                    'label': os.path.basename(mp) or mp, 'usable': usable, 'reason': reason,
+                    'current': mp == current}
+            item.update(usage)
+            out.append(item)
+        if current and current not in mounts:
+            # the picked disk is away: still shown as the chosen one, so the
+            # screens can say the information is on a disk that is not here
+            out.append({'id': current, 'path': current, 'kind': _location_kind(current),
+                        'label': os.path.basename(current) or current, 'usable': False,
+                        'reason': 'unavailable', 'current': True})
+        return out
+
+    def set_cache_location(self, location):
+        """Keep the downloaded information somewhere else. The archive moves
+        with the setting: changing your mind about where it goes is not a
+        reason to download everything again."""
+        location = '' if location in (None, '', 'default') else str(location).rstrip('/')
+        if location:
+            match = next((i for i in self.cache_locations() if i['path'] == location), None)
+            if match is None:
+                raise CacheMoveError('meta.cacheDirUnknown')
+            if not match['usable']:
+                raise CacheMoveError({'network': 'meta.cacheDirNetwork',
+                                      'readonly': 'meta.cacheDirReadonly'}.get(match['reason'],
+                                                                               'meta.cacheDirUnknown'))
+            target = os.path.join(location, CACHE_FOLDER)
+        else:
+            target = self.cache_dir
+        if os.path.abspath(target) == os.path.abspath(self.effective_cache_dir()):
+            self._write_text(CACHE_DIR_SETTING, location)
+            self._dir = {'value': None, 'at': 0.0}
+            return self.settings()
+        # let whatever is running finish before the database moves under it
+        self.wait_idle(timeout=20)
+        with self._cache_lock:
+            cache, self._cache = self._cache, None
+            source = cache.directory if cache is not None else self.effective_cache_dir()
+            if cache is not None:
+                cache.checkpoint()
+                cache.close()
+            try:
+                _move_db(source, target)
+            except CacheMoveError:
+                raise           # nothing was written: the archive stays put
+            except OSError as e:
+                raise CacheMoveError('meta.cacheDirFailed', detail=str(e))
+            self._write_text(CACHE_DIR_SETTING, location)
+            self._dir = {'value': target, 'at': time.monotonic()}
+        _log(f'archive moved to {target}')
+        return self.settings()
+
+    def _apply_keep(self):
+        """The open database follows the setting without a restart."""
+        cache = self._cache
+        if cache is None:
+            return
+        cache.max_bytes = None if self.keep_enabled() else CACHE_MAX_BYTES
+        try:
+            cache.evict()
+        except sqlite3.Error as e:
+            _log(f'evict failed: {e}')
+
     def settings(self):
         try:
             stats = self.cache.stats()
         except Exception as e:  # noqa: BLE001
             _log(f'cache stats unavailable: {e}')
             stats = {'albums': 0, 'artists': 0, 'bytes': 0}
-        return {'online': self.online_enabled(), 'prefetch': self.prefetch_enabled(), 'cache': stats,
+        location = self.cache_location()
+        stats['dir'] = self.effective_cache_dir()
+        stats['location'] = location
+        stats['detached'] = bool(location) and location not in self._mount_points()
+        room = _room_for(stats['dir'])
+        stats['free'] = room.get('free', 0)
+        stats['total'] = room.get('total', 0)
+        return {'online': self.online_enabled(), 'prefetch': self.prefetch_enabled(),
+                'keep': self.keep_enabled(), 'cache': stats, 'locations': self.cache_locations(),
                 'prefetch_state': dict(self._prefetch)}
 
-    def set_settings(self, online=None, prefetch=None):
+    def set_settings(self, online=None, prefetch=None, keep=None, cache_location=None):
         if online is not None:
             self._write_flag('meta-online', bool(online))
             if online:
                 self.client.reset()
         if prefetch is not None:
             self._write_flag('meta-prefetch', bool(prefetch))
+        if keep is not None:
+            self._write_flag('meta-keep', bool(keep))
+            self._apply_keep()
         self._settings_event.set()
+        if cache_location is not None:
+            return self.set_cache_location(cache_location)
         return self.settings()
 
     def clear_cache(self):
@@ -2374,13 +2700,16 @@ class MetadataService:
 
     # cached data helpers
     def _fresh(self, key, ttl=DATA_TTL):
-        """(value, negative, stale) or None."""
+        """(value, negative, stale) or None. With "keep" on, only a "not
+        found" ever goes stale: nothing was downloaded for it, and a week
+        later MusicBrainz may well know the album."""
         hit = self.cache.get(key)
         if hit is None:
             return None
         value, age, negative = hit
-        limit = NEGATIVE_TTL if negative else ttl
-        return value, negative, age > limit
+        if negative:
+            return value, negative, age > NEGATIVE_TTL
+        return value, negative, False if self.keep_enabled() else age > ttl
 
     def _mb(self, ctx, path, **params):
         ctx.check()
@@ -3769,10 +4098,17 @@ def init_app(app, require_auth, service_getter=None):
             data = request.get_json(silent=True) or {}
             online = data.get('online')
             prefetch = data.get('prefetch')
-            if (online is not None and not isinstance(online, bool)) or \
-                    (prefetch is not None and not isinstance(prefetch, bool)):
-                return _bad('online/prefetch must be booleans')
-            return jsonify(svc().set_settings(online=online, prefetch=prefetch))
+            keep = data.get('keep')
+            where = data.get('cache_location')
+            if any(v is not None and not isinstance(v, bool) for v in (online, prefetch, keep)):
+                return _bad('online/prefetch/keep must be booleans')
+            if where is not None and not isinstance(where, str):
+                return _bad('cache_location must be a string')
+            try:
+                return jsonify(svc().set_settings(online=online, prefetch=prefetch, keep=keep,
+                                                  cache_location=where))
+            except CacheMoveError as e:
+                return _fail(e.code, **e.fields)
         return jsonify(svc().settings())
 
     @app.route('/api/meta/cache/clear', methods=['POST'])

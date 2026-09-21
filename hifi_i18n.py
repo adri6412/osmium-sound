@@ -622,6 +622,20 @@ MESSAGES = {
                       'it': 'Scrivi almeno 2 caratteri (al massimo 100).'},
     'meta.badOverrides': {'en': 'The corrections could not be saved: {detail}',
                           'it': 'Impossibile salvare le correzioni: {detail}'},
+
+    # ── Where the downloaded information is kept ─────────────────────
+    'meta.cacheDirUnknown': {'en': 'That place is not available any more. Pick another one.',
+                             'it': 'Quel posto non c\u2019\u00e8 pi\u00f9. Scegline un altro.'},
+    'meta.cacheDirNetwork': {'en': 'A network folder cannot hold this archive: choose a disk '
+                                   'connected to the player, or leave it on the player itself.',
+                             'it': 'Una cartella di rete non pu\u00f2 tenere questo archivio: scegli un '
+                                   'disco collegato al lettore, oppure lascialo sul lettore stesso.'},
+    'meta.cacheDirReadonly': {'en': 'That disk cannot be written to.',
+                              'it': 'Su quel disco non si pu\u00f2 scrivere.'},
+    'meta.cacheDirNoSpace': {'en': 'There is not enough room on that disk.',
+                             'it': 'Su quel disco non c\u2019\u00e8 spazio a sufficienza.'},
+    'meta.cacheDirFailed': {'en': 'The information could not be moved: {detail}',
+                            'it': 'Impossibile spostare le informazioni: {detail}'},
 }
 
 

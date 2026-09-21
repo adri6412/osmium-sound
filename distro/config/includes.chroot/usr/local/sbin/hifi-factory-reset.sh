@@ -153,6 +153,14 @@ rm -rf /var/lib/hifi-player/anim-scenes /var/lib/hifi-player/anim-store 2>/dev/n
 # choices, credit corrections, the journal of tag changes (hifi_tags.py).
 rm -rf /var/lib/hifi-player/metadata 2>/dev/null || true
 rm -rf /var/lib/hifi-player/metadata-edits 2>/dev/null || true
+# The owner may have moved that archive onto a disk of their own
+# (/etc/hifi-player/meta-cache-dir holds the mount point): take the folder we
+# made there too, and never anything else on their disk.
+META_DIR="$(cat /etc/hifi-player/meta-cache-dir 2>/dev/null || true)"
+case "$META_DIR" in
+  /*) mountpoint -q "$META_DIR" && rm -rf "${META_DIR%/}/osmium-metadata" 2>/dev/null || true ;;
+esac
+rm -f /etc/hifi-player/meta-cache-dir /etc/hifi-player/meta-keep 2>/dev/null || true
 rm -f /system-update 2>/dev/null || true
 
 # Stored backup generations (Settings -> Backup e ripristino). These can carry

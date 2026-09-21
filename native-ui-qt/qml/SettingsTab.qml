@@ -142,7 +142,8 @@ Item {
         // the server's library: totals, last scan, a scan in progress
         property var lib: ({ albums: -1, artists: -1, songs: -1, duration: 0, lastScan: 0, scanning: false, progress: "", pct: -1 })
         // album and artist information from the web (sources_server /api/meta/settings)
-        property var meta: ({ available: false, online: true, prefetch: true, albums: 0, artists: 0, bytes: 0, running: false, done: 0, total: 0 })
+        property var meta: ({ available: false, online: true, prefetch: true, keep: true, albums: 0, artists: 0, bytes: 0,
+                              running: false, done: 0, total: 0, location: "", detached: false, places: [] })
         property var players: []                                    // [{id,name,sync}]
         property var alarms: []                                     // [{id,time,on}]
         property string netType: ""; property string netSsid: ""; property string netIp: ""; property string netDev: ""; property string netSubnet: ""; property bool netConnected: false
@@ -322,8 +323,15 @@ Item {
             get(src("/api/meta/settings"), function(d) {
                 if (d.online === undefined) return
                 var c = d.cache || {}, st = d.prefetch_state || {}
-                meta = { available: true, online: !!d.online, prefetch: !!d.prefetch, albums: Number(c.albums || 0), artists: Number(c.artists || 0),
-                         bytes: Number(c.bytes || 0), running: !!st.running, done: Number(st.done || 0), total: Number(st.total || 0) }
+                var places = (d.locations || []).map(function(x) {
+                    return { path: String(x.path || ""), kind: String(x.kind || ""), label: String(x.label || ""),
+                             usable: !!x.usable, reason: String(x.reason || ""), current: !!x.current,
+                             free: Number(x.free || 0), total: Number(x.total || 0) }
+                })
+                meta = { available: true, online: !!d.online, prefetch: !!d.prefetch, keep: d.keep !== false,
+                         albums: Number(c.albums || 0), artists: Number(c.artists || 0),
+                         bytes: Number(c.bytes || 0), running: !!st.running, done: Number(st.done || 0), total: Number(st.total || 0),
+                         location: String(c.location || ""), detached: !!c.detached, places: places }
             })
             get(src("/api/usb"), function(d) { usb = d.disks || [] })
             get(src("/api/internal/disks"), function(d) {
@@ -695,6 +703,21 @@ Item {
     function dir(name, act) { return push({ type: "dir", label: name, arg: name, act: act }) }
     function miniRow() { return push({ type: "mini", mini: [] }) }
     function box(fn) { var b = push({ type: "box", children: [] }); begin(b.children); fn(); end(); return b }
+
+    // A place the downloaded information may be kept, as the owner reads it:
+    // "USB disk «MUSIC»" and how much room is left on it.
+    function metaPlaceName(p) {
+        if (p.kind === "internal") return Tr.t("settings.lyrion.metaHere")
+        if (p.kind === "data") return Tr.t("settings.lyrion.metaData")
+        var key = p.kind === "usb" ? "metaUsb" : p.kind === "network" ? "metaNetwork" : "metaDisk"
+        return Tr.tf("settings.lyrion." + key, "name", p.label)
+    }
+    function metaPlaceRoom(p) {
+        if (!p.usable)
+            return Tr.t(p.reason === "network" ? "settings.lyrion.metaNoNetwork"
+                        : p.reason === "readonly" ? "settings.lyrion.metaReadonly" : "settings.lyrion.metaGone")
+        return p.total > 0 ? Tr.tf("settings.lyrion.metaFree", "size", humanSize(p.free)) : ""
+    }
 
     function humanSize(bytes) {
         var gb = bytes / (1024 * 1024 * 1024)
@@ -1269,6 +1292,17 @@ Item {
                      .replace("{artists}", String(cfg.meta.artists)).replace("{size}", Meta.bytes(cfg.meta.bytes))).mono = true
                 var mc = action(Tr.t("settings.lyrion.metaClear"), "meta_clear", "accent"); mc.hh = 40; mc.icon = "trash-2"
             }
+            toggle(Tr.t("settings.lyrion.metaKeep"), Tr.t("settings.lyrion.metaKeepHelp"), cfg.meta.keep, "meta_keep")
+            // where that archive is kept: this device, or a disk of the owner's
+            if (cfg.meta.places.length > 1) {
+                labelText(Tr.t("settings.lyrion.metaWhere"), 15)
+                help("settings.lyrion.metaWhereHelp", 12)
+                for (var mp = 0; mp < cfg.meta.places.length; mp++) {
+                    var pl = cfg.meta.places[mp]
+                    option(metaPlaceName(pl), metaPlaceRoom(pl), pl.path, pl.current, "meta_where").dim = !pl.usable && !pl.current
+                }
+            }
+            if (cfg.meta.detached) note(Tr.t("settings.lyrion.metaWhereAway"), "amber", "alert-triangle", 12)
             sep()
         }
         if (remoteNote()) return
@@ -1880,6 +1914,16 @@ Item {
         case "meta_online": post(S("/api/meta/settings"), { online: !row.on }); cfg.meta = Object.assign({}, cfg.meta, { online: !row.on }); break
         case "meta_prefetch": post(S("/api/meta/settings"), { prefetch: !row.on }); cfg.meta = Object.assign({}, cfg.meta, { prefetch: !row.on }); break
         case "meta_clear": post(S("/api/meta/cache/clear"), {}); say(Tr.t("settings.lyrion.metaCleared")); break
+        case "meta_keep": post(S("/api/meta/settings"), { keep: !row.on }); cfg.meta = Object.assign({}, cfg.meta, { keep: !row.on }); break
+        case "meta_where":
+            // the archive travels with the choice, so this can take a moment
+            if (arg === cfg.meta.location) return
+            say(Tr.t("settings.lyrion.metaMoving"))
+            post(S("/api/meta/settings"), { cache_location: arg }, function(ok, d) {
+                say(ok ? Tr.t("settings.lyrion.metaMoved")
+                       : ((d && d.message) || Tr.t("settings.lyrion.metaMoveFailed")), !ok)
+            })
+            break
         case "lib_abort":
             Player.queryServer(["abortscan"], function() { cfg.loadLibrary() })
             say(Tr.t("settings.lyrion.scanAborted")); break

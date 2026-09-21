@@ -631,7 +631,8 @@ class CacheTests(unittest.TestCase):
         shutil.rmtree(self.tmp)
 
     def test_put_get_and_ttl(self):
-        svc = hm.MetadataService(cache_dir=self.tmp, etc_dir=self.tmp, lyrion=object(), start_worker=False)
+        svc = hm.MetadataService(cache_dir=self.cache.directory, etc_dir=self.tmp, lyrion=object(),
+                                 start_worker=False)
         svc._cache = self.cache
         self.cache.put('release:a', {'x': 1})
         self.cache.put('match:n', {'mbid': None}, negative=True)
@@ -640,6 +641,9 @@ class CacheTests(unittest.TestCase):
         self.assertTrue(svc._fresh('match:n')[2])          # negative: stale after 7 days
         self.assertFalse(svc._fresh('release:a')[2])       # data: still fresh
         self.clock.t += hm.DATA_TTL
+        # keep is on by default: what was downloaded never goes stale
+        self.assertFalse(svc._fresh('release:a')[2])
+        svc.set_settings(keep=False)
         self.assertTrue(svc._fresh('release:a')[2])
         self.assertIsNone(svc._fresh('nothing'))
 
@@ -672,6 +676,124 @@ class CacheTests(unittest.TestCase):
         self.assertIsNotNone(self.cache.get('release:9'))
         # the small "resolved" answers are never evicted, even the oldest
         self.assertIsNotNone(self.cache.get('match:a'))
+
+
+# ── where the downloaded information is kept ─────────────────────────
+class CacheLocationTests(unittest.TestCase):
+    """The owner picks the disk; the archive moves there and stays there
+    until they clear it."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.etc = os.path.join(self.tmp, 'etc')
+        self.here = os.path.join(self.tmp, 'internal', 'metadata')
+        self.disk = os.path.join(self.tmp, 'disk')       # a disk of the owner's
+        self.share = os.path.join(self.tmp, 'share')     # a folder on a NAS
+        for d in (self.etc, self.disk, self.share):
+            os.makedirs(d)
+        self.ram = os.path.join(self.tmp, 'ram')          # /mnt and /media are tmpfs here
+        os.makedirs(self.ram)
+        self.mounts = [(self.disk, 'ext4'), (self.share, 'cifs'), (self.ram, 'tmpfs'), (self.tmp, 'ext4')]
+        for target, value in (('CACHE_MOUNT_ROOTS', (self.tmp,)),):
+            patcher = mock.patch.object(hm, target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        # a tmp folder is one filesystem: pretend each mount is its own disk
+        patcher = mock.patch.object(hm, '_device_of', self._device_of)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.svc = self.service()
+
+    def tearDown(self):
+        if self.svc._cache is not None:
+            self.svc._cache.close()
+        shutil.rmtree(self.tmp)
+
+    def service(self):
+        return hm.MetadataService(cache_dir=self.here, etc_dir=self.etc, lyrion=object(),
+                                  start_worker=False, mounts=lambda: list(self.mounts))
+
+    def _device_of(self, path):
+        for number, root in enumerate((self.disk, self.share), start=2):
+            if path == root or path.startswith(root + os.sep):
+                return number
+        return 1
+
+    def place(self, path):
+        return next(i for i in self.svc.cache_locations() if i['path'] == path)
+
+    def test_lists_the_places_and_refuses_a_share(self):
+        places = self.svc.cache_locations()
+        self.assertEqual(places[0]['id'], 'default')
+        self.assertTrue(places[0]['current'] and places[0]['usable'])
+        self.assertGreater(places[0]['total'], 0)
+        disk = self.place(self.disk)
+        self.assertTrue(disk['usable'] and not disk['current'])
+        self.assertEqual(disk['label'], 'disk')
+        self.assertGreater(disk['free'], 0)
+        share = self.place(self.share)
+        self.assertEqual((share['usable'], share['reason'], share['kind']), (False, 'network', 'disk'))
+        # neither RAM nor the folder those mounts merely sit in are offered
+        paths = [i['path'] for i in places]
+        self.assertNotIn(self.ram, paths)
+        self.assertNotIn(self.tmp, paths)
+        with self.assertRaises(hm.CacheMoveError) as e:
+            self.svc.set_cache_location(self.share)
+        self.assertEqual(e.exception.code, 'meta.cacheDirNetwork')
+        with self.assertRaises(hm.CacheMoveError) as e:
+            self.svc.set_cache_location('/somewhere/else')
+        self.assertEqual(e.exception.code, 'meta.cacheDirUnknown')
+
+    def test_the_archive_travels_with_the_setting(self):
+        self.svc.cache.put('release:a', {'x': 1})
+        self.assertTrue(os.path.exists(os.path.join(self.here, 'metadata.db')))
+        out = self.svc.set_cache_location(self.disk)
+        moved = os.path.join(self.disk, hm.CACHE_FOLDER)
+        self.assertEqual(out['cache']['dir'], moved)
+        self.assertEqual(out['cache']['location'], self.disk)
+        self.assertFalse(out['cache']['detached'])
+        self.assertTrue(os.path.exists(os.path.join(moved, 'metadata.db')))
+        self.assertFalse(os.path.exists(os.path.join(self.here, 'metadata.db')))
+        with open(os.path.join(self.etc, hm.CACHE_DIR_SETTING)) as f:
+            self.assertEqual(f.read().strip(), self.disk)
+        # what was downloaded is still there, and a fresh service finds it
+        self.assertEqual(self.svc.cache.get('release:a')[0], {'x': 1})
+        other = self.service()
+        self.assertEqual(other.cache.get('release:a')[0], {'x': 1})
+        other.cache.close()
+        self.assertTrue(self.place(self.disk)['current'])
+        self.svc.set_cache_location('')
+        self.assertEqual(self.svc.cache.get('release:a')[0], {'x': 1})
+        self.assertTrue(os.path.exists(os.path.join(self.here, 'metadata.db')))
+        self.assertFalse(os.path.exists(os.path.join(moved, 'metadata.db')))
+
+    def test_a_disk_taken_away_does_not_write_onto_its_mount_point(self):
+        self.svc.cache.put('release:a', {'x': 1})
+        self.svc.set_cache_location(self.disk)
+        self.mounts = [(self.share, 'cifs')]              # unplugged
+        self.svc._dir = {'value': None, 'at': 0.0}        # (checked every few seconds)
+        self.assertEqual(self.svc.effective_cache_dir(), self.here)
+        self.assertEqual(self.svc.cache.directory, self.here)   # reopened on its own
+        self.assertEqual(self.svc.cache_location(), self.disk)
+        stats = self.svc.settings()['cache']
+        self.assertTrue(stats['detached'])
+        self.assertEqual(stats['dir'], self.here)
+        away = self.place(self.disk)
+        self.assertEqual((away['current'], away['usable'], away['reason']),
+                         (True, False, 'unavailable'))
+        # the archive is untouched on the disk, waiting for it to come back
+        self.assertTrue(os.path.exists(os.path.join(self.disk, hm.CACHE_FOLDER, 'metadata.db')))
+        self.mounts = [(self.disk, 'ext4'), (self.share, 'cifs'), (self.ram, 'tmpfs'), (self.tmp, 'ext4')]
+        self.svc._dir = {'value': None, 'at': 0.0}
+        self.assertEqual(self.svc.cache.get('release:a')[0], {'x': 1})
+
+    def test_keep_decides_whether_anything_is_ever_thrown_away(self):
+        self.assertIsNone(self.svc.cache.max_bytes)
+        self.svc.set_settings(keep=False)
+        self.assertEqual(self.svc.cache.max_bytes, hm.CACHE_MAX_BYTES)
+        self.svc.set_settings(keep=True)
+        self.assertIsNone(self.svc.cache.max_bytes)
+        self.assertTrue(self.svc.settings()['keep'])
 
 
 # ── the service, end to end with fakes ───────────────────────────────
@@ -795,7 +917,9 @@ class ServiceTests(unittest.TestCase):
     def test_settings_default_on_and_persisted(self):
         s = self.svc.settings()
         self.assertTrue(s['online'] and s['prefetch'])
-        self.assertEqual(set(s['cache']), {'albums', 'artists', 'bytes'})
+        self.assertTrue(s['keep'])
+        self.assertEqual(set(s['cache']),
+                         {'albums', 'artists', 'bytes', 'dir', 'location', 'detached', 'free', 'total'})
         self.assertEqual(set(s['prefetch_state']), {'running', 'done', 'total'})
         self.svc.set_settings(online=False)
         with open(os.path.join(self.tmp, 'meta-online')) as f:
@@ -1325,8 +1449,10 @@ class RoutesTests(unittest.TestCase):
             def settings(self):
                 return {'online': True}
 
-            def set_settings(self, online=None, prefetch=None):
-                calls.append(('set', online, prefetch))
+            def set_settings(self, online=None, prefetch=None, keep=None, cache_location=None):
+                calls.append(('set', online, prefetch, keep, cache_location))
+                if cache_location == '/nope':
+                    raise hm.CacheMoveError('meta.cacheDirNetwork')
                 return {'online': online}
 
         allowed = {'yes': True}
@@ -1342,8 +1468,15 @@ class RoutesTests(unittest.TestCase):
         self.assertEqual(calls[:2], [('album', 7, 'it'), ('album', 7, 'en')])
         self.assertEqual(c.get('/api/meta/album').status_code, 400)
         self.assertEqual(c.post('/api/meta/settings', json={'online': 'yes'}).status_code, 400)
+        self.assertEqual(c.post('/api/meta/settings', json={'keep': 'yes'}).status_code, 400)
+        self.assertEqual(c.post('/api/meta/settings', json={'cache_location': 3}).status_code, 400)
         c.post('/api/meta/settings', json={'prefetch': False})
-        self.assertEqual(calls[-1], ('set', None, False))
+        self.assertEqual(calls[-1], ('set', None, False, None, None))
+        c.post('/api/meta/settings', json={'keep': True, 'cache_location': '/mnt/x'})
+        self.assertEqual(calls[-1], ('set', None, None, True, '/mnt/x'))
+        r = c.post('/api/meta/settings', json={'cache_location': '/nope'}, headers={'X-UI-Lang': 'it'})
+        self.assertEqual((r.status_code, r.get_json()['code']), (400, 'meta.cacheDirNetwork'))
+        self.assertIn('cartella di rete', r.get_json()['message'])
         allowed['yes'] = False
         self.assertEqual(c.get('/api/meta/settings').status_code, 401)
 

@@ -870,7 +870,24 @@
       "metaProgress": "Preparati",
       "metaProgressValue": "{done} album su {total}",
       "metaClear": "Cancella le informazioni salvate",
-      "metaCleared": "Informazioni salvate cancellate"
+      "metaCleared": "Informazioni salvate cancellate",
+      "metaKeep": "Conserva quello che hai scaricato",
+      "metaKeepHelp": "Resta finché non lo cancelli tu. Se lo spegni, dopo due mesi viene cercato di nuovo e oltre i 100 MB le informazioni più vecchie vengono tolte.",
+      "metaWhere": "Dove tenerle",
+      "metaWhereHelp": "Se cambi, quello che hai già scaricato ci viene spostato: non si riscarica niente.",
+      "metaWhereAway": "Il disco che hai scelto non è collegato. Per ora le informazioni stanno su questo apparecchio; ricollegalo e ci tornano.",
+      "metaHere": "Su questo apparecchio",
+      "metaData": "Nello spazio dati di questo apparecchio",
+      "metaDisk": "Disco «{name}»",
+      "metaUsb": "Disco USB «{name}»",
+      "metaNetwork": "Cartella di rete «{name}»",
+      "metaFree": "{size} liberi",
+      "metaNoNetwork": "Una cartella di rete non può tenerle",
+      "metaReadonly": "In sola lettura",
+      "metaGone": "Non collegato",
+      "metaMoving": "Sposto le informazioni…",
+      "metaMoved": "Informazioni spostate",
+      "metaMoveFailed": "Non sono riuscito a spostare le informazioni"
     },
     "sources": {
       "help": "Aggiungi le cartelle musicali: chiavette/dischi USB (montati in automatico), cartelle di rete (SMB) o locali. Le modifiche hanno effetto subito."
