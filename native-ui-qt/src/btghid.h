@@ -16,7 +16,11 @@
 // navigazione, la mappatura dei tasti) non sa nemmeno che e' successo.
 //
 // 🚨 Si interviene SOLO sui dispositivi che il nucleo ha rifiutato: se il
-// telecomando funziona da se', qui non si tocca niente.
+// telecomando funziona da se', qui non si tocca niente. E siccome "ce l'ha
+// fatta" si vede solo dopo che BlueZ ha finito il suo giro, si aspetta qualche
+// secondo prima di decidere, e si chiude il ponte se il nodo del nucleo
+// compare dopo — altrimenti lo stesso telecomando finisce a mandare i tasti
+// due volte (successo con un telecomando Xiaomi: quattro nodi invece di due).
 #pragma once
 #include <QDBusObjectPath>
 #include <QDBusVariant>
@@ -74,5 +78,6 @@ private:
 
     QHash<QString, Bridge> m_bridges;     // devPath -> ponte
     QStringList m_failed;                 // dispositivi su cui abbiamo gia' rinunciato
+    QHash<QString, qint64> m_seen;        // devPath -> da quando e' collegato (ms)
     QTimer m_poll;
 };

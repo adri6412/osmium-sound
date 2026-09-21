@@ -144,6 +144,7 @@ private:
     QHash<QString, QHash<int, QString>> m_custom;
     QString m_chosen;                // il nome del "mio telecomando"
     qint64 m_webLearnUntil = 0;      // prova dei tasti chiesta dal web admin
+    mutable qint64 m_selfWrote = -10000;   // quando abbiamo scritto noi in /run
     QFileSystemWatcher m_confWatch;  // i due file che cambia anche il web admin
     QTimer m_confRescan, m_learnTick;
     QString m_learnDevice;           // chi sta parlando al pannello di prova

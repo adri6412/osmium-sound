@@ -30,6 +30,17 @@ const QString HID_SERVICE = QStringLiteral("00001812");          // HID over GAT
 const QString UUID_REPORT_MAP = QStringLiteral("00002a4b-0000-1000-8000-00805f9b34fb");
 const QString UUID_REPORT = QStringLiteral("00002a4d-0000-1000-8000-00805f9b34fb");
 const QString UUID_REPORT_REF = QStringLiteral("00002908-0000-1000-8000-00805f9b34fb");
+// come si firma il dispositivo che creiamo noi, per riconoscerlo in sysfs
+#define UHID_PHYS "osmium-btghid"
+// 🚨 Quanto si aspetta prima di rimpiazzare il nucleo: BlueZ il suo giro lo
+// finisce in un paio di secondi, e intervenire prima vuol dire creare un
+// doppione del dispositivo che stava per funzionare.
+const qint64 GRACE_MS = 6000;
+// 🚨 Quanti rapporti si leggono per ogni risveglio del descrittore. Un
+// telecomando che parla in continuazione (i sensori di movimento di certi
+// telecomandi Android) teneva il ciclo dentro `read` e l'interfaccia si
+// fermava: lo schermo restava fermo col processo vivo.
+const int MAX_REPORTS_PER_WAKE = 32;
 
 // Le collection della mappa si chiudono tutte? E' esattamente il controllo che
 // fa il nucleo prima di rifiutare un descrittore.
@@ -107,9 +118,16 @@ bool BtGattHid::kernelHandles(const QString &mac) const {
     const QString root = qEnvironmentVariable("HIFI_SYSFS_INPUT", QStringLiteral("/sys/class/input"));
     const QStringList entries = QDir(root).entryList(QStringList("input*"), QDir::Dirs | QDir::NoDotAndDotDot);
     for (const QString &e : entries) {
-        QFile f(root + "/" + e + "/uniq");
-        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
-        if (QString::fromLatin1(f.readAll()).trimmed().compare(mac, Qt::CaseInsensitive) == 0) return true;
+        QFile u(root + "/" + e + "/uniq");
+        if (!u.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
+        if (QString::fromLatin1(u.readAll()).trimmed().compare(mac, Qt::CaseInsensitive) != 0) continue;
+        // 🚨 ...ma non deve essere il nostro: il dispositivo che creiamo noi
+        // porta lo stesso indirizzo, e senza questo controllo ci vedremmo da
+        // soli e non chiuderemmo mai un ponte diventato inutile.
+        QFile p(root + "/" + e + "/phys");
+        QString phys;
+        if (p.open(QIODevice::ReadOnly | QIODevice::Text)) phys = QString::fromLatin1(p.readAll()).trimmed();
+        if (phys != QLatin1String(UHID_PHYS)) return true;
     }
     return false;
 }
@@ -133,9 +151,19 @@ void BtGattHid::poll() {
         const QString path = it.key().path();
         const QString mac = dev.value("Address").toString().toUpper();
         alive << path;
-        if (m_bridges.contains(path)) continue;
+        if (!m_seen.contains(path)) m_seen.insert(path, QDateTime::currentMSecsSinceEpoch());
+        if (m_bridges.contains(path)) {
+            // il nucleo ce l'ha fatta dopo di noi: il ponte non serve piu'
+            if (kernelHandles(mac)) {
+                qInfo("btghid: %s: ci ha pensato il nucleo, ponte chiuso", qPrintable(mac));
+                stop(path);
+            }
+            continue;
+        }
         if (m_failed.contains(path)) continue;
         if (kernelHandles(mac)) continue;         // funziona da se': non si tocca
+        // gli si lascia il tempo di farcela da solo
+        if (QDateTime::currentMSecsSinceEpoch() - m_seen.value(path) < GRACE_MS) continue;
 
         const QString name = dev.value("Alias").toString().isEmpty()
                            ? dev.value("Name").toString() : dev.value("Alias").toString();
@@ -155,6 +183,8 @@ void BtGattHid::poll() {
     const QStringList had = m_bridges.keys();
     for (const QString &p : had) if (!alive.contains(p)) stop(p);
     for (const QString &p : m_failed) if (!alive.contains(p)) m_failed.removeAll(p);
+    const QStringList seen = m_seen.keys();
+    for (const QString &p : seen) if (!alive.contains(p)) m_seen.remove(p);
 }
 
 // ─── leggere per intero cio' che BlueZ legge a meta' ───────────────────────
@@ -172,7 +202,7 @@ QByteArray BtGattHid::readCharacteristic(const QString &path) const {
         if (first < 0) first = part.size();
         out += part;
         if (part.size() < first) break;           // ultimo pezzo
-        if (out.size() > int(HID_MAX_DESCRIPTOR_SIZE)) break;
+        if (out.size() >= int(HID_MAX_DESCRIPTOR_SIZE)) break;
     }
     return out;
 }
@@ -191,6 +221,11 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
     if (mapPath.isEmpty() || reportChars.isEmpty()) { m_failed << devPath; return; }
 
     const QByteArray rd = readCharacteristic(mapPath);
+    if (rd.size() > int(HID_MAX_DESCRIPTOR_SIZE)) {
+        qWarning("btghid: %s: mappa dei tasti troppo lunga (%lld byte)", qPrintable(name), (long long)rd.size());
+        m_failed << devPath;
+        return;
+    }
     if (rd.isEmpty() || !balanced(rd)) {
         qWarning("btghid: %s: mappa dei tasti illeggibile (%lld byte)", qPrintable(name), (long long)rd.size());
         m_failed << devPath;
@@ -308,7 +343,7 @@ void BtGattHid::onReport(const QString &devPath, int index) {
     Bridge &b = m_bridges[devPath];
     if (index < 0 || index >= b.reports.size()) return;
     Report &r = b.reports[index];
-    for (;;) {
+    for (int n_read = 0; n_read < MAX_REPORTS_PER_WAKE; n_read++) {
         char buf[UHID_DATA_MAX];
         const ssize_t n = ::read(r.fd, buf, sizeof(buf));
         if (n <= 0) {

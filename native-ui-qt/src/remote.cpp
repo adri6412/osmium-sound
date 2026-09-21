@@ -188,7 +188,17 @@ Remote::Remote(const QString &configDir, QObject *parent) : QObject(parent), m_c
         readWebLearn();
         publishDevices();
     });
-    connect(&m_confWatch, &QFileSystemWatcher::directoryChanged, this, [this]() { m_confRescan.start(); });
+    // 🚨 Anche il file, non solo la cartella: riscrivere un file che c'e' gia'
+    // NON e' un cambiamento di cartella, e la scadenza della prova non
+    // arrivava mai. Il percorso si riaggancia a ogni giro, perche' un file
+    // sostituito con una rinomina porta via la sorveglianza con se'.
+    connect(&m_confWatch, &QFileSystemWatcher::fileChanged, this, [this]() { m_confRescan.start(); });
+    connect(&m_confWatch, &QFileSystemWatcher::directoryChanged, this, [this](const QString &dir) {
+        // la cartella di /run l'abbiamo appena toccata noi scrivendo l'ultimo
+        // tasto: non c'e' niente da rileggere
+        if (dir.startsWith("/run/") && m_clock.elapsed() - m_selfWrote < 500) return;
+        m_confRescan.start();
+    });
     if (QDir(m_configDir).exists()) m_confWatch.addPath(m_configDir);
     QDir().mkpath("/run/hifi-remote");
     if (QDir("/run/hifi-remote").exists()) m_confWatch.addPath("/run/hifi-remote");
@@ -338,7 +348,11 @@ void Remote::onKey(Dev &dev, int code, int value) {
         return;
     }
 
-    if (m_learning) {
+    // 🚨 learning(), non m_learning: la prova si accende anche dal web admin
+    // (finestra con scadenza in /run/hifi-remote/learn), e guardando solo il
+    // flag del pannello del kiosk i tasti continuavano a comandare lo schermo
+    // mentre la pagina diceva che non lo facevano.
+    if (learning()) {
         // 🚨 Un dispositivo solo. Con una tastiera accanto al telecomando, un
         // tasto premuto li' si prendeva il posto di quello del telecomando —
         // e l'assegnazione finiva sul dispositivo sbagliato.
@@ -528,7 +542,14 @@ bool Remote::saveCustom(int code, const QString &device) {
 }
 
 // Per il pannello del web admin: l'ultimo tasto, dove l'api_server lo legge.
+//
+// 🚨 Solo mentre si stanno provando i tasti. Scriverlo a ogni pressione voleva
+// dire un file scritto per ogni tasto — e siccome quella cartella la
+// sorvegliamo noi per la finestra di prova, ogni tasto si svegliava da solo per
+// rileggere la configurazione. Fuori dalla prova il pannello non guarda niente,
+// quindi non serve a nessuno.
 void Remote::publishLastKey() const {
+    if (!learning()) return;
     QJsonObject o;
     o.insert("code", m_lastKey.value("code").toInt());
     o.insert("key", m_lastKey.value("key").toString());
@@ -539,11 +560,14 @@ void Remote::publishLastKey() const {
     QFile f("/run/hifi-remote/last.json");
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return;
     f.write(QJsonDocument(o).toJson(QJsonDocument::Compact));
+    m_selfWrote = m_clock.elapsed();
 }
 
 void Remote::readWebLearn() {
     qint64 until = 0;
-    QFile f("/run/hifi-remote/learn");
+    const QString path = QStringLiteral("/run/hifi-remote/learn");
+    if (QFile::exists(path) && !m_confWatch.files().contains(path)) m_confWatch.addPath(path);
+    QFile f(path);
     if (f.open(QIODevice::ReadOnly | QIODevice::Text)) until = QString::fromUtf8(f.readAll()).trimmed().toLongLong();
     if (until == m_webLearnUntil) return;
     const bool before = learning();

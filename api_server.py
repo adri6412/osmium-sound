@@ -6988,8 +6988,12 @@ def set_remote_learning(enable):
     telecomando non comanda piu' niente."""
     try:
         os.makedirs(REMOTE_RUN_DIR, exist_ok=True)
-        with open(REMOTE_LEARN_FILE, 'w') as f:
+        # 🚨 Scritto e poi rinominato: l'interfaccia sorveglia la cartella, e
+        # una riscrittura sul posto non e' un cambiamento di cartella.
+        tmp = REMOTE_LEARN_FILE + '.tmp'
+        with open(tmp, 'w') as f:
             f.write(str(int(time.time()) + REMOTE_LEARN_SECONDS) if enable else '0')
+        os.replace(tmp, REMOTE_LEARN_FILE)
     except Exception:
         log.exception("set_remote_learning failed")
         return {'success': False, 'message': _t('remote.saveFailed', _lang()), **get_remote()}
