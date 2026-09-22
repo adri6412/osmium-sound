@@ -344,7 +344,7 @@
       "isMine": "il tuo telecomando",
       "mine": "È il mio",
       "notMine": "Non è il mio",
-      "mineHint": "Se dici qual è il tuo telecomando, di quello si ascoltano tutti i tasti — anche quelli che manderebbe una tastiera — e quello che imposti lì non tocca la tastiera.",
+      "mineHint": "Serve solo per un telecomando che si presenta come una tastiera, per esempio un air mouse: a quelli di serie prendiamo solo i tasti di riproduzione e volume, per non rubare la scrittura a una tastiera vera. Se dici che è il tuo, gli si ascoltano tutti i tasti — e quello che imposti lì non tocca la tastiera.",
       "test": "Prova i tasti",
       "testSwitch": "Mostra qui i tasti",
       "testHintWeb": "Finché è acceso, i tasti si vedono qui e non comandano l'interfaccia sullo schermo, così puoi vedere cosa manda davvero il tuo telecomando. Si spegne da solo dopo qualche minuto.",

@@ -1431,12 +1431,20 @@ Item {
             if (d.chosen) sub += " · " + Tr.t("settings.remote.isMine")
             var dr = info(String(d.name || ""), sub)
             dr.style = "row"; dr.icon = d.bus === "bluetooth" ? "bluetooth-connected" : "usb"; dr.hh = 60
-            // 🚨 Tastiera e telecomando mandano gli stessi codici: dire qual e'
-            // il telecomando e' l'unico modo per non confonderli (remote.h).
-            mini(dr, Tr.t(d.chosen ? "settings.remote.notMine" : "settings.remote.mine"),
-                 "rm_mine", d.chosen ? "light" : "accent", false, String(d.name || ""))
+            // 🚨 Il pulsante solo dove cambia qualcosa: un dispositivo gia'
+            // riconosciuto come telecomando ascolta tutti i tasti di suo, e
+            // offrirlo li' faceva credere che senza sceglierlo non funzionasse.
+            // Serve per chi si presenta come tastiera (un G20S, un air mouse):
+            // li' di serie prendiamo solo i tasti di riproduzione, per non
+            // rubare la scrittura a una tastiera vera.
+            if (d.kind !== "remote" || d.chosen)
+                mini(dr, Tr.t(d.chosen ? "settings.remote.notMine" : "settings.remote.mine"),
+                     "rm_mine", d.chosen ? "light" : "accent", false, String(d.name || ""))
         }
-        if (devs.length > 1) help("settings.remote.mineHint", 12)
+        // il consiglio solo quando c'e' davvero una scelta da fare
+        var anyKeyboard = false
+        for (var h = 0; h < devs.length; h++) if (devs[h].kind !== "remote") anyKeyboard = true
+        if (anyKeyboard) help("settings.remote.mineHint", 12)
 
         sep()
         var t = toggle(Tr.t("settings.remote.test"), Tr.t("settings.remote.testHint"), remoteTest, "rm_test")

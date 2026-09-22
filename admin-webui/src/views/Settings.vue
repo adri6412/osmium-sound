@@ -1750,11 +1750,14 @@ onUnmounted(() => {
             <template v-if="d.chosen"> · {{ t('settings.remote.isMine') }}</template>
           </span>
         </span>
-        <button class="secondary fit" :disabled="rc.busy" @click="rcMine(d)">
+        <!-- 🚨 Solo dove cambia qualcosa: chi e' gia' riconosciuto come
+             telecomando ascolta tutti i tasti di suo, e il pulsante li faceva
+             credere il contrario. -->
+        <button v-if="d.kind !== 'remote' || d.chosen" class="secondary fit" :disabled="rc.busy" @click="rcMine(d)">
           {{ d.chosen ? t('settings.remote.notMine') : t('settings.remote.mine') }}
         </button>
       </div>
-      <p class="sub" v-if="rc.devices.length > 1">{{ t('settings.remote.mineHint') }}</p>
+      <p class="sub" v-if="rc.devices.some((d) => d.kind !== 'remote')">{{ t('settings.remote.mineHint') }}</p>
 
       <label>{{ t('settings.remote.test') }}</label>
       <p class="sub">{{ t('settings.remote.testHintWeb') }}</p>

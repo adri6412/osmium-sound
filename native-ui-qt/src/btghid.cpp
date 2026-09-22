@@ -272,6 +272,15 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
     if (b.reports.isEmpty()) { m_failed.insert(devPath, now); return; }
 
     // 3. il dispositivo HID nostro
+    // 🚨 Ultimo controllo prima di crearlo: leggere la mappa e i riferimenti
+    // richiede una decina di chiamate a BlueZ, e in quel tempo il nucleo puo'
+    // avercela fatta da solo. Senza questo, un telecomando che funzionava (uno
+    // Xiaomi da Mi Box) si ritrovava per un attimo con quattro nodi di input
+    // invece di due, e i tasti arrivavano doppi.
+    if (kernelHandles(mac)) {
+        qInfo("btghid: %s: ci ha pensato il nucleo mentre leggevo, lascio stare", qPrintable(name));
+        return;
+    }
     b.uhid = ::open("/dev/uhid", O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (b.uhid < 0) {
         qWarning("btghid: /dev/uhid non si apre (%s)", strerror(errno));

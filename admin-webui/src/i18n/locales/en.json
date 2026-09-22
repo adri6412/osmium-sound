@@ -344,7 +344,7 @@
       "isMine": "your remote",
       "mine": "This is mine",
       "notMine": "Not mine",
-      "mineHint": "Say which one is your remote and every key of it is listened to, even the ones a keyboard would send — and what you set on it does not touch the keyboard.",
+      "mineHint": "Only needed for a remote that introduces itself as a keyboard, an air mouse for instance: those get the play and volume keys only, so typing on a real keyboard keeps working. Say this one is yours and every key of it is listened to — and what you set on it does not touch the keyboard.",
       "test": "Try the keys",
       "testSwitch": "Show the keys here",
       "testHintWeb": "While this is on, the keys are shown here and do not work the interface on the screen, so you can see what your remote really sends. It switches itself off after a few minutes.",

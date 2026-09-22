@@ -711,7 +711,7 @@
       "mine": "This is my remote",
       "notMine": "Not my remote",
       "isMine": "your remote",
-      "mineHint": "Say which one is your remote and every key of it is listened to, even the ones a keyboard would send — and what you set on it does not touch the keyboard.",
+      "mineHint": "Only needed for a remote that introduces itself as a keyboard, an air mouse for instance: those get the play and volume keys only, so typing on a real keyboard keeps working. Say this one is yours and every key of it is listened to — and what you set on it does not touch the keyboard.",
       "listening": "Listening to",
       "listenAnother": "Listen to another device",
       "test": "Try the keys",

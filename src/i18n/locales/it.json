@@ -711,7 +711,7 @@
       "mine": "Questo è il mio telecomando",
       "notMine": "Non è il mio telecomando",
       "isMine": "il tuo telecomando",
-      "mineHint": "Se dici qual è il tuo telecomando, di quello si ascoltano tutti i tasti — anche quelli che manderebbe una tastiera — e quello che imposti lì non tocca la tastiera.",
+      "mineHint": "Serve solo per un telecomando che si presenta come una tastiera, per esempio un air mouse: a quelli di serie prendiamo solo i tasti di riproduzione e volume, per non rubare la scrittura a una tastiera vera. Se dici che è il tuo, gli si ascoltano tutti i tasti — e quello che imposti lì non tocca la tastiera.",
       "listening": "Sto ascoltando",
       "listenAnother": "Ascolta un altro dispositivo",
       "test": "Prova i tasti",
