@@ -95,7 +95,10 @@
     "remotePickFailed": "Non sono riuscito a impostare questo telecomando.",
     "remoteFailed": "Non sono riuscito ad accoppiare questo telecomando.",
     "remoteNeedsUpdate": "Il sistema di questo apparecchio non è abbastanza nuovo per accoppiare un telecomando Bluetooth. Installa l'ultimo aggiornamento e riprova.",
-    "remoteAskFailed": "Non sono riuscito a chiedere all'apparecchio che telecomandi ha. Riprova fra un momento."
+    "remoteAskFailed": "Non sono riuscito a chiedere all'apparecchio che telecomandi ha. Riprova fra un momento.",
+    "remoteWaiting": "Accoppiato. Aspetto che l'apparecchio lo colleghi…",
+    "remoteReady": "Pronto — è già scelto qui sotto: premi «Usa questo».",
+    "remoteNotYet": "Accoppiato, ma non si è ancora fatto vivo. Premi un tasto sul telecomando per svegliarlo, poi scansiona di nuovo."
   },
   "dashboard": {
     "title": "Dashboard",

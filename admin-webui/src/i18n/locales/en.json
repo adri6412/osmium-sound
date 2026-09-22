@@ -95,7 +95,10 @@
     "remotePickFailed": "Could not set this remote.",
     "remoteFailed": "Could not pair with this remote.",
     "remoteNeedsUpdate": "This device's system is not new enough to pair a Bluetooth remote. Install the latest update and look again.",
-    "remoteAskFailed": "Could not ask this device about its remotes. Try again in a moment."
+    "remoteAskFailed": "Could not ask this device about its remotes. Try again in a moment.",
+    "remoteWaiting": "Paired. Waiting for this device to connect it…",
+    "remoteReady": "Ready — it is picked below; press \"Use this one\".",
+    "remoteNotYet": "Paired, but it has not turned up yet. Press a key on the remote to wake it, then scan again."
   },
   "dashboard": {
     "title": "Dashboard",

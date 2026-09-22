@@ -60,15 +60,26 @@ async function rcScan() {
   await loadRemote();
 }
 async function rcPair(mac) {
+  const before = rc.devices.map((d) => d.name);
   rc.busy = true;
   const r = await api.sysPost('bt_remotes/add', { mac });
   rc.busy = false;
-  rc.msg = (r.ok && r.data && r.data.success !== false) ? t('setup.remotePaired')
-                                                        : ((r.data && r.data.message) || t('setup.remoteFailed'));
-  await loadRemote();
-  // BlueZ connects it and the kernel gives it an input node a moment later,
-  // so the picker is filled again after a beat, not only right now
-  setTimeout(loadRemote, 4000);
+  if (!(r.ok && r.data && r.data.success !== false)) {
+    rc.msg = (r.data && r.data.message) || t('setup.remoteFailed');
+    return;
+  }
+  // 🚨 Pairing does not make it an input device: BlueZ still has to connect
+  // it and the kernel to give it a node, which takes seconds — longer for one
+  // whose report map this box rebuilds. Looking once, a beat later, showed an
+  // empty picker to someone who had just paired something.
+  rc.msg = t('setup.remoteWaiting');
+  for (let left = 20; left > 0; left--) {
+    await new Promise((done) => setTimeout(done, 3000));
+    await loadRemote();
+    const fresh = rc.devices.find((d) => !before.includes(d.name));
+    if (fresh) { rc.pick = fresh.name; rc.msg = t('setup.remoteReady'); return; }
+  }
+  rc.msg = t('setup.remoteNotYet');
 }
 // Which of the connected input devices IS the remote. It matters beyond
 // bookkeeping: one that looks like a keyboard is left alone by the interface
