@@ -94,7 +94,8 @@
     "remoteUnset": "Nessun telecomando in uso.",
     "remotePickFailed": "Non sono riuscito a impostare questo telecomando.",
     "remoteFailed": "Non sono riuscito ad accoppiare questo telecomando.",
-    "remoteNeedsUpdate": "Il sistema di questo apparecchio non è abbastanza nuovo per accoppiare un telecomando Bluetooth. Installa l'ultimo aggiornamento e riprova."
+    "remoteNeedsUpdate": "Il sistema di questo apparecchio non è abbastanza nuovo per accoppiare un telecomando Bluetooth. Installa l'ultimo aggiornamento e riprova.",
+    "remoteAskFailed": "Non sono riuscito a chiedere all'apparecchio che telecomandi ha. Riprova fra un momento."
   },
   "dashboard": {
     "title": "Dashboard",

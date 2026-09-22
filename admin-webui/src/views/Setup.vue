@@ -41,12 +41,17 @@ let lyrionPoll = null;
 // l'accoppiamento di uno Bluetooth. Quale tasto fa cosa resta in
 // Impostazioni -> Telecomando, che non e' roba da primo avvio.
 const rc = reactive({ devices: [], pick: '', msg: '', busy: false, scanning: false,
-                      bt: { available: false, supported: false, remotes: [], found: [] } });
+                      bt: { answered: false, available: false, supported: false, remotes: [], found: [] } });
 async function loadRemote() {
+  // 🚨 An answer has the fields in it. A refusal is not "nothing is
+  // connected" and not "this device has no Bluetooth" — both were shown to
+  // people as facts about their hardware, twice.
   const r = await api.sys('remote');
-  if (r.ok && r.data) { rc.devices = r.data.devices || []; rc.pick = r.data.chosen || ''; }
+  if (r.ok && r.data && r.data.devices) { rc.devices = r.data.devices || []; rc.pick = r.data.chosen || ''; }
+  else rc.msg = t('setup.remoteAskFailed');
   const b = await api.sys('bt_remotes');
-  if (b.ok && b.data && b.data.available !== undefined) Object.assign(rc.bt, b.data);
+  if (b.ok && b.data && b.data.available !== undefined) { rc.bt.answered = true; Object.assign(rc.bt, b.data); }
+  else { rc.bt.answered = false; rc.msg = t('setup.remoteAskFailed'); }
 }
 async function rcScan() {
   rc.busy = true; rc.scanning = true;
@@ -341,7 +346,7 @@ async function finish() {
     <div class="card">
       <h3><span class="dot"></span>{{ t('setup.remoteTitle') }}</h3>
       <p class="sub">{{ t('setup.remoteHint') }}</p>
-      <template v-if="rc.bt.available && rc.bt.supported">
+      <template v-if="!rc.bt.answered || (rc.bt.available && rc.bt.supported)">
         <p class="sub">{{ t('setup.remoteBtHint') }}</p>
         <button class="secondary" :disabled="rc.busy" @click="rcScan">
           {{ rc.scanning ? t('setup.remoteSearching') : t('setup.remoteScan') }}

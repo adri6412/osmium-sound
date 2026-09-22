@@ -94,7 +94,8 @@
     "remoteUnset": "No remote in use.",
     "remotePickFailed": "Could not set this remote.",
     "remoteFailed": "Could not pair with this remote.",
-    "remoteNeedsUpdate": "This device's system is not new enough to pair a Bluetooth remote. Install the latest update and look again."
+    "remoteNeedsUpdate": "This device's system is not new enough to pair a Bluetooth remote. Install the latest update and look again.",
+    "remoteAskFailed": "Could not ask this device about its remotes. Try again in a moment."
   },
   "dashboard": {
     "title": "Dashboard",
