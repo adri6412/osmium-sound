@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.25-dev.6-alpha7",
-  "name": "v2.5.25-dev.6-alpha7",
-  "body": "## What's new in v2.5.25-dev.6-alpha7\n\n- remote control: the row says what the code actually does\n",
+  "tag_name": "v2.5.25-dev.6-alpha8",
+  "name": "v2.5.25-dev.6-alpha8",
+  "body": "## What's new in v2.5.25-dev.6-alpha8\n\n- remote control: six fake remotes to test against, and a card to send\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.25-dev.6-alpha7.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha7/hifi-qtui-v2.5.25-dev.6-alpha7.tar.gz",
-      "size": 23201723
+      "name": "hifi-qtui-v2.5.25-dev.6-alpha8.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha8/hifi-qtui-v2.5.25-dev.6-alpha8.tar.gz",
+      "size": 23201679
     },
     {
-      "name": "hifi-qtui-v2.5.25-dev.6-alpha7.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha7/hifi-qtui-v2.5.25-dev.6-alpha7.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.25-dev.6-alpha8.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha8/hifi-qtui-v2.5.25-dev.6-alpha8.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.25-dev.6-alpha7.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha7/hifi-system-v2.5.25-dev.6-alpha7.tar.gz",
-      "size": 807230
+      "name": "hifi-system-v2.5.25-dev.6-alpha8.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha8/hifi-system-v2.5.25-dev.6-alpha8.tar.gz",
+      "size": 810207
     },
     {
-      "name": "hifi-system-v2.5.25-dev.6-alpha7.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha7/hifi-system-v2.5.25-dev.6-alpha7.tar.gz.sha256",
+      "name": "hifi-system-v2.5.25-dev.6-alpha8.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha8/hifi-system-v2.5.25-dev.6-alpha8.tar.gz.sha256",
       "size": 106
     },
     {
-      "name": "hifi-os-v2.5.25-dev.6-alpha7.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha7/hifi-os-v2.5.25-dev.6-alpha7.tar.gz",
+      "name": "hifi-os-v2.5.25-dev.6-alpha8.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha8/hifi-os-v2.5.25-dev.6-alpha8.tar.gz",
       "size": 1404044
     },
     {
-      "name": "hifi-os-v2.5.25-dev.6-alpha7.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha7/hifi-os-v2.5.25-dev.6-alpha7.tar.gz.sha256",
+      "name": "hifi-os-v2.5.25-dev.6-alpha8.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha8/hifi-os-v2.5.25-dev.6-alpha8.tar.gz.sha256",
       "size": 102
     },
     {
-      "name": "hifi-os-v2.5.25-dev.6-alpha7.tar.gz.sha256.sig",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha7/hifi-os-v2.5.25-dev.6-alpha7.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.25-dev.6-alpha8.tar.gz.sha256.sig",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha8/hifi-os-v2.5.25-dev.6-alpha8.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.25-dev.6-alpha7.raucb",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha7/hifi-image-v2.5.25-dev.6-alpha7.raucb",
-      "size": 1023330979
+      "name": "hifi-image-v2.5.25-dev.6-alpha8.raucb",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha8/hifi-image-v2.5.25-dev.6-alpha8.raucb",
+      "size": 1023421091
     },
     {
-      "name": "hifi-image-v2.5.25-dev.6-alpha7.raucb.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha7/hifi-image-v2.5.25-dev.6-alpha7.raucb.sha256",
+      "name": "hifi-image-v2.5.25-dev.6-alpha8.raucb.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6-alpha8/hifi-image-v2.5.25-dev.6-alpha8.raucb.sha256",
       "size": 104
     }
   ]
