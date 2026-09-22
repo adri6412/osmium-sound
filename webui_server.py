@@ -1048,6 +1048,19 @@ _AUTH_ROUTES = {
     ('/api/system/bt_speakers/remove', 'POST'): '/bt_speakers/remove',
     ('/api/system/bt_speakers/update', 'POST'): '/bt_speakers/update',
     ('/api/system/bt_speakers/connect', 'POST'): '/bt_speakers/connect',
+    # Remote controls (USB dongle or Bluetooth). Same set the kiosk's own
+    # Telecomando page drives, so the web admin and the setup wizard can do the
+    # whole job from a phone: see the devices, say which one is the remote,
+    # assign its keys, and pair a Bluetooth one.
+    ('/api/system/remote', 'GET'): '/remote',
+    ('/api/system/remote/device', 'POST'): '/remote/device',
+    ('/api/system/remote/keys', 'POST'): '/remote/keys',
+    ('/api/system/remote/learn', 'POST'): '/remote/learn',
+    ('/api/system/remote/report', 'GET'): '/remote/report',
+    ('/api/system/bt_remotes', 'GET'): '/bt_remotes',
+    ('/api/system/bt_remotes/scan', 'POST'): '/bt_remotes/scan',
+    ('/api/system/bt_remotes/add', 'POST'): '/bt_remotes/add',
+    ('/api/system/bt_remotes/remove', 'POST'): '/bt_remotes/remove',
     ('/api/system/pointer_status', 'GET'): '/pointer_status',
     ('/api/system/pointer_set', 'POST'): '/pointer_set',
     ('/api/system/nowplaying_autoexpand', 'GET'): '/nowplaying_autoexpand',
@@ -1966,6 +1979,7 @@ def _handle_proxy(local_path, method):
                           # still has to press. api_server bounds each of these
                           # itself — this only has to outlast it.
                           else 120 if api_path.startswith('/bt_speakers')
+                          or api_path.startswith('/bt_remotes')
                           # Joining a Wi-Fi network or bringing the cable up
                           # ends in a DHCP wait, so these outlast the default
                           # budget on any slow network — and cutting them off

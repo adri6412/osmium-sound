@@ -293,6 +293,8 @@ jobs:
           python3 tests/test_bt_remotes.py
           echo "== web admin: who gets a CSRF token (python) =="
           python3 tests/test_csrf.py
+          echo "== web admin: every call has a route through (python) =="
+          python3 tests/test_webui_routes.py
 
       - name: Stage LMS skin assets into the OS payload
         # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately
