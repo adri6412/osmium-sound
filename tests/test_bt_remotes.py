@@ -170,6 +170,25 @@ class PairingWindowTests(RemoteTestCase):
         self.assertEqual(out['code'], 'bluetooth.remoteNeedsUpdate')
         self.assertEqual(self._argv('bluetoothctl', 'pair'), [])
 
+    def test_a_box_whose_supervisor_has_not_written_yet_is_not_a_box_without_bluetooth(self):
+        """No snapshot at all — the state a freshly installed box is in while
+        it walks its setup wizard. The wizard asks this question to decide
+        whether to offer Bluetooth pairing, and answering "no" there said, in
+        so many words, that the device has no Bluetooth."""
+        os.remove(api_server.BT_STATUS_FILE)
+        script = os.path.join(self.tmp, 'hifi-bt-out.py')
+        with open(script, 'w') as f:
+            f.write("doc['remote_pairing_until'] = ...\n")   # the new supervisor
+        self._patch('BT_SUPERVISOR_SCRIPT', script)
+        self.assertTrue(api_server.get_bt_remotes()['supported'])
+
+        with open(script, 'w') as f:
+            f.write("nothing about remotes here\n")          # an older image
+        self.assertFalse(api_server.get_bt_remotes()['supported'])
+
+        self._patch('BT_SUPERVISOR_SCRIPT', os.path.join(self.tmp, 'gone.py'))
+        self.assertFalse(api_server.get_bt_remotes()['supported'])
+
     def test_no_adapter_is_reported_rather_than_pairing_blind(self):
         self._write_snapshot({'enabled': False, 'adapter': False, 'speakers': [], 'remotes': []})
         self._see(REMOTE, 'Osmium Remote')

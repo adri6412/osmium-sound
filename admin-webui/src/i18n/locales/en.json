@@ -85,7 +85,7 @@
     "remotePaired": "Paired.",
     "remoteLater": "You can skip this and do it later from Settings → Remote control.",
     "remoteScan": "Scan",
-    "remoteNoBt": "This device has no Bluetooth: only a USB remote can be used.",
+    "remoteNoBt": "Bluetooth is not available on this device yet: only a USB remote can be used.",
     "remotePick": "Remote to use",
     "remotePickNone": "— none —",
     "remotePickEmpty": "— no remote connected —",
@@ -93,7 +93,8 @@
     "remoteUsing": "Done: this remote now drives the interface.",
     "remoteUnset": "No remote in use.",
     "remotePickFailed": "Could not set this remote.",
-    "remoteFailed": "Could not pair with this remote."
+    "remoteFailed": "Could not pair with this remote.",
+    "remoteNeedsUpdate": "This device's system is not new enough to pair a Bluetooth remote. Install the latest update and look again."
   },
   "dashboard": {
     "title": "Dashboard",

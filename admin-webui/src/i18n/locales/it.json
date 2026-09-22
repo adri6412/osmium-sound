@@ -85,7 +85,7 @@
     "remotePaired": "Accoppiato.",
     "remoteLater": "Puoi saltarlo e farlo più avanti da Impostazioni → Telecomando.",
     "remoteScan": "Scansiona",
-    "remoteNoBt": "Questo apparecchio non ha il Bluetooth: si può usare solo un telecomando USB.",
+    "remoteNoBt": "Il Bluetooth non è ancora disponibile su questo apparecchio: si può usare solo un telecomando USB.",
     "remotePick": "Telecomando da usare",
     "remotePickNone": "— nessuno —",
     "remotePickEmpty": "— nessun telecomando collegato —",
@@ -93,7 +93,8 @@
     "remoteUsing": "Fatto: ora è questo a comandare l'interfaccia.",
     "remoteUnset": "Nessun telecomando in uso.",
     "remotePickFailed": "Non sono riuscito a impostare questo telecomando.",
-    "remoteFailed": "Non sono riuscito ad accoppiare questo telecomando."
+    "remoteFailed": "Non sono riuscito ad accoppiare questo telecomando.",
+    "remoteNeedsUpdate": "Il sistema di questo apparecchio non è abbastanza nuovo per accoppiare un telecomando Bluetooth. Installa l'ultimo aggiornamento e riprova."
   },
   "dashboard": {
     "title": "Dashboard",

@@ -354,7 +354,8 @@ async function finish() {
           <span class="check">+</span>
         </div>
       </template>
-      <p class="sub" v-else>{{ t('setup.remoteNoBt') }}</p>
+      <p class="sub" v-else-if="!rc.bt.available">{{ t('setup.remoteNoBt') }}</p>
+      <p class="sub" v-else>{{ t('setup.remoteNeedsUpdate') }}</p>
       <label>{{ t('setup.remotePick') }}</label>
       <select v-model="rc.pick" :disabled="rc.busy || !rc.devices.length">
         <option value="">{{ rc.devices.length ? t('setup.remotePickNone') : t('setup.remotePickEmpty') }}</option>

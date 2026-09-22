@@ -6100,6 +6100,9 @@ def delete_dsp_preset(name):
 BT_STATE_FILE = '/etc/hifi-player/bluetooth.json'
 BT_STATUS_FILE = '/run/hifi-bt/output.json'
 BT_SUPERVISOR = 'hifi-bt-out.service'
+# The supervisor's own code, read when it has not written a snapshot yet
+# (see _bt_remotes_supported); the unit's ExecStart is this file.
+BT_SUPERVISOR_SCRIPT = '/usr/local/sbin/hifi-bt-out.py'
 BT_PLAYER_UNIT = 'hifi-bt-player@{}.service'
 BT_BLUEALSA_UNIT = 'hifi-bluealsa.service'
 # The ALSA plugin squeezelite opens as bluealsa:DEV=<MAC>. The daemon alone is
@@ -6583,8 +6586,25 @@ def _bt_remotes_supported():
     supervisor half in the image: on a device where the image is older, a
     pairing window would be ignored and the radio torn down mid-pairing. The
     new supervisor always writes a `remotes` key in its snapshot, so its
-    presence is the honest answer to "can this device do it yet"."""
-    return 'remotes' in _bt_snapshot()
+    presence is the honest answer to "can this device do it yet".
+
+    🚨 A MISSING snapshot is not a "no". The supervisor writes it on its first
+    pass, and until then there is nothing to read — which is exactly the state
+    a box is in while it walks its setup wizard right after being installed.
+    Answering "no" there told people, in the wizard, that their device has no
+    Bluetooth at all. With no snapshot to go by, ask the supervisor's own
+    script instead, and kick it so the real answer turns up a moment later."""
+    snap = _bt_snapshot()
+    if snap:
+        return 'remotes' in snap
+    try:
+        with open(BT_SUPERVISOR_SCRIPT) as f:
+            known = 'remote_pairing_until' in f.read()
+    except Exception:
+        return False
+    if known:
+        _bt_kick()
+    return known
 
 
 def _bt_open_pairing_window(seconds=BT_PAIRING_WINDOW):
