@@ -82,7 +82,25 @@ check "add: files layered under the extension" "yes" \
 contains "add: extension-release pins this image" \
          "$(cat "$ROOT/var/lib/extensions/fake/usr/lib/extension-release.d/extension-release.fake")" \
          "SYSEXT_LEVEL=v2.5.24-test"
-contains "add: the merge is applied" "$(cat "$ROOT/calls")" "systemd-sysext refresh"
+
+# 🚨 /usr only. systemd-sysext merges /usr AND /opt by default, and a
+# hierarchy nothing provides content for is mounted as an empty tmpfs: on a
+# device in the field that hid /opt/hifi-qt, and the on-screen interface never
+# came back from its next restart. Both halves of the cure are checked here —
+# what the extension declares, and how this script merges it.
+contains "add: the extension asks for /usr only, so /opt is left alone" \
+         "$(cat "$ROOT/var/lib/extensions/fake/usr/lib/extension-release.d/extension-release.fake")" \
+         "EXTENSION_HIERARCHIES=/usr"
+contains "the merge itself is restricted to /usr" \
+         "$(cat "$SCRIPT")" \
+         "SYSEXT_HIERARCHIES=/usr systemd-sysext merge"
+contains "and a device that already has /opt hidden is unmerged first" \
+         "$(sed -n '/^apply_now()/,/^}/p' "$SCRIPT")" \
+         "systemd-sysext unmerge"
+# "refresh" would be the obvious call, and it was — but refresh unmerges with
+# the same restricted hierarchies it then merges with, which leaves a device
+# that already has an empty tmpfs over /opt exactly as it was.
+contains "add: the merge is applied" "$(cat "$ROOT/calls")" "systemd-sysext merge"
 contains "add: the request is kept, not just the result" \
          "$(cat "$ROOT/var/lib/hifi-player/ext/fake/request.json")" '"packages":"fake"'
 
