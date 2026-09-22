@@ -21,8 +21,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <!-- Modulo recensioni (Tally) -->
-  <script async src="https://tally.so/widgets/embed.js"></script>
   <style>
     :root {
       --bg:        #0a0a0a;
@@ -148,6 +146,10 @@
       text-decoration: none;
       transition: transform 0.15s, box-shadow 0.15s;
       display: inline-flex; align-items: center; gap: 8px;
+    }
+    /* The same button, when it is a real <button> and not a link. */
+    button.btn-primary {
+      border: none; cursor: pointer; font-family: inherit; line-height: 1.6;
     }
     .btn-primary:hover {
       transform: translateY(-2px);
@@ -659,6 +661,12 @@
       max-width: 460px; margin: 0;
     }
     .review-inner strong { color: var(--accent); }
+    /* The way out to every channel, picked out like the bold lead-in.
+       Excludes .chat-note, whose link stays muted on purpose. */
+    .review-inner > p:not(.chat-note) a {
+      color: var(--accent); text-decoration: underline;
+    }
+    .review-inner > p:not(.chat-note) a:hover { text-decoration: none; }
     .review-actions {
       display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center;
     }
@@ -666,6 +674,13 @@
       padding: 10px 20px; font-size: 0.9rem; white-space: nowrap;
       border: none; cursor: pointer; font-family: inherit; line-height: 1.6;
     }
+    /* Said next to the button, because that is where the choice is made. */
+    .review-inner .chat-note {
+      flex-basis: 100%; max-width: none;
+      font-size: 0.78rem; line-height: 1.5; color: var(--muted);
+    }
+    .chat-note a { color: var(--muted); text-decoration: underline; }
+    .chat-note a:hover { color: var(--accent); }
     .kofi-btn {
       padding: 10px 20px; font-size: 0.9rem; white-space: nowrap;
       background: var(--bg); border-color: rgba(245,184,32,0.35);
@@ -724,7 +739,7 @@
     <li><a href="#specs" data-en="Specs" data-it="Specifiche">Specs</a></li>
     <li><a href="#android" data-en="Android app" data-it="App Android">Android app</a></li>
     <li><a href="#apple" data-en="iPhone/iPad app" data-it="App iPhone/iPad">iPhone/iPad app</a></li>
-    <li><a href="#support" data-en="Support" data-it="Supporto">Support</a></li>
+    <li><a href="#support" data-en="Support" data-it="Supporto" style="color:var(--accent)">Support</a></li>
   </ul>
   <div class="nav-right">
     <div class="lang-switch" role="group" aria-label="Language">
@@ -766,6 +781,29 @@
     <span class="pill"><strong>FLAC · DSD · 192kHz</strong></span>
     <span class="pill"><strong>Deezer · Qobuz · TIDAL · Spotify</strong></span>
     <span class="pill"><strong>AGPL-3.0</strong> Open Source</span>
+  </div>
+</section>
+
+<!-- HELP, KO-FI, SOCIAL: high on the page, so somebody who needs a hand
+     does not have to read the whole pitch first -->
+<section id="review">
+  <div class="review-inner">
+    <p data-en="&lt;strong&gt;Stuck, or just want to tell us how it is going?&lt;/strong&gt; Open the chat: the assistant answers straight away from the manual, and if that is not enough your question goes to a person and stays there as a ticket. Prefer email or GitHub? &lt;a href=&quot;#support&quot;&gt;Every way to reach us&lt;/a&gt;. If you enjoy Osmium Sound you can also support the work with a voluntary donation, or follow the news on Facebook." data-it="&lt;strong&gt;Sei bloccato, o vuoi solo raccontarci come ti trovi?&lt;/strong&gt; Apri la chat: l&#x27;assistente risponde subito con quello che c&#x27;&egrave; nel manuale, e se non basta la domanda arriva a una persona e resta l&igrave; come ticket. Preferisci l&#x27;email o GitHub? &lt;a href=&quot;#support&quot;&gt;Tutti i modi per contattarci&lt;/a&gt;. Se Osmium Sound ti piace puoi anche sostenere il lavoro con una donazione volontaria, o seguire le novit&agrave; su Facebook."><strong>Stuck, or just want to tell us how it is going?</strong> Open the chat: the assistant answers straight away from the manual, and if that is not enough your question goes to a person and stays there as a ticket. Prefer email or GitHub? <a href="#support">Every way to reach us</a>. If you enjoy Osmium Sound you can also support the work with a voluntary donation, or follow the news on Facebook.</p>
+    <div class="review-actions">
+      <button type="button" class="btn-primary review-btn" data-chat>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C6.98 3 3 6.36 3 10.5c0 2.3 1.23 4.35 3.17 5.72-.14 1.22-.6 2.4-1.37 3.36-.2.25-.03.62.29.6 1.9-.12 3.6-.79 4.94-1.8.94.21 1.94.32 2.97.32 5.02 0 9-3.36 9-7.5S17.02 3 12 3z"/></svg>
+        <span data-en="Open the chat" data-it="Apri la chat">Open the chat</span>
+      </button>
+      <a class="btn-secondary kofi-btn" href="/kofi?from=reviews" target="_blank" rel="noopener">
+        <img src="kofi.png" alt="Ko-fi" width="24" height="19">
+        <span data-en="Support us on Ko-fi" data-it="Sostienici su Ko-fi">Support us on Ko-fi</span>
+      </a>
+      <a class="btn-secondary social-btn" href="https://www.facebook.com/profile.php?id=61593595246369" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></svg>
+        <span data-en="Follow us on Facebook" data-it="Seguici su Facebook">Follow us on Facebook</span>
+      </a>
+    </div>
+    <p class="chat-note" data-en="The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then this page stores nothing. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;" data-it="La chat &egrave; di Featurebase e si carica solo quando la apri: da quel momento tiene qualche voce nel tuo browser per ricordare la conversazione. Fino ad allora questa pagina non salva nulla. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;">The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then this page stores nothing. <a href="privacy">Privacy</a></p>
   </div>
 </section>
 
@@ -906,7 +944,6 @@
       <strong>Try it live:</strong> pick <strong>Try Osmium Sound (no install)</strong> at the boot menu to run the interface straight from the USB stick, nothing written to disk.
     </p>
 
-
     <p class="install-note" data-en="&lt;strong&gt;Verified on the platforms we tested:&lt;/strong&gt; there, every feature has been checked and validated. The x86 hardware landscape is vast, though: we can&#x27;t rule out issues on other hardware combinations. If you run into one, please report it through the &lt;a href=&quot;#support&quot;&gt;official channels below&lt;/a&gt; — it really helps." data-it="&lt;strong&gt;Verificata sulle piattaforme che abbiamo testato:&lt;/strong&gt; lì tutte le funzioni sono state controllate e validate. Il parco hardware x86 è però vastissimo: non escludiamo che su altre combinazioni possano emergere anomalie. Se ne incontri una, segnalacela tramite i &lt;a href=&quot;#support&quot;&gt;canali ufficiali qui sotto&lt;/a&gt; — è molto importante.">
       <strong>Verified on the platforms we tested:</strong> there, every feature has been checked and validated. The x86 hardware landscape is vast, though: we can't rule out issues on other hardware combinations. If you run into one, please report it through the <a href="#support">official channels below</a> — it really helps.
     </p>
@@ -919,33 +956,6 @@
   </div>
 </section>
 
-<!-- RECENSIONI + KO-FI -->
-<section id="review">
-  <div class="review-inner">
-    <p data-en="&lt;strong&gt;Already using Osmium Sound?&lt;/strong&gt; Tell us how it is going — it takes a minute and helps other people decide. And if you enjoy it, you can support the work with a voluntary donation or follow the news on Facebook." data-it="&lt;strong&gt;Usi gi&agrave; Osmium Sound?&lt;/strong&gt; Raccontaci come ti trovi: ci vuole un minuto e aiuta le altre persone a scegliere. E se ti piace, puoi sostenere il lavoro con una donazione volontaria o seguire le novit&agrave; su Facebook."><strong>Already using Osmium Sound?</strong> Tell us how it is going — it takes a minute and helps other people decide. And if you enjoy it, you can support the work with a voluntary donation or follow the news on Facebook.</p>
-    <div class="review-actions">
-      <button type="button" class="btn-primary review-btn"
-              data-tally-open="yP5z90"
-              data-tally-align-left="1"
-              data-tally-hide-title="1"
-              data-tally-emoji-text="👋"
-              data-tally-emoji-animation="head-shake"
-              data-tally-auto-close="3000"
-              data-tally-form-events-forwarding="1">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 5.88 6.49.95-4.7 4.58 1.11 6.46L12 17.32l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.95L12 2.5z"/></svg>
-        <span data-en="Leave a review" data-it="Lascia una recensione">Leave a review</span>
-      </button>
-      <a class="btn-secondary kofi-btn" href="/kofi?from=reviews" target="_blank" rel="noopener">
-        <img src="kofi.png" alt="Ko-fi" width="24" height="19">
-        <span data-en="Support us on Ko-fi" data-it="Sostienici su Ko-fi">Support us on Ko-fi</span>
-      </a>
-      <a class="btn-secondary social-btn" href="https://www.facebook.com/profile.php?id=61593595246369" target="_blank" rel="noopener">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></svg>
-        <span data-en="Follow us on Facebook" data-it="Seguici su Facebook">Follow us on Facebook</span>
-      </a>
-    </div>
-  </div>
-</section>
 
 <!-- MANUAL -->
 <section id="manual">
@@ -1226,9 +1236,19 @@
 <section id="support">
   <div class="support-grid">
     <div class="manual-card">
+      <div class="manual-icon">💬</div>
+      <h2 data-en="Ask the assistant, or open a ticket" data-it="Chiedi all&#x27;assistente, o apri un ticket">Ask the assistant, or open a ticket</h2>
+      <p data-en="The same window does two things. &lt;strong&gt;Ask the assistant&lt;/strong&gt; and it answers straight away, from the manual and the guides. If that is not enough, &lt;strong&gt;open a ticket&lt;/strong&gt;: the conversation goes to a person, who replies when they are at the desk — Osmium Sound is made by one person in spare time — and it stays there, so you can pick it up later." data-it="La stessa finestra fa due cose. &lt;strong&gt;Chiedi all&#x27;assistente&lt;/strong&gt; e ti risponde subito, con quello che c&#x27;&egrave; nel manuale e nelle guide. Se non basta, &lt;strong&gt;apri un ticket&lt;/strong&gt;: la conversazione arriva a una persona, che risponde quando &egrave; alla scrivania — Osmium Sound &egrave; fatto da una persona sola nel tempo libero — e resta l&igrave;, cos&igrave; puoi riprenderla pi&ugrave; tardi.">The same window does two things. <strong>Ask the assistant</strong> and it answers straight away, from the manual and the guides. If that is not enough, <strong>open a ticket</strong>: the conversation goes to a person, who replies when they are at the desk — Osmium Sound is made by one person in spare time — and it stays there, so you can pick it up later.</p>
+      <button type="button" class="btn-primary" data-chat>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C6.98 3 3 6.36 3 10.5c0 2.3 1.23 4.35 3.17 5.72-.14 1.22-.6 2.4-1.37 3.36-.2.25-.03.62.29.6 1.9-.12 3.6-.79 4.94-1.8.94.21 1.94.32 2.97.32 5.02 0 9-3.36 9-7.5S17.02 3 12 3z"/></svg>
+        <span data-en="Open the chat" data-it="Apri la chat">Open the chat</span>
+      </button>
+      <p class="alt-contact" data-en="The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then nothing is stored. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;" data-it="La chat &egrave; di Featurebase e si carica solo quando la apri: da quel momento tiene qualche voce nel tuo browser per ricordare la conversazione. Fino ad allora non viene salvato nulla. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;">The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then nothing is stored. <a href="privacy">Privacy</a></p>
+    </div>
+    <div class="manual-card">
       <div class="manual-icon">✉️</div>
       <h2 data-en="Need help? Email support" data-it="Serve aiuto? Scrivi al supporto">Need help? Email support</h2>
-      <p data-en="Write to &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; and an issue is opened automatically on the project's GitHub repository, so it can be tracked and followed up like any other bug or request. Please describe your issue clearly (what happened, what you expected, and any relevant details like your ISO/APK version) — this becomes the issue text." data-it="Scrivi a &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; e verrà aperta automaticamente una issue sul repository GitHub del progetto, così da poterla tracciare e seguire come qualsiasi altro bug o richiesta. Descrivi chiaramente il problema (cosa è successo, cosa ti aspettavi ed eventuali dettagli utili come la versione della ISO/APK) — diventerà il testo della issue.">Write to <strong>support@osmiumsound.it</strong> and an issue is opened automatically on the project's GitHub repository, so it can be tracked and followed up like any other bug or request. Please describe your issue clearly (what happened, what you expected, and any relevant details like your ISO/APK version) — this becomes the issue text.</p>
+      <p data-en="Write to &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; and a ticket is opened automatically — the same ticket the chat opens — so your message can be followed and picked up again later. Say what happened, what you expected, and the details that save a round of questions: the version and update channel, whether the device runs with a screen, headless or server-only, and the exact message you saw." data-it="Scrivi a &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; e viene aperto automaticamente un ticket — lo stesso che apre la chat — così il tuo messaggio si può seguire e riprendere più tardi. Racconta cosa è successo, cosa ti aspettavi e i dettagli che fanno risparmiare un giro di domande: versione e canale di aggiornamento, se l'apparecchio è con schermo, headless o solo server, e il messaggio esatto che hai visto.">Write to <strong>support@osmiumsound.it</strong> and a ticket is opened automatically — the same ticket the chat opens — so your message can be followed and picked up again later. Say what happened, what you expected, and the details that save a round of questions: the version and update channel, whether the device runs with a screen, headless or server-only, and the exact message you saw.</p>
       <a class="btn-primary" href="mailto:support@osmiumsound.it">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" fill="none"/><path d="M22 6 12 13 2 6"/><path d="M2 6h20v12H2z"/></svg>
         <span data-en="Email support@osmiumsound.it" data-it="Scrivi a support@osmiumsound.it">Email support@osmiumsound.it</span>
@@ -1238,7 +1258,7 @@
     <div class="manual-card">
       <div class="manual-icon">🐙</div>
       <h2 data-en="Prefer GitHub? Open an issue" data-it="Preferisci GitHub? Apri una issue">Prefer GitHub? Open an issue</h2>
-      <p data-en="File it yourself directly on the project's GitHub repository — the same place your email would end up anyway, just skipping the middle step." data-it="Aprila tu stesso direttamente sul repository GitHub del progetto — lo stesso posto dove finirebbe comunque la tua email, saltando il passaggio intermedio.">File it yourself directly on the project's GitHub repository — the same place your email would end up anyway, just skipping the middle step.</p>
+      <p data-en="File it yourself directly on the project's GitHub repository. The right place for something reproducible that you would rather discuss in the open, next to the code." data-it="Aprila tu stesso direttamente sul repository GitHub del progetto. È il posto giusto per qualcosa di riproducibile, che preferisci discutere alla luce del sole accanto al codice.">File it yourself directly on the project's GitHub repository. The right place for something reproducible that you would rather discuss in the open, next to the code.</p>
       <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/issues" target="_blank">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
         <span data-en="Open an issue on GitHub" data-it="Apri una issue su GitHub">Open an issue on GitHub</span>
@@ -1255,8 +1275,7 @@
     &nbsp;·&nbsp; &copy; 2025–2026 Adriano Frongillo
   </div>
   <div class="footer-links">
-    <a href="#tally-open=yP5z90&amp;tally-align-left=1&amp;tally-hide-title=1&amp;tally-emoji-text=👋&amp;tally-emoji-animation=head-shake&amp;tally-auto-close=3000&amp;tally-form-events-forwarding=1"
-       data-en="Leave a review" data-it="Lascia una recensione">Leave a review</a>
+    <a href="#support" data-en="Write to us" data-it="Scrivici">Write to us</a>
     <a href="privacy" data-en="Privacy" data-it="Privacy">Privacy</a>
     <a href="https://github.com/adri6412/osmium-sound" target="_blank">GitHub</a>
     <a href="https://github.com/adri6412/osmium-sound/issues" target="_blank" data-en="Issues" data-it="Problemi">Issues</a>
@@ -1311,6 +1330,10 @@
 
   let lang = 'en';
   let current = 0;
+  // The support chat, once somebody has asked for it. Declared up here
+  // because applyLang() runs before the chat block and follows the
+  // language switch into the chat window.
+  let chatModule = null;
 
   function applyLang(l) {
     lang = (l === 'it') ? 'it' : 'en';
@@ -1323,6 +1346,8 @@
       b.classList.toggle('active', b.dataset.lang === lang);
     });
     try { localStorage.setItem('lang', lang); } catch (e) {}
+    // If the chat is already open, it changes language with the page.
+    if (chatModule) chatModule.then(fb => fb.setLanguage(lang)).catch(() => {});
     // Refresh the caption shown in the carousel for the new language
     if (typeof current === 'number') {
       const cap = document.getElementById('caption');
@@ -1355,6 +1380,37 @@
       videoFacade.replaceWith(iframe);
     });
   }
+
+  // ── Support chat (Featurebase) ───────────────────────────────
+  // Loaded on the first click and not before, the same rule the video
+  // facade follows: somebody who never asks for the chat downloads none
+  // of it and gets nothing written into their browser. Afterwards the
+  // module is kept, so later clicks only reopen the window.
+  function openChat() {
+    if (!chatModule) {
+      chatModule = import('/featurebase.js').then(fb => {
+        fb.default({
+          appId: '6ab2a5f859cd20cc3e6a646a',
+          theme: 'dark',
+          language: lang,
+          hideDefaultLauncher: true,   // opened from our own buttons only
+        });
+        return fb;
+      });
+    }
+    chatModule
+      .then(fb => fb.whenReady(() => fb.show()))
+      .catch(() => {
+        // The chat could not load. The email address is on the page
+        // anyway, so send them to it rather than to a dead button.
+        chatModule = null;
+        location.hash = '#support';
+      });
+  }
+
+  document.querySelectorAll('[data-chat]').forEach(el => {
+    el.addEventListener('click', openChat);
+  });
 
   let autoTimer;
 
