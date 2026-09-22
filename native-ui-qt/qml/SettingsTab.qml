@@ -1426,7 +1426,11 @@ Item {
             var where = d.bus === "usb" ? Tr.t("settings.remote.viaUsb")
                       : d.bus === "bluetooth" ? Tr.t("settings.remote.viaBluetooth")
                       : Tr.t("settings.remote.viaOther")
-            var what = (d.grabbed || d.chosen) ? Tr.t("settings.remote.full") : Tr.t("settings.remote.mediaOnly")
+            // 🚨 La stessa regola del codice che smista i tasti (remote.cpp):
+            // conta l'essere un telecomando, non l'essere riusciti a prenderlo
+            // in esclusiva — un telecomando non preso resta comunque un
+            // telecomando, e i suoi tasti si ascoltano tutti.
+            var what = (d.kind === "remote" || d.chosen) ? Tr.t("settings.remote.full") : Tr.t("settings.remote.mediaOnly")
             var sub = where + " · " + what
             if (d.chosen) sub += " · " + Tr.t("settings.remote.isMine")
             var dr = info(String(d.name || ""), sub)
