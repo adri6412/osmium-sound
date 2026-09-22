@@ -1745,50 +1745,6 @@ def provision_lms_skin():
     return jsonify(body), status
 
 
-# Remote controls — the wizard's step-remote. The same two endpoints the web
-# admin's Telecomando section uses, reachable during the setup window: the
-# step comes after the account exists, but everything else in this page talks
-# /api/provision, and so does this.
-@app.route('/api/provision/remote', methods=['GET'])
-def provision_remote():
-    if not _provisioning():
-        return jsonify({'success': False, 'code': 'provision.notInProgress',
-                        'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy(API_BASE, '/remote', method='GET')
-    return jsonify(body), status
-
-
-@app.route('/api/provision/remote/device', methods=['POST'])
-def provision_remote_device():
-    if not _provisioning():
-        return jsonify({'success': False, 'code': 'provision.notInProgress',
-                        'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy(API_BASE, '/remote/device', method='POST',
-                          body=request.get_json(silent=True) or {})
-    return jsonify(body), status
-
-
-@app.route('/api/provision/bt_remotes', methods=['GET'])
-def provision_bt_remotes():
-    if not _provisioning():
-        return jsonify({'success': False, 'code': 'provision.notInProgress',
-                        'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy(API_BASE, '/bt_remotes', method='GET')
-    return jsonify(body), status
-
-
-@app.route('/api/provision/bt_remotes/<any(scan, add):what>', methods=['POST'])
-def provision_bt_remotes_do(what):
-    if not _provisioning():
-        return jsonify({'success': False, 'code': 'provision.notInProgress',
-                        'message': _wt('provision.notInProgress', _lang())}), 409
-    # A scan runs for its whole window and pairing waits on a person pressing
-    # a button on the remote; api_server bounds both, this only outlasts it.
-    body, status = _proxy(API_BASE, '/bt_remotes/' + what, method='POST',
-                          body=request.get_json(silent=True) or {}, timeout=120)
-    return jsonify(body), status
-
-
 @app.route('/api/provision/lms_skin_status', methods=['GET'])
 def provision_lms_skin_status():
     if not _provisioning():
@@ -2484,7 +2440,11 @@ def root():
     # minimal network-only portal (no account/mode/wizard steps — this box
     # is already configured, it just needs its network back).
     if _provisioning():
-        return Response(_captive_html(), mimetype='text/html')
+        # 🚨 no-store, not no-cache: this page changes with the state of the
+        # box (and with every update), and a browser that kept showing the
+        # copy it had is a person looking at a wizard that no longer exists.
+        return Response(_captive_html(), mimetype='text/html',
+                        headers={'Cache-Control': 'no-store, must-revalidate'})
     if _net_recovery['active']:
         # This box is already configured, so unlike the setup captive page
         # (whose deviceHost/hostMsg only exist because the name is being
@@ -2517,7 +2477,26 @@ def library_page():
 
 @app.route('/<path:subpath>', methods=['GET'])
 def spa(subpath):
+    # 🚨 Setup owns the whole site, not just '/'. This catch-all used to hand
+    # out the admin app at any other address while the box was still being
+    # set up: a reload on /settings (or /setup, or /index.html — wherever the
+    # address bar happened to be) dropped the person out of the wizard and
+    # into the admin, mid-setup, with no way back but typing the bare IP.
+    # Same rule the Library page already followed.
+    if (_provisioning() or _net_recovery['active']) and _wants_html():
+        return redirect('/', code=302)
     return _serve_spa(subpath)
+
+
+def _wants_html():
+    """A page the browser is navigating to, as opposed to a script or a
+    stylesheet it is fetching for one. Only navigations are worth redirecting:
+    answering a .js request with HTML would break the page instead of moving
+    it."""
+    dest = request.headers.get('Sec-Fetch-Dest', '')
+    if dest:
+        return dest == 'document'
+    return 'text/html' in (request.headers.get('Accept') or '')
 
 
 def _serve_spa(subpath):
@@ -3567,15 +3546,15 @@ function loadTimezone(){
 }
 function saveTimezone(){
   var tz=document.getElementById('tzselect').value;
-  jpost('/api/provision/set_timezone',{timezone:tz}).then(function(){
-    // Account + timezone are the last things that need the pre-auth
-    // provisioning API -- finalize now (marker removed, AP torn down, mode
-    // switched live) so the sources step below can open the REAL,
-    // session-authenticated Vue Settings page instead of a pre-auth
-    // workaround. finish()'s own finalize call later becomes a harmless
-    // no-op (provision_finalize() early-returns once already finalized).
-    jpost('/api/provision/finalize',{}).then(function(){showSourcesStep()});
-  });
+  // 🚨 This used to finalize here, three steps early, so that the steps below
+  // could use the session-authenticated API. They can anyway — the account
+  // exists by now and those endpoints only ask for a session — and finalizing
+  // early cost more than it bought: from this point on the box was no longer
+  // in setup, so every /api/provision call answered "not in provisioning"
+  // (the remote step read that as "this device has no Bluetooth"), and a
+  // reload landed on the admin app with the rest of the wizard gone. Setup
+  // ends where it looks like it ends: at "Complete setup".
+  jpost('/api/provision/set_timezone',{timezone:tz}).then(showSourcesStep);
 }
 
 function showSourcesStep(){
@@ -4015,8 +3994,15 @@ function showRemoteStep(){
 // chosen, and it is the choice that tells the interface which of the input
 // devices is the remote (a remote that looks like a keyboard is left alone
 // until someone says it is theirs).
+//
+// 🚨 /api/system, NOT /api/provision — the same endpoints Settings → Remote
+// control uses, like the sources step above. The account exists by this point
+// and they only ask for a session, so they work here and would keep working
+// wherever this step ended up. The provisioning API would not: it answers
+// "not in provisioning" the moment setup ends, and a refusal read as data is
+// what told people their device has no Bluetooth.
 function loadRemoteStep(){
-  jget('/api/provision/remote').then(function(r){
+  jget('/api/system/remote').then(function(r){
     var sel=byId('remote-pick');
     var devs=(r&&r.devices)||[];
     var chosen=(r&&r.chosen)||'';
@@ -4036,7 +4022,7 @@ function loadRemoteStep(){
       sel.appendChild(o);
     });
   });
-  jget('/api/provision/bt_remotes').then(function(r){
+  jget('/api/system/bt_remotes').then(function(r){
     // 🚨 Three states, not two. No Bluetooth stack on this box is one thing;
     // a system too old to pair a remote is another, and saying "this device
     // has no Bluetooth" to the second one is a lie people act on. Either way
@@ -4050,7 +4036,7 @@ function loadRemoteStep(){
 function remotePick(){
   var b=byId('btn-remote-pick'),name=byId('remote-pick').value;
   b.disabled=true;
-  jpost('/api/provision/remote/device',{device:name}).then(function(r){
+  jpost('/api/system/remote/device',{device:name}).then(function(r){
     b.disabled=false;
     if(r&&r.success===false){byId('remote-msg').textContent=r.message||S.remotePickFailed;return}
     byId('remote-msg').textContent=name?S.remoteUsing:S.remoteUnset;
@@ -4062,7 +4048,7 @@ function remoteScan(){
   if(b.disabled)return;
   b.disabled=true;b.textContent=S.remoteSearching;
   byId('remote-msg').textContent='';byId('remote-found').innerHTML='';
-  jpost('/api/provision/bt_remotes/scan',{seconds:12}).then(function(r){
+  jpost('/api/system/bt_remotes/scan',{seconds:12}).then(function(r){
     b.disabled=false;b.textContent=S.remoteScan;
     var found=(r&&r.found)||[];
     if(!found.length){byId('remote-msg').textContent=(r&&r.message)||S.remoteNothing;return}
@@ -4077,7 +4063,7 @@ function remoteScan(){
 }
 function remotePair(mac,btn){
   btn.disabled=true;byId('remote-msg').textContent=S.remotePairing;
-  jpost('/api/provision/bt_remotes/add',{mac:mac}).then(function(r){
+  jpost('/api/system/bt_remotes/add',{mac:mac}).then(function(r){
     btn.disabled=false;
     if(!(r&&r.success)){byId('remote-msg').textContent=(r&&r.message)||S.remoteFailed;return}
     byId('remote-msg').textContent=S.remotePaired;

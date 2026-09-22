@@ -150,6 +150,31 @@ class WebAdminRoutes(unittest.TestCase):
             self.assertIn((path, method), reachable)
 
 
+class FirstBootWizardFlow(unittest.TestCase):
+    """Where the setup ends, and what the steps after it can still ask for."""
+
+    @classmethod
+    def setUpClass(cls):
+        import webui_server
+        cls.html = webui_server.SETUP_CAPTIVE_HTML
+
+    def test_setup_ends_at_complete_setup_and_not_three_steps_early(self):
+        """The timezone step used to finalize: from there on the box was out
+        of provisioning while the wizard was still running, so every
+        /api/provision call was refused (the remote step read the refusal as
+        "no Bluetooth") and a reload dropped into the admin app, wizard gone.
+        Finalizing belongs to the last screen — and to the restore path, which
+        reboots into an already-configured device."""
+        callers = [line.strip() for line in self.html.splitlines()
+                   if 'provision/finalize' in line]
+        self.assertEqual(len(callers), 2, callers)
+        self.assertTrue(any('reboot:true' in c for c in callers), callers)   # restore
+        self.assertTrue(any('reboot' not in c for c in callers), callers)    # finish()
+        # the step before the sources one must just move on
+        self.assertIn('jpost(`/api/provision/set_timezone`'.replace('`', "'") +
+                      ",{timezone:tz}).then(showSourcesStep)", self.html)
+
+
 class FirstBootWizardRoutes(unittest.TestCase):
     """The captive page, checked against the routes Flask really registers."""
 
@@ -180,12 +205,12 @@ class FirstBootWizardRoutes(unittest.TestCase):
         self.assertIn("'step-remote'", steps,
                       'the card exists but is not in STEPS, so show() would never reach it: ' + steps)
         self.assertTrue('showRemoteStep()' in html, 'nothing leads into the step')
-        for path, method in (('/api/provision/remote', 'GET'),
+        for path, method in (('/api/system/remote', 'GET'),
                              # the step's two buttons: scan+pair, and "use this one"
-                             ('/api/provision/remote/device', 'POST'),
-                             ('/api/provision/bt_remotes', 'GET'),
-                             ('/api/provision/bt_remotes/scan', 'POST'),
-                             ('/api/provision/bt_remotes/add', 'POST')):
+                             ('/api/system/remote/device', 'POST'),
+                             ('/api/system/bt_remotes', 'GET'),
+                             ('/api/system/bt_remotes/scan', 'POST'),
+                             ('/api/system/bt_remotes/add', 'POST')):
             self.assertTrue(self._reachable(path, method), path)
 
 
