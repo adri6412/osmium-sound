@@ -404,7 +404,11 @@
       "btSearch": "Search for a remote",
       "btSearching": "Searching…",
       "btSearchingHint": "Keep the remote in pairing mode while this runs.",
-      "btFoundNone": "Nothing found. Put the remote in pairing mode and search again."
+      "btFoundNone": "Nothing found. Put the remote in pairing mode and search again.",
+      "reportTitle": "Remote control card",
+      "reportHint": "A file with what your remote declares, how we recognised it and what the kernel said about it — for when a remote will not work and whoever helps you does not have it in their hands. It carries device names and Bluetooth addresses.",
+      "report": "Download the remote control card",
+      "reportSaved": "Card saved"
     },
     "sources": {
       "hint": "Manage local folders, USB/internal disks, SMB shares and CD ripping.",

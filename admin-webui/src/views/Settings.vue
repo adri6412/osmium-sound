@@ -532,6 +532,25 @@ const rcActionLabel = (a) => (a ? t('settings.remote.actions.' + a) : t('setting
 const rcWhere = (d) => (d.bus === 'bluetooth' ? t('settings.remote.viaBluetooth')
                       : d.bus === 'usb' ? t('settings.remote.viaUsb') : t('settings.remote.viaOther'));
 async function rcScan() { rc.bt.scanning = true; await rcCall('bt_remotes/scan', { seconds: 12 }, loadRemoteBt); }
+// La "scheda del telecomando": quello che dichiara il telecomando, come
+// l'abbiamo classificato e cosa ne ha detto il nucleo, in un file solo.
+// 🚨 Serve a far diagnosticare un telecomando che chi assiste non ha in mano —
+// e' l'insieme di dati con cui si e' risolto il caso del G20S. Dentro ci sono
+// nomi dei dispositivi e indirizzi Bluetooth: la riga sotto il pulsante lo dice.
+async function rcReport() {
+  rc.busy = true;
+  const r = await api.sys('remote/report');
+  rc.busy = false;
+  if (!r.ok || !r.data) { say(bodyMsg(r, t('settings.remote.opFailed')), true); return; }
+  const name = 'telecomando-' + ((r.data.device && r.data.device.hostname) || 'osmium')
+             + '-' + new Date().toISOString().slice(0, 10) + '.json';
+  const url = URL.createObjectURL(new Blob([JSON.stringify(r.data, null, 1)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  say(t('settings.remote.reportSaved'));
+}
 const rcPair = (mac) => rcCall('bt_remotes/add', { mac }, loadRemoteBt);
 const rcForget = (mac) => rcCall('bt_remotes/remove', { mac }, loadRemoteBt);
 // Un telecomando Bluetooth collegato dovrebbe comparire anche fra i
@@ -1794,6 +1813,10 @@ onUnmounted(() => {
         </div>
       </template>
       <p class="sub">{{ t('settings.remote.keysBody') }}</p>
+
+      <label>{{ t('settings.remote.reportTitle') }}</label>
+      <p class="sub">{{ t('settings.remote.reportHint') }}</p>
+      <button class="secondary" :disabled="rc.busy" @click="rcReport">{{ t('settings.remote.report') }}</button>
 
       <label>{{ t('settings.remote.btTitle') }}</label>
       <p class="sub">{{ t('settings.remote.btHelp') }}</p>

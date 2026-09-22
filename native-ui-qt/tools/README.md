@@ -18,10 +18,14 @@ un finto apparecchio in Python.
   pannello veri: un `QMouseEvent` costruito a mano e mandato alla finestra non tiene la presa fra un
   evento e l'altro, e i trascinamenti non diventavano mai scorrimenti. Il primo evento dopo l'avvio
   puo' andare perso (stato del puntatore su xcb): premettere un `move`.
-- `fake-remote.py` — un telecomando finto per provare la lettura di evdev senza telecomando:
-  `fake-remote.py tree DIR` prepara un albero sysfs e una fifo, poi `dev-run.sh` con `FAKE_REMOTE=DIR`
-  lo fa vedere all'interfaccia e `fake-remote.py send DIR play next up ok` preme i tasti.
-  🚨 la fifo non e' un evdev vero: la presa esclusiva (EVIOCGRAB) non si puo' provare cosi'.
+- `fake-remote.py` — telecomandi finti, per provare il riconoscimento senza comprare la ferramenta:
+  `fake-remote.py list` mostra i profili (`remote`, `mce`, `flirc`, `androidtv`, `airmouse`, `digits`),
+  `fake-remote.py tree DIR androidtv airmouse flirc digits` li crea tutti insieme, poi `dev-run.sh` con
+  `FAKE_REMOTE=DIR` li fa vedere all'interfaccia e `fake-remote.py send DIR -d "G20S" down` preme un tasto
+  su uno preciso. Ogni profilo dichiara cosa ci si aspetta (telecomando / tastiera / da ignorare): e' la
+  prova della classificazione in remote.cpp, che e' dove si sbaglia coi modelli che non si hanno in mano.
+  🚨 i nodi sono fifo: la presa esclusiva (EVIOCGRAB) non si puo' provare cosi', e vale UNA `send` per
+  avvio (chiusa la scrittura il dispositivo sparisce).
 - `mock-server.py` — scenari via ambiente: `MOCK_LONG_QUEUE=1` (40 brani in coda),
   `MOCK_SHARED_LMS=N` (Lyrion altrui: prima solo un telefono, il nostro "Osmium" compare dopo N s),
   `MOCK_PLAYERS=1` (altri due player sul server, ognuno col suo now playing: per il selettore di player;

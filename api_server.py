@@ -7000,6 +7000,101 @@ def set_remote_learning(enable):
     return {'success': True, **get_remote()}
 
 
+def get_remote_report():
+    """La "scheda del telecomando": tutto quello che serve per capire un
+    telecomando che non si ha in mano.
+
+    🚨 Nasce da una domanda onesta dell'utente: "non posso comprare cinquanta
+    telecomandi per provarli". Con questa, chi segnala un problema manda un
+    file e dall'altra parte si vede cosa dichiara il suo telecomando, come
+    l'abbiamo classificato e cosa ne ha detto il nucleo — che e' esattamente
+    l'insieme di dati con cui si e' risolto il caso del G20S.
+
+    Dentro ci sono nomi dei dispositivi e indirizzi Bluetooth: la pagina lo
+    dice prima di farlo scaricare."""
+    def run(cmd, timeout=10):
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+        except Exception:
+            return ''
+
+    def line(path):
+        try:
+            with open(path) as f:
+                return f.readline().strip()
+        except Exception:
+            return ''
+
+    hid = []
+    for d in sorted(glob.glob('/sys/bus/hid/devices/*')):
+        def rd(name, path=d):
+            try:
+                with open(os.path.join(path, name)) as f:
+                    return f.read().strip()
+            except Exception:
+                return ''
+        desc = b''
+        try:
+            with open(os.path.join(d, 'report_descriptor'), 'rb') as f:
+                desc = f.read()
+        except Exception:
+            pass
+        hid.append({
+            'id': os.path.basename(d),
+            'modalias': rd('modalias'),
+            'uniq': rd('uniq').upper(),
+            'phys': rd('phys'),
+            # il driver legato: se manca, il nucleo ha rifiutato il descrittore
+            'driver': os.path.basename(os.path.realpath(os.path.join(d, 'driver')))
+                      if os.path.exists(os.path.join(d, 'driver')) else '',
+            'descriptor_bytes': len(desc),
+            'descriptor': desc.hex(),
+        })
+
+    # i dispositivi di input come li vede il nucleo, con le capacita' grezze:
+    # e' da queste che decidiamo chi e' un telecomando (remote.cpp)
+    inputs = []
+    root = os.environ.get('HIFI_SYSFS_INPUT', '/sys/class/input')
+    for din in sorted(glob.glob(os.path.join(root, 'input*'))):
+        def rin(name, path=din):
+            try:
+                with open(os.path.join(path, name)) as f:
+                    return f.read().strip()
+            except Exception:
+                return ''
+        if not rin('capabilities/key'):
+            continue
+        inputs.append({
+            'name': rin('name'), 'uniq': rin('uniq').upper(), 'phys': rin('phys'),
+            'bustype': rin('id/bustype'), 'vendor': rin('id/vendor'), 'product': rin('id/product'),
+            'key': rin('capabilities/key'), 'rel': rin('capabilities/rel'),
+            'abs': rin('capabilities/abs'), 'properties': rin('properties'),
+        })
+
+    kernel = [l for l in run(['dmesg']).splitlines()
+              if re.search(r'hid|uhid|bluetooth|input:', l, re.I)][-60:]
+    kiosk = [l for l in run(['journalctl', '-u', 'hifi-qt', '-n', '400', '--no-pager']).splitlines()
+             if re.search(r'btghid|remote:|input:', l)][-60:]
+
+    return {
+        'generated': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+        'device': {
+            'hostname': socket.gethostname(),
+            'image': line('/usr/lib/osmium/IMAGE_VERSION'),
+            'ui': line('/etc/hifi-player/UI_VERSION'),
+            'system': line('/etc/hifi-player/SYSTEM_VERSION'),
+            'os': line('/etc/hifi-player/OS_VERSION'),
+            'kernel': run(['uname', '-r']).strip(),
+        },
+        'remote': get_remote(),
+        'bluetooth': get_bt_remotes(),
+        'hid': hid,
+        'inputs': inputs,
+        'kernelLog': kernel,
+        'interfaceLog': kiosk,
+    }
+
+
 # ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
 # ──────────────────────────────────────────────────────────────────
@@ -9288,6 +9383,10 @@ def api_remote_keys():
     # 'action' assente = togli l'assegnazione; "" = questo tasto non fa niente
     action = data.get('action', None) if 'action' in data else None
     return jsonify(set_remote_key(data.get('code'), action, data.get('device', '')))
+
+@app.route('/remote/report', methods=['GET'])
+def api_remote_report():
+    return jsonify(get_remote_report())
 
 @app.route('/remote/learn', methods=['POST'])
 def api_remote_learn():

@@ -404,7 +404,11 @@
       "btSearch": "Cerca un telecomando",
       "btSearching": "Sto cercando…",
       "btSearchingHint": "Tieni il telecomando in accoppiamento mentre cerco.",
-      "btFoundNone": "Non ho trovato niente. Metti il telecomando in accoppiamento e cerca di nuovo."
+      "btFoundNone": "Non ho trovato niente. Metti il telecomando in accoppiamento e cerca di nuovo.",
+      "reportTitle": "Scheda del telecomando",
+      "reportHint": "Un file con quello che il tuo telecomando dichiara, come l'abbiamo riconosciuto e cosa ne ha detto il nucleo — serve quando un telecomando non va e chi ti aiuta non ce l'ha in mano. Dentro ci sono i nomi dei dispositivi e gli indirizzi Bluetooth.",
+      "report": "Scarica la scheda del telecomando",
+      "reportSaved": "Scheda salvata"
     },
     "sources": {
       "hint": "Gestisci cartelle locali, dischi USB/interni, condivisioni SMB e rip dei CD.",
