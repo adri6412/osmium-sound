@@ -172,6 +172,26 @@ bool mediaOnly(const QString &a) {
 
 }  // namespace
 
+// Cosa tiene insieme i nodi di UN telecomando: vedi Dev::group in remote.h.
+QString Remote::groupKey(const QString &dir, const QString &fallback) {
+    const QString uniq = hifiSysfsRead(dir + "/uniq").trimmed().toUpper();
+    if (!uniq.isEmpty()) return uniq;
+    const QString phys = hifiSysfsRead(dir + "/phys").trimmed();
+    // "usb-0000:00:14.0-3/input1": dopo la barra c'e' QUALE nodo e', non quale
+    // apparecchio
+    if (!phys.isEmpty()) return phys.section('/', 0, 0);
+    const QString vid = hifiSysfsRead(dir + "/id/vendor").trimmed();
+    const QString pid = hifiSysfsRead(dir + "/id/product").trimmed();
+    if (!vid.isEmpty() || !pid.isEmpty()) return vid + ":" + pid;
+    return fallback;
+}
+
+// "Questo e' il mio telecomando" vale per il nome del dispositivo o per il
+// gruppo: chi sceglie dal web admin sceglie un telecomando, non un nodo.
+bool Remote::isChosen(const Dev &d) const {
+    return !m_chosen.isEmpty() && (d.name == m_chosen || d.group == m_chosen);
+}
+
 Remote::Remote(const QString &configDir, QObject *parent) : QObject(parent), m_configDir(configDir) {
     m_clock.start();
     loadChosen();
@@ -184,7 +204,7 @@ Remote::Remote(const QString &configDir, QObject *parent) : QObject(parent), m_c
         loadChosen();
         loadCustom();
         for (auto it = m_open.begin(); it != m_open.end(); ++it)
-            it->chosen = !m_chosen.isEmpty() && it->name == m_chosen;
+            it->chosen = isChosen(*it);
         readWebLearn();
         publishDevices();
     });
@@ -281,8 +301,9 @@ void Remote::rescan() {
         if (dev.name.isEmpty()) dev.name = evs.first();
         const int bus = hifiSysfsRead(dir + "/id/bustype").toInt(nullptr, 16);
         dev.bus = bus == BUS_BLUETOOTH ? "bluetooth" : bus == BUS_USB ? "usb" : "other";
+        dev.group = groupKey(dir, dev.name);
         dev.remote = isRemote;
-        dev.chosen = !m_chosen.isEmpty() && dev.name == m_chosen;
+        dev.chosen = isChosen(dev);
         if (isRemote && ioctl(dev.fd, EVIOCGRAB, 1) == 0) dev.grabbed = true;
         qInfo("remote: %s (%s%s) su %s", qPrintable(dev.name), qPrintable(dev.bus),
               dev.grabbed ? ", presa esclusiva" : isRemote ? ", senza presa esclusiva" : ", solo tasti multimediali",
@@ -611,7 +632,7 @@ void Remote::setChosen(const QString &device) {
     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(device.toUtf8() + "\n");
     f.close();
     for (auto it = m_open.begin(); it != m_open.end(); ++it)
-        it->chosen = !m_chosen.isEmpty() && it->name == m_chosen;
+        it->chosen = isChosen(*it);
     // in prova si passa ad ascoltare lui
     if (m_learning && m_learnDevice != m_chosen) { m_learnDevice = m_chosen; emit learnDeviceChanged(); }
     publishDevices();
@@ -625,7 +646,7 @@ void Remote::publishDevices() {
         const Dev &d = m_open[p];
         out.append(QVariantMap{ { "name", d.name }, { "path", d.path }, { "bus", d.bus },
                                 { "kind", d.remote ? "remote" : "keyboard" }, { "grabbed", d.grabbed },
-                                { "chosen", d.chosen } });
+                                { "chosen", d.chosen }, { "group", d.group } });
     }
     m_devices = out;
     emit devicesChanged();

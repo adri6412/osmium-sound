@@ -6841,6 +6841,47 @@ def _sysfs_bit(bitmap, bit):
         return False
 
 
+def _remote_group_key(rd):
+    """What ties the nodes of ONE physical remote together.
+
+    🚨 A remote is often more than one input device: a Xiaomi one shows up as
+    a keyboard AND a consumer-control node, an air mouse adds a pointer. They
+    are the same thing in someone's hand, and offering them as separate
+    entries to choose between is a question nobody can answer. `uniq` is the
+    Bluetooth address (the same for every node of one remote); USB devices
+    rarely set it, so fall back to the physical port with the endpoint cut
+    off ("…-3/input1" → "…-3"), then to vendor:product."""
+    uniq = (rd('uniq') or '').strip().upper()
+    if uniq:
+        return uniq
+    phys = (rd('phys') or '').strip()
+    if phys:
+        return phys.split('/')[0]
+    vid, pid = (rd('id/vendor') or '').strip(), (rd('id/product') or '').strip()
+    return ('%s:%s' % (vid, pid)) if (vid or pid) else ''
+
+
+def _remote_group_name(names):
+    """One name for a remote that came in several pieces: what its nodes
+    agree on ("Xiaomi RC Keyboard" + "Xiaomi RC Consumer Control" → "Xiaomi
+    RC"), or the shortest of them when they agree on nothing useful."""
+    names = [n for n in names if n]
+    if not names:
+        return ''
+    if len(names) == 1:
+        return names[0]
+    shortest = min(names, key=len)
+    common = ''
+    for i, ch in enumerate(shortest):
+        if all(n[i] == ch for n in names):
+            common += ch
+        else:
+            break
+    common = common.rstrip(' -_/·').strip()
+    # a couple of letters in common is not a name
+    return common if len(common) >= 3 else shortest
+
+
 def _remote_devices():
     """I telecomandi collegati adesso, con le regole di remote.cpp: tasti
     multimediali oppure frecce+conferma, e niente tastiere complete fra i
@@ -6873,13 +6914,20 @@ def _remote_devices():
             bus = int(rd('id/bustype') or '0', 16)
         except ValueError:
             bus = 0
+        group = _remote_group_key(rd) or name
         out.append({
             'name': name,
             'bus': 'bluetooth' if bus == 5 else 'usb' if bus == 3 else 'other',
             'kind': 'remote' if (not full_keyboard and not pointer and not tablet) else 'keyboard',
-            'chosen': bool(chosen) and name == chosen,
+            # chosen by its own name, or by the group: one remote, one choice,
+            # however many input devices it happens to be made of
+            'chosen': bool(chosen) and chosen in (name, group),
             'address': rd('uniq').upper(),
+            'group': group,
         })
+    # the name to show when the pieces are offered as one
+    for row in out:
+        row['groupName'] = _remote_group_name([d['name'] for d in out if d['group'] == row['group']])
     return out
 
 

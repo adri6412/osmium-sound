@@ -4018,11 +4018,16 @@ function loadRemoteStep(){
       return devs;      // 🚨 devs, not nothing: the wait below reads this
     }
     sel.appendChild(new Option(S.remotePickNone,''));
-    devs.forEach(function(d){
-      var label=(d.name||'')+' — '+(d.bus==='bluetooth'?S.remoteViaBluetooth:
-                                    (d.bus==='usb'?S.remoteViaUsb:S.remoteViaOther));
-      var o=new Option(label,d.name||'');
-      if(d.chosen||(chosen&&d.name===chosen)){o.selected=true}
+    // 🚨 Un telecomando, una riga. Parecchi ne espongono due o tre (tastiera,
+    // comandi multimediali, puntatore): sono lo stesso oggetto in mano a chi
+    // guarda, e chiedergli quale dei tre e' il suo non e' una domanda a cui
+    // si possa rispondere. Il valore e' il gruppo, e sceglierlo vale per
+    // tutti i nodi (api_server e remote.cpp confrontano anche il gruppo).
+    remoteGroups(devs).forEach(function(g){
+      var label=g.label+' — '+(g.bus==='bluetooth'?S.remoteViaBluetooth:
+                               (g.bus==='usb'?S.remoteViaUsb:S.remoteViaOther));
+      var o=new Option(label,g.id);
+      if(g.chosen||(chosen&&(chosen===g.id||g.names.indexOf(chosen)>=0))){o.selected=true}
       sel.appendChild(o);
     });
     return devs;
@@ -4049,9 +4054,12 @@ function loadRemoteStep(){
 function remoteAwait(before,left){
   left=(typeof left==='number')?left:20;      // ~60 s
   loadRemoteStep().then(function(devs){
-    var fresh=(devs||[]).filter(function(d){return before.indexOf(d.name||'')<0});
+    // 🚨 per gruppo, non per nome: le voci dell'elenco valgono un telecomando
+    // intero, e un nome di nodo non combacia con nessuna di esse (l'elenco
+    // tornava su "nessuno" e "Usa questo" non usava niente)
+    var fresh=(devs||[]).filter(function(d){return before.indexOf(d.group||d.name||'')<0});
     if(fresh.length){
-      byId('remote-pick').value=fresh[0].name||'';
+      byId('remote-pick').value=fresh[0].group||fresh[0].name||'';
       byId('remote-msg').textContent=S.remoteReady;
       return;
     }
@@ -4063,6 +4071,18 @@ function remoteAwait(before,left){
     if(left>0){setTimeout(function(){remoteAwait(before,left-1)},3000)}
     else{byId('remote-msg').textContent=S.remoteNotYet}
   });
+}
+function remoteGroups(devs){
+  var out=[],by={};
+  (devs||[]).forEach(function(d){
+    var id=d.group||d.name||'';
+    if(!by[id]){by[id]={id:id,label:d.groupName||d.name||id,bus:d.bus,chosen:false,names:[]};out.push(by[id])}
+    by[id].names.push(d.name||'');
+    if(d.chosen)by[id].chosen=true;
+    // un nodo Bluetooth basta a dire com'e' collegato l'oggetto
+    if(d.bus==='bluetooth')by[id].bus='bluetooth';
+  });
+  return out;
 }
 function remotePick(){
   var b=byId('btn-remote-pick'),name=byId('remote-pick').value;

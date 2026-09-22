@@ -291,6 +291,8 @@ jobs:
           python3 tests/test_bt_speakers.py
           echo "== bluetooth remote controls (python) =="
           python3 tests/test_bt_remotes.py
+          echo "== which input devices are remotes, and which are the same one (python) =="
+          python3 tests/test_remote_devices.py
           echo "== web admin: who gets a CSRF token (python) =="
           python3 tests/test_csrf.py
           echo "== web admin: every call has a route through (python) =="

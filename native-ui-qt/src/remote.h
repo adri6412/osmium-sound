@@ -117,6 +117,13 @@ private:
         QString path;              // /dev/input/eventN
         QString name;              // il nome che dichiara il dispositivo
         QString bus;               // "usb", "bluetooth", "other"
+        // 🚨 Cosa tiene insieme i pezzi di UN telecomando: un Xiaomi si
+        // presenta come tastiera E come comandi multimediali, un air mouse ci
+        // aggiunge il puntatore. Per chi lo tiene in mano e' un oggetto solo,
+        // quindi "questo e' il mio" vale per tutto il gruppo. L'indirizzo
+        // Bluetooth (uniq) quando c'e', se no la porta fisica, se no
+        // fornitore:prodotto.
+        QString group;
         bool remote = false;       // telecomando vero (non una tastiera)
         bool chosen = false;       // l'utente ha detto che e' il suo telecomando
         bool grabbed = false;      // presa esclusiva ottenuta
@@ -124,6 +131,8 @@ private:
         QSocketNotifier *notifier = nullptr;
     };
 
+    static QString groupKey(const QString &dir, const QString &fallback);
+    bool isChosen(const Dev &d) const;
     void openDevice(const QString &path);
     void closeDevice(const QString &path);
     void readFrom(const QString &path);

@@ -47,7 +47,11 @@ async function loadRemote() {
   // connected" and not "this device has no Bluetooth" — both were shown to
   // people as facts about their hardware, twice.
   const r = await api.sys('remote');
-  if (r.ok && r.data && r.data.devices) { rc.devices = r.data.devices || []; rc.pick = r.data.chosen || ''; }
+  if (r.ok && r.data && r.data.devices) {
+    rc.devices = r.data.devices || [];
+    const mine = rc.devices.find((d) => d.chosen);
+    rc.pick = mine ? (mine.group || mine.name) : (r.data.chosen || '');
+  }
   else rc.msg = t('setup.remoteAskFailed');
   const b = await api.sys('bt_remotes');
   if (b.ok && b.data && b.data.available !== undefined) { rc.bt.answered = true; Object.assign(rc.bt, b.data); }
@@ -60,7 +64,7 @@ async function rcScan() {
   await loadRemote();
 }
 async function rcPair(mac) {
-  const before = rc.devices.map((d) => d.name);
+  const before = rc.devices.map((d) => d.group || d.name);
   rc.busy = true;
   const r = await api.sysPost('bt_remotes/add', { mac });
   rc.busy = false;
@@ -76,8 +80,8 @@ async function rcPair(mac) {
   for (let left = 20; left > 0; left--) {
     await new Promise((done) => setTimeout(done, 3000));
     await loadRemote();
-    const fresh = rc.devices.find((d) => !before.includes(d.name));
-    if (fresh) { rc.pick = fresh.name; rc.msg = t('setup.remoteReady'); return; }
+    const fresh = rc.devices.find((d) => !before.includes(d.group || d.name));
+    if (fresh) { rc.pick = fresh.group || fresh.name; rc.msg = t('setup.remoteReady'); return; }
   }
   rc.msg = t('setup.remoteNotYet');
 }
@@ -95,6 +99,20 @@ async function rcUse() {
 }
 const rcWhere = (d) => (d.bus === 'bluetooth' ? t('setup.remoteViaBluetooth')
                       : d.bus === 'usb' ? t('setup.remoteViaUsb') : t('setup.remoteViaOther'));
+// 🚨 One remote, one row. Several of them are two or three input devices at
+// once (keyboard, consumer control, pointer); they are one object in
+// someone's hand, and asking which of the three is theirs is not a question.
+// The value is the group, and choosing it covers every node of it.
+const rcGroups = computed(() => {
+  const out = [], by = {};
+  for (const d of rc.devices) {
+    const id = d.group || d.name || '';
+    if (!by[id]) { by[id] = { id, label: d.groupName || d.name || id, bus: d.bus, chosen: false }; out.push(by[id]); }
+    if (d.chosen) by[id].chosen = true;
+    if (d.bus === 'bluetooth') by[id].bus = 'bluetooth';
+  }
+  return out;
+});
 
 // Internal vs external, offered up front: someone adding a player to a house
 // that already runs Lyrion should not have to install a second server and then
@@ -373,13 +391,13 @@ async function finish() {
       <p class="sub" v-else-if="!rc.bt.available">{{ t('setup.remoteNoBt') }}</p>
       <p class="sub" v-else>{{ t('setup.remoteNeedsUpdate') }}</p>
       <label>{{ t('setup.remotePick') }}</label>
-      <select v-model="rc.pick" :disabled="rc.busy || !rc.devices.length">
-        <option value="">{{ rc.devices.length ? t('setup.remotePickNone') : t('setup.remotePickEmpty') }}</option>
-        <option v-for="d in rc.devices" :key="d.name + d.address" :value="d.name">
-          {{ d.name }} — {{ rcWhere(d) }}
+      <select v-model="rc.pick" :disabled="rc.busy || !rcGroups.length">
+        <option value="">{{ rcGroups.length ? t('setup.remotePickNone') : t('setup.remotePickEmpty') }}</option>
+        <option v-for="g in rcGroups" :key="g.id" :value="g.id">
+          {{ g.label }} — {{ rcWhere(g) }}
         </option>
       </select>
-      <button class="secondary" style="margin-top: 8px;" :disabled="rc.busy || !rc.devices.length" @click="rcUse">
+      <button class="secondary" style="margin-top: 8px;" :disabled="rc.busy || !rcGroups.length" @click="rcUse">
         {{ t('setup.remoteUse') }}
       </button>
       <p class="sub" v-if="rc.msg">{{ rc.msg }}</p>
