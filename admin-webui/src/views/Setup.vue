@@ -40,11 +40,11 @@ let lyrionPoll = null;
 // nelle impostazioni dopo. Qui solo il minimo: cosa e' gia' collegato e
 // l'accoppiamento di uno Bluetooth. Quale tasto fa cosa resta in
 // Impostazioni -> Telecomando, che non e' roba da primo avvio.
-const rc = reactive({ devices: [], busy: false, scanning: false,
+const rc = reactive({ devices: [], pick: '', msg: '', busy: false, scanning: false,
                       bt: { available: false, supported: false, remotes: [], found: [] } });
 async function loadRemote() {
   const r = await api.sys('remote');
-  if (r.ok && r.data) rc.devices = r.data.devices || [];
+  if (r.ok && r.data) { rc.devices = r.data.devices || []; rc.pick = r.data.chosen || ''; }
   const b = await api.sys('bt_remotes');
   if (b.ok && b.data && b.data.available !== undefined) Object.assign(rc.bt, b.data);
 }
@@ -56,8 +56,25 @@ async function rcScan() {
 }
 async function rcPair(mac) {
   rc.busy = true;
-  await api.sysPost('bt_remotes/add', { mac });
+  const r = await api.sysPost('bt_remotes/add', { mac });
   rc.busy = false;
+  rc.msg = (r.ok && r.data && r.data.success !== false) ? t('setup.remotePaired')
+                                                        : ((r.data && r.data.message) || t('setup.remoteFailed'));
+  await loadRemote();
+  // BlueZ connects it and the kernel gives it an input node a moment later,
+  // so the picker is filled again after a beat, not only right now
+  setTimeout(loadRemote, 4000);
+}
+// Which of the connected input devices IS the remote. It matters beyond
+// bookkeeping: one that looks like a keyboard is left alone by the interface
+// until someone says it is theirs.
+async function rcUse() {
+  rc.busy = true;
+  const r = await api.sysPost('remote/device', { device: rc.pick });
+  rc.busy = false;
+  rc.msg = (r.ok && r.data && r.data.success !== false)
+    ? (rc.pick ? t('setup.remoteUsing') : t('setup.remoteUnset'))
+    : ((r.data && r.data.message) || t('setup.remotePickFailed'));
   await loadRemote();
 }
 const rcWhere = (d) => (d.bus === 'bluetooth' ? t('setup.remoteViaBluetooth')
@@ -324,20 +341,10 @@ async function finish() {
     <div class="card">
       <h3><span class="dot"></span>{{ t('setup.remoteTitle') }}</h3>
       <p class="sub">{{ t('setup.remoteHint') }}</p>
-      <template v-if="rc.devices.length">
-        <div v-for="d in rc.devices" :key="d.name + d.address" class="net between">
-          <span>
-            <span style="display:block;">{{ d.name }}</span>
-            <span class="muted">{{ rcWhere(d) }}</span>
-          </span>
-          <span class="check">✓</span>
-        </div>
-      </template>
-      <p class="sub" v-else>{{ t('setup.remoteNone') }}</p>
       <template v-if="rc.bt.available && rc.bt.supported">
-        <p class="sub" style="margin-top: 10px;">{{ t('setup.remoteBtHint') }}</p>
+        <p class="sub">{{ t('setup.remoteBtHint') }}</p>
         <button class="secondary" :disabled="rc.busy" @click="rcScan">
-          {{ rc.scanning ? t('setup.remoteSearching') : t('setup.remoteSearch') }}
+          {{ rc.scanning ? t('setup.remoteSearching') : t('setup.remoteScan') }}
         </button>
         <div v-for="d in rc.bt.found" :key="d.mac" class="net between" @click="rcPair(d.mac)">
           <span>
@@ -346,8 +353,19 @@ async function finish() {
           </span>
           <span class="check">+</span>
         </div>
-        <p class="sub" v-if="rc.bt.remotes.length">{{ t('setup.remotePaired') }}</p>
       </template>
+      <p class="sub" v-else>{{ t('setup.remoteNoBt') }}</p>
+      <label>{{ t('setup.remotePick') }}</label>
+      <select v-model="rc.pick" :disabled="rc.busy || !rc.devices.length">
+        <option value="">{{ rc.devices.length ? t('setup.remotePickNone') : t('setup.remotePickEmpty') }}</option>
+        <option v-for="d in rc.devices" :key="d.name + d.address" :value="d.name">
+          {{ d.name }} — {{ rcWhere(d) }}
+        </option>
+      </select>
+      <button class="secondary" style="margin-top: 8px;" :disabled="rc.busy || !rc.devices.length" @click="rcUse">
+        {{ t('setup.remoteUse') }}
+      </button>
+      <p class="sub" v-if="rc.msg">{{ rc.msg }}</p>
       <p class="sub">{{ t('setup.remoteLater') }}</p>
     </div>
     <button :disabled="busy" @click="finish">{{ busy ? t('setup.finishing') : t('setup.finishSetup') }}</button>

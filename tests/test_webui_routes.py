@@ -181,6 +181,8 @@ class FirstBootWizardRoutes(unittest.TestCase):
                       'the card exists but is not in STEPS, so show() would never reach it: ' + steps)
         self.assertTrue('showRemoteStep()' in html, 'nothing leads into the step')
         for path, method in (('/api/provision/remote', 'GET'),
+                             # the step's two buttons: scan+pair, and "use this one"
+                             ('/api/provision/remote/device', 'POST'),
                              ('/api/provision/bt_remotes', 'GET'),
                              ('/api/provision/bt_remotes/scan', 'POST'),
                              ('/api/provision/bt_remotes/add', 'POST')):
