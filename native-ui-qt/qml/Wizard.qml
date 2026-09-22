@@ -249,7 +249,7 @@ Item {
                     // una tastiera a schermo, e un carattere sbagliato dietro i
                     // pallini e' il motivo piu' comune di una connessione fallita.
                     color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)   // bg-white/5, border-white/10, focus oro/50
-                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder"); vkButton: true
+                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder")
                     onTextEdited: (t) => root.pass = t
                     onAccepted: root.wifiConnect()
                 }

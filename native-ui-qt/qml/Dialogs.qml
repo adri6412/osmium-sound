@@ -300,7 +300,7 @@ Item {
                 TextField_ {
                     id: ssidField
                     width: parent.width; height: 40; textSize: 14; padding: 12
-                    text: root.ssid; placeholder: Tr.t("wizard.wifi.title"); vkButton: true
+                    text: root.ssid; placeholder: Tr.t("wizard.wifi.title")
                     color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)   // focus:border-hifi-gold/50
                     // Un nome scritto a mano non e' piu' la riga toccata: nessuna
                     // banda da fissare.
@@ -313,7 +313,7 @@ Item {
                     // In chiaro: la chiave si scrive una volta sola, sulla tastiera
                     // a schermo, e un carattere sbagliato dietro i pallini e' il
                     // motivo piu' comune di una connessione fallita.
-                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder"); vkButton: true
+                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder")
                     color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)
                     onTextEdited: (t) => root.pass = t
                 }

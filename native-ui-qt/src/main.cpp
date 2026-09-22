@@ -69,11 +69,8 @@ protected:
             m_sys->noteInput(); break;
         case QEvent::KeyPress: {
             m_sys->noteInput();
-            // solo le lettere: i tasti di un telecomando a infrarossi (cifre,
-            // frecce, invio) non sono "qualcuno sta scrivendo su una tastiera"
             QKeyEvent *ke = static_cast<QKeyEvent *>(e);
             const int k = ke->key();
-            if (k >= Qt::Key_A && k <= Qt::Key_Z) m_sys->noteRealKey();
             // 🚨 Il telecomando si serve QUI e non da un Keys.onPressed in QML:
             // un gestore in QML vede solo i tasti che il fuoco gli lascia
             // passare, e il fuoco in questa interfaccia ce l'ha quasi sempre
