@@ -76,5 +76,47 @@ class GracefulDegradationTests(unittest.TestCase):
         self.assertNotIn('precheck_run', d)
 
 
+class BundleSecretsTests(unittest.TestCase):
+    """An owner found their NAS password in config/etc/hifi-sources.json."""
+
+    SOURCES = {'sources': [
+        {'id': 'a', 'type': 'smb', 'server': 'nas', 'share': 'music',
+         'username': 'g22', 'password': 'hunter2', 'rw': True},
+        {'id': 'b', 'type': 'smb', 'server': 'nas', 'share': 'pub',
+         'username': '', 'password': ''},
+    ]}
+
+    def build_with(self, text):
+        import os
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix='.json')
+        with os.fdopen(fd, 'w') as f:
+            f.write(text)
+        saved = (a.SUPPORT_CONFIG_FILES, a._SUPPORT_REDACT_JSON)
+        a.SUPPORT_CONFIG_FILES, a._SUPPORT_REDACT_JSON = [path], {path}
+        try:
+            return path, zipfile.ZipFile(io.BytesIO(a._support_bundle_build()))
+        finally:
+            a.SUPPORT_CONFIG_FILES, a._SUPPORT_REDACT_JSON = saved
+            os.unlink(path)
+
+    def test_the_login_of_a_share_is_masked(self):
+        path, z = self.build_with(json.dumps(self.SOURCES))
+        raw = z.read('config' + path).decode()
+        self.assertNotIn('hunter2', raw)
+        self.assertNotIn('g22', raw)
+        d = json.loads(raw)['sources']
+        self.assertEqual(d[0]['password'], '<redacted>')
+        self.assertEqual(d[0]['server'], 'nas')
+        # guest versus login must still be visible
+        self.assertEqual(d[1]['password'], '')
+
+    def test_a_file_that_does_not_parse_is_left_out(self):
+        path, z = self.build_with('{"password": "hunter2",')
+        self.assertNotIn('config' + path, z.namelist())
+        for name in z.namelist():
+            self.assertNotIn(b'hunter2', z.read(name))
+
+
 if __name__ == '__main__':
     unittest.main()

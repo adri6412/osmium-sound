@@ -162,6 +162,10 @@ def load_state():
 
 
 def save_state(state):
+    # A share's login never reaches the disk in the clear, whichever path
+    # built this state (see hifi_backup.seal_login). Costs nothing when every
+    # login is already sealed.
+    hb.seal_plain_logins(state)
     tmp = STATE_FILE + ".tmp"
     with open(tmp, "w") as f:
         json.dump(state, f, indent=2)
@@ -285,8 +289,11 @@ def mount_smb(src):
     destination)."""
     server = src["server"].strip().strip("/")
     share = src["share"].strip().strip("/")
-    username = src.get("username", "")
-    password = src.get("password", "")
+    try:
+        username, password = _smb_login(src)
+    except hb.LoginUnreadable as e:
+        print(f"[sources] login of {server}/{share} cannot be opened: {e}")
+        return False, _ht('mount.loginUnreadable', _hlang()), ""
     for value in (server, share, username, password):
         if not _field_ok(value):
             return False, _ht('mount.invalidFields', _hlang()), ""
@@ -328,10 +335,7 @@ def mount_smb(src):
         if username:
             # Credentials go in a private temp file rather than the -o string,
             # so the password never shows up in argv / `ps aux` output.
-            fd, cred_path = tempfile.mkstemp(prefix="hifi-smb-cred-")
-            with os.fdopen(fd, "w") as f:
-                f.write(f"username={username}\npassword={password}\n")
-            os.chmod(cred_path, 0o600)
+            cred_path = _smb_cred_file(username, password)
             cred_opt = f",credentials={cred_path}"
         else:
             cred_opt = ",guest"
@@ -3676,6 +3680,12 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
                 report("restoring", pct, _ht('restore.restoringFiles', _hlang(), done=done, total=total))
             restored, errors = _restore_members(tar, manifest, categories, _member_progress)
             _fix_restored_permissions(restored)
+            if STATE_FILE in restored:
+                # An encrypted backup brings the share logins back opened.
+                try:
+                    _seal_stored_logins()
+                except Exception as e:
+                    print(f"[sources] sealing restored logins failed: {e}")
         finally:
             if lyrion_stopped:
                 report("starting_lyrion", 80, _ht('restore.startingLyrion', _hlang()))
@@ -4796,12 +4806,36 @@ def _smb_cred_file(username, password):
     """Credentials in a 0600 temp file. NEVER on the command line: argv is
     readable through /proc, so -U user%pass would put the NAS password in
     `ps aux` for every account on the box. Same reason mount_smb() writes a
-    credentials= file instead of using -o."""
-    fd, path = tempfile.mkstemp(prefix="hifi-smb-cred-")
+    credentials= file instead of using -o.
+
+    In /run, which is RAM: /tmp is on the disk here, and a deleted file's
+    blocks still hold the password until something overwrites them."""
+    run_dir = "/run" if os.access("/run", os.W_OK) else None
+    fd, path = tempfile.mkstemp(prefix="hifi-smb-cred-", dir=run_dir)
+    os.fchmod(fd, 0o600)
     with os.fdopen(fd, "w") as f:
         f.write(f"username={username}\npassword={password}\n")
-    os.chmod(path, 0o600)
     return path
+
+
+def _smb_login(src):
+    """(username, password) of a stored SMB source. Sealed on disk (see
+    hifi_backup.seal_login); a clear pair is only still there when it could
+    not be sealed yet, and is used as it is rather than failing the mount.
+    Raises hb.LoginUnreadable when the sealed login cannot be opened."""
+    if src.get("login"):
+        return hb.open_login(src["login"])
+    return src.get("username") or "", src.get("password") or ""
+
+
+def _seal_stored_logins():
+    """Seal any clear login in the state file: the ones written before this
+    existed, and the ones an encrypted backup brings back."""
+    with _lock:
+        state = load_state()
+        if any(isinstance(s, dict) and ("username" in s or "password" in s)
+               for s in state.get("sources", [])):
+            save_state(state)
 
 
 def _smbclient(args, username, password, timeout=25):
@@ -5147,6 +5181,8 @@ def api_list():
         item = dict(s)
         item.pop("password", None)
         item.pop("smbpassword", None)
+        item.pop("username", None)
+        item.pop("login", None)
         t = s.get("type")
         if t == "smb":
             item["mounted"] = os.path.ismount(s["mountpoint"])
@@ -5455,8 +5491,6 @@ def api_add_smb():
         "name": name,
         "server": server,
         "share": share,
-        "username": (data.get("username") or "").strip(),
-        "password": data.get("password") or "",
         "mountpoint": os.path.join(MOUNT_ROOT, _slug(server, share)),
         # On by default — see mount_smb()'s docstring. A caller that asks
         # for read-only still gets it, and so does a share the server only
@@ -5469,6 +5503,18 @@ def api_add_smb():
         # this, so it can't reach Lyrion by any path until api_set_subpath()
         # clears the flag -- see current_paths()'s docstring.
         src["pending_activation"] = True
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if username or password:
+        # Sealed before anything else: a login that cannot be stored safely
+        # is refused, never kept in the clear. Adding a share again is also
+        # how an owner puts back a login that no longer opens (same id, so
+        # the entry below replaces the old one).
+        try:
+            src["login"] = hb.seal_login(username, password)
+        except hb.LoginUnreadable as e:
+            print(f"[sources] cannot seal the login of {server}/{share}: {e}")
+            return _err("msg.smbLoginNotStored", 500)
     ok, msg, detail = mount_smb(src)
     if not ok:
         return _err_detail(_smb_reason(detail) or "msg.mountFailed", 400,
@@ -7007,6 +7053,7 @@ SOURCES_I18N = {
         "msg.smbBadCredentials": "Wrong username or password for this device.",
         "msg.smbPasswordExpired": "That account's password has expired — change it on the device that shares the folder.",
         "msg.smbAccountLocked": "That account is locked or disabled on the device that shares the folder.",
+        "msg.smbLoginNotStored": "The username and password could not be stored safely on this device, so the folder was not added.",
         "msg.smbNoSuchShare": "There is no shared folder with this name on that device.",
         "msg.smbUnreachable": "{server} is not answering. Check that it is switched on and on the same network.",
         "msg.smbProtocol": "This device speaks a version of file sharing the player cannot use.",
@@ -7176,6 +7223,7 @@ SOURCES_I18N = {
         "msg.smbBadCredentials": "Nome utente o password non corretti per questo dispositivo.",
         "msg.smbPasswordExpired": "La password di questo account è scaduta: cambiala sul dispositivo che condivide la cartella.",
         "msg.smbAccountLocked": "Questo account è bloccato o disattivato sul dispositivo che condivide la cartella.",
+        "msg.smbLoginNotStored": "Non è stato possibile conservare in modo sicuro nome utente e password su questo dispositivo: la cartella non è stata aggiunta.",
         "msg.smbNoSuchShare": "Su quel dispositivo non c'è nessuna cartella condivisa con questo nome.",
         "msg.smbUnreachable": "{server} non risponde. Controlla che sia acceso e sulla stessa rete.",
         "msg.smbProtocol": "Questo dispositivo usa una versione della condivisione file che il lettore non sa usare.",
@@ -7773,6 +7821,12 @@ if __name__ == "__main__":
         os.makedirs(MOUNT_ROOT, exist_ok=True)
     except Exception:
         pass
+    # Share logins written in the clear before they were sealed at rest: done
+    # once here, before the remount below reads them.
+    try:
+        _seal_stored_logins()
+    except Exception as e:
+        print(f"[sources] _seal_stored_logins error: {e}")
     # Re-mount known SMB shares on startup (survives reboots). Runs in the
     # background with retries: boot no longer waits for the network, so the NAS
     # may not be reachable yet — keep trying instead of failing once.

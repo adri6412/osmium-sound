@@ -103,6 +103,10 @@ DENY_FILES = frozenset((
     # let one box's session cookies work on another. A restored webui.db is
     # enough to get the account back.
     "/etc/hifi-player/webui-secret.key",
+    # The key the network-share logins are sealed with (see seal_login). An
+    # archive carries those logins decrypted, inside its own encryption, so
+    # the key has no business travelling — and a restore must never swap it.
+    "/etc/hifi-player/credential.secret",
     # Support/provisioning state that is re-derived, not user config.
     "/etc/hifi-player/github-support-pat",
     "/etc/hifi-player/shell-account",
@@ -370,29 +374,124 @@ def _transform_sqlite(src, ctx):
         return _FileMember(tmp)
 
 
+# ── network-share logins at rest ─────────────────────────────────────
+# 🚨 The username and password of an SMB source used to sit in the clear in
+# /etc/hifi-sources.json, and an owner found them in a support bundle. They
+# are now one systemd-creds blob per source (AES-256-GCM, name-bound), under
+# the "login" key, and the clear text exists only in memory and in the 0600
+# credentials file mount.cifs reads from /run for the length of one mount.
+#
+# The key is NOT systemd's usual /var/lib/systemd/credential.secret: the A/B
+# conversion seeds /data/var with a fixed list of folders and that one is not
+# among them, so every login would turn unreadable the moment a device
+# converted. /etc/hifi-player is copied whole (hifi-ab-seed.sh), so the key
+# lives there. systemd-creds creates it on first use, root-only.
+#
+# With a TPM2 chip the blob is also sealed to it ("auto"), so the disk read on
+# another computer is not enough. No PCRs (--tpm2-pcrs=): bound to the boot
+# state, turning Secure Boot on or off would lose every password. A BIOS
+# update that clears the firmware TPM still does — the owner then adds the
+# share again, which replaces the entry (same id) — see api_add_smb.
+LOGIN_KEY_FILE = "/etc/hifi-player/credential.secret"
+_LOGIN_CRED_NAME = "hifi-smb-login"
+
+
+class LoginUnreadable(Exception):
+    """A sealed login that cannot be opened (key gone, TPM cleared, tampered)."""
+
+
+def _creds(args, data):
+    env = dict(os.environ, SYSTEMD_CREDENTIAL_SECRET=LOGIN_KEY_FILE)
+    try:
+        r = subprocess.run(["systemd-creds"] + args + ["--name=" + _LOGIN_CRED_NAME, "-", "-"],
+                           input=data, capture_output=True, env=env, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return None, str(e)
+    if r.returncode != 0:
+        return None, (r.stderr or b"").decode("utf-8", "replace").strip()[:300]
+    return r.stdout, ""
+
+
+def seal_login(username, password):
+    """Username + password -> printable blob. Raises LoginUnreadable if it
+    cannot be sealed: the caller must refuse, never store the clear text."""
+    payload = json.dumps({"u": username or "", "p": password or ""}).encode("utf-8")
+    out, err = _creds(["encrypt", "--with-key=auto", "--tpm2-pcrs="], payload)
+    if not out:
+        raise LoginUnreadable(err or "systemd-creds encrypt failed")
+    return "".join(out.decode("ascii").split())
+
+
+def open_login(blob):
+    """Blob -> (username, password). Raises LoginUnreadable."""
+    out, err = _creds(["decrypt"], (blob or "").encode("ascii"))
+    if out is None:
+        raise LoginUnreadable(err or "systemd-creds decrypt failed")
+    try:
+        d = json.loads(out.decode("utf-8"))
+        return d.get("u") or "", d.get("p") or ""
+    except Exception as e:
+        raise LoginUnreadable(str(e))
+
+
+def seal_plain_logins(state):
+    """Move any clear-text username/password of a source into a sealed
+    "login". Returns True when something changed. A source that cannot be
+    sealed is left as it is: losing the owner's password is not the fix."""
+    changed = False
+    for entry in (state or {}).get("sources", []):
+        if not isinstance(entry, dict):
+            continue
+        if "username" not in entry and "password" not in entry:
+            continue
+        user, pw = entry.get("username") or "", entry.get("password") or ""
+        if user or pw:
+            try:
+                entry["login"] = seal_login(user, pw)
+            except LoginUnreadable:
+                continue
+        entry.pop("username", None)
+        entry.pop("password", None)
+        changed = True
+    return changed
+
+
 def _transform_sources(src, ctx):
-    """Music sources, with SMB passwords stripped on unencrypted archives.
+    """Music sources, with SMB logins taken out of unencrypted archives.
 
     The source list itself is not a secret and is the thing users most want
-    back, so it stays in every backup. The passwords inside it are a secret, so
-    an unencrypted archive gets them blanked and the manifest records that the
-    file was redacted. On restore, a blank password is treated as "keep whatever
-    this device already has" (see merge_sources_state), so re-restoring onto the
-    same box loses nothing at all.
+    back, so it stays in every backup. The logins inside it are a secret:
+    an encrypted archive carries them opened (the sealed form only opens on
+    this very device, and the archive has encryption of its own), while an
+    unencrypted one gets them removed and the manifest records that the file
+    was redacted. On restore, a source without a login is treated as "keep
+    whatever this device already has" (see merge_sources_state), so
+    re-restoring onto the same box loses nothing at all.
     """
     with open(src, "rb") as f:
         raw = f.read()
-    if ctx.get("encrypted"):
-        return raw
     try:
         state = json.loads(raw.decode("utf-8"))
     except Exception:
-        return raw
+        # Never ship what could not be looked at: it may hold a clear login.
+        return raw if ctx.get("encrypted") else None
     redacted = False
     for entry in state.get("sources", []):
-        if entry.get("password"):
-            entry["password"] = ""
+        if not isinstance(entry, dict):
+            continue
+        blob = entry.pop("login", None)
+        if ctx.get("encrypted"):
+            if blob:
+                try:
+                    entry["username"], entry["password"] = open_login(blob)
+                except LoginUnreadable:
+                    ctx.setdefault("notes", []).append("sources:login-unreadable")
+            continue
+        if blob or entry.get("password") or entry.get("username"):
             redacted = True
+        entry.pop("username", None)
+        if "password" in entry or blob:
+            entry["password"] = ""
     if redacted:
         ctx.setdefault("notes", []).append("sources:redacted")
     return json.dumps(state, indent=2).encode("utf-8")
@@ -765,13 +864,15 @@ def categories_in_manifest(manifest):
 
 
 def merge_sources_state(restored_raw, current_raw):
-    """Reinstate SMB passwords the archive had redacted.
+    """Reinstate SMB logins the archive had redacted.
 
-    An unencrypted backup blanks credentials (see _transform_sources). When such
-    a backup is restored onto the device it came from, the passwords are still
+    An unencrypted backup drops credentials (see _transform_sources). When such
+    a backup is restored onto the device it came from, the logins are still
     sitting in the live file, so match on server+share and keep them — the user
     gets their sources back working instead of getting a list of shares that all
-    fail to mount.
+    fail to mount. The live file holds them sealed ("login"); one written before
+    that holds a clear "password", which is carried over the same way and
+    sealed by sources_server.py on its next load.
     """
     try:
         restored = json.loads(restored_raw.decode("utf-8"))
@@ -781,14 +882,19 @@ def merge_sources_state(restored_raw, current_raw):
     have = {}
     for entry in current.get("sources", []):
         key = (entry.get("server"), entry.get("share"))
-        if entry.get("password"):
-            have[key] = entry["password"]
+        if entry.get("login"):
+            have[key] = {"login": entry["login"]}
+        elif entry.get("password"):
+            have[key] = {"username": entry.get("username") or "", "password": entry["password"]}
     changed = False
     for entry in restored.get("sources", []):
         key = (entry.get("server"), entry.get("share"))
-        if not entry.get("password") and key in have:
-            entry["password"] = have[key]
-            changed = True
+        if entry.get("login") or entry.get("password") or key not in have:
+            continue
+        entry.pop("username", None)
+        entry.pop("password", None)
+        entry.update(have[key])
+        changed = True
     if not changed:
         return restored_raw
     return json.dumps(restored, indent=2).encode("utf-8")

@@ -2762,6 +2762,26 @@ SUPPORT_CONFIG_FILES = [
     '/etc/hifi-player/SYSTEM_VERSION',
     '/etc/hifi-player/OS_VERSION',
 ]
+# 🚨 /etc/hifi-sources.json used to keep the SMB login of every network share
+# in the clear, and it was copied into the zip as-is — an owner reported their
+# NAS password in the bundle. The logins are sealed at rest now (see
+# hifi_backup.seal_login), but a device that could not seal one still has it
+# in the clear, and the sealed blob has no business leaving the device either.
+# Any key that looks like a secret or a login is masked, at any depth, before
+# the file is written. An empty value stays empty on purpose: "guest share"
+# versus "share with a login" is exactly what a mount failure needs to show.
+_SUPPORT_SECRET_KEY_RE = re.compile(r'pass|secret|token|cred|user|key|login', re.I)
+_SUPPORT_REDACT_JSON = {'/etc/hifi-sources.json'}
+
+
+def _support_redact(value):
+    if isinstance(value, dict):
+        return {k: ('<redacted>' if _SUPPORT_SECRET_KEY_RE.search(str(k)) and v not in ('', None)
+                    else _support_redact(v))
+                for k, v in value.items()}
+    if isinstance(value, list):
+        return [_support_redact(v) for v in value]
+    return value
 
 
 def _support_journal_dump(unit, since='7 days ago'):
@@ -2881,7 +2901,19 @@ def _support_bundle_build():
 
         for fpath in SUPPORT_CONFIG_FILES:
             try:
-                if os.path.isfile(fpath):
+                if not os.path.isfile(fpath):
+                    continue
+                if fpath in _SUPPORT_REDACT_JSON:
+                    # Never fall back to the raw file: one that does not
+                    # parse is left out rather than shipped unmasked.
+                    try:
+                        with open(fpath) as f:
+                            data = _support_redact(json.load(f))
+                        z.writestr('config' + fpath, json.dumps(data, indent=2))
+                    except ValueError:
+                        z.writestr('config' + fpath + '.unreadable',
+                                   '(not valid JSON: left out, it may hold passwords)\n')
+                else:
                     z.write(fpath, arcname='config' + fpath)
             except Exception:
                 log.exception("support bundle: config file %s failed", fpath)

@@ -331,6 +331,111 @@ class SourcesRedactionTests(FakeRootTestCase):
         self.assertEqual(merged["sources"][0]["password"], "")
 
 
+@unittest.skipUnless(shutil.which("systemd-creds"), "systemd-creds not installed")
+class SealedLoginTests(FakeRootTestCase):
+    """An owner found their NAS password in a support bundle: the logins of
+    network shares are sealed on disk and only ever opened in memory."""
+
+    def setUp(self):
+        super().setUp()
+        self._key = hb.LOGIN_KEY_FILE
+        hb.LOGIN_KEY_FILE = os.path.join(self.root, "credential.secret")
+
+    def tearDown(self):
+        hb.LOGIN_KEY_FILE = self._key
+        super().tearDown()
+
+    def plain_state(self):
+        return {"sources": [
+            {"type": "smb", "server": "nas", "share": "music", "username": "g22", "password": "hunter2"},
+            {"type": "smb", "server": "nas", "share": "pub", "username": "", "password": ""},
+            {"type": "local", "path": "/srv/music"},
+        ]}
+
+    def test_a_login_round_trips(self):
+        blob = hb.seal_login("g22", "hunter2")
+        self.assertNotIn("hunter2", blob)
+        self.assertNotIn("g22", blob)
+        self.assertEqual(hb.open_login(blob), ("g22", "hunter2"))
+
+    def test_a_tampered_login_does_not_open(self):
+        blob = hb.seal_login("g22", "hunter2")
+        bad = blob[:40] + ("A" if blob[40] != "A" else "B") + blob[41:]
+        with self.assertRaises(hb.LoginUnreadable):
+            hb.open_login(bad)
+
+    def test_another_key_does_not_open_it(self):
+        blob = hb.seal_login("g22", "hunter2")
+        os.chmod(hb.LOGIN_KEY_FILE, 0o600)
+        os.unlink(hb.LOGIN_KEY_FILE)
+        hb.seal_login("x", "y")          # a fresh key takes its place
+        with self.assertRaises(hb.LoginUnreadable):
+            hb.open_login(blob)
+
+    def test_clear_logins_are_sealed(self):
+        state = self.plain_state()
+        self.assertTrue(hb.seal_plain_logins(state))
+        smb, guest, local = state["sources"]
+        self.assertNotIn("password", smb)
+        self.assertNotIn("username", smb)
+        self.assertEqual(hb.open_login(smb["login"]), ("g22", "hunter2"))
+        self.assertNotIn("login", guest)
+        self.assertNotIn("password", guest)
+        self.assertEqual(local, {"type": "local", "path": "/srv/music"})
+        self.assertNotIn("hunter2", json.dumps(state))
+        self.assertFalse(hb.seal_plain_logins(state))
+
+    def test_a_login_that_cannot_be_sealed_is_kept(self):
+        # systemd-creds creates missing folders, but not under a plain file
+        blocker = os.path.join(self.root, "blocker")
+        open(blocker, "w").close()
+        hb.LOGIN_KEY_FILE = os.path.join(blocker, "k")
+        state = self.plain_state()
+        hb.seal_plain_logins(state)
+        self.assertEqual(state["sources"][0]["password"], "hunter2")
+
+    def sealed_on_disk(self):
+        state = self.plain_state()
+        hb.seal_plain_logins(state)
+        _write(self.root, "/etc/hifi-sources.json", json.dumps(state).encode())
+        return state
+
+    def test_encrypted_backup_carries_the_login_opened(self):
+        self.sealed_on_disk()
+        dest = os.path.join(self.root, "out.tar.gz")
+        hb.build_archive(dest, ["sources"], self.root, encrypted=True)
+        with tarfile.open(dest) as tar:
+            data = json.loads(tar.extractfile("etc/hifi-sources.json").read())
+        smb = data["sources"][0]
+        self.assertNotIn("login", smb)
+        self.assertEqual((smb["username"], smb["password"]), ("g22", "hunter2"))
+
+    def test_unencrypted_backup_carries_no_login(self):
+        self.sealed_on_disk()
+        dest = os.path.join(self.root, "out.tar.gz")
+        notes = hb.build_archive(dest, ["sources"], self.root, encrypted=False)["notes"]
+        with tarfile.open(dest) as tar:
+            raw = tar.extractfile("etc/hifi-sources.json").read()
+        smb = json.loads(raw)["sources"][0]
+        self.assertNotIn("login", smb)
+        self.assertNotIn("username", smb)
+        self.assertEqual(smb["password"], "")
+        self.assertNotIn(b"hunter2", raw)
+        self.assertIn("sources:redacted", notes)
+
+    def test_restore_of_a_redacted_backup_keeps_the_sealed_login(self):
+        current = self.sealed_on_disk()
+        redacted = json.dumps({"sources": [{"type": "smb", "server": "nas",
+                                            "share": "music", "password": ""}]}).encode()
+        merged = json.loads(hb.merge_sources_state(redacted, json.dumps(current).encode()))
+        smb = merged["sources"][0]
+        self.assertNotIn("password", smb)
+        self.assertEqual(hb.open_login(smb["login"]), ("g22", "hunter2"))
+
+    def test_the_key_never_travels_in_a_backup(self):
+        self.assertIn("/etc/hifi-player/credential.secret", hb.DENY_FILES)
+
+
 class NetworkFilterTests(FakeRootTestCase):
     def test_only_wifi_profiles_are_archived(self):
         _write(self.root, "/etc/NetworkManager/system-connections/wifi.nmconnection",

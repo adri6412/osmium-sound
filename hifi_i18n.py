@@ -528,6 +528,8 @@ MESSAGES = {
     'mount.alreadyMounted': {'en': 'Already mounted', 'it': 'Già montato'},
     'mount.smbUnreachable': {'en': "Can't reach {server} on the network (port 445)",
                              'it': 'Impossibile raggiungere {server} sulla rete (porta 445)'},
+    'mount.loginUnreadable': {'en': 'The saved username and password for this folder can no longer be read on this device: add the folder again to enter them',
+                              'it': 'Nome utente e password salvati per questa cartella non si possono più leggere su questo dispositivo: aggiungi di nuovo la cartella per reinserirli'},
     'mount.mountedSmb': {'en': 'Mounted (SMB {vers})', 'it': 'Montato (SMB {vers})'},
     'mount.mountedSmbRo': {'en': 'Mounted read-only (SMB {vers}): the other device does not allow writing into this folder',
                            'it': 'Montato in sola lettura (SMB {vers}): l\'altro dispositivo non consente di scrivere in questa cartella'},
