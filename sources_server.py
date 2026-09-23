@@ -740,6 +740,18 @@ def _samba_account_exists():
 
 def _create_samba_user(force_new_password=False):
     """Ensure a dedicated local + Samba user exists; return its password."""
+    # Samba does not recreate its own state folders: without private/ both
+    # smbpasswd ("Failed to open .../secrets.tdb") and smbd fail. Every device
+    # installed straight as an image started with an empty /var (see
+    # scripts/local-bottom/hifi-state), so they are made here if missing.
+    for d, mode in (("/var/lib/samba", 0o755), ("/var/lib/samba/private", 0o700),
+                    ("/var/cache/samba", 0o755), ("/var/log/samba", 0o750)):
+        try:
+            if not os.path.isdir(d):
+                os.makedirs(d, exist_ok=True)
+                os.chmod(d, mode)
+        except OSError as e:
+            print(f"[sources] cannot create {d}: {e}")
     _ensure_samba_uid_gid()
     cred = {}
     if os.path.exists(SAMBA_CRED_FILE):
