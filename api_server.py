@@ -2816,6 +2816,48 @@ def _support_previous_boot_tail():
         return f'(journalctl failed: {e})\n'
 
 
+SUPPORT_LYRION_LOG_DIR = '/var/log/squeezeboxserver'
+SUPPORT_LYRION_LOG_TAIL = 1024 * 1024   # bytes per file
+# Streaming services put their credentials in the query of the URLs Lyrion
+# logs (signed stream links, session tokens, API keys): the value goes, the
+# name stays, so the line still says what kind of request it was.
+_SUPPORT_URL_SECRET_RE = re.compile(
+    rb'([?&;\s"\'](?:[\w.-]*(?:pass|token|secret|sig|key|auth|session|cred)[\w.-]*))=[^&\s"\';,]+',
+    re.I)
+
+
+def _support_lyrion_logs():
+    """(name, bytes) for the tail of each of Lyrion's own log files.
+
+    They are plain files on /data, so unlike a journal that lived in RAM they
+    are still there after the owner pulled the plug — and they are where a
+    growing server, a rescan or a plugin at work shows up. Only the tail: a
+    scanner.log after a big library can be tens of MB."""
+    out = []
+    try:
+        names = sorted(os.listdir(SUPPORT_LYRION_LOG_DIR))
+    except OSError:
+        return out
+    for name in names:
+        if not (name.startswith(('server.log', 'scanner.log', 'perfmon.log'))):
+            continue
+        path = os.path.join(SUPPORT_LYRION_LOG_DIR, name)
+        try:
+            with open(path, 'rb') as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                f.seek(max(0, size - SUPPORT_LYRION_LOG_TAIL))
+                data = f.read()
+            if size > SUPPORT_LYRION_LOG_TAIL:
+                # start on a whole line, and say that the head was cut
+                data = b'(... first %d bytes left out ...)\n' % (size - SUPPORT_LYRION_LOG_TAIL) \
+                    + data.split(b'\n', 1)[-1]
+            out.append((name, _SUPPORT_URL_SECRET_RE.sub(rb'\1=<redacted>', data)))
+        except OSError:
+            continue
+    return out
+
+
 def _support_memory_snapshot():
     """Memory right now: totals, pressure, swap and the biggest processes.
     /var/log/hifi/memory.log (hifi-memlog.timer) has the same every 5 min."""
@@ -2928,6 +2970,11 @@ def _support_bundle_build():
             z.writestr(f'journal/{unit}.log', _support_journal_dump(unit))
         z.writestr('journal/previous-boot-tail.log', _support_previous_boot_tail())
         z.writestr('memory.txt', _support_memory_snapshot())
+        try:
+            for name, data in _support_lyrion_logs():
+                z.writestr(f'lyrion/{name}', data)
+        except Exception:
+            log.exception("support bundle: Lyrion logs failed")
 
         z.writestr('system_info.json', json.dumps(get_system_info(), indent=2))
         z.writestr('services.txt', _support_services_snapshot())

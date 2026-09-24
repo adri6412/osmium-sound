@@ -53,6 +53,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -324,12 +325,20 @@ _dnsmasq_attempted = False
 
 
 def _dnsmasq_present():
+    # 🚨 The binary, not `dpkg -s`: on a box short of memory dpkg overran its
+    # 10 s timeout, the package read as missing, and apt-get went to work for
+    # three minutes on a machine that was already stalling (2026-09-24).
     if FAKE:
         return True
+    return shutil.which('dnsmasq') is not None or os.path.exists('/usr/sbin/dnsmasq')
+
+
+def _root_is_writable():
+    # An A/B image runs from a read-only squashfs: apt-get cannot install
+    # anything there, and dnsmasq-base ships in the image anyway.
     try:
-        return subprocess.run(['dpkg', '-s', 'dnsmasq-base'],
-                              capture_output=True, timeout=10).returncode == 0
-    except Exception:
+        return not (os.statvfs('/').f_flag & os.ST_RDONLY)
+    except OSError:
         return False
 
 
@@ -337,7 +346,7 @@ def _ensure_dnsmasq():
     global _dnsmasq_attempted
     if _dnsmasq_present():
         return True
-    if _dnsmasq_attempted:
+    if _dnsmasq_attempted or not _root_is_writable():
         return False
     _dnsmasq_attempted = True
     print('[webui] dnsmasq-base missing — installing (required for the setup hotspot)')
@@ -719,16 +728,24 @@ _net_recovery = {'active': False, 'ssid': None, 'psk': None,
                  'networks': [], 'networks_cached_at': None, 'error': None}
 _monitor_start = time.monotonic()
 _NET_MONITOR_GRACE = 90  # seconds after daemon start before raising a recovery AP
+_NET_DOWN_TICKS = 3      # consecutive "no network" answers before the recovery AP
+_net_down_ticks = 0
 
 
 def _has_any_connectivity():
     """True if a real (non-AP) wired or Wi-Fi connection is up. Excludes our
-    own setup/recovery hotspot, which shows up as an active 'wifi' device too."""
+    own setup/recovery hotspot, which shows up as an active 'wifi' device too.
+
+    None when nmcli itself did not answer: that says nothing about the
+    network. 🚨 It used to count as "no network", and on a box stalling for
+    memory (nmcli timing out) the recovery hotspot went up and took a
+    Wi-Fi-only unit off the home network (2026-09-24)."""
     if FAKE:
         return True
-    rc, out, _ = _nmcli(['-t', '-f', 'DEVICE,TYPE,STATE,CONNECTION', 'device', 'status'])
+    rc, out, _ = _nmcli(['-t', '-f', 'DEVICE,TYPE,STATE,CONNECTION', 'device', 'status'],
+                        timeout=20)
     if rc != 0:
-        return False
+        return None
     for line in out.splitlines():
         parts = re.split(r'(?<!\\):', line)
         if len(parts) >= 4 and parts[1] in ('ethernet', 'wifi') \
@@ -766,11 +783,21 @@ def _network_monitor_tick():
     _wired_self_heal()
     if time.monotonic() - _monitor_start < _NET_MONITOR_GRACE:
         return  # boot grace window — give normal autoconnect/DHCP time to settle
+    global _net_down_ticks
     with _net_lock:
-        if _has_any_connectivity():
+        up = _has_any_connectivity()
+        if up is None:
+            return  # nmcli did not answer: nothing learnt, nothing changes
+        if up:
+            _net_down_ticks = 0
             if _net_recovery['active']:
                 _teardown_net_recovery()
-        elif not _net_recovery['active']:
+            return
+        # A Wi-Fi roam or a DHCP renewal can read as "down" for one tick; the
+        # hotspot takes a Wi-Fi-only unit off the home network, so only after
+        # a minute of certain absence (three ticks, 20 s apart).
+        _net_down_ticks += 1
+        if _net_down_ticks >= _NET_DOWN_TICKS and not _net_recovery['active']:
             _raise_net_recovery_ap()
 
 

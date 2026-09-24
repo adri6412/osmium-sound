@@ -118,5 +118,48 @@ class BundleSecretsTests(unittest.TestCase):
             self.assertNotIn(b'hunter2', z.read(name))
 
 
+class LyrionLogTests(unittest.TestCase):
+    """Lyrion's own logs are on /data and survive the power cycle that a
+    frozen box gets, so they go in — tail only, and without the tokens that
+    streaming services put in the URLs Lyrion logs."""
+
+    def setUp(self):
+        import tempfile
+        self.dir = tempfile.mkdtemp()
+        self.saved = (a.SUPPORT_LYRION_LOG_DIR, a.SUPPORT_LYRION_LOG_TAIL)
+        a.SUPPORT_LYRION_LOG_DIR = self.dir
+        self.addCleanup(lambda: (setattr(a, 'SUPPORT_LYRION_LOG_DIR', self.saved[0]),
+                                 setattr(a, 'SUPPORT_LYRION_LOG_TAIL', self.saved[1])))
+
+    def write(self, name, data):
+        import os
+        with open(os.path.join(self.dir, name), 'wb') as f:
+            f.write(data)
+
+    def test_server_and_scanner_logs_are_in_the_bundle(self):
+        self.write('server.log', b'[18:09] Slim::Web::HTTP warning\n')
+        self.write('scanner.log', b'[18:00] scan done\n')
+        self.write('unrelated.txt', b'nope\n')
+        names = zipfile.ZipFile(io.BytesIO(a._support_bundle_build())).namelist()
+        self.assertIn('lyrion/server.log', names)
+        self.assertIn('lyrion/scanner.log', names)
+        self.assertNotIn('lyrion/unrelated.txt', names)
+
+    def test_url_credentials_are_masked(self):
+        self.write('server.log', b'GET http://s/x?track=1&user_auth_token=abc123&sig=f00 ok\n')
+        data = dict(a._support_lyrion_logs())['server.log']
+        self.assertNotIn(b'abc123', data)
+        self.assertNotIn(b'f00', data)
+        self.assertIn(b'track=1', data)
+
+    def test_only_the_tail_of_a_big_log(self):
+        a.SUPPORT_LYRION_LOG_TAIL = 64
+        self.write('server.log', b''.join(b'line %04d\n' % i for i in range(1000)))
+        data = dict(a._support_lyrion_logs())['server.log']
+        self.assertTrue(data.startswith(b'(... first '))
+        self.assertTrue(data.endswith(b'line 0999\n'))
+        self.assertLess(len(data), 200)
+
+
 if __name__ == '__main__':
     unittest.main()
