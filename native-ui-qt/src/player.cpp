@@ -523,10 +523,18 @@ void Player::setCoverPx(int px) {
 }
 
 void Player::updateArtwork() {
-    // stessa chiave di app.c: per le radio l'immagine puo' cambiare col brano
+    // On a radio the picture follows the song on air, and a station often
+    // sends it a little after the title: ask again every 10 s for the first
+    // 30 s of a song, then leave it alone until the next one.
+    // 🚨 It used to be every 10 s for the whole session (elapsed/10 in the
+    // key): ~1,000 cover requests an hour to Lyrion, each fetched and resized
+    // again, and a freeze of the whole box after hours of radio (2026-09-24).
+    if (m_remote && m_currentTitle != m_artSong) { m_artSong = m_currentTitle; m_artSongSince = m_clock.elapsed(); }
+    qint64 songAge = m_clock.elapsed() - m_artSongSince;
+    int round = m_remote ? (int)qMin<qint64>(songAge / 10000, 3) : 0;
     QString key = QString("%1|%2|%3|%4|%5").arg(m_id.left(30), m_coverId, QString::number(m_remote),
                                               m_remote ? m_currentTitle.left(60) : QString(),
-                                              QString::number(m_remote ? (int)(m_elapsed / 10) : 0));
+                                              QString::number(round));
     if (key == m_artKey) return;
     m_artKey = key;
     QString url;

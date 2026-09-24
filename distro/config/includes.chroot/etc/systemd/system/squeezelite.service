@@ -43,5 +43,11 @@ IOAccounting=yes
 CPUWeight=1000
 IOWeight=1000
 
+# Last to go when memory runs out: systemd-oomd skips it (system.slice.d/
+# 10-hifi-oomd.conf) and the kernel's own OOM killer ranks it near the bottom.
+# It needs a few MB; killing it would never be what frees the box.
+ManagedOOMPreference=avoid
+OOMScoreAdjust=-900
+
 [Install]
 WantedBy=multi-user.target

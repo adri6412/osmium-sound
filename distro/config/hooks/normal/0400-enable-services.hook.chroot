@@ -110,6 +110,12 @@ mkdir -p /var/log/hifi
 chmod 0750 /var/log/hifi
 chown root:root /var/log/hifi
 
+echo "I: [hifi] enabling systemd-oomd and the memory log"
+# The package enables oomd on install; said again here so a later packaging
+# change cannot leave the policy in the slice drop-ins with nobody to apply it.
+systemctl enable systemd-oomd.service || true
+systemctl enable hifi-memlog.timer || true
+
 echo "I: [hifi] making journald persistent across reboots"
 mkdir -p /var/log/journal
 systemd-tmpfiles --create --prefix /var/log/journal || true

@@ -251,6 +251,7 @@ private:
     qint64 m_lookupSince = 0, m_lastFind = 0, m_lastNameFetch = 0;
     QString m_title, m_artist, m_album, m_id, m_coverId, m_artworkUrlLms, m_type, m_bitrate, m_chip, m_currentTitle;
     QString m_artworkUrl, m_artKey;
+    QString m_artSong; qint64 m_artSongSince = 0;   // radio: the song on air and since when (updateArtwork)
     QString m_url, m_rawTitle, m_stationName;      // the track's URL (favourites) and its title as Lyrion gives it
     QString m_albumId, m_artistId;
     // favourites: what the last `favorites exists` was about, and its answer

@@ -2748,6 +2748,9 @@ SUPPORT_JOURNAL_UNITS = [
     # say which player unit was started or why one wasn't).
     'hifi-bt-out',
     'bluetooth', 'NetworkManager',
+    # The on-screen interface, and systemd-oomd: when memory runs out the
+    # latter says which service it killed and why (pressure or swap).
+    'hifi-qt', 'systemd-oomd',
 ]
 # Config worth including — never secrets/keys. Mirrors the allow-list spirit of
 # sources_server.py's BACKUP_FILES, but deliberately excludes everything under
@@ -2797,6 +2800,43 @@ def _support_journal_dump(unit, since='7 days ago'):
         return r.stdout or ''
     except Exception as e:
         return f'(journalctl fallito: {e})\n'
+
+
+def _support_previous_boot_tail():
+    """The last lines of the boot before this one, every unit together.
+
+    A bundle is usually taken right after the owner pulled the plug on a box
+    that froze, and the per-unit dumps above are dominated by the few minutes
+    of the new boot. What happened just before the freeze is here."""
+    try:
+        r = subprocess.run(['journalctl', '-b', '-1', '-n', '600', '-o', 'short-iso', '--no-pager'],
+                           capture_output=True, text=True, timeout=15)
+        return r.stdout or f'(no previous boot in the journal) {(r.stderr or "").strip()[:200]}\n'
+    except Exception as e:
+        return f'(journalctl failed: {e})\n'
+
+
+def _support_memory_snapshot():
+    """Memory right now: totals, pressure, swap and the biggest processes.
+    /var/log/hifi/memory.log (hifi-memlog.timer) has the same every 5 min."""
+    out = []
+    for label, path in (('meminfo', '/proc/meminfo'), ('pressure', '/proc/pressure/memory'),
+                        ('swaps', '/proc/swaps')):
+        out.append(f'== {label} ==')
+        try:
+            with open(path) as f:
+                out.append(f.read().rstrip())
+        except OSError as e:
+            out.append(f'({e})')
+        out.append('')
+    out.append('== ps (by resident memory) ==')
+    try:
+        r = subprocess.run(['ps', '-eo', 'pid,rss,vsz,etime,comm,args', '--sort=-rss'],
+                           capture_output=True, text=True, timeout=10)
+        out.append('\n'.join((r.stdout or '').splitlines()[:25]))
+    except Exception as e:
+        out.append(f'(ps failed: {e})')
+    return '\n'.join(out) + '\n'
 
 
 def _support_services_snapshot():
@@ -2886,6 +2926,8 @@ def _support_bundle_build():
 
         for unit in SUPPORT_JOURNAL_UNITS:
             z.writestr(f'journal/{unit}.log', _support_journal_dump(unit))
+        z.writestr('journal/previous-boot-tail.log', _support_previous_boot_tail())
+        z.writestr('memory.txt', _support_memory_snapshot())
 
         z.writestr('system_info.json', json.dumps(get_system_info(), indent=2))
         z.writestr('services.txt', _support_services_snapshot())

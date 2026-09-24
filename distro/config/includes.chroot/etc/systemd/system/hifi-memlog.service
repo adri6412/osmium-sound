@@ -1,0 +1,8 @@
+[Unit]
+Description=Osmium Sound - memory snapshot into /var/log/hifi/memory.log
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /usr/local/sbin/hifi-memlog.sh
+Nice=10
+IOSchedulingClass=idle

@@ -36,3 +36,6 @@ CPUAccounting=yes
 IOAccounting=yes
 CPUWeight=500
 IOWeight=500
+# the music keeps going when memory runs out (see squeezelite.service)
+ManagedOOMPreference=avoid
+OOMScoreAdjust=-900
