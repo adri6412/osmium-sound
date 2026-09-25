@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.25-dev.6",
-  "name": "v2.5.25-dev.6",
-  "body": "## What's new in v2.5.25-dev.6\n\n- kiosk: a remote can reach a text field, and the keyboard is always there\n- add-ons: installing one must not take the screen away\n",
+  "tag_name": "v2.5.25-dev.7",
+  "name": "v2.5.25-dev.7",
+  "body": "## What's new in v2.5.25-dev.7\n\n- image: Broadcom BCM4360/BCM4352 Wi-Fi works\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.25-dev.6.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6/hifi-qtui-v2.5.25-dev.6.tar.gz",
-      "size": 23191220
+      "name": "hifi-qtui-v2.5.25-dev.7.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.7/hifi-qtui-v2.5.25-dev.7.tar.gz",
+      "size": 23199796
     },
     {
-      "name": "hifi-qtui-v2.5.25-dev.6.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6/hifi-qtui-v2.5.25-dev.6.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.25-dev.7.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.7/hifi-qtui-v2.5.25-dev.7.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-system-v2.5.25-dev.6.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6/hifi-system-v2.5.25-dev.6.tar.gz",
-      "size": 817817
+      "name": "hifi-system-v2.5.25-dev.7.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.7/hifi-system-v2.5.25-dev.7.tar.gz",
+      "size": 824686
     },
     {
-      "name": "hifi-system-v2.5.25-dev.6.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6/hifi-system-v2.5.25-dev.6.tar.gz.sha256",
+      "name": "hifi-system-v2.5.25-dev.7.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.7/hifi-system-v2.5.25-dev.7.tar.gz.sha256",
       "size": 99
     },
     {
-      "name": "hifi-os-v2.5.25-dev.6.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6/hifi-os-v2.5.25-dev.6.tar.gz",
-      "size": 1404043
+      "name": "hifi-os-v2.5.25-dev.7.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.7/hifi-os-v2.5.25-dev.7.tar.gz",
+      "size": 1402985
     },
     {
-      "name": "hifi-os-v2.5.25-dev.6.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6/hifi-os-v2.5.25-dev.6.tar.gz.sha256",
+      "name": "hifi-os-v2.5.25-dev.7.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.7/hifi-os-v2.5.25-dev.7.tar.gz.sha256",
       "size": 95
     },
     {
-      "name": "hifi-os-v2.5.25-dev.6.tar.gz.sha256.sig",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6/hifi-os-v2.5.25-dev.6.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.25-dev.7.tar.gz.sha256.sig",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.7/hifi-os-v2.5.25-dev.7.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.25-dev.6.raucb",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6/hifi-image-v2.5.25-dev.6.raucb",
-      "size": 1023421077
+      "name": "hifi-image-v2.5.25-dev.7.raucb",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.7/hifi-image-v2.5.25-dev.7.raucb",
+      "size": 1024998037
     },
     {
-      "name": "hifi-image-v2.5.25-dev.6.raucb.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.6/hifi-image-v2.5.25-dev.6.raucb.sha256",
+      "name": "hifi-image-v2.5.25-dev.7.raucb.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.25-dev.7/hifi-image-v2.5.25-dev.7.raucb.sha256",
       "size": 97
     }
   ]
