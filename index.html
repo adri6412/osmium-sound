@@ -686,6 +686,47 @@
       background: var(--bg); border-color: rgba(245,184,32,0.35);
     }
     .kofi-btn img { width: 24px; height: auto; display: block; }
+    /* The names from the Ko-fi webhook (/api/supporters). Hidden until at
+       least one arrives; slides only when they do not fit on one line. */
+    .supporters {
+      flex-basis: 100%; min-width: 0;
+      border-top: 1px solid rgba(245,184,32,0.2);
+      padding-top: 1rem;
+    }
+    .review-inner .supporters-title {
+      max-width: none; margin: 0 0 0.6rem;
+      font-size: 0.78rem; color: var(--muted);
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .supporters-viewport { overflow: hidden; }
+    .supporters-viewport.scrolling {
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+              mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+    }
+    .supporters-track {
+      display: flex; gap: 0.6rem; list-style: none;
+      justify-content: center; width: max-content; margin: 0 auto;
+    }
+    /* The trailing padding matches the gap, so half the doubled track is
+       exactly one set of names plus its gaps and the loop does not jump. */
+    .supporters-viewport.scrolling .supporters-track {
+      margin: 0; padding-right: 0.6rem;
+      animation: supporters-slide var(--supporters-duration, 40s) linear infinite;
+    }
+    .supporters-viewport.scrolling:hover .supporters-track,
+    .supporters-viewport.scrolling:focus-within .supporters-track { animation-play-state: paused; }
+    @keyframes supporters-slide { to { transform: translateX(-50%); } }
+    .supporters-track li {
+      display: flex; align-items: center; gap: 0.45rem;
+      padding: 5px 14px; border-radius: 999px;
+      background: var(--bg); border: 1px solid rgba(245,184,32,0.35);
+      font-size: 0.86rem; white-space: nowrap;
+    }
+    .supporters-track img { width: 18px; height: auto; display: block; }
+    @media (prefers-reduced-motion: reduce) {
+      .supporters-viewport.scrolling { overflow-x: auto; -webkit-mask-image: none; mask-image: none; }
+      .supporters-viewport.scrolling .supporters-track { animation: none; }
+    }
     /* Same size and weight as the Ko-fi button next to it. */
     .social-btn {
       padding: 10px 20px; font-size: 0.9rem; white-space: nowrap;
@@ -804,6 +845,12 @@
       </a>
     </div>
     <p class="chat-note" data-en="The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then this page stores nothing. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;" data-it="La chat &egrave; di Featurebase e si carica solo quando la apri: da quel momento tiene qualche voce nel tuo browser per ricordare la conversazione. Fino ad allora questa pagina non salva nulla. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;">The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then this page stores nothing. <a href="privacy">Privacy</a></p>
+    <div class="supporters" id="supporters" hidden>
+      <p class="supporters-title" data-en="Thank you to everyone supporting Osmium Sound" data-it="Grazie a chi sostiene Osmium Sound">Thank you to everyone supporting Osmium Sound</p>
+      <div class="supporters-viewport">
+        <ul class="supporters-track" id="supportersTrack" aria-label="Ko-fi supporters"></ul>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1367,6 +1414,63 @@
       .some(l => l.toLowerCase().startsWith('it'));
     applyLang(saved || (browserIt ? 'it' : 'en'));
   })();
+
+  // Ko-fi supporters under the support band (/api/supporters, filled by the
+  // Ko-fi webhook). The strip stays hidden until somebody has donated
+  // publicly; when the names do not fit on one line they slide, doubled so
+  // the loop has no seam.
+  (function () {
+    const box = document.getElementById('supporters');
+    const track = document.getElementById('supportersTrack');
+    if (!box || !track) return;
+    const viewport = track.parentElement;
+    let names = [];
+    let laidOutWidth = 0;
+
+    function item(name, copy) {
+      const li = document.createElement('li');
+      if (copy) li.setAttribute('aria-hidden', 'true');
+      const cup = document.createElement('img');
+      cup.src = 'kofi.png';
+      cup.alt = '';
+      const label = document.createElement('span');
+      label.textContent = name;
+      li.append(cup, label);
+      return li;
+    }
+
+    function layout() {
+      laidOutWidth = viewport.clientWidth;
+      viewport.classList.remove('scrolling');
+      track.replaceChildren(...names.map(n => item(n, false)));
+      if (track.getBoundingClientRect().width <= laidOutWidth) return;
+      track.append(...names.map(n => item(n, true)));
+      viewport.classList.add('scrolling');
+      // About 40 px a second, however many names there are.
+      const loop = track.getBoundingClientRect().width / 2;
+      viewport.style.setProperty('--supporters-duration', Math.max(loop / 40, 10) + 's');
+    }
+
+    fetch('/api/supporters')
+      .then(r => r.ok ? r.json() : { names: [] })
+      .then(data => {
+        names = (data.names || []).filter(n => typeof n === 'string' && n);
+        if (!names.length) return;
+        box.hidden = false;
+        layout();
+        // Only a change of width matters: phones fire resize when the
+        // address bar slides away, and restarting the strip each time shows.
+        let timer = null;
+        window.addEventListener('resize', () => {
+          clearTimeout(timer);
+          timer = setTimeout(() => {
+            if (viewport.clientWidth !== laidOutWidth) layout();
+          }, 200);
+        });
+      })
+      .catch(() => {});
+  })();
+
   // Click-to-play YouTube facade — keeps the title/channel hidden at rest
   const videoFacade = document.getElementById('videoFacade');
   if (videoFacade) {
