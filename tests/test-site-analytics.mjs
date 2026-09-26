@@ -9,7 +9,8 @@
 //      byte-for-byte with osmium-iso-tracker and was not touched here);
 //   3. no INSERT in the site's functions names a column about a person;
 //   4. the migration really produces the counters it promises, against a
-//      throwaway copy of the old schema.
+//      throwaway copy of the old schema;
+//   5. the Ko-fi webhook keeps a public supporter's name and nothing else.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -23,6 +24,9 @@ import { add, count, empty, merge, serialize, deserialize } from "../website/fun
 import { classify, parseUA } from "../website/functions/_lib/traffic.js";
 import { CHECK, CLICK, DOWNLOADS_DAILY, SERVED, SITE_DAILY } from "../website/functions/_lib/counters.js";
 import { utcDay, weekStart } from "../website/functions/_lib/visitor.js";
+import { MAX_NAMES, cleanName } from "../website/functions/_lib/supporters.js";
+import { onRequestPost as kofiWebhook } from "../website/functions/api/kofi.js";
+import { onRequestGet as supportersList } from "../website/functions/api/supporters.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 let failures = 0;
@@ -182,8 +186,12 @@ section("The weekly salt key");
 
 section("What the functions write");
 
-const FORBIDDEN = ["ip", "user_agent", "visitor_id", "referrer", "city", "region", "screen_w", "http_proto"];
+const FORBIDDEN = ["ip", "user_agent", "visitor_id", "referrer", "city", "region", "screen_w", "http_proto", "email"];
 const ALLOWED_TABLES = ["site_daily", "downloads_daily", "site_breakdown", "site_drops", "site_salts"];
+// The one table that holds something about a person, on purpose: the names
+// supporters left public on Ko-fi, which the home page shows. It may hold
+// exactly these columns — no email, no message, no amount.
+const PUBLISHED_TABLES = { kofi_supporters: ["message_id", "name", "ts"] };
 
 function jsFiles(dir) {
   const out = [];
@@ -218,10 +226,18 @@ for (const insert of inserts) {
 // they carry the column names that the INSERT text cannot show.
 const named = [...new Set(inserts.map((i) => i.table).filter((t) => !t.startsWith("${")))];
 check(
-  "every INSERT that names a table names an aggregate one",
-  named.every((t) => ALLOWED_TABLES.includes(t)),
+  "every INSERT that names a table names an aggregate one, or the supporters list",
+  named.every((t) => ALLOWED_TABLES.includes(t) || t in PUBLISHED_TABLES),
   named.join(", ")
 );
+for (const insert of inserts.filter((i) => i.table in PUBLISHED_TABLES)) {
+  const want = PUBLISHED_TABLES[insert.table];
+  check(
+    `${insert.file}: ${insert.table} gets exactly ${want.join(", ")}`,
+    insert.columns.length === want.length && want.every((c) => insert.columns.includes(c)),
+    insert.columns.join(", ")
+  );
+}
 for (const spec of [SITE_DAILY, DOWNLOADS_DAILY]) {
   const columns = [...spec.keyCols, spec.countCol, spec.sketchCol];
   check(
@@ -420,6 +436,117 @@ check(
   ["site_daily", "downloads_daily", "site_breakdown", "site_drops"].every((name) => left.includes(name)),
   left.join(", ")
 );
+
+// ------------------------------------------------ 5. the Ko-fi supporters list
+
+section("Ko-fi supporters");
+
+// D1 as far as the two functions use it, over node:sqlite.
+function fakeD1(sqlite) {
+  const statement = (sql, args = []) => ({
+    bind: (...values) => statement(sql, values),
+    run: async () => sqlite.prepare(sql).run(...args),
+    all: async () => ({ results: sqlite.prepare(sql).all(...args) }),
+  });
+  return {
+    prepare: (sql) => statement(sql),
+    batch: async (list) => {
+      sqlite.exec("BEGIN");
+      try {
+        for (const s of list) await s.run();
+        sqlite.exec("COMMIT");
+      } catch (err) {
+        sqlite.exec("ROLLBACK");
+        throw err;
+      }
+    },
+  };
+}
+
+const TOKEN = "test-token";
+let donation = 0;
+function payload(overrides = {}) {
+  donation++;
+  return {
+    verification_token: TOKEN,
+    message_id: `msg-${donation}`,
+    timestamp: new Date(Date.UTC(2026, 8, 1, 0, donation)).toISOString(),
+    type: "Donation",
+    is_public: true,
+    from_name: `Supporter ${donation}`,
+    message: "A secret message",
+    amount: "3.00",
+    email: "someone@example.com",
+    currency: "EUR",
+    kofi_transaction_id: `tx-${donation}`,
+    ...overrides,
+  };
+}
+async function post(env, data, raw) {
+  const body = raw ?? new URLSearchParams({ data: JSON.stringify(data) }).toString();
+  const response = await kofiWebhook({
+    request: new Request("https://osmiumsound.it/api/kofi", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    }),
+    env,
+  });
+  return response.status;
+}
+async function listed(env) {
+  return (await (await supportersList({ env })).json()).names;
+}
+
+const kofiDb = new DatabaseSync(":memory:");
+const kofiEnv = { DB: fakeD1(kofiDb), KOFI_VERIFICATION_TOKEN: TOKEN };
+
+check("no table yet: the list is empty, not an error", (await listed(kofiEnv)).length === 0);
+check("no token configured: refused", (await post({ DB: kofiEnv.DB }, payload())) === 503);
+check("wrong token: refused", (await post(kofiEnv, payload({ verification_token: "nope" }))) === 403);
+check("not form data: refused", (await post(kofiEnv, null, "garbage")) === 400);
+
+const first = payload({ from_name: "  Ada‮   Lovelace\n" });
+check("a public donation is accepted", (await post(kofiEnv, first)) === 200);
+check("the second delivery of it is a no-op", (await post(kofiEnv, first)) === 200);
+const stored = kofiDb.prepare("SELECT * FROM kofi_supporters").all();
+check("one row for one donation", stored.length === 1, `${stored.length}`);
+check("the name is cleaned up", stored[0]?.name === "Ada Lovelace", JSON.stringify(stored[0]?.name));
+check(
+  "only the id, the name and the time are stored",
+  Object.keys(stored[0] ?? {}).sort().join() === "message_id,name,ts",
+  Object.keys(stored[0] ?? {}).join(", ")
+);
+check(
+  "email, message and amount are nowhere in the table",
+  !JSON.stringify(stored).match(/example\.com|secret|3\.00/)
+);
+
+await post(kofiEnv, payload({ from_name: "Private", is_public: false }));
+await post(kofiEnv, payload({ from_name: "Shopper", type: "Shop Order" }));
+await post(kofiEnv, payload({ from_name: "Jo Example", kofi_transaction_id: "00000000-1111-2222-3333-444444444444" }));
+await post(kofiEnv, payload({ from_name: "   " }));
+check(
+  "private donations, shop orders, Ko-fi's test and empty names are not kept",
+  kofiDb.prepare("SELECT COUNT(*) AS n FROM kofi_supporters").get().n === 1
+);
+
+await post(kofiEnv, payload({ from_name: "Monthly" }));
+await post(kofiEnv, payload({ from_name: "Grace", type: "Subscription" }));
+await post(kofiEnv, payload({ from_name: "Monthly", type: "Subscription" }));
+const names = await listed(kofiEnv);
+check(
+  "the list is newest first, each name once",
+  names.join() === "Monthly,Grace,Ada Lovelace",
+  names.join(", ")
+);
+
+for (let i = 0; i < MAX_NAMES + 5; i++) await post(kofiEnv, payload());
+const kept = kofiDb.prepare("SELECT COUNT(DISTINCT name) AS n FROM kofi_supporters").get().n;
+check(`only the latest ${MAX_NAMES} names are kept`, kept === MAX_NAMES, `${kept}`);
+check("the oldest name went first", !(await listed(kofiEnv)).includes("Ada Lovelace"));
+check("a long name is cut", [...cleanName("x".repeat(100))].length === 40);
+check("emoji survive", cleanName("Luca 🎧") === "Luca 🎧");
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures === 0 ? 0 : 1);
