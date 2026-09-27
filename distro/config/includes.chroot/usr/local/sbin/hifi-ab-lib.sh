@@ -5,7 +5,7 @@
 # POSIX sh puro (dash), niente bashismi.
 #
 # Layout GPT di riferimento (identico per ISO nuove e apparecchi convertiti):
-#   p1 "BIOS boot"    1 MiB      inerte
+#   p1 "BIOS boot"    1 MiB      core.img di GRUB per BIOS legacy (vuota sui convertiti)
 #   p2 "EFI System"   512 MiB    shim+grub Debian, selettore, grubenv
 #   p3 hifi-root-a    dinamica (convertiti) / 1280 (nuovi)     slot A
 #   p4 hifi-root-b    1280 MiB                                  slot B

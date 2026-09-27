@@ -13,15 +13,15 @@ linux-image-amd64
 #   boots with UEFI Secure Boot enabled in firmware — verified at build time, the
 #   ONLY safe place to touch the bootloader (NOT via OTA — see
 #   distro/os-update/apply.d/0010-secure-boot.sh, kept as a no-op).
-# BIOS/legacy boot — the partition layout (see includes.installer/preseed.cfg)
-# always carved out a 1MB bios_grub partition for this, but the package that
-# actually populates it was missing, so grub-installer had nothing to install
-# on a BIOS-booted target and the install failed. Shipping it here (like the
-# UEFI chain above) lands it on the target via the live-clone install, so
-# grub-installer can run grub-install --target=i386-pc fully offline. Debian
-# permits grub-pc and grub-efi-amd64-signed installed side by side; d-i's
-# grub-installer picks the right one for the machine's actual boot mode.
+# BIOS/legacy boot — only the i386-pc GRUB modules (grub-pc-bin), NOT grub-pc:
+# grub-pc's postinst wants to own the MBR and its debconf questions got in the
+# way (it was dropped in 8399bd4, which left BIOS machines unable to install).
+# hifi-disk-install.sh runs `grub-install --target=i386-pc` itself, straight
+# from the live system, and puts core.img in the 1 MiB "BIOS boot" partition
+# every layout already carves out. The installed image carries the package
+# too, since the single-squashfs ISO boots that very image.
 grub-efi-amd64-signed
+grub-pc-bin
 shim-signed
 efibootmgr
 
