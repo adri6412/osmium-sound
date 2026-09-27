@@ -703,6 +703,9 @@
       "keysBody": "Le frecce spostano il riflettore, OK preme. Indietro chiude quello che è aperto, o torna di un passo. Casa riporta alla libreria. Il tasto menu apre lo stesso menu che si apre tenendo il dito su una riga. Riproduci, precedente, successivo, volume e muto fanno quello che dicono.",
       "connected": "Telecomandi collegati adesso",
       "none": "Nessun telecomando collegato. Infila la chiavetta di un telecomando USB, oppure accoppiane uno Bluetooth qui sotto.",
+      "noneYet": "Ancora nessun telecomando. Aggiungine uno con il pulsante qui sopra, oppure infila la chiavetta di uno USB: funziona subito.",
+      "keysPage": "Prova e assegna i tasti",
+      "keysPageSub": "Guarda cosa manda ogni tasto e dagli un altro compito",
       "viaUsb": "USB",
       "viaBluetooth": "Bluetooth",
       "viaOther": "Collegato",
@@ -762,6 +765,23 @@
       },
       "btTitle": "Telecomandi Bluetooth",
       "btHelp": "Prima metti il telecomando in accoppiamento — di solito si tiene premuto un tasto finché la sua spia lampeggia — poi cerca.",
+      "pair": {
+        "title": "Aggiungi un telecomando",
+        "pairedOther": "Telecomando collegato!",
+        "which": "Quale telecomando hai?",
+        "other": "Un altro telecomando",
+        "how": {
+          "firetv": "Tieni premuto il tasto Home (⌂) finché la luce in alto non lampeggia.",
+          "xiaomi": "Tieni premuti insieme il tasto ⋮⋮⋮ e il tasto ○ per 7–8 secondi, finché la luce non lampeggia.",
+          "g20s": "Tieni premuti insieme OK e Indietro per 5–7 secondi, finché la luce non lampeggia."
+        },
+        "wait": "Poi lascialo vicino all’apparecchio: lo trovo e lo collego da solo.",
+        "looking": "Sto cercando il tuo {name}…",
+        "paired": "{name} collegato!",
+        "notYet": "Non lo trovo ancora. Controlla che la luce lampeggi, poi riprova.",
+        "retry": "Riprova",
+        "change": "Scegli un altro telecomando"
+      },
       "btUnavailable": "Il Bluetooth non è ancora disponibile su questo apparecchio. Installa l'ultimo aggiornamento e riprova.",
       "btNeedsUpdate": "Il sistema di questo apparecchio non è abbastanza nuovo per accoppiare un telecomando Bluetooth. Installa l'ultimo aggiornamento e riprova.",
       "btNoAdapter": "Su questo apparecchio non è stato trovato il Bluetooth. Basta una chiavetta Bluetooth USB.",
@@ -783,7 +803,8 @@
         "body": "Ecco cosa fa ogni tasto su Osmium. Scorri per vederli tutti.",
         "later": "Puoi rivederla quando vuoi da Impostazioni → Telecomando.",
         "gotIt": "Ho capito",
-        "show": "Mappa dei tasti"
+        "show": "Mappa dei tasti",
+        "showSub": "Cosa fa ogni tasto del tuo telecomando"
       },
       "tour": {
         "title": "Prova il telecomando",

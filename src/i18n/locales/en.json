@@ -703,6 +703,9 @@
       "keysBody": "Arrows move the highlight, OK presses. Back closes what is open, or goes back a step. Home returns to the library. The menu key opens the same menu a long press on a row opens. Play, previous, next, volume and mute do what they say.",
       "connected": "Remotes connected now",
       "none": "No remote connected. Plug in the receiver of a USB remote, or pair a Bluetooth one below.",
+      "noneYet": "No remote yet. Add one with the button above, or plug in the receiver of a USB one: it works straight away.",
+      "keysPage": "Try and assign the keys",
+      "keysPageSub": "See what each key sends and give it another job",
       "viaUsb": "USB",
       "viaBluetooth": "Bluetooth",
       "viaOther": "Connected",
@@ -762,6 +765,23 @@
       },
       "btTitle": "Bluetooth remotes",
       "btHelp": "Put the remote in pairing mode first — usually holding a key until its light blinks — then search.",
+      "pair": {
+        "title": "Add a remote",
+        "pairedOther": "Remote connected!",
+        "which": "Which remote do you have?",
+        "other": "Another remote",
+        "how": {
+          "firetv": "Hold the Home key (⌂) until the light at the top blinks.",
+          "xiaomi": "Hold the ⋮⋮⋮ key and the ○ key together for 7–8 seconds, until the light blinks.",
+          "g20s": "Hold OK and Back together for 5–7 seconds, until the light blinks."
+        },
+        "wait": "Then leave it near the device: it is found and connected by itself.",
+        "looking": "Looking for your {name}…",
+        "paired": "{name} connected!",
+        "notYet": "Not found yet. Check that its light is blinking, then try again.",
+        "retry": "Try again",
+        "change": "Choose another remote"
+      },
       "btUnavailable": "Bluetooth is not available on this device yet. Install the latest update and look again.",
       "btNeedsUpdate": "This device's system is not new enough to pair a Bluetooth remote. Install the latest update and look again.",
       "btNoAdapter": "No Bluetooth was found on this device. A USB Bluetooth adapter is all it takes.",
@@ -783,7 +803,8 @@
         "body": "This is what each key does on Osmium. Scroll to see them all.",
         "later": "You can see it again any time from Settings → Remote control.",
         "gotIt": "Got it",
-        "show": "Key map"
+        "show": "Key map",
+        "showSub": "What each key of your remote does"
       },
       "tour": {
         "title": "Try the remote",

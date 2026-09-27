@@ -41,7 +41,12 @@ Item {
     property bool remoteTest: false
     property bool remoteBusy: false
     property bool remoteScanning: false
-    readonly property bool remoteSection: active >= 0 && active < secs.length && secs[active].id === "remote"
+    // the list of Bluetooth remotes is read again when the wizard closes
+    Connections {
+        target: Ui.app ? Ui.app.pairWizard : null
+        function onClosed() { if (root.remoteSection) cfg.loadRemotes() }
+    }
+    readonly property bool remoteSection: active >= 0 && active < secs.length && (secs[active].id === "remote" || secs[active].id === "remoteKeys")
     Binding { target: Remote; property: "learning"; value: root.remoteTest && root.remoteSection }
     Connections {
         target: Remote
@@ -113,7 +118,8 @@ Item {
         { id: "systemControls", icon: "power", key: "settings.sections.systemControls" },
         { id: "thirdPartyNotices", icon: "scroll-text", key: "settings.sections.thirdPartyNotices" },
         // reached from System info and Updates, not listed on its own
-        { id: "netCheck", icon: "network", key: "settings.sections.netCheck", hidden: true }]
+        { id: "netCheck", icon: "network", key: "settings.sections.netCheck", hidden: true },
+        { id: "remoteKeys", icon: "remote", key: "settings.remote.keysPage", hidden: true }]
     readonly property var listedSecs: secs.filter(function(s) { return !s.hidden })
 
     Component.onCompleted: Ui.settings = root
@@ -793,6 +799,7 @@ Item {
             case "multiroom": secMultiroom(); break
             case "btSpeakers": secBtSpeakers(); break
             case "remote": secRemote(); break
+            case "remoteKeys": secRemoteKeys(); break
             case "alarm": secAlarm(); break
             case "network": secNetwork(); break
             case "webRemote": secWebremote(); break
@@ -1415,55 +1422,73 @@ Item {
         }
         return false
     }
+    // Remote control, kept short: the button that adds one (a wizard over
+    // everything, RemotePairWizard.qml), the remotes this box has, and three
+    // entries for the rest — the key map, the practice run, and the page that
+    // shows and reassigns what each key sends.
     function secRemote() {
-        help("settings.remote.help")
+        var canBt = cfg.rmAvailable && cfg.rmSupported
+        var add = action(Tr.t("settings.remote.pair.title"), "rm_pair_open", "gold")
+        add.icon = "plus"; add.hh = 52; add.bold = true; add.dim = !canBt
+        if (!cfg.rmAvailable) helpText(Tr.t("settings.remote.btUnavailable"), 12)
+        else if (!cfg.rmSupported) helpText(Tr.t("settings.remote.btNeedsUpdate"), 12)
 
-        label("settings.remote.connected")
+        label("settings.remote.btYours")
         var devs = Remote.devices
-        var mapShown = []
-        if (!devs.length) helpText(Tr.t("settings.remote.none"), 13)
+        var model = ""
+        var shown = 0
+        // the Bluetooth ones this box is paired with, connected or asleep
+        for (var j = 0; j < cfg.rmRemotes.length; j++) {
+            var rm = cfg.rmRemotes[j]
+            var rr = info(String(rm.name || rm.mac),
+                          rm.connected ? Tr.t("settings.remote.btConnected") : Tr.t("settings.remote.btNotConnected"))
+            rr.style = "row"; rr.icon = rm.connected ? "bluetooth-connected" : "bluetooth"; rr.hh = 60
+            mini(rr, Tr.t("settings.remote.btForget"), "rm_forget", "red", remoteBusy, rm.mac)
+            // 🚨 connected but silent: the kernel refused the HID descriptor
+            // the remote declares; saying so beats a remote that looks fine
+            if (rm.connected && !remoteHasKeys(String(rm.name || "")))
+                note(Tr.t("settings.remote.btNoKeys"), "dark", "alert-triangle", 12)
+            shown++
+        }
+        // everything else that is plugged in (a USB receiver), one row per
+        // remote even when it is made of several input devices
+        var groups = []
         for (var i = 0; i < devs.length; i++) {
             var d = devs[i]
+            if (d.model && !model) model = String(d.model)
+            if (d.bus === "bluetooth" && cfg.rmRemotes.some(function(r) {
+                    var n = String(r.name || ""); return n && (String(d.name).indexOf(n) === 0 || n.indexOf(String(d.name)) === 0) }))
+                continue
+            var g = String(d.group || d.name)
+            if (groups.indexOf(g) >= 0) continue
+            groups.push(g)
             var where = d.bus === "usb" ? Tr.t("settings.remote.viaUsb")
-                      : d.bus === "bluetooth" ? Tr.t("settings.remote.viaBluetooth")
-                      : Tr.t("settings.remote.viaOther")
-            // 🚨 La stessa regola del codice che smista i tasti (remote.cpp):
-            // conta l'essere un telecomando, non l'essere riusciti a prenderlo
-            // in esclusiva — un telecomando non preso resta comunque un
-            // telecomando, e i suoi tasti si ascoltano tutti.
-            var what = (d.kind === "remote" || d.chosen) ? Tr.t("settings.remote.full") : Tr.t("settings.remote.mediaOnly")
-            var sub = where + " · " + what
-            if (d.chosen) sub += " · " + Tr.t("settings.remote.isMine")
-            var dr = info(String(d.name || ""), sub)
+                      : d.bus === "bluetooth" ? Tr.t("settings.remote.viaBluetooth") : Tr.t("settings.remote.viaOther")
+            var dr = info(String(d.name || ""), d.chosen ? where + " · " + Tr.t("settings.remote.isMine") : where)
             dr.style = "row"; dr.icon = d.bus === "bluetooth" ? "bluetooth-connected" : "usb"; dr.hh = 60
-            // 🚨 Il pulsante solo dove cambia qualcosa: un dispositivo gia'
-            // riconosciuto come telecomando ascolta tutti i tasti di suo, e
-            // offrirlo li' faceva credere che senza sceglierlo non funzionasse.
-            // Serve per chi si presenta come tastiera (un G20S, un air mouse):
-            // li' di serie prendiamo solo i tasti di riproduzione, per non
-            // rubare la scrittura a una tastiera vera.
+            // only where it changes something: a device that presents itself
+            // as a keyboard gets just the playback keys until it is "mine"
             if (d.kind !== "remote" || d.chosen)
                 mini(dr, Tr.t(d.chosen ? "settings.remote.notMine" : "settings.remote.mine"),
                      "rm_mine", d.chosen ? "light" : "accent", false, String(d.name || ""))
-            // a remote the appliance knows: its key map, once per remote
-            // (a Xiaomi is two input devices, one object in the hand)
-            else if (d.model && mapShown.indexOf(d.model) < 0) {
-                mapShown.push(d.model)
-                mini(dr, Tr.t("settings.remote.intro.show"), "rm_map", "accent", false, String(d.model))
-            }
+            shown++
         }
-        // il consiglio solo quando c'e' davvero una scelta da fare
-        var anyKeyboard = false
-        for (var h = 0; h < devs.length; h++) if (devs[h].kind !== "remote") anyKeyboard = true
-        if (anyKeyboard) help("settings.remote.mineHint", 12)
-        // the tour of how to use a remote, for the known model in hand if any
-        if (devs.length) {
-            var tr = info(Tr.t("settings.remote.tour.title"), Tr.t("settings.remote.tour.sub"))
-            tr.style = "row"; tr.icon = "remote"
-            mini(tr, Tr.t("settings.remote.tour.start"), "rm_tour", "accent", false, mapShown.length ? mapShown[0] : "")
-        }
+        if (!shown) helpText(Tr.t("settings.remote.noneYet"), 13)
 
         sep()
+        if (model) {
+            var mp = option(Tr.t("settings.remote.intro.show"), Tr.t("settings.remote.intro.showSub"), model, false, "rm_map")
+            mp.hh = 72; mp.style = "border"; mp.icon = "chevron-right"
+        }
+        var tr = option(Tr.t("settings.remote.tour.title"), Tr.t("settings.remote.tour.sub"), model, false, "rm_tour")
+        tr.hh = 72; tr.style = "border"; tr.icon = "chevron-right"
+        var kp = option(Tr.t("settings.remote.keysPage"), Tr.t("settings.remote.keysPageSub"), "", false, "rm_keys_open")
+        kp.hh = 72; kp.style = "border"; kp.icon = "chevron-right"
+    }
+    // What each key sends, and giving it another job
+    function secRemoteKeys() {
+        help("settings.remote.keysBody", 13)
+        var devs = Remote.devices
         var t = toggle(Tr.t("settings.remote.test"), Tr.t("settings.remote.testHint"), remoteTest, "rm_test")
         t.icon = "remote"
         if (remoteTest) {
@@ -1471,8 +1496,8 @@ Item {
             var heard = String(Remote.learnDevice || "")
             if (!heard) helpText(Tr.t("settings.remote.pressAKey"), 13)
             else {
-                // da qui in poi si ascolta lui solo, e quello che si assegna
-                // vale per lui solo
+                // from here on only this one is listened to, and what is
+                // assigned applies to it alone
                 var li = info(Tr.t("settings.remote.listening"), heard); li.style = "row"; li.icon = "remote"
                 mini(li, Tr.t("settings.remote.listenAnother"), "rm_listen", "light", false, "")
             }
@@ -1491,42 +1516,10 @@ Item {
                 }
             }
         }
-        note(Tr.t("settings.remote.keysBody"), "dark", "info", 12)
-
-        sep()
-        label("settings.remote.btTitle")
-        help("settings.remote.btHelp", 12)
-        if (!cfg.rmAvailable) { note(Tr.t("settings.remote.btUnavailable"), "dark", "info"); return }
-        if (!cfg.rmSupported) { note(Tr.t("settings.remote.btNeedsUpdate"), "dark", "info"); return }
-        if (remoteBusy && !cfg.rmRemotes.length && !cfg.rmFound.length) { helpText(Tr.t("common.loading"), 13); return }
-
-        if (!cfg.rmRemotes.length) helpText(Tr.t("settings.remote.btNone"), 13)
-        else {
-            label("settings.remote.btYours")
-            for (var j = 0; j < cfg.rmRemotes.length; j++) {
-                var rm = cfg.rmRemotes[j]
-                var rr = info(String(rm.name || rm.mac),
-                              rm.connected ? Tr.t("settings.remote.btConnected") : Tr.t("settings.remote.btNotConnected"))
-                rr.style = "row"; rr.icon = rm.connected ? "bluetooth-connected" : "bluetooth"; rr.hh = 60
-                mini(rr, Tr.t("settings.remote.btForget"), "rm_forget", "red", remoteBusy, rm.mac)
-                // 🚨 Collegato ma muto: succede quando il nucleo rifiuta il
-                // descrittore HID che il telecomando dichiara (capita con una
-                // copia in cache letta a meta'). Dirlo, e dire cosa fare, e'
-                // meglio di un telecomando che sembra a posto e non fa niente.
-                if (rm.connected && !remoteHasKeys(String(rm.name || "")))
-                    note(Tr.t("settings.remote.btNoKeys"), "dark", "alert-triangle", 12)
-            }
-        }
-        var sc = action(remoteScanning ? Tr.t("settings.remote.btSearching") : Tr.t("settings.remote.btSearch"), "rm_scan", "accent")
-        sc.icon = "bluetooth-searching"; sc.hh = 44; sc.dim = remoteScanning || remoteBusy
-        if (remoteScanning) { helpText(Tr.t("settings.remote.btSearchingHint"), 12); return }
-        if (!cfg.rmFound.length) { helpText(Tr.t("settings.remote.btFoundNone"), 13); return }
-        label("settings.remote.btFound")
-        for (var f = 0; f < cfg.rmFound.length; f++) {
-            var dev = cfg.rmFound[f]
-            var fr = option(String(dev.name || dev.mac), dev.mac, dev.mac, false, "rm_add")
-            fr.icon = "remote"; fr.hh = 60; fr.style = "row"; fr.dim = remoteBusy
-        }
+        // the choice a keyboard-like remote needs, explained where it matters
+        var anyKeyboard = false
+        for (var h = 0; h < devs.length; h++) if (devs[h].kind !== "remote") anyKeyboard = true
+        if (anyKeyboard) help("settings.remote.mineHint", 12)
     }
     function secAlarm() {
         help("settings.alarm.help")
@@ -1987,6 +1980,8 @@ Item {
         case "rm_unassign":
             Remote.forget(Number(arg), String(Remote.learnDevice || ""))
             break
+        case "rm_pair_open": if (Ui.app && cfg.rmAvailable && cfg.rmSupported) Ui.app.pairWizard.open(); return
+        case "rm_keys_open": openSection("remoteKeys"); backTo = "remote"; return
         case "rm_scan":
             remoteScanning = true; remoteBusy = true
             Api.post(A("/bt_remotes/scan"), { seconds: 12 }, function(ok, d) { root.rmApply(ok, d) }, 60000)

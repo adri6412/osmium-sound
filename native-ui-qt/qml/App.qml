@@ -17,7 +17,7 @@ Item {
     function setAlbumView(v) { albumView = v === "coverflow" ? "coverflow" : "grid"; Sys.setConf("album-view", albumView) }
     // tempo dell'ultimo tocco (per l'auto-apertura e il salvaschermo)
     readonly property real lastInput: Sys.lastInput
-    readonly property bool busyOverlay: dialogs.active || vk.active || ota.active || cdrip.open || tutorial.active || remoteIntro.active || remoteTour.active
+    readonly property bool busyOverlay: dialogs.active || vk.active || ota.active || cdrip.open || tutorial.active || remoteIntro.active || remoteTour.active || remotePair.active
 
     // ─── principale <-> Now Playing: y:'100%' con molla 200/26 ─────────────
     Spring { id: npSpring; stiffness: 200; damping: 26; rate: Theme.motionRate }
@@ -176,6 +176,7 @@ Item {
         if (cdrip.open) { cdrip.close(); return }
         if (tutorial.active) { tutorial.finish(); return }
         if (remoteIntro.active) { remoteIntro.close(); return }
+        if (remotePair.active) { remotePair.close(); return }
         if (overlays.busy) { overlays.close(); return }
         if (ota.active) { ota.dismissed = true; return }
         if (mainScreen.browser.menuOpen) { mainScreen.browser.closeMenu(); return }
@@ -205,6 +206,7 @@ Item {
     readonly property var otaItem: ota
     readonly property var tour: tutorial
     readonly property var remoteMap: remoteIntro
+    readonly property var pairWizard: remotePair
     readonly property var nav: Nav                    // il riflettore del telecomando
 
     MainScreen {
@@ -294,9 +296,11 @@ Item {
     RemoteIntro {
         id: remoteIntro; anchors.fill: parent
         blocked: wizard.active || intro.active || screensaver.covering || dialogs.active || vk.active || ota.active || cdrip.open
-                 || tutorial.active || remoteTour.active || app.tutorialPending
+                 || tutorial.active || remoteTour.active || remotePair.active || app.tutorialPending
         onTourWanted: (m) => app.startRemoteTour(m)
     }
+    // "add a remote", from Settings → Remote control
+    RemotePairWizard { id: remotePair; anchors.fill: parent }
     // the practice run: every remote key comes here first while it is open
     RemoteTour {
         id: remoteTour; anchors.fill: parent
