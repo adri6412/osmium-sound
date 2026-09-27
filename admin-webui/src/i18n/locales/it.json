@@ -428,6 +428,22 @@
         "later": "Puoi rivederla quando vuoi da Impostazioni → Telecomando.",
         "gotIt": "Ho capito",
         "show": "Mappa dei tasti"
+      },
+      "pair": {
+        "title": "Aggiungi un telecomando",
+        "which": "Quale telecomando hai?",
+        "other": "Un altro telecomando",
+        "how": {
+          "firetv": "Tieni premuto il tasto Home (⌂) finché la luce in alto non lampeggia.",
+          "xiaomi": "Tieni premuti insieme il tasto ⋮⋮⋮ e il tasto ○ per 7–8 secondi, finché la luce non lampeggia.",
+          "g20s": "Tieni premuti insieme OK e Indietro per 5–7 secondi, finché la luce non lampeggia."
+        },
+        "wait": "Poi lascialo vicino all’apparecchio: lo trovo e lo collego da solo.",
+        "looking": "Sto cercando il tuo {name}…",
+        "paired": "{name} collegato!",
+        "notYet": "Non lo trovo ancora. Controlla che la luce lampeggi, poi riprova.",
+        "retry": "Riprova",
+        "change": "Scegli un altro telecomando"
       }
     },
     "sources": {

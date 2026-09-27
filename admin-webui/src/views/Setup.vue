@@ -6,6 +6,7 @@ import { useI18n } from '../i18n';
 import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
 import RemoteIntro from '../components/RemoteIntro.vue';
+import RemotePairing from '../components/RemotePairing.vue';
 
 const router = useRouter();
 
@@ -41,6 +42,8 @@ let lyrionPoll = null;
 // nelle impostazioni dopo. Qui solo il minimo: cosa e' gia' collegato e
 // l'accoppiamento di uno Bluetooth. Quale tasto fa cosa resta in
 // Impostazioni -> Telecomando, che non e' roba da primo avvio.
+const rcOther = ref(false);        // "another remote": the plain scan and list
+let rcBefore = [];                 // the devices there when a certified model was chosen
 const rc = reactive({ devices: [], pick: '', msg: '', busy: false, scanning: false,
                       bt: { answered: false, available: false, supported: false, remotes: [], found: [] } });
 async function loadRemote() {
@@ -73,10 +76,13 @@ async function rcPair(mac) {
     rc.msg = (r.data && r.data.message) || t('setup.remoteFailed');
     return;
   }
-  // 🚨 Pairing does not make it an input device: BlueZ still has to connect
-  // it and the kernel to give it a node, which takes seconds — longer for one
-  // whose report map this box rebuilds. Looking once, a beat later, showed an
-  // empty picker to someone who had just paired something.
+  await rcAwait(before);
+}
+// 🚨 Pairing does not make it an input device: BlueZ still has to connect
+// it and the kernel to give it a node, which takes seconds — longer for one
+// whose report map this box rebuilds. Looking once, a beat later, showed an
+// empty picker to someone who had just paired something.
+async function rcAwait(before) {
   rc.msg = t('setup.remoteWaiting');
   for (let left = 20; left > 0; left--) {
     await new Promise((done) => setTimeout(done, 3000));
@@ -379,17 +385,22 @@ async function finish() {
       <RemoteIntro :devices="rc.devices" />
       <p class="sub">{{ t('setup.remoteHint') }}</p>
       <template v-if="!rc.bt.answered || (rc.bt.available && rc.bt.supported)">
-        <p class="sub">{{ t('setup.remoteBtHint') }}</p>
-        <button class="secondary" :disabled="rc.busy" @click="rcScan">
-          {{ rc.scanning ? t('setup.remoteSearching') : t('setup.remoteScan') }}
-        </button>
-        <div v-for="d in rc.bt.found" :key="d.mac" class="net between" @click="rcPair(d.mac)">
-          <span>
-            <span style="display:block;">{{ d.name || d.mac }}</span>
-            <span class="muted">{{ d.mac }}</span>
-          </span>
-          <span class="check">+</span>
-        </div>
+        <!-- the certified remotes first: instructions, then found by itself -->
+        <RemotePairing v-if="!rcOther" @paired="rcAwait(rcBefore)" @other="rcOther = true" @click.capture="rcBefore = rc.devices.map((d) => d.group || d.name)" />
+        <template v-else>
+          <p class="sub">{{ t('setup.remoteBtHint') }}</p>
+          <button class="secondary" :disabled="rc.busy" @click="rcScan">
+            {{ rc.scanning ? t('setup.remoteSearching') : t('setup.remoteScan') }}
+          </button>
+          <div v-for="d in rc.bt.found" :key="d.mac" class="net between" @click="rcPair(d.mac)">
+            <span>
+              <span style="display:block;">{{ d.name || d.mac }}</span>
+              <span class="muted">{{ d.mac }}</span>
+            </span>
+            <span class="check">+</span>
+          </div>
+          <button class="ghost" style="margin-top: 8px;" @click="rcOther = false">{{ t('settings.remote.pair.change') }}</button>
+        </template>
       </template>
       <p class="sub" v-else-if="!rc.bt.available">{{ t('setup.remoteNoBt') }}</p>
       <p class="sub" v-else>{{ t('setup.remoteNeedsUpdate') }}</p>

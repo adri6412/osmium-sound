@@ -297,5 +297,91 @@ class StatusTests(RemoteTestCase):
         self.assertFalse(out['adapter'])
 
 
+class AutoPairTests(RemoteTestCase):
+    """The certified remotes pair themselves while the box has no remote."""
+
+    def setUp(self):
+        super().setUp()
+        api_server._bt_autopair_failed.clear()
+        p = patch.object(api_server, 'get_display_mode', lambda: {'mode': 'gui'})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_the_certified_names_are_recognised(self):
+        m = api_server._bt_certified_model
+        self.assertEqual(m({'name': 'G20S PRO', 'input': False}), 'g20s')
+        self.assertEqual(m({'name': 'Xiaomi RC', 'input': True}), 'xiaomi')
+        self.assertEqual(m({'name': 'AR', 'input': True}), 'firetv')
+        self.assertEqual(m({'name': 'Amazon Remote', 'input': True}), 'firetv')
+        # "AR" alone is too short to trust: it has to be a HID device too
+        self.assertEqual(m({'name': 'AR', 'input': False}), '')
+        self.assertEqual(m({'name': 'JBL Flip 5', 'input': False}), '')
+        self.assertEqual(m({'name': 'ARCHER', 'input': True}), '')
+
+    def test_a_certified_remote_in_pairing_mode_is_paired_by_itself(self):
+        self._see(REMOTE, 'G20S PRO', input_=False)
+        self.assertTrue(api_server._bt_autopair_wanted())
+        api_server._bt_autopair_round()
+        self.assertEqual([r['mac'] for r in self._state()['remotes']], [REMOTE])
+        self.assertTrue(self._argv('bluetoothctl', 'pair', REMOTE))
+
+    def test_a_certified_remote_paired_by_hand_is_adopted(self):
+        self._see(REMOTE, 'Xiaomi RC', paired=True)
+        api_server._bt_autopair_round()
+        self.assertEqual([r['mac'] for r in self._state()['remotes']], [REMOTE])
+        self.assertFalse(self._argv('bluetoothctl', 'pair'))       # nothing to pair again
+        self.assertFalse(api_server._bt_autopair_wanted())
+
+    def test_a_new_certified_remote_is_introduced_again_on_the_screen(self):
+        seen = os.path.join(self.tmp, 'etc', 'remote-intro-seen')
+        self._patch('REMOTE_INTRO_SEEN_FILE', seen)
+        with open(seen, 'w') as f:
+            f.write('firetv,g20s\n')
+        self._see(REMOTE, 'AR', input_=True)
+        api_server._bt_autopair_round()
+        with open(seen) as f:
+            self.assertEqual(f.read().strip(), 'g20s')
+
+    def test_the_wizard_scan_pairs_the_chosen_model_at_once(self):
+        self._see(SPEAKER, 'G20S PRO', input_=False)       # another model: not this one
+        self._see(REMOTE, 'Xiaomi RC')
+        out = api_server.bt_remotes_scan(10, 'xiaomi')
+        self.assertTrue(out['success'])
+        self.assertEqual(out['paired'], REMOTE)
+        self.assertEqual([r['mac'] for r in self._state()['remotes']], [REMOTE])
+
+    def test_the_wizard_scan_without_the_remote_in_range_pairs_nothing(self):
+        self._see(REMOTE, 'Some Keyboard')
+        out = api_server.bt_remotes_scan(10, 'firetv')
+        self.assertEqual(out['paired'], '')
+        self.assertFalse(self._argv('bluetoothctl', 'pair'))
+
+    def test_other_devices_in_range_are_left_alone(self):
+        self._see(REMOTE, 'Some Keyboard')
+        self._see(SPEAKER, 'Xiaomi RC', audio=True)       # a speaker, whatever its name
+        api_server._bt_autopair_round()
+        self.assertFalse(self._argv('bluetoothctl', 'pair'))
+
+    def test_it_stops_listening_once_a_remote_is_paired(self):
+        self._write_state({'enabled': False, 'speakers': [], 'remotes': [{'mac': REMOTE, 'name': 'AR'}]})
+        self.assertFalse(api_server._bt_autopair_wanted())
+
+    def test_never_while_a_speaker_is_connected(self):
+        self._write_snapshot({'enabled': True, 'adapter': True, 'remotes': [],
+                              'speakers': [{'mac': SPEAKER, 'connected': True}]})
+        self.assertFalse(api_server._bt_autopair_wanted())
+
+    def test_never_on_a_box_without_a_screen(self):
+        with patch.object(api_server, 'get_display_mode', lambda: {'mode': 'headless'}):
+            self.assertFalse(api_server._bt_autopair_wanted())
+
+    def test_a_remote_that_failed_is_not_retried_every_minute(self):
+        self._see(REMOTE, 'Xiaomi RC')
+        self.pair_succeeds = False
+        api_server._bt_autopair_round()
+        api_server._bt_autopair_round()
+        self.assertEqual(len(self._argv('bluetoothctl', 'pair', REMOTE)), 1)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

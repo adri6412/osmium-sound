@@ -9,6 +9,7 @@ import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
 import VuSkinPreview from '../components/VuSkinPreview.vue';
 import RemoteIntro from '../components/RemoteIntro.vue';
+import RemotePairing from '../components/RemotePairing.vue';
 import animCd from '../assets/anim/cd.jpg';
 import animCdfront from '../assets/anim/cdfront.jpg';
 import animVinyl from '../assets/anim/vinyl.jpg';
@@ -564,6 +565,9 @@ const rcForget = (mac) => rcCall('bt_remotes/remove', { mac }, loadRemoteBt);
 // dispositivi di input: se non c'e', i suoi tasti non arrivano (succede
 // quando il nucleo rifiuta la mappa che il telecomando dichiara).
 const rmIntro = ref(null);
+// adding a Bluetooth remote: the certified models first, the plain scan and
+// list only for "another remote" (RemotePairing.vue)
+const rcOther = ref(false);
 const rcFirstOfModel = (d) => rc.devices.find((x) => x.model === d.model) === d;
 const rcHasKeys = (name) => !name || rc.devices.some((d) => d.name.startsWith(name) || name.startsWith(d.name));
 
@@ -1835,7 +1839,6 @@ onUnmounted(() => {
       <button class="secondary" :disabled="rc.busy" @click="rcReport">{{ t('settings.remote.report') }}</button>
 
       <label>{{ t('settings.remote.btTitle') }}</label>
-      <p class="sub">{{ t('settings.remote.btHelp') }}</p>
       <p class="sub" v-if="!rc.bt.available">{{ t('settings.remote.btUnavailable') }}</p>
       <p class="sub" v-else-if="!rc.bt.supported">{{ t('settings.remote.btNeedsUpdate') }}</p>
       <template v-else>
@@ -1850,19 +1853,25 @@ onUnmounted(() => {
           </span>
           <button class="danger fit" :disabled="rc.busy" @click="rcForget(r.mac)">{{ t('settings.remote.btForget') }}</button>
         </div>
-        <button :disabled="rc.busy" @click="rcScan" style="margin-top: 10px;">
-          {{ rc.bt.scanning ? t('settings.remote.btSearching') : t('settings.remote.btSearch') }}
-        </button>
-        <p class="sub" v-if="rc.bt.scanning">{{ t('settings.remote.btSearchingHint') }}</p>
+        <label>{{ t('settings.remote.pair.title') }}</label>
+        <RemotePairing v-if="!rcOther" @paired="() => { loadRemoteBt(); loadRemote(); }" @other="rcOther = true" />
         <template v-else>
-          <p class="sub" v-if="!rc.bt.found.length">{{ t('settings.remote.btFoundNone') }}</p>
-          <div v-for="d in rc.bt.found" :key="d.mac" class="net between" @click="rcPair(d.mac)">
-            <span>
-              <span style="display:block;">{{ d.name || d.mac }}</span>
-              <span class="muted">{{ d.mac }}</span>
-            </span>
-            <span class="check">+</span>
-          </div>
+          <p class="sub">{{ t('settings.remote.btHelp') }}</p>
+          <button :disabled="rc.busy" @click="rcScan" style="margin-top: 10px;">
+            {{ rc.bt.scanning ? t('settings.remote.btSearching') : t('settings.remote.btSearch') }}
+          </button>
+          <p class="sub" v-if="rc.bt.scanning">{{ t('settings.remote.btSearchingHint') }}</p>
+          <template v-else>
+            <p class="sub" v-if="!rc.bt.found.length">{{ t('settings.remote.btFoundNone') }}</p>
+            <div v-for="d in rc.bt.found" :key="d.mac" class="net between" @click="rcPair(d.mac)">
+              <span>
+                <span style="display:block;">{{ d.name || d.mac }}</span>
+                <span class="muted">{{ d.mac }}</span>
+              </span>
+              <span class="check">+</span>
+            </div>
+          </template>
+          <button class="ghost" style="margin-top: 8px;" @click="rcOther = false">{{ t('settings.remote.pair.change') }}</button>
         </template>
       </template>
     </div>

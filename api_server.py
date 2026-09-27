@@ -6799,9 +6799,14 @@ def _bt_remote_fail(code, **extra):
     return out
 
 
-def bt_remotes_scan(seconds=12):
+def bt_remotes_scan(seconds=12, model=None):
     """Look for a remote in pairing mode. Blocking, like the speakers' scan:
-    the screen shows a spinner and the answer is the list."""
+    the screen shows a spinner and the answer is the list.
+
+    With `model` (one of the certified remotes, chosen in the setup wizard)
+    the first remote of that model found is paired straight away, and the
+    answer carries its address in `paired`: the person only has to follow the
+    instructions on the remote, not pick it out of a list."""
     if not _bt_remotes_available():
         return _bt_remote_fail('bluetooth.unavailable')
     if not _bt_remotes_supported():
@@ -6818,7 +6823,15 @@ def bt_remotes_scan(seconds=12):
     except Exception:
         log.exception("bt_remotes_scan failed")
         return _bt_remote_fail('bluetooth.scanFailed')
-    return _bt_remote_ok('bluetooth.scanDone')
+    if model:
+        mine = {str(r.get('mac', '')).upper() for r in (_bt_read_doc().get('remotes') or [])}
+        for dev in _bt_known_devices():
+            if dev.get('audio') or dev['mac'] in mine or _bt_certified_model(dev) != model:
+                continue
+            res = bt_remote_add(dev['mac'])
+            res['paired'] = dev['mac'] if res.get('success') else ''
+            return res
+    return _bt_remote_ok('bluetooth.scanDone', paired='')
 
 
 def bt_remote_add(mac):
@@ -6870,6 +6883,7 @@ def bt_remote_add(mac):
             log.exception("bt_remote_add: first connect failed")
 
         doc['remotes'].append({'mac': mac, 'name': _bt_clean_name(info['name'] or mac, mac)})
+        _remote_intro_again(_bt_certified_model(info))
         try:
             _bt_write_doc(doc)
         except Exception:
@@ -6878,6 +6892,135 @@ def bt_remote_add(mac):
     _bt_kick()
     time.sleep(2)
     return _bt_remote_ok('bluetooth.remoteAdded')
+
+
+# ── Certified remotes pair themselves ─────────────────────────────────
+#
+# The three remotes the appliance knows out of the box (_REMOTE_MODELS) do not
+# need the Scan button: while this box has no remote at all, it listens for
+# ten seconds every minute, and one of them put in pairing mode nearby is
+# paired, trusted and saved exactly as if it had been tapped in the list. The
+# kiosk then shows its key map and the practice run by itself.
+#
+# What that costs, and when it stops:
+#   * the radio stays up while no remote is paired (the pairing window is
+#     renewed on every round, so the supervisor keeps it on);
+#   * it stops for good as soon as one remote is saved — a second one is
+#     added from Settings;
+#   * never on a box without a screen (a remote drives nothing there), and
+#     never while a Bluetooth speaker is connected: discovery takes the radio
+#     away from the audio link.
+# Over the air a remote has only its name to go by. The Fire TV one calls
+# itself "AR", which is short enough to be something else: it must also
+# offer the HID service before it counts.
+_BT_CERTIFIED = (
+    ('firetv', re.compile(r'^(AR|Amazon Remote.*|Amazon Fire TV Remote.*)$'), True),
+    ('g20s', re.compile(r'^G20S'), False),
+    ('xiaomi', re.compile(r'^Xiaomi RC'), False),
+)
+BT_AUTOPAIR_EVERY = 60           # seconds between two listening rounds
+BT_AUTOPAIR_LISTEN = 10          # seconds of discovery per round
+BT_AUTOPAIR_RETRY = 600          # a remote that failed to pair is left alone this long
+_bt_autopair_failed = {}
+
+
+def _bt_certified_model(dev):
+    """The certified model a discovered device is, or ''."""
+    name = str(dev.get('name') or '').strip()
+    for model, pattern, needs_hid in _BT_CERTIFIED:
+        if pattern.match(name) and (dev.get('input') or not needs_hid):
+            return model
+    return ''
+
+
+REMOTE_INTRO_SEEN_FILE = '/etc/hifi-player/remote-intro-seen'
+
+
+def _remote_intro_again(model):
+    """A certified remote was just added (here, from the web or by itself):
+    the kiosk shows its key map and the practice run again, whether or not it
+    had shown them for that model before. The kiosk keeps the models it has
+    introduced in this file (qml/RemoteIntro.qml) and watches its folder, so
+    taking the model out is all it takes."""
+    if not model:
+        return
+    try:
+        with open(REMOTE_INTRO_SEEN_FILE) as f:
+            seen = [m for m in f.read().strip().split(',') if m]
+    except FileNotFoundError:
+        return
+    except Exception:
+        log.exception("remote intro: could not read the seen list")
+        return
+    if model not in seen:
+        return
+    try:
+        tmp = REMOTE_INTRO_SEEN_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(','.join(m for m in seen if m != model) + '\n')
+        os.replace(tmp, REMOTE_INTRO_SEEN_FILE)
+    except Exception:
+        log.exception("remote intro: could not update the seen list")
+
+
+def _bt_autopair_wanted():
+    """Should this round listen at all? See the block comment above."""
+    if not _bt_remotes_available() or not _bt_remotes_supported():
+        return False
+    if get_display_mode().get('mode') != 'gui':
+        return False
+    doc = _bt_read_doc()
+    if doc.get('remotes'):
+        return False
+    snap = _bt_snapshot()
+    if any(sp.get('connected') for sp in (snap.get('speakers') or [])):
+        return False
+    return True
+
+
+def _bt_autopair_round():
+    """One round: keep the radio up, listen, pair the first certified remote
+    found. Returns False when the radio could not be brought up."""
+    if not _bt_open_pairing_window(BT_AUTOPAIR_EVERY + 60):
+        return False
+    try:
+        subprocess.run(['bluetoothctl', '--timeout', str(BT_AUTOPAIR_LISTEN), 'scan', 'on'],
+                       capture_output=True, text=True, timeout=BT_AUTOPAIR_LISTEN + 15)
+    except Exception:
+        log.exception("bt autopair: scan failed")
+        return True
+    now = time.time()
+    for dev in _bt_known_devices():
+        # 🚨 A certified remote already paired in BlueZ but not in our list
+        # (paired by hand with bluetoothctl, or from an older system) is
+        # adopted the same way: bt_remote_add skips the pairing it does not
+        # need. Left out, the box would go on listening for a remote forever
+        # with three of them in the drawer.
+        if dev.get('audio'):
+            continue
+        model = _bt_certified_model(dev)
+        if not model or now - _bt_autopair_failed.get(dev['mac'], 0) < BT_AUTOPAIR_RETRY:
+            continue
+        log.info("bt autopair: certified remote %s (%s) %s", dev["mac"], model, "already paired, adopting it" if dev.get("paired") else "in pairing mode, pairing it")
+        res = bt_remote_add(dev['mac'])
+        if res.get('success'):
+            log.info("bt autopair: %s paired", dev['mac'])
+            return True
+        _bt_autopair_failed[dev['mac']] = now
+        log.warning("bt autopair: %s did not pair (%s)", dev['mac'], res.get('code'))
+    return True
+
+
+def _bt_autopair_background():
+    time.sleep(45)                   # let the boot and the supervisor settle first
+    while True:
+        pause = BT_AUTOPAIR_EVERY
+        try:
+            if _bt_autopair_wanted() and not _bt_autopair_round():
+                pause = BT_AUTOPAIR_RETRY    # no adapter answering: ask again much later
+        except Exception:
+            log.exception("bt autopair round failed")
+        time.sleep(pause)
 
 
 def bt_remote_remove(mac):
@@ -9565,7 +9708,9 @@ def api_bt_remotes():
 @app.route('/bt_remotes/scan', methods=['POST'])
 def api_bt_remotes_scan():
     data = request.get_json(silent=True) or {}
-    return jsonify(bt_remotes_scan(data.get('seconds', 12)))
+    model = data.get('model')
+    model = model if model in {m for m, _, _ in _BT_CERTIFIED} else None
+    return jsonify(bt_remotes_scan(data.get('seconds', 12), model))
 
 @app.route('/bt_remotes/add', methods=['POST'])
 def api_bt_remotes_add():
@@ -9625,4 +9770,5 @@ if __name__ == '__main__':
     threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
     threading.Thread(target=_vu_store_background, daemon=True, name='vu-store').start()
     threading.Thread(target=_anim_store_background, daemon=True, name='anim-store').start()
+    threading.Thread(target=_bt_autopair_background, daemon=True, name='bt-autopair').start()
     app.run(host='127.0.0.1', port=8000, threaded=True)
