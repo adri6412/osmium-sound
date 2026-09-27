@@ -6947,6 +6947,24 @@ _KEY_ENTER, _KEY_OK, _KEY_SELECT = 28, 0x160, 0x161
 _REL_X, _REL_Y, _ABS_X, _ABS_MT_X = 0, 1, 0, 53
 
 
+# The remotes the appliance knows out of the box: kModels in
+# native-ui-qt/src/remote.cpp (bus, vendor, product, 0 = any product).
+# 🚨 Keep the two lists the same: a model is a remote even when it declares a
+# whole keyboard (Fire TV, G20S PRO), and here that decides what the page says.
+_REMOTE_MODELS = [
+    ('firetv', 'Fire TV', 5, 0x0171, 0),
+    ('g20s', 'G20S PRO', 5, 0x1d5a, 0xc081),
+    ('xiaomi', 'Xiaomi', 5, 0x2717, 0),
+]
+
+
+def _remote_model(bus, vendor, product):
+    for mid, _label, mbus, mvendor, mproduct in _REMOTE_MODELS:
+        if bus == mbus and vendor == mvendor and (not mproduct or product == mproduct):
+            return mid
+    return ''
+
+
 def _sysfs_bit(bitmap, bit):
     """Un bit di un bitmap di /sys/class/input: parole esadecimali, la piu'
     significativa per prima."""
@@ -7025,21 +7043,24 @@ def _remote_devices():
                     (_KEY_PLAYPAUSE, _KEY_NEXTSONG, _KEY_PREVIOUSSONG, _KEY_PLAYCD, _KEY_STOPCD, _KEY_PLAY))
         nav = (all(_sysfs_bit(key, c) for c in (_KEY_UP, _KEY_DOWN, _KEY_LEFT, _KEY_RIGHT))
                and any(_sysfs_bit(key, c) for c in (_KEY_ENTER, _KEY_OK, _KEY_SELECT)))
-        if not media and not (nav and not full_keyboard):
+        try:
+            bus = int(rd('id/bustype') or '0', 16)
+            model = _remote_model(bus, int(rd('id/vendor') or '0', 16), int(rd('id/product') or '0', 16))
+        except ValueError:
+            bus, model = 0, ''
+        any_key = any(c not in '0 ' for c in key)
+        if not media and not (nav and not full_keyboard) and not (model and any_key):
             continue
         rel, abs_ = rd('capabilities/rel'), rd('capabilities/abs')
         pointer = _sysfs_bit(rel, _REL_X) and _sysfs_bit(rel, _REL_Y)
         tablet = _sysfs_bit(abs_, _ABS_X) or _sysfs_bit(abs_, _ABS_MT_X)
         name = rd('name') or os.path.basename(d)
-        try:
-            bus = int(rd('id/bustype') or '0', 16)
-        except ValueError:
-            bus = 0
         group = _remote_group_key(rd) or name
         out.append({
             'name': name,
             'bus': 'bluetooth' if bus == 5 else 'usb' if bus == 3 else 'other',
-            'kind': 'remote' if (not full_keyboard and not pointer and not tablet) else 'keyboard',
+            'kind': 'remote' if ((not full_keyboard or model) and not pointer and not tablet) else 'keyboard',
+            'model': model,
             # chosen by its own name, or by the group: one remote, one choice,
             # however many input devices it happens to be made of
             'chosen': bool(chosen) and chosen in (name, group),

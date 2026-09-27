@@ -421,7 +421,14 @@
       "reportTitle": "Scheda del telecomando",
       "reportHint": "Un file con quello che il tuo telecomando dichiara, come l'abbiamo riconosciuto e cosa ne ha detto il nucleo — serve quando un telecomando non va e chi ti aiuta non ce l'ha in mano. Dentro ci sono i nomi dei dispositivi e gli indirizzi Bluetooth.",
       "report": "Scarica la scheda del telecomando",
-      "reportSaved": "Scheda salvata"
+      "reportSaved": "Scheda salvata",
+      "intro": {
+        "title": "Il tuo telecomando {name} è pronto",
+        "body": "Ecco cosa fa ogni tasto su Osmium. Scorri per vederli tutti.",
+        "later": "Puoi rivederla quando vuoi da Impostazioni → Telecomando.",
+        "gotIt": "Ho capito",
+        "show": "Mappa dei tasti"
+      }
     },
     "sources": {
       "hint": "Gestisci cartelle locali, dischi USB/interni, condivisioni SMB e rip dei CD.",

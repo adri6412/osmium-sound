@@ -1,0 +1,12 @@
+# Only the box's own power button may switch it off.
+#
+# systemd's 70-power-switch.rules tags EVERY input device that has keys as a
+# power switch, so logind acts on KEY_POWER from any of them. A Bluetooth or
+# USB remote that presents itself as a keyboard (Fire TV, G20S PRO, most air
+# mice) is not taken exclusively by the kiosk, and its power button reached
+# logind and shut the appliance down. The kiosk turns a remote's power key
+# into "screen to rest"; for logind, USB and Bluetooth devices are no longer
+# power switches. The chassis button (ACPI, bus 0019) keeps working.
+ACTION=="remove", GOTO="hifi_remote_power_end"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{id/bustype}=="0003|0005", TAG-="power-switch"
+LABEL="hifi_remote_power_end"

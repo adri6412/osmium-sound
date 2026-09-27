@@ -52,7 +52,7 @@ class RemoteDevices(unittest.TestCase):
         self._real_chosen = api_server._remote_chosen
         api_server._remote_chosen = lambda: self._chosen
 
-    def _node(self, name, keys, bus=5, uniq='', phys='', rel=None):
+    def _node(self, name, keys, bus=5, uniq='', phys='', rel=None, vendor='2717', product='1234'):
         d = os.path.join(self.tmp, 'input%d' % self.n)
         self.n += 1
         os.makedirs(os.path.join(d, 'capabilities'))
@@ -65,8 +65,18 @@ class RemoteDevices(unittest.TestCase):
         w('uniq', uniq)
         w('phys', phys)
         w('id/bustype', '%x' % bus)
-        w('id/vendor', '2717')
-        w('id/product', '1234')
+        w('id/vendor', vendor)
+        w('id/product', product)
+
+    def test_a_known_remote_that_declares_a_keyboard_is_a_remote(self):
+        # The Fire TV remote declares a whole keyboard. As a "keyboard" it was
+        # not taken exclusively, and its power key reached logind and switched
+        # the box off. A model the appliance knows is a remote whatever it says.
+        self._node('Amazon Remote Keyboard', LETTERS + NAV + MEDIA, vendor='0171', product='0421')
+        self._node('Some Keyboard', LETTERS + NAV + MEDIA, vendor='046d', product='c31c')
+        kinds = {d['name']: (d['kind'], d['model']) for d in api_server._remote_devices()}
+        self.assertEqual(kinds['Amazon Remote Keyboard'], ('remote', 'firetv'))
+        self.assertEqual(kinds['Some Keyboard'], ('keyboard', ''))
 
     def test_the_two_halves_of_one_bluetooth_remote_are_one_remote(self):
         # a Xiaomi remote, exactly as it shows up: two nodes, one address.

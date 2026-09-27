@@ -8,6 +8,7 @@ import Toggle from '../components/Toggle.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
 import VuSkinPreview from '../components/VuSkinPreview.vue';
+import RemoteIntro from '../components/RemoteIntro.vue';
 import animCd from '../assets/anim/cd.jpg';
 import animCdfront from '../assets/anim/cdfront.jpg';
 import animVinyl from '../assets/anim/vinyl.jpg';
@@ -522,7 +523,13 @@ function rcActionOf(code, device) {
   const d = (rc.keys.devices || {})[device] || {};
   if (k in d) return d[k];
   const all = rc.keys.all || {};
-  return k in all ? all[k] : '';
+  if (k in all) return all[k];
+  // 🚨 Not assigned by hand: what the key does out of the box (the generic
+  // map, or the one of that model of remote) only the kiosk knows, and it
+  // writes it next to the last key. Returning '' here showed "does nothing"
+  // for every key that worked without being assigned.
+  const lk = rc.lastKey || {};
+  return String(lk.code) === k && lk.device === device ? (lk.action || '') : '';
 }
 const rcIsCustom = (code, device) => {
   const k = String(code);
@@ -556,6 +563,8 @@ const rcForget = (mac) => rcCall('bt_remotes/remove', { mac }, loadRemoteBt);
 // Un telecomando Bluetooth collegato dovrebbe comparire anche fra i
 // dispositivi di input: se non c'e', i suoi tasti non arrivano (succede
 // quando il nucleo rifiuta la mappa che il telecomando dichiara).
+const rmIntro = ref(null);
+const rcFirstOfModel = (d) => rc.devices.find((x) => x.model === d.model) === d;
 const rcHasKeys = (name) => !name || rc.devices.some((d) => d.name.startsWith(name) || name.startsWith(d.name));
 
 watch(open, (k) => {
@@ -1775,8 +1784,15 @@ onUnmounted(() => {
         <button v-if="d.kind !== 'remote' || d.chosen" class="secondary fit" :disabled="rc.busy" @click="rcMine(d)">
           {{ d.chosen ? t('settings.remote.notMine') : t('settings.remote.mine') }}
         </button>
+        <!-- a remote the appliance knows: its key map, once per remote (a
+             Xiaomi is two input devices, one object in the hand) -->
+        <button v-else-if="d.model && rcFirstOfModel(d)" class="secondary fit" @click="rmIntro && rmIntro.show(d.model)">
+          {{ t('settings.remote.intro.show') }}
+        </button>
       </div>
       <p class="sub" v-if="rc.devices.some((d) => d.kind !== 'remote')">{{ t('settings.remote.mineHint') }}</p>
+      <!-- shown by itself the first time a known remote is connected -->
+      <RemoteIntro ref="rmIntro" :devices="rc.devices" />
 
       <label>{{ t('settings.remote.test') }}</label>
       <p class="sub">{{ t('settings.remote.testHintWeb') }}</p>

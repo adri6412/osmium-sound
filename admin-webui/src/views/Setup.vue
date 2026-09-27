@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { useI18n } from '../i18n';
 import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
+import RemoteIntro from '../components/RemoteIntro.vue';
 
 const router = useRouter();
 
@@ -374,6 +375,8 @@ async function finish() {
     </div>
     <div class="card">
       <h3><span class="dot"></span>{{ t('setup.remoteTitle') }}</h3>
+      <!-- the key map of a known remote, as soon as the pairing shows it -->
+      <RemoteIntro :devices="rc.devices" />
       <p class="sub">{{ t('setup.remoteHint') }}</p>
       <template v-if="!rc.bt.answered || (rc.bt.available && rc.bt.supported)">
         <p class="sub">{{ t('setup.remoteBtHint') }}</p>

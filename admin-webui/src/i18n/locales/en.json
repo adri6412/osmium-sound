@@ -421,7 +421,14 @@
       "reportTitle": "Remote control card",
       "reportHint": "A file with what your remote declares, how we recognised it and what the kernel said about it — for when a remote will not work and whoever helps you does not have it in their hands. It carries device names and Bluetooth addresses.",
       "report": "Download the remote control card",
-      "reportSaved": "Card saved"
+      "reportSaved": "Card saved",
+      "intro": {
+        "title": "Your {name} remote is ready",
+        "body": "This is what each key does on Osmium. Scroll to see them all.",
+        "later": "You can see it again any time from Settings → Remote control.",
+        "gotIt": "Got it",
+        "show": "Key map"
+      }
     },
     "sources": {
       "hint": "Manage local folders, USB/internal disks, SMB shares and CD ripping.",
