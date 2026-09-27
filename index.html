@@ -686,8 +686,9 @@
       background: var(--bg); border-color: rgba(245,184,32,0.35);
     }
     .kofi-btn img { width: 24px; height: auto; display: block; }
-    /* The names from the Ko-fi webhook (/api/supporters). Hidden until at
-       least one arrives; slides only when they do not fit on one line. */
+    /* The cards from the Ko-fi webhook (/api/supporters): what each
+       supporter wrote, their name and the day. Hidden until at least one
+       arrives; slides only when the cards do not fit on one line. */
     .supporters {
       flex-basis: 100%; min-width: 0;
       border-top: 1px solid rgba(245,184,32,0.2);
@@ -704,25 +705,44 @@
               mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
     }
     .supporters-track {
-      display: flex; gap: 0.6rem; list-style: none;
+      display: flex; gap: 0.9rem; list-style: none;
       justify-content: center; width: max-content; margin: 0 auto;
     }
     /* The trailing padding matches the gap, so half the doubled track is
        exactly one set of names plus its gaps and the loop does not jump. */
     .supporters-viewport.scrolling .supporters-track {
-      margin: 0; padding-right: 0.6rem;
+      margin: 0; padding-right: 0.9rem;
       animation: supporters-slide var(--supporters-duration, 40s) linear infinite;
     }
     .supporters-viewport.scrolling:hover .supporters-track,
     .supporters-viewport.scrolling:focus-within .supporters-track { animation-play-state: paused; }
     @keyframes supporters-slide { to { transform: translateX(-50%); } }
     .supporters-track li {
-      display: flex; align-items: center; gap: 0.45rem;
-      padding: 5px 14px; border-radius: 999px;
+      flex: none; width: 270px;
+      display: flex; flex-direction: column; justify-content: space-between; gap: 0.8rem;
+      padding: 1rem 1.1rem; border-radius: var(--radius);
       background: var(--bg); border: 1px solid rgba(245,184,32,0.35);
-      font-size: 0.86rem; white-space: nowrap;
+      text-align: left;
     }
-    .supporters-track img { width: 18px; height: auto; display: block; }
+    .review-inner .supporter-quote {
+      max-width: none; margin: 0;
+      font-size: 0.88rem; line-height: 1.55; color: var(--text);
+      display: -webkit-box; -webkit-box-orient: vertical;
+      -webkit-line-clamp: 5; line-clamp: 5; overflow: hidden;
+      overflow-wrap: anywhere;
+    }
+    .supporter-quote::before { content: "\201C"; color: var(--accent); font-weight: 700; margin-right: 0.1em; }
+    .supporter-quote::after { content: "\201D"; color: var(--accent); font-weight: 700; margin-left: 0.1em; }
+    .review-inner .supporter-quote.plain { color: var(--muted); font-style: italic; }
+    .supporter-quote.plain::before, .supporter-quote.plain::after { content: none; }
+    .supporter-who {
+      display: flex; align-items: center; gap: 0.6rem;
+      font-size: 0.82rem; line-height: 1.35; min-width: 0;
+    }
+    .supporter-who img { width: 20px; height: auto; display: block; flex: none; }
+    .supporter-who > span { display: flex; flex-direction: column; min-width: 0; }
+    .supporter-name { font-weight: 600; color: var(--accent); overflow-wrap: anywhere; }
+    .supporter-date { color: var(--muted); font-size: 0.76rem; }
     @media (prefers-reduced-motion: reduce) {
       .supporters-viewport.scrolling { overflow-x: auto; -webkit-mask-image: none; mask-image: none; }
       .supporters-viewport.scrolling .supporters-track { animation: none; }
@@ -1416,46 +1436,79 @@
   })();
 
   // Ko-fi supporters under the support band (/api/supporters, filled by the
-  // Ko-fi webhook). The strip stays hidden until somebody has donated
-  // publicly; when the names do not fit on one line they slide, doubled so
-  // the loop has no seam.
+  // Ko-fi webhook): one card each, with what they wrote. The strip stays
+  // hidden until somebody has donated publicly; when the cards do not fit on
+  // one line they slide, doubled so the loop has no seam. The message is
+  // theirs, in whatever language they wrote it, and is never translated.
   (function () {
     const box = document.getElementById('supporters');
     const track = document.getElementById('supportersTrack');
     if (!box || !track) return;
     const viewport = track.parentElement;
-    let names = [];
+    let supporters = [];
     let laidOutWidth = 0;
+    const NO_MESSAGE = { en: 'Bought Osmium Sound a coffee', it: 'Ha offerto un caff\u00e8 a Osmium Sound' };
 
-    function item(name, copy) {
+    // Both languages up front, so the language switch (applyLang) can swap
+    // the words and the date format like it does for the rest of the page.
+    function bilingual(el, en, it) {
+      el.dataset.en = en;
+      el.dataset.it = it;
+      el.textContent = lang === 'it' ? it : en;
+    }
+    function formatDate(iso, locale) {
+      const d = new Date(iso + 'T12:00:00Z');
+      if (isNaN(d)) return '';
+      return d.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    }
+
+    function item(s, copy) {
       const li = document.createElement('li');
       if (copy) li.setAttribute('aria-hidden', 'true');
+      const quote = document.createElement('p');
+      quote.className = 'supporter-quote';
+      if (s.message) {
+        quote.textContent = s.message;
+      } else {
+        quote.classList.add('plain');
+        bilingual(quote, NO_MESSAGE.en, NO_MESSAGE.it);
+      }
+      const who = document.createElement('div');
+      who.className = 'supporter-who';
       const cup = document.createElement('img');
       cup.src = 'kofi.png';
       cup.alt = '';
-      const label = document.createElement('span');
-      label.textContent = name;
-      li.append(cup, label);
+      const name = document.createElement('span');
+      name.className = 'supporter-name';
+      name.textContent = s.name;
+      const date = document.createElement('span');
+      date.className = 'supporter-date';
+      bilingual(date, formatDate(s.date, 'en-GB'), formatDate(s.date, 'it-IT'));
+      const text = document.createElement('span');
+      text.append(name, date);
+      who.append(cup, text);
+      li.append(quote, who);
       return li;
     }
 
     function layout() {
       laidOutWidth = viewport.clientWidth;
       viewport.classList.remove('scrolling');
-      track.replaceChildren(...names.map(n => item(n, false)));
+      track.replaceChildren(...supporters.map(s => item(s, false)));
       if (track.getBoundingClientRect().width <= laidOutWidth) return;
-      track.append(...names.map(n => item(n, true)));
+      track.append(...supporters.map(s => item(s, true)));
       viewport.classList.add('scrolling');
-      // About 40 px a second, however many names there are.
+      // About 30 px a second, slow enough to read a card as it goes by;
+      // it stops under the pointer.
       const loop = track.getBoundingClientRect().width / 2;
-      viewport.style.setProperty('--supporters-duration', Math.max(loop / 40, 10) + 's');
+      viewport.style.setProperty('--supporters-duration', Math.max(loop / 30, 15) + 's');
     }
 
     fetch('/api/supporters')
-      .then(r => r.ok ? r.json() : { names: [] })
+      .then(r => r.ok ? r.json() : { supporters: [] })
       .then(data => {
-        names = (data.names || []).filter(n => typeof n === 'string' && n);
-        if (!names.length) return;
+        supporters = (data.supporters || []).filter(s => s && typeof s.name === 'string' && s.name);
+        if (!supporters.length) return;
         box.hidden = false;
         layout();
         // Only a change of width matters: phones fire resize when the
