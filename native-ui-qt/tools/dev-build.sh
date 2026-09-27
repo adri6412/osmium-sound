@@ -12,6 +12,7 @@ sudo rsync -a --delete /home/coder/osmium/hifi-media-player/native-ui-qt/assets/
 sudo mkdir -p $R/build/assets/anim
 sudo rsync -a --delete /home/coder/osmium/hifi-media-player/native-ui-qt/assets/anim/ $R/build/assets/anim/
 sudo rsync -a /home/coder/osmium/hifi-media-player/native-ui-qt/assets/ledbar/ $R/build/assets/
+sudo rsync -a --delete /home/coder/osmium/hifi-media-player/native-ui-qt/assets/remotes/ $R/build/assets/remotes/
 sudo rsync -a /home/coder/osmium/hifi-media-player/native-ui/locales/ $R/build/locales/
 # the strings the payload ships (ci/build-payload.sh), not the C UI's older copy
 sudo cp /home/coder/osmium/hifi-media-player/src/i18n/locales/en.json /home/coder/osmium/hifi-media-player/src/i18n/locales/it.json $R/build/locales/

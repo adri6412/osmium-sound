@@ -73,6 +73,11 @@ PROFILES = {
                    ALPHABET_ROW + LETTERS + NAV + MEDIA + EXTRA, False),
                   ("G20S PRO Mouse", BUS_BLUETOOTH, [272, 273], True)],
                  "tastiera (solo multimediali) + puntatore, che NON va preso in esclusiva"),
+    # Fire TV remote (3rd gen): declares a whole keyboard, known by vendor and
+    # product (remote.cpp kModels) - so a remote all the same, key map included
+    "firetv": ([("Amazon Remote Keyboard", BUS_BLUETOOTH,
+                 ALPHABET_ROW + LETTERS + NAV + MEDIA + EXTRA, False, 0x0171, 0x0421)],
+               "known model: remote, taken exclusively, key map shown once"),
     # solo cifre e accensione: non e' un telecomando per noi, e non si tocca
     "digits": ([("Tastierino numerico finto", BUS_USB, DIGITS + [KEYS["power"]], False)],
                "ignorato di proposito: niente frecce, niente multimediali"),
@@ -99,7 +104,9 @@ def tree(root, names):
         devs += PROFILES[name][0]
 
     os.makedirs(os.path.join(root, "dev"), exist_ok=True)
-    for i, (label, bus, keys, pointer) in enumerate(devs):
+    for i, dev in enumerate(devs):
+        label, bus, keys, pointer = dev[:4]
+        vendor, product = (dev[4], dev[5]) if len(dev) > 5 else (0, 0)
         sysdir = os.path.join(root, "sys", "input%d" % i)
         for sub in ("capabilities", "id", "event%d" % i):
             os.makedirs(os.path.join(sysdir, sub), exist_ok=True)
@@ -110,6 +117,8 @@ def tree(root, names):
         w("capabilities/abs", "0")
         w("properties", "0")
         w("id/bustype", "%x" % bus)
+        w("id/vendor", "%04x" % vendor)
+        w("id/product", "%04x" % product)
         node = os.path.join(root, "dev", "event%d" % i)
         if not os.path.exists(node):
             os.mkfifo(node)

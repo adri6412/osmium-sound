@@ -192,6 +192,13 @@ Item {
         // come il dito che la tocca. Il riflettore sta intorno a quella, non
         // intorno a tutta la fila.
         property bool navigable: true
+        // Left and right flip through the albums (like the two arrows), down
+        // goes to play; out is up, or the back key, which returns to the menus.
+        function navKey(d) {
+            if (d === "left" || d === "right") { root.step(d === "left" ? -1 : 1); return true }
+            if (d === "down" && root.count > 0) { Nav.focus(navPlay); return true }
+            return false
+        }
         NavRing {
             fill: false
             radius: 6
@@ -253,6 +260,24 @@ Item {
         }
         property real wheelAcc: 0
     }
+    // the front cover's play button as a remote stop (down from the cover):
+    // OK presses its centre and the touch lands on `area`, as a finger's
+    // would. Left and right flip albums from here too, and the button stays
+    // the one of whichever cover comes to the front.
+    Item {
+        id: navPlay
+        property bool navigable: root.count > 0
+        function navKey(d) {
+            if (d === "left" || d === "right") { root.step(d === "left" ? -1 : 1); return true }
+            if (d === "up") { Nav.focus(area); return true }
+            // below there is only the slider: "down" landed on the mini
+            // player's play button, across the screen
+            return d === "down"
+        }
+        x: root.cx + root.cs / 2 - 8 - 17 - 20; y: root.coverY + root.cs - 8 - 17 - 20
+        width: 40; height: 40
+        NavRing { radius: 20 }
+    }
 
     // ─── the arrows: glass discs at the two ends, hold to keep going ───────
     Repeater {
@@ -277,6 +302,8 @@ Item {
             Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: arrow.dir * 1; name: arrow.dir < 0 ? "chevron-left" : "chevron-right"; size: 26; color: Theme.gold; scale: arrowTap.tapScale }
             Tap {
                 id: arrowTap; tap: 0.9; grow: 6
+                // with a remote, left and right do what the arrows do
+                navigable: false
                 onClicked: root.step(arrow.dir)
                 // held down: one album after another, faster after a moment
                 Timer {

@@ -777,7 +777,19 @@
       "btPairing": "Sto accoppiando…",
       "btNoKeys": "Collegato, ma i suoi tasti non arrivano all'apparecchio. Dimenticalo e accoppialo di nuovo: di solito basta.",
       "btForget": "Dimentica",
-      "btForgetConfirm": "Dimentico questo telecomando? Smette di funzionare finché non lo accoppi di nuovo."
+      "btForgetConfirm": "Dimentico questo telecomando? Smette di funzionare finché non lo accoppi di nuovo.",
+      "intro": {
+        "title": "Il tuo telecomando {name} è pronto",
+        "body": "Ecco cosa fa ogni tasto su Osmium. Scorri per vederli tutti.",
+        "later": "Puoi rivederla quando vuoi da Impostazioni → Telecomando.",
+        "gotIt": "Ho capito",
+        "show": "Mappa dei tasti"
+      },
+      "tour": {
+        "title": "Prova il telecomando",
+        "sub": "Un tasto alla volta, un minuto",
+        "start": "Prova"
+      }
     },
     "btSpeakers": {
       "help": "Suona su un altoparlante Bluetooth o su un paio di cuffie. Ognuno che aggiungi diventa un lettore a sé, con il suo nome e la sua coda, accanto al lettore di questo apparecchio: puoi mandargli un altro disco, oppure unire i due.",
@@ -1390,6 +1402,107 @@
     "lanWifi": "Connesso a {ssid}, ma internet non è raggiungibile",
     "lanWired": "Connesso via cavo, ma internet non è raggiungibile",
     "offline": "Nessuna connessione di rete"
+  },
+  "tutorialRemote": {
+    "title": "PROVA IL TELECOMANDO",
+    "done": "Fatto!",
+    "wrong": "Hai premuto «{got}». Cerca {want}.",
+    "scene": {
+      "home": "Home",
+      "albums": "Album"
+    },
+    "steps": {
+      "welcome": {
+        "title": "Proviamo il telecomando",
+        "body": "Ti chiedo un tasto alla volta: quando premi quello giusto si va avanti. Premi {okKey} per cominciare."
+      },
+      "arrows": {
+        "title": "Il riflettore",
+        "body": "Il bordo dorato mostra cosa è scelto. Spostalo con le frecce: prova su, giù, sinistra e destra."
+      },
+      "ok": {
+        "title": "Aprire",
+        "body": "Premi {okKey} per aprire quello che è scelto, come se lo toccassi."
+      },
+      "menu": {
+        "title": "Il menu",
+        "body": "Premi {menuKey}: apre le azioni dell’elemento scelto, come la coda e i preferiti."
+      },
+      "back": {
+        "title": "Tornare indietro",
+        "body": "Premi {backKey} per tornare alla schermata di prima."
+      },
+      "albums": {
+        "title": "Nella griglia degli album",
+        "body": "Il riflettore è su un album: premi → per passare sul suo tasto play. Premendo OK lì, l’album parte subito."
+      },
+      "az": {
+        "title": "L’indice A–Z",
+        "body": "Premi ancora → per arrivare all’indice, poi ↓ o ↑ per scegliere una lettera: la lista salta lì."
+      },
+      "coverflow": {
+        "title": "Il Cover Flow",
+        "body": "Qui ← e → sfogliano gli album. Provali tutti e due."
+      },
+      "coverflowPlay": {
+        "title": "Il play nel Cover Flow",
+        "body": "Premi ↓ per andare sul tasto play dell’album davanti. Con OK sulla copertina, invece, l’album si apre."
+      },
+      "home": {
+        "title": "Home",
+        "body": "Premi {homeKey}: da qualunque schermata torni alla libreria."
+      },
+      "volume": {
+        "title": "Il volume",
+        "body": "Premi volume + o volume −. Funziona da ogni schermata."
+      },
+      "play": {
+        "title": "Play e pausa",
+        "body": "Premi {playKey} per mettere in pausa la musica o farla ripartire."
+      },
+      "player": {
+        "title": "Il player",
+        "body": "Premi {playerKey} per aprire e chiudere il player a tutto schermo."
+      },
+      "done": {
+        "title": "Bravo, sai già tutto",
+        "body": "Mappa dei tasti e questa prova le ritrovi in Impostazioni → Telecomando. Premi {okKey} per finire."
+      }
+    },
+    "keys": {
+      "generic": {
+        "ok": "OK",
+        "back": "Indietro",
+        "home": "Home",
+        "menu": "il tasto menu",
+        "play": "il tasto play/pausa",
+        "player": "il tasto del player"
+      },
+      "firetv": {
+        "ok": "il tasto al centro della ghiera",
+        "back": "il tasto ↩",
+        "home": "il tasto ⌂",
+        "menu": "il tasto ≡",
+        "play": "il tasto play/pausa",
+        "player": "il tasto TV"
+      },
+      "g20s": {
+        "ok": "OK",
+        "back": "il tasto ↩",
+        "home": "il tasto ⌂",
+        "menu": "il tasto con la lampadina",
+        "play": "il tasto play/pausa",
+        "player": "il tasto 1"
+      },
+      "xiaomi": {
+        "ok": "il tasto al centro della ghiera",
+        "back": "il tasto ←",
+        "home": "il tasto ○",
+        "menu": "il tasto ⋮⋮⋮",
+        "play": "il tasto Netflix",
+        "player": "il tasto LIVE"
+      }
+    }
   },
   "tutorial": {
     "skip": "Salta",

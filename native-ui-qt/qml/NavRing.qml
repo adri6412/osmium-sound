@@ -17,17 +17,32 @@ Loader {
     property Item target: parent
     property real radius: 10
     property bool fill: true
+    // the faint gold wash inside the ring; a photo turns sepia under it, so
+    // a big picture passes "transparent" and keeps just the outline
+    property color tint: Theme.goldA(0.12)
 
     anchors.fill: fill ? parent : undefined
     active: !!target && Nav.item === target && Nav.active
     z: 100
+    // Two rings: the gold one outside and a dark one just inside. On a dark
+    // box the gold shows; on one that is already gold (the chosen option, the
+    // main button) the gold melts into it and the dark line remains — with a
+    // single ring the spotlight simply vanished there.
     sourceComponent: Rectangle {
-        color: Theme.goldA(0.12)
+        color: ring.tint
         border.width: 2
         border.color: Theme.gold
         radius: ring.radius
         opacity: 0
         Component.onCompleted: opacity = 1
         Behavior on opacity { NumberAnimation { duration: Theme.dur(120) } }
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: 2
+            color: "transparent"
+            border.width: 2
+            border.color: Theme.dark
+            radius: Math.max(0, ring.radius - 2)
+        }
     }
 }

@@ -127,6 +127,7 @@ private:
         bool remote = false;       // telecomando vero (non una tastiera)
         bool chosen = false;       // l'utente ha detto che e' il suo telecomando
         bool grabbed = false;      // presa esclusiva ottenuta
+        int model = -1;            // one of the known remotes (kModels), or -1
         int fd = -1;
         QSocketNotifier *notifier = nullptr;
     };
@@ -136,6 +137,10 @@ private:
     void openDevice(const QString &path);
     void closeDevice(const QString &path);
     void readFrom(const QString &path);
+    // the vendor keys (Fire TV: the app buttons) the kernel does not translate
+    void openHidraw(const QString &inputDir, const QString &devPath);
+    void closeHidraw(const QString &path);
+    void readHidraw(const QString &path);
     void onKey(Dev &dev, int code, int value);
     void publishDevices();
     void loadCustom();
@@ -148,6 +153,16 @@ private:
 
     QString m_configDir;
     QHash<QString, Dev> m_open;      // path -> dispositivo aperto
+    struct Hid {
+        QString devPath;           // the evdev node it acts on behalf of
+        int model = -1;
+        int fd = -1;
+        int pressed = 0;           // the code held down, for the release
+        QSocketNotifier *notifier = nullptr;
+    };
+    QHash<QString, Hid> m_hid;       // /dev/hidrawN -> reader
+    // device name -> known model, for actionFor(code, device)
+    QHash<QString, int> m_modelOf;
     // quello che l'utente ha deciso: dispositivo ("" = vale per tutti) ->
     // codice -> azione. Da remote-keys.json.
     QHash<QString, QHash<int, QString>> m_custom;

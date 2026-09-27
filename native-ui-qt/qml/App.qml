@@ -17,7 +17,7 @@ Item {
     function setAlbumView(v) { albumView = v === "coverflow" ? "coverflow" : "grid"; Sys.setConf("album-view", albumView) }
     // tempo dell'ultimo tocco (per l'auto-apertura e il salvaschermo)
     readonly property real lastInput: Sys.lastInput
-    readonly property bool busyOverlay: dialogs.active || vk.active || ota.active || cdrip.open || tutorial.active
+    readonly property bool busyOverlay: dialogs.active || vk.active || ota.active || cdrip.open || tutorial.active || remoteIntro.active || remoteTour.active
 
     // ─── principale <-> Now Playing: y:'100%' con molla 200/26 ─────────────
     Spring { id: npSpring; stiffness: 200; damping: 26; rate: Theme.motionRate }
@@ -58,7 +58,13 @@ Item {
     // first time and its "shown" file is missing: after the first wizard on
     // a new appliance, at the first start after the update on an old one.
     readonly property bool tutorialCanStart: !wizard.active && !intro.active && !screensaver.covering && !ota.active && !cdrip.open && !dialogs.active
+                                             && !remoteIntro.active && !remoteTour.active
     property bool tutorialTried: false
+    // 🚨 At the end of the first setup both the touch tour and a remote's key
+    // map want the screen (a remote paired from the web wizard is already
+    // there): the map came first by a few hundred ms and the tour opened on
+    // top of it. One after the other: the tour, then the map and the practice.
+    readonly property bool tutorialPending: !tutorialTried && !tutorial.wasShown()
     onTutorialCanStartChanged: if (tutorialCanStart && !tutorialTried) tutorialDelay.restart()
     Timer {
         id: tutorialDelay
@@ -70,6 +76,9 @@ Item {
         }
     }
     function startTutorial() { tutorialTried = true; tutorial.start() }
+    // trying the remote, one key at a time: after a known remote's key map,
+    // and from Settings → Remote control
+    function startRemoteTour(model) { remoteTour.start(model || "") }
     // the tour's album steps: the list as a grid or as Cover Flow, whatever
     // the owner chose (put back when the tour ends), and the long-press menu
     function tutorialAlbums(mode) { setExpanded(false); albumView = mode; mainScreen.browser.tutorialAlbums(mode) }
@@ -107,6 +116,8 @@ Item {
                 a === "back" || a === "home" || a === "menu" || a === "standby" ||
                 a === "pageUp" || a === "pageDown" || a === "search") return
         }
+        // trying the remote: every key is the practice run's, none acts
+        if (remoteTour.active) { remoteTour.handle(a); return }
         switch (a) {
         case "up": case "down": case "left": case "right": Nav.move(a); return
         case "pageUp": Nav.page("up"); return
@@ -164,6 +175,7 @@ Item {
         if (dialogs.active) { dialogs.close(); return }
         if (cdrip.open) { cdrip.close(); return }
         if (tutorial.active) { tutorial.finish(); return }
+        if (remoteIntro.active) { remoteIntro.close(); return }
         if (overlays.busy) { overlays.close(); return }
         if (ota.active) { ota.dismissed = true; return }
         if (mainScreen.browser.menuOpen) { mainScreen.browser.closeMenu(); return }
@@ -192,6 +204,7 @@ Item {
     readonly property var toastItem: toast
     readonly property var otaItem: ota
     readonly property var tour: tutorial
+    readonly property var remoteMap: remoteIntro
     readonly property var nav: Nav                    // il riflettore del telecomando
 
     MainScreen {
@@ -273,7 +286,22 @@ Item {
     Dialogs { id: dialogs; anchors.fill: parent }
     OtaOverlay { id: ota; anchors.fill: parent }
     CdRip { id: cdrip; anchors.fill: parent }
-    Tutorial { id: tutorial; anchors.fill: parent }       // the guided tour, over everything but the saver and the intro
+    Tutorial {                                             // the guided tours, over everything but the saver and the intro
+        id: tutorial; anchors.fill: parent
+        onEnded: remoteIntro.check()                       // another known remote may be waiting for its map
+    }
+    // the key map of a known remote, once, after it is paired
+    RemoteIntro {
+        id: remoteIntro; anchors.fill: parent
+        blocked: wizard.active || intro.active || screensaver.covering || dialogs.active || vk.active || ota.active || cdrip.open
+                 || tutorial.active || remoteTour.active || app.tutorialPending
+        onTourWanted: (m) => app.startRemoteTour(m)
+    }
+    // the practice run: every remote key comes here first while it is open
+    RemoteTour {
+        id: remoteTour; anchors.fill: parent
+        onEnded: remoteIntro.check()                       // another known remote may be waiting for its map
+    }
     Toast { id: toast; anchors.fill: parent }             // z-[10050]: sopra CD (z-70) e aggiornamento
     VirtualKeyboard { id: vk; anchors.fill: parent }
     Screensaver {

@@ -1420,6 +1420,7 @@ Item {
 
         label("settings.remote.connected")
         var devs = Remote.devices
+        var mapShown = []
         if (!devs.length) helpText(Tr.t("settings.remote.none"), 13)
         for (var i = 0; i < devs.length; i++) {
             var d = devs[i]
@@ -1444,11 +1445,23 @@ Item {
             if (d.kind !== "remote" || d.chosen)
                 mini(dr, Tr.t(d.chosen ? "settings.remote.notMine" : "settings.remote.mine"),
                      "rm_mine", d.chosen ? "light" : "accent", false, String(d.name || ""))
+            // a remote the appliance knows: its key map, once per remote
+            // (a Xiaomi is two input devices, one object in the hand)
+            else if (d.model && mapShown.indexOf(d.model) < 0) {
+                mapShown.push(d.model)
+                mini(dr, Tr.t("settings.remote.intro.show"), "rm_map", "accent", false, String(d.model))
+            }
         }
         // il consiglio solo quando c'e' davvero una scelta da fare
         var anyKeyboard = false
         for (var h = 0; h < devs.length; h++) if (devs[h].kind !== "remote") anyKeyboard = true
         if (anyKeyboard) help("settings.remote.mineHint", 12)
+        // the tour of how to use a remote, for the known model in hand if any
+        if (devs.length) {
+            var tr = info(Tr.t("settings.remote.tour.title"), Tr.t("settings.remote.tour.sub"))
+            tr.style = "row"; tr.icon = "remote"
+            mini(tr, Tr.t("settings.remote.tour.start"), "rm_tour", "accent", false, mapShown.length ? mapShown[0] : "")
+        }
 
         sep()
         var t = toggle(Tr.t("settings.remote.test"), Tr.t("settings.remote.testHint"), remoteTest, "rm_test")
@@ -1958,6 +1971,8 @@ Item {
         case "rm_test": remoteTest = !row.on; break
         case "rm_mine": Remote.setChosen(Remote.chosen === arg ? "" : arg); break
         case "rm_listen": Remote.listenAgain(); break
+        case "rm_map": if (Ui.app) Ui.app.remoteMap.open(arg, true); break
+        case "rm_tour": if (Ui.app) Ui.app.startRemoteTour(arg); break
         case "rm_assign":
             var code = Number(arg), dev = String(Remote.learnDevice || "")
             var acts = Remote.actionNames()

@@ -153,13 +153,20 @@ QtObject {
     //      del brano precedente (venti punti a destra ma centoventi piu' in giu')
     //      invece che nella libreria, che e' quello che si vede a destra.
     //   2. fra quelli in linea vince il piu' vicino di bordo, non di centro: una
-    //      riga lunga e una corta accanto valgono uguale.
+    //      riga lunga e una corta accanto valgono uguale. On a tie, the one
+    //      in the same column wins: from a row's play button "down" goes to
+    //      the play button below, not to the whole row.
+    // 🚨 Up and down neither enter nor leave a box inside another (the play
+    // button inside a row or an album card): right gets there and left gets
+    // out. Otherwise every "down" in the album grid first stopped on the
+    // card's play button, and it took two presses to reach the next row.
     function pick(list, cur, dir) {
         var vertical = dir === "up" || dir === "down"
         var best = null, bestScore = 0, bestAligned = false
         for (var i = 0; i < list.length; i++) {
             var r = list[i].r
             if (list[i].it === item) continue
+            if (vertical && (encloses(r, cur) || encloses(cur, r))) continue
             var dc = dir === "down" ? cy(r) - cy(cur) : dir === "up" ? cy(cur) - cy(r)
                    : dir === "right" ? cx(r) - cx(cur) : cx(cur) - cx(r)
             if (dc <= 1) continue                       // sta dietro, o e' in linea
@@ -169,14 +176,75 @@ QtObject {
             // quanto si sovrappongono di traverso
             var ov = vertical ? span(cur.x, cur.x + cur.width, r.x, r.x + r.width)
                               : span(cur.y, cur.y + cur.height, r.y, r.y + r.height)
-            var aligned = ov > 0
-            var off = aligned ? 0 : (vertical ? Math.abs(cx(r) - cx(cur)) : Math.abs(cy(r) - cy(cur)))
-            var s = edge + dc * 0.2 + off * 2.5
+            // 🚨 In line means a real overlap, a quarter of the smaller box at
+            // least: touch areas grown past their drawing (the Discover genre
+            // pills, `grow: 4`) overlap the next row by a couple of pixels, and
+            // left/right jumped between rows as if they were in line.
+            var cross = vertical ? Math.min(cur.width, r.width) : Math.min(cur.height, r.height)
+            var aligned = ov > Math.max(1, cross * 0.25)
+            var off = vertical ? Math.abs(cx(r) - cx(cur)) : Math.abs(cy(r) - cy(cur))
+            // (in line, the column is only a tie-break: at 0.2, "up" from the
+            // first row jumped the breadcrumbs and landed on the tabs)
+            var s = edge + dc * 0.2 + off * (aligned ? 0.05 : 2.5)
             if (aligned && !bestAligned) { best = list[i].it; bestScore = s; bestAligned = true; continue }
             if (!aligned && bestAligned) continue
             if (!best || s < bestScore) { best = list[i].it; bestScore = s }
         }
         return best ? { it: best, aligned: bestAligned } : null
+    }
+    function encloses(a, b) {
+        return a.x <= b.x + 0.5 && a.y <= b.y + 0.5 &&
+               a.x + a.width >= b.x + b.width - 0.5 && a.y + a.height >= b.y + b.height - 0.5
+    }
+    // The best one INSIDE the list that holds the spotlight, if there is one
+    // in line; `null` when the list has nothing that way.
+    // 🚨 `pick` alone is not enough: its score weighs the distance between
+    // centres too, and with tall rows (album cards are ~270 points) the search
+    // field or the breadcrumbs above the list "beat" the card of the row
+    // above. "Up" left the list instead of scrolling it, "down" from the bar
+    // came back to the first visible card, and the part above could only be
+    // reached with the back key.
+    function pickInList(list, cur, dir) {
+        var f = flickOf(item)
+        if (!f) return null
+        var inner = []
+        for (var i = 0; i < list.length; i++) if (isInside(f, list[i].it)) inner.push(list[i])
+        // Up and down go to the very next row, never past it. In rows of
+        // different lengths (the genre pills wrap) the best "in line" box could
+        // be two rows away while the next row, shorter, overlapped nothing — and
+        // "down" skipped a row. Only the boxes really beyond this one count
+        // (not a tall neighbour beside it), and of those the nearest band.
+        if (dir === "up" || dir === "down") {
+            var beyond = [], near = Infinity
+            for (var j = 0; j < inner.length; j++) {
+                var r = inner[j].r
+                var gap = dir === "down" ? r.y - (cur.y + cur.height) : cur.y - (r.y + r.height)
+                var past = dir === "down" ? r.y >= cur.y + cur.height * 0.75 : r.y + r.height <= cur.y + cur.height * 0.25
+                if (!past || inner[j].it === item) continue
+                beyond.push({ c: inner[j], gap: gap })
+                near = Math.min(near, gap)
+            }
+            var band = []
+            for (var k = 0; k < beyond.length; k++)
+                if (beyond[k].gap <= near + Math.max(10, cur.height * 0.6)) band.push(beyond[k].c)
+            if (band.length) {
+                // in that row, the one closest across wins, in line or not
+                var best = null, bestOff = 0
+                for (var m = 0; m < band.length; m++) {
+                    var rr = band[m].r
+                    if (encloses(rr, cur) || encloses(cur, rr)) continue
+                    // overlapping ones first, then the most centred: from a
+                    // row's play button "down" is the play button below, not
+                    // the whole row that also overlaps
+                    var o = Math.abs(cx(rr) - cx(cur))
+                    if (span(cur.x, cur.x + cur.width, rr.x, rr.x + rr.width) <= 0) o += 100000
+                    if (!best || o < bestOff) { best = band[m].it; bestOff = o }
+                }
+                if (best) return { it: best, aligned: true }
+            }
+        }
+        var b = pick(inner, cur, dir)
+        return b && b.aligned ? b : null
     }
 
     function move(dir) {
@@ -189,11 +257,18 @@ QtObject {
         // vicino a dov'eravamo, che e' quello che l'occhio si aspetta.
         var cur = (item && inScope(item)) ? rectOf(item) : null
         if (!cur) return focusNearest(lastRect)
-        var best = pick(list, cur, dir)
+        // A box may keep the arrows for itself: `navKey(dir)` returning true.
+        // Cover Flow flips albums with left/right, the A-Z index changes letter
+        // with up/down. Whatever it does not keep goes on from here.
+        if (typeof item.navKey === "function" && item.navKey(dir)) return true
+        // the list we are in first, as long as it has something that way
+        var best = pickInList(list, cur, dir)
+        if (best) { focus(best.it); return true }
         // 🚨 Niente in linea, ma la lista sotto il riflettore ha ancora strada:
         // si scorre. Saltare al pannello accanto solo perche' e' l'unica cosa
         // in quella direzione e' il modo piu' rapido per perdere il filo.
-        if ((!best || !best.aligned) && canScroll(dir) && nudge(dir)) return true
+        if (canScroll(dir) && nudge(dir)) return true
+        best = pick(list, cur, dir)
         if (!best) return false
         focus(best.it)
         return true
@@ -233,13 +308,19 @@ QtObject {
             var list = nav.candidates()
             var cur = (nav.item && nav.inScope(nav.item)) ? nav.rectOf(nav.item) : nav.lastRect
             if (!cur || !list.length) { nav.focusFirst(); return }
-            var best = nav.pick(list, cur, dir)
+            var best = nav.pickInList(list, cur, dir) || nav.pick(list, cur, dir)
             if (best) nav.focus(best.it)
         }
     }
 
     // il primo riquadro dello strato aperto: in alto a sinistra
     function focusFirst() {
+        // A layer may say where the spotlight starts (`navFirst` on the item
+        // its NavScope confines to): the tours start on "Next", which is not
+        // top-left — there sits "Skip", and the first OK ended the tour.
+        var top = scope()
+        var pref = top && top.navFirst !== undefined ? top.navFirst : null
+        if (pref && pref.navigable === true && pref.enabled && inScope(pref) && rectOf(pref)) { focus(pref); return true }
         var list = candidates()
         if (!list.length) { item = null; return false }
         var best = null, bestScore = 0
@@ -329,6 +410,12 @@ QtObject {
         }
         return focusClosest(list, where)
     }
+    // the box inside `box` closest to a point of the scene
+    function focusIn(box, where) {
+        var list = candidates(), inside = []
+        for (var i = 0; i < list.length; i++) if (isInside(box, list[i].it)) inside.push(list[i])
+        return inside.length ? focusClosest(inside, where) : false
+    }
     function focusClosest(list, where) {
         if (!list.length) return focusFirst()
         if (!where) { focus(list[0].it); return true }
@@ -347,6 +434,9 @@ QtObject {
     // riga (620 ms, oltre i 500 di pressAndHoldInterval)
     function activate(hold) {
         if (!item || !inScope(item)) { if (!focusFirst()) return false; }
+        // like navKey: a box that is not pressed at one point (the A-Z index:
+        // its centre would be the letter M) says itself what OK means
+        if (!hold && typeof item.navOk === "function" && item.navOk()) return true
         var r = rectOf(item)
         if (!r) return false
         Sys.tapAt(r.x + r.width / 2, r.y + r.height / 2, hold ? 620 : 0)

@@ -358,6 +358,15 @@ def rpc(player, params):
         else:
             r = {"loop_loop": [plugin_item(cmd, i) for i in range(9)],
                  "item_loop": [menu_item(cmd, i) for i in range(9)]}
+    elif cmd == "randomplaygenrelist":
+        # the real answer: two entries without a checkbox (select all / none),
+        # then one per genre; names of different lengths so the pills wrap
+        names = ["Rock", "Jazz", "Classical", "Electronic", "Pop", "Hip-Hop", "Soundtrack", "Blues",
+                 "Folk", "Metal", "Ambient", "Country", "Reggae", "Singer-Songwriter", "Funk", "Soul",
+                 "Alternative", "World", "Latin", "Progressive Rock", "Punk", "R&B", "Opera", "Lo-fi"]
+        loop = [{"text": "Select all"}, {"text": "Select none"}]
+        loop += [{"text": n, "checkbox": 1 if i % 3 else 0} for i, n in enumerate(names)]
+        r = {"count": len(loop), "item_loop": loop}
     elif cmd == "playlistcontrol":
         pass
     elif cmd == "serverstatus":

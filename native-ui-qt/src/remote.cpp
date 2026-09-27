@@ -5,6 +5,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QSocketNotifier>
 #include <QtDebug>
 #include <errno.h>
@@ -13,6 +14,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <iterator>
 
 // Codici che le intestazioni di sistema piu' vecchie potrebbero non avere:
 // meglio dichiararli qui che perdere un tasto a seconda di dove si compila.
@@ -36,6 +38,21 @@
 #endif
 #ifndef KEY_CONTEXT_MENU
 #define KEY_CONTEXT_MENU 0x1b6
+#endif
+#ifndef KEY_VIDEO
+#define KEY_VIDEO 0x189
+#endif
+#ifndef KEY_PROGRAM
+#define KEY_PROGRAM 0x16a
+#endif
+#ifndef KEY_APPSELECT
+#define KEY_APPSELECT 0x244
+#endif
+#ifndef KEY_VOICECOMMAND
+#define KEY_VOICECOMMAND 0x246
+#endif
+#ifndef KEY_ASSISTANT
+#define KEY_ASSISTANT 0x247
 #endif
 
 namespace {
@@ -93,6 +110,10 @@ const KeyDef kKeys[] = {
     { KEY_LIST,         "KEY_LIST",         "queue" },
     { KEY_SEARCH,       "KEY_SEARCH",       "search" },
     { KEY_FIND,         "KEY_FIND",         "search" },
+    // the microphone key (Assistant, "voice"): we do not listen to the voice,
+    // but whoever presses it wants to look something up
+    { KEY_VOICECOMMAND, "KEY_VOICECOMMAND", "search" },
+    { KEY_ASSISTANT,    "KEY_ASSISTANT",    "search" },
     { KEY_FAVORITES,    "KEY_FAVORITES",    "favorite" },
     { KEY_SHUFFLE,      "KEY_SHUFFLE",      "shuffle" },
     // 🚨 spegnere l'apparecchio dal telecomando, no: il tasto manda lo
@@ -111,6 +132,10 @@ const KeyDef kKeys[] = {
     { KEY_BLUE,         "KEY_BLUE",         "" },
     { KEY_CHANNELUP,    "KEY_CHANNELUP",    "" },
     { KEY_CHANNELDOWN,  "KEY_CHANNELDOWN",  "" },
+    { KEY_PROGRAM,      "KEY_PROGRAM",      "" },
+    { KEY_VIDEO,        "KEY_VIDEO",        "" },
+    { KEY_APPSELECT,    "KEY_APPSELECT",    "" },
+    { KEY_COMPOSE,      "KEY_COMPOSE",      "" },
     { KEY_1, "KEY_1", "" }, { KEY_2, "KEY_2", "" }, { KEY_3, "KEY_3", "" },
     { KEY_4, "KEY_4", "" }, { KEY_5, "KEY_5", "" }, { KEY_6, "KEY_6", "" },
     { KEY_7, "KEY_7", "" }, { KEY_8, "KEY_8", "" }, { KEY_9, "KEY_9", "" },
@@ -151,6 +176,70 @@ const QtKeyDef kQtKeys[] = {
     { Qt::Key_Search, "search" }, { Qt::Key_Favorites, "favorite" },
     { Qt::Key_LaunchMedia, "nowPlaying" }, { Qt::Key_Eject, "eject" },
 };
+
+// ─── the remotes known out of the box ──────────────────────────────────────
+// Three models the appliance knows by itself: recognised by bus and vendor
+// (not by name: the Fire TV calls itself "AR Keyboard" or "Amazon Remote
+// Keyboard" depending on the connection), remotes even when they present
+// themselves as keyboards, with a key map of their own between what the user
+// assigns by hand and the generic one. Codes measured by pressing the real
+// keys (2026-09-27), not taken from a data sheet.
+//
+// 🚨 "A remote even if it says keyboard" is not just convenience: a device
+// that is not taken exclusively carries its power key all the way to logind,
+// and the Fire TV switched the appliance OFF.
+struct ModelKey { int code; const char *action; };
+// Keys the kernel does not translate (vendor page): read from hidraw. Report
+// `report`, first byte `byte` when pressed, 0 when released. The code is
+// ours, past KEY_MAX, so it can be assigned like any other.
+struct VendorKey { int report; int byte; int code; const char *name; const char *action; };
+struct Model {
+    const char *id;
+    const char *label;
+    int bus, vendor, product;          // product 0 = any
+    const ModelKey *keys; int nkeys;
+    const VendorKey *vkeys; int nvkeys;
+};
+constexpr int kVendorBase = 0x1000;    // > KEY_MAX (0x2ff)
+
+// Fire TV Alexa (3rd gen): no previous/next keys, so ⏪ ⏩ do that (music
+// needs it more than 30-second jumps); the TV guide key opens the player.
+const ModelKey kFireTvKeys[] = {
+    { KEY_REWIND, "prev" }, { KEY_FASTFORWARD, "next" }, { KEY_PROGRAM, "nowPlaying" },
+};
+const VendorKey kFireTvVendor[] = {
+    { 0xef, 0xa1, kVendorBase + 0xa1, "APP_PRIME_VIDEO",   "queue" },
+    { 0xef, 0xa2, kVendorBase + 0xa2, "APP_NETFLIX",       "favorite" },
+    { 0xef, 0xa3, kVendorBase + 0xa3, "APP_DISNEY_PLUS",   "nextVu" },
+    { 0xef, 0xa4, kVendorBase + 0xa4, "APP_AMAZON_MUSIC",  "fullScreen" },
+};
+// G20S PRO: the light-bulb key sends KEY_COMPOSE, the "menu" key of PC
+// keyboards — and the only menu key it has. The digits are shortcuts.
+const ModelKey kG20sKeys[] = {
+    { KEY_COMPOSE, "menu" },
+    { KEY_1, "nowPlaying" }, { KEY_2, "queue" }, { KEY_3, "favorite" }, { KEY_4, "shuffle" },
+    { KEY_5, "fullScreen" }, { KEY_6, "nextVu" }, { KEY_7, "nextAnimation" }, { KEY_8, "search" },
+    { KEY_9, "stop" }, { KEY_0, "home" },
+};
+// Xiaomi (Mi Box S): no playback keys, so play/pause sits on Netflix
+// (KEY_VIDEO); the app grid is the menu, LIVE opens the player.
+const ModelKey kXiaomiKeys[] = {
+    { KEY_APPSELECT, "menu" }, { KEY_VIDEO, "playPause" }, { KEY_GREEN, "nowPlaying" },
+};
+const Model kModels[] = {
+    { "firetv", "Fire TV", BUS_BLUETOOTH, 0x0171, 0,
+      kFireTvKeys, int(std::size(kFireTvKeys)), kFireTvVendor, int(std::size(kFireTvVendor)) },
+    { "g20s", "G20S PRO", BUS_BLUETOOTH, 0x1d5a, 0xc081,
+      kG20sKeys, int(std::size(kG20sKeys)), nullptr, 0 },
+    { "xiaomi", "Xiaomi", BUS_BLUETOOTH, 0x2717, 0,
+      kXiaomiKeys, int(std::size(kXiaomiKeys)), nullptr, 0 },
+};
+
+const Model *modelFor(int bus, int vendor, int product) {
+    for (const Model &m : kModels)
+        if (m.bus == bus && m.vendor == vendor && (!m.product || m.product == product)) return &m;
+    return nullptr;
+}
 
 // Quali azioni hanno senso ripetute a tasto premuto.
 bool repeatable(const QString &a) {
@@ -270,6 +359,10 @@ void Remote::rescan() {
         if (key.isEmpty()) continue;
         const QString rel = hifiSysfsRead(dir + "/capabilities/rel");
         const QString abs = hifiSysfsRead(dir + "/capabilities/abs");
+        const int bus = hifiSysfsRead(dir + "/id/bustype").toInt(nullptr, 16);
+        const Model *model = modelFor(bus, hifiSysfsRead(dir + "/id/vendor").toInt(nullptr, 16),
+                                      hifiSysfsRead(dir + "/id/product").toInt(nullptr, 16));
+        const bool anyKey = key.contains(QRegularExpression(QStringLiteral("[1-9a-fA-F]")));
 
         // tastiera completa: tutti i tasti da ESC a D (1..31), la stessa
         // regola di udev che usa Sys per la tastiera a schermo
@@ -284,13 +377,15 @@ void Remote::rescan() {
         const bool nav = hifiSysfsBit(key, KEY_UP) && hifiSysfsBit(key, KEY_DOWN)
                       && hifiSysfsBit(key, KEY_LEFT) && hifiSysfsBit(key, KEY_RIGHT)
                       && (hifiSysfsBit(key, KEY_ENTER) || hifiSysfsBit(key, KEY_OK) || hifiSysfsBit(key, KEY_SELECT));
-        if (!media && !(nav && !fullKeyboard)) continue;
+        if (!media && !(nav && !fullKeyboard) && !(model && anyKey)) continue;
 
         // 🚨 niente presa esclusiva su chi e' anche puntatore o tastiera: il
-        // puntatore si fermerebbe e non si scriverebbe piu'
+        // puntatore si fermerebbe e non si scriverebbe piu'. A known model is
+        // a remote even when it declares a whole keyboard (the Fire TV and the
+        // G20S do): we know every one of its keys.
         const bool pointer = hifiSysfsBit(rel, REL_X) && hifiSysfsBit(rel, REL_Y);
         const bool tablet = hifiSysfsBit(abs, ABS_X) || hifiSysfsBit(abs, ABS_MT_POSITION_X);
-        const bool isRemote = !fullKeyboard && !pointer && !tablet;
+        const bool isRemote = (!fullKeyboard || model) && !pointer && !tablet;
 
         seen << path;
         if (m_open.contains(path)) continue;
@@ -299,15 +394,20 @@ void Remote::rescan() {
         Dev &dev = m_open[path];
         dev.name = hifiSysfsRead(dir + "/name");
         if (dev.name.isEmpty()) dev.name = evs.first();
-        const int bus = hifiSysfsRead(dir + "/id/bustype").toInt(nullptr, 16);
         dev.bus = bus == BUS_BLUETOOTH ? "bluetooth" : bus == BUS_USB ? "usb" : "other";
         dev.group = groupKey(dir, dev.name);
         dev.remote = isRemote;
+        dev.model = model ? int(model - kModels) : -1;
         dev.chosen = isChosen(dev);
+        if (model) m_modelOf.insert(dev.name, dev.model);
         if (isRemote && ioctl(dev.fd, EVIOCGRAB, 1) == 0) dev.grabbed = true;
-        qInfo("remote: %s (%s%s) su %s", qPrintable(dev.name), qPrintable(dev.bus),
-              dev.grabbed ? ", presa esclusiva" : isRemote ? ", senza presa esclusiva" : ", solo tasti multimediali",
+        qInfo("remote: %s (%s%s%s) on %s", qPrintable(dev.name), qPrintable(dev.bus),
+              dev.grabbed ? ", taken exclusively" : isRemote ? ", not taken exclusively" : ", media keys only",
+              model ? qPrintable(QStringLiteral(", model %1").arg(QLatin1String(model->label))) : "",
               qPrintable(path));
+        // the keys the kernel does not translate: from the hidraw of the same
+        // HID device (one per remote, even when it has two input nodes)
+        if (model && model->nvkeys && anyKey) openHidraw(dir, path);
     }
 
     // quelli spariti
@@ -331,7 +431,65 @@ void Remote::openDevice(const QString &path) {
     m_open.insert(path, dev);
 }
 
+// The hidraw of the HID device the input node `dir` belongs to
+// (/sys/class/input/inputN/device/hidraw/hidrawM). Read only: reports reach
+// everyone who opens it, and the exclusive grab on evdev does not stop them.
+void Remote::openHidraw(const QString &dir, const QString &devPath) {
+    const QStringList raws = QDir(dir + "/device/hidraw").entryList(QStringList("hidraw*"), QDir::Dirs | QDir::NoDotAndDotDot);
+    if (raws.isEmpty()) return;
+    const QString path = QStringLiteral("/dev/") + raws.first();
+    if (m_hid.contains(path)) return;
+    const int fd = ::open(path.toLocal8Bit().constData(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) { qInfo("remote: cannot open %s (%s)", qPrintable(path), strerror(errno)); return; }
+    Hid h;
+    h.devPath = devPath;
+    h.fd = fd;
+    h.model = m_open.value(devPath).model;
+    h.notifier = new QSocketNotifier(fd, QSocketNotifier::Read, this);
+    connect(h.notifier, &QSocketNotifier::activated, this, [this, path]() { readHidraw(path); });
+    m_hid.insert(path, h);
+    qInfo("remote: vendor keys from %s", qPrintable(path));
+}
+
+void Remote::closeHidraw(const QString &path) {
+    Hid h = m_hid.take(path);
+    if (h.notifier) { h.notifier->setEnabled(false); h.notifier->deleteLater(); }
+    if (h.fd >= 0) ::close(h.fd);
+}
+
+void Remote::readHidraw(const QString &path) {
+    if (!m_hid.contains(path)) return;
+    unsigned char buf[256];
+    // 🚨 a bounded round per wake-up: a remote streaming audio (the
+    // microphone) would otherwise hog the loop, as with the btghid bridge
+    for (int round = 0; round < 32; round++) {
+        const ssize_t n = ::read(m_hid[path].fd, buf, sizeof(buf));
+        if (n <= 0) {
+            if (n == 0 || (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) closeHidraw(path);
+            return;
+        }
+        Hid &h = m_hid[path];
+        if (h.model < 0 || n < 2 || !m_open.contains(h.devPath)) continue;
+        const Model &m = kModels[h.model];
+        for (int i = 0; i < m.nvkeys; i++) {
+            const VendorKey &vk = m.vkeys[i];
+            if (buf[0] != vk.report) continue;
+            if (buf[1] == 0) {                                  // released
+                if (h.pressed) { const int c = h.pressed; h.pressed = 0; onKey(m_open[h.devPath], c, 0); }
+                break;
+            }
+            if (buf[1] != vk.byte) continue;
+            h.pressed = vk.code;
+            onKey(m_open[h.devPath], vk.code, 1);
+            break;
+        }
+    }
+}
+
 void Remote::closeDevice(const QString &path) {
+    // the hidraw goes with the node that opened it
+    const QStringList raws = m_hid.keys();
+    for (const QString &r : raws) if (m_hid.value(r).devPath == path) closeHidraw(r);
     if (!m_open.contains(path)) return;
     Dev dev = m_open.take(path);
     if (dev.notifier) { dev.notifier->setEnabled(false); dev.notifier->deleteLater(); }
@@ -460,7 +618,14 @@ QString Remote::actionFor(int code, const QString &device) const {
         const auto it = all->constFind(code);
         if (it != all->constEnd()) return it.value();
     }
-    // ...e infine la mappa di serie
+    // ...then the model's, when it is one of the known remotes...
+    const int mi = m_modelOf.value(device, -1);
+    if (mi >= 0) {
+        const Model &m = kModels[mi];
+        for (int i = 0; i < m.nkeys; i++) if (m.keys[i].code == code) return QString::fromLatin1(m.keys[i].action);
+        for (int i = 0; i < m.nvkeys; i++) if (m.vkeys[i].code == code) return QString::fromLatin1(m.vkeys[i].action);
+    }
+    // ...and finally the generic map
     for (const KeyDef &k : kKeys) if (k.code == code) return QString::fromLatin1(k.action);
     return QString();
 }
@@ -472,6 +637,8 @@ QString Remote::actionForQtKey(int key) const {
 
 QString Remote::keyName(int code) const {
     for (const KeyDef &k : kKeys) if (k.code == code) return QString::fromLatin1(k.name);
+    for (const Model &m : kModels)
+        for (int i = 0; i < m.nvkeys; i++) if (m.vkeys[i].code == code) return QString::fromLatin1(m.vkeys[i].name);
     return QStringLiteral("#%1").arg(code);
 }
 
@@ -646,7 +813,8 @@ void Remote::publishDevices() {
         const Dev &d = m_open[p];
         out.append(QVariantMap{ { "name", d.name }, { "path", d.path }, { "bus", d.bus },
                                 { "kind", d.remote ? "remote" : "keyboard" }, { "grabbed", d.grabbed },
-                                { "chosen", d.chosen }, { "group", d.group } });
+                                { "chosen", d.chosen }, { "group", d.group },
+                                { "model", d.model >= 0 ? QString::fromLatin1(kModels[d.model].id) : QString() } });
     }
     m_devices = out;
     emit devicesChanged();

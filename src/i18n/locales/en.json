@@ -777,7 +777,19 @@
       "btPairing": "Pairing…",
       "btNoKeys": "Connected, but its keys are not reaching the appliance. Forget it and pair it again — that usually sorts it out.",
       "btForget": "Forget",
-      "btForgetConfirm": "Forget this remote? It stops working until you pair it again."
+      "btForgetConfirm": "Forget this remote? It stops working until you pair it again.",
+      "intro": {
+        "title": "Your {name} remote is ready",
+        "body": "This is what each key does on Osmium. Scroll to see them all.",
+        "later": "You can see it again any time from Settings → Remote control.",
+        "gotIt": "Got it",
+        "show": "Key map"
+      },
+      "tour": {
+        "title": "Try the remote",
+        "sub": "One key at a time, one minute",
+        "start": "Try"
+      }
     },
     "btSpeakers": {
       "help": "Play to a Bluetooth speaker or a pair of headphones. Each one you add becomes a player in its own right, with its own name and its own queue, next to this device's own player — so you can send it a different album, or group the two together.",
@@ -1390,6 +1402,107 @@
     "lanWifi": "Connected to {ssid}, but the internet is not reachable",
     "lanWired": "Connected by cable, but the internet is not reachable",
     "offline": "No network connection"
+  },
+  "tutorialRemote": {
+    "title": "TRY THE REMOTE",
+    "done": "Done!",
+    "wrong": "You pressed “{got}”. Look for {want}.",
+    "scene": {
+      "home": "Home",
+      "albums": "Albums"
+    },
+    "steps": {
+      "welcome": {
+        "title": "Let’s try the remote",
+        "body": "I will ask for one key at a time: press the right one and we move on. Press {okKey} to start."
+      },
+      "arrows": {
+        "title": "The spotlight",
+        "body": "The gold outline shows what is selected. Move it with the arrows: try up, down, left and right."
+      },
+      "ok": {
+        "title": "Opening",
+        "body": "Press {okKey} to open what is selected, as if you touched it."
+      },
+      "menu": {
+        "title": "The menu",
+        "body": "Press {menuKey}: it opens the actions of the selected item, like the queue and favourites."
+      },
+      "back": {
+        "title": "Going back",
+        "body": "Press {backKey} to go back to the previous screen."
+      },
+      "albums": {
+        "title": "In the album grid",
+        "body": "The spotlight is on an album: press → to move to its play button. OK there plays the album straight away."
+      },
+      "az": {
+        "title": "The A–Z index",
+        "body": "Press → again to reach the index, then ↓ or ↑ to pick a letter: the list jumps there."
+      },
+      "coverflow": {
+        "title": "Cover Flow",
+        "body": "Here ← and → flip through the albums. Try both."
+      },
+      "coverflowPlay": {
+        "title": "Play in Cover Flow",
+        "body": "Press ↓ to move to the play button of the album in front. OK on the cover opens the album instead."
+      },
+      "home": {
+        "title": "Home",
+        "body": "Press {homeKey}: from any screen it takes you back to the library."
+      },
+      "volume": {
+        "title": "The volume",
+        "body": "Press volume + or volume −. It works from every screen."
+      },
+      "play": {
+        "title": "Play and pause",
+        "body": "Press {playKey} to pause the music or start it again."
+      },
+      "player": {
+        "title": "The player",
+        "body": "Press {playerKey} to open and close the full-screen player."
+      },
+      "done": {
+        "title": "Well done, you know it all",
+        "body": "The key map and this practice are in Settings → Remote control. Press {okKey} to finish."
+      }
+    },
+    "keys": {
+      "generic": {
+        "ok": "OK",
+        "back": "Back",
+        "home": "Home",
+        "menu": "the menu key",
+        "play": "the play/pause key",
+        "player": "the player key"
+      },
+      "firetv": {
+        "ok": "the key in the middle of the ring",
+        "back": "the ↩ key",
+        "home": "the ⌂ key",
+        "menu": "the ≡ key",
+        "play": "the play/pause key",
+        "player": "the TV key"
+      },
+      "g20s": {
+        "ok": "OK",
+        "back": "the ↩ key",
+        "home": "the ⌂ key",
+        "menu": "the light-bulb key",
+        "play": "the play/pause key",
+        "player": "the 1 key"
+      },
+      "xiaomi": {
+        "ok": "the key in the middle of the ring",
+        "back": "the ← key",
+        "home": "the ○ key",
+        "menu": "the ⋮⋮⋮ key",
+        "play": "the Netflix key",
+        "player": "the LIVE key"
+      }
+    }
   },
   "tutorial": {
     "skip": "Skip",
