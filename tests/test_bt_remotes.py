@@ -356,6 +356,22 @@ class AutoPairTests(RemoteTestCase):
         self.assertEqual(out['paired'], '')
         self.assertFalse(self._argv('bluetoothctl', 'pair'))
 
+    def test_the_fire_tv_is_known_by_its_maker_even_without_a_name(self):
+        m = api_server._bt_certified_model
+        self.assertEqual(m({'name': '08-57-FB-F3-C1-1D', 'input': True, 'makers': [0x0171]}), 'firetv')
+        self.assertEqual(m({'name': '08-57-FB-F3-C1-1D', 'input': False, 'makers': [0x0171]}), '')
+        # chosen in the wizard: the name alone, or the maker alone, is enough
+        self.assertEqual(m({'name': 'AR', 'input': False}, 'firetv'), 'firetv')
+        self.assertEqual(m({'name': 'x', 'input': False, 'makers': [0x0171]}, 'firetv'), 'firetv')
+
+    def test_the_wizard_counts_a_remote_the_background_round_just_paired(self):
+        # the background round got there first: the wizard must hear "paired"
+        self._see(REMOTE, 'Xiaomi RC', paired=True)
+        self._write_state({'enabled': False, 'speakers': [], 'remotes': [{'mac': REMOTE, 'name': 'Xiaomi RC'}]})
+        out = api_server.bt_remotes_scan(10, 'xiaomi')
+        self.assertEqual(out['paired'], REMOTE)
+        self.assertFalse(self._argv('bluetoothctl', 'pair'))
+
     def test_other_devices_in_range_are_left_alone(self):
         self._see(REMOTE, 'Some Keyboard')
         self._see(SPEAKER, 'Xiaomi RC', audio=True)       # a speaker, whatever its name

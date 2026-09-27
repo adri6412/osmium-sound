@@ -6360,7 +6360,13 @@ def _bt_device_info(mac):
     info['trusted'] = 'Trusted: yes' in text
     info['connected'] = 'Connected: yes' in text
     info['audio'] = _BT_SINK_UUID in text.lower()
-    info['input'] = any(u in text.lower() for u in _BT_HID_UUIDS)
+    # an input device: it offers HID, or (a BLE device that has not said which
+    # services it has yet) its appearance makes BlueZ call it "input-…"
+    info['input'] = (any(u in text.lower() for u in _BT_HID_UUIDS)
+                     or re.search(r'^\s*Icon:\s*input-', text, re.M) is not None)
+    # Bluetooth company ids in its advertisement (Amazon is 0x0171): a remote
+    # in pairing mode may not send its name, but it says who made it
+    info['makers'] = [int(m, 16) for m in re.findall(r'ManufacturerData\.?\s*Key:\s*0x([0-9a-fA-F]{4})', text)]
     return info
 
 
@@ -6825,13 +6831,30 @@ def bt_remotes_scan(seconds=12, model=None):
         return _bt_remote_fail('bluetooth.scanFailed')
     if model:
         mine = {str(r.get('mac', '')).upper() for r in (_bt_read_doc().get('remotes') or [])}
+        seen = []
         for dev in _bt_known_devices():
-            if dev.get('audio') or dev['mac'] in mine or _bt_certified_model(dev) != model:
+            if dev.get('audio'):
                 continue
+            if _bt_certified_model(dev, model) != model:
+                seen.append('%s %r input=%s makers=%s' % (dev['mac'], dev.get('name'), dev.get('input'),
+                                                           ['0x%04x' % m for m in dev.get('makers') or []]))
+                continue
+            # 🚨 Already ours: most likely the background round paired it a
+            # moment ago, while the wizard was looking. That IS the success the
+            # wizard is waiting for — skipping it kept saying "not found yet".
+            if dev['mac'] in mine:
+                return _bt_remote_ok('bluetooth.remoteAdded', paired=dev['mac'])
             res = bt_remote_add(dev['mac'])
             res['paired'] = dev['mac'] if res.get('success') else ''
             return res
+        now = time.time()
+        if now - _bt_scan_log_at[0] > 60:          # what was there instead, at most once a minute
+            _bt_scan_log_at[0] = now
+            log.warning("bt remotes: no %s in range; seen: %s", model, '; '.join(seen) or 'nothing')
     return _bt_remote_ok('bluetooth.scanDone', paired='')
+
+
+_bt_scan_log_at = [0.0]
 
 
 def bt_remote_add(mac):
@@ -6914,9 +6937,11 @@ def bt_remote_add(mac):
 # itself "AR", which is short enough to be something else: it must also
 # offer the HID service before it counts.
 _BT_CERTIFIED = (
-    ('firetv', re.compile(r'^(AR|Amazon Remote.*|Amazon Fire TV Remote.*)$'), True),
-    ('g20s', re.compile(r'^G20S'), False),
-    ('xiaomi', re.compile(r'^Xiaomi RC'), False),
+    # model, name over the air, name alone needs to be an input device too,
+    # Bluetooth company id that also identifies it (with an input device)
+    ('firetv', re.compile(r'^(AR|Amazon Remote.*|Amazon Fire TV Remote.*)$'), True, 0x0171),
+    ('g20s', re.compile(r'^G20S'), False, None),
+    ('xiaomi', re.compile(r'^Xiaomi RC'), False, None),
 )
 BT_AUTOPAIR_EVERY = 60           # seconds between two listening rounds
 BT_AUTOPAIR_LISTEN = 10          # seconds of discovery per round
@@ -6924,11 +6949,18 @@ BT_AUTOPAIR_RETRY = 600          # a remote that failed to pair is left alone th
 _bt_autopair_failed = {}
 
 
-def _bt_certified_model(dev):
-    """The certified model a discovered device is, or ''."""
+def _bt_certified_model(dev, chosen=None):
+    """The certified model a discovered device is, or ''.
+
+    `chosen` is the model the person said they are pairing (the wizard): then
+    its name alone is enough — they are holding that remote in pairing mode,
+    and "AR" is not worth a second proof."""
     name = str(dev.get('name') or '').strip()
-    for model, pattern, needs_hid in _BT_CERTIFIED:
-        if pattern.match(name) and (dev.get('input') or not needs_hid):
+    makers = dev.get('makers') or []
+    for model, pattern, needs_hid, maker in _BT_CERTIFIED:
+        if pattern.match(name) and (dev.get('input') or not needs_hid or chosen == model):
+            return model
+        if maker is not None and maker in makers and (dev.get('input') or chosen == model):
             return model
     return ''
 
@@ -9709,7 +9741,7 @@ def api_bt_remotes():
 def api_bt_remotes_scan():
     data = request.get_json(silent=True) or {}
     model = data.get('model')
-    model = model if model in {m for m, _, _ in _BT_CERTIFIED} else None
+    model = model if model in {c[0] for c in _BT_CERTIFIED} else None
     return jsonify(bt_remotes_scan(data.get('seconds', 12), model))
 
 @app.route('/bt_remotes/add', methods=['POST'])
