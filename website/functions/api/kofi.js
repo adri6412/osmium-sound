@@ -3,15 +3,15 @@
 // Ko-fi calls this once for every payment to ko-fi.com/osmiumsound, and it is
 // the only way to learn who supported the project: Ko-fi has no API to read
 // the list back. What is kept is what the home page shows under the Ko-fi
-// button (/api/supporters): the name, and when.
+// button (/api/supporters): the name, the message, and when.
 //
 // Kept, and nothing else:
 //   - only donations and subscriptions, not shop orders or commissions;
 //   - only the ones the supporter left public on Ko-fi. A private one is
 //     answered and forgotten: no row, not even an anonymous one;
-//   - the name as the supporter typed it on Ko-fi, cleaned up. The email
-//     address, the message and the amount arrive in the same request and are
-//     never written anywhere.
+//   - the name and the message as the supporter typed them on Ko-fi, cleaned
+//     up. The email address and the amount arrive in the same request and
+//     are never written anywhere.
 // The list keeps the latest MAX_NAMES different names; an older one is
 // deleted when a newer one pushes it out.
 //
@@ -21,9 +21,11 @@
 //   - Cloudflare Pages → osmium-sound → Settings → Variables and secrets:
 //     KOFI_VERIFICATION_TOKEN = that token, as a secret.
 // The table creates itself on the first call. Taking a name off the list,
-// when somebody asks:
+// or only a message, when somebody asks:
 //   npx wrangler d1 execute osmium-downloads --remote \
 //     --command "DELETE FROM kofi_supporters WHERE name = '…'"
+//   npx wrangler d1 execute osmium-downloads --remote \
+//     --command "UPDATE kofi_supporters SET message = '' WHERE name = '…'"
 //
 // Ko-fi sends again whatever does not get a 200, so a failed write answers
 // 500 and comes back later; message_id makes the second delivery a no-op.
@@ -64,8 +66,8 @@ export async function onRequestPost(context) {
   try {
     await env.DB.batch([
       env.DB.prepare(SCHEMA),
-      env.DB.prepare("INSERT OR IGNORE INTO kofi_supporters (message_id, name, ts) VALUES (?, ?, ?)")
-        .bind(supporter.id, supporter.name, ts),
+      env.DB.prepare("INSERT OR IGNORE INTO kofi_supporters (message_id, name, ts, message) VALUES (?, ?, ?, ?)")
+        .bind(supporter.id, supporter.name, ts, supporter.message),
       env.DB.prepare(
         `DELETE FROM kofi_supporters WHERE name NOT IN
            (SELECT name FROM kofi_supporters GROUP BY name ORDER BY MAX(ts) DESC LIMIT ?)`

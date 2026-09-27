@@ -10,7 +10,8 @@
 //   3. no INSERT in the site's functions names a column about a person;
 //   4. the migration really produces the counters it promises, against a
 //      throwaway copy of the old schema;
-//   5. the Ko-fi webhook keeps a public supporter's name and nothing else.
+//   5. the Ko-fi webhook keeps a public supporter's name and message, and
+//      nothing else.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -24,7 +25,7 @@ import { add, count, empty, merge, serialize, deserialize } from "../website/fun
 import { classify, parseUA } from "../website/functions/_lib/traffic.js";
 import { CHECK, CLICK, DOWNLOADS_DAILY, SERVED, SITE_DAILY } from "../website/functions/_lib/counters.js";
 import { utcDay, weekStart } from "../website/functions/_lib/visitor.js";
-import { MAX_NAMES, cleanName } from "../website/functions/_lib/supporters.js";
+import { MAX_NAMES, cleanMessage, cleanName } from "../website/functions/_lib/supporters.js";
 import { onRequestPost as kofiWebhook } from "../website/functions/api/kofi.js";
 import { onRequestGet as supportersList } from "../website/functions/api/supporters.js";
 
@@ -189,9 +190,10 @@ section("What the functions write");
 const FORBIDDEN = ["ip", "user_agent", "visitor_id", "referrer", "city", "region", "screen_w", "http_proto", "email"];
 const ALLOWED_TABLES = ["site_daily", "downloads_daily", "site_breakdown", "site_drops", "site_salts"];
 // The one table that holds something about a person, on purpose: the names
-// supporters left public on Ko-fi, which the home page shows. It may hold
-// exactly these columns — no email, no message, no amount.
-const PUBLISHED_TABLES = { kofi_supporters: ["message_id", "name", "ts"] };
+// supporters left public on Ko-fi and the messages they wrote there, which
+// the home page shows. It may hold exactly these columns — no email, no
+// amount.
+const PUBLISHED_TABLES = { kofi_supporters: ["message_id", "name", "ts", "message"] };
 
 function jsFiles(dir) {
   const out = [];
@@ -474,7 +476,7 @@ function payload(overrides = {}) {
     type: "Donation",
     is_public: true,
     from_name: `Supporter ${donation}`,
-    message: "A secret message",
+    message: "Lovely player!",
     amount: "3.00",
     email: "someone@example.com",
     currency: "EUR",
@@ -494,8 +496,11 @@ async function post(env, data, raw) {
   });
   return response.status;
 }
+async function cards(env) {
+  return (await (await supportersList({ env })).json()).supporters;
+}
 async function listed(env) {
-  return (await (await supportersList({ env })).json()).names;
+  return (await cards(env)).map((card) => card.name);
 }
 
 const kofiDb = new DatabaseSync(":memory:");
@@ -513,13 +518,14 @@ const stored = kofiDb.prepare("SELECT * FROM kofi_supporters").all();
 check("one row for one donation", stored.length === 1, `${stored.length}`);
 check("the name is cleaned up", stored[0]?.name === "Ada Lovelace", JSON.stringify(stored[0]?.name));
 check(
-  "only the id, the name and the time are stored",
-  Object.keys(stored[0] ?? {}).sort().join() === "message_id,name,ts",
+  "only the id, the name, the time and the message are stored",
+  Object.keys(stored[0] ?? {}).sort().join() === "message,message_id,name,ts",
   Object.keys(stored[0] ?? {}).join(", ")
 );
+check("the message is kept", stored[0]?.message === "Lovely player!", JSON.stringify(stored[0]?.message));
 check(
-  "email, message and amount are nowhere in the table",
-  !JSON.stringify(stored).match(/example\.com|secret|3\.00/)
+  "email and amount are nowhere in the table",
+  !JSON.stringify(stored).match(/example\.com|3\.00/)
 );
 
 await post(kofiEnv, payload({ from_name: "Private", is_public: false }));
@@ -531,21 +537,32 @@ check(
   kofiDb.prepare("SELECT COUNT(*) AS n FROM kofi_supporters").get().n === 1
 );
 
-await post(kofiEnv, payload({ from_name: "Monthly" }));
-await post(kofiEnv, payload({ from_name: "Grace", type: "Subscription" }));
-await post(kofiEnv, payload({ from_name: "Monthly", type: "Subscription" }));
-const names = await listed(kofiEnv);
+await post(kofiEnv, payload({ from_name: "Monthly", message: "First month" }));
+await post(kofiEnv, payload({ from_name: "Grace", type: "Subscription", message: null }));
+await post(kofiEnv, payload({ from_name: "Monthly", type: "Subscription", message: "" }));
+const shown = await cards(kofiEnv);
 check(
   "the list is newest first, each name once",
-  names.join() === "Monthly,Grace,Ada Lovelace",
-  names.join(", ")
+  shown.map((c) => c.name).join() === "Monthly,Grace,Ada Lovelace",
+  shown.map((c) => c.name).join(", ")
 );
+check(
+  "an empty message does not hide the one before it",
+  shown[0]?.message === "First month",
+  JSON.stringify(shown[0]?.message)
+);
+check("no message is an empty string", shown[1]?.message === "", JSON.stringify(shown[1]?.message));
+check("each card has its day", /^\d{4}-\d{2}-\d{2}$/.test(shown[0]?.date ?? ""), shown[0]?.date);
 
 for (let i = 0; i < MAX_NAMES + 5; i++) await post(kofiEnv, payload());
 const kept = kofiDb.prepare("SELECT COUNT(DISTINCT name) AS n FROM kofi_supporters").get().n;
 check(`only the latest ${MAX_NAMES} names are kept`, kept === MAX_NAMES, `${kept}`);
 check("the oldest name went first", !(await listed(kofiEnv)).includes("Ada Lovelace"));
 check("a long name is cut", [...cleanName("x".repeat(100))].length === 40);
+check(
+  "a long message is cut, and says so",
+  [...cleanMessage("y".repeat(1000))].length === 300 && cleanMessage("y".repeat(1000)).endsWith("…")
+);
 check("emoji survive", cleanName("Luca 🎧") === "Luca 🎧");
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
