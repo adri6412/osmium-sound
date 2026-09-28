@@ -765,6 +765,7 @@
         "resetTouch": "Restart the touchscreen",
         "shuffle": "Shuffle",
         "standby": "Screen off",
+        "powerMenu": "Restart or shut down…",
         "eject": "Eject the CD"
       },
       "btTitle": "Bluetooth remotes",

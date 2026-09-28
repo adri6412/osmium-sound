@@ -1,6 +1,6 @@
 # g20s: key -> (x, y) on the 1213x3901 scan, evdev code, action (remote.cpp)
 KEYS = [
-    ('power', 263, 332, 'KEY_POWER', 'standby'),
+    ('power', 263, 332, 'KEY_POWER', 'powerMenu'),
     ('mute', 829, 322, 'KEY_MUTE', 'mute'),
     ('pgup', 273, 595, 'KEY_PAGEUP', 'pageUp'),
     ('pgdn', 829, 595, 'KEY_PAGEDOWN', 'pageDown'),

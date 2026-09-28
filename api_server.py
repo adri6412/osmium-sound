@@ -7116,7 +7116,7 @@ REMOTE_ACTIONS = [
     'volumeUp', 'volumeDown', 'mute',
     'up', 'down', 'left', 'right', 'ok', 'back', 'home', 'menu', 'pageUp', 'pageDown',
     'nowPlaying', 'fullScreen', 'nextVu', 'nextAnimation', 'queue', 'search',
-    'favorite', 'openFavorites', 'shuffle', 'standby', 'eject', 'resetTouch',
+    'favorite', 'openFavorites', 'shuffle', 'standby', 'powerMenu', 'eject', 'resetTouch',
 ]
 # i codici evdev che bastano a riconoscere un telecomando (linux/input-event-codes.h)
 _KEY_PLAYPAUSE, _KEY_NEXTSONG, _KEY_PREVIOUSSONG = 164, 163, 165

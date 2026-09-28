@@ -116,10 +116,11 @@ const KeyDef kKeys[] = {
     { KEY_ASSISTANT,    "KEY_ASSISTANT",    "search" },
     { KEY_FAVORITES,    "KEY_FAVORITES",    "favorite" },
     { KEY_SHUFFLE,      "KEY_SHUFFLE",      "shuffle" },
-    // 🚨 spegnere l'apparecchio dal telecomando, no: il tasto manda lo
-    // schermo a riposo (e un tocco qualsiasi lo risveglia). Un telecomando in
-    // una tasca non deve poter spegnere quello che sta suonando.
-    { KEY_POWER,        "KEY_POWER",        "standby" },
+    // 🚨 The power key opens the restart / shut down menu (the owner asked
+    // for it, 2026-09-28) and never acts by itself: the menu wants a choice
+    // and its spotlight starts on Cancel, so a remote in a pocket still
+    // cannot switch off what is playing. The sleep key rests the screen.
+    { KEY_POWER,        "KEY_POWER",        "powerMenu" },
     { KEY_SLEEP,        "KEY_SLEEP",        "standby" },
     { KEY_EJECTCD,      "KEY_EJECTCD",      "eject" },
     { KEY_EJECTCLOSECD, "KEY_EJECTCLOSECD", "eject" },
@@ -153,7 +154,7 @@ const char *const kActions[] = {
     "volumeUp", "volumeDown", "mute",
     "up", "down", "left", "right", "ok", "back", "home", "menu", "pageUp", "pageDown",
     "nowPlaying", "fullScreen", "nextVu", "nextAnimation",
-    "queue", "search", "favorite", "openFavorites", "shuffle", "standby", "eject", "resetTouch",
+    "queue", "search", "favorite", "openFavorites", "shuffle", "standby", "powerMenu", "eject", "resetTouch",
 };
 
 // I tasti Qt: la stessa tabella, ma dal lato di chi li riceve gia' tradotti.
@@ -273,7 +274,7 @@ bool mediaOnly(const QString &a) {
         || a == "next" || a == "prev" || a == "forward" || a == "rewind"
         || a == "volumeUp" || a == "volumeDown" || a == "mute"
         || a == "nowPlaying" || a == "queue" || a == "favorite" || a == "openFavorites" || a == "resetTouch"
-        || a == "shuffle" || a == "eject" || a == "standby"
+        || a == "shuffle" || a == "eject" || a == "standby" || a == "powerMenu"
         || a == "fullScreen" || a == "nextVu" || a == "nextAnimation";
 }
 

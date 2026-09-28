@@ -135,6 +135,15 @@ Item {
     // the album and artist pages, from anywhere (library, search, Now Playing,
     // credits); a person known only to MusicBrainz opens the artist page by mbid
     function showMusicTab() { if (tab !== 0) { navDir = -1; tab = 0; ctx.close() } }
+    // restart / shut down: the ⏻ button of the tab bar, and a remote's power key
+    function openPower() {
+        Ui.dialogs.power(function(act) {
+            if (!act) return
+            Api.post(Api.apiBase + "/" + act, {}, function() {}, 12000)
+            Ui.toast.say(act === "reboot" ? "rotate-cw" : "power",
+                         Tr.t(act === "reboot" ? "settings.msg.rebooting" : "settings.msg.shuttingDown"))
+        })
+    }
     // the Favourites list straight away (a remote key): the same list the
     // tile on the library home opens, with Back leading to that home
     function openFavorites() {
@@ -491,12 +500,7 @@ Item {
             }
             Tap {
                 id: powerTap; tap: 0.9
-                onClicked: Ui.dialogs.power(function(act) {
-                    if (!act) return
-                    Api.post(Api.apiBase + "/" + act, {}, function() {}, 12000)
-                    Ui.toast.say(act === "reboot" ? "rotate-cw" : "power",
-                                 Tr.t(act === "reboot" ? "settings.msg.rebooting" : "settings.msg.shuttingDown"))
-                })
+                onClicked: root.openPower()
             }
         }
         // the tabs as they are without the badge, measured apart so the

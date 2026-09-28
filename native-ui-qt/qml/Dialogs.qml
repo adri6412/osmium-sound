@@ -19,7 +19,9 @@ Item {
     // chosen (the one with the tick), like the list itself: from the top, the
     // remote needed a dozen presses to get back to where the list opened.
     property Item pickFirst: null
-    readonly property Item navFirst: kind === 2 ? pickFirst : null
+    // 🚨 In the restart / shut down menu it starts on Cancel: the remote's
+    // power key opens it, and one OK too many must not switch the box off.
+    readonly property Item navFirst: kind === 2 ? pickFirst : kind === 7 ? pwcTap : null
     anchors.fill: parent
 
     property string title: ""

@@ -1,6 +1,6 @@
 # Fire TV (3rd gen): key -> (x, y) on the 1030x3448 scan, evdev code, action (remote.cpp)
 KEYS = [
-    ("power",   224,  285, "KEY_POWER",         "standby"),
+    ("power",   224,  285, "KEY_POWER",         "powerMenu"),
     ("alexa",   488,  474, "KEY_SEARCH",        "search"),
     ("up",      488,  725, "KEY_UP",            "up"),
     ("left",    216, 1000, "KEY_LEFT",          "left"),

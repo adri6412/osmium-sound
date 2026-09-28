@@ -765,6 +765,7 @@
         "resetTouch": "Riavvia il touch screen",
         "shuffle": "Riproduzione casuale",
         "standby": "Spegni lo schermo",
+        "powerMenu": "Spegni o riavvia…",
         "eject": "Espelli il CD"
       },
       "btTitle": "Telecomandi Bluetooth",

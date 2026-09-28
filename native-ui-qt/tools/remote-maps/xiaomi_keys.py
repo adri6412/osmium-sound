@@ -1,6 +1,6 @@
 # xiaomi: key -> (x, y) on the 1213x3901 scan, evdev code, action (remote.cpp)
 KEYS = [
-    ('power', 556, 312, 'KEY_POWER', 'standby'),
+    ('power', 556, 312, 'KEY_POWER', 'powerMenu'),
     ('mic', 556, 575, 'KEY_VOICECOMMAND', 'search'),
     ('up', 566, 858, 'KEY_UP', 'up'),
     ('left', 292, 1121, 'KEY_LEFT', 'left'),

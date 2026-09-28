@@ -163,6 +163,14 @@ Item {
         case "search": setExpanded(false); mainScreen.browser.focusSearch(); return
         case "favorite": if (Player.favoritesAvailable) Player.toggleFavorite(); return
         case "openFavorites": remoteHome(); mainScreen.browser.openFavorites(); return
+        // the power key: the restart / shut down menu, and pressed again it
+        // goes away (the spotlight starts on Cancel: see Dialogs.navFirst)
+        case "powerMenu":
+            if (dialogs.active && dialogs.kind === 7) { dialogs.backdrop(); return }
+            if (vk.active) vk.close(false)
+            if (dialogs.active) dialogs.backdrop()
+            mainScreen.browser.openPower()
+            return
         // the touchscreen "unplugged and plugged back in" (api_server
         // reset_touchscreen): for a panel that stops answering the finger
         case "resetTouch":
