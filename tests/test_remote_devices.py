@@ -52,7 +52,22 @@ class RemoteDevices(unittest.TestCase):
         self._real_chosen = api_server._remote_chosen
         api_server._remote_chosen = lambda: self._chosen
 
-    def _node(self, name, keys, bus=5, uniq='', phys='', rel=None, vendor='2717', product='1234', abs_=None, props=None):
+    def _usb(self, port, classes):
+        """a USB device with one interface per class ('01' audio, '03' HID);
+        returns the HID interface, where an input node hangs"""
+        dev = os.path.join(self.tmp, 'devices', port)
+        hid = ''
+        for i, c in enumerate(classes):
+            iface = os.path.join(dev, '%s:1.%d' % (port, i))
+            os.makedirs(iface)
+            open(os.path.join(iface, 'bInterfaceClass'), 'w').write(c + '\n')
+            if c == '03':
+                hid = iface
+        for k in ('authorized', 'idVendor'):
+            open(os.path.join(dev, k), 'w').write('1\n')
+        return hid
+
+    def _node(self, name, keys, bus=5, uniq='', phys='', rel=None, vendor='2717', product='1234', abs_=None, props=None, usb=None):
         d = os.path.join(self.tmp, 'input%d' % self.n)
         self.n += 1
         os.makedirs(os.path.join(d, 'capabilities'))
@@ -68,6 +83,8 @@ class RemoteDevices(unittest.TestCase):
         w('id/bustype', '%x' % bus)
         w('id/vendor', vendor)
         w('id/product', product)
+        if usb:
+            os.symlink(usb, os.path.join(d, 'device'))
 
     def test_a_known_remote_that_declares_a_keyboard_is_a_remote(self):
         # The Fire TV remote declares a whole keyboard. As a "keyboard" it was
@@ -143,6 +160,17 @@ class RemoteDevices(unittest.TestCase):
         self._node('Mini Keyboard', LETTERS + NAV + MEDIA, bus=3, phys='usb-4/input0')
         self._node('Mini Keyboard Touchpad', [330], bus=3, phys='usb-4/input1', abs_=[0, 1])
         self.assertEqual([d['name'] for d in api_server._remote_devices()], ['Mini Keyboard'])
+
+
+    def test_the_playback_keys_of_a_dac_are_not_a_remote(self):
+        # The Topping DX1 II: audio interfaces plus a HID one with play, next
+        # and previous. It showed up under "Your remotes"; a USB remote
+        # receiver without audio must stay.
+        dac = self._usb('1-1.1', ['01', '01', '01', '01', '03'])
+        self._node('TOPPING DX1 II', MEDIA, bus=3, phys='usb-0000:00:15.0-1.1/input4', vendor='152a', product='8750', usb=dac)
+        rx = self._usb('1-3', ['03', '03'])
+        self._node('MCE Remote', NAV + MEDIA, bus=3, phys='usb-0000:00:14.0-3/input0', usb=rx)
+        self.assertEqual([d['name'] for d in api_server._remote_devices()], ['MCE Remote'])
 
 
 if __name__ == '__main__':

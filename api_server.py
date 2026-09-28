@@ -7201,6 +7201,36 @@ def _remote_group_name(names):
     return common if len(common) >= 3 else shortest
 
 
+def _usb_device_dir(input_dir):
+    """The USB device an input node belongs to (…/usb1/1-2): the first parent
+    of its `device` link with both `authorized` and `idVendor`; '' if none."""
+    p = os.path.realpath(os.path.join(input_dir, 'device'))
+    for _ in range(8):
+        if os.path.exists(os.path.join(p, 'authorized')) and os.path.exists(os.path.join(p, 'idVendor')):
+            return p
+        parent = os.path.dirname(p)
+        if parent == p:
+            break
+        p = parent
+    return ''
+
+
+def _usb_is_audio(usb):
+    """🚨 A DAC with playback keys (the Topping DX1 II) is a sound card, not a
+    remote: true when the USB device also has an audio interface
+    (bInterfaceClass 01). Same rule as remote.cpp usbAudio()."""
+    if not usb:
+        return False
+    for iface in glob.glob(os.path.join(usb, '*:*')):
+        try:
+            with open(os.path.join(iface, 'bInterfaceClass')) as f:
+                if f.read().strip() == '01':
+                    return True
+        except Exception:
+            pass
+    return False
+
+
 def _remote_devices():
     """I telecomandi collegati adesso, con le regole di remote.cpp: tasti
     multimediali oppure frecce+conferma, e niente tastiere complete fra i
@@ -7250,6 +7280,10 @@ def _remote_devices():
             bus, model = 0, ''
         any_key = any(c not in '0 ' for c in key)
         if not media and not (nav and not full_keyboard) and not (model and any_key):
+            continue
+        # a sound card's playback keys work (remote.cpp reads them) but it is
+        # not a remote to list, nor to call "mine"
+        if not model and _usb_is_audio(_usb_device_dir(d)):
             continue
         rel, abs_ = rd('capabilities/rel'), rd('capabilities/abs')
         pointer = _sysfs_bit(rel, _REL_X) and _sysfs_bit(rel, _REL_Y)
@@ -7440,17 +7474,7 @@ def _touchscreens():
             continue
         if not (_sysfs_bit(abs_, _ABS_X) or _sysfs_bit(abs_, _ABS_MT_X)):
             continue
-        usb = ''
-        p = os.path.realpath(os.path.join(d, 'device'))
-        for _ in range(8):
-            if os.path.exists(os.path.join(p, 'authorized')) and os.path.exists(os.path.join(p, 'idVendor')):
-                usb = p
-                break
-            parent = os.path.dirname(p)
-            if parent == p:
-                break
-            p = parent
-        out.append((rd('name') or os.path.basename(d), usb))
+        out.append((rd('name') or os.path.basename(d), _usb_device_dir(d)))
     return out
 
 

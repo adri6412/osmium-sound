@@ -135,6 +135,9 @@ private:
         // fornitore:prodotto.
         QString group;
         bool remote = false;       // telecomando vero (non una tastiera)
+        // the playback keys of a sound card (a DAC, a headset): they work,
+        // but it is not a remote and is not listed as one
+        bool audio = false;
         bool chosen = false;       // l'utente ha detto che e' il suo telecomando
         bool grabbed = false;      // presa esclusiva ottenuta
         int model = -1;            // one of the known remotes (kModels), or -1

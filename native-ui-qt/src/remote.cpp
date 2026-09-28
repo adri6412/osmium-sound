@@ -235,6 +235,24 @@ const Model kModels[] = {
       kXiaomiKeys, int(std::size(kXiaomiKeys)), nullptr, 0 },
 };
 
+// 🚨 A DAC with playback keys (the Topping DX1 II: play, next, previous on a
+// HID interface of its own) is a sound card, not a remote: it showed up under
+// "Your remotes". True when the USB device the node belongs to also has an
+// audio interface (bInterfaceClass 01).
+bool usbAudio(const QString &inputDir) {
+    QString p = QFileInfo(inputDir + "/device").canonicalFilePath();
+    for (int i = 0; i < 8 && !p.isEmpty() && p != "/"; i++) {
+        if (QFile::exists(p + "/idVendor")) {
+            const QStringList ifs = QDir(p).entryList(QStringList("*:*"), QDir::Dirs | QDir::NoDotAndDotDot);
+            for (const QString &f : ifs)
+                if (hifiSysfsRead(p + "/" + f + "/bInterfaceClass").trimmed() == "01") return true;
+            return false;
+        }
+        p = QFileInfo(p).path();
+    }
+    return false;
+}
+
 const Model *modelFor(int bus, int vendor, int product) {
     for (const Model &m : kModels)
         if (m.bus == bus && m.vendor == vendor && (!m.product || m.product == product)) return &m;
@@ -401,7 +419,8 @@ void Remote::rescan() {
         // G20S do): we know every one of its keys.
         const bool pointer = hifiSysfsBit(rel, REL_X) && hifiSysfsBit(rel, REL_Y);
         const bool tablet = hifiSysfsBit(abs, ABS_X) || hifiSysfsBit(abs, ABS_MT_POSITION_X);
-        const bool isRemote = (!fullKeyboard || model) && !pointer && !tablet;
+        const bool audio = !model && usbAudio(dir);
+        const bool isRemote = (!fullKeyboard || model) && !pointer && !tablet && !audio;
 
         seen << path;
         if (m_open.contains(path)) continue;
@@ -413,12 +432,13 @@ void Remote::rescan() {
         dev.bus = bus == BUS_BLUETOOTH ? "bluetooth" : bus == BUS_USB ? "usb" : "other";
         dev.group = groupKey(dir, dev.name);
         dev.remote = isRemote;
+        dev.audio = audio;
         dev.model = model ? int(model - kModels) : -1;
         dev.chosen = isChosen(dev);
         if (model) m_modelOf.insert(dev.name, dev.model);
         if (isRemote && ioctl(dev.fd, EVIOCGRAB, 1) == 0) dev.grabbed = true;
         qInfo("remote: %s (%s%s%s) on %s", qPrintable(dev.name), qPrintable(dev.bus),
-              dev.grabbed ? ", taken exclusively" : isRemote ? ", not taken exclusively" : ", media keys only",
+              dev.grabbed ? ", taken exclusively" : isRemote ? ", not taken exclusively" : audio ? ", keys of a sound card" : ", media keys only",
               model ? qPrintable(QStringLiteral(", model %1").arg(QLatin1String(model->label))) : "",
               qPrintable(path));
         // the keys the kernel does not translate: from the hidraw of the same
@@ -851,6 +871,7 @@ void Remote::publishDevices() {
     paths.sort();                    // l'elenco sullo schermo non deve ballare
     for (const QString &p : paths) {
         const Dev &d = m_open[p];
+        if (d.audio) continue;       // its keys work, but it is not a remote to list
         out.append(QVariantMap{ { "name", d.name }, { "path", d.path }, { "bus", d.bus },
                                 { "kind", d.remote ? "remote" : "keyboard" }, { "grabbed", d.grabbed },
                                 { "chosen", d.chosen }, { "group", d.group },
