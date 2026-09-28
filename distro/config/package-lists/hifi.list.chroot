@@ -25,6 +25,14 @@ grub-pc-bin
 shim-signed
 efibootmgr
 
+# Network time — a separate package since Debian 12, NOT part of systemd.
+# 0400-enable-services enabled it from 2026-08-09 without it ever being
+# installed, so the clock came only from the RTC: an hour or two off on every
+# PC that ran Windows before (Windows keeps the RTC in local time), and wrong
+# for good on one with a flat CMOS battery. build-image.sh now refuses an
+# image where the unit is not enabled.
+systemd-timesyncd
+
 # Firmware — broad coverage for all mainline-supported WiFi/Ethernet/etc.
 # (requires the non-free-firmware archive area, set in build-distro.sh).
 # MediaTek MT76xx firmware ships inside firmware-misc-nonfree on bookworm.
