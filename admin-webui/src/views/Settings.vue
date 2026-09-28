@@ -1075,6 +1075,18 @@ async function setPointer(enable) {
   else say(bodyMsg(r, t('settings.display.pointerFailed')), true);
 }
 
+// ── Touchscreen: unplugged and plugged back in, in software ─────────────
+// For a panel that stops answering until its cable is pulled (api_server
+// reset_touchscreen): the same cure, from the phone.
+const touchBusy = ref(false);
+async function resetTouch() {
+  touchBusy.value = true;
+  const r = await api.sysPost('touch/reset', {});
+  touchBusy.value = false;
+  if (r.ok && r.data.success !== false) say(r.data.message || t('settings.display.touchResetDone'));
+  else say(bodyMsg(r, t('settings.display.touchResetFailed')), true);
+}
+
 // ── Now-playing auto-expand ─────────────────────────────────────────
 // How long after a song starts playing the kiosk auto-opens its fullscreen
 // now-playing view on its own. 0 = disabled. Same "reachable here for a
@@ -2249,6 +2261,14 @@ onUnmounted(() => {
             <button :disabled="pointerBusy" :class="{ active: pointer.enabled }" @click="setPointer(true)">{{ t('settings.display.pointerOn') }}</button>
             <button :disabled="pointerBusy" :class="{ active: !pointer.enabled }" @click="setPointer(false)">{{ t('settings.display.pointerOff') }}</button>
           </span>
+        </div>
+
+        <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.display.touchResetLabel') }}</p>
+          <p class="muted">{{ t('settings.display.touchResetHelp') }}</p>
+          <button class="secondary" :disabled="touchBusy" @click="resetTouch">
+            {{ touchBusy ? t('settings.display.touchResetting') : t('settings.display.touchReset') }}
+          </button>
         </div>
       </template>
 

@@ -281,6 +281,7 @@
   "player": {
     "muted": "Muto",
     "soundOn": "Audio attivo",
+    "touchRestarting": "Riavvio il touch screen…",
     "connectError": "Impossibile connettersi al server. Verifica l'URL nelle Impostazioni.",
     "tabs": {
       "music": "Musica",
@@ -761,6 +762,7 @@
         "search": "Cerca",
         "favorite": "Aggiungi ai preferiti",
         "openFavorites": "Apri i preferiti",
+        "resetTouch": "Riavvia il touch screen",
         "shuffle": "Riproduzione casuale",
         "standby": "Spegni lo schermo",
         "eject": "Espelli il CD"

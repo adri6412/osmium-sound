@@ -2971,6 +2971,10 @@ def _support_bundle_build():
         z.writestr('journal/previous-boot-tail.log', _support_previous_boot_tail())
         z.writestr('memory.txt', _support_memory_snapshot())
         try:
+            z.writestr('touch.json', json.dumps(_support_touch_snapshot(), indent=2))
+        except Exception as e:
+            z.writestr('touch.json', json.dumps({'error': str(e)}))
+        try:
             for name, data in _support_lyrion_logs():
                 z.writestr(f'lyrion/{name}', data)
         except Exception:
@@ -7112,7 +7116,7 @@ REMOTE_ACTIONS = [
     'volumeUp', 'volumeDown', 'mute',
     'up', 'down', 'left', 'right', 'ok', 'back', 'home', 'menu', 'pageUp', 'pageDown',
     'nowPlaying', 'fullScreen', 'nextVu', 'nextAnimation', 'queue', 'search',
-    'favorite', 'openFavorites', 'shuffle', 'standby', 'eject',
+    'favorite', 'openFavorites', 'shuffle', 'standby', 'eject', 'resetTouch',
 ]
 # i codici evdev che bastano a riconoscere un telecomando (linux/input-event-codes.h)
 _KEY_PLAYPAUSE, _KEY_NEXTSONG, _KEY_PREVIOUSSONG = 164, 163, 165
@@ -7120,6 +7124,7 @@ _KEY_PLAYCD, _KEY_STOPCD, _KEY_PLAY = 200, 166, 207
 _KEY_UP, _KEY_DOWN, _KEY_LEFT, _KEY_RIGHT = 103, 108, 105, 106
 _KEY_ENTER, _KEY_OK, _KEY_SELECT = 28, 0x160, 0x161
 _REL_X, _REL_Y, _ABS_X, _ABS_MT_X = 0, 1, 0, 53
+_INPUT_PROP_DIRECT = 1                       # a screen you touch where you look
 
 
 # The remotes the appliance knows out of the box: kModels in
@@ -7203,15 +7208,35 @@ def _remote_devices():
     out = []
     chosen = _remote_chosen()
     root = os.environ.get('HIFI_SYSFS_INPUT', '/sys/class/input')
-    for d in sorted(glob.glob(os.path.join(root, 'input*'))):
+
+    def reader(d):
         def rd(name):
             try:
                 with open(os.path.join(d, name)) as f:
                     return f.read().strip()
             except Exception:
                 return ''
+        return rd
+    dirs = sorted(glob.glob(os.path.join(root, 'input*')))
+    # 🚨 A touchscreen often comes with a keyboard node of its own (the TSTP
+    # MTouch panel: a full keyboard with media keys, same serial and port as
+    # the touch node). That one is the screen, not a remote, and it was
+    # listed under "Your remotes" with "This is my remote" next to it. Every
+    # node of a device that has a touchscreen node (INPUT_PROP_DIRECT with
+    # absolute axes) stays out — the same rule as remote.cpp.
+    screens = set()
+    for d in dirs:
+        rd = reader(d)
+        abs_ = rd('capabilities/abs')
+        if _sysfs_bit(rd('properties'), _INPUT_PROP_DIRECT) and (_sysfs_bit(abs_, _ABS_X) or _sysfs_bit(abs_, _ABS_MT_X)):
+            screens.add(_remote_group_key(rd))
+    screens.discard('')
+    for d in dirs:
+        rd = reader(d)
         key = rd('capabilities/key')
         if not key:
+            continue
+        if _remote_group_key(rd) in screens:
             continue
         full_keyboard = all(_sysfs_bit(key, b) for b in range(1, 32))
         media = any(_sysfs_bit(key, c) for c in
@@ -7383,6 +7408,103 @@ def set_remote_learning(enable):
         log.exception("set_remote_learning failed")
         return {'success': False, 'message': _t('remote.saveFailed', _lang()), **get_remote()}
     return {'success': True, **get_remote()}
+
+
+# ──────────────────────────────────────────────────────────────────
+#  Touchscreen: what it is doing, and "unplug it and plug it back in"
+# ──────────────────────────────────────────────────────────────────
+# 🚨 2026-09-28, a TSTP MTouch panel: now and then the whole screen stops
+# answering and only pulling its USB cable brings it back, with nothing in the
+# kernel log. The kiosk watches the panel (native-ui-qt/src/touchwatch.cpp →
+# /run/hifi-touch.json, in the support bundle) to tell a silent panel from a
+# stuck finger from touches lost on the way; meanwhile the same cure as the
+# cable is one press away: the USB device is de-authorised and authorised
+# again, which the kernel treats as unplugged and plugged back in.
+TOUCH_STATE_FILE = '/run/hifi-touch.json'
+
+
+def _touchscreens():
+    """[(name, usb device dir or '')] of every touchscreen: absolute axes on
+    a device touched where you look (INPUT_PROP_DIRECT), as touchwatch.cpp."""
+    root = os.environ.get('HIFI_SYSFS_INPUT', '/sys/class/input')
+    out = []
+    for d in sorted(glob.glob(os.path.join(root, 'input*'))):
+        def rd(name, d=d):
+            try:
+                with open(os.path.join(d, name)) as f:
+                    return f.read().strip()
+            except Exception:
+                return ''
+        abs_ = rd('capabilities/abs')
+        if not _sysfs_bit(rd('properties'), _INPUT_PROP_DIRECT):
+            continue
+        if not (_sysfs_bit(abs_, _ABS_X) or _sysfs_bit(abs_, _ABS_MT_X)):
+            continue
+        usb = ''
+        p = os.path.realpath(os.path.join(d, 'device'))
+        for _ in range(8):
+            if os.path.exists(os.path.join(p, 'authorized')) and os.path.exists(os.path.join(p, 'idVendor')):
+                usb = p
+                break
+            parent = os.path.dirname(p)
+            if parent == p:
+                break
+            p = parent
+        out.append((rd('name') or os.path.basename(d), usb))
+    return out
+
+
+def reset_touchscreen():
+    """Unplug and plug back in, in software, every USB touchscreen."""
+    screens = _touchscreens()
+    usbs = []
+    for _name, usb in screens:
+        if usb and usb not in usbs:
+            usbs.append(usb)
+    if not usbs:
+        return {'success': False, 'message': _t('touch.none', _lang())}
+    done = []
+    try:
+        for usb in usbs:
+            with open(os.path.join(usb, 'authorized'), 'w') as f:
+                f.write('0')
+        time.sleep(1.5)                     # long enough for everyone to see it go
+        for usb in usbs:
+            with open(os.path.join(usb, 'authorized'), 'w') as f:
+                f.write('1')
+            done.append(os.path.basename(usb))
+    except Exception:
+        log.exception("reset_touchscreen failed")
+        # never leave a panel de-authorised: that would be worse than frozen
+        for usb in usbs:
+            try:
+                with open(os.path.join(usb, 'authorized'), 'w') as f:
+                    f.write('1')
+            except Exception:
+                pass
+        return {'success': False, 'message': _t('touch.failed', _lang())}
+    log.info("touchscreen restarted: %s", ', '.join(done))
+    return {'success': True, 'message': _t('touch.reset', _lang()), 'devices': done}
+
+
+def _support_touch_snapshot():
+    """The kiosk's view of the touchscreen plus the USB power state of each."""
+    out = {'watch': None, 'screens': []}
+    try:
+        with open(TOUCH_STATE_FILE) as f:
+            out['watch'] = json.load(f)
+    except Exception as e:
+        out['watch'] = {'error': str(e)}
+    for name, usb in _touchscreens():
+        row = {'name': name, 'usb': os.path.basename(usb) if usb else ''}
+        for k in ('authorized', 'power/control', 'power/runtime_status', 'power/autosuspend_delay_ms'):
+            try:
+                with open(os.path.join(usb, k)) as f:
+                    row[k] = f.read().strip()
+            except Exception:
+                row[k] = None
+        out['screens'].append(row)
+    return out
 
 
 def get_remote_report():
@@ -9774,6 +9896,10 @@ def api_remote_keys():
 @app.route('/remote/report', methods=['GET'])
 def api_remote_report():
     return jsonify(get_remote_report())
+
+@app.route('/touch/reset', methods=['POST'])
+def api_touch_reset():
+    return jsonify(reset_touchscreen())
 
 @app.route('/remote/learn', methods=['POST'])
 def api_remote_learn():

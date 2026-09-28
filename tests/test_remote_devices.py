@@ -52,7 +52,7 @@ class RemoteDevices(unittest.TestCase):
         self._real_chosen = api_server._remote_chosen
         api_server._remote_chosen = lambda: self._chosen
 
-    def _node(self, name, keys, bus=5, uniq='', phys='', rel=None, vendor='2717', product='1234'):
+    def _node(self, name, keys, bus=5, uniq='', phys='', rel=None, vendor='2717', product='1234', abs_=None, props=None):
         d = os.path.join(self.tmp, 'input%d' % self.n)
         self.n += 1
         os.makedirs(os.path.join(d, 'capabilities'))
@@ -61,7 +61,8 @@ class RemoteDevices(unittest.TestCase):
         w('name', name)
         w('capabilities/key', bitmap(keys))
         w('capabilities/rel', bitmap(rel) if rel else '0')
-        w('capabilities/abs', '0')
+        w('capabilities/abs', bitmap(abs_) if abs_ else '0')
+        w('properties', bitmap(props) if props else '0')
         w('uniq', uniq)
         w('phys', phys)
         w('id/bustype', '%x' % bus)
@@ -123,6 +124,25 @@ class RemoteDevices(unittest.TestCase):
         self._node('flirc.tv flirc Keyboard', LETTERS + NAV + MEDIA, bus=3, phys='usb-3/input0')
         devs = api_server._remote_devices()
         self.assertEqual([d['kind'] for d in devs], ['keyboard'])
+
+    def test_the_keyboard_node_of_a_touchscreen_is_the_screen_not_a_remote(self):
+        # The TSTP MTouch panel, as a user's appliance shows it: a touch node
+        # (INPUT_PROP_DIRECT, multitouch axes) and a full keyboard with media
+        # keys, same serial, same port. The keyboard node was listed under
+        # "Your remotes" with "This is my remote" next to it.
+        self._node('TSTP MTouch', [330], bus=3, uniq='CMTP_1.0', phys='usb-0000:00:15.0-2/input0',
+                   vendor='eeef', product='2828', abs_=[0, 1, 47, 53, 54, 57], props=[1])
+        self._node('TSTP MTouch', LETTERS + NAV + MEDIA, bus=3, uniq='CMTP_1.0', phys='usb-0000:00:15.0-2/input1',
+                   vendor='eeef', product='2828')
+        self._node('Amazon Remote Keyboard', LETTERS + NAV + MEDIA, vendor='0171', product='0421')
+        self.assertEqual([d['name'] for d in api_server._remote_devices()], ['Amazon Remote Keyboard'])
+
+    def test_a_touchpad_on_a_remote_does_not_hide_the_remote(self):
+        # absolute axes WITHOUT INPUT_PROP_DIRECT: a touchpad (keyboard remotes
+        # with a pad), not a screen — the remote stays
+        self._node('Mini Keyboard', LETTERS + NAV + MEDIA, bus=3, phys='usb-4/input0')
+        self._node('Mini Keyboard Touchpad', [330], bus=3, phys='usb-4/input1', abs_=[0, 1])
+        self.assertEqual([d['name'] for d in api_server._remote_devices()], ['Mini Keyboard'])
 
 
 if __name__ == '__main__':

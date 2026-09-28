@@ -281,6 +281,7 @@
   "player": {
     "muted": "Muted",
     "soundOn": "Sound on",
+    "touchRestarting": "Restarting the touchscreen…",
     "connectError": "Unable to connect to the server. Check the URL in Settings.",
     "tabs": {
       "music": "Music",
@@ -761,6 +762,7 @@
         "search": "Search",
         "favorite": "Add to favourites",
         "openFavorites": "Open favourites",
+        "resetTouch": "Restart the touchscreen",
         "shuffle": "Shuffle",
         "standby": "Screen off",
         "eject": "Eject the CD"

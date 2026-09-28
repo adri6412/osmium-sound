@@ -78,6 +78,13 @@ PROFILES = {
     "firetv": ([("Amazon Remote Keyboard", BUS_BLUETOOTH,
                  ALPHABET_ROW + LETTERS + NAV + MEDIA + EXTRA, False, 0x0171, 0x0421)],
                "known model: remote, taken exclusively, key map shown once"),
+    # a touchscreen with a keyboard node of its own (TSTP MTouch): same serial,
+    # same port. Neither is a remote - the keyboard node belongs to the screen
+    "touchpanel": ([("TSTP MTouch", BUS_USB, [330], False, 0xeeef, 0x2828,
+                     {"abs": [0, 1, 47, 53, 54, 57], "props": [1], "uniq": "CMTP_1.0", "phys": "usb-0000:00:15.0-2/input0"}),
+                    ("TSTP MTouch", BUS_USB, ALPHABET_ROW + LETTERS + NAV + MEDIA, False, 0xeeef, 0x2828,
+                     {"uniq": "CMTP_1.0", "phys": "usb-0000:00:15.0-2/input1"})],
+                   "ignored: both nodes are the screen, not a remote"),
     # solo cifre e accensione: non e' un telecomando per noi, e non si tocca
     "digits": ([("Tastierino numerico finto", BUS_USB, DIGITS + [KEYS["power"]], False)],
                "ignorato di proposito: niente frecce, niente multimediali"),
@@ -107,6 +114,7 @@ def tree(root, names):
     for i, dev in enumerate(devs):
         label, bus, keys, pointer = dev[:4]
         vendor, product = (dev[4], dev[5]) if len(dev) > 5 else (0, 0)
+        extra = dev[6] if len(dev) > 6 else {}
         sysdir = os.path.join(root, "sys", "input%d" % i)
         for sub in ("capabilities", "id", "event%d" % i):
             os.makedirs(os.path.join(sysdir, sub), exist_ok=True)
@@ -114,8 +122,10 @@ def tree(root, names):
         w("name", label)
         w("capabilities/key", bitmap(keys))
         w("capabilities/rel", bitmap([REL_X, REL_Y]) if pointer else "0")
-        w("capabilities/abs", "0")
-        w("properties", "0")
+        w("capabilities/abs", bitmap(extra.get("abs", [])))
+        w("properties", bitmap(extra.get("props", [])))
+        w("uniq", extra.get("uniq", ""))
+        w("phys", extra.get("phys", ""))
         w("id/bustype", "%x" % bus)
         w("id/vendor", "%04x" % vendor)
         w("id/product", "%04x" % product)

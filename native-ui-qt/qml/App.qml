@@ -163,6 +163,14 @@ Item {
         case "search": setExpanded(false); mainScreen.browser.focusSearch(); return
         case "favorite": if (Player.favoritesAvailable) Player.toggleFavorite(); return
         case "openFavorites": remoteHome(); mainScreen.browser.openFavorites(); return
+        // the touchscreen "unplugged and plugged back in" (api_server
+        // reset_touchscreen): for a panel that stops answering the finger
+        case "resetTouch":
+            toast.say("refresh-cw", Tr.t("remote.touchRestarting"))
+            Api.post(Api.apiBase + "/touch/reset", {}, function(ok, d) {
+                if (d && d.message) toast.say(ok && d.success !== false ? "check" : "x", d.message)
+            }, 15000)
+            return
         case "shuffle": Player.cycleShuffle(); return
         case "standby": screensaver.show(true); return
         case "eject": if (cdrip.haveDisc) cdrip.eject(); return

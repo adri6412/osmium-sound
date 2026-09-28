@@ -153,7 +153,7 @@ const char *const kActions[] = {
     "volumeUp", "volumeDown", "mute",
     "up", "down", "left", "right", "ok", "back", "home", "menu", "pageUp", "pageDown",
     "nowPlaying", "fullScreen", "nextVu", "nextAnimation",
-    "queue", "search", "favorite", "openFavorites", "shuffle", "standby", "eject",
+    "queue", "search", "favorite", "openFavorites", "shuffle", "standby", "eject", "resetTouch",
 };
 
 // I tasti Qt: la stessa tabella, ma dal lato di chi li riceve gia' tradotti.
@@ -254,7 +254,7 @@ bool mediaOnly(const QString &a) {
     return a == "playPause" || a == "play" || a == "pause" || a == "stop"
         || a == "next" || a == "prev" || a == "forward" || a == "rewind"
         || a == "volumeUp" || a == "volumeDown" || a == "mute"
-        || a == "nowPlaying" || a == "queue" || a == "favorite" || a == "openFavorites"
+        || a == "nowPlaying" || a == "queue" || a == "favorite" || a == "openFavorites" || a == "resetTouch"
         || a == "shuffle" || a == "eject" || a == "standby"
         || a == "fullScreen" || a == "nextVu" || a == "nextAnimation";
 }
@@ -348,8 +348,24 @@ void Remote::rescan() {
 
     QStringList seen;
     const QStringList entries = QDir(sysRoot).entryList(QStringList("input*"), QDir::Dirs | QDir::NoDotAndDotDot);
+    // 🚨 A touchscreen often brings a keyboard node of its own (the TSTP
+    // MTouch panel: a full keyboard with media keys, same serial and port as
+    // the touch node). That is the screen, not a remote: it was listed among
+    // the remotes, with "This is my remote" next to it. Every node of a device
+    // that has a touchscreen node (INPUT_PROP_DIRECT + absolute axes) is left
+    // alone — api_server._remote_devices() has the same rule.
+    QSet<QString> screens;
     for (const QString &e : entries) {
         const QString dir = sysRoot + "/" + e;
+        const QString abs = hifiSysfsRead(dir + "/capabilities/abs");
+        if (hifiSysfsBit(hifiSysfsRead(dir + "/properties"), INPUT_PROP_DIRECT)
+            && (hifiSysfsBit(abs, ABS_X) || hifiSysfsBit(abs, ABS_MT_POSITION_X)))
+            screens.insert(groupKey(dir, QString()));
+    }
+    screens.remove(QString());
+    for (const QString &e : entries) {
+        const QString dir = sysRoot + "/" + e;
+        if (screens.contains(groupKey(dir, QString()))) continue;
         // il nodo /dev di questo dispositivo: la sottocartella eventN
         const QStringList evs = QDir(dir).entryList(QStringList("event*"), QDir::Dirs | QDir::NoDotAndDotDot);
         if (evs.isEmpty()) continue;

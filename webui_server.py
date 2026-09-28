@@ -1084,6 +1084,8 @@ _AUTH_ROUTES = {
     ('/api/system/remote/keys', 'POST'): '/remote/keys',
     ('/api/system/remote/learn', 'POST'): '/remote/learn',
     ('/api/system/remote/report', 'GET'): '/remote/report',
+    # the touchscreen "unplugged and plugged back in" in software
+    ('/api/system/touch/reset', 'POST'): '/touch/reset',
     ('/api/system/bt_remotes', 'GET'): '/bt_remotes',
     ('/api/system/bt_remotes/scan', 'POST'): '/bt_remotes/scan',
     ('/api/system/bt_remotes/add', 'POST'): '/bt_remotes/add',

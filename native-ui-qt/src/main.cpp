@@ -18,6 +18,7 @@
 #include "player.h"
 #include "kmsmode.h"
 #include "remote.h"
+#include "touchwatch.h"
 #include "btghid.h"
 #include "qritem.h"
 #include "spring.h"
@@ -59,13 +60,23 @@ static Remote *g_remote = nullptr;
 // al telecomando i tasti che arrivano per la strada di Qt.
 class InputWatch : public QObject {
 public:
-    InputWatch(Sys *s, Remote *r, QQuickView *v) : m_sys(s), m_remote(r), m_view(v) {}
+    InputWatch(Sys *s, Remote *r, QQuickView *v, TouchWatch *t) : m_sys(s), m_remote(r), m_view(v), m_touch(t) {}
 protected:
     bool eventFilter(QObject *, QEvent *e) override {
         switch (e->type()) {
-        case QEvent::MouseButtonPress: case QEvent::TouchBegin:
+        case QEvent::TouchBegin:
+            // the touch reached the interface: TouchWatch compares it with
+            // what the kernel saw (a touch in the kernel and none here = the
+            // screen "not answering" while it works)
+            if (m_touch) m_touch->noteQt();
             m_sys->noteInput(); m_sys->notePointer(); break;
-        case QEvent::MouseMove: case QEvent::Wheel: case QEvent::TouchUpdate:
+        case QEvent::MouseButtonPress:
+            m_sys->noteInput(); m_sys->notePointer(); break;
+        case QEvent::TouchUpdate: case QEvent::TouchEnd:
+            if (m_touch) m_touch->noteQt();
+            if (e->type() == QEvent::TouchUpdate) m_sys->noteInput();
+            break;
+        case QEvent::MouseMove: case QEvent::Wheel:
             m_sys->noteInput(); break;
         case QEvent::KeyPress: {
             m_sys->noteInput();
@@ -97,6 +108,7 @@ private:
     Sys *m_sys;
     Remote *m_remote;
     QQuickView *m_view;
+    TouchWatch *m_touch;
 };
 static volatile sig_atomic_t g_shot = 0;
 static void onUsr1(int) { g_shot = 1; }
@@ -279,6 +291,7 @@ int main(int argc, char *argv[]) {
     // I telecomandi: chiavetta USB o Bluetooth gia' accoppiato, letti da evdev
     // e tradotti in azioni che App.qml smista (remote.h).
     Remote remote(sys.configDir());
+    TouchWatch touch;
     g_remote = &remote;
     // Il ponte per i telecomandi Bluetooth che il nucleo rifiuta (btghid.h):
     // quando ne rimette in piedi uno, nasce un /dev/input nuovo e Remote deve
@@ -323,7 +336,7 @@ int main(int argc, char *argv[]) {
     view.engine()->addImportPath(base + "/qml");
     api.setEngine(view.engine());
     sys.setWindow(&view);
-    InputWatch watch(&sys, &remote, &view);
+    InputWatch watch(&sys, &remote, &view, &touch);
     view.installEventFilter(&watch);
     if (!sys.pointerEnabled()) QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
 

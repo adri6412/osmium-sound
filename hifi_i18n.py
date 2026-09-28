@@ -318,6 +318,9 @@ MESSAGES = {
     'remote.saveFailed': {'en': 'Could not save the choice', 'it': 'Non sono riuscito a salvare la scelta'},
     'remote.badKey': {'en': 'That key is not valid', 'it': 'Quel tasto non è valido'},
     'remote.badAction': {'en': 'That action does not exist', 'it': 'Quell\'azione non esiste'},
+    'touch.reset': {'en': 'Touchscreen restarted', 'it': 'Touch screen riavviato'},
+    'touch.none': {'en': 'No touchscreen found', 'it': 'Nessun touch screen trovato'},
+    'touch.failed': {'en': 'Could not restart the touchscreen', 'it': 'Non sono riuscito a riavviare il touch screen'},
 
     # ── OTA channel ──────────────────────────────────────────────────
     'ota.invalidChannel': {'en': 'Invalid channel', 'it': 'Canale non valido'},
