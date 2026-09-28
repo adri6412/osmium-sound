@@ -18,11 +18,10 @@ spec = importlib.util.spec_from_file_location('k', keys_py); k = importlib.util.
 tr = json.load(open(TR % lang))
 ACT = tr['settings']['remote']['actions']
 EXTRA = {'it': {'shortcut': 'scorciatoia'}, 'en': {'shortcut': 'shortcut'}}[lang]
-# the entries too long to sit next to a key
-SHORT = {'it': {'favorite': 'Aggiungi ai preferiti', 'menu': 'Menu contestuale', 'nowPlaying': 'Apri / chiudi il player',
-                'queue': 'Apri / chiudi la coda'},
-         'en': {'favorite': 'Add to favourites', 'menu': 'Context menu', 'nowPlaying': 'Open / close the player', 'queue': 'Open / close the queue'}}[lang]
-ACT = dict(ACT, **SHORT)
+# 🚨 No shorter names of our own here: the picture once said "Context menu"
+# while the list of actions said "Menu of the chosen item", and whoever looked
+# for the picture's words in the list thought actions were missing. If a name
+# is too long for the picture, shorten it in the translations, for both.
 
 BG, GOLD, WHITE, GREY = (10, 10, 10), (212, 175, 55), (240, 240, 240), (150, 150, 150)
 F = '/usr/share/fonts/truetype/dejavu/'

@@ -39,6 +39,14 @@ Item {
     // dalla sezione con la prova accesa lascerebbe un apparecchio in cui il
     // telecomando non comanda piu' niente, e nessuno capirebbe perche'.
     property bool remoteTest: false
+    // 🚨 The test hears ONE key, then the remote works the page again. It
+    // used to keep listening for as long as the switch was on: with a remote
+    // alone, "Use this key for…" could not be reached, the list of actions did
+    // not move (every arrow became the key under test) and even Back could not
+    // leave. `remoteHeard` is our own copy of that key, because the remote's
+    // last key changes with every arrow pressed afterwards.
+    property bool remoteListen: false
+    property var remoteHeard: null
     property bool remoteBusy: false
     property bool remoteScanning: false
     // the list of Bluetooth remotes is read again when the wizard closes
@@ -47,12 +55,35 @@ Item {
         function onClosed() { if (root.remoteSection) cfg.loadRemotes() }
     }
     readonly property bool remoteSection: active >= 0 && active < secs.length && (secs[active].id === "remote" || secs[active].id === "remoteKeys")
-    Binding { target: Remote; property: "learning"; value: root.remoteTest && root.remoteSection }
+    Binding { target: Remote; property: "learning"; value: root.remoteTest && root.remoteListen && root.remoteSection }
     Connections {
         target: Remote
-        function onLastKeyChanged() { if (root.remoteSection && root.remoteTest) root.rebuild() }
-        function onLearnDeviceChanged() { if (root.remoteSection) root.rebuild() }
+        function onLastKeyChanged() {
+            if (!root.remoteSection || !root.remoteTest || !root.remoteListen) return
+            var k = Remote.lastKey
+            if (!k || !k.code) return
+            root.remoteHeard = { code: k.code, key: k.key, device: k.device }
+            root.remoteListen = false
+            root.rebuild()
+            root.navTo("rm_assign")
+        }
+        function onLearnDeviceChanged() { if (root.remoteSection && root.remoteListen) root.rebuild() }
         function onDevicesChanged() { if (root.remoteSection) root.rebuild() }
+    }
+    // Puts the remote's spotlight on the row with that action, once the
+    // rebuilt rows are laid out — only when the remote is in use (the finger
+    // hides the spotlight, and a spotlight turning up by itself is noise).
+    property string navWant: ""
+    function navTo(act) { if (!Nav.active) return; navWant = act; navTimer.restart() }
+    Timer {
+        id: navTimer
+        interval: 80
+        onTriggered: {
+            var list = Nav.candidates()
+            for (var i = 0; i < list.length; i++)
+                for (var p = list[i].it; p && p !== root; p = p.parent)
+                    if (p.row && p.row.act === root.navWant) { Nav.focus(list[i].it); return }
+        }
     }
     // Procedura guidata "aggiungi una cartella di rete". Sostituisce le quattro
     // caselle vuote (server/share/utente/password), che sono inutilizzabili per
@@ -1491,30 +1522,33 @@ Item {
         var devs = Remote.devices
         var t = toggle(Tr.t("settings.remote.test"), Tr.t("settings.remote.testHint"), remoteTest, "rm_test")
         t.icon = "remote"
-        if (remoteTest) {
-            var k = Remote.lastKey
+        if (remoteTest && remoteListen) {
+            helpText(Tr.t("settings.remote.pressAKey"), 13)
             var heard = String(Remote.learnDevice || "")
-            if (!heard) helpText(Tr.t("settings.remote.pressAKey"), 13)
-            else {
-                // from here on only this one is listened to, and what is
-                // assigned applies to it alone
+            if (heard) {
+                // only this one is listened to, and what is assigned applies
+                // to it alone
                 var li = info(Tr.t("settings.remote.listening"), heard); li.style = "row"; li.icon = "remote"
                 mini(li, Tr.t("settings.remote.listenAnother"), "rm_listen", "light", false, "")
             }
-            if (heard && k && k.code) {
-                var ki = info(Tr.t("settings.remote.keyLabel"), String(k.key) + "  ·  " + k.code)
-                ki.mono = true; ki.style = "row"
-                var a = String(k.action || "")
-                var does = a ? Tr.t("settings.remote.actions." + a) : Tr.t("settings.remote.doesNothing")
-                if (Remote.isCustom(k.code, heard)) does += "  (" + Tr.t("settings.remote.custom") + ")"
-                info(Tr.t("settings.remote.doesLabel"), does).style = "row"
-                var asg = action(Tr.t("settings.remote.assign"), "rm_assign", "accent")
-                asg.hh = 44; asg.arg = String(k.code)
-                if (Remote.isCustom(k.code, heard)) {
-                    var un = action(Tr.t("settings.remote.unassign"), "rm_unassign", "light")
-                    un.hh = 40; un.arg = String(k.code)
-                }
+        } else if (remoteTest && remoteHeard) {
+            var k = remoteHeard
+            var ki = info(Tr.t("settings.remote.keyLabel"), String(k.key) + "  ·  " + k.code)
+            ki.mono = true; ki.style = "row"
+            // what it does NOW: the assignment may have changed since it was heard
+            var a = Remote.actionFor(k.code, k.device)
+            var custom = Remote.isCustom(k.code, k.device)
+            var does = a ? Tr.t("settings.remote.actions." + a) : Tr.t("settings.remote.doesNothing")
+            if (custom) does += "  (" + Tr.t("settings.remote.custom") + ")"
+            info(Tr.t("settings.remote.doesLabel"), does).style = "row"
+            var asg = action(Tr.t("settings.remote.assign"), "rm_assign", "accent")
+            asg.hh = 44; asg.arg = String(k.code)
+            if (custom) {
+                var un = action(Tr.t("settings.remote.unassign"), "rm_unassign", "light")
+                un.hh = 40; un.arg = String(k.code)
             }
+            var again = action(Tr.t("settings.remote.tryAnother"), "rm_again", "light")
+            again.hh = 40; again.icon = "remote"
         }
         // the choice a keyboard-like remote needs, explained where it matters
         var anyKeyboard = false
@@ -1961,25 +1995,35 @@ Item {
                 Api.post(A("/bt_speakers/remove"), { mac: arg }, function(ok2, d) { btApply(ok2, d) }, 60000)
             })
             return
-        case "rm_test": remoteTest = !row.on; break
+        case "rm_test": remoteTest = !row.on; remoteListen = remoteTest; remoteHeard = null; break
         case "rm_mine": Remote.setChosen(Remote.chosen === arg ? "" : arg); break
         case "rm_listen": Remote.listenAgain(); break
+        case "rm_again":
+            // back to the same remote: a keyboard key pressed by mistake must
+            // not take its place
+            var from = remoteHeard ? String(remoteHeard.device || "") : ""
+            remoteListen = true
+            if (from) Remote.listenTo(from)
+            break
         case "rm_map": if (Ui.app) Ui.app.remoteMap.open(arg, true); break
         case "rm_tour": if (Ui.app) Ui.app.startRemoteTour(arg); break
         case "rm_assign":
-            var code = Number(arg), dev = String(Remote.learnDevice || "")
+            var code = Number(arg), dev = remoteHeard ? String(remoteHeard.device || "") : ""
             var acts = Remote.actionNames()
             var labels = [Tr.t("settings.remote.assignNothing")]
             for (var ai = 0; ai < acts.length; ai++) labels.push(Tr.t("settings.remote.actions." + acts[ai]))
             Ui.dialogs.pick(Tr.t("settings.remote.assignTitle"), labels, acts.indexOf(Remote.actionFor(code, dev)) + 1, function(i) {
-                if (i < 0) return
+                if (i < 0) { root.navTo("rm_assign"); return }
                 var done = Remote.assign(code, i === 0 ? "" : acts[i - 1], dev)
                 root.say(Tr.t(done ? "settings.remote.assigned" : "settings.remote.assignFailed"), !done)
+                root.navTo("rm_again")
             })
             return
         case "rm_unassign":
-            Remote.forget(Number(arg), String(Remote.learnDevice || ""))
-            break
+            Remote.forget(Number(arg), remoteHeard ? String(remoteHeard.device || "") : "")
+            rebuild()
+            navTo("rm_again")
+            return
         case "rm_pair_open": if (Ui.app && cfg.rmAvailable && cfg.rmSupported) Ui.app.pairWizard.open(); return
         case "rm_keys_open": openSection("remoteKeys"); backTo = "remote"; return
         case "rm_scan":

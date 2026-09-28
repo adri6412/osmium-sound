@@ -77,6 +77,10 @@ public:
     QString learnDevice() const { return m_learnDevice; }
     // ricomincia ad ascoltare: il prossimo tasto decide il dispositivo
     Q_INVOKABLE void listenAgain();
+    // listen to that device only (the one the previous key came from): the
+    // key test hears one key at a time, and leaving the test in between
+    // forgets who was talking
+    Q_INVOKABLE void listenTo(const QString &device);
     QString chosen() const { return m_chosen; }
     // "questo e' il mio telecomando" (nome vuoto = nessuno). Finisce in
     // <configDir>/remote-device e vale da subito.
@@ -172,6 +176,7 @@ private:
     QFileSystemWatcher m_confWatch;  // i due file che cambia anche il web admin
     QTimer m_confRescan, m_learnTick;
     QString m_learnDevice;           // chi sta parlando al pannello di prova
+    int m_heldFromTest = 0;          // key heard by the test and still held down
     QVariantList m_devices;
     QVariantMap m_lastKey;
     bool m_learning = false;

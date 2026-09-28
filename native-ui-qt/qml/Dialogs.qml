@@ -15,6 +15,11 @@ Item {
     visible: active
     // il telecomando resta qui dentro finche' questo strato e' aperto
     NavScope { active: root.active && !root.closing }
+    // In a list to choose from, the spotlight starts on the entry already
+    // chosen (the one with the tick), like the list itself: from the top, the
+    // remote needed a dozen presses to get back to where the list opened.
+    property Item pickFirst: null
+    readonly property Item navFirst: kind === 2 ? pickFirst : null
     anchors.fill: parent
 
     property string title: ""
@@ -57,10 +62,15 @@ Item {
     }
     function confirm(text, ok, dang, f) { openCommon(1); body = text || ""; okLabel = ok || Tr.t("common.confirm"); danger = !!dang; cb = f }
     function pick(t, list, cur, f) {
-        openCommon(2); title = t || ""; items = list || []; current = cur; cb = f
+        openCommon(2); title = t || ""; items = list || []; current = cur; cb = f; pickFirst = null
         // porta la voce corrente sotto gli occhi, come fa la select di Chromium
         // con 487 fusi orari in elenco
-        Qt.callLater(function() { if (root.current >= 0) pickList.positionViewAtIndex(root.current, ListView.Center) })
+        Qt.callLater(function() {
+            if (root.current < 0) return
+            pickList.positionViewAtIndex(root.current, ListView.Center)
+            var d = pickList.itemAtIndex(root.current)
+            root.pickFirst = d ? d.tap : null
+        })
     }
     function text(t, b) { openCommon(3); title = t || ""; body = b || "" }
     // `pre` ({ssid, pass, band, err}) reopens the window as it was after a
@@ -213,6 +223,7 @@ Item {
                         required property var modelData
                         required property int index
                         readonly property bool cur: index === root.current
+                        readonly property Item tap: pTap
                         width: pickList.width; height: 44; radius: 8
                         color: cur ? Theme.goldA(0.2) : pTap.mix(Qt.rgba(0,0,0,0), Theme.wa(0.05))
                         Text { x: 12; width: parent.width - 48; anchors.verticalCenter: parent.verticalCenter; text: String(modelData); elide: Text.ElideRight; color: parent.cur ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14 }

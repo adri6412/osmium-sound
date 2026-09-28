@@ -524,6 +524,7 @@ void Remote::onKey(Dev &dev, int code, int value) {
 
     if (value == 0) {                       // rilasciato
         if (code == m_repeatCode) stopRepeat();
+        if (code == m_heldFromTest) m_heldFromTest = 0;
         return;
     }
 
@@ -540,12 +541,18 @@ void Remote::onKey(Dev &dev, int code, int value) {
             emit learnDeviceChanged();
         }
         if (dev.name != m_learnDevice) return;
+        if (value == 1) m_heldFromTest = code;
         m_lastKey = QVariantMap{ { "code", code }, { "key", keyName(code) }, { "action", act },
                                  { "device", dev.name }, { "at", m_clock.elapsed() } };
         emit lastKeyChanged();
         publishLastKey();
         return;                             // in prova non si agisce
     }
+    // 🚨 The kiosk's test hears ONE key and then stops listening, while that
+    // key is still down: its repeats must not start working the screen (a
+    // held "down" would scroll the page away from the key just heard).
+    // (A new press means the old one was let go, even if that got lost.)
+    if (code == m_heldFromTest) { if (value == 2) return; m_heldFromTest = 0; }
     m_lastKey = QVariantMap{ { "code", code }, { "key", keyName(code) }, { "action", act },
                              { "device", dev.name }, { "at", m_clock.elapsed() } };
     emit lastKeyChanged();
@@ -789,6 +796,10 @@ void Remote::setLearning(bool on) {
 void Remote::listenAgain() {
     if (!m_learnDevice.isEmpty()) { m_learnDevice.clear(); emit learnDeviceChanged(); }
     if (!m_lastKey.isEmpty()) { m_lastKey.clear(); emit lastKeyChanged(); }
+}
+
+void Remote::listenTo(const QString &device) {
+    if (m_learnDevice != device) { m_learnDevice = device; emit learnDeviceChanged(); }
 }
 
 void Remote::setChosen(const QString &device) {

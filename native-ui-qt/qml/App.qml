@@ -172,7 +172,9 @@ Item {
     // "Indietro": chiude quello che c'e' davanti, uno strato per volta
     function remoteBack() {
         if (vk.active) { vk.close(false); return }
-        if (dialogs.active) { dialogs.close(); return }
+        // like Escape and a tap outside: whoever opened the dialog hears it was
+        // cancelled (a bare close() left them waiting, and the spotlight lost)
+        if (dialogs.active) { dialogs.backdrop(); return }
         if (cdrip.open) { cdrip.close(); return }
         if (tutorial.active) { tutorial.finish(); return }
         if (remoteIntro.active) { remoteIntro.close(); return }
