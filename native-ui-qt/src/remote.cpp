@@ -153,7 +153,7 @@ const char *const kActions[] = {
     "volumeUp", "volumeDown", "mute",
     "up", "down", "left", "right", "ok", "back", "home", "menu", "pageUp", "pageDown",
     "nowPlaying", "fullScreen", "nextVu", "nextAnimation",
-    "queue", "search", "favorite", "shuffle", "standby", "eject",
+    "queue", "search", "favorite", "openFavorites", "shuffle", "standby", "eject",
 };
 
 // I tasti Qt: la stessa tabella, ma dal lato di chi li riceve gia' tradotti.
@@ -254,7 +254,7 @@ bool mediaOnly(const QString &a) {
     return a == "playPause" || a == "play" || a == "pause" || a == "stop"
         || a == "next" || a == "prev" || a == "forward" || a == "rewind"
         || a == "volumeUp" || a == "volumeDown" || a == "mute"
-        || a == "nowPlaying" || a == "queue" || a == "favorite"
+        || a == "nowPlaying" || a == "queue" || a == "favorite" || a == "openFavorites"
         || a == "shuffle" || a == "eject" || a == "standby"
         || a == "fullScreen" || a == "nextVu" || a == "nextAnimation";
 }
@@ -647,6 +647,19 @@ QString Remote::keyName(int code) const {
     for (const Model &m : kModels)
         for (int i = 0; i < m.nvkeys; i++) if (m.vkeys[i].code == code) return QString::fromLatin1(m.vkeys[i].name);
     return QStringLiteral("#%1").arg(code);
+}
+
+int Remote::codeForName(const QString &name) const {
+    for (const KeyDef &k : kKeys) if (name == QLatin1String(k.name)) return k.code;
+    for (const Model &m : kModels)
+        for (int i = 0; i < m.nvkeys; i++) if (name == QLatin1String(m.vkeys[i].name)) return m.vkeys[i].code;
+    return 0;
+}
+
+QString Remote::deviceOfModel(const QString &model) const {
+    for (auto it = m_open.constBegin(); it != m_open.constEnd(); ++it)
+        if (it->model >= 0 && model == QLatin1String(kModels[it->model].id)) return it->name;
+    return QString();
 }
 
 QStringList Remote::actionNames() const {

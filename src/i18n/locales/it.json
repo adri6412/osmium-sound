@@ -760,6 +760,7 @@
         "queue": "Apri / chiudi la coda",
         "search": "Cerca",
         "favorite": "Aggiungi ai preferiti",
+        "openFavorites": "Apri i preferiti",
         "shuffle": "Riproduzione casuale",
         "standby": "Spegni lo schermo",
         "eject": "Espelli il CD"
@@ -801,16 +802,11 @@
       "btForgetConfirm": "Dimentico questo telecomando? Smette di funzionare finché non lo accoppi di nuovo.",
       "intro": {
         "title": "Il tuo telecomando {name} è pronto",
-        "body": "Ecco cosa fa ogni tasto su Osmium. Scorri per vederli tutti.",
+        "body": "Ecco cosa fa ogni tasto su Osmium.",
         "later": "Puoi rivederla quando vuoi da Impostazioni → Telecomando.",
         "gotIt": "Ho capito",
         "show": "Mappa dei tasti",
         "showSub": "Cosa fa ogni tasto del tuo telecomando"
-      },
-      "tour": {
-        "title": "Prova il telecomando",
-        "sub": "Un tasto alla volta, un minuto",
-        "start": "Prova"
       }
     },
     "btSpeakers": {
@@ -1499,30 +1495,78 @@
         "menu": "il tasto menu",
         "play": "il tasto play/pausa",
         "player": "il tasto del player"
-      },
+      }
+    },
+    "keyNames": {
       "firetv": {
-        "ok": "il tasto al centro della ghiera",
-        "back": "il tasto ↩",
-        "home": "il tasto ⌂",
-        "menu": "il tasto ≡",
-        "play": "il tasto play/pausa",
-        "player": "il tasto TV"
+        "KEY_KPENTER": "il tasto al centro della ghiera",
+        "KEY_BACK": "il tasto ↩",
+        "KEY_HOMEPAGE": "il tasto ⌂",
+        "KEY_MENU": "il tasto ≡",
+        "KEY_PLAYPAUSE": "il tasto play/pausa",
+        "KEY_PROGRAM": "il tasto TV",
+        "KEY_REWIND": "il tasto indietro veloce",
+        "KEY_FASTFORWARD": "il tasto avanti veloce",
+        "KEY_MUTE": "il tasto muto",
+        "KEY_VOLUMEUP": "il tasto +",
+        "KEY_VOLUMEDOWN": "il tasto −",
+        "KEY_SEARCH": "il tasto azzurro in alto",
+        "APP_PRIME_VIDEO": "il tasto Prime Video",
+        "APP_NETFLIX": "il tasto Netflix",
+        "APP_DISNEY_PLUS": "il tasto Disney+",
+        "APP_AMAZON_MUSIC": "il tasto Amazon Music",
+        "KEY_POWER": "il tasto di accensione",
+        "KEY_UP": "la freccia su",
+        "KEY_DOWN": "la freccia giù",
+        "KEY_LEFT": "la freccia sinistra",
+        "KEY_RIGHT": "la freccia destra"
       },
       "g20s": {
-        "ok": "OK",
-        "back": "il tasto ↩",
-        "home": "il tasto ⌂",
-        "menu": "il tasto con la lampadina",
-        "play": "il tasto play/pausa",
-        "player": "il tasto 1"
+        "KEY_SELECT": "OK",
+        "KEY_BACK": "il tasto ↩",
+        "KEY_HOMEPAGE": "il tasto ⌂",
+        "KEY_COMPOSE": "il tasto con la lampadina",
+        "KEY_PLAYPAUSE": "il tasto play/pausa",
+        "KEY_0": "il tasto 0",
+        "KEY_1": "il tasto 1",
+        "KEY_2": "il tasto 2",
+        "KEY_3": "il tasto 3",
+        "KEY_4": "il tasto 4",
+        "KEY_5": "il tasto 5",
+        "KEY_6": "il tasto 6",
+        "KEY_7": "il tasto 7",
+        "KEY_8": "il tasto 8",
+        "KEY_9": "il tasto 9",
+        "KEY_PREVIOUSSONG": "il tasto brano precedente",
+        "KEY_NEXTSONG": "il tasto brano successivo",
+        "KEY_VOLUMEUP": "il tasto volume +",
+        "KEY_VOLUMEDOWN": "il tasto volume −",
+        "KEY_MUTE": "il tasto muto",
+        "KEY_PAGEUP": "il tasto Pg+",
+        "KEY_PAGEDOWN": "il tasto Pg-",
+        "KEY_VOICECOMMAND": "il tasto del microfono",
+        "KEY_BACKSPACE": "il tasto DEL",
+        "KEY_POWER": "il tasto di accensione",
+        "KEY_UP": "la freccia su",
+        "KEY_DOWN": "la freccia giù",
+        "KEY_LEFT": "la freccia sinistra",
+        "KEY_RIGHT": "la freccia destra"
       },
       "xiaomi": {
-        "ok": "il tasto al centro della ghiera",
-        "back": "il tasto ←",
-        "home": "il tasto ○",
-        "menu": "il tasto ⋮⋮⋮",
-        "play": "il tasto Netflix",
-        "player": "il tasto LIVE"
+        "KEY_SELECT": "il tasto al centro della ghiera",
+        "KEY_BACK": "il tasto ←",
+        "KEY_HOMEPAGE": "il tasto ○",
+        "KEY_APPSELECT": "il tasto ⋮⋮⋮",
+        "KEY_VIDEO": "il tasto Netflix",
+        "KEY_GREEN": "il tasto LIVE",
+        "KEY_VOLUMEUP": "il tasto +",
+        "KEY_VOLUMEDOWN": "il tasto −",
+        "KEY_VOICECOMMAND": "il tasto del microfono",
+        "KEY_POWER": "il tasto di accensione",
+        "KEY_UP": "la freccia su",
+        "KEY_DOWN": "la freccia giù",
+        "KEY_LEFT": "la freccia sinistra",
+        "KEY_RIGHT": "la freccia destra"
       }
     }
   },

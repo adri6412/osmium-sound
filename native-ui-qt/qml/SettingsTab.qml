@@ -1511,8 +1511,8 @@ Item {
             var mp = option(Tr.t("settings.remote.intro.show"), Tr.t("settings.remote.intro.showSub"), model, false, "rm_map")
             mp.hh = 72; mp.style = "border"; mp.icon = "chevron-right"
         }
-        var tr = option(Tr.t("settings.remote.tour.title"), Tr.t("settings.remote.tour.sub"), model, false, "rm_tour")
-        tr.hh = 72; tr.style = "border"; tr.icon = "chevron-right"
+        // (no "Try the remote" here: the practice run belongs to the first
+        // setup only — afterwards the key map and "Try the keys" cover it)
         var kp = option(Tr.t("settings.remote.keysPage"), Tr.t("settings.remote.keysPageSub"), "", false, "rm_keys_open")
         kp.hh = 72; kp.style = "border"; kp.icon = "chevron-right"
     }
@@ -2006,7 +2006,6 @@ Item {
             if (from) Remote.listenTo(from)
             break
         case "rm_map": if (Ui.app) Ui.app.remoteMap.open(arg, true); break
-        case "rm_tour": if (Ui.app) Ui.app.startRemoteTour(arg); break
         case "rm_assign":
             var code = Number(arg), dev = remoteHeard ? String(remoteHeard.device || "") : ""
             var acts = Remote.actionNames()

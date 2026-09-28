@@ -760,6 +760,7 @@
         "queue": "Open / close the queue",
         "search": "Search",
         "favorite": "Add to favourites",
+        "openFavorites": "Open favourites",
         "shuffle": "Shuffle",
         "standby": "Screen off",
         "eject": "Eject the CD"
@@ -801,16 +802,11 @@
       "btForgetConfirm": "Forget this remote? It stops working until you pair it again.",
       "intro": {
         "title": "Your {name} remote is ready",
-        "body": "This is what each key does on Osmium. Scroll to see them all.",
+        "body": "This is what each key does on Osmium.",
         "later": "You can see it again any time from Settings → Remote control.",
         "gotIt": "Got it",
         "show": "Key map",
         "showSub": "What each key of your remote does"
-      },
-      "tour": {
-        "title": "Try the remote",
-        "sub": "One key at a time, one minute",
-        "start": "Try"
       }
     },
     "btSpeakers": {
@@ -1499,30 +1495,78 @@
         "menu": "the menu key",
         "play": "the play/pause key",
         "player": "the player key"
-      },
+      }
+    },
+    "keyNames": {
       "firetv": {
-        "ok": "the key in the middle of the ring",
-        "back": "the ↩ key",
-        "home": "the ⌂ key",
-        "menu": "the ≡ key",
-        "play": "the play/pause key",
-        "player": "the TV key"
+        "KEY_KPENTER": "the key in the middle of the ring",
+        "KEY_BACK": "the ↩ key",
+        "KEY_HOMEPAGE": "the ⌂ key",
+        "KEY_MENU": "the ≡ key",
+        "KEY_PLAYPAUSE": "the play/pause key",
+        "KEY_PROGRAM": "the TV key",
+        "KEY_REWIND": "the rewind key",
+        "KEY_FASTFORWARD": "the fast-forward key",
+        "KEY_MUTE": "the mute key",
+        "KEY_VOLUMEUP": "the + key",
+        "KEY_VOLUMEDOWN": "the − key",
+        "KEY_SEARCH": "the blue key at the top",
+        "APP_PRIME_VIDEO": "the Prime Video key",
+        "APP_NETFLIX": "the Netflix key",
+        "APP_DISNEY_PLUS": "the Disney+ key",
+        "APP_AMAZON_MUSIC": "the Amazon Music key",
+        "KEY_POWER": "the power key",
+        "KEY_UP": "the up arrow",
+        "KEY_DOWN": "the down arrow",
+        "KEY_LEFT": "the left arrow",
+        "KEY_RIGHT": "the right arrow"
       },
       "g20s": {
-        "ok": "OK",
-        "back": "the ↩ key",
-        "home": "the ⌂ key",
-        "menu": "the light-bulb key",
-        "play": "the play/pause key",
-        "player": "the 1 key"
+        "KEY_SELECT": "OK",
+        "KEY_BACK": "the ↩ key",
+        "KEY_HOMEPAGE": "the ⌂ key",
+        "KEY_COMPOSE": "the light-bulb key",
+        "KEY_PLAYPAUSE": "the play/pause key",
+        "KEY_0": "the 0 key",
+        "KEY_1": "the 1 key",
+        "KEY_2": "the 2 key",
+        "KEY_3": "the 3 key",
+        "KEY_4": "the 4 key",
+        "KEY_5": "the 5 key",
+        "KEY_6": "the 6 key",
+        "KEY_7": "the 7 key",
+        "KEY_8": "the 8 key",
+        "KEY_9": "the 9 key",
+        "KEY_PREVIOUSSONG": "the previous-track key",
+        "KEY_NEXTSONG": "the next-track key",
+        "KEY_VOLUMEUP": "the volume + key",
+        "KEY_VOLUMEDOWN": "the volume − key",
+        "KEY_MUTE": "the mute key",
+        "KEY_PAGEUP": "the Pg+ key",
+        "KEY_PAGEDOWN": "the Pg- key",
+        "KEY_VOICECOMMAND": "the microphone key",
+        "KEY_BACKSPACE": "the DEL key",
+        "KEY_POWER": "the power key",
+        "KEY_UP": "the up arrow",
+        "KEY_DOWN": "the down arrow",
+        "KEY_LEFT": "the left arrow",
+        "KEY_RIGHT": "the right arrow"
       },
       "xiaomi": {
-        "ok": "the key in the middle of the ring",
-        "back": "the ← key",
-        "home": "the ○ key",
-        "menu": "the ⋮⋮⋮ key",
-        "play": "the Netflix key",
-        "player": "the LIVE key"
+        "KEY_SELECT": "the key in the middle of the ring",
+        "KEY_BACK": "the ← key",
+        "KEY_HOMEPAGE": "the ○ key",
+        "KEY_APPSELECT": "the ⋮⋮⋮ key",
+        "KEY_VIDEO": "the Netflix key",
+        "KEY_GREEN": "the LIVE key",
+        "KEY_VOLUMEUP": "the + key",
+        "KEY_VOLUMEDOWN": "the − key",
+        "KEY_VOICECOMMAND": "the microphone key",
+        "KEY_POWER": "the power key",
+        "KEY_UP": "the up arrow",
+        "KEY_DOWN": "the down arrow",
+        "KEY_LEFT": "the left arrow",
+        "KEY_RIGHT": "the right arrow"
       }
     }
   },

@@ -30,6 +30,7 @@ Item {
     Component.onCompleted: {
         Ui.app = app; Ui.vk = vk; Ui.dialogs = dialogs; Ui.toast = toast; Ui.overlays = overlays
         Nav.root = app                                     // il telecomando cerca i riquadri da qui
+        firstStart = !tutorial.wasShown()                  // before the tour can write its file
         npSpring.set(Sys.startExpanded ? 0 : 1)
         expanded = Sys.startExpanded
         if (tutorialCanStart) tutorialDelay.restart()      // no intro or wizard to wait for
@@ -76,9 +77,15 @@ Item {
         }
     }
     function startTutorial() { tutorialTried = true; tutorial.start() }
-    // trying the remote, one key at a time: after a known remote's key map,
-    // and from Settings → Remote control
-    function startRemoteTour(model) { remoteTour.start(model || "") }
+    // The first start after the setup: the touch tour had not been shown yet
+    // when the interface came up (read once — the tour writes its file as it
+    // goes, and the remote's practice comes after it).
+    property bool firstStart: false
+    // 🚨 Trying the remote, one key at a time: ONLY after a known remote's
+    // key map at the end of the first setup. Later (a remote paired months
+    // after, Settings) it was one more thing in the way: the key map and
+    // "Try the keys" are there for that.
+    function startRemoteTour(model) { if (firstStart) remoteTour.start(model || "") }
     // the tour's album steps: the list as a grid or as Cover Flow, whatever
     // the owner chose (put back when the tour ends), and the long-press menu
     function tutorialAlbums(mode) { setExpanded(false); albumView = mode; mainScreen.browser.tutorialAlbums(mode) }
@@ -155,6 +162,7 @@ Item {
         case "queue": if (overlays.busy) overlays.close(); else overlays.openQueue(); return
         case "search": setExpanded(false); mainScreen.browser.focusSearch(); return
         case "favorite": if (Player.favoritesAvailable) Player.toggleFavorite(); return
+        case "openFavorites": remoteHome(); mainScreen.browser.openFavorites(); return
         case "shuffle": Player.cycleShuffle(); return
         case "standby": screensaver.show(true); return
         case "eject": if (cdrip.haveDisc) cdrip.eject(); return
@@ -209,6 +217,7 @@ Item {
     readonly property var tour: tutorial
     readonly property var remoteMap: remoteIntro
     readonly property var pairWizard: remotePair
+    readonly property var practice: remoteTour
     readonly property var nav: Nav                    // il riflettore del telecomando
 
     MainScreen {

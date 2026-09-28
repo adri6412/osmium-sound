@@ -39,8 +39,10 @@ un finto apparecchio in Python.
   `VU Nagra.zip` with: `--needle-pivot 13.75,577 --meter 755.22,984.77 --meter 2098.24,994.79
   --angles=-46.5,47.2` (source-artwork pixels).
 - `remote-maps/` — the key maps of the remotes known out of the box (Fire TV, G20S PRO, Xiaomi):
-  the photo of each, a table of where every key is and what it does (`<model>_keys.py`, kept in step
-  with `kModels` in `src/remote.cpp`), and `make-all.sh`, which renders them into `assets/remotes`
+  the photo of each (the reference the key positions were measured on), a drawing of each in the
+  same coordinates (`remote-draw.py`, flat, no logos: that is what the pictures show), a table of
+  where every key is and what it does (`<model>_keys.py`, kept in step with `kModels` in
+  `src/remote.cpp`), and `make-all.sh`, which renders them into `assets/remotes`
   and `admin-webui/public/remotes` (shown once after pairing, `qml/RemoteIntro.qml`).
 - `np-anim/*.py` — generate the PNGs of the Now Playing animations (`assets/anim/<cd|vinyl|cassette>/`,
   one script per scene, Pillow + numpy); the scenes are `qml/AnimCd.qml`, `AnimVinyl.qml`, `AnimCassette.qml`,

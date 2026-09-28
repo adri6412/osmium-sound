@@ -1,5 +1,6 @@
-"""remote-map.py PHOTO KEYS.py LANG OUT.png TITLE [--ui] — the photo of a remote with, next to
-every key, the action it does out of the box (names from the web admin's translations).
+"""remote-map.py PICTURE KEYS.py LANG OUT.png TITLE [--ui] — a remote (the drawing of
+remote-draw.py, or its photo) with, next to every key, the action it does out of the box (names
+from the web admin's translations).
 
 The key tables (<model>_keys.py) hold each key's position on the photo, its evdev code and the
 action kModels in native-ui-qt/src/remote.cpp gives it: change both together. --ui renders the
@@ -25,8 +26,14 @@ EXTRA = {'it': {'shortcut': 'scorciatoia'}, 'en': {'shortcut': 'shortcut'}}[lang
 
 BG, GOLD, WHITE, GREY = (10, 10, 10), (212, 175, 55), (240, 240, 240), (150, 150, 150)
 F = '/usr/share/fonts/truetype/dejavu/'
-fAct = ImageFont.truetype(F + 'DejaVuSans-Bold.ttf', 25)
-fKey = ImageFont.truetype(F + 'DejaVuSansMono.ttf', 16)
+# 🚨 The interface shows the whole picture at once, fitted to the height of a
+# popup on a landscape screen (about 440 points of 600): at the old 25 px the
+# labels came out at 7 points and the picture had to scroll. In --ui the
+# remote keeps its size and everything written grows by K, so the picture is
+# wide rather than tall and the labels stay readable when it is fitted.
+K = 2.2 if UI else 1.0
+fAct = ImageFont.truetype(F + 'DejaVuSans-Bold.ttf', round(25 * K))
+fKey = ImageFont.truetype(F + ('DejaVuSans.ttf' if UI else 'DejaVuSansMono.ttf'), round(16 * K))
 fTitle = ImageFont.truetype(F + 'DejaVuSans-Bold.ttf', 38)
 
 src = Image.open(photo).convert('RGB')
@@ -36,7 +43,7 @@ sc = RH / src.height
 rem = src.resize((round(src.width * sc), RH), Image.LANCZOS)
 _m = ImageDraw.Draw(Image.new('RGB', (1, 1)))
 LW = max(max(_m.textlength(ACT.get(kk[4], kk[4]), font=fAct), _m.textlength(kk[3] + '  ·  ' + EXTRA.get(kk[5], kk[5]) if len(kk) > 5 else kk[3], font=fKey)) for kk in k.KEYS)
-W, TOP = int(rem.width + 2 * (LW + 110)), (40 if UI else 120)
+W, TOP = int(rem.width + 2 * (LW + 110 * K)), (40 if UI else 120)
 H = TOP + RH + 50
 rx = (W - rem.width) // 2
 img = Image.new('RGB', (W, H), BG)
@@ -72,13 +79,17 @@ for it in items:
             if not blocked(it, it['y'] + dy): it['lane'] = it['y'] + dy; break
     it['ly0'] = TOP + it['lane'] * sc
 
-GAP = 60
+GAP = 60 if not UI else round(42 * K)          # one label (and its note) under the next
 for side in 'LR':
     col = sorted([it for it in items if it['side'] == side], key=lambda it: it['ly0'])
     # label positions: next to their key, never overlapping
     ys = [it['ly0'] for it in col]
     for i in range(1, len(ys)):
         ys[i] = max(ys[i], ys[i - 1] + GAP)
+    # a crowded column (the G20S: fifteen labels, most with a note) would run
+    # off the bottom of the picture: the last one stops at the remote's foot
+    # and the others make room upwards
+    if ys: ys[-1] = min(ys[-1], TOP + RH - 10 * K)
     for i in range(len(ys) - 2, -1, -1):
         ys[i] = min(ys[i], ys[i + 1] - GAP)
     for it, ly in zip(col, ys):
@@ -88,17 +99,19 @@ for side in 'LR':
         label = ACT.get(it['act'], it['act'])
         note = EXTRA.get(it['note'], it['note']) if it['note'] else ''
         sub = note if UI else it['code'] + ('  ·  ' + note if note else '')
-        edge = rx - 30 if side == 'L' else rx + rem.width + 30
+        edge = rx - 30 * K if side == 'L' else rx + rem.width + 30 * K
         elbow = rx - 12 if side == 'L' else rx + rem.width + 12
         # the line: from the key to the edge of the remote, then to the label
-        d.line([(it['bx'], it['by']), (it['bx'], it['ly0']), (elbow, it['ly0']), (edge, ly)], fill=GOLD, width=2, joint='curve')
-        d.ellipse((it['bx'] - 7, it['by'] - 7, it['bx'] + 7, it['by'] + 7), outline=GOLD, width=3)
+        mr = 7 * K
+        d.line([(it['bx'], it['by']), (it['bx'], it['ly0']), (elbow, it['ly0']), (edge, ly)], fill=GOLD, width=round(2 * K), joint='curve')
+        d.ellipse((it['bx'] - mr, it['by'] - mr, it['bx'] + mr, it['by'] + mr), outline=GOLD, width=round(3 * K))
         aw = d.textlength(label, font=fAct); kw = d.textlength(sub, font=fKey)
+        up, down, pad = (22 if sub else 15) * K, 7 * K, 12 * K
         if side == 'L':
-            d.text((edge - 12 - aw, ly - (22 if sub else 15)), label, font=fAct, fill=WHITE)
-            d.text((edge - 12 - kw, ly + 7), sub, font=fKey, fill=GREY)
+            d.text((edge - pad - aw, ly - up), label, font=fAct, fill=WHITE)
+            d.text((edge - pad - kw, ly + down), sub, font=fKey, fill=GREY)
         else:
-            d.text((edge + 12, ly - (22 if sub else 15)), label, font=fAct, fill=WHITE)
-            d.text((edge + 12, ly + 7), sub, font=fKey, fill=GREY)
+            d.text((edge + pad, ly - up), label, font=fAct, fill=WHITE)
+            d.text((edge + pad, ly + down), sub, font=fKey, fill=GREY)
 img.save(out)
 print(out, img.size)

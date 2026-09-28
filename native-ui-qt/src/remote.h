@@ -96,6 +96,12 @@ public:
     // il nome del tasto, per il pannello di prova ("KEY_PLAYPAUSE", o il
     // numero quando il nome non lo conosciamo)
     Q_INVOKABLE QString keyName(int code) const;
+    // the other way round ("KEY_MENU" -> 139, "APP_NETFLIX" -> its code), 0
+    // if unknown: the practice run looks up the keys of a known model by name
+    Q_INVOKABLE int codeForName(const QString &name) const;
+    // the name of the device a known model is connected as ("" if it is not):
+    // the key assignments are kept per device name
+    Q_INVOKABLE QString deviceOfModel(const QString &model) const;
     // tutte le azioni assegnabili, nell'ordine in cui si mostrano
     Q_INVOKABLE QStringList actionNames() const;
     // assegna un tasto a un'azione (azione vuota = il tasto non fa niente):

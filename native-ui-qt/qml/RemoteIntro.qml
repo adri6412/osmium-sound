@@ -3,10 +3,9 @@
 // model shows up among the input devices: right after it has been paired,
 // or on an appliance that already had it when this screen arrived.
 //
-// A card like the tour's: the annotated photo (assets/remotes/<model>-<lang>
-// .jpg, the same pictures the web admin shows) and "Got it" at the bottom.
-// The photo is taller than the screen, so it scrolls: with a finger, or with
-// the remote's up/down while it holds the spotlight.
+// A card like the tour's: the annotated drawing (assets/remotes/<model>-<lang>
+// .jpg, the same pictures the web admin shows), whole and without scrolling,
+// and "Got it" at the bottom, where the remote's spotlight starts.
 //
 // Which models were already shown lives in <config>/remote-intro-seen
 // (comma-separated ids). Settings → Remote control opens it again.
@@ -28,6 +27,8 @@ Item {
     visible: active || fade > 0
     anchors.fill: parent
     NavScope { active: root.active }
+    // the picture is no longer a stop: the only thing to press is "Got it"
+    readonly property Item navFirst: okTap
 
     property real fade: 0
     Behavior on fade { NumberAnimation { duration: Theme.dur(240); easing.type: Easing.OutCubic } }
@@ -40,7 +41,6 @@ Item {
     function open(m, byHand) {
         model = m
         manual = !!byHand
-        flick.contentY = 0
         active = true
         fade = 1
     }
@@ -109,57 +109,23 @@ Item {
             wrapMode: Text.Wrap
         }
 
-        // the photo, as wide as the card, scrolling under a fixed title and button
+        // 🚨 The whole remote at once, fitted to the frame: it used to be as
+        // wide as the card and scroll, and the owner had to scroll to find the
+        // key in their hand. The pictures are drawn for this (remote-map.py
+        // --ui: wide, with large labels), so fitted they stay readable.
         Rectangle {
             id: frame
             x: card.pad; y: sub.y + sub.height + 12
             width: parent.width - 2 * card.pad
             height: bottomBar.y - 12 - y
             radius: 10; color: Theme.dark; clip: true
-            Flickable {
-                id: flick
+            Image {
+                id: pic
                 anchors.fill: parent
-                contentWidth: width; contentHeight: pic.height
-                boundsBehavior: Flickable.StopAtBounds
-                flickDeceleration: 1500; maximumFlickVelocity: 4000
-                Image {
-                    id: pic
-                    width: flick.width
-                    height: implicitWidth > 0 ? width * implicitHeight / implicitWidth : 0
-                    source: root.picture
-                    asynchronous: true; smooth: true; mipmap: true
-                    fillMode: Image.PreserveAspectFit
-                }
-            }
-            ScrollBar_ { flick: flick }
-            // a soft edge where the photo runs on, so it reads as scrolling
-            // and no half label is left hanging at the border
-            Rectangle {
-                width: parent.width; height: 22; visible: flick.contentY > 1
-                gradient: Gradient { GradientStop { position: 0; color: Theme.dark } GradientStop { position: 1; color: "transparent" } }
-            }
-            Rectangle {
-                y: parent.height - height; width: parent.width; height: 22
-                visible: flick.contentY < flick.contentHeight - flick.height - 1
-                gradient: Gradient { GradientStop { position: 0; color: "transparent" } GradientStop { position: 1; color: Theme.dark } }
-            }
-            // The photo is one stop for the remote: up and down scroll it,
-            // and only at its ends do they move on (down: to "Got it"). OK
-            // goes to the button, the one thing to do here.
-            Item {
-                id: picStop
-                anchors.fill: parent
-                property bool navigable: true
-                function navKey(d) {
-                    if (d !== "up" && d !== "down") return false
-                    var max = Math.max(0, flick.contentHeight - flick.height)
-                    var step = flick.height * 0.4
-                    if (d === "down" && flick.contentY < max - 1) { flick.contentY = Math.min(max, flick.contentY + step); return true }
-                    if (d === "up" && flick.contentY > 1) { flick.contentY = Math.max(0, flick.contentY - step); return true }
-                    return false
-                }
-                function navOk() { Nav.focus(okTap); return true }
-                NavRing { radius: 10; tint: "transparent" }
+                anchors.margins: 6
+                source: root.picture
+                asynchronous: true; smooth: true; mipmap: true
+                fillMode: Image.PreserveAspectFit
             }
         }
 

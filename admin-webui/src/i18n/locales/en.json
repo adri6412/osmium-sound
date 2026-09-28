@@ -401,6 +401,7 @@
         "queue": "Open / close the queue",
         "search": "Search",
         "favorite": "Add to favourites",
+        "openFavorites": "Open favourites",
         "shuffle": "Shuffle",
         "standby": "Screen off",
         "eject": "Eject the CD"
@@ -424,7 +425,7 @@
       "reportSaved": "Card saved",
       "intro": {
         "title": "Your {name} remote is ready",
-        "body": "This is what each key does on Osmium. Scroll to see them all.",
+        "body": "This is what each key does on Osmium.",
         "later": "You can see it again any time from Settings → Remote control.",
         "gotIt": "Got it",
         "show": "Key map"

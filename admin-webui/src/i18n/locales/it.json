@@ -401,6 +401,7 @@
         "queue": "Apri / chiudi la coda",
         "search": "Cerca",
         "favorite": "Aggiungi ai preferiti",
+        "openFavorites": "Apri i preferiti",
         "shuffle": "Riproduzione casuale",
         "standby": "Spegni lo schermo",
         "eject": "Espelli il CD"
@@ -424,7 +425,7 @@
       "reportSaved": "Scheda salvata",
       "intro": {
         "title": "Il tuo telecomando {name} è pronto",
-        "body": "Ecco cosa fa ogni tasto su Osmium. Scorri per vederli tutti.",
+        "body": "Ecco cosa fa ogni tasto su Osmium.",
         "later": "Puoi rivederla quando vuoi da Impostazioni → Telecomando.",
         "gotIt": "Ho capito",
         "show": "Mappa dei tasti"

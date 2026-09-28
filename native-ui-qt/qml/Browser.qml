@@ -135,6 +135,12 @@ Item {
     // the album and artist pages, from anywhere (library, search, Now Playing,
     // credits); a person known only to MusicBrainz opens the artist page by mbid
     function showMusicTab() { if (tab !== 0) { navDir = -1; tab = 0; ctx.close() } }
+    // the Favourites list straight away (a remote key): the same list the
+    // tile on the library home opens, with Back leading to that home
+    function openFavorites() {
+        showMusicTab(); navHome()
+        goView(LibraryModel.PluginItems, Tr.t("player.titles.favorites"), "favorites")
+    }
     function openAlbum(id, title) { if (!id) return; showMusicTab(); goView(LibraryModel.AlbumPage, title, String(id)) }
     function openArtist(id, name) { if (!id) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, String(id)) }
     function openPerson(mbid, name) { if (!mbid) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, "", "mbid:" + mbid) }

@@ -5,11 +5,17 @@
 //
 // While it runs every remote action comes here first (App.remote) and none
 // reaches the interface: practising play/pause must not stop the music, nor
-// the volume step blast it. The key names are the ones of the model in hand
-// (tutorialRemote.keys.<model>), generic words otherwise.
+// the volume step blast it.
 //
-// Started after a known remote's key map (RemoteIntro.qml) and from
-// Settings → Remote control. Only short, one-off animations: this GPU is weak.
+// 🚨 The key names follow what the keys do NOW on the remote in hand: a
+// known model's keys (modelKeys, named in tutorialRemote.keyNames.<model>)
+// are looked up through Remote.actionFor, so a key the owner gave another job
+// is named for that job — the tour said "press ≡" for the menu while ≡ had
+// become something else. A step no key can do any more is left out. Remotes
+// that are not a known model get generic words (tutorialRemote.keys.generic).
+//
+// Started only after a known remote's key map at the end of the first setup
+// (App.startRemoteTour). Only short, one-off animations: this GPU is weak.
 import QtQuick
 import Hifi
 import Hifi.Ui
@@ -53,7 +59,12 @@ Item {
 
     function start(m) {
         model = m || ""
-        steps = allSteps.filter(function(s) { return !s.needs || root.model !== "" })
+        device = model ? Remote.deviceOfModel(model) : ""
+        steps = allSteps.filter(function(s) {
+            if (s.needs && root.model === "") return false
+            // what no key does any more cannot be practised
+            return s.all ? s.want.every(root.canDo) : s.want.some(root.canDo)
+        })
         step = 0
         reset()
         active = true
@@ -76,10 +87,43 @@ Item {
     }
 
     // ─── the keys ──────────────────────────────────────────────────────────
+    // Every key of each known model (the names Remote.keyName gives), the
+    // usual one for a job first: where two keys do the same thing (G20S:
+    // ↩ and DEL, ⌂ and 0) the tour names the first.
+    readonly property var modelKeys: ({
+        firetv: ["KEY_KPENTER", "KEY_BACK", "KEY_HOMEPAGE", "KEY_MENU", "KEY_PLAYPAUSE", "KEY_PROGRAM",
+                 "KEY_REWIND", "KEY_FASTFORWARD", "KEY_MUTE", "KEY_VOLUMEUP", "KEY_VOLUMEDOWN", "KEY_SEARCH",
+                 "APP_PRIME_VIDEO", "APP_NETFLIX", "APP_DISNEY_PLUS", "APP_AMAZON_MUSIC", "KEY_POWER",
+                 "KEY_UP", "KEY_DOWN", "KEY_LEFT", "KEY_RIGHT"],
+        g20s: ["KEY_SELECT", "KEY_BACK", "KEY_HOMEPAGE", "KEY_COMPOSE", "KEY_PLAYPAUSE", "KEY_1", "KEY_2", "KEY_3",
+               "KEY_4", "KEY_5", "KEY_6", "KEY_7", "KEY_8", "KEY_9", "KEY_0", "KEY_PREVIOUSSONG", "KEY_NEXTSONG",
+               "KEY_VOLUMEUP", "KEY_VOLUMEDOWN", "KEY_MUTE", "KEY_PAGEUP", "KEY_PAGEDOWN", "KEY_VOICECOMMAND",
+               "KEY_BACKSPACE", "KEY_POWER", "KEY_UP", "KEY_DOWN", "KEY_LEFT", "KEY_RIGHT"],
+        xiaomi: ["KEY_SELECT", "KEY_BACK", "KEY_HOMEPAGE", "KEY_APPSELECT", "KEY_VIDEO", "KEY_GREEN",
+                 "KEY_VOLUMEUP", "KEY_VOLUMEDOWN", "KEY_VOICECOMMAND", "KEY_POWER",
+                 "KEY_UP", "KEY_DOWN", "KEY_LEFT", "KEY_RIGHT"]
+    })
+    // the device the model is connected as: assignments are kept per device
+    property string device: ""
+    readonly property var jobOf: ({ ok: ["ok"], back: ["back"], home: ["home"], menu: ["menu"],
+                                    play: ["playPause", "play", "pause"], player: ["nowPlaying"] })
+    // the first key of the remote in hand that does one of these actions now
+    function keyFor(actions) {
+        var keys = modelKeys[model]
+        if (!keys || !device) return ""
+        for (var i = 0; i < keys.length; i++) {
+            var code = Remote.codeForName(keys[i])
+            if (code && actions.indexOf(Remote.actionFor(code, device)) >= 0) return keys[i]
+        }
+        return ""
+    }
+    function canDo(a) { return !modelKeys[model] || !device || keyFor([a]) !== "" }
     function keyName(what) {
-        var k = "tutorialRemote.keys." + (model || "generic") + "." + what
-        var s = Tr.t(k)
-        return s === k ? Tr.t("tutorialRemote.keys.generic." + what) : s
+        if (modelKeys[model] && device) {
+            var k = keyFor(jobOf[what] || [what])
+            if (k) return Tr.t("tutorialRemote.keyNames." + model + "." + k)
+        }
+        return Tr.t("tutorialRemote.keys.generic." + what)
     }
     function fill(text) {
         var names = ["ok", "back", "home", "menu", "play", "player"]
