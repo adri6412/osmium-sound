@@ -1745,6 +1745,15 @@ def ensure_playlistdir():
         return False
     _run(["systemctl", "stop", LYRION_SERVICE], timeout=60)
     try:
+        # 🚨 Read the file AGAIN, now that Lyrion is stopped: it writes its
+        # prefs out on the way down, and the copy read above can be older than
+        # what it had in memory. In the setup wizard the skin step sets
+        # skin=material live seconds before this runs (1edc819 moved it
+        # first), and writing the stale copy back put the default skin back:
+        # "the wizard no longer turns on Material". Only playlistdir changes.
+        with open(prefs) as f:
+            data = yaml.safe_load(f) or {}
+        data, _ = _provision_playlistdir(data)
         tmp = prefs + ".tmp"
         with open(tmp, "w") as f:
             yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
@@ -2785,9 +2794,10 @@ def _lms_setup_apply(plugins, analytics, language):
     """Worker thread behind POST /api/lms_setup.
 
     Order matters twice over:
-      * playlistdir FIRST — ensure_playlistdir() reads the prefs file, then
-        stops Lyrion, then writes the whole dict back, so anything set live
-        just before it would be clobbered by that stale read. It also used to
+      * playlistdir FIRST — ensure_playlistdir() stops Lyrion, reads the prefs
+        file it wrote on the way down and writes it back with the folder (it
+        used to read before stopping, and the stale copy undid the skin the
+        wizard had just set). It also used to
         run right after the plugin install had restarted Lyrion, and stopped
         the server two seconds into extracting the new plugins (a Perl panic
         in the log of a fresh install). Before the install, the only start it
