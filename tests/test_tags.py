@@ -91,6 +91,7 @@ class FakeLyrion:
         self.mediadirs = []
         self.calls = []
         self.fail = False
+        self.tags_down = False      # `tags` alone fails, as Lyrion 9.2 does on WAV
         self.moved_to = None        # the album the files belong to after a rescan
         self.scanning = []          # serverstatus `rescan` answers, in order
 
@@ -111,6 +112,8 @@ class FakeLyrion:
         if cmd == 'pref':
             return {'_p2': list(self.mediadirs)}
         if cmd == 'tags':
+            if self.tags_down:
+                raise hm.LyrionError('stalled')
             return dict(self.raw.get(int(args['track_id']), {}))
         start, count = int(params[1]), int(params[2])
         if cmd == 'albums':
@@ -580,6 +583,15 @@ class ServiceTests(unittest.TestCase):
         self.assertIn('sort:album', albums_calls[-2])
         self.assertEqual(self.svc.artists('', 0, 100),
                          {'total': 1, 'artists': [{'artist_id': 977, 'name': 'Pink Floyd', 'album_count': 1}]})
+        # only artists: Lyrion's own default puts composers, conductors and
+        # bands in the list, so the roles are always spelled out, on the
+        # artists, on one artist's albums and on the album counts
+        role = 'role_id:ARTIST,ALBUMARTIST,TRACKARTIST'
+        self.assertIn(role, [c for c in self.lyrion.calls if c[0] == 'artists'][-1])
+        self.assertIn(role, albums_calls[-1])
+        self.assertNotIn(role, albums_calls[-2])
+        counts = [c for c in self.lyrion.calls if c[0] == 'albums' and c[2] == '0' and 'artist_id:977' in c]
+        self.assertTrue(counts and all(role in c for c in counts))
         # counts are asked once per scan
         n = sum(1 for c in self.lyrion.calls if c[0] == 'titles')
         self.svc.albums('', 0, 60)
@@ -612,6 +624,13 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(rows[201]['reason'], 'unsupported_format')        # cue track: never written
         self.assertEqual(rows[202]['reason'], 'missing')
         self.assertEqual([r['track_id'] for r in out['tracks']], [101, 102, 103, 200, 201, 202])
+        # Lyrion's `tags` failing: the row comes from the track list, composer included
+        self.lyrion.tracks[704][3].update(title='Us and Them', composer='Richard Wright, Roger Waters')
+        self.lyrion.tags_down = True
+        rows = {r['track_id']: r for r in self.svc.album(704)['tracks']}
+        self.assertEqual(rows[200]['tags'], {'TITLE': ['Us and Them'], 'COMPOSER': ['Richard Wright, Roger Waters'],
+                                             'TRACKNUMBER': ['4'], 'DISCNUMBER': ['1']})
+        self.lyrion.tags_down = False
         # another server's library: nothing is written, tags come from Lyrion
         self.local['yes'] = False
         remote = self.svc.album(704)

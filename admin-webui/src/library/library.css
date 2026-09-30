@@ -106,6 +106,7 @@
 .lb-head-cover { width: 112px; flex: 0 0 auto; margin: 0; }
 .lb-head-tx { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .lb-head-tx h2.page { margin: 0; overflow-wrap: anywhere; line-height: 1.25; }
+.lb-composers { overflow-wrap: anywhere; }
 @media (max-width: 560px) {
   .lb-head { gap: 12px; }
   .lb-head-cover { width: 84px; }

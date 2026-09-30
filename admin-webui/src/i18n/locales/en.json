@@ -1126,7 +1126,9 @@
       "nTracks": "{n} tracks",
       "nDiscs": "{n} discs",
       "tabTags": "Tags in the files",
-      "tabCredits": "Online credits"
+      "tabCredits": "Online credits",
+      "composer": "Composer",
+      "composers": "Composers"
     },
     "tags": {
       "albumTitle": "The whole album",

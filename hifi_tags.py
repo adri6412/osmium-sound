@@ -93,6 +93,12 @@ MAX_TRACKS = 2000
 OTHER_VALUE_LEN = 1000      # read-only tags are shown cut to this
 OTHER_KEYS_MAX = 100
 MAX_COVER_BYTES = 12 * 1024 * 1024
+# The contributor roles that make somebody an artist here. Asked for
+# explicitly on every `artists` / `albums artist_id:` query: left out, Lyrion
+# falls back on its own preferences, and the default ones (unified list off)
+# put every role in the list, so composers, conductors and bands turned up
+# among the artists. They keep their credits on each track instead.
+ARTIST_ROLES = 'ARTIST,ALBUMARTIST,TRACKARTIST'
 LYRION_TAGS_TIMEOUT = 5.0   # Lyrion 9.2 can hang on `tags` for a WAV file
 
 _NUMBER_RE = re.compile(r'^[0-9]{1,4}(/[0-9]{1,4})?$')
@@ -944,7 +950,8 @@ class TagService:
             missing = [i for i in dict.fromkeys(ids) if i is not None and i not in cache]
 
         def count(item):
-            cmd = ['titles', 0, 0, f'album_id:{item}'] if kind == 'tracks' else ['albums', 0, 0, f'artist_id:{item}']
+            cmd = (['titles', 0, 0, f'album_id:{item}'] if kind == 'tracks'
+                   else ['albums', 0, 0, f'artist_id:{item}', f'role_id:{ARTIST_ROLES}'])
             try:
                 return item, int(self.lyrion.request(cmd, timeout=10).get('count') or 0)
             except (hm.LyrionError, TypeError, ValueError):
@@ -990,6 +997,7 @@ class TagService:
             params.append(f'search:{q}')
         if artist_id is not None:
             params.append(f'artist_id:{int(artist_id)}')
+            params.append(f'role_id:{ARTIST_ROLES}')
         r = self.lyrion.request(params, timeout=20)
         loop = [a for a in r.get('albums_loop') or [] if _int_or_none(a.get('id')) is not None]
         counts = self._counted('tracks', [int(a['id']) for a in loop])
@@ -1001,7 +1009,7 @@ class TagService:
         return {'total': int(r.get('count') or 0), 'albums': albums}
 
     def artists(self, q='', offset=0, limit=100):
-        params = ['artists', int(offset), int(limit)]
+        params = ['artists', int(offset), int(limit), f'role_id:{ARTIST_ROLES}']
         if q:
             params.append(f'search:{q}')
         r = self.lyrion.request(params, timeout=20)
@@ -1064,7 +1072,7 @@ class TagService:
         return loop[0] if loop and _int_or_none(loop[0].get('id')) is not None else None
 
     def _album_tracks(self, album_id):
-        r = self.lyrion.request(['titles', 0, 5000, f'album_id:{int(album_id)}', 'tags:dtiuoalyg',
+        r = self.lyrion.request(['titles', 0, 5000, f'album_id:{int(album_id)}', 'tags:Adtiuoalyg',
                                  'sort:tracknum'], timeout=30)
         return [t for t in r.get('titles_loop') or [] if _int_or_none(t.get('id')) is not None]
 
@@ -1163,7 +1171,7 @@ class TagService:
                 dump_state[fmt] = True
         m = _Model()
         m.add('TITLE', [t.get('title') or ''])
-        for key, field in (('ARTIST', 'artist'), ('ALBUM', 'album'), ('GENRE', 'genre')):
+        for key, field in (('ARTIST', 'artist'), ('ALBUM', 'album'), ('GENRE', 'genre'), ('COMPOSER', 'composer')):
             if t.get(field) and t[field] not in self._LYRION_PLACEHOLDERS:
                 m.add(key, [t[field]])
         if str(t.get('year') or '0') != '0':

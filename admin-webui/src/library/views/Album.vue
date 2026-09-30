@@ -47,6 +47,23 @@ async function load() {
 }
 
 const album = computed(() => (data.value && data.value.album) || null);
+// The composers the files name, once each in the order they appear: an
+// extra under the artist, since they are no longer listed among the
+// artists (the library's artist list keeps to artists).
+const composers = computed(() => {
+  const seen = new Set();
+  const out = [];
+  for (const tr of (data.value && data.value.tracks) || []) {
+    for (const v of (tr.tags && tr.tags.COMPOSER) || []) {
+      const name = String(v).trim();
+      const k = name.toLowerCase();
+      if (!name || seen.has(k)) continue;
+      seen.add(k);
+      out.push(name);
+    }
+  }
+  return out;
+});
 
 function setDirty(which, v) { dirty.value = { ...dirty.value, [which]: v }; }
 const anyDirty = computed(() => dirty.value.tags || dirty.value.credits);
@@ -84,6 +101,9 @@ function onMoved(id) {
         <template v-if="album.year">{{ album.year }} · </template>
         {{ data.tracks.length === 1 ? t('library.album.oneTrack') : t('library.album.nTracks', { n: data.tracks.length }) }}
         <template v-if="album.disc_count > 1"> · {{ t('library.album.nDiscs', { n: album.disc_count }) }}</template>
+      </div>
+      <div class="muted lb-composers" v-if="composers.length">
+        {{ composers.length === 1 ? t('library.album.composer') : t('library.album.composers') }}: {{ composers.join(' · ') }}
       </div>
     </div>
   </div>

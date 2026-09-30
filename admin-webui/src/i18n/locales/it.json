@@ -1126,7 +1126,9 @@
       "nTracks": "{n} brani",
       "nDiscs": "{n} dischi",
       "tabTags": "Tag nei file",
-      "tabCredits": "Crediti dal web"
+      "tabCredits": "Crediti dal web",
+      "composer": "Compositore",
+      "composers": "Compositori"
     },
     "tags": {
       "albumTitle": "Tutto l'album",
