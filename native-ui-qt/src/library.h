@@ -40,8 +40,9 @@ class LibraryModel : public QAbstractListModel {
     Q_PROPERTY(QString playerId MEMBER m_playerId)
 public:
     // The new views sit at the end so the numbers the QML compares against
-    // stay what they were. Genres/Years/Composers/NewMusic are `genres`,
-    // `years`, `artists role_id:COMPOSER` and `albums sort:new`; Search is
+    // stay what they were. Artists is `artists` with the artist roles only
+    // (ARTIST, ALBUMARTIST, TRACKARTIST); Genres/Years/Composers/NewMusic are
+    // `genres`, `years`, `artists role_id:COMPOSER` and `albums sort:new`; Search is
     // Lyrion's server-side `search` (artists, albums and tracks in one list,
     // see `kind`). Albums also takes a filter in p2 (genre_id:, year:, role_id:).
     // AlbumPage and ArtistPage are the album and artist pages: they load their

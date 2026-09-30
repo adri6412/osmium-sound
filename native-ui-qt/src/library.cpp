@@ -182,7 +182,10 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
     // random, search results); the alphabetical views sort here
     m_serverOrder = view == NewMusic || view == Search || (view == Albums && s2.contains("sort:"));
     switch (view) {
-    case Artists: params = {"artists", "0", "9999", "tags:s"}; break;
+    // artists only: without `role_id` Lyrion follows its own preferences,
+    // whose defaults put every role in the list (composers, conductors,
+    // bands); those keep their own view and their credits on the album page
+    case Artists: params = {"artists", "0", "9999", "tags:s", "role_id:ARTIST,ALBUMARTIST,TRACKARTIST"}; break;
     // p2 = extra filter for the albums query: genre_id:N, year:YYYY, role_id:COMPOSER, sort:new…
     case Albums: params = {"albums", "0", "9999", "tags:alSj"}; if (!s1.isEmpty()) params << "artist_id:" + s1; if (!s2.isEmpty()) params << s2; break;
     case NewMusic: params = {"albums", "0", "100", "tags:alSj", "sort:new"}; break;
