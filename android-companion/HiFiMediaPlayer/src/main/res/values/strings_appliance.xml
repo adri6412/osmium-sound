@@ -6,7 +6,7 @@
     <string name="appliance_section_sources">Music sources</string>
     <string name="appliance_section_sources_desc">Folders, USB, network shares</string>
     <string name="appliance_section_services">Services</string>
-    <string name="appliance_section_services_desc">Tidal Connect and SSH access</string>
+    <string name="appliance_section_services_desc">SSH access</string>
     <string name="appliance_section_playback">Playback</string>
     <string name="appliance_section_playback_desc">Track transitions, VU meters, auto-open now playing</string>
     <string name="appliance_section_display">Display</string>
@@ -89,10 +89,6 @@
     <string name="appliance_autoexpand_off">Off</string>
     <string name="appliance_autoexpand_changed">Auto-open preference saved</string>
     <string name="appliance_autoexpand_failed">Could not save the preference</string>
-
-    <!-- Services -->
-    <string name="appliance_services_tidal">Tidal Connect</string>
-    <string name="appliance_services_tidal_updated">Tidal Connect updated</string>
 
     <!-- Lyrion -->
     <string name="appliance_lyrion_reboot_warning">Changing the music server needs a restart to take effect. Restart now?</string>

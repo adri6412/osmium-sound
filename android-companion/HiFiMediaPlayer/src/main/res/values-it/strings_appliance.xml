@@ -3,7 +3,7 @@
     <string name="appliance_section_sources">Sorgenti musicali</string>
     <string name="appliance_section_sources_desc">Cartelle, USB, condivisioni di rete</string>
     <string name="appliance_section_services">Servizi</string>
-    <string name="appliance_section_services_desc">Tidal Connect e accesso SSH</string>
+    <string name="appliance_section_services_desc">Accesso SSH</string>
     <string name="appliance_section_playback">Riproduzione</string>
     <string name="appliance_section_playback_desc">Transizioni tra i brani, VU meter, apertura automatica in riproduzione</string>
     <string name="appliance_section_display">Schermo</string>
@@ -86,10 +86,6 @@
     <string name="appliance_autoexpand_off">Disattiva</string>
     <string name="appliance_autoexpand_changed">Preferenza salvata</string>
     <string name="appliance_autoexpand_failed">Salvataggio preferenza fallito</string>
-
-    <!-- Services -->
-    <string name="appliance_services_tidal">Tidal Connect</string>
-    <string name="appliance_services_tidal_updated">Tidal Connect aggiornato</string>
 
     <!-- Lyrion -->
     <string name="appliance_lyrion_reboot_warning">Cambiare il server musicale richiede un riavvio per avere effetto. Riavviare ora?</string>

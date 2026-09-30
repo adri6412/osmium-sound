@@ -18,7 +18,7 @@ implementazione per le 3 feature a maggior impatto. Aggiornata a luglio 2026.
 
 Buona parte di ciò che i concorrenti pubblicizzano è **già presente**: multiroom
 con auto-discovery, DSP (EQ parametrico, crossfeed, room correction), bit-perfect
-fino a DSD/192 kHz, streaming via plugin Lyrion (Spotify, TIDAL Connect, Qobuz,
+fino a DSD/192 kHz, streaming via plugin Lyrion (Spotify, TIDAL, Qobuz,
 Deezer), radio internet, testi (MusicArtistInfo), sveglia e sleep timer, app
 companion Android con pairing QR, OTA firmati, **riproduzione CD** (plugin CD
 Player + regole udev già nell'immagine), Samba/SMB/USB come sorgenti, VU meter

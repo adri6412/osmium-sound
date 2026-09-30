@@ -359,16 +359,10 @@ async function removeFir() {
   loadFir();
 }
 
-// ── Tidal / SSH ─────────────────────────────────────────────────
-const tidal = reactive({ available: false, enabled: false });
+// ── SSH ─────────────────────────────────────────────────────────
 const sshState = reactive({ available: false, enabled: false });
 async function loadToggles() {
-  const tv = await api.sys('tidal'); if (tv.ok) { tidal.available = !!tv.data.available; tidal.enabled = !!tv.data.enabled; }
   const s = await api.sys('ssh'); if (s.ok) { sshState.available = !!s.data.available; sshState.enabled = !!s.data.enabled; }
-}
-async function setTidal(v) {
-  tidal.enabled = v; const r = await api.sysPost('tidal', { enable: v });
-  say(bodyMsg(r, t('settings.services.tidalUpdated')), !(r.ok && r.data.success !== false)); loadToggles();
 }
 async function setSsh(v) {
   sshState.enabled = v; const r = await api.sysPost('ssh', { enable: v });
@@ -1928,10 +1922,6 @@ onUnmounted(() => {
 
     <!-- Services -->
     <div class="card" v-if="open === 'services'">
-      <div class="between item" v-if="tidal.available">
-        <span>{{ t('settings.services.tidal') }}</span>
-        <Toggle :model-value="tidal.enabled" @update:model-value="setTidal" />
-      </div>
       <div class="between item">
         <span>{{ t('settings.services.ssh') }} <span class="muted">{{ t('settings.services.sshHint') }}</span></span>
         <Toggle :model-value="sshState.enabled" @update:model-value="setSsh" />

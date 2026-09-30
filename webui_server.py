@@ -1029,8 +1029,6 @@ _AUTH_ROUTES = {
     ('/api/system/lms_role', 'GET'): '/lms_role',
     ('/api/system/lms_role', 'POST'): '/lms_role',
     ('/api/system/discover_lms', 'GET'): '/discover_lms',
-    ('/api/system/tidal', 'GET'): '/tidal_status',
-    ('/api/system/tidal', 'POST'): '/tidal_set',
     ('/api/system/dsp', 'GET'): '/dsp_status',
     ('/api/system/dsp', 'POST'): '/dsp_set',
     ('/api/system/dsp_presets', 'GET'): '/dsp_presets',

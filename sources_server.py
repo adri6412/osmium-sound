@@ -4461,8 +4461,8 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/ui_refresh", "POST", "/ui_refresh"),
     # The rest of the web admin's Settings the companion shows too: which
     # interface runs on the screen, the pointer, whether this device plays at
-    # all, the timezone, the VU meter style and store, the now-playing
-    # auto-open delay, and the Tidal connector. Same rationale as the display
+    # all, the timezone, the VU meter style and store, and the now-playing
+    # auto-open delay. Same rationale as the display
     # settings above — none of them can cut the box off the network, lock
     # anyone out or hand out a login, so the pairing token is enough. Network
     # addressing, Tailscale, the SSH login, the admin account, factory reset
@@ -4485,8 +4485,6 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/vu_store/seen", "POST", "/vu_store/seen"),
     ("/api/system/nowplaying_autoexpand", "GET", "/nowplaying_autoexpand"),
     ("/api/system/nowplaying_autoexpand", "POST", "/nowplaying_autoexpand"),
-    ("/api/system/tidal", "GET", "/tidal_status"),
-    ("/api/system/tidal", "POST", "/tidal_set"),
     ("/api/system/player_name", "GET", "/player_name"),
     ("/api/system/player_name", "POST", "/player_name"),
     # Renames BOTH the hostname and the squeezelite/Bluetooth player name
@@ -4529,7 +4527,7 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/shutdown", "POST", "/shutdown"),
 ]
 
-_SLOW_SYSTEM_PROXY_POSTS = {"/ui_engine", "/player_enabled", "/tidal_set", "/timezone"}
+_SLOW_SYSTEM_PROXY_POSTS = {"/ui_engine", "/player_enabled", "/timezone"}
 
 
 def _make_system_proxy_view(remote_path, method):
@@ -4538,8 +4536,8 @@ def _make_system_proxy_view(remote_path, method):
     # write the plan. Timing out here would tell the phone the update failed
     # while the appliance was in fact about to start it — and the phone would
     # then fall back to driving the sequence itself, on top of a running plan.
-    # Switching the screen's interface, turning the player on/off or the Tidal
-    # connector on/off each wait on a systemctl call of up to 30s over there.
+    # Switching the screen's interface or turning the player on/off each wait
+    # on a systemctl call of up to 30s over there.
     if "apply" in remote_path:
         timeout = 90
     elif method == "POST" and remote_path in _SLOW_SYSTEM_PROXY_POSTS:

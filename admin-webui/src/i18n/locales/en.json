@@ -618,12 +618,10 @@
       "firNoneToRemove": "No filter to remove"
     },
     "services": {
-      "tidal": "Tidal Connect",
       "ssh": "SSH access",
       "sshHint": "(for support use only)",
       "sshOn": "SSH enabled",
       "sshOff": "SSH disabled",
-      "tidalUpdated": "Tidal Connect updated",
       "sshLoginIs": "SSH login:",
       "sshNoLogin": "No SSH login has been created on this device yet.",
       "sshSudoWarning": "This login has full administrator rights (sudo) on the appliance. SSH is for advanced users — use at your own risk.",

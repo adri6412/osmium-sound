@@ -5404,18 +5404,6 @@ def webui_reset_credentials():
         return {'success': False, 'code': 'webui.credsResetFailed',
                 'message': _t('webui.credsResetFailed', _lang())}
 
-# ──────────────────────────────────────────────────────────────────
-#  Tidal Connect — optional. Lets the appliance appear as a Tidal Connect
-#  target so the Tidal app can stream directly to it (via mDNS/avahi). The
-#  daemon is an unofficial, reverse-engineered binary that is NOT bundled
-#  (no trusted x86 build ships with the image); the OS-OTA migration only
-#  sets up the prerequisites (avahi) and the systemd unit. The toggle is
-#  therefore only "available" once a tidal-connect binary is actually present.
-#  Unit name comes from a fixed constant (never user input) — no injection.
-# ──────────────────────────────────────────────────────────────────
-TIDAL_UNIT = 'tidal-connect.service'
-TIDAL_BINARY = '/usr/local/bin/tidal_connect'
-
 def _unit_exists(unit):
     try:
         r = subprocess.run(['systemctl', 'list-unit-files', unit],
@@ -5423,52 +5411,6 @@ def _unit_exists(unit):
         return r.returncode == 0 and unit in (r.stdout or '')
     except Exception:
         return False
-
-def _tidal_available():
-    # Both the unit AND the (unbundled) binary must be present for the toggle
-    # to do anything useful.
-    return _unit_exists(TIDAL_UNIT) and os.path.exists(TIDAL_BINARY)
-
-def get_tidal_status():
-    try:
-        en = subprocess.run(['systemctl', 'is-enabled', TIDAL_UNIT],
-                           capture_output=True, text=True, timeout=10)
-        ac = subprocess.run(['systemctl', 'is-active', TIDAL_UNIT],
-                           capture_output=True, text=True, timeout=10)
-        return {
-            'available': _tidal_available(),
-            'enabled': en.stdout.strip() == 'enabled',
-            'active': ac.stdout.strip() == 'active',
-        }
-    except Exception:
-        log.exception("get_tidal_status failed")
-        return {'available': False, 'enabled': False, 'active': False,
-                'error': _t('tidal.statusUnavailable', _lang())}
-
-def set_tidal(enable):
-    """Enable+start or disable+stop the Tidal Connect daemon (persists)."""
-    if enable and not _tidal_available():
-        return {'success': False, 'available': False, 'enabled': False,
-                'active': False, 'code': 'tidal.notInstalled',
-                'message': _t('tidal.notInstalled', _lang())}
-    action = 'enable' if enable else 'disable'
-    try:
-        r = subprocess.run(['sudo', 'systemctl', action, '--now', TIDAL_UNIT],
-                          capture_output=True, text=True, timeout=30)
-        if r.returncode != 0:
-            log.error("set_tidal %s failed: %s", action, (r.stderr or '').strip())
-            status = get_tidal_status()
-            status['success'] = False
-            status['code'] = 'tidal.opFailed'
-            status['message'] = _t('tidal.opFailed', _lang())
-            return status
-    except Exception:
-        log.exception("set_tidal failed")
-        return {'success': False, 'code': 'tidal.opFailed', 'message': _t('tidal.opFailed', _lang())}
-    status = get_tidal_status()
-    status['success'] = True
-    status['message'] = _t('tidal.enabled' if enable else 'tidal.disabled', _lang())
-    return status
 
 # ──────────────────────────────────────────────────────────────────
 #  DSP / CamillaDSP engine — OPTIONAL parametric EQ + crossfeed.
@@ -9821,15 +9763,6 @@ def api_dsp_preset_rename():
 def api_dsp_preset_delete():
     data = request.get_json(silent=True) or {}
     return jsonify(delete_dsp_preset(data.get('name')))
-
-@app.route('/tidal_status', methods=['GET'])
-def api_tidal_status():
-    return jsonify(get_tidal_status())
-
-@app.route('/tidal_set', methods=['POST'])
-def api_tidal_set():
-    data = request.get_json(silent=True) or {}
-    return jsonify(set_tidal(bool(data.get('enable'))))
 
 # ── Bluetooth speakers (A2DP source) ──────────────────────────────
 # /bluetooth_status keeps its old path: it is the one Bluetooth route that

@@ -231,10 +231,6 @@ export const systemAPI = {
   // Broadcast-discover other Lyrion/LMS servers on the LAN (no IP typing needed).
   // Returns { servers: [{ ip, name, port }] }
   discoverLmsServers: () => apiGet('/discover_lms'),
-  // Tidal Connect daemon state: { available, enabled, active }
-  getTidalStatus: () => apiGet('/tidal_status'),
-  // Enable/disable the Tidal Connect daemon. Returns { success, enabled, active, message }
-  setTidal: (enable) => apiPost('/tidal_set', { enable }),
 
   // DSP/EQ engine state: { available, enabled, bands, crossfeed }
   getDspStatus: () => apiGet('/dsp_status'),

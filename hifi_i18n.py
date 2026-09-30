@@ -243,13 +243,6 @@ MESSAGES = {
                          'it': 'Credenziali interfaccia web azzerate'},
     'webui.credsResetFailed': {'en': 'Credential reset failed', 'it': 'Reset credenziali fallito'},
 
-    # ── Tidal Connect ────────────────────────────────────────────────
-    'tidal.notInstalled': {'en': 'Tidal Connect is not installed on this device',
-                           'it': 'Tidal Connect non installato su questo dispositivo'},
-    'tidal.opFailed': {'en': 'Tidal Connect operation failed', 'it': 'Operazione Tidal Connect fallita'},
-    'tidal.enabled': {'en': 'Tidal Connect enabled', 'it': 'Tidal Connect abilitato'},
-    'tidal.disabled': {'en': 'Tidal Connect disabled', 'it': 'Tidal Connect disabilitato'},
-
     # ── DSP engine ───────────────────────────────────────────────────
     'dsp.unavailable': {'en': 'DSP is not available on this device', 'it': 'DSP non disponibile su questo dispositivo'},
     'dsp.opFailed': {'en': 'DSP operation failed', 'it': 'Operazione DSP fallita'},
@@ -552,7 +545,6 @@ MESSAGES = {
     'network.scanFailed': {'en': 'Wi-Fi scan failed', 'it': 'Scansione WiFi fallita'},
     'audio.listDevicesFailed': {'en': 'Reading audio devices failed', 'it': 'Lettura dispositivi audio fallita'},
     'tailscale.statusUnavailable': {'en': 'Status unavailable', 'it': 'Stato non disponibile'},
-    'tidal.statusUnavailable': {'en': 'Tidal Connect status unavailable', 'it': 'Stato Tidal Connect non disponibile'},
     'network.hotspotUnsupported': {'en': "This Wi-Fi card doesn't support hotspot mode",
                                    'it': 'La scheda Wi-Fi non supporta la modalità hotspot'},
     'network.hotspotActivateFailed': {'en': 'Hotspot activation failed', 'it': 'Attivazione hotspot fallita'},

@@ -618,12 +618,10 @@
       "firNoneToRemove": "Nessun filtro da rimuovere"
     },
     "services": {
-      "tidal": "Tidal Connect",
       "ssh": "Accesso SSH",
       "sshHint": "(solo per assistenza)",
       "sshOn": "SSH attivato",
       "sshOff": "SSH disattivato",
-      "tidalUpdated": "Tidal Connect aggiornato",
       "sshLoginIs": "Accesso SSH:",
       "sshNoLogin": "Su questo dispositivo non è ancora stato creato un accesso SSH.",
       "sshSudoWarning": "Questo accesso ha pieni diritti di amministratore (sudo) sull'apparecchio. SSH è per utenti esperti: usalo a tuo rischio.",
