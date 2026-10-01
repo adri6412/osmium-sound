@@ -452,6 +452,12 @@ FSTAB
 rm -f "$CH/var/lib/dbus/machine-id"
 
 # ── 8. pulizia ───────────────────────────────────────────────────────────
+# Every package of the image with its license, for Settings → Licenses &
+# credits (api_server.py /credits). Before the cleanup below, which keeps the
+# copyright files anyway; runs on the host, reads the chroot only.
+log "credits.json (pacchetti e licenze)"
+python3 "$SCRIPT_DIR/gen-credits.py" "$CH" "$CH/usr/lib/osmium/credits.json" || die "gen-credits.py fallito"
+
 log "pulizia (apt, doc/man/info, locale, log)"
 in_chroot apt-get clean >/dev/null
 rm -rf "$CH"/var/lib/apt/lists/* "$CH"/var/cache/apt/*.bin "$CH"/var/cache/debconf/*-old "$CH"/var/lib/dpkg/*-old

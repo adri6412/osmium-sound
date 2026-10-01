@@ -111,6 +111,9 @@ Item {
     property bool fmtWatch: false
     property var timezones: []
     property var thirdParty: null
+    // api /credits: this project's license, the installed Lyrion and how many
+    // Debian packages the image carries (the full list is in the web admin)
+    property var credits: null
     // network check (api_server /network_check): the last result, and the
     // section it was opened from, where the back arrow returns
     property var nc: null
@@ -595,6 +598,7 @@ Item {
         if (id === "vuMeters") cfg.loadStore(true)
         if (id === "animations") cfg.loadAnimStore(true)
         if (id === "thirdPartyNotices" && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
+        if (id === "thirdPartyNotices" && !credits) Api.get(cfg.api("/credits"), function(ok, d) { if (ok && d && d.project) { credits = d; rebuild() } }, 8000)
         rebuild(); page.contentY = 0; appear()
         if (mark) { pendingMark = mark; markTimer.restart() }
     }
@@ -1885,6 +1889,15 @@ Item {
     function secThirdparty() {
         if (!thirdParty) { note(Tr.t("common.loading"), "dark"); return }
         help("settings.thirdPartyNotices.intro")
+        // This project and Lyrion first, from the API when it has answered:
+        // the name Lyrion is never left out of this page
+        var c = credits || {}, p = c.project || {}, ly = c.lyrion || {}
+        var pr = info("Osmium Sound " + String(p.version || cfg.version || ""), String(p.license || "AGPL-3.0-only")); pr.mono = true; pr.hh = 64; pr.tone = "tp"
+        pr.extra = Tr.t("settings.thirdPartyNotices.projectNote")
+        var lr = info(String(ly.name || "Lyrion Music Server"), String(ly.license || "GPL-2.0+")); lr.mono = true; lr.hh = 64; lr.tone = "tp"
+        lr.extra = (ly.version ? String(ly.version) + " — " : "") + Tr.t("settings.thirdPartyNotices.lyrionNote")
+        if (c.packages_available) helpText(Tr.tf("settings.thirdPartyNotices.debianCount", "n", String((c.packages || []).length)), 12)
+        else if (credits) helpText(Tr.t("settings.thirdPartyNotices.debianMissing"), 12)
         for (var i = 0; i < thirdParty.length; i++) {
             var s = thirdParty[i]
             var h = labelText(String(s.section || ""), 12); h.dim = true

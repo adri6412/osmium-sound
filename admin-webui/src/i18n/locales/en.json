@@ -267,6 +267,10 @@
         "label": "System",
         "desc": "Reboot, shutdown, factory reset"
       },
+      "notices": {
+        "label": "Licenses & credits",
+        "desc": "What the device is made of, and under which licenses"
+      },
       "debug": {
         "label": "Debug",
         "desc": "Boot/crash diagnostics, HAR network captures"
@@ -349,6 +353,19 @@
       "changeFailed": "Could not change the output device",
       "nameSaved": "Name saved",
       "saveFailed": "Could not save"
+    },
+    "notices": {
+      "intro": "What this device is made of, and under which licenses. The same record is kept in THIRD-PARTY-NOTICES.md in the project repository.",
+      "projectLicense": "The project's own code is released under the",
+      "sourceCode": "source code",
+      "commercial": "Commercial licenses are available: write to {email}.",
+      "mitNote": "Code published before {date} was released under the MIT License and remains available under those terms.",
+      "lyrion": "Independent project, not affiliated with Osmium Sound. Installed from the official LMS-Community server under the",
+      "packagesTitle": "Debian packages in this image ({suite}): {n}",
+      "packagesMissing": "The package list of this image is not available: it is written when the image is built.",
+      "generated": "List written when the image was built, on {date}. Each license comes from the package's own copyright file.",
+      "filter": "Filter by name or license",
+      "sourceOffer": "The GPL and LGPL components are unmodified binaries from Debian and from the LMS-Community. Their source code is at deb.debian.org (the suite named above) and on GitHub; a complete source archive matching this image can be requested from info@osmiumsound.it."
     },
     "btSpeakers": {
       "help": "Play to a Bluetooth speaker or a pair of headphones. Each one you add becomes a player in its own right, with its own name and its own queue, next to this device's own player — so you can send it a different album, or group the two together. The DAC output is untouched.",

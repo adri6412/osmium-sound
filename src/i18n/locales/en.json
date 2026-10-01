@@ -937,7 +937,11 @@
       "failed": "Could not change the display mode."
     },
     "thirdPartyNotices": {
-      "intro": "Osmium Sound includes open source components, each under its own license. The full record is also kept in THIRD-PARTY-NOTICES.md in the project repository."
+      "intro": "Osmium Sound includes open source components, each under its own license. The full record is also kept in THIRD-PARTY-NOTICES.md in the project repository.",
+      "projectNote": "The project's own code is released under the GNU AGPL-3.0-only; commercial licenses are available from info@osmiumsound.it. Source: github.com/adri6412/osmium-sound",
+      "lyrionNote": "Independent project, not affiliated with Osmium Sound. Installed from the official LMS-Community server; source: github.com/LMS-Community/slimserver",
+      "debianCount": "Debian packages in this image: {n}. The full list with every license is in the web admin, Settings → Licenses & credits.",
+      "debianMissing": "The package list of this image is not available."
     },
     "playerEnabled": {
       "label": "Player",

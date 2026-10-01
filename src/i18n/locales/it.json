@@ -937,7 +937,11 @@
       "failed": "Impossibile cambiare la modalità schermo."
     },
     "thirdPartyNotices": {
-      "intro": "Osmium Sound include componenti open source, ciascuno con la propria licenza. L'elenco completo è mantenuto anche in THIRD-PARTY-NOTICES.md nel repository del progetto."
+      "intro": "Osmium Sound include componenti open source, ciascuno con la propria licenza. L'elenco completo è mantenuto anche in THIRD-PARTY-NOTICES.md nel repository del progetto.",
+      "projectNote": "Il codice del progetto è rilasciato sotto GNU AGPL-3.0-only; licenze commerciali disponibili scrivendo a info@osmiumsound.it. Sorgenti: github.com/adri6412/osmium-sound",
+      "lyrionNote": "Progetto indipendente, non affiliato a Osmium Sound. Installato dal server ufficiale della LMS-Community; sorgenti: github.com/LMS-Community/slimserver",
+      "debianCount": "Pacchetti Debian in questa immagine: {n}. L'elenco completo con tutte le licenze è nell'amministrazione web, Impostazioni → Licenze e crediti.",
+      "debianMissing": "L'elenco dei pacchetti di questa immagine non è disponibile."
     },
     "playerEnabled": {
       "label": "Player",

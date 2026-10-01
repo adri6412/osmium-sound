@@ -1023,6 +1023,9 @@ _AUTH_ROUTES = {
     ('/api/system/squeezelite_conf', 'GET'): '/squeezelite_conf',
     ('/api/system/squeezelite_conf', 'POST'): '/squeezelite_conf',
     ('/api/system/squeezelite_conf/reset', 'POST'): '/squeezelite_conf/reset',
+    # Settings → Licenses & credits: the project, Lyrion, the third-party
+    # notices and every Debian package of the image with its license.
+    ('/api/system/credits', 'GET'): '/credits',
     ('/api/system/player_name', 'GET'): '/player_name',
     ('/api/system/player_name', 'POST'): '/player_name',
     # Renames BOTH the Linux hostname and the squeezelite/Bluetooth player

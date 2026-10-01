@@ -9307,6 +9307,60 @@ def api_close_and_restart():
     result = close_all_apps_and_restart()
     return jsonify({"message": result})
 
+# ── Settings → Licenses & credits ───────────────────────────────────
+# What the device is made of and under which licenses: this project (AGPL
+# with a commercial option), Lyrion (named, always — see THIRD-PARTY-NOTICES),
+# the hand-kept third-party notices the kiosk already shows, and every Debian
+# package of the image with its license, written by distro/gen-credits.py at
+# image build. The web admin shows all of it; the on-screen page the summary.
+CREDITS_FILE = '/usr/lib/osmium/credits.json'
+THIRD_PARTY_FILE = '/opt/hifi-qt/locales/third_party.json'   # native-ui-qt/ci/build-payload.sh, from src/data/thirdPartyNotices.js
+PROJECT_SOURCE_URL = 'https://github.com/adri6412/osmium-sound'
+
+def get_credits():
+    def load(path, default):
+        try:
+            with open(path, encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return default
+    pkgs = load(CREDITS_FILE, {})
+    if not isinstance(pkgs, dict):
+        pkgs = {}
+    packages = pkgs.get('packages')
+    notices = load(THIRD_PARTY_FILE, [])
+    try:
+        lyrion_version = _lyrion_installed_version() or None
+    except Exception:
+        lyrion_version = None
+    return {
+        'project': {
+            'name': 'Osmium Sound',
+            'version': _installed_ui_version(),
+            'license': 'AGPL-3.0-only',
+            'license_url': 'https://www.gnu.org/licenses/agpl-3.0.html',
+            'source': PROJECT_SOURCE_URL,
+            'commercial': 'info@osmiumsound.it',
+            'mit_until': '2026-08-23',
+        },
+        'lyrion': {
+            'name': 'Lyrion Music Server',
+            'version': lyrion_version,
+            'license': 'GPL-2.0+',
+            'url': 'https://lyrion.org',
+            'source': 'https://github.com/LMS-Community/slimserver',
+        },
+        'notices': notices if isinstance(notices, list) else [],
+        'packages': packages if isinstance(packages, list) else [],
+        'packages_available': isinstance(packages, list),
+        'packages_generated': pkgs.get('generated'),
+        'suite': pkgs.get('suite'),
+    }
+
+@app.route('/credits', methods=['GET'])
+def api_credits():
+    return jsonify(get_credits())
+
 @app.route('/system_info', methods=['GET'])
 def api_system_info():
     result = get_system_info()

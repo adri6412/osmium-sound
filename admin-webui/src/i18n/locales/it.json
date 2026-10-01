@@ -267,6 +267,10 @@
         "label": "Sistema",
         "desc": "Riavvio, spegnimento, ripristino di fabbrica"
       },
+      "notices": {
+        "label": "Licenze e crediti",
+        "desc": "Di cosa è fatto l'apparecchio, e con quali licenze"
+      },
       "debug": {
         "label": "Debug",
         "desc": "Diagnostica avvio/crash, catture di rete HAR"
@@ -349,6 +353,19 @@
       "changeFailed": "Cambio uscita fallito",
       "nameSaved": "Nome salvato",
       "saveFailed": "Salvataggio fallito"
+    },
+    "notices": {
+      "intro": "Di cosa è fatto questo apparecchio, e con quali licenze. Lo stesso elenco è mantenuto in THIRD-PARTY-NOTICES.md nel repository del progetto.",
+      "projectLicense": "Il codice del progetto è rilasciato sotto",
+      "sourceCode": "codice sorgente",
+      "commercial": "Licenze commerciali disponibili: scrivi a {email}.",
+      "mitNote": "Il codice pubblicato prima del {date} era rilasciato sotto licenza MIT e resta disponibile a quelle condizioni.",
+      "lyrion": "Progetto indipendente, non affiliato a Osmium Sound. Installato dal server ufficiale della LMS-Community sotto",
+      "packagesTitle": "Pacchetti Debian in questa immagine ({suite}): {n}",
+      "packagesMissing": "L'elenco dei pacchetti di questa immagine non è disponibile: viene scritto quando l'immagine viene costruita.",
+      "generated": "Elenco scritto alla costruzione dell'immagine, il {date}. Ogni licenza viene dal file copyright del pacchetto.",
+      "filter": "Filtra per nome o licenza",
+      "sourceOffer": "I componenti GPL e LGPL sono binari non modificati di Debian e della LMS-Community. I loro sorgenti sono su deb.debian.org (la suite indicata sopra) e su GitHub; un archivio completo dei sorgenti di questa immagine si può richiedere a info@osmiumsound.it."
     },
     "btSpeakers": {
       "help": "Suona su un altoparlante Bluetooth o su un paio di cuffie. Ognuno che aggiungi diventa un lettore a sé, con il suo nome e la sua coda, accanto al lettore di questo apparecchio: puoi mandargli un altro disco, oppure unire i due. L'uscita del DAC non viene toccata.",

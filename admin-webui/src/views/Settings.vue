@@ -51,6 +51,9 @@ const sections = computed(() => [
   { key: 'backup',    label: t('settings.sections.backup.label'),    desc: t('settings.sections.backup.desc') },
   { key: 'language',  label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
   { key: 'system',    label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
+  // What the device is made of and under which licenses: the project, Lyrion,
+  // the third-party notices and every Debian package of the image.
+  { key: 'notices',   label: t('settings.sections.notices.label'),   desc: t('settings.sections.notices.desc') },
   { key: 'debug',     label: t('settings.sections.debug.label'),     desc: t('settings.sections.debug.desc') },
   // Reached from System and Updates ("Check the network"), not listed itself.
   { key: 'netCheck',  label: t('settings.sections.netCheck.label'),  desc: t('settings.sections.netCheck.desc'), hidden: true },
@@ -235,12 +238,54 @@ async function loadAudio() {
   const r = await api.sys('audio_devices');
   if (r.ok) { devices.value = r.data.devices || []; currentDevice.value = r.data.current || 'default'; }
   const p = await api.sys('device_name'); if (p.ok) playerName.value = p.data.name || '';
+  loadSq();
 }
 async function pickDevice(id) {
   currentDevice.value = id;
   const r = await api.sysPost('audio_device', { device: id });
   say(r.ok && r.data.success !== false ? t('settings.audio.changed') : bodyMsg(r, t('settings.audio.changeFailed')), !(r.ok && r.data.success !== false));
+  loadSq();   // what the new DAC declares for DSD, and its mixer controls
 }
+
+// ── Audio → Advanced: the rest of squeezelite's command line ──────
+// api_server.py get/set/reset_squeezelite_conf; the model lives in
+// hifi_squeezelite.py and /etc/default/squeezelite is rendered from it, so
+// this page — not SSH — is where every option gets changed. Each control
+// applies at once and restarts the player for a moment.
+const sq = ref(null); const sqBusy = ref(false); const sqExtra = ref('');
+function sqTake(data) { sq.value = data; sqExtra.value = (data.conf && data.conf.extra) || ''; }
+async function loadSq() {
+  const r = await api.sys('squeezelite_conf');
+  if (r.ok && r.data.conf) sqTake(r.data);
+}
+async function sqCall(path, body, okMsg) {
+  sqBusy.value = true;
+  try {
+    const r = await api.sysPost(path, body);
+    const ok = r.ok && r.data.success !== false;
+    if (ok && r.data.conf) sqTake(r.data);
+    say(bodyMsg(r, ok ? okMsg : t('settings.audio.saveFailed')), !ok);
+  } finally { sqBusy.value = false; }
+}
+const setSq = (patch) => sqCall('squeezelite_conf', patch, t('settings.audio.sqSaved'));
+const resetSq = () => sqCall('squeezelite_conf/reset', {}, t('settings.audio.sqReset'));
+
+// ── Licenses & credits ─────────────────────────────────────────────
+// api_server.py get_credits: the project, Lyrion, the hand-kept third-party
+// notices (the same the kiosk shows) and every Debian package of the image
+// with its license (distro/gen-credits.py at image build). Loaded when the
+// section opens: the package list runs to several hundred rows.
+const credits = ref(null); const pkgFilter = ref('');
+async function loadCredits() {
+  const r = await api.sys('credits');
+  if (r.ok && r.data.project) credits.value = r.data;
+}
+watch(open, (v) => { if (v === 'notices' && !credits.value) loadCredits(); }, { immediate: true });
+const filteredPackages = computed(() => {
+  const list = (credits.value && credits.value.packages) || [];
+  const q = pkgFilter.value.trim().toLowerCase();
+  return q ? list.filter((p) => (p.name + ' ' + (p.license || '')).toLowerCase().includes(q)) : list;
+});
 async function saveName() {
   const r = await api.sysPost('device_name', { name: playerName.value });
   say(r.ok && r.data.success !== false ? t('settings.audio.nameSaved') : bodyMsg(r, t('settings.audio.saveFailed')), !(r.ok && r.data.success !== false));
@@ -2578,6 +2623,58 @@ onUnmounted(() => {
     </div>
 
     <!-- Debug: boot / kernel-panic troubleshooting flags -->
+    <!-- Licenses & credits: see loadCredits() above -->
+    <div class="card" v-if="open === 'notices'">
+      <p class="sub">{{ t('settings.notices.intro') }}</p>
+      <p class="muted" v-if="!credits">{{ t('common.loading') }}</p>
+      <template v-else>
+        <h3>Osmium Sound <span class="muted">{{ credits.project.version }}</span></h3>
+        <p class="muted">
+          {{ t('settings.notices.projectLicense') }}
+          <a :href="credits.project.license_url" target="_blank" rel="noopener">AGPL-3.0-only</a> ·
+          <a :href="credits.project.source" target="_blank" rel="noopener">{{ t('settings.notices.sourceCode') }}</a>
+        </p>
+        <p class="muted">{{ t('settings.notices.commercial', { email: credits.project.commercial }) }}</p>
+        <p class="muted">{{ t('settings.notices.mitNote', { date: credits.project.mit_until }) }}</p>
+
+        <h3 style="margin-top: 18px;">{{ credits.lyrion.name }} <span class="muted">{{ credits.lyrion.version || '' }}</span></h3>
+        <p class="muted">
+          {{ t('settings.notices.lyrion') }} {{ credits.lyrion.license }} ·
+          <a :href="credits.lyrion.url" target="_blank" rel="noopener">lyrion.org</a> ·
+          <a :href="credits.lyrion.source" target="_blank" rel="noopener">{{ t('settings.notices.sourceCode') }}</a>
+        </p>
+
+        <div v-for="s in credits.notices" :key="s.section" style="margin-top: 18px;">
+          <p class="sub">{{ s.section }}</p>
+          <div v-for="e in s.entries" :key="e.name" class="net between">
+            <span>
+              <span style="display:block;">{{ e.name }} <span class="muted" v-if="e.version">{{ e.version }}</span></span>
+              <span class="muted" style="display:block;" v-if="e.notes">{{ e.notes }}</span>
+              <a class="muted" style="display:block;" v-if="e.url" :href="e.url" target="_blank" rel="noopener">{{ e.url }}</a>
+            </span>
+            <span class="muted" style="white-space: nowrap; margin-left: 12px;">{{ e.license }}</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.notices.packagesTitle', { n: credits.packages.length, suite: credits.suite || 'Debian' }) }}</p>
+          <p class="muted" v-if="!credits.packages_available">{{ t('settings.notices.packagesMissing') }}</p>
+          <template v-else>
+            <p class="muted" v-if="credits.packages_generated">{{ t('settings.notices.generated', { date: credits.packages_generated }) }}</p>
+            <input v-model="pkgFilter" :placeholder="t('settings.notices.filter')" spellcheck="false" />
+            <div v-for="p in filteredPackages" :key="p.name" class="net between">
+              <span>
+                <span style="display:block;">{{ p.name }} <span class="muted">{{ p.version }}</span></span>
+                <a class="muted" style="display:block;" v-if="p.homepage" :href="p.homepage" target="_blank" rel="noopener">{{ p.homepage }}</a>
+              </span>
+              <span class="muted" style="white-space: nowrap; margin-left: 12px;">{{ p.license }}</span>
+            </div>
+          </template>
+        </div>
+        <p class="muted" style="margin-top: 14px;">{{ t('settings.notices.sourceOffer') }}</p>
+      </template>
+    </div>
+
     <div class="card" v-if="open === 'debug'">
       <p class="sub">{{ t('settings.debug.bootHint') }}</p>
       <div class="between item">
