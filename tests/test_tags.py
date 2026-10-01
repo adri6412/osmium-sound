@@ -580,6 +580,10 @@ class ServiceTests(unittest.TestCase):
         self.assertIn('sort:album', albums_calls[-2])
         self.assertEqual(self.svc.artists('', 0, 100),
                          {'total': 1, 'artists': [{'artist_id': 977, 'name': 'Pink Floyd', 'album_count': 1}]})
+        # artists are asked by role, so composers stay out whatever Lyrion's
+        # own artist-list preferences say
+        self.assertIn('role_id:ALBUMARTIST,ARTIST,TRACKARTIST',
+                      [c for c in self.lyrion.calls if c[0] == 'artists'][-1])
         # counts are asked once per scan
         n = sum(1 for c in self.lyrion.calls if c[0] == 'titles')
         self.svc.albums('', 0, 60)

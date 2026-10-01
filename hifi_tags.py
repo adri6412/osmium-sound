@@ -1000,8 +1000,13 @@ class TagService:
             albums.append(entry)
         return {'total': int(r.get('count') or 0), 'albums': albums}
 
+    # Without role_id Lyrion lists whichever contributor roles its own
+    # "artists list" preferences include, composers among them: the editor
+    # wants the people an album is credited to, whatever the server shows.
+    ARTIST_ROLES = 'role_id:ALBUMARTIST,ARTIST,TRACKARTIST'
+
     def artists(self, q='', offset=0, limit=100):
-        params = ['artists', int(offset), int(limit)]
+        params = ['artists', int(offset), int(limit), self.ARTIST_ROLES]
         if q:
             params.append(f'search:{q}')
         r = self.lyrion.request(params, timeout=20)
