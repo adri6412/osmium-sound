@@ -3592,6 +3592,18 @@ def _restore_apply_side_effects(restored):
         except Exception as e:
             print(f"[sources] restore side-effect (timezone) failed: {e}")
     if any(p in restored for p in ("/etc/default/squeezelite", "/var/lib/hifi-player/dsp-target")):
+        # /etc/default/squeezelite is rendered from /etc/hifi-player/
+        # squeezelite.json at every start of the service. A backup from
+        # before the JSON existed restores only the file: without this the
+        # restart would render the live JSON over it and the restored DAC,
+        # name and server would be gone. No JSON → the file is imported.
+        if "/etc/default/squeezelite" in restored and "/etc/hifi-player/squeezelite.json" not in restored:
+            try:
+                os.remove("/etc/hifi-player/squeezelite.json")
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                print(f"[sources] restore side-effect (squeezelite model) failed: {e}")
         _run(["systemctl", "restart", "squeezelite"], timeout=30)
         notes.append(_ht('restore.squeezeliteRestarted', _hlang()))
     if any(p in restored for p in ("/etc/camilladsp/config.yml", "/etc/hifi-player/dsp.json")) \

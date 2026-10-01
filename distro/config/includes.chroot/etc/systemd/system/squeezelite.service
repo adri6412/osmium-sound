@@ -16,6 +16,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# Before every start, render /etc/default/squeezelite from the settings in
+# /etc/hifi-player/squeezelite.json (hifi_squeezelite.py). A device that only
+# has the file gets it imported into the JSON once. Runs here, not as a
+# migration, so every device is right at the next boot; the file is read by
+# EnvironmentFile= only after this step. A hand edit of the file does not
+# survive this — the JSON (or Settings → Audio) is the place to change it.
+# `-` so squeezelite still starts if the script ever fails.
+ExecStartPre=-/usr/bin/python3 /usr/local/bin/hifi_squeezelite.py apply
 EnvironmentFile=-/etc/default/squeezelite
 ExecStart=/usr/bin/squeezelite $ARGS
 Restart=always

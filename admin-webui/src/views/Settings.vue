@@ -1697,11 +1697,78 @@ onUnmounted(() => {
     <div class="card" v-if="open === 'audio'">
       <p class="sub">{{ t('settings.audio.hint') }}</p>
       <div v-for="d in devices" :key="d.id" class="net between" @click="pickDevice(d.id)">
-        <span>{{ d.name || d.id }}</span><span class="check" v-if="d.id === currentDevice">✓</span>
+        <span>{{ d.name || d.id }}<span class="muted" v-if="d.dsd === 'native'" style="margin-left: 8px; font-size: 0.85em;">{{ t('settings.audio.dsdNative') }}</span></span><span class="check" v-if="d.id === currentDevice">✓</span>
       </div>
       <label>{{ t('settings.audio.playerName') }}</label>
       <div class="row"><input v-model="playerName" /><button class="secondary fit" @click="saveName">{{ t('common.save') }}</button></div>
       <p class="sub" style="margin-top: 4px;">{{ t('settings.audio.playerNameHint') }}</p>
+
+      <!-- Advanced: the rest of squeezelite's command line, one control per
+           option, applied at once. See setSq() above. -->
+      <div v-if="sq" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.audio.advancedTitle') }}</p>
+        <p class="muted">{{ t('settings.audio.advancedHint') }}</p>
+
+        <label>{{ t('settings.audio.dsdLabel') }}</label>
+        <span class="seg">
+          <button v-for="m in sq.choices.dsd" :key="m" :disabled="sqBusy" :class="{ active: sq.conf.dsd === m }" @click="setSq({ dsd: m })">{{ t('settings.audio.dsd.' + m) }}</button>
+        </span>
+        <p class="muted">{{ t(sq.dsd_detected === 'native' ? 'settings.audio.dsdDetectedNative' : 'settings.audio.dsdDetectedDop') }} {{ t('settings.audio.dsdHelp') }}</p>
+
+        <label>{{ t('settings.audio.dsdDelayLabel') }}</label>
+        <span class="seg">
+          <button v-for="d in sq.choices.dsd_delay_ms" :key="d" :disabled="sqBusy" :class="{ active: sq.conf.dsd_delay_ms === d }" @click="setSq({ dsd_delay_ms: d })">{{ d ? d + ' ms' : t('settings.audio.off') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.audio.dsdDelayHelp') }}</p>
+
+        <label>{{ t('settings.audio.maxRateLabel') }}</label>
+        <span class="seg">
+          <button v-for="r in sq.choices.max_rate" :key="r" :disabled="sqBusy" :class="{ active: sq.conf.max_rate === r }" @click="setSq({ max_rate: r })">{{ r ? (r / 1000) + ' kHz' : t('settings.audio.auto') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.audio.maxRateHelp') }}</p>
+
+        <label>{{ t('settings.audio.volumeLabel') }}</label>
+        <span class="seg">
+          <button :disabled="sqBusy" :class="{ active: sq.conf.volume === 'software' }" @click="setSq({ volume: 'software' })">{{ t('settings.audio.volumeSoftware') }}</button>
+          <button :disabled="sqBusy || !sq.mixers.length" :class="{ active: sq.conf.volume === 'hardware' }" @click="setSq({ volume: 'hardware' })">{{ t('settings.audio.volumeHardware') }}</button>
+        </span>
+        <p class="muted">{{ sq.mixers.length ? t('settings.audio.volumeHelp') : t('settings.audio.volumeNoMixer') }}</p>
+        <template v-if="sq.conf.volume === 'hardware' && sq.mixers.length > 1">
+          <label>{{ t('settings.audio.mixerLabel') }}</label>
+          <select :value="sq.conf.mixer" :disabled="sqBusy" @change="setSq({ mixer: $event.target.value })">
+            <option v-for="m in sq.mixers" :key="m" :value="m">{{ m }}</option>
+          </select>
+        </template>
+
+        <label>{{ t('settings.audio.alsaBufferLabel') }}</label>
+        <span class="seg">
+          <button :disabled="sqBusy" :class="{ active: sq.conf.alsa_buffer === 'auto' }" @click="setSq({ alsa_buffer: 'auto' })">{{ t('settings.audio.auto') }}</button>
+          <button :disabled="sqBusy" :class="{ active: sq.conf.alsa_buffer === 'large' }" @click="setSq({ alsa_buffer: 'large' })">{{ t('settings.audio.large') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.audio.alsaBufferHelp') }}</p>
+
+        <label>{{ t('settings.audio.streamBufferLabel') }}</label>
+        <span class="seg">
+          <button :disabled="sqBusy" :class="{ active: sq.conf.stream_buffer === 'auto' }" @click="setSq({ stream_buffer: 'auto' })">{{ t('settings.audio.auto') }}</button>
+          <button :disabled="sqBusy" :class="{ active: sq.conf.stream_buffer === 'large' }" @click="setSq({ stream_buffer: 'large' })">{{ t('settings.audio.large') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.audio.streamBufferHelp') }}</p>
+
+        <label>{{ t('settings.audio.realtimeLabel') }}</label>
+        <span class="seg">
+          <button :disabled="sqBusy" :class="{ active: !sq.conf.realtime }" @click="setSq({ realtime: false })">{{ t('settings.audio.off') }}</button>
+          <button :disabled="sqBusy" :class="{ active: sq.conf.realtime }" @click="setSq({ realtime: true })">{{ t('settings.audio.on') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.audio.realtimeHelp') }}</p>
+
+        <label>{{ t('settings.audio.extraLabel') }}</label>
+        <div class="row"><input v-model="sqExtra" :placeholder="t('settings.audio.extraPlaceholder')" spellcheck="false" /><button class="secondary fit" :disabled="sqBusy" @click="setSq({ extra: sqExtra })">{{ t('common.save') }}</button></div>
+        <p class="muted">{{ t('settings.audio.extraHint') }}</p>
+
+        <label>{{ t('settings.audio.argsLabel') }}</label>
+        <p class="muted" style="font-family: monospace; word-break: break-all; user-select: all;">squeezelite {{ sq.args }}</p>
+        <button class="secondary" :disabled="sqBusy" @click="resetSq">{{ t('settings.audio.sqResetButton') }}</button>
+      </div>
     </div>
 
     <!-- Bluetooth speakers: pair one and it turns into a player of its own,

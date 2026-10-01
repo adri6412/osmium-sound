@@ -25,6 +25,7 @@ import glob
 from hifi_logging import get_logger
 from hifi_i18n import t as _t
 from hifi_i18n import MESSAGES as _I18N_MESSAGES
+import hifi_squeezelite as sq
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -1961,6 +1962,21 @@ def set_ipv4_config(cfg):
 # ──────────────────────────────────────────────────────────────────
 
 SQUEEZELITE_DEFAULT = '/etc/default/squeezelite'
+# The settings behind that file. hifi_squeezelite owns the ARGS line: every
+# writer here changes a field of the model and renders the file from it, and
+# squeezelite.service renders it again at every start (ExecStartPre), so the
+# file is never edited in place by anyone — including over SSH.
+SQUEEZELITE_CONF = sq.CONF
+
+def _sq_load():
+    model, _ = sq.load(SQUEEZELITE_CONF, SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
+    return model
+
+def _sq_save(model):
+    """Persist the model and render the defaults file from it. True when the
+    rendered ARGS line changed, i.e. when a player restart is worth it."""
+    model = sq.save(model, SQUEEZELITE_CONF)
+    return sq.write_default(sq.render(model), SQUEEZELITE_DEFAULT)
 
 def list_audio_devices():
     """List ALSA playback devices (cards) usable as squeezelite output.
@@ -1984,11 +2000,19 @@ def list_audio_devices():
                 # DSP engine, not a real output the user should pick directly.
                 if cid == 'Loopback':
                     continue
+                dev_id = f'hw:CARD={cid},DEV={dev}'
+                # 'dsd': how DSD would reach this output — 'native' when the
+                # kernel lists a DSD_U32/U16 format for it, 'dop' otherwise.
+                # Read from /proc/asound by hifi_squeezelite; the DSD mode
+                # itself is a field of the model (Settings → Audio).
+                dsd_fmt = sq.probe(dev_id)
                 devices.append({
-                    'id': f'hw:CARD={cid},DEV={dev}',
+                    'id': dev_id,
                     'name': f'{cname} — {dname}',
                     'card': card,
                     'device': dev,
+                    'dsd': 'native' if sq.is_native(dsd_fmt) else 'dop',
+                    'dsd_format': dsd_fmt,
                 })
     except Exception:
         log.exception("list_audio_devices failed")
@@ -1997,21 +2021,16 @@ def list_audio_devices():
     return {'devices': devices, 'current': _current_real_dac()}
 
 def _current_audio_device():
-    """Return the -o output device currently configured in /etc/default/squeezelite."""
+    """The -o device squeezelite is started with: the Loopback while the DSP
+    engine is on, the chosen DAC otherwise (see _current_real_dac)."""
     try:
-        with open(SQUEEZELITE_DEFAULT) as f:
-            content = f.read()
-        m = re.search(r"ARGS=(['\"])(.*?)\1", content)
-        if m:
-            o = re.search(r'-o\s+(\S+)', m.group(2))
-            if o:
-                return o.group(1)
+        model = _sq_load()
     except Exception:
-        pass
-    return 'default'
+        return 'default'
+    return LOOPBACK_PLAYBACK if model['dsp']['enabled'] else model['output']
 
 def set_audio_device(device):
-    """Rewrite the -o option in /etc/default/squeezelite and restart it."""
+    """Set the DAC (`output` in the squeezelite model) and restart the player."""
     if not device:
         return {'success': False, 'code': 'audio.deviceMissing', 'message': _t('audio.deviceMissing', _lang())}
 
@@ -2035,30 +2054,12 @@ def set_audio_device(device):
                     'message': _t('audio.dspOutputFailed', _lang())}
         return {'success': True, 'message': _t('audio.dspOutputSet', _lang(), device=device)}
 
+    # The DSD mode, the rate limit and the rest stay as the model says; the
+    # render decides `-D`'s format for the new DAC on its own (auto).
     try:
-        with open(SQUEEZELITE_DEFAULT) as f:
-            content = f.read()
-    except Exception:
-        content = "ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium'\n"
-
-    m = re.search(r"ARGS=(['\"])(.*?)\1", content)
-    if m:
-        args = m.group(2)
-        if re.search(r'-o\s+\S+', args):
-            args = re.sub(r'-o\s+\S+', f'-o {device}', args)
-        else:
-            args = f'-o {device} ' + args
-        # Ensure DSD-over-PCM (bit-perfect DSD) is enabled. Without -D squeezelite
-        # downconverts DSD to PCM; -D passes DSD verbatim to a DSD-capable DAC (DoP).
-        if not re.search(r'(^|\s)-D(\s|$)', args):
-            args = re.sub(r'(-o\s+\S+)', r'\1 -D', args, count=1)
-        content = content[:m.start()] + f"ARGS='{args}'" + content[m.end():]
-    else:
-        content += f"\nARGS='-o {device} -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium'\n"
-
-    try:
-        with open(SQUEEZELITE_DEFAULT, 'w') as f:
-            f.write(content)
+        model = _sq_load()
+        model['output'] = device
+        _sq_save(model)
     except Exception:
         log.exception("set_audio_device: write config failed")
         return {'success': False, 'code': 'audio.writeConfigFailed',
@@ -2074,6 +2075,61 @@ def set_audio_device(device):
         return {'success': True, 'message': _t('audio.deviceSetRestartFailed', _lang(), device=device)}
     return {'success': True, 'message': _t('audio.outputSet', _lang(), device=device)}
 
+# ── Settings → Audio: the rest of the squeezelite model ────────────
+# The fields in hifi_squeezelite.TUNABLE (DSD mode, switching pause, rate
+# limit, hardware volume, buffers, real-time priority, extra arguments) —
+# what used to need SSH and a hand edit of /etc/default/squeezelite.
+def get_squeezelite_conf():
+    model = _sq_load()
+    fmt = sq.probe(model['output'])
+    return {
+        'conf': model,
+        'args': sq.render(model),
+        'dsd_detected': 'native' if sq.is_native(fmt) else 'dop',
+        'dsd_format': fmt,
+        'mixers': sq.mixer_controls(model['output']),
+        'choices': {'dsd': list(sq.DSD_MODES), 'dsd_delay_ms': list(sq.DSD_DELAYS),
+                    'max_rate': [0, 96000, 192000, 384000]},
+        'defaults': {k: sq.DEFAULTS[k] for k in sq.TUNABLE},
+    }
+
+def set_squeezelite_conf(changes):
+    model = _sq_load()
+    try:
+        model = sq.set_fields(model, changes)
+    except sq.InvalidField as e:
+        return {'success': False, 'code': e.code,
+                'message': _t(e.code, _lang(), field=e.field, detail=e.detail)}
+    if model['volume'] == 'hardware' and not model['mixer']:
+        mixers = sq.mixer_controls(model['output'])
+        if not mixers:
+            return {'success': False, 'code': 'squeezelite.noMixer',
+                    'message': _t('squeezelite.noMixer', _lang())}
+        model['mixer'] = mixers[0]
+    return _apply_squeezelite_conf(model, 'squeezelite.saved')
+
+def reset_squeezelite_conf():
+    return _apply_squeezelite_conf(sq.reset_tunables(_sq_load()), 'squeezelite.reset')
+
+def _apply_squeezelite_conf(model, msg_key):
+    try:
+        changed = _sq_save(model)
+    except Exception:
+        log.exception("squeezelite conf: write failed")
+        return {'success': False, 'code': 'audio.writeConfigFailed',
+                'message': _t('audio.writeConfigFailed', _lang())}
+    result = {'success': True, 'message': _t(msg_key, _lang())}
+    if changed:
+        try:
+            r = _restart_squeezelite_if_enabled()
+            if r.returncode != 0:
+                result['message'] = _t('squeezelite.restartWarn', _lang(), err=(r.stderr or '').strip())
+        except Exception:
+            log.exception("squeezelite conf: restart failed")
+            result['message'] = _t('squeezelite.restartWarn', _lang(), err='restart failed')
+    result.update(get_squeezelite_conf())
+    return result
+
 # ── Multiroom: which Lyrion server this device's squeezelite follows ──
 # Standalone (default) is squeezelite's own local LMS (-s 127.0.0.1). "Follow"
 # points -s at another Osmium device's LMS on the LAN, so this device's player
@@ -2081,12 +2137,10 @@ def set_audio_device(device):
 # lyrionApi.syncPlayer/unsyncPlayer) — LMS instances don't discover each other,
 # so both devices must point at the same one for multiroom to work between them.
 def _current_lms_host():
-    _, args = _read_sq_args()
-    if args:
-        m = re.search(r'-s\s+(\S+)', args)
-        if m:
-            return m.group(1)
-    return '127.0.0.1'
+    try:
+        return _sq_load()['server']
+    except Exception:
+        return '127.0.0.1'
 
 # A DNS name for an external Lyrion server (nas.lan, lms.example.com,
 # osmium.local). Letters, digits and hyphens per label only: the name ends up
@@ -2180,11 +2234,14 @@ def set_lms_role(mode, host):
         return {'success': False, 'code': 'lms.invalidMode',
                 'message': _t('lms.invalidMode', _lang(), mode=mode)}
 
-    _, args = _read_sq_args()
-    if args is None:
+    try:
+        model = _sq_load()
+        model['server'] = target
+        _sq_save(model)
+    except Exception:
+        log.exception("set_lms_role: write config failed")
         return {'success': False, 'code': 'lms.sqConfigMissing',
                 'message': _t('lms.sqConfigMissing', _lang())}
-    _write_sq_args(_sq_set_s(args, target))
     # Before the player restart below, so squeezelite comes back up with the
     # local server already stopped (following) or already running (standalone)
     # and can only land on the one that was just chosen.
@@ -2222,12 +2279,10 @@ def _valid_player_name(name):
     return bool(isinstance(name, str) and _PLAYER_NAME_RE.match(name))
 
 def _current_player_name():
-    _, args = _read_sq_args()
-    if args:
-        m = re.search(r'-n\s+(\S+)', args)
-        if m:
-            return m.group(1)
-    return 'OsmiumSound'
+    try:
+        return _sq_load()['name']
+    except Exception:
+        return 'OsmiumSound'
 
 def get_player_name():
     return {'name': _current_player_name()}
@@ -2236,15 +2291,14 @@ def set_player_name(name):
     if not _valid_player_name(name):
         return {'success': False, 'code': 'player.invalidName',
                 'message': _t('player.invalidName', _lang())}
-    _, args = _read_sq_args()
-    if args is None:
+    try:
+        model = _sq_load()
+        model['name'] = name
+        _sq_save(model)
+    except Exception:
+        log.exception("set_player_name: write config failed")
         return {'success': False, 'code': 'lms.sqConfigMissing',
                 'message': _t('lms.sqConfigMissing', _lang())}
-    if re.search(r'-n\s+\S+', args):
-        args = re.sub(r'-n\s+\S+', f'-n {name}', args)
-    else:
-        args = (args + f' -n {name}').strip()
-    _write_sq_args(args)
 
     try:
         r = _restart_squeezelite_if_enabled()
@@ -5554,56 +5608,10 @@ def _write_dsp_target(dev):
         f.write((dev or 'default') + '\n')
     os.replace(tmp, DSP_TARGET_FILE)
 
-# ── squeezelite ARGS string editing (shared with set_audio_device) ──
-def _read_sq_args():
-    """Return (full_file_content, args_string) or (content, None) if no ARGS=."""
-    try:
-        with open(SQUEEZELITE_DEFAULT) as f:
-            content = f.read()
-    except Exception:
-        return None, None
-    m = re.search(r"ARGS=(['\"])(.*?)\1", content)
-    return content, (m.group(2) if m else None)
-
-def _write_sq_args(new_args):
-    content, _ = _read_sq_args()
-    if content is None:
-        content = ''
-    m = re.search(r"ARGS=(['\"])(.*?)\1", content)
-    if m:
-        content = content[:m.start()] + f"ARGS='{new_args}'" + content[m.end():]
-    else:
-        content += f"\nARGS='{new_args}'\n"
-    with open(SQUEEZELITE_DEFAULT, 'w') as f:
-        f.write(content)
-
-def _sq_set_o(args, dev):
-    if re.search(r'-o\s+\S+', args):
-        return re.sub(r'-o\s+\S+', f'-o {dev}', args)
-    return f'-o {dev} ' + args
-
-def _sq_set_s(args, host):
-    if re.search(r'-s\s+\S+', args):
-        return re.sub(r'-s\s+\S+', f'-s {host}', args)
-    return (args + f' -s {host}').strip()
-
-def _sq_remove_flag(args, flag):
-    return re.sub(rf'(^|\s){re.escape(flag)}(?=\s|$)', ' ', args).strip()
-
-def _sq_ensure_D(args):
-    if not re.search(r'(^|\s)-D(\s|$)', args):
-        args = re.sub(r'(-o\s+\S+)', r'\1 -D', args, count=1)
-    return args
-
-def _sq_set_rate(args, rate):
-    if re.search(r'-r\s+\S+', args):
-        return re.sub(r'-r\s+\S+', f'-r {rate}', args)
-    return re.sub(r'(-o\s+\S+)', rf'\1 -r {rate}', args, count=1)
-
-def _sq_ensure_R(args):
-    if not re.search(r'(^|\s)-R(\s|$)', args):
-        args = (args + ' -R').strip()
-    return args
+# The squeezelite ARGS line is no longer edited here as a string: the DSP
+# path flips `dsp.enabled` in the hifi_squeezelite model (see _sq_load /
+# _sq_save next to set_audio_device) and the render puts squeezelite on the
+# Loopback at DSP_RATE with soxr, or back on the DAC with `-D`, from that.
 
 def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False, balance=0.0):
     """Build a CamillaDSP config (returned as a dict; JSON is valid YAML)."""
@@ -5674,10 +5682,12 @@ def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False, 
     }
 
 def _current_real_dac():
-    """The DAC squeezelite outputs to when DSP is OFF. When DSP is ON the
-    squeezelite -o is the Loopback, so fall back to the stored target."""
-    o = _current_audio_device()
-    return _read_dsp_target() if 'Loopback' in o else o
+    """The DAC squeezelite outputs to when DSP is OFF — and the one CamillaDSP
+    plays to when it is ON: the model's `output` either way."""
+    try:
+        return _sq_load()['output']
+    except Exception:
+        return _read_dsp_target()
 
 # ── Pause playback around a DSP apply ───────────────────────────────
 # Applying a DSP change restarts squeezelite and/or CamillaDSP, which means
@@ -5905,33 +5915,28 @@ def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balanc
     with open(CAMILLA_CONFIG, 'w') as f:
         json.dump(cfg, f, indent=2)
     _write_dsp_target(playback_dev)
-    _, args = _read_sq_args()
-    if args is not None:
-        new_args = _sq_set_o(args, LOOPBACK_PLAYBACK)
-        new_args = _sq_remove_flag(new_args, '-D')   # no DoP/DSD through the DSP path
-        new_args = _sq_set_rate(new_args, DSP_RATE)  # fixed rate into the loopback
-        new_args = _sq_ensure_R(new_args)            # soxr resample to that rate
-        # Collapse whitespace left behind by flag removal/insertion — belt and
-        # braces against a messy starting string (e.g. an external migration
-        # like 0003-audio-dsd-device.sh touching the same line) leaving runs
-        # of spaces that would otherwise just accumulate on every apply.
-        new_args = re.sub(r'\s+', ' ', new_args).strip()
-        # squeezelite only needs restarting when its own args actually change
-        # (DSP was off, or a preset/balance apply just merged in from an older
-        # client that still sent 'enabled' — see set_dsp). A plain EQ/preset
-        # switch while already on leaves squeezelite's args identical, so
-        # skip the restart: it would otherwise drop squeezelite's connection
-        # to Lyrion and interrupt whatever's currently playing for no reason
-        # — only CamillaDSP needs to reload to pick up the new EQ.
-        if new_args != re.sub(r'\s+', ' ', args).strip():
-            _write_sq_args(new_args)
-            # squeezelite must release the real DAC (by restarting onto the
-            # loopback) BEFORE CamillaDSP tries to open that same hw: device —
-            # otherwise the two processes fight over an exclusive-access
-            # device and CamillaDSP's open can fail or wedge the DAC until a
-            # reboot. Same reasoning as _apply_dsp_off(), just mirrored:
-            # release the old holder before starting the new one.
-            _restart_squeezelite_if_enabled()
+    # squeezelite goes onto the Loopback at DSP_RATE with soxr and no `-D`
+    # (no DoP/DSD through the DSP path): all of that is the render of
+    # dsp.enabled; the DAC itself stays `output`, for CamillaDSP and for the
+    # way back. squeezelite only needs restarting when its own args actually
+    # change (DSP was off, or a preset/balance apply just merged in from an
+    # older client that still sent 'enabled' — see set_dsp). A plain EQ/preset
+    # switch while already on leaves squeezelite's args identical, so skip the
+    # restart: it would otherwise drop squeezelite's connection to Lyrion and
+    # interrupt whatever's currently playing for no reason — only CamillaDSP
+    # needs to reload to pick up the new EQ.
+    model = _sq_load()
+    if playback_dev:
+        model['output'] = playback_dev
+    model['dsp']['enabled'] = True
+    if _sq_save(model):
+        # squeezelite must release the real DAC (by restarting onto the
+        # loopback) BEFORE CamillaDSP tries to open that same hw: device —
+        # otherwise the two processes fight over an exclusive-access
+        # device and CamillaDSP's open can fail or wedge the DAC until a
+        # reboot. Same reasoning as _apply_dsp_off(), just mirrored:
+        # release the old holder before starting the new one.
+        _restart_squeezelite_if_enabled()
     # `enable --now` is a no-op on an already-running unit — it would NOT pick
     # up the config.yml we just wrote (CamillaDSP only reads it at startup, no
     # hot reload). Enable separately for boot persistence, then always
@@ -5950,13 +5955,12 @@ def _apply_dsp_off():
         _lms_pause(playing_player)
     try:
         dac = _read_dsp_target()
-        _, args = _read_sq_args()
-        if args is not None:
-            args = _sq_set_o(args, dac or 'default')
-            args = _sq_ensure_D(args)                 # restore DoP/DSD
-            args = re.sub(r'\s*-r\s+\S+', '', args)    # drop the forced rate
-            args = _sq_remove_flag(args, '-R')         # drop resampling
-            _write_sq_args(re.sub(r'\s+', ' ', args).strip())
+        # Back on the DAC: `-D` as the model's DSD mode says, the forced rate
+        # and the resampling gone — all from the render of dsp.enabled=False.
+        model = _sq_load()
+        model['output'] = dac or model['output'] or 'default'
+        model['dsp']['enabled'] = False
+        _sq_save(model)
         subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
                        capture_output=True, text=True, timeout=30)
         _restart_squeezelite_if_enabled()
@@ -9663,6 +9667,19 @@ def api_audio_devices():
 def api_set_audio_device():
     data = request.get_json(silent=True) or {}
     return jsonify(set_audio_device(data.get('device')))
+
+@app.route('/squeezelite_conf', methods=['GET'])
+def api_squeezelite_conf():
+    return jsonify(get_squeezelite_conf())
+
+@app.route('/squeezelite_conf', methods=['POST'])
+def api_set_squeezelite_conf():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_squeezelite_conf(data if isinstance(data, dict) else {}))
+
+@app.route('/squeezelite_conf/reset', methods=['POST'])
+def api_reset_squeezelite_conf():
+    return jsonify(reset_squeezelite_conf())
 
 @app.route('/lms_role', methods=['GET'])
 def api_lms_role():

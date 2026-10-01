@@ -66,6 +66,18 @@ MESSAGES = {
                                      'it': 'Device impostato ({device}); riavvio non riuscito'},
     'audio.outputSet': {'en': 'Audio output set to {device}', 'it': 'Uscita audio impostata su {device}'},
     'audio.defaultDeviceName': {'en': 'System default', 'it': 'Predefinito di sistema'},
+    # Settings → Audio, the squeezelite model (hifi_squeezelite.py)
+    'squeezelite.saved': {'en': 'Saved, player restarted', 'it': 'Salvato, player riavviato'},
+    'squeezelite.reset': {'en': 'Back to defaults, player restarted', 'it': 'Predefiniti ripristinati, player riavviato'},
+    'squeezelite.unknownField': {'en': 'Unknown setting: {field}', 'it': 'Impostazione sconosciuta: {field}'},
+    'squeezelite.invalidValue': {'en': 'Invalid value for {field}: {detail}', 'it': 'Valore non valido per {field}: {detail}'},
+    'squeezelite.extraManaged': {'en': 'These options are set above, not here: {detail}',
+                                 'it': 'Queste opzioni si impostano sopra, non qui: {detail}'},
+    'squeezelite.extraInvalid': {'en': 'Not allowed in the extra arguments: {detail}',
+                                 'it': 'Non ammesso negli argomenti aggiuntivi: {detail}'},
+    'squeezelite.noMixer': {'en': 'This output has no hardware volume control',
+                            'it': 'Questa uscita non ha un controllo di volume hardware'},
+    'squeezelite.restartWarn': {'en': 'Saved; squeezelite restart: {err}', 'it': 'Salvato; riavvio di squeezelite: {err}'},
 
     # ── Multiroom / Lyrion server role ──────────────────────────────
     'lms.invalidHost': {'en': 'Invalid server address: {host}. Use an IP address (192.168.1.50) or a name (nas.local)',

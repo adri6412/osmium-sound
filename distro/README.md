@@ -63,7 +63,7 @@ refuses `--suite bookworm`).
 | `sources_server.py` | Music sources, internal/USB disks, SMB shares, CD rip, backup/restore, Lyrion skin + first-run setup; companion-app proxy | `hifi-sources.service`, `0.0.0.0:8080` (pairing-token gated) |
 | `webui_server.py` | Web admin (Vue app in `/opt/hifi-webui/dist`) + first-boot setup portal / installer captive portal | `hifi-webui.service`, `:80` (plain HTTP) |
 | `vu_meter_daemon.py` | Streams VU levels from `/dev/shm/squeezelite-*` to the kiosk | `hifi-vumeter.service`, WebSocket `127.0.0.1:9001` |
-| squeezelite (Debian, `-v`) | Local player + VU visualizer export, DSD over DoP | `squeezelite.service` |
+| squeezelite (Debian, `-v`) | Local player + VU visualizer export; its command line is rendered from `/etc/hifi-player/squeezelite.json` (`hifi_squeezelite.py`) | `squeezelite.service` |
 | Lyrion Music Server | Music server / library / streaming (**installed on first boot**, not in the image) | `lyrionmusicserver.service` (`:9000`) |
 | `hifi-firstboot.sh` | One-shot: downloads + installs Lyrion on the installed system, then removes itself | `hifi-firstboot.service` (`ConditionKernelCommandLine=!boot=live`) |
 | `hifi-update-stage-runner.sh` / `hifi-update-apply-runner.sh` | The two-phase "Update now" (stage live → reboot into `system-update.target` → apply in isolation) | transient `hifi-update-stage`, `hifi-update-stage-resume.service`, `hifi-update-apply.service` |
@@ -316,11 +316,21 @@ the boot prompt (press `Tab` on BIOS / `e` on UEFI) and remove
 
 The output device is chosen in Settings (or the setup wizard) and persisted by
 `api_server.py`'s `set_audio_device` as a stable ALSA card name
-(`hw:CARD=<id>,DEV=<n>`) in `/etc/default/squeezelite`, so the choice survives
-reboots and USB re-enumeration. For a hand edit on the installed system: set
-`-o hw:DAC` (find the name with `aplay -l`) in `/etc/default/squeezelite`, then
-`systemctl restart squeezelite`. squeezelite runs with `-D` (DSD over DoP) and a
-persistent per-device player MAC (`apply.d/0042`).
+(`hw:CARD=<id>,DEV=<n>`), so the choice survives reboots and USB
+re-enumeration. **`/etc/default/squeezelite` is a generated file**: `hifi_squeezelite.py`
+renders its `ARGS=` line from the model in `/etc/hifi-player/squeezelite.json`
+(DAC, player name, Lyrion server, persistent player MAC, DSD mode, switching
+pause, rate limit, hardware volume, buffers, real-time priority, extra
+arguments, DSP on/off) — `api_server.py` on every change from Settings, and
+`squeezelite.service`'s `ExecStartPre` at every start, so a hand edit of the
+file is gone at the next start. A device that only has the file gets it
+imported into the JSON once. For a hand change on the installed system: edit
+the JSON (or use Settings → Audio, which has every field), then
+`systemctl restart squeezelite`; `hifi_squeezelite.py show` prints the model and
+the line it renders. DSD: `-D :u32be` / `-D :u32le` (native) when
+`/proc/asound/<card>/stream<n>` lists that format for the DAC and the mode is
+`auto` or `native`, plain `-D` (DoP) otherwise, no `-D` with `off` (squeezelite
+converts DSD to PCM — for HDMI and other outputs with no DSD).
 
 ## Customisation map
 

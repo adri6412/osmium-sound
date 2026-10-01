@@ -1018,6 +1018,11 @@ _AUTH_ROUTES = {
     ('/api/system/ota_channel', 'POST'): '/ota_channel',
     ('/api/system/audio_devices', 'GET'): '/audio_devices',
     ('/api/system/audio_device', 'POST'): '/set_audio_device',
+    # The rest of the squeezelite command line (DSD mode, rate limit, hardware
+    # volume, buffers, extra arguments): Settings → Audio → Advanced.
+    ('/api/system/squeezelite_conf', 'GET'): '/squeezelite_conf',
+    ('/api/system/squeezelite_conf', 'POST'): '/squeezelite_conf',
+    ('/api/system/squeezelite_conf/reset', 'POST'): '/squeezelite_conf/reset',
     ('/api/system/player_name', 'GET'): '/player_name',
     ('/api/system/player_name', 'POST'): '/player_name',
     # Renames BOTH the Linux hostname and the squeezelite/Bluetooth player

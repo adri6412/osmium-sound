@@ -210,6 +210,11 @@ CATEGORIES = {
             # api_server's /timezone to bring the symlink along with it. Keep
             # that in mind if this entry ever moves/renames.
             ("file", "/etc/timezone"),
+            # The settings the file below is rendered from (hifi_squeezelite.py).
+            # A backup made before the JSON existed has only the file: the
+            # restore then drops the live JSON so the file gets imported again
+            # (sources_server._restore_apply_side_effects).
+            ("file", "/etc/hifi-player/squeezelite.json"),
             ("file", "/etc/default/squeezelite"),
             ("file", "/etc/camilladsp/config.yml"),
             ("file", "/var/lib/hifi-player/dsp-target"),

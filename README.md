@@ -22,7 +22,7 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 
 ## ✨ Features
 
-- 🎵 **High-resolution audio** — FLAC, DSD (DoP), PCM up to 192kHz, bit-perfect (no resampling)
+- 🎵 **High-resolution audio** — FLAC, DSD (native when the DAC accepts it, DoP otherwise — automatic, with a choice in Settings → Audio), PCM up to 192kHz, bit-perfect (no resampling)
 - 🎧 **Streaming services** — Deezer, Qobuz, TIDAL, Spotify and more, via Lyrion plugins
 - 📁 **Music library** — browse by artist, album, genre, year, composer, new music, folder or playlist; search the whole library from the touchscreen; refresh it on demand with progress
 - 🎼 **Album & artist pages** — tracks, format and the credits in your own tags; online, who played what on which instrument, production and studios, first release, band members and biographies from MusicBrainz and Wikipedia (pick the edition if the match is wrong)

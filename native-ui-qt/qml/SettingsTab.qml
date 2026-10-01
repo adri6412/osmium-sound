@@ -17,6 +17,9 @@ Item {
 
     // ─── stato locale della sezione aperta (S.*) ───────────────────────────
     property string audioSel: ""
+    // Audio → Advanced: the extra-arguments field, as typed; `dirty` tells a
+    // cleared field from one not touched yet (which shows the saved value)
+    property string sqExtraEdit: ""; property bool sqExtraDirty: false
     property string sshUser: ""; property string sshPass: ""
     property string nameEdit: ""; property string hostEdit: ""
     property string pendAct: ""; property string pendArg: ""
@@ -187,7 +190,9 @@ Item {
         property int animStoreNew: 0
         property var storeAnims: []                                 // [{id, name:{en,it}, scene}]
         property string otaChannel: "prod"; property var otaChannels: ["prod", "dev"]
-        property string audioCur: ""; property var audio: []          // [{id,name}]
+        property string audioCur: ""; property var audio: []          // [{id,name,dsd}]
+        // the rest of squeezelite's command line (api /squeezelite_conf)
+        property var sq: ({ loaded: false, conf: {}, args: "", dsd_detected: "dop", mixers: [], choices: {} })
         property string lmsMode: "local"; property string lmsHost: ""; property string playerName: ""; property string lyrionChannel: "release"
         property string lmsSkin: "unset"; property string skinState: ""; property string skinMsg: ""
         property string lyrInstalled: ""; property var lyrChVer: ["", "", ""]; property string lyrStatus: ""; property int lyrPct: 0; property bool lyrRunning: false
@@ -370,7 +375,11 @@ Item {
             })
             get(api("/audio_devices"), function(d) {
                 audioCur = str(d, "current")
-                audio = (d.devices || []).map(function(x) { return { id: String(x.id || ""), name: String(x.name || "") } })
+                audio = (d.devices || []).map(function(x) { return { id: String(x.id || ""), name: String(x.name || ""), dsd: String(x.dsd || "") } })
+            })
+            get(api("/squeezelite_conf"), function(d) {
+                sq = { loaded: !!d.conf, conf: d.conf || {}, args: String(d.args || ""), dsd_detected: String(d.dsd_detected || "dop"),
+                       mixers: d.mixers || [], choices: d.choices || {} }
             })
             get(api("/lms_role"), function(d) { lmsMode = str(d, "mode", "local"); lmsHost = str(d, "host") })
             get(api("/player_name"), function(d) { playerName = str(d, "name") })
@@ -533,6 +542,16 @@ Item {
 
     function enter() { cfg.load(); goRoot() }
     function say(text, err) { msg = text; msgErr = !!err; rebuild() }
+    // Audio → Advanced: one call per row, the server answers with the whole
+    // model and a message; post() reloads cfg afterwards, which rebuilds the
+    // rows from what was actually saved.
+    function sqDone(ok, d) {
+        if (!ok || (d && d.success === false)) { say((d && d.message) || Tr.t("settings.audio.setFailed"), true); return }
+        sqExtraDirty = false
+        say((d && d.message) || Tr.t("settings.audio.saved"))
+    }
+    function sqSet(body) { post(cfg.api("/squeezelite_conf"), body, sqDone) }
+    function sqReset() { post(cfg.api("/squeezelite_conf/reset"), {}, sqDone) }
     // Settings → Network → "Connect to Wi-Fi". The answer decides the message:
     // before, the page said "now using Wi-Fi" the moment the request left,
     // whatever NetworkManager made of it. A failed attempt reopens the window
@@ -1109,10 +1128,46 @@ Item {
         var sel = audioSel || cfg.audioCur
         for (var i = 0; i < cfg.audio.length; i++) {
             var a = cfg.audio[i]
-            var r = option(a.id === "default" ? Tr.t("settings.audio.defaultDevice") : a.name, a.id, a.id, sel === a.id, "audio_pick"); r.hh = 60; r.mono = true
+            // The sub-line is the ALSA id; a DAC that takes native DSD says so
+            // there too (decided by the kernel's format list, not a setting)
+            var subl = a.id + (a.dsd === "native" ? "   ·   " + Tr.t("settings.audio.dsdNative") : "")
+            var r = option(a.id === "default" ? Tr.t("settings.audio.defaultDevice") : a.name, subl, a.id, sel === a.id, "audio_pick"); r.hh = 60; r.mono = true
         }
         grid([acell(Tr.t("settings.audio.refreshList"), "audio_refresh", "accent", { icon: "rotate-cw", hh: 48 }),
               acell(Tr.t("settings.audio.setOutput"), "audio_apply", "gold", { icon: "volume-2", bold: true, hh: 48 })])
+        if (cfg.sq.loaded) secSqueezelite()
+    }
+    // The rest of squeezelite's command line (api /squeezelite_conf, model in
+    // hifi_squeezelite.py; /etc/default/squeezelite is rendered from it): what
+    // used to need SSH and a hand edit. Every row applies at once.
+    function secSqueezelite() {
+        var s = cfg.sq, c = s.conf || {}, ch = s.choices || {}, i
+        sep()
+        label("settings.audio.advancedTitle"); help("settings.audio.advancedHint", 12)
+        label("settings.audio.dsdLabel", 14)
+        help(s.dsd_detected === "native" ? "settings.audio.dsdDetectedNative" : "settings.audio.dsdDetectedDop", 12)
+        var dm = ch.dsd || ["auto", "dop", "native", "off"], dc = []
+        for (i = 0; i < dm.length; i++) dc.push(cell(Tr.t("settings.audio.dsd." + dm[i]), dm[i], c.dsd === dm[i], "sq_dsd", { hh: 44 }))
+        grid(dc)
+        label("settings.audio.dsdDelayLabel", 14)
+        var dd = ch.dsd_delay_ms || [0, 100, 250, 500], ddc = []
+        for (i = 0; i < dd.length; i++) ddc.push(cell(dd[i] ? dd[i] + " ms" : Tr.t("settings.audio.off"), String(dd[i]), c.dsd_delay_ms === dd[i], "sq_delay", { hh: 44 }))
+        grid(ddc)
+        label("settings.audio.maxRateLabel", 14); help("settings.audio.maxRateHelp", 12)
+        var mr = ch.max_rate || [0, 96000, 192000, 384000], mrc = []
+        for (i = 0; i < mr.length; i++) mrc.push(cell(mr[i] ? (mr[i] / 1000) + " kHz" : Tr.t("settings.audio.auto"), String(mr[i]), c.max_rate === mr[i], "sq_rate", { hh: 44 }))
+        grid(mrc)
+        if (s.mixers && s.mixers.length) toggle(Tr.t("settings.audio.volumeHardware"), Tr.t("settings.audio.volumeHelp"), c.volume === "hardware", "sq_hwvol")
+        else note(Tr.t("settings.audio.volumeNoMixer"), "dark")
+        toggle(Tr.t("settings.audio.alsaBufferLarge"), Tr.t("settings.audio.alsaBufferHelp"), c.alsa_buffer === "large", "sq_abuf")
+        toggle(Tr.t("settings.audio.streamBufferLarge"), Tr.t("settings.audio.streamBufferHelp"), c.stream_buffer === "large", "sq_sbuf")
+        toggle(Tr.t("settings.audio.realtimeLabel"), Tr.t("settings.audio.realtimeHelp"), !!c.realtime, "sq_rt")
+        label("settings.audio.extraLabel", 14); help("settings.audio.extraHint", 12)
+        input(Tr.t("settings.audio.extraPlaceholder"), sqExtraDirty ? sqExtraEdit : (c.extra || ""), "sq_extra", false).hh = 50
+        grid([acell(Tr.t("settings.audio.extraApply"), "sq_extra_apply", "gold", { icon: "check", hh: 44 })])
+        label("settings.audio.argsLabel", 14)
+        code("squeezelite " + (s.args || ""))
+        action(Tr.t("settings.audio.sqResetButton"), "sq_reset", "dark")
     }
     // Playback prefs, alarms and the sync group are THIS device's: while
     // another player is being driven they are hidden behind a note (#99),
@@ -1854,6 +1909,7 @@ Item {
         case "ssh_pass": sshPass = text; break
         case "player_name": nameEdit = text; break
         case "lms_host": hostEdit = text; break
+        case "sq_extra": sqExtraEdit = text; sqExtraDirty = true; break
         case "pick_new": pickNew = text; break
         case "bt_name": btNameEdit = text; break
         }
@@ -2108,8 +2164,19 @@ Item {
             if (!audioSel) return
             post(A("/set_audio_device"), { device: audioSel }); cfg.audioCur = audioSel; say(Tr.t("settings.audio.updated")); break
         case "audio_refresh": cfg.load(); break
+        // Audio → Advanced (see secSqueezelite); toggles send the opposite of
+        // what the row shows, like the SSH and pointer switches
+        case "sq_dsd": sqSet({ dsd: arg }); break
+        case "sq_delay": sqSet({ dsd_delay_ms: parseInt(arg) }); break
+        case "sq_rate": sqSet({ max_rate: parseInt(arg) }); break
+        case "sq_hwvol": sqSet({ volume: row.on ? "software" : "hardware" }); break
+        case "sq_abuf": sqSet({ alsa_buffer: row.on ? "auto" : "large" }); break
+        case "sq_sbuf": sqSet({ stream_buffer: row.on ? "auto" : "large" }); break
+        case "sq_rt": sqSet({ realtime: !row.on }); break
+        case "sq_extra_apply": sqSet({ extra: sqExtraDirty ? sqExtraEdit : String((cfg.sq.conf || {}).extra || "") }); break
+        case "sq_reset": sqReset(); break
         case "lms_skin": post(S("/api/lms_skin"), { skin: arg }); cfg.lmsSkin = arg; say(Tr.t("settings.lyrion.skinApplying")); break
-        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": return
+        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": case "sq_extra": return
         case "lms_role":
             if (arg !== "local") { cfg.lmsMode = "follow"; cfg.loadDiscover(); break }
             // Already on this device's own server: only the toggle moves back,
