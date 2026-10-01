@@ -215,6 +215,8 @@ CATEGORIES = {
             # restore then drops the live JSON so the file gets imported again
             # (sources_server._restore_apply_side_effects).
             ("file", "/etc/hifi-player/squeezelite.json"),
+            # Settings → CD ripping (hifi_cdrip.py)
+            ("file", "/etc/hifi-player/cdrip.json"),
             ("file", "/etc/default/squeezelite"),
             ("file", "/etc/camilladsp/config.yml"),
             ("file", "/var/lib/hifi-player/dsp-target"),

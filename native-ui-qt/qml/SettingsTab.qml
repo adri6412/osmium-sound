@@ -20,6 +20,9 @@ Item {
     // Audio → Advanced: the extra-arguments field, as typed; `dirty` tells a
     // cleared field from one not touched yet (which shows the saved value)
     property string sqExtraEdit: ""; property bool sqExtraDirty: false
+    // CD ripping: the two typed fields (prefix, offset), as typed
+    property string cdPrefixEdit: ""; property bool cdPrefixDirty: false
+    property string cdOffsetEdit: ""; property bool cdOffsetDirty: false
     property string sshUser: ""; property string sshPass: ""
     property string nameEdit: ""; property string hostEdit: ""
     property string pendAct: ""; property string pendArg: ""
@@ -131,6 +134,7 @@ Item {
     readonly property var secs: [
         { id: "language", icon: "globe", key: "settings.sections.language" },
         { id: "sources", icon: "hard-drive", key: "settings.sections.sources" },
+        { id: "cdRip", icon: "disc", key: "settings.sections.cdRip" },
         { id: "audio", icon: "volume-2", key: "settings.sections.audio" },
         { id: "btSpeakers", icon: "bluetooth", key: "settings.sections.btSpeakers" },
         { id: "remote", icon: "remote", key: "settings.sections.remote" },
@@ -196,6 +200,8 @@ Item {
         property string audioCur: ""; property var audio: []          // [{id,name,dsd}]
         // the rest of squeezelite's command line (api /squeezelite_conf)
         property var sq: ({ loaded: false, conf: {}, args: "", dsd_detected: "dop", mixers: [], choices: {} })
+        // Settings → CD ripping (sources_server /api/cd/settings, hifi_cdrip.py)
+        property var cdrip: ({ loaded: false, settings: {}, drive: {}, target_ok: false, targets: [], ripping: false, choices: {} })
         property string lmsMode: "local"; property string lmsHost: ""; property string playerName: ""; property string lyrionChannel: "release"
         property string lmsSkin: "unset"; property string skinState: ""; property string skinMsg: ""
         property string lyrInstalled: ""; property var lyrChVer: ["", "", ""]; property string lyrStatus: ""; property int lyrPct: 0; property bool lyrRunning: false
@@ -400,6 +406,10 @@ Item {
             get(src("/api/lms_skin"), function(d) { lmsSkin = str(d, "skin", "unset") })
             get(src("/api/lms_skin_status"), function(d) { skinState = str(d, "state"); skinMsg = str(d, "message") })
             get(src("/api/sources"), function(d) { sources = d.sources || [] })
+            get(src("/api/cd/settings"), function(d) {
+                cdrip = { loaded: !!d.settings, settings: d.settings || {}, drive: d.drive || {}, target_ok: !!d.target_ok,
+                          targets: d.targets || [], ripping: !!d.ripping, choices: d.choices || {} }
+            })
             loadLibrary()
             get(src("/api/meta/settings"), function(d) {
                 if (d.online === undefined) return
@@ -555,6 +565,20 @@ Item {
     }
     function sqSet(body) { post(cfg.api("/squeezelite_conf"), body, sqDone) }
     function sqReset() { post(cfg.api("/squeezelite_conf/reset"), {}, sqDone) }
+    // CD ripping: one call per row, the server answers with the whole
+    // settings and a message; post() reloads cfg afterwards
+    function cdDone(ok, d) {
+        if (!ok || (d && d.success === false)) { say((d && d.message) || Tr.t("settings.cdRip.saveFailed"), true); return }
+        cdPrefixDirty = false; cdOffsetDirty = false
+        say((d && d.message) || Tr.t("settings.cdRip.saved"))
+    }
+    function cdSet(body) { post(cfg.src("/api/cd/settings"), body, cdDone) }
+    function cdSimple(path, okKey, failKey) {
+        post(cfg.src(path), {}, function(ok, d) {
+            var good = ok && !(d && d.success === false)
+            say(good ? Tr.t(okKey) : ((d && d.message) || Tr.t(failKey)), !good)
+        })
+    }
     // Settings → Network → "Connect to Wi-Fi". The answer decides the message:
     // before, the page said "now using Wi-Fi" the moment the request left,
     // whatever NetworkManager made of it. A failed attempt reopens the window
@@ -844,6 +868,7 @@ Item {
             switch (secs[active].id) {
             case "language": secLanguage(); break
             case "sources": secSources(); break
+            case "cdRip": secCdRip(); break
             case "audio": secAudio(); break
             case "playback": secPlayback(); break
             case "vuMeters": secVuMeters(); break
@@ -1140,6 +1165,61 @@ Item {
         grid([acell(Tr.t("settings.audio.refreshList"), "audio_refresh", "accent", { icon: "rotate-cw", hh: 48 }),
               acell(Tr.t("settings.audio.setOutput"), "audio_apply", "gold", { icon: "volume-2", bold: true, hh: 48 })])
         if (cfg.sq.loaded) secSqueezelite()
+    }
+    // Settings → CD ripping: Daphile's page, field by field (sources_server
+    // /api/cd/settings, hifi_cdrip.py). The destination is picked with the
+    // same folder picker as Music sources (pickOwner 4). Every row applies at once.
+    function secCdRip() {
+        var s = cfg.cdrip, c = s.settings || {}, ch = s.choices || {}, i
+        if (!s.loaded) { note(Tr.t("common.loading"), "dark"); return }
+        help("settings.cdRip.help")
+        toggle(Tr.t("settings.cdRip.enableLabel"), Tr.t("settings.cdRip.enableText"), !!c.enabled, "cd_enabled")
+        label("settings.cdRip.targetLabel", 14); help("settings.cdRip.targetHelp", 12)
+        var tr = srcRow(c.target || Tr.t("settings.cdRip.targetUnset"), "", c.target && !s.target_ok ? Tr.t("settings.cdRip.targetBad") : "", "", "", !c.target || s.target_ok); tr.hh = 44; tr.px = 12
+        mini(tr, pickOwner === 4 ? Tr.t("common.close") : Tr.t("settings.cdRip.targetPick"), "cd_pick_open", "accent", false, "")
+        mini(tr, Tr.t("settings.cdRip.targetClear"), "cd_target_clear", "accent", !c.target, "")
+        if (pickOwner === 4) folderPicker(Tr.t("settings.cdRip.targetUse"))
+        label("settings.cdRip.prefixLabel", 14); help("settings.cdRip.prefixHelp", 12)
+        input(Tr.t("settings.cdRip.prefixPlaceholder"), cdPrefixDirty ? cdPrefixEdit : String(c.dir_prefix || ""), "cd_prefix", false).hh = 50
+        grid([acell(Tr.t("common.save"), "cd_prefix_apply", "gold", { icon: "check", hh: 44 })])
+        label("settings.cdRip.autoStartLabel", 14); help("settings.cdRip.autoStartHelp", 12)
+        var am = ch.auto_start || ["off", "if_tags", "always"], ac = []
+        for (i = 0; i < am.length; i++) ac.push(cell(Tr.t("settings.cdRip.autoStart." + am[i]), am[i], c.auto_start === am[i], "cd_auto", { hh: 44 }))
+        grid(ac)
+        label("settings.cdRip.formatLabel", 14)
+        grid([cell("WAV", "wav", c.format === "wav", "cd_format", { hh: 44 }), cell("FLAC", "flac", c.format === "flac", "cd_format", { hh: 44 })])
+        if (c.format === "flac") {
+            label("settings.cdRip.compressionLabel", 14)
+            var lv = [0, 3, 5, 8], lc = []
+            for (i = 0; i < lv.length; i++) lc.push(cell(String(lv[i]) + (lv[i] === 5 ? " · " + Tr.t("settings.cdRip.default") : lv[i] === 8 ? " · " + Tr.t("settings.cdRip.best") : ""), String(lv[i]), c.flac_compression === lv[i], "cd_level", { hh: 44 }))
+            grid(lc)
+        } else help("settings.cdRip.wavHelp", 12)
+        label("settings.cdRip.retriesLabel", 14); help("settings.cdRip.retriesHelp", 12)
+        var rv = ch.retries || [0, 1, 2, 5], rc = []
+        for (i = 0; i < rv.length; i++) rc.push(cell(Tr.t("settings.cdRip.retries." + rv[i]), String(rv[i]), c.retries === rv[i], "cd_retries", { hh: 44 }))
+        grid(rc)
+        label("settings.cdRip.preEmphasisLabel", 14); help("settings.cdRip.preEmphasisHelp", 12)
+        var pm = ch.pre_emphasis || ["ignore", "tag", "filter"], pc = []
+        for (i = 0; i < pm.length; i++) pc.push(cell(Tr.t("settings.cdRip.preEmphasis." + pm[i]), pm[i], c.pre_emphasis === pm[i], "cd_pre", { hh: 44 }))
+        grid(pc)
+        var flags = ["clean_names", "replaygain", "log_file", "eject"]
+        for (i = 0; i < flags.length; i++) toggle(Tr.t("settings.cdRip.flags." + flags[i] + ".label"), Tr.t("settings.cdRip.flags." + flags[i] + ".text"), !!c[flags[i]], "cd_flag", flags[i])
+        sep()
+        labelText(String((s.drive && s.drive.label) || Tr.t("settings.cdRip.noDrive")), 14)
+        label("settings.cdRip.speedLabel", 14); help("settings.cdRip.speedHelp", 12)
+        var sv = ch.speed || [0, 4, 8, 16, 24, 32, 48], sc1 = [], sc2 = []
+        for (i = 0; i < sv.length; i++) (i < 4 ? sc1 : sc2).push(cell(sv[i] ? sv[i] + "x" : Tr.t("settings.cdRip.speedMax"), String(sv[i]), c.speed === sv[i], "cd_speed", { hh: 44 }))
+        grid(sc1); if (sc2.length) grid(sc2)
+        label("settings.cdRip.offsetLabel", 14); help("settings.cdRip.offsetHelp", 12)
+        input("+6", cdOffsetDirty ? cdOffsetEdit : String(c.offset === undefined ? 0 : c.offset), "cd_offset", false).hh = 50
+        grid([acell(Tr.t("common.save"), "cd_offset_apply", "gold", { icon: "check", hh: 44 }),
+              acell(Tr.t("settings.cdRip.calibrate"), "cd_calibrate", "accent", { icon: "compass", hh: 44, dim: !(s.drive && s.drive.present) })])
+        toggle(Tr.t("settings.cdRip.paranoiaLabel"), Tr.t("settings.cdRip.paranoiaText"), !!c.paranoia, "cd_paranoia")
+        sep()
+        help("settings.cdRip.ejectHelp", 12)
+        var ej = [acell(Tr.t("settings.cdRip.ejectNow"), "cd_eject", "accent", { icon: "disc", hh: 44, dim: !!s.ripping })]
+        if (s.ripping) ej.push(acell(Tr.t("settings.cdRip.cancelRip"), "cd_cancel", "dark", { icon: "x", hh: 44 }))
+        grid(ej)
     }
     // The rest of squeezelite's command line (api /squeezelite_conf, model in
     // hifi_squeezelite.py; /etc/default/squeezelite is rendered from it): what
@@ -1923,6 +2003,8 @@ Item {
         case "player_name": nameEdit = text; break
         case "lms_host": hostEdit = text; break
         case "sq_extra": sqExtraEdit = text; sqExtraDirty = true; break
+        case "cd_prefix": cdPrefixEdit = text; cdPrefixDirty = true; break
+        case "cd_offset": cdOffsetEdit = text; cdOffsetDirty = true; break
         case "pick_new": pickNew = text; break
         case "bt_name": btNameEdit = text; break
         }
@@ -2188,8 +2270,29 @@ Item {
         case "sq_rt": sqSet({ realtime: !row.on }); break
         case "sq_extra_apply": sqSet({ extra: sqExtraDirty ? sqExtraEdit : String((cfg.sq.conf || {}).extra || "") }); break
         case "sq_reset": sqReset(); break
+        // Settings → CD ripping (secCdRip)
+        case "cd_enabled": cdSet({ enabled: !row.on }); break
+        case "cd_pick_open": if (pickOwner === 4) { pickOwner = 0; break } pickOwner = 4; pickBrowse(String((cfg.cdrip.settings || {}).target || "")); break
+        case "cd_target_clear": cdSet({ target: "" }); break
+        case "cd_prefix_apply": cdSet({ dir_prefix: cdPrefixDirty ? cdPrefixEdit : String((cfg.cdrip.settings || {}).dir_prefix || "") }); break
+        case "cd_auto": cdSet({ auto_start: arg }); break
+        case "cd_format": cdSet({ format: arg }); break
+        case "cd_level": cdSet({ flac_compression: parseInt(arg) }); break
+        case "cd_retries": cdSet({ retries: parseInt(arg) }); break
+        case "cd_pre": cdSet({ pre_emphasis: arg }); break
+        case "cd_flag": { var fb = {}; fb[arg] = !row.on; cdSet(fb); break }
+        case "cd_speed": cdSet({ speed: parseInt(arg) }); break
+        case "cd_offset_apply": {
+            var ov = parseInt(cdOffsetDirty ? cdOffsetEdit : String((cfg.cdrip.settings || {}).offset || 0))
+            if (isNaN(ov)) { say(Tr.t("settings.cdRip.offsetInvalid"), true); break }
+            cdSet({ offset: ov }); break
+        }
+        case "cd_calibrate": post(S("/api/cd/settings/offset_lookup"), {}, cdDone); say(Tr.t("common.loading")); break
+        case "cd_paranoia": cdSet({ paranoia: !row.on }); break
+        case "cd_eject": cdSimple("/api/cd/eject", "settings.cdRip.ejected", "settings.cdRip.ejectFailed"); break
+        case "cd_cancel": cdSimple("/api/cd/cancel", "settings.cdRip.cancelled", "settings.cdRip.cancelFailed"); break
         case "lms_skin": post(S("/api/lms_skin"), { skin: arg }); cfg.lmsSkin = arg; say(Tr.t("settings.lyrion.skinApplying")); break
-        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": case "sq_extra": return
+        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": case "sq_extra": case "cd_prefix": case "cd_offset": return
         case "lms_role":
             if (arg !== "local") { cfg.lmsMode = "follow"; cfg.loadDiscover(); break }
             // Already on this device's own server: only the toggle moves back,
@@ -2384,6 +2487,7 @@ Item {
             pickNew = ""; break
         case "pick_use":
             if (!cfg.pkPath) return
+            if (pickOwner === 4) { cdSet({ target: cfg.pkPath }); pickOwner = 0; break }
             if (pickOwner === 2) { post(S("/api/playlistdir"), { path: cfg.pkPath }); say(Tr.t("sources.playlistdir.saved")) }
             else { post(S("/api/sources/local"), { path: cfg.pkPath, samba: pickOwner === 3 }); say(Tr.t("sources.added")) }
             pickOwner = 0; break

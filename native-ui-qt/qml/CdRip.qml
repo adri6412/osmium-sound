@@ -30,7 +30,9 @@ Item {
     property string err: ""
     property bool open: false
     property bool closing: false
-    readonly property bool bannerVisible: haveDisc && discid !== dismissed
+    // Settings → CD ripping → Enable: off, the disc is ignored altogether
+    property bool enabled: true
+    readonly property bool bannerVisible: haveDisc && discid !== dismissed && enabled
     anchors.fill: parent
     visible: open
     // il telecomando resta qui dentro finche' questo strato e' aperto
@@ -69,7 +71,11 @@ Item {
                 root.state = ""; root.msg = ""; root.progress = 0; root.curTrack = 0; root.total = 0
                 root.ripping = false
             }
-            root.dests = (d.destinations || []).map(function(x) { return { id: String(x.source_id || ""), name: String(x.name || "") } })
+            // the folder from Settings → CD ripping first, then the writable sources
+            var dl = (d.destinations || []).map(function(x) { return { id: String(x.source_id || ""), name: String(x.name || "") } })
+            if (d.default_target && d.default_target.path) dl.unshift({ id: "__default__", name: String(d.default_target.name || d.default_target.path) })
+            root.dests = dl
+            root.enabled = d.enabled !== false
             root.haveDisc = true
             if (d.ripping) root.ripping = true
         }, 5000)
@@ -79,7 +85,7 @@ Item {
             if (!ok || !d || typeof d !== "object") { root.ripping = false; return }
             root.state = String(d.state || "idle"); root.msg = String(d.message || "")
             root.progress = Number(d.progress || 0); root.curTrack = Number(d.track || 0); root.total = Number(d.total || 0)
-            root.ripping = root.state !== "done" && root.state !== "error" && root.state !== "idle"
+            root.ripping = root.state !== "done" && root.state !== "error" && root.state !== "idle" && root.state !== "cancelled"
         }, 5000)
     }
     Timer { interval: 7000; repeat: true; running: true; triggeredOnStart: true; onTriggered: root.loadInfo() }
@@ -89,6 +95,8 @@ Item {
     function close() { if (!open || closing) return; closing = true; closeScale = 0.94; fade = 0 }
     Timer { interval: 40; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.open = false; root.closing = false } }
     function dismissBanner() { dismissed = discid }
+    // Cancel: the worker stops, removes what it had read, and the disc can be ejected
+    function cancelRip() { Api.post(Api.srcBase + "/api/cd/cancel", {}, function() { root.loadStatus() }) }
     function eject() { Api.post(Api.srcBase + "/api/cd/eject", {}, function() { root.loadStatus() }); haveDisc = false; state = ""; close() }
     function releaseLabel(r) {
         if (!r) return ""
@@ -152,12 +160,20 @@ Item {
             }
             Text { visible: root.ripping; width: parent.width; y: parent.cy + 32; height: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Tr.tf("player.cd.ripProgress", "track", String(root.curTrack)).replace("{total}", String(root.total)); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
             Text { visible: root.state === "done"; width: parent.width; y: parent.cy + 16; height: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.ripDone"); color: "#34d399"; font.family: Theme.font; font.pixelSize: 14 }
-            Text { visible: root.state === "error"; x: 24; y: parent.cy + 16; width: parent.width - 48; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter; text: root.msg || Tr.t("player.cd.ripError"); color: Theme.red300; font.family: Theme.font; font.pixelSize: 14 }
+            Text { visible: root.state === "error" || root.state === "cancelled"; x: 24; y: parent.cy + 16; width: parent.width - 48; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter; text: root.state === "cancelled" ? Tr.t("player.cd.cancelled") : (root.msg || Tr.t("player.cd.ripError")); color: root.state === "cancelled" ? Theme.silver : Theme.red300; font.family: Theme.font; font.pixelSize: 14 }
+            // Eject after the rip, however it ended: a drive without its own
+            // button has no other way to give the disc back after a failure
             Rectangle {
-                visible: root.state === "done"
+                visible: root.state === "done" || root.state === "error" || root.state === "cancelled"
                 x: 20; y: parent.height - 20 - 42; width: parent.width - 40; height: 42; radius: 8; color: ejTap.mix(Theme.gold, "#ca8a04")
                 Text { anchors.centerIn: parent; text: Tr.t("player.cd.eject"); color: Theme.black; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
                 Tap { id: ejTap; onClicked: root.eject() }
+            }
+            Rectangle {
+                visible: root.ripping
+                x: 20; y: parent.height - 20 - 42; width: parent.width - 40; height: 42; radius: 8; color: cxTap.mix(Theme.light, Theme.accent)
+                Text { anchors.centerIn: parent; text: Tr.t("player.cd.cancel"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                Tap { id: cxTap; onClicked: root.cancelRip() }
             }
         }
         // ── impostazione ────────────────────────────────────────────────────

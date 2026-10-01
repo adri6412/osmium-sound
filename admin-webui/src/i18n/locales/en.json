@@ -203,6 +203,10 @@
         "label": "Music sources",
         "desc": "Folders, USB, network shares, CD"
       },
+      "cdRip": {
+        "label": "CD ripping",
+        "desc": "Destination, format, retries, log, eject, drive offset"
+      },
       "dsp": {
         "label": "DSP / Equalizer",
         "desc": "DSP engine, crossfeed, presets"
@@ -366,6 +370,87 @@
       "generated": "List written when the image was built, on {date}. Each license comes from the package's own copyright file.",
       "filter": "Filter by name or license",
       "sourceOffer": "The GPL and LGPL components are unmodified binaries from Debian and from the LMS-Community. Their source code is at deb.debian.org (the suite named above) and on GitHub; a complete source archive matching this image can be requested from info@osmiumsound.it."
+    },
+    "cdRip": {
+      "hint": "How an audio CD is copied into the library. Every control applies at once; the names follow Daphile's CD Ripping page.",
+      "saved": "Saved",
+      "saveFailed": "Could not save",
+      "on": "Enable",
+      "off": "Off",
+      "enableLabel": "CD Ripping",
+      "targetLabel": "Default target folder",
+      "targetUnset": "Not set: the only writable source, or asked at rip time",
+      "targetBad": "This folder is not available right now (disk unplugged or share not mounted).",
+      "targetPick": "Browse…",
+      "targetUse": "Use this folder",
+      "targetClear": "Clear",
+      "targetHelp": "A folder inside a writable music source: an internal or USB disk, or a network share mounted read-write. Albums land there as Artist/Album.",
+      "prefixLabel": "Directory prefix",
+      "prefixPlaceholder": "e.g. CD rips",
+      "prefixHelp": "A folder under the target that every ripped album goes into; empty for none.",
+      "autoStartLabel": "Automatic start",
+      "autoStart": {
+        "off": "Off",
+        "if_tags": "If tags available",
+        "always": "Always"
+      },
+      "autoStartHelp": "Start by itself when a disc is inserted, into the default folder: only when MusicBrainz knows the disc, or always.",
+      "formatLabel": "Output Format",
+      "compressionLabel": "FLAC compression",
+      "default": "default",
+      "best": "best",
+      "wavHelp": "WAV files carry no tags and no ReplayGain; the cover and the log are still saved next to them.",
+      "retriesLabel": "Inaccurate retries",
+      "retries": {
+        "0": "Never",
+        "1": "Once",
+        "2": "Twice",
+        "5": "5 times"
+      },
+      "retriesHelp": "A track is read again until two reads agree. More retries, slower but safer on scratched discs.",
+      "preEmphasisLabel": "Pre-emphasis",
+      "preEmphasis": {
+        "ignore": "Ignore completely",
+        "tag": "Tag only",
+        "filter": "Remove with filter"
+      },
+      "preEmphasisHelp": "Some early CDs flag pre-emphasis: a PRE_EMPHASIS tag lets a player correct it, the filter corrects the audio itself.",
+      "flags": {
+        "clean_names": {
+          "label": "File naming",
+          "text": "Clean up all special & non ASCII characters"
+        },
+        "replaygain": {
+          "label": "ReplayGain",
+          "text": "Enable calculation and tagging"
+        },
+        "log_file": {
+          "label": "Log file",
+          "text": "Save ripping log file to the album folder"
+        },
+        "eject": {
+          "label": "Disk eject",
+          "text": "Eject after successful completion"
+        }
+      },
+      "noDrive": "No optical drive found",
+      "speedLabel": "Force speed",
+      "speedMax": "Max",
+      "speedHelp": "A slower speed reads a worn disc more reliably and keeps the drive quieter.",
+      "offsetLabel": "Drive offset",
+      "offsetHelp": "Read offset in samples, as listed by AccurateRip for this drive model. Calibrate looks it up online and sets it.",
+      "offsetInvalid": "The offset must be a whole number.",
+      "offsetFound": "Offset set from the AccurateRip list",
+      "calibrate": "Calibrate",
+      "paranoiaLabel": "CDParanoia",
+      "paranoiaText": "Enable (error correction while reading)",
+      "ejectNow": "Eject now",
+      "cancelRip": "Cancel rip",
+      "ejected": "Disc ejected",
+      "ejectFailed": "Could not eject",
+      "cancelled": "Rip cancelled",
+      "cancelFailed": "Could not cancel",
+      "ejectHelp": "For a drive without its own button: ejects the disc at any time a rip is not running."
     },
     "btSpeakers": {
       "help": "Play to a Bluetooth speaker or a pair of headphones. Each one you add becomes a player in its own right, with its own name and its own queue, next to this device's own player — so you can send it a different album, or group the two together. The DAC output is untouched.",

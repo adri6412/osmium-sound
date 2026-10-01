@@ -380,6 +380,8 @@
     "sleepActive": "Si ferma tra circa {min} min",
     "sleepOff": "Disattiva timer",
     "cd": {
+      "cancel": "Annulla",
+      "cancelled": "Rip annullato. Puoi espellere il disco.",
       "detected": "CD audio rilevato",
       "rip": "Rippa",
       "ripTitle": "Rippa CD in libreria",
@@ -480,6 +482,7 @@
     "apiUnavailable": "⚠️ Server API non disponibile",
     "sections": {
       "sources": "Sorgenti musicali",
+      "cdRip": "Rip dei CD",
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
       "vuMeters": "VU meter",
@@ -942,6 +945,85 @@
       "lyrionNote": "Progetto indipendente, non affiliato a Osmium Sound. Installato dal server ufficiale della LMS-Community; sorgenti: github.com/LMS-Community/slimserver",
       "debianCount": "Pacchetti Debian in questa immagine: {n}. L'elenco completo con tutte le licenze è nell'amministrazione web, Impostazioni → Licenze e crediti.",
       "debianMissing": "L'elenco dei pacchetti di questa immagine non è disponibile."
+    },
+    "cdRip": {
+      "help": "Come un CD audio viene copiato nella libreria. Ogni riga si applica subito; i nomi seguono la pagina CD Ripping di Daphile.",
+      "saved": "Salvato.",
+      "saveFailed": "Salvataggio fallito.",
+      "enableLabel": "Rip dei CD",
+      "enableText": "Riconosce i dischi e propone il rip",
+      "targetLabel": "Cartella di destinazione predefinita",
+      "targetHelp": "Una cartella dentro una sorgente musicale scrivibile (disco interno o USB, condivisione di rete scrivibile). Gli album finiscono lì come Artista/Album.",
+      "targetUnset": "Non impostata: l'unica sorgente scrivibile, oppure si sceglie al momento",
+      "targetBad": "Adesso non disponibile (disco scollegato o condivisione non montata)",
+      "targetPick": "Sfoglia",
+      "targetUse": "Usa questa cartella",
+      "targetClear": "Togli",
+      "prefixLabel": "Prefisso cartella",
+      "prefixHelp": "Una cartella sotto la destinazione in cui va ogni album rippato; vuoto per nessuna.",
+      "prefixPlaceholder": "es. Rip CD",
+      "autoStartLabel": "Avvio automatico",
+      "autoStartHelp": "Parte da solo all'inserimento del disco, nella cartella predefinita.",
+      "autoStart": {
+        "off": "Off",
+        "if_tags": "Se ci sono i tag",
+        "always": "Sempre"
+      },
+      "formatLabel": "Formato di uscita",
+      "compressionLabel": "Compressione FLAC",
+      "default": "predefinito",
+      "best": "massima",
+      "wavHelp": "I file WAV non hanno tag né ReplayGain; copertina e log vengono salvati comunque accanto.",
+      "retriesLabel": "Riletture se inesatto",
+      "retriesHelp": "Una traccia viene riletta finché due letture coincidono.",
+      "retries": {
+        "0": "Mai",
+        "1": "Una volta",
+        "2": "Due volte",
+        "5": "5 volte"
+      },
+      "preEmphasisLabel": "Pre-enfasi",
+      "preEmphasisHelp": "CD dei primi anni con pre-enfasi: il tag lascia correggere al player, il filtro corregge l'audio stesso.",
+      "preEmphasis": {
+        "ignore": "Ignora del tutto",
+        "tag": "Solo tag",
+        "filter": "Rimuovi col filtro"
+      },
+      "flags": {
+        "clean_names": {
+          "label": "Nomi dei file",
+          "text": "Pulisci tutti i caratteri speciali e non ASCII"
+        },
+        "replaygain": {
+          "label": "ReplayGain",
+          "text": "Calcola e scrivi nei tag"
+        },
+        "log_file": {
+          "label": "File di log",
+          "text": "Salva il log del rip nella cartella dell'album"
+        },
+        "eject": {
+          "label": "Espulsione",
+          "text": "Espelli a fine rip riuscito"
+        }
+      },
+      "noDrive": "Nessun lettore ottico trovato",
+      "speedLabel": "Velocità forzata",
+      "speedMax": "Max",
+      "speedHelp": "Più lento legge meglio un disco rovinato e tiene il lettore più silenzioso.",
+      "offsetLabel": "Offset del lettore",
+      "offsetHelp": "Offset di lettura in campioni, come indicato da AccurateRip per questo lettore. Calibra lo cerca in rete e lo imposta.",
+      "offsetInvalid": "L'offset deve essere un numero intero.",
+      "calibrate": "Calibra",
+      "paranoiaLabel": "CDParanoia",
+      "paranoiaText": "Attivo (correzione degli errori in lettura)",
+      "ejectNow": "Espelli ora",
+      "cancelRip": "Annulla il rip",
+      "ejected": "Disco espulso.",
+      "ejectFailed": "Espulsione fallita.",
+      "cancelled": "Rip annullato.",
+      "cancelFailed": "Annullamento fallito.",
+      "ejectHelp": "Per un lettore senza tasto: espelle il disco ogni volta che non c'è un rip in corso."
     },
     "playerEnabled": {
       "label": "Player",

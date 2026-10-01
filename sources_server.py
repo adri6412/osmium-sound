@@ -39,6 +39,7 @@ from datetime import datetime, timezone
 import hifi_backup as hb
 import hifi_metadata as hmeta
 import hifi_tags as htags
+import hifi_cdrip as hcd
 from hifi_logging import tee_stdio_to_file
 from hifi_i18n import t as _ht
 # Every print() below keeps reaching the console/journald unchanged AND now also
@@ -137,6 +138,8 @@ RIP_PLAN = "/run/hifi-rip-plan.json"
 RIP_COVER = "/run/hifi-rip-cover.jpg"
 RIP_UNIT = "hifi-rip-cd"
 RIP_SCRIPT = "/usr/local/sbin/hifi-rip-cd.py"
+# Settings → CD ripping (hifi_cdrip.py): Daphile's page, field by field.
+CDRIP_CONF = hcd.CONF
 LYRION_RPC = "http://127.0.0.1:9000/jsonrpc.js"
 PREFS_GLOBS = [
     "/var/lib/squeezeboxserver/prefs/server.prefs",
@@ -6519,7 +6522,7 @@ def _rip_state():
 
 
 def _rip_running():
-    return _rip_state().get("state") not in ("idle", "done", "error")
+    return _rip_state().get("state") not in ("idle", "done", "error", "cancelled")
 
 
 def _lyrion_request(params, timeout=10):
@@ -6670,7 +6673,7 @@ def _rip_watcher():
         try:
             st = _rip_state()
             state = st.get("state")
-            if state in ("done", "error", "idle"):
+            if state in ("done", "error", "idle", "cancelled"):
                 if state == "done":
                     dest = st.get("dest") or ""
                     uid, gid = _ensure_samba_uid_gid()
@@ -6719,8 +6722,14 @@ def api_cd_info():
     if not toc:
         return jsonify({"no_disc": True, "releases": []})
     meta = _cd_metadata(toc, request.args.get("release"))
+    settings = _cd_settings()
     return jsonify({
         "no_disc": False,
+        "enabled": settings["enabled"],
+        # the folder set in Settings → CD ripping, when it is usable right now
+        "default_target": _cd_default_target(settings),
+        "eject_after": settings["eject"],
+        "auto_start": settings["auto_start"],
         "discid": toc["discid"],
         "mbid": meta["mbid"],
         "artist": meta["artist"],
@@ -6738,26 +6747,53 @@ def api_cd_info():
     })
 
 
-@app.route("/api/cd/rip", methods=["POST"])
-def api_cd_rip():
-    denied = _require_pair_token()
-    if denied:
-        return denied
-    data = request.get_json(silent=True) or {}
-    toc = _cd_toc()
-    if not toc:
-        return _err("msg.noAudioCd", 400)
-    if _rip_running():
-        return _err("msg.ripInProgress", 409)
+def _cd_settings():
+    return hcd.load(CDRIP_CONF)
 
+
+def _cd_target_root(path):
+    """(mountpoint, source) of the writable source `path` sits in, or
+    (None, None): a destination is only ever a folder inside an adopted
+    internal or USB disk, or a network share mounted read-write."""
+    if not path:
+        return None, None
+    real = os.path.realpath(path)
+    for src in _rip_writable_sources():
+        mp = os.path.realpath(src.get("mountpoint") or "")
+        if mp and (real == mp or real.startswith(mp + os.sep)):
+            return mp, src
+    return None, None
+
+
+def _cd_default_target(settings=None):
+    """The configured destination when it is usable right now: {path, name,
+    source_id}; None when unset, unmounted or not writable."""
+    s = settings or _cd_settings()
+    path = s.get("target") or ""
+    mp, src = _cd_target_root(path)
+    if not mp or not os.path.isdir(path) or not os.access(path, os.W_OK):
+        return None
+    return {"path": path, "name": path, "source_id": src.get("id")}
+
+
+def _cd_start_rip(data, toc, auto=False):
+    """Start the worker for the disc `toc`. `data` may carry source_id (a
+    writable source, or "__default__" for the folder from Settings), release,
+    artist, album, year and track titles; without a source the default folder
+    is used, or the only writable source. Returns (body, status)."""
+    settings = _cd_settings()
     sources = _rip_writable_sources()
     source_id = (data.get("source_id") or "").strip()
-    src = next((s for s in sources if s.get("id") == source_id), None)
-    if src is None:
-        if len(sources) == 1 and not source_id:
+    default = _cd_default_target(settings)
+    if source_id in ("", "__default__") and default:
+        root = default["path"]
+    else:
+        src = next((s for s in sources if s.get("id") == source_id), None)
+        if src is None and len(sources) == 1 and not source_id:
             src = sources[0]
-        else:
+        if src is None:
             return _err("msg.noWritableTarget", 400)
+        root = src["mountpoint"]
 
     meta = _cd_metadata(toc, data.get("release"))
     artist = str(data.get("artist") or meta["artist"]).strip() or "Unknown Artist"
@@ -6796,7 +6832,7 @@ def api_cd_rip():
         tr["tags"] = [list(t) for t in (track_tags[i] or [])] if i < len(track_tags) else []
     plan = {
         "device": CD_DEVICE,
-        "root": src["mountpoint"],
+        "root": root,
         "artist": artist,
         "album": album,
         "year": year,
@@ -6804,6 +6840,9 @@ def api_cd_rip():
         "cover": RIP_COVER if os.path.exists(RIP_COVER) else "",
         "tracks": tracks,
         "album_tags": [list(t) for t in album_tags],
+        # Settings → CD ripping, frozen for this rip (hifi-rip-cd.py reads them)
+        "options": settings,
+        "auto": bool(auto),
     }
     with open(RIP_PLAN, "w") as f:
         json.dump(plan, f)
@@ -6816,6 +6855,135 @@ def api_cd_rip():
           RIP_SCRIPT, RIP_PLAN], timeout=10)
     threading.Thread(target=_rip_watcher, daemon=True, name="rip-watcher").start()
     return jsonify({"success": True, "total": len(tracks)}), 202
+
+
+@app.route("/api/cd/rip", methods=["POST"])
+def api_cd_rip():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    if not _cd_settings().get("enabled", True):
+        return _err("msg.cdDisabled", 403)
+    toc = _cd_toc()
+    if not toc:
+        return _err("msg.noAudioCd", 400)
+    if _rip_running():
+        return _err("msg.ripInProgress", 409)
+    return _cd_start_rip(data, toc)
+
+
+@app.route("/api/cd/cancel", methods=["POST"])
+def api_cd_cancel():
+    """Stop a running rip: the worker catches the SIGTERM, removes its work
+    folder and reports "cancelled"; the disc can then be ejected."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if not _rip_running():
+        return _err("msg.ripNotRunning", 409)
+    _run(["systemctl", "stop", RIP_UNIT + ".service"], timeout=60)
+    if _rip_running():
+        with open(RIP_STATUS, "w") as f:
+            json.dump({"state": "cancelled", "track": 0, "total": 0, "progress": 0,
+                       "message": _ht('common.cancelled', _hlang())}, f)
+    return jsonify({"success": True})
+
+
+@app.route("/api/cd/settings", methods=["GET", "POST"])
+def api_cd_settings():
+    """Settings → CD ripping: Daphile's page, field by field (hifi_cdrip.py).
+    A POST is a partial update; the destination folder must be inside a
+    writable source and exist."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    settings = _cd_settings()
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        try:
+            settings = hcd.set_fields(settings, data if isinstance(data, dict) else {})
+        except hcd.InvalidField as e:
+            return _err("msg.cdInvalidValue", 400, field=e.field)
+        if settings["target"]:
+            mp, _src = _cd_target_root(settings["target"])
+            if not mp:
+                return _err("msg.cdTargetOutside", 400)
+            if not os.path.isdir(settings["target"]):
+                return _err("msg.folderMissing", 400, path=settings["target"])
+        try:
+            settings = hcd.save(settings, CDRIP_CONF)
+        except OSError as e:
+            return jsonify({"success": False, "message": str(e)}), 500
+    return jsonify({
+        "success": True,
+        "settings": settings,
+        "drive": hcd.drive_info(CD_DEVICE),
+        "target_ok": _cd_default_target(settings) is not None,
+        "targets": [{"source_id": s.get("id"), "name": s.get("name") or s.get("label"), "path": s.get("mountpoint")}
+                    for s in _rip_writable_sources()],
+        "ripping": _rip_running(),
+        "choices": {"auto_start": list(hcd.AUTO_START), "retries": list(hcd.RETRIES),
+                    "pre_emphasis": list(hcd.PRE_EMPHASIS), "speed": list(hcd.SPEEDS)},
+    })
+
+
+@app.route("/api/cd/settings/offset_lookup", methods=["POST"])
+def api_cd_offset_lookup():
+    """Daphile's "Calibrate": the drive's read offset from AccurateRip's
+    public list (accuraterip.com/driveoffsets.htm), matched on vendor and
+    model and saved into the settings."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    drive = hcd.drive_info(CD_DEVICE)
+    if not (drive.get("vendor") or drive.get("model")):
+        return _err("msg.cdNoDrive", 400)
+    try:
+        found = hcd.lookup_offset(drive.get("vendor"), drive.get("model"))
+    except Exception as e:
+        return _err("msg.cdOffsetLookupFailed", 502, err=str(e))
+    if not found.get("found"):
+        return _err("msg.cdOffsetNotFound", 404, drive=drive.get("label") or drive.get("node"))
+    settings = hcd.save(hcd.set_fields(_cd_settings(), {"offset": int(found["offset"])}), CDRIP_CONF)
+    return jsonify({"success": True, "offset": found["offset"], "drive": found["drive"],
+                    "submitted": found["submitted"], "agree": found["agree"], "settings": settings,
+                    "message": _m("msg.cdOffsetFound", offset=f"{found['offset']:+d}", drive=found["drive"])})
+
+
+_cd_auto_seen = {}   # discid -> True once auto-start has decided about that disc
+
+
+def cd_monitor(interval=5):
+    """Automatic start: when a disc appears and Settings → CD ripping says so,
+    rip it into the default folder without anyone touching a screen. One
+    decision per disc — a failed or cancelled rip is not retried until the
+    disc comes out and back in."""
+    while True:
+        time.sleep(interval)
+        try:
+            s = _cd_settings()
+            if not s.get("enabled") or s.get("auto_start") == "off":
+                continue
+            toc = _cd_toc()
+            if not toc:
+                _cd_auto_seen.clear()
+                continue
+            if toc["discid"] in _cd_auto_seen or _rip_running():
+                continue
+            _cd_auto_seen[toc["discid"]] = True
+            meta = _cd_metadata(toc)
+            if s["auto_start"] == "if_tags" and not meta.get("mbid"):
+                print(f"[sources] cd auto-start: disc {toc['discid']} unknown to MusicBrainz, waiting for the owner")
+                continue
+            if not _cd_default_target(s) and len(_rip_writable_sources()) != 1:
+                print("[sources] cd auto-start: no default folder set and more than one writable source")
+                continue
+            with app.app_context():
+                _body, status = _cd_start_rip({}, toc, auto=True)
+            print(f"[sources] cd auto-start: disc {toc['discid']} -> {status}")
+        except Exception as e:
+            print(f"[sources] cd monitor error: {e}")
 
 
 @app.route("/api/cd/rip/status", methods=["GET"])
@@ -7079,6 +7247,14 @@ SOURCES_I18N = {
         "msg.noAudioCd": "No audio CD in the drive.",
         "msg.ripInProgress": "A rip is already running.",
         "msg.noWritableTarget": "No writable destination: adopt an internal disk first.",
+        "msg.cdDisabled": "CD ripping is turned off in Settings.",
+        "msg.cdInvalidValue": "Invalid value for {field}.",
+        "msg.cdTargetOutside": "The destination folder must be inside a writable music source (internal disk, USB disk or a writable network share).",
+        "msg.cdNoDrive": "No optical drive found.",
+        "msg.cdOffsetLookupFailed": "Could not reach the AccurateRip drive list: {err}",
+        "msg.cdOffsetNotFound": "{drive} is not in the AccurateRip drive list. Look it up at accuraterip.com/driveoffsets.htm and type the offset by hand.",
+        "msg.cdOffsetFound": "Offset {offset} set, as listed for {drive}.",
+        "msg.ripNotRunning": "No rip is running.",
         "msg.sambaMissing": "Samba is not installed.",
 
         # ── Network folders: what went wrong, in words ──────────────
@@ -7249,6 +7425,14 @@ SOURCES_I18N = {
         "msg.noAudioCd": "Nessun CD audio nel lettore.",
         "msg.ripInProgress": "Rip già in corso.",
         "msg.noWritableTarget": "Nessuna destinazione scrivibile: adotta un disco interno.",
+        "msg.cdDisabled": "Il rip dei CD è disattivato nelle Impostazioni.",
+        "msg.cdInvalidValue": "Valore non valido per {field}.",
+        "msg.cdTargetOutside": "La cartella di destinazione deve stare dentro una sorgente musicale scrivibile (disco interno, disco USB o condivisione di rete scrivibile).",
+        "msg.cdNoDrive": "Nessun lettore ottico trovato.",
+        "msg.cdOffsetLookupFailed": "Elenco AccurateRip dei lettori non raggiungibile: {err}",
+        "msg.cdOffsetNotFound": "{drive} non è nell'elenco AccurateRip dei lettori. Cercalo su accuraterip.com/driveoffsets.htm e scrivi l'offset a mano.",
+        "msg.cdOffsetFound": "Offset {offset} impostato, come indicato per {drive}.",
+        "msg.ripNotRunning": "Nessun rip in corso.",
         "msg.sambaMissing": "Samba non installato.",
 
         # ── Network folders: what went wrong, in words ──────────────
@@ -7866,6 +8050,7 @@ if __name__ == "__main__":
     # Auto-adopt USB sticks/drives as soon as they're plugged in (mount
     # read-write + Samba share, no user action needed — see usb_sync()).
     threading.Thread(target=usb_monitor, daemon=True, name="usb-monitor").start()
+    threading.Thread(target=cd_monitor, daemon=True, name="cd-monitor").start()
     # One-time cleanup of "local" sources left over from the old ephemeral
     # read-only USB browse mount (removed — see the USB drives section above).
     try:

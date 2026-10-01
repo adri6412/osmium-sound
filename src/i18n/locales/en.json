@@ -380,6 +380,8 @@
     "sleepActive": "Stops in about {min} min",
     "sleepOff": "Turn off timer",
     "cd": {
+      "cancel": "Cancel",
+      "cancelled": "Rip cancelled. You can eject the disc.",
       "detected": "Audio CD detected",
       "rip": "Rip",
       "ripTitle": "Rip CD to library",
@@ -480,6 +482,7 @@
     "apiUnavailable": "⚠️ API server unavailable",
     "sections": {
       "sources": "Music sources",
+      "cdRip": "CD ripping",
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
       "vuMeters": "VU Meters",
@@ -942,6 +945,85 @@
       "lyrionNote": "Independent project, not affiliated with Osmium Sound. Installed from the official LMS-Community server; source: github.com/LMS-Community/slimserver",
       "debianCount": "Debian packages in this image: {n}. The full list with every license is in the web admin, Settings → Licenses & credits.",
       "debianMissing": "The package list of this image is not available."
+    },
+    "cdRip": {
+      "help": "How an audio CD is copied into the library. Every row applies at once; the names follow Daphile's CD Ripping page.",
+      "saved": "Saved.",
+      "saveFailed": "Could not save.",
+      "enableLabel": "CD Ripping",
+      "enableText": "Detect discs and offer to rip them",
+      "targetLabel": "Default target folder",
+      "targetHelp": "A folder inside a writable music source (internal or USB disk, writable network share). Albums land there as Artist/Album.",
+      "targetUnset": "Not set: the only writable source, or asked at rip time",
+      "targetBad": "Not available right now (disk unplugged or share not mounted)",
+      "targetPick": "Browse",
+      "targetUse": "Use this folder",
+      "targetClear": "Clear",
+      "prefixLabel": "Directory prefix",
+      "prefixHelp": "A folder under the target that every ripped album goes into; empty for none.",
+      "prefixPlaceholder": "e.g. CD rips",
+      "autoStartLabel": "Automatic start",
+      "autoStartHelp": "Start by itself when a disc is inserted, into the default folder.",
+      "autoStart": {
+        "off": "Off",
+        "if_tags": "If tags available",
+        "always": "Always"
+      },
+      "formatLabel": "Output Format",
+      "compressionLabel": "FLAC compression",
+      "default": "default",
+      "best": "best",
+      "wavHelp": "WAV files carry no tags and no ReplayGain; cover and log are still saved next to them.",
+      "retriesLabel": "Inaccurate retries",
+      "retriesHelp": "A track is read again until two reads agree.",
+      "retries": {
+        "0": "Never",
+        "1": "Once",
+        "2": "Twice",
+        "5": "5 times"
+      },
+      "preEmphasisLabel": "Pre-emphasis",
+      "preEmphasisHelp": "Early CDs with pre-emphasis: a tag lets the player correct it, the filter corrects the audio itself.",
+      "preEmphasis": {
+        "ignore": "Ignore completely",
+        "tag": "Tag only",
+        "filter": "Remove with filter"
+      },
+      "flags": {
+        "clean_names": {
+          "label": "File naming",
+          "text": "Clean up all special & non ASCII characters"
+        },
+        "replaygain": {
+          "label": "ReplayGain",
+          "text": "Enable calculation and tagging"
+        },
+        "log_file": {
+          "label": "Log file",
+          "text": "Save ripping log file to the album folder"
+        },
+        "eject": {
+          "label": "Disk eject",
+          "text": "Eject after successful completion"
+        }
+      },
+      "noDrive": "No optical drive found",
+      "speedLabel": "Force speed",
+      "speedMax": "Max",
+      "speedHelp": "Slower reads a worn disc more reliably and keeps the drive quieter.",
+      "offsetLabel": "Drive offset",
+      "offsetHelp": "Read offset in samples, as AccurateRip lists it for this drive. Calibrate looks it up online and sets it.",
+      "offsetInvalid": "The offset must be a whole number.",
+      "calibrate": "Calibrate",
+      "paranoiaLabel": "CDParanoia",
+      "paranoiaText": "Enable (error correction while reading)",
+      "ejectNow": "Eject now",
+      "cancelRip": "Cancel rip",
+      "ejected": "Disc ejected.",
+      "ejectFailed": "Could not eject.",
+      "cancelled": "Rip cancelled.",
+      "cancelFailed": "Could not cancel.",
+      "ejectHelp": "For a drive without its own button: ejects the disc whenever a rip is not running."
     },
     "playerEnabled": {
       "label": "Player",

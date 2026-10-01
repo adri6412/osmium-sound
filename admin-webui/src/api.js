@@ -186,6 +186,13 @@ export const api = {
   sourcesAddLocal: (path, samba = false) => req('/api/system/sources/local', { method: 'POST', body: { path, samba } }),
   localBrowse: (path = '') => req('/api/system/local/browse?path=' + encodeURIComponent(path)),
   localMkdir: (path, name) => req('/api/system/local/mkdir', { method: 'POST', body: { path, name } }),
+  // CD ripping — Settings → CD ripping; lives on sources_server.py, forwarded
+  // by webui_server's /api/system/cd/<rest> (session-gated).
+  cdSettings: () => req('/api/system/cd/settings'),
+  cdSettingsSet: (body) => req('/api/system/cd/settings', { method: 'POST', body }),
+  cdOffsetLookup: () => req('/api/system/cd/settings/offset_lookup', { method: 'POST', body: {} }),
+  cdEject: () => req('/api/system/cd/eject', { method: 'POST', body: {} }),
+  cdCancel: () => req('/api/system/cd/cancel', { method: 'POST', body: {} }),
   sourcesAddSmb: ({ server, share, username, password, rw, defer_activation }) =>
     req('/api/system/sources/smb', { method: 'POST', body: { server, share, username, password, rw, defer_activation } }),
   // Guided "add a network folder": the appliance looks for file servers on the

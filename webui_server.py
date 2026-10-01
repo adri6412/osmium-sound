@@ -2343,6 +2343,18 @@ def internal_proxy(rest):
     return _forward_to_sources('/api/internal/' + rest)
 
 
+# ── CD ripping — session-gated forward to sources_server, for Settings → CD
+# ripping in the web admin (settings, AccurateRip offset lookup, eject,
+# cancel, rip status). /api/cd is also in _SOURCES_FWD_PREFIXES for the
+# pairing-token flow (kiosk, companion); this is the webui-session equivalent.
+@app.route('/api/system/cd/<path:rest>', methods=['GET', 'POST'])
+def cd_proxy(rest):
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/cd/' + rest)
+
+
 @app.route('/api/system/local/<path:rest>', methods=['GET', 'POST'])
 def local_proxy(rest):
     denied = _require_session()

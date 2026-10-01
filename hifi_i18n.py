@@ -442,6 +442,7 @@ MESSAGES = {
     'install.systemdRunNoResponse': {'en': 'systemd-run did not respond',
                                      'it': 'systemd-run non ha risposto'},
     'common.starting': {'en': 'Starting…', 'it': 'Avvio…'},
+    'common.cancelled': {'en': 'Cancelled', 'it': 'Annullato'},
     'roomcorr.updateRequired': {'en': 'A system update is required', 'it': 'Aggiornamento di sistema richiesto'},
     'roomcorr.micNotFound': {'en': 'Microphone not found: connect a USB mic',
                              'it': 'Microfono non trovato: collega un mic USB'},

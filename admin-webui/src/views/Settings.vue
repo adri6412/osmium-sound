@@ -27,6 +27,8 @@ const sections = computed(() => [
   { key: 'btSpeakers', label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
   { key: 'remote',    label: t('settings.sections.remote.label'),    desc: t('settings.sections.remote.desc') },
   { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
+  // Daphile's CD Ripping page, field by field (sources_server /api/cd/settings)
+  { key: 'cdRip',     label: t('settings.sections.cdRip.label'),     desc: t('settings.sections.cdRip.desc') },
   // 'dsp' is deliberately NOT listed here — the feature (and its room-correction
   // sub-flow) is being held back for a future paid tier. The card markup below
   // (v-if="open === 'dsp'") and all its backing code/API endpoints are left
@@ -281,6 +283,53 @@ async function loadCredits() {
   if (r.ok && r.data.project) credits.value = r.data;
 }
 watch(open, (v) => { if (v === 'notices' && !credits.value) loadCredits(); }, { immediate: true });
+
+// ── CD ripping ─────────────────────────────────────────────────────
+// Settings → CD ripping: Daphile's page, field by field, on sources_server's
+// /api/cd/settings (hifi_cdrip.py). Every control applies at once; the
+// destination folder is picked with the same FolderPicker as Music sources.
+const cd = ref(null); const cdBusy = ref(false); const cdPickOpen = ref(false);
+const cdPrefix = ref(''); const cdOffset = ref('');
+function cdTake(data) {
+  cd.value = data;
+  cdPrefix.value = data.settings.dir_prefix || '';
+  cdOffset.value = String(data.settings.offset ?? 0);
+}
+async function loadCd() {
+  const r = await api.cdSettings();
+  if (r.ok && r.data.settings) cdTake(r.data);
+}
+async function cdCall(call, okMsg) {
+  cdBusy.value = true;
+  try {
+    const r = await call();
+    const ok = r.ok && r.data.success !== false;
+    if (ok && r.data.settings) cdTake(r.data);
+    say(bodyMsg(r, ok ? okMsg : t('settings.cdRip.saveFailed')), !ok);
+    return ok;
+  } finally { cdBusy.value = false; }
+}
+const setCd = (patch) => cdCall(() => api.cdSettingsSet(patch), t('settings.cdRip.saved'));
+async function cdPickTarget(path) { if (await setCd({ target: path })) cdPickOpen.value = false; }
+function cdSaveOffset() {
+  const n = parseInt(cdOffset.value, 10);
+  if (Number.isNaN(n)) { say(t('settings.cdRip.offsetInvalid'), true); return; }
+  setCd({ offset: n });
+}
+const cdCalibrate = () => cdCall(() => api.cdOffsetLookup(), t('settings.cdRip.offsetFound'));
+async function cdEject() {
+  const r = await api.cdEject();
+  say(bodyMsg(r, r.ok && r.data.success !== false ? t('settings.cdRip.ejected') : t('settings.cdRip.ejectFailed')), !(r.ok && r.data.success !== false));
+  loadCd();
+}
+async function cdCancel() {
+  const r = await api.cdCancel();
+  say(bodyMsg(r, r.ok && r.data.success !== false ? t('settings.cdRip.cancelled') : t('settings.cdRip.cancelFailed')), !(r.ok && r.data.success !== false));
+  loadCd();
+}
+watch(open, (v) => { if (v === 'cdRip') { cdPickOpen.value = false; loadCd(); } }, { immediate: true });
+const cdSpeedLabel = (v) => (v ? v + 'x' : t('settings.cdRip.speedMax'));
+const cdRetriesLabel = (v) => t('settings.cdRip.retries.' + v);
 const filteredPackages = computed(() => {
   const list = (credits.value && credits.value.packages) || [];
   const q = pkgFilter.value.trim().toLowerCase();
@@ -1997,6 +2046,101 @@ onUnmounted(() => {
     <!-- Sources (native — talks directly to sources_server.py through
          webui_server's session-gated /api/system/sources|usb|internal|apply
          forwarders, see SourcesPanel.vue) -->
+    <!-- CD ripping: see loadCd() / setCd() above -->
+    <div class="card" v-if="open === 'cdRip'">
+      <p class="sub">{{ t('settings.cdRip.hint') }}</p>
+      <p class="muted" v-if="!cd">{{ t('common.loading') }}</p>
+      <template v-else>
+        <label>{{ t('settings.cdRip.enableLabel') }}</label>
+        <span class="seg">
+          <button :disabled="cdBusy" :class="{ active: cd.settings.enabled }" @click="setCd({ enabled: true })">{{ t('settings.cdRip.on') }}</button>
+          <button :disabled="cdBusy" :class="{ active: !cd.settings.enabled }" @click="setCd({ enabled: false })">{{ t('settings.cdRip.off') }}</button>
+        </span>
+
+        <label>{{ t('settings.cdRip.targetLabel') }}</label>
+        <div class="net between" style="align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div class="muted" style="min-width: 220px; word-break: break-all;">
+            {{ cd.settings.target || t('settings.cdRip.targetUnset') }}
+            <span v-if="cd.settings.target && !cd.target_ok" style="display: block; color: var(--danger, #f87171);">{{ t('settings.cdRip.targetBad') }}</span>
+          </div>
+          <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">
+            <button class="secondary fit" :disabled="cdBusy" @click="cdPickOpen = !cdPickOpen">{{ cdPickOpen ? t('common.close') : t('settings.cdRip.targetPick') }}</button>
+            <button class="secondary fit" :disabled="cdBusy || !cd.settings.target" @click="setCd({ target: '' })">{{ t('settings.cdRip.targetClear') }}</button>
+          </div>
+        </div>
+        <p class="muted">{{ t('settings.cdRip.targetHelp') }}</p>
+        <FolderPicker v-if="cdPickOpen" :start-at="cd.settings.target || ''" :pick-label="t('settings.cdRip.targetUse')" :busy="cdBusy" @pick="cdPickTarget" @error="(m) => say(m, true)" />
+
+        <label>{{ t('settings.cdRip.prefixLabel') }}</label>
+        <div class="row"><input v-model="cdPrefix" :placeholder="t('settings.cdRip.prefixPlaceholder')" spellcheck="false" /><button class="secondary fit" :disabled="cdBusy" @click="setCd({ dir_prefix: cdPrefix })">{{ t('common.save') }}</button></div>
+        <p class="muted">{{ t('settings.cdRip.prefixHelp') }}</p>
+
+        <label>{{ t('settings.cdRip.autoStartLabel') }}</label>
+        <span class="seg">
+          <button v-for="m in cd.choices.auto_start" :key="m" :disabled="cdBusy" :class="{ active: cd.settings.auto_start === m }" @click="setCd({ auto_start: m })">{{ t('settings.cdRip.autoStart.' + m) }}</button>
+        </span>
+        <p class="muted">{{ t('settings.cdRip.autoStartHelp') }}</p>
+
+        <label>{{ t('settings.cdRip.formatLabel') }}</label>
+        <span class="seg">
+          <button :disabled="cdBusy" :class="{ active: cd.settings.format === 'wav' }" @click="setCd({ format: 'wav' })">WAV</button>
+          <button :disabled="cdBusy" :class="{ active: cd.settings.format === 'flac' }" @click="setCd({ format: 'flac' })">FLAC</button>
+        </span>
+        <template v-if="cd.settings.format === 'flac'">
+          <label>{{ t('settings.cdRip.compressionLabel') }}</label>
+          <select :value="cd.settings.flac_compression" :disabled="cdBusy" @change="setCd({ flac_compression: parseInt($event.target.value, 10) })">
+            <option v-for="n in [0,1,2,3,4,5,6,7,8]" :key="n" :value="n">{{ n }}{{ n === 5 ? ' (' + t('settings.cdRip.default') + ')' : n === 8 ? ' (' + t('settings.cdRip.best') + ')' : '' }}</option>
+          </select>
+        </template>
+        <p class="muted" v-else>{{ t('settings.cdRip.wavHelp') }}</p>
+
+        <label>{{ t('settings.cdRip.retriesLabel') }}</label>
+        <span class="seg">
+          <button v-for="n in cd.choices.retries" :key="n" :disabled="cdBusy" :class="{ active: cd.settings.retries === n }" @click="setCd({ retries: n })">{{ cdRetriesLabel(n) }}</button>
+        </span>
+        <p class="muted">{{ t('settings.cdRip.retriesHelp') }}</p>
+
+        <label>{{ t('settings.cdRip.preEmphasisLabel') }}</label>
+        <span class="seg">
+          <button v-for="m in cd.choices.pre_emphasis" :key="m" :disabled="cdBusy" :class="{ active: cd.settings.pre_emphasis === m }" @click="setCd({ pre_emphasis: m })">{{ t('settings.cdRip.preEmphasis.' + m) }}</button>
+        </span>
+        <p class="muted">{{ t('settings.cdRip.preEmphasisHelp') }}</p>
+
+        <div v-for="f in ['clean_names', 'replaygain', 'log_file', 'eject']" :key="f" class="net between" style="align-items: center;">
+          <span><span style="display:block;">{{ t('settings.cdRip.flags.' + f + '.label') }}</span><span class="muted" style="display:block;">{{ t('settings.cdRip.flags.' + f + '.text') }}</span></span>
+          <Toggle :model-value="!!cd.settings[f]" :disabled="cdBusy" @update:model-value="(v) => setCd({ [f]: v })" />
+        </div>
+
+        <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ cd.drive.label || t('settings.cdRip.noDrive') }}</p>
+          <label>{{ t('settings.cdRip.speedLabel') }}</label>
+          <span class="seg">
+            <button v-for="v in cd.choices.speed" :key="v" :disabled="cdBusy" :class="{ active: cd.settings.speed === v }" @click="setCd({ speed: v })">{{ cdSpeedLabel(v) }}</button>
+          </span>
+          <p class="muted">{{ t('settings.cdRip.speedHelp') }}</p>
+
+          <label>{{ t('settings.cdRip.offsetLabel') }}</label>
+          <div class="row">
+            <input v-model="cdOffset" inputmode="numeric" placeholder="+6" style="max-width: 120px;" />
+            <button class="secondary fit" :disabled="cdBusy" @click="cdSaveOffset">{{ t('common.save') }}</button>
+            <button class="fit" :disabled="cdBusy || !cd.drive.present" @click="cdCalibrate">{{ t('settings.cdRip.calibrate') }}</button>
+          </div>
+          <p class="muted">{{ t('settings.cdRip.offsetHelp') }}</p>
+
+          <div class="net between" style="align-items: center;">
+            <span><span style="display:block;">{{ t('settings.cdRip.paranoiaLabel') }}</span><span class="muted" style="display:block;">{{ t('settings.cdRip.paranoiaText') }}</span></span>
+            <Toggle :model-value="!!cd.settings.paranoia" :disabled="cdBusy" @update:model-value="(v) => setCd({ paranoia: v })" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 18px; flex-wrap: wrap;">
+          <button class="secondary fit" :disabled="cdBusy || cd.ripping" @click="cdEject">{{ t('settings.cdRip.ejectNow') }}</button>
+          <button class="secondary fit" v-if="cd.ripping" :disabled="cdBusy" @click="cdCancel">{{ t('settings.cdRip.cancelRip') }}</button>
+        </div>
+        <p class="muted">{{ t('settings.cdRip.ejectHelp') }}</p>
+      </template>
+    </div>
+
     <div class="card wide" v-if="open === 'sources'">
       <p class="sub">{{ t('settings.sources.hint') }}</p>
       <SourcesPanel />

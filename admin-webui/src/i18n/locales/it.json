@@ -203,6 +203,10 @@
         "label": "Sorgenti musicali",
         "desc": "Cartelle, USB, condivisioni di rete, CD"
       },
+      "cdRip": {
+        "label": "Rip dei CD",
+        "desc": "Destinazione, formato, riletture, log, espulsione, offset del lettore"
+      },
       "dsp": {
         "label": "DSP / Equalizzatore",
         "desc": "Motore DSP, crossfeed, preset"
@@ -366,6 +370,87 @@
       "generated": "Elenco scritto alla costruzione dell'immagine, il {date}. Ogni licenza viene dal file copyright del pacchetto.",
       "filter": "Filtra per nome o licenza",
       "sourceOffer": "I componenti GPL e LGPL sono binari non modificati di Debian e della LMS-Community. I loro sorgenti sono su deb.debian.org (la suite indicata sopra) e su GitHub; un archivio completo dei sorgenti di questa immagine si può richiedere a info@osmiumsound.it."
+    },
+    "cdRip": {
+      "hint": "Come un CD audio viene copiato nella libreria. Ogni controllo si applica subito; i nomi seguono la pagina CD Ripping di Daphile.",
+      "saved": "Salvato",
+      "saveFailed": "Salvataggio fallito",
+      "on": "Attivo",
+      "off": "Off",
+      "enableLabel": "Rip dei CD",
+      "targetLabel": "Cartella di destinazione predefinita",
+      "targetUnset": "Non impostata: l'unica sorgente scrivibile, oppure si sceglie al momento",
+      "targetBad": "Questa cartella adesso non è disponibile (disco scollegato o condivisione non montata).",
+      "targetPick": "Sfoglia…",
+      "targetUse": "Usa questa cartella",
+      "targetClear": "Togli",
+      "targetHelp": "Una cartella dentro una sorgente musicale scrivibile: disco interno o USB, oppure una condivisione di rete montata in scrittura. Gli album finiscono lì come Artista/Album.",
+      "prefixLabel": "Prefisso cartella",
+      "prefixPlaceholder": "es. Rip CD",
+      "prefixHelp": "Una cartella sotto la destinazione in cui va ogni album rippato; vuoto per nessuna.",
+      "autoStartLabel": "Avvio automatico",
+      "autoStart": {
+        "off": "Off",
+        "if_tags": "Se ci sono i tag",
+        "always": "Sempre"
+      },
+      "autoStartHelp": "Parte da solo all'inserimento del disco, nella cartella predefinita: solo se MusicBrainz conosce il disco, oppure sempre.",
+      "formatLabel": "Formato di uscita",
+      "compressionLabel": "Compressione FLAC",
+      "default": "predefinito",
+      "best": "massima",
+      "wavHelp": "I file WAV non hanno tag né ReplayGain; copertina e log vengono salvati comunque accanto.",
+      "retriesLabel": "Riletture se inesatto",
+      "retries": {
+        "0": "Mai",
+        "1": "Una volta",
+        "2": "Due volte",
+        "5": "5 volte"
+      },
+      "retriesHelp": "Una traccia viene riletta finché due letture coincidono. Più riletture: più lento ma più sicuro sui dischi graffiati.",
+      "preEmphasisLabel": "Pre-enfasi",
+      "preEmphasis": {
+        "ignore": "Ignora del tutto",
+        "tag": "Solo tag",
+        "filter": "Rimuovi col filtro"
+      },
+      "preEmphasisHelp": "Alcuni CD dei primi anni hanno la pre-enfasi: il tag PRE_EMPHASIS lascia correggere al player, il filtro corregge l'audio stesso.",
+      "flags": {
+        "clean_names": {
+          "label": "Nomi dei file",
+          "text": "Pulisci tutti i caratteri speciali e non ASCII"
+        },
+        "replaygain": {
+          "label": "ReplayGain",
+          "text": "Calcola e scrivi nei tag"
+        },
+        "log_file": {
+          "label": "File di log",
+          "text": "Salva il log del rip nella cartella dell'album"
+        },
+        "eject": {
+          "label": "Espulsione",
+          "text": "Espelli a fine rip riuscito"
+        }
+      },
+      "noDrive": "Nessun lettore ottico trovato",
+      "speedLabel": "Velocità forzata",
+      "speedMax": "Max",
+      "speedHelp": "Una velocità più bassa legge meglio un disco rovinato e tiene il lettore più silenzioso.",
+      "offsetLabel": "Offset del lettore",
+      "offsetHelp": "Offset di lettura in campioni, come indicato da AccurateRip per questo modello. Calibra lo cerca in rete e lo imposta.",
+      "offsetInvalid": "L'offset deve essere un numero intero.",
+      "offsetFound": "Offset impostato dall'elenco AccurateRip",
+      "calibrate": "Calibra",
+      "paranoiaLabel": "CDParanoia",
+      "paranoiaText": "Attivo (correzione degli errori in lettura)",
+      "ejectNow": "Espelli ora",
+      "cancelRip": "Annulla il rip",
+      "ejected": "Disco espulso",
+      "ejectFailed": "Espulsione fallita",
+      "cancelled": "Rip annullato",
+      "cancelFailed": "Annullamento fallito",
+      "ejectHelp": "Per un lettore senza tasto: espelle il disco in qualsiasi momento in cui non c'è un rip in corso."
     },
     "btSpeakers": {
       "help": "Suona su un altoparlante Bluetooth o su un paio di cuffie. Ognuno che aggiungi diventa un lettore a sé, con il suo nome e la sua coda, accanto al lettore di questo apparecchio: puoi mandargli un altro disco, oppure unire i due. L'uscita del DAC non viene toccata.",
