@@ -60,7 +60,17 @@ RETRIES = (0, 1, 2, 5)
 PRE_EMPHASIS = ('ignore', 'tag', 'filter')
 SPEEDS = (0, 4, 8, 16, 24, 32, 48)
 
-_PREFIX_RE = re.compile(r'^[^\x00-\x1f<>:"/\\|?*]{0,60}$')
+_SEGMENT_RE = re.compile(r'^[^\x00-\x1f<>:"/\\|?*]{1,60}$')
+
+
+def clean_prefix(value):
+    """The directory prefix as 'a' or 'a/b' (a folder, maybe nested, under the
+    target): empty for none, None when a segment is not a plain folder name."""
+    parts = [p.strip() for p in str(value or '').replace('\\', '/').split('/')]
+    parts = [p for p in parts if p]
+    if any(p in ('.', '..') or not _SEGMENT_RE.match(p) for p in parts):
+        return None
+    return '/'.join(parts)
 
 
 class InvalidField(ValueError):
@@ -76,8 +86,7 @@ def normalize(settings):
     s['enabled'] = bool(src.get('enabled', True))
     target = str(src.get('target') or '').strip()
     s['target'] = target if target.startswith('/') and '\x00' not in target else ''
-    prefix = str(src.get('dir_prefix') or '').strip().strip('/')
-    s['dir_prefix'] = prefix if _PREFIX_RE.match(prefix) else ''
+    s['dir_prefix'] = clean_prefix(src.get('dir_prefix')) or ''
     s['auto_start'] = src.get('auto_start') if src.get('auto_start') in AUTO_START else 'off'
     s['format'] = src.get('format') if src.get('format') in FORMATS else 'flac'
     try:
@@ -122,9 +131,10 @@ def set_fields(settings, changes):
             if value and (not value.startswith('/') or '\x00' in value):
                 raise InvalidField(key, value)
         elif key == 'dir_prefix':
-            value = str(value or '').strip().strip('/')
-            if not _PREFIX_RE.match(value):
-                raise InvalidField(key, value)
+            cleaned = clean_prefix(value)
+            if cleaned is None:
+                raise InvalidField(key, str(value))
+            value = cleaned
         elif key == 'auto_start':
             if value not in AUTO_START:
                 raise InvalidField(key, str(value))

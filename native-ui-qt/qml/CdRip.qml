@@ -21,6 +21,9 @@ Item {
     property bool refill: false
     property var dests: []              // [{id,name}]
     property int destSel: 0
+    // the folder picked in the browser below (absolute); "" = dests[destSel]
+    property string destPath: ""
+    property string defaultTargetPath: ""
     property string state: ""
     property string msg: ""
     property int progress: 0
@@ -72,9 +75,10 @@ Item {
                 root.ripping = false
             }
             // the folder from Settings → CD ripping first, then the writable sources
-            var dl = (d.destinations || []).map(function(x) { return { id: String(x.source_id || ""), name: String(x.name || "") } })
+            var dl = (d.destinations || []).map(function(x) { return { id: String(x.source_id || ""), name: String(x.name || ""), path: String(x.path || "") } })
             if (d.default_target && d.default_target.path) dl.unshift({ id: "__default__", name: String(d.default_target.name || d.default_target.path) })
             root.dests = dl
+            root.defaultTargetPath = d.default_target && d.default_target.path ? String(d.default_target.path) : ""
             root.enabled = d.enabled !== false
             root.haveDisc = true
             if (d.ripping) root.ripping = true
@@ -95,6 +99,13 @@ Item {
     function close() { if (!open || closing) return; closing = true; closeScale = 0.94; fade = 0 }
     Timer { interval: 40; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.open = false; root.closing = false } }
     function dismissBanner() { dismissed = discid }
+    // ── the destination: the kiosk's folder chooser (FolderChooser.qml), the
+    // same navigator Music sources and the playlist folder use ─────────────
+    function openBrowser() {
+        var start = destPath || defaultTargetPath
+        if (!start) for (var i = 0; i < dests.length; i++) if (dests[i].path) { start = dests[i].path; break }
+        if (Ui.folderChooser) Ui.folderChooser.openAt(start, Tr.t("sources.useThisFolder"), function(p) { root.destPath = p })
+    }
     // Cancel: the worker stops, removes what it had read, and the disc can be ejected
     function cancelRip() { Api.post(Api.srcBase + "/api/cd/cancel", {}, function() { root.loadStatus() }) }
     function eject() { Api.post(Api.srcBase + "/api/cd/eject", {}, function() { root.loadStatus() }); haveDisc = false; state = ""; close() }
@@ -116,8 +127,10 @@ Item {
         })
     }
     function startRip() {
-        if (!dests.length) return
-        var body = { source_id: dests[destSel].id, artist: artist, album: album, tracks: tracks }
+        if (!dests.length && !destPath) return
+        var body = { artist: artist, album: album, tracks: tracks }
+        if (destPath) body.target = destPath
+        else body.source_id = dests[destSel].id
         if (release) body.release = release
         Api.post(Api.srcBase + "/api/cd/rip", body, function() { root.loadStatus() })
         state = "starting"; ripping = true; total = tracks.length
@@ -221,9 +234,9 @@ Item {
                 Icon { x: 0; anchors.verticalCenter: parent.verticalCenter; name: "hard-drive"; size: 14; color: Theme.silverA(0.6) }
                 Rectangle {
                     x: 22; width: parent.width - 22; height: 36; radius: 8; color: Theme.dark; border.width: 1; border.color: Theme.accent
-                    Text { x: 10; width: parent.width - 38; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; text: root.dests.length ? root.dests[root.destSel].name : ""; color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
-                    Icon { x: parent.width - 24; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 16; color: Theme.silver }
-                    Tap { onClicked: Ui.dialogs.pick(Tr.t("player.cd.ripTitle"), root.dests.map(function(d) { return d.name }), root.destSel, function(i) { if (i >= 0) root.destSel = i }) }
+                    Text { x: 10; width: parent.width - 38; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideMiddle; text: root.destPath || (root.dests.length ? root.dests[root.destSel].name : ""); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                    Icon { x: parent.width - 24; anchors.verticalCenter: parent.verticalCenter; name: "folder"; size: 16; color: Theme.silver }
+                    Tap { onClicked: root.openBrowser() }
                 }
             }
             Text { visible: root.err !== ""; x: 20; y: parent.height - parent.foot + 42; height: 16; text: root.err; color: Theme.red300; font.family: Theme.font; font.pixelSize: 12 }

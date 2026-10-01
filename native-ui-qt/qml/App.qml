@@ -315,6 +315,7 @@ Item {
     Dialogs { id: dialogs; anchors.fill: parent }
     OtaOverlay { id: ota; anchors.fill: parent }
     CdRip { id: cdrip; anchors.fill: parent }
+    FolderChooser { id: folderChooser; anchors.fill: parent }
     Tutorial {                                             // the guided tours, over everything but the saver and the intro
         id: tutorial; anchors.fill: parent
         onEnded: remoteIntro.check()                       // another known remote may be waiting for its map

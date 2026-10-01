@@ -62,13 +62,17 @@ class TestSettings(unittest.TestCase):
         self.assertEqual(s['dir_prefix'], '')
         self.assertFalse(s['enabled'])
         self.assertEqual(hcd.normalize({'dir_prefix': ' CD rips/ '})['dir_prefix'], 'CD rips')
+        self.assertEqual(hcd.normalize({'dir_prefix': 'CD rips/2026/'})['dir_prefix'], 'CD rips/2026')
+        self.assertEqual(hcd.normalize({'dir_prefix': '../escape'})['dir_prefix'], '')
+        self.assertEqual(hcd.clean_prefix('a\\b'), 'a/b')
+        self.assertIsNone(hcd.clean_prefix('a/../b'))
 
     def test_set_fields_strict(self):
         base = hcd.normalize({})
         s = hcd.set_fields(base, {'format': 'wav', 'retries': 5, 'offset': -12, 'speed': 24, 'dir_prefix': 'Rips', 'eject': False})
         self.assertEqual((s['format'], s['retries'], s['offset'], s['speed'], s['dir_prefix'], s['eject']), ('wav', 5, -12, 24, 'Rips', False))
         for bad in ({'format': 'mp3'}, {'retries': 3}, {'flac_compression': 9}, {'speed': 10}, {'offset': 'six'},
-                    {'offset': 6000}, {'eject': 1}, {'target': 'no-slash'}, {'dir_prefix': 'a/b'}, {'nope': 1}, {'pre_emphasis': 'x'}):
+                    {'offset': 6000}, {'eject': 1}, {'target': 'no-slash'}, {'dir_prefix': 'a/../b'}, {'nope': 1}, {'pre_emphasis': 'x'}):
             with self.assertRaises(hcd.InvalidField, msg=str(bad)):
                 hcd.set_fields(base, bad)
         self.assertEqual(base, hcd.normalize({}))
@@ -312,6 +316,48 @@ class TestApi(unittest.TestCase):
         r = self.client.post('/api/cd/eject')
         self.assertEqual(r.status_code, 200)
         self.assertIn(['eject', self.ss.CD_DEVICE], self.calls)
+
+    def test_rip_target_folder(self):
+        """POST /api/cd/rip with `target` (a folder picked in the browser),
+        with the default folder, or with the only writable source."""
+        ss = self.ss
+        self._patch('RIP_PLAN', os.path.join(self.tmp, 'rip-plan.json'))
+        self._patch('RIP_COVER', os.path.join(self.tmp, 'rip-cover.jpg'))
+        self._patch('_cd_lookup', lambda toc: None)
+        self._patch('_rip_watcher', lambda: None)
+        toc = {'discid': 'abcd1234', 'ntracks': 2, 'offsets': [150, 20000], 'total_sec': 500, 'lengths': [264, 235], 'leadout': 37500}
+        self._patch('_cd_toc', lambda: toc)
+        picked = os.path.join(self.mount, 'Rips')
+        r = self.client.post('/api/cd/rip', json={'target': picked})
+        self.assertEqual(r.status_code, 202, r.get_json())
+        with open(ss.RIP_PLAN) as f:
+            plan = json.load(f)
+        self.assertEqual(plan['root'], picked)
+        self.assertEqual(plan['options']['retries'], 2)
+        self.assertEqual(len(plan['tracks']), 2)
+        self.assertIn(['systemd-run', '--no-block', '--collect', '--unit=hifi-rip-cd', ss.RIP_SCRIPT, ss.RIP_PLAN], self.calls)
+        # a folder outside every writable source is refused
+        with open(ss.RIP_STATUS, 'w') as f:
+            json.dump({'state': 'idle'}, f)
+        r = self.client.post('/api/cd/rip', json={'target': self.tmp})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.get_json()['code'], 'msg.cdTargetOutside')
+        # nothing picked: the default folder from the settings, else the only source
+        hcd.save({'target': picked, 'dir_prefix': 'CD rips/2026'}, ss.CDRIP_CONF)
+        r = self.client.post('/api/cd/rip', json={})
+        self.assertEqual(r.status_code, 202)
+        with open(ss.RIP_PLAN) as f:
+            plan = json.load(f)
+        self.assertEqual(plan['root'], picked)
+        self.assertEqual(plan['options']['dir_prefix'], 'CD rips/2026')
+        hcd.save({}, ss.CDRIP_CONF)
+        with open(ss.RIP_STATUS, 'w') as f:
+            json.dump({'state': 'idle'}, f)
+        r = self.client.post('/api/cd/rip', json={})
+        self.assertEqual(r.status_code, 202)
+        with open(ss.RIP_PLAN) as f:
+            plan = json.load(f)
+        self.assertEqual(plan['root'], self.mount)
 
     def test_terminal_states(self):
         for state in ('idle', 'done', 'error', 'cancelled'):

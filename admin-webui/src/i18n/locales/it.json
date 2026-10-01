@@ -387,7 +387,12 @@
       "targetHelp": "Una cartella dentro una sorgente musicale scrivibile: disco interno o USB, oppure una condivisione di rete montata in scrittura. Gli album finiscono lì come Artista/Album.",
       "prefixLabel": "Prefisso cartella",
       "prefixPlaceholder": "es. Rip CD",
-      "prefixHelp": "Una cartella sotto la destinazione in cui va ogni album rippato; vuoto per nessuna.",
+      "prefixHelp": "Una cartella dentro la cartella di destinazione predefinita in cui va ogni album rippato, scelta dal navigatore; nessuna per rippare direttamente nella destinazione.",
+      "prefixNone": "Nessuno",
+      "prefixPick": "Sfoglia",
+      "prefixUse": "Usa questa cartella come prefisso",
+      "prefixNeedsTarget": "Imposta prima la cartella di destinazione predefinita.",
+      "prefixOutside": "Il prefisso deve essere una cartella dentro la cartella di destinazione predefinita.",
       "autoStartLabel": "Avvio automatico",
       "autoStart": {
         "off": "Off",

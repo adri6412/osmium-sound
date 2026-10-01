@@ -290,7 +290,9 @@ def main():
     if cover and not os.path.isfile(cover):
         cover = ""
 
-    base = os.path.join(root, hifi_cdrip.safe_name(opt["dir_prefix"], "", clean)) if opt["dir_prefix"] else root
+    base = root
+    for seg in [p for p in opt["dir_prefix"].split("/") if p]:
+        base = os.path.join(base, hifi_cdrip.safe_name(seg, "rip", clean))
     dest = os.path.join(base, hifi_cdrip.safe_name(artist, "Unknown Artist", clean),
                         hifi_cdrip.safe_name(album, "Unknown Album", clean))
     work = os.path.join(root, ".partial-rip")

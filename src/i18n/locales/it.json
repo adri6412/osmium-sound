@@ -10,6 +10,7 @@
     "retry": "Riprova",
     "cancel": "Annulla",
     "close": "Chiudi",
+    "save": "Salva",
     "search": "Cerca",
     "confirm": "Conferma",
     "clear": "Cancella",
@@ -20,6 +21,17 @@
     "done": "Fatto",
     "noResults": "Nessun risultato",
     "networkError": "Errore di connessione"
+  },
+  "fileChooser": {
+    "title": "Scegli una cartella",
+    "places": "Posizioni",
+    "root": "Tutte le cartelle",
+    "newFolder": "Nuova cartella",
+    "create": "Crea",
+    "empty": "Nessuna cartella qui",
+    "freeOf": "{free} liberi di {total}",
+    "items": "{n} elementi",
+    "emptyPlace": "Vuoto"
   },
   "sources": {
     "active": "Sorgenti attive",
@@ -52,6 +64,7 @@
     "newFolderCreate": "Crea",
     "localSambaHint": "Condividi anche questa cartella in rete (SMB), così puoi caricarci musica da un PC.",
     "useThisFolder": "Usa questa cartella",
+    "browseFolders": "Sfoglia le cartelle…",
     "playlistdir": {
       "title": "Cartella playlist",
       "hint": "Dove Lyrion salva le playlist che crei dal player. Quella predefinita va bene nella maggior parte dei casi — scegli una cartella sul tuo disco se preferisci tenere le playlist vicino alla musica.",
@@ -960,7 +973,12 @@
       "targetUse": "Usa questa cartella",
       "targetClear": "Togli",
       "prefixLabel": "Prefisso cartella",
-      "prefixHelp": "Una cartella sotto la destinazione in cui va ogni album rippato; vuoto per nessuna.",
+      "prefixHelp": "Una cartella dentro la cartella di destinazione predefinita in cui va ogni album rippato, scelta dal navigatore; nessuna per rippare direttamente nella destinazione.",
+      "prefixNone": "Nessuno",
+      "prefixPick": "Sfoglia",
+      "prefixUse": "Usa questa cartella come prefisso",
+      "prefixNeedsTarget": "Imposta prima la cartella di destinazione predefinita.",
+      "prefixOutside": "Il prefisso deve essere una cartella dentro la cartella di destinazione predefinita.",
       "prefixPlaceholder": "es. Rip CD",
       "autoStartLabel": "Avvio automatico",
       "autoStartHelp": "Parte da solo all'inserimento del disco, nella cartella predefinita.",

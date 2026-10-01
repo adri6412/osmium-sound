@@ -387,7 +387,12 @@
       "targetHelp": "A folder inside a writable music source: an internal or USB disk, or a network share mounted read-write. Albums land there as Artist/Album.",
       "prefixLabel": "Directory prefix",
       "prefixPlaceholder": "e.g. CD rips",
-      "prefixHelp": "A folder under the target that every ripped album goes into; empty for none.",
+      "prefixHelp": "A folder inside the default target folder that every ripped album goes into, chosen from the folder browser; none to rip straight into the target.",
+      "prefixNone": "None",
+      "prefixPick": "Browse",
+      "prefixUse": "Use this folder as prefix",
+      "prefixNeedsTarget": "Set the default target folder first.",
+      "prefixOutside": "The prefix must be a folder inside the default target folder.",
       "autoStartLabel": "Automatic start",
       "autoStart": {
         "off": "Off",

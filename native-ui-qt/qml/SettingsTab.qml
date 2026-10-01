@@ -20,8 +20,7 @@ Item {
     // Audio → Advanced: the extra-arguments field, as typed; `dirty` tells a
     // cleared field from one not touched yet (which shows the saved value)
     property string sqExtraEdit: ""; property bool sqExtraDirty: false
-    // CD ripping: the two typed fields (prefix, offset), as typed
-    property string cdPrefixEdit: ""; property bool cdPrefixDirty: false
+    // CD ripping: the offset field, as typed
     property string cdOffsetEdit: ""; property bool cdOffsetDirty: false
     property string sshUser: ""; property string sshPass: ""
     property string nameEdit: ""; property string hostEdit: ""
@@ -569,10 +568,18 @@ Item {
     // settings and a message; post() reloads cfg afterwards
     function cdDone(ok, d) {
         if (!ok || (d && d.success === false)) { say((d && d.message) || Tr.t("settings.cdRip.saveFailed"), true); return }
-        cdPrefixDirty = false; cdOffsetDirty = false
+        cdOffsetDirty = false
         say((d && d.message) || Tr.t("settings.cdRip.saved"))
     }
     function cdSet(body) { post(cfg.src("/api/cd/settings"), body, cdDone) }
+    // the prefix is a folder picked INSIDE the default target folder
+    function cdPrefixPick(path) {
+        var tgt = String((cfg.cdrip.settings || {}).target || "").replace(/\/+$/, "")
+        if (!tgt) { say(Tr.t("settings.cdRip.prefixNeedsTarget"), true); return }
+        if (path === tgt) { cdSet({ dir_prefix: "" }); return }
+        if (path.indexOf(tgt + "/") !== 0) { say(Tr.t("settings.cdRip.prefixOutside"), true); return }
+        cdSet({ dir_prefix: path.slice(tgt.length + 1) })
+    }
     function cdSimple(path, okKey, failKey) {
         post(cfg.src(path), {}, function(ok, d) {
             var good = ok && !(d && d.success === false)
@@ -912,18 +919,27 @@ Item {
         var r = option("English", "", "en", cur === "en", "lang"); r.hh = 52; r.icon = "check"
         r = option("Italiano", "", "it", cur === "it", "lang"); r.hh = 52; r.icon = "check"
     }
-    function folderPicker(pickLabel) {
-        box(function() {
-            var hd = info(cfg.pkPath || "/", ""); hd.style = "seg"; hd.px = 12; hd.hh = 28
-            mini(hd, Tr.t("sources.subpathUp"), "pick_up", "accent", !cfg.pkHasParent)
-            if (pickBusy) helpText(Tr.t("common.loading"), 12)
-            else if (!cfg.pkDirs.length) helpText(Tr.t("sources.subpathNoSubfolders"), 12)
-            else for (var i = 0; i < cfg.pkDirs.length; i++) dir(cfg.pkDirs[i], "pick_into")
-            var inp = { type: "input", label: Tr.t("sources.newFolderPlaceholder"), value: pickNew, act: "pick_new", span: 3 }
-            var cr = acell(Tr.t("sources.newFolderCreate"), "pick_create", "accent", { px: 12, hh: 46, dim: !pickNew || !cfg.pkPath })
-            var g = push({ type: "grid", cols: 4, cells: [inp, cr] })
-            var use = action(pickLabel, "pick_use", "accent"); use.icon = "plus"; use.dim = !cfg.pkPath
-        })
+    // Every folder is picked in FolderChooser.qml (the File page's look): the
+    // row here only opens it, with what to do with the folder decided by
+    // pickOwner (0 add a local folder, 2 playlist folder, 3 share a folder,
+    // 4 CD rip target, 5 CD rip prefix) in pickUse().
+    property string pickLabelCur: ""
+    property string pickStartCur: ""
+    function folderPicker(pickLabel, start) {
+        pickLabelCur = pickLabel || Tr.t("sources.useThisFolder"); pickStartCur = start || ""
+        var b = action(Tr.t("sources.browseFolders"), "pick_chooser", "accent"); b.icon = "folder"
+    }
+    function openChooser(start, label) {
+        if (!Ui.folderChooser) return
+        Ui.folderChooser.openAt(start || "", label || pickLabelCur || Tr.t("sources.useThisFolder"), function(p) { pickUse(p) })
+    }
+    function pickUse(path) {
+        if (!path) return
+        if (pickOwner === 4) { cdSet({ target: path }); pickOwner = 0; return }
+        if (pickOwner === 5) { cdPrefixPick(path); pickOwner = 0; return }
+        if (pickOwner === 2) { post(cfg.src("/api/playlistdir"), { path: path }); say(Tr.t("sources.playlistdir.saved")) }
+        else { post(cfg.src("/api/sources/local"), { path: path, samba: pickOwner === 3 }); say(Tr.t("sources.added")) }
+        pickOwner = 0
     }
     function subpathBrowser() {
         box(function() {
@@ -1142,9 +1158,8 @@ Item {
             begin(b2.children)
             help("sources.playlistdir.hint")
             var r = srcRow(cfg.pldir || Tr.t("sources.playlistdir.unset"), "", "", "", "", true); r.hh = 44; r.px = 12
-            mini(r, pickOwner === 2 ? Tr.t("common.close") : Tr.t("sources.playlistdir.pick"), "pick_open", "accent", false, "")
+            mini(r, Tr.t("sources.playlistdir.pick"), "pick_open", "accent", false, "")
             mini(r, Tr.t("sources.playlistdir.default"), "pldir_default", "accent", !cfg.pldirDef || cfg.pldirDefault, "")
-            if (pickOwner === 2) folderPicker(Tr.t("sources.playlistdir.use"))
             end()
         }
         var sum3 = cfg.smbShares.length ? Tr.tf("sources.shareCount", "count", String(cfg.smbShares.length)) : Tr.t("sources.shareNone")
@@ -1176,12 +1191,12 @@ Item {
         toggle(Tr.t("settings.cdRip.enableLabel"), Tr.t("settings.cdRip.enableText"), !!c.enabled, "cd_enabled")
         label("settings.cdRip.targetLabel", 14); help("settings.cdRip.targetHelp", 12)
         var tr = srcRow(c.target || Tr.t("settings.cdRip.targetUnset"), "", c.target && !s.target_ok ? Tr.t("settings.cdRip.targetBad") : "", "", "", !c.target || s.target_ok); tr.hh = 44; tr.px = 12
-        mini(tr, pickOwner === 4 ? Tr.t("common.close") : Tr.t("settings.cdRip.targetPick"), "cd_pick_open", "accent", false, "")
+        mini(tr, Tr.t("settings.cdRip.targetPick"), "cd_pick_open", "accent", false, "")
         mini(tr, Tr.t("settings.cdRip.targetClear"), "cd_target_clear", "accent", !c.target, "")
-        if (pickOwner === 4) folderPicker(Tr.t("settings.cdRip.targetUse"))
-        label("settings.cdRip.prefixLabel", 14); help("settings.cdRip.prefixHelp", 12)
-        input(Tr.t("settings.cdRip.prefixPlaceholder"), cdPrefixDirty ? cdPrefixEdit : String(c.dir_prefix || ""), "cd_prefix", false).hh = 50
-        grid([acell(Tr.t("common.save"), "cd_prefix_apply", "gold", { icon: "check", hh: 44 })])
+        label("settings.cdRip.prefixLabel", 14); help(c.target ? "settings.cdRip.prefixHelp" : "settings.cdRip.prefixNeedsTarget", 12)
+        var pr = srcRow(c.dir_prefix || Tr.t("settings.cdRip.prefixNone"), "", "", "", "", true); pr.hh = 44; pr.px = 12
+        mini(pr, Tr.t("settings.cdRip.prefixPick"), "cd_prefix_open", "accent", !c.target, "")
+        mini(pr, Tr.t("settings.cdRip.targetClear"), "cd_prefix_clear", "accent", !c.dir_prefix, "")
         label("settings.cdRip.autoStartLabel", 14); help("settings.cdRip.autoStartHelp", 12)
         var am = ch.auto_start || ["off", "if_tags", "always"], ac = []
         for (i = 0; i < am.length; i++) ac.push(cell(Tr.t("settings.cdRip.autoStart." + am[i]), am[i], c.auto_start === am[i], "cd_auto", { hh: 44 }))
@@ -2003,7 +2018,6 @@ Item {
         case "player_name": nameEdit = text; break
         case "lms_host": hostEdit = text; break
         case "sq_extra": sqExtraEdit = text; sqExtraDirty = true; break
-        case "cd_prefix": cdPrefixEdit = text; cdPrefixDirty = true; break
         case "cd_offset": cdOffsetEdit = text; cdOffsetDirty = true; break
         case "pick_new": pickNew = text; break
         case "bt_name": btNameEdit = text; break
@@ -2272,9 +2286,14 @@ Item {
         case "sq_reset": sqReset(); break
         // Settings → CD ripping (secCdRip)
         case "cd_enabled": cdSet({ enabled: !row.on }); break
-        case "cd_pick_open": if (pickOwner === 4) { pickOwner = 0; break } pickOwner = 4; pickBrowse(String((cfg.cdrip.settings || {}).target || "")); break
+        case "cd_pick_open": pickOwner = 4; openChooser(String((cfg.cdrip.settings || {}).target || ""), Tr.t("settings.cdRip.targetUse")); break
         case "cd_target_clear": cdSet({ target: "" }); break
-        case "cd_prefix_apply": cdSet({ dir_prefix: cdPrefixDirty ? cdPrefixEdit : String((cfg.cdrip.settings || {}).dir_prefix || "") }); break
+        case "cd_prefix_open": {
+            var tgt = String((cfg.cdrip.settings || {}).target || "").replace(/\/+$/, ""), pfx = String((cfg.cdrip.settings || {}).dir_prefix || "")
+            if (!tgt) { say(Tr.t("settings.cdRip.prefixNeedsTarget"), true); break }
+            pickOwner = 5; openChooser(pfx ? tgt + "/" + pfx : tgt, Tr.t("settings.cdRip.prefixUse")); break
+        }
+        case "cd_prefix_clear": cdSet({ dir_prefix: "" }); break
         case "cd_auto": cdSet({ auto_start: arg }); break
         case "cd_format": cdSet({ format: arg }); break
         case "cd_level": cdSet({ flac_compression: parseInt(arg) }); break
@@ -2292,7 +2311,7 @@ Item {
         case "cd_eject": cdSimple("/api/cd/eject", "settings.cdRip.ejected", "settings.cdRip.ejectFailed"); break
         case "cd_cancel": cdSimple("/api/cd/cancel", "settings.cdRip.cancelled", "settings.cdRip.cancelFailed"); break
         case "lms_skin": post(S("/api/lms_skin"), { skin: arg }); cfg.lmsSkin = arg; say(Tr.t("settings.lyrion.skinApplying")); break
-        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": case "sq_extra": case "cd_prefix": case "cd_offset": return
+        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": case "sq_extra": case "cd_offset": return
         case "lms_role":
             if (arg !== "local") { cfg.lmsMode = "follow"; cfg.loadDiscover(); break }
             // Already on this device's own server: only the toggle moves back,
@@ -2402,7 +2421,7 @@ Item {
         // ── procedura guidata "cartella di rete" ────────────────────────
         case "where_net": band = 1; bandAdd = 0; wizOpen(); return
         case "where_disk": band = 1; bandAdd = 1; break
-        case "where_local": band = 1; bandAdd = 2; pickOwner = 1; pickBrowse(""); break
+        case "where_local": band = 1; bandAdd = 2; pickOwner = 1; break
         case "wiz_open": wizOpen(); return
         case "wiz_manual_open": wizReset(); wiz = 0; wizManual = true; break
         case "wiz_close": wizReset(); break
@@ -2449,19 +2468,19 @@ Item {
         case "band": {
             var b = parseInt(arg)
             band = band === b ? -1 : b; brId = ""; pickOwner = 0
-            if (band === 1 && bandAdd === 2) { pickOwner = 1; pickBrowse("") }
-            if (band === 3 && bandShare === 0) { pickOwner = 3; pickBrowse("") }
+            if (band === 1 && bandAdd === 2) pickOwner = 1
+            if (band === 3 && bandShare === 0) pickOwner = 3
             break
         }
         case "band_add": {
             var ba = parseInt(arg)
             bandAdd = bandAdd === ba ? -1 : ba; pickOwner = 0
-            if (bandAdd === 2) { pickOwner = 1; pickBrowse("") }
+            if (bandAdd === 2) pickOwner = 1
             break
         }
         case "band_share":
             bandShare = bandShare === 0 ? -1 : 0; pickOwner = 0
-            if (bandShare === 0) { pickOwner = 3; pickBrowse("") }
+            if (bandShare === 0) pickOwner = 3
             break
         case "src_browse": {
             if (brId === arg) { brId = ""; break }
@@ -2476,21 +2495,9 @@ Item {
         case "br_here": case "br_root":
             post(S("/api/sources/" + brId + "/subpath"), { subpath: act === "br_root" ? "" : cfg.brPath })
             brId = ""; say(Tr.t("sources.subpathSaved")); break
-        case "pick_open":
-            if (pickOwner === 2) { pickOwner = 0; break }
-            pickOwner = 2; pickBrowse(cfg.pldir); break
-        case "pick_up": if (!cfg.pkHasParent) return; pickBrowse(cfg.pkParent); break
-        case "pick_into": pickBrowse(arg); break
-        case "pick_create":
-            if (!pickNew || !cfg.pkPath) return
-            Api.post(S("/api/local/mkdir"), { path: cfg.pkPath, name: pickNew }, function() { pickBrowse(cfg.pkPath) })
-            pickNew = ""; break
-        case "pick_use":
-            if (!cfg.pkPath) return
-            if (pickOwner === 4) { cdSet({ target: cfg.pkPath }); pickOwner = 0; break }
-            if (pickOwner === 2) { post(S("/api/playlistdir"), { path: cfg.pkPath }); say(Tr.t("sources.playlistdir.saved")) }
-            else { post(S("/api/sources/local"), { path: cfg.pkPath, samba: pickOwner === 3 }); say(Tr.t("sources.added")) }
-            pickOwner = 0; break
+        case "pick_open": pickOwner = 2; openChooser(cfg.pldir, Tr.t("sources.playlistdir.use")); break
+        case "pick_chooser": openChooser(pickStartCur, pickLabelCur); break
+        case "pick_use": pickUse(cfg.pkPath); break
         case "smb_regen": post(S("/api/internal/smb/regenerate"), {}); break
         case "smb_show": smbShowPw = !smbShowPw; break
         case "revoke_pair":
@@ -2526,7 +2533,6 @@ Item {
         }
         rebuild()
     }
-    function pickBrowse(path) { pickBusy = true; cfg.browse(2, "", path) }
     Timer {
         id: countTimer
         interval: 1000; repeat: true; running: root.countdown > 0

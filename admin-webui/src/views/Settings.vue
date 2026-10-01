@@ -288,11 +288,10 @@ watch(open, (v) => { if (v === 'notices' && !credits.value) loadCredits(); }, { 
 // Settings → CD ripping: Daphile's page, field by field, on sources_server's
 // /api/cd/settings (hifi_cdrip.py). Every control applies at once; the
 // destination folder is picked with the same FolderPicker as Music sources.
-const cd = ref(null); const cdBusy = ref(false); const cdPickOpen = ref(false);
-const cdPrefix = ref(''); const cdOffset = ref('');
+const cd = ref(null); const cdBusy = ref(false); const cdPickOpen = ref(false); const cdPrefixOpen = ref(false);
+const cdOffset = ref('');
 function cdTake(data) {
   cd.value = data;
-  cdPrefix.value = data.settings.dir_prefix || '';
   cdOffset.value = String(data.settings.offset ?? 0);
 }
 async function loadCd() {
@@ -311,6 +310,21 @@ async function cdCall(call, okMsg) {
 }
 const setCd = (patch) => cdCall(() => api.cdSettingsSet(patch), t('settings.cdRip.saved'));
 async function cdPickTarget(path) { if (await setCd({ target: path })) cdPickOpen.value = false; }
+// The prefix is a folder picked INSIDE the default target folder, never typed.
+const cdPrefixStart = computed(() => {
+  const t = (cd.value && cd.value.settings.target) || '';
+  const p = (cd.value && cd.value.settings.dir_prefix) || '';
+  return t ? (p ? t.replace(/\/+$/, '') + '/' + p : t) : '';
+});
+async function cdPickPrefix(path) {
+  const t = ((cd.value && cd.value.settings.target) || '').replace(/\/+$/, '');
+  if (!t) { say(t('settings.cdRip.prefixNeedsTarget'), true); return; }
+  let prefix;
+  if (path === t) prefix = '';
+  else if (path.startsWith(t + '/')) prefix = path.slice(t.length + 1);
+  else { say(t('settings.cdRip.prefixOutside'), true); return; }
+  if (await setCd({ dir_prefix: prefix })) cdPrefixOpen.value = false;
+}
 function cdSaveOffset() {
   const n = parseInt(cdOffset.value, 10);
   if (Number.isNaN(n)) { say(t('settings.cdRip.offsetInvalid'), true); return; }
@@ -327,7 +341,7 @@ async function cdCancel() {
   say(bodyMsg(r, r.ok && r.data.success !== false ? t('settings.cdRip.cancelled') : t('settings.cdRip.cancelFailed')), !(r.ok && r.data.success !== false));
   loadCd();
 }
-watch(open, (v) => { if (v === 'cdRip') { cdPickOpen.value = false; loadCd(); } }, { immediate: true });
+watch(open, (v) => { if (v === 'cdRip') { cdPickOpen.value = false; cdPrefixOpen.value = false; loadCd(); } }, { immediate: true });
 const cdSpeedLabel = (v) => (v ? v + 'x' : t('settings.cdRip.speedMax'));
 const cdRetriesLabel = (v) => t('settings.cdRip.retries.' + v);
 const filteredPackages = computed(() => {
@@ -2072,8 +2086,15 @@ onUnmounted(() => {
         <FolderPicker v-if="cdPickOpen" :start-at="cd.settings.target || ''" :pick-label="t('settings.cdRip.targetUse')" :busy="cdBusy" @pick="cdPickTarget" @error="(m) => say(m, true)" />
 
         <label>{{ t('settings.cdRip.prefixLabel') }}</label>
-        <div class="row"><input v-model="cdPrefix" :placeholder="t('settings.cdRip.prefixPlaceholder')" spellcheck="false" /><button class="secondary fit" :disabled="cdBusy" @click="setCd({ dir_prefix: cdPrefix })">{{ t('common.save') }}</button></div>
-        <p class="muted">{{ t('settings.cdRip.prefixHelp') }}</p>
+        <div class="net between" style="align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div class="muted" style="min-width: 220px; word-break: break-all;">{{ cd.settings.dir_prefix || t('settings.cdRip.prefixNone') }}</div>
+          <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">
+            <button class="secondary fit" :disabled="cdBusy || !cd.settings.target" @click="cdPrefixOpen = !cdPrefixOpen">{{ cdPrefixOpen ? t('common.close') : t('settings.cdRip.prefixPick') }}</button>
+            <button class="secondary fit" :disabled="cdBusy || !cd.settings.dir_prefix" @click="setCd({ dir_prefix: '' })">{{ t('settings.cdRip.targetClear') }}</button>
+          </div>
+        </div>
+        <p class="muted">{{ cd.settings.target ? t('settings.cdRip.prefixHelp') : t('settings.cdRip.prefixNeedsTarget') }}</p>
+        <FolderPicker v-if="cdPrefixOpen && cd.settings.target" :start-at="cdPrefixStart" :pick-label="t('settings.cdRip.prefixUse')" :busy="cdBusy" @pick="cdPickPrefix" @error="(m) => say(m, true)" />
 
         <label>{{ t('settings.cdRip.autoStartLabel') }}</label>
         <span class="seg">

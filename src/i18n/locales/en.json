@@ -10,6 +10,7 @@
     "retry": "Retry",
     "cancel": "Cancel",
     "close": "Close",
+    "save": "Save",
     "search": "Search",
     "confirm": "Confirm",
     "clear": "Clear",
@@ -20,6 +21,17 @@
     "done": "Done",
     "noResults": "No results",
     "networkError": "Connection error"
+  },
+  "fileChooser": {
+    "title": "Choose a folder",
+    "places": "Locations",
+    "root": "All folders",
+    "newFolder": "New folder",
+    "create": "Create",
+    "empty": "No folders here",
+    "freeOf": "{free} free of {total}",
+    "items": "{n} items",
+    "emptyPlace": "Empty"
   },
   "sources": {
     "active": "Active sources",
@@ -52,6 +64,7 @@
     "newFolderCreate": "Create",
     "localSambaHint": "Also share this folder over the network (SMB), so you can copy music onto it from a PC.",
     "useThisFolder": "Use this folder",
+    "browseFolders": "Browse the folders…",
     "playlistdir": {
       "title": "Playlist folder",
       "hint": "Where Lyrion saves the playlists you create from the player. The default works for most setups — pick a folder on your own disk if you'd rather keep the playlists next to your music.",
@@ -960,7 +973,12 @@
       "targetUse": "Use this folder",
       "targetClear": "Clear",
       "prefixLabel": "Directory prefix",
-      "prefixHelp": "A folder under the target that every ripped album goes into; empty for none.",
+      "prefixHelp": "A folder inside the default target folder that every ripped album goes into, chosen from the folder browser; none to rip straight into the target.",
+      "prefixNone": "None",
+      "prefixPick": "Browse",
+      "prefixUse": "Use this folder as prefix",
+      "prefixNeedsTarget": "Set the default target folder first.",
+      "prefixOutside": "The prefix must be a folder inside the default target folder.",
       "prefixPlaceholder": "e.g. CD rips",
       "autoStartLabel": "Automatic start",
       "autoStartHelp": "Start by itself when a disc is inserted, into the default folder.",

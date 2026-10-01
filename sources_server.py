@@ -6740,7 +6740,7 @@ def api_cd_info():
         # choice: pass one back as `release` here or to /api/cd/rip.
         "releases": meta["releases"],
         "destinations": [
-            {"source_id": s.get("id"), "name": s.get("name") or s.get("label")}
+            {"source_id": s.get("id"), "name": s.get("name") or s.get("label"), "path": s.get("mountpoint")}
             for s in _rip_writable_sources()
         ],
         "ripping": _rip_running(),
@@ -6784,8 +6784,15 @@ def _cd_start_rip(data, toc, auto=False):
     settings = _cd_settings()
     sources = _rip_writable_sources()
     source_id = (data.get("source_id") or "").strip()
+    target = str(data.get("target") or "").strip()
     default = _cd_default_target(settings)
-    if source_id in ("", "__default__") and default:
+    if target:
+        # a folder picked in the rip page's browser: inside a writable source
+        mp, _src = _cd_target_root(target)
+        if not mp or not os.path.isdir(target) or not os.access(target, os.W_OK):
+            return _err("msg.cdTargetOutside", 400)
+        root = target
+    elif source_id in ("", "__default__") and default:
         root = default["path"]
     else:
         src = next((s for s in sources if s.get("id") == source_id), None)
