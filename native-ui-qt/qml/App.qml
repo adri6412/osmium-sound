@@ -1,7 +1,8 @@
 // La tela 1024x600: le due schermate (principale e Now Playing) con la loro
 // transizione, e sopra gli strati condivisi nello stesso ordine di app.c:
-// coda / timer / salva playlist, intro di avvio, dialoghi, avviso USB,
-// aggiornamento, copia CD, tastiera a schermo, salvaschermo.
+// coda / timer / salva playlist, dialoghi, avviso USB, aggiornamento,
+// copia CD, tastiera a schermo, salvaschermo. Niente filmato d'avvio: lo
+// schermo parte con l'interfaccia (il marchio lo mostra già Plymouth).
 import QtQuick
 import Hifi
 import Hifi.Ui
@@ -46,7 +47,7 @@ Item {
         firstStart = !tutorial.wasShown()                  // before the tour can write its file
         npSpring.set(Sys.startExpanded ? 0 : 1)
         expanded = Sys.startExpanded
-        if (tutorialCanStart) tutorialDelay.restart()      // no intro or wizard to wait for
+        if (tutorialCanStart) tutorialDelay.restart()      // no wizard to wait for
     }
 
     // Choose the player to drive (#99): the server's list, this device's own
@@ -71,7 +72,7 @@ Item {
     // The guided tour (Tutorial.qml): once, when the screen is free for the
     // first time and its "shown" file is missing: after the first wizard on
     // a new appliance, at the first start after the update on an old one.
-    readonly property bool tutorialCanStart: !wizard.active && !intro.active && !screensaver.covering && !ota.active && !cdrip.open && !dialogs.active
+    readonly property bool tutorialCanStart: !wizard.active && !screensaver.covering && !ota.active && !cdrip.open && !dialogs.active
                                              && !remoteIntro.active && !remoteTour.active
     property bool tutorialTried: false
     // 🚨 At the end of the first setup both the touch tour and a remote's key
@@ -328,14 +329,14 @@ Item {
     OtaOverlay { id: ota; anchors.fill: parent }
     CdRip { id: cdrip; anchors.fill: parent }
     FolderChooser { id: folderChooser; anchors.fill: parent }
-    Tutorial {                                             // the guided tours, over everything but the saver and the intro
+    Tutorial {                                             // the guided tours, over everything but the saver
         id: tutorial; anchors.fill: parent
         onEnded: remoteIntro.check()                       // another known remote may be waiting for its map
     }
     // the key map of a known remote, once, after it is paired
     RemoteIntro {
         id: remoteIntro; anchors.fill: parent
-        blocked: wizard.active || intro.active || screensaver.covering || dialogs.active || vk.active || ota.active || cdrip.open
+        blocked: wizard.active || screensaver.covering || dialogs.active || vk.active || ota.active || cdrip.open
                  || tutorial.active || remoteTour.active || remotePair.active || app.tutorialPending
         onTourWanted: (m) => app.startRemoteTour(m)
     }
@@ -356,5 +357,4 @@ Item {
         lastInput: app.lastInput
         blocked: wizard.active || app.busyOverlay
     }
-    BootIntro { id: intro; anchors.fill: parent; devScale: app.devicePixelScale }
 }

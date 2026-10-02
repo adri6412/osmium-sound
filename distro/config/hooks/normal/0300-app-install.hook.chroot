@@ -1,22 +1,17 @@
 #!/bin/sh
-# HiFi Player appliance — finalise the Electron app installed under /opt.
+# HiFi Player appliance — finalise the on-screen interface installed under /opt
+# and the executable bits of the services, which live-build copies as git
+# records them (this repo has core.filemode=false).
 set -e
 
-APPDIR=/opt/hifi-media-player
-BIN="$APPDIR/hifi-media-player"
+QTDIR=/opt/hifi-qt
 
-if [ ! -x "$BIN" ]; then
-    echo "E: [hifi] $BIN not found — the app payload was not injected. Aborting." >&2
+# 🚨 The interface is the Qt one, and it must be there: an image without a
+# program to start would be a black screen. (The Electron app was removed
+# from the repository on 2026-10-02; nothing injects it any more.)
+if [ ! -f "$QTDIR/hifi-qt" ]; then
+    echo "E: [hifi] $QTDIR/hifi-qt not found — the Qt interface payload was not injected. Aborting." >&2
     exit 1
-fi
-
-echo "I: [hifi] linking app into PATH"
-ln -sf "$BIN" /usr/bin/hifi-media-player
-
-echo "I: [hifi] fixing chrome-sandbox permissions (SUID root)"
-if [ -f "$APPDIR/chrome-sandbox" ]; then
-    chown root:root "$APPDIR/chrome-sandbox"
-    chmod 4755 "$APPDIR/chrome-sandbox"
 fi
 
 echo "I: [hifi] ensuring python services are executable"
@@ -29,36 +24,37 @@ chmod +x /usr/local/sbin/hifi-ota-update.sh /usr/local/sbin/hifi-lyrion-update.s
          /usr/local/sbin/hifi-ota-enroll-key.sh /usr/local/sbin/hifi-ota-alpha-toggle.sh \
          2>/dev/null || true
 
-# 🚨 This repo has core.filemode=false, so git records a new file as 644 no
-# matter what it looks like on disk, and live-build copies that mode straight
-# into the image. hifi-bluealsa.service runs the launcher directly, so without
-# this line Bluetooth output is a unit that dies with "Permission denied".
+# 🚨 hifi-bluealsa.service runs the launcher directly, so without this line
+# Bluetooth output is a unit that dies with "Permission denied".
 # (The system OTA path already does the same, broadly, in hifi-system-update.sh.)
 echo "I: [hifi] making the Bluetooth speaker scripts executable"
 chmod +x /usr/local/sbin/hifi-bluealsa-run.sh /usr/local/sbin/hifi-bt-out.py \
          /usr/local/sbin/hifi-bt-player-run.py 2>/dev/null || true
 
-echo "I: [hifi] seeding UI_VERSION if missing"
-[ -f "$APPDIR/UI_VERSION" ] || echo "unknown" > "$APPDIR/UI_VERSION"
-
 # 🚨 Il permesso di esecuzione va rimesso qui: in CI il pacchetto Qt arriva
 # come artefatto e gli artefatti non lo conservano. Deve succedere prima del
-# hook 0400, che sceglie l'interfaccia predefinita guardando proprio se il
-# programma e' eseguibile.
-if [ -f /opt/hifi-qt/hifi-qt ]; then
-    echo "I: [hifi] finalising the Qt on-screen UI"
-    chmod 755 /opt/hifi-qt/hifi-qt
-    if [ -f /opt/hifi-qt/hifi-media-player ]; then
-        chmod 755 /opt/hifi-qt/hifi-media-player
-    fi
-    mkdir -p /etc/hifi-player
-    if [ ! -f /etc/hifi-player/UI_VERSION ] && [ -f "$APPDIR/UI_VERSION" ]; then
-        cp "$APPDIR/UI_VERSION" /etc/hifi-player/UI_VERSION
-    fi
+# hook 0400, che abilita l'interfaccia guardando proprio se il programma e'
+# eseguibile.
+echo "I: [hifi] finalising the Qt on-screen UI"
+chmod 755 "$QTDIR/hifi-qt"
+if [ -f "$QTDIR/hifi-media-player" ]; then
+    chmod 755 "$QTDIR/hifi-media-player"       # the compatibility shim for the older updaters
 fi
 
-echo "I: [hifi] seeding SYSTEM_VERSION if missing"
+# The interface version the updater compares against: build-distro.sh seeds
+# it; a payload copied by hand gets the payload's own, else "unknown".
+echo "I: [hifi] seeding UI_VERSION if missing"
 mkdir -p /etc/hifi-player
+if [ ! -f /etc/hifi-player/UI_VERSION ]; then
+    if [ -f "$QTDIR/UI_VERSION" ]; then
+        cp "$QTDIR/UI_VERSION" /etc/hifi-player/UI_VERSION
+    else
+        echo "unknown" > /etc/hifi-player/UI_VERSION
+    fi
+fi
+[ -f "$QTDIR/UI_VERSION" ] || cp /etc/hifi-player/UI_VERSION "$QTDIR/UI_VERSION"
+
+echo "I: [hifi] seeding SYSTEM_VERSION if missing"
 [ -f /etc/hifi-player/SYSTEM_VERSION ] || echo "unknown" > /etc/hifi-player/SYSTEM_VERSION
 
 echo "I: [hifi] app-install hook done"

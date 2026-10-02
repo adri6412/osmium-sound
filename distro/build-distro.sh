@@ -499,7 +499,7 @@ if [ "$STAGE" != "binary" ]; then
         --architectures "$ARCH" \
         --archive-areas "main contrib non-free non-free-firmware" \
         --bootloaders "syslinux,grub-efi" \
-        --bootappend-live "boot=live components quiet splash loglevel=0 vt.global_cursor_default=0 hostname=hifiplayer noautologin" \
+        --bootappend-live "boot=live components quiet splash loglevel=0 systemd.show_status=0 rd.systemd.show_status=0 vt.global_cursor_default=0 hostname=hifiplayer noautologin" \
         --iso-application "$BRAND_NAME" \
         --iso-publisher "$BRAND_NAME" \
         --iso-volume "OSMIUM_SOUND" \
