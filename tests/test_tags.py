@@ -69,7 +69,10 @@ def dsf_bytes():
 
 
 FFMPEG_CODECS = {'mp3': ['-c:a', 'libmp3lame', '-id3v2_version', '0', '-write_xing', '0'],
+                 'mp2': ['-c:a', 'mp2', '-f', 'mp2'],
                  'm4a': ['-c:a', 'aac'], 'ogg': ['-c:a', 'libvorbis'], 'opus': ['-c:a', 'libopus'],
+                 'spx': ['-c:a', 'libspeex', '-f', 'ogg'], 'ogf': ['-c:a', 'flac', '-f', 'ogg'],
+                 'wma': ['-c:a', 'wmav2'], 'tta': ['-c:a', 'tta'],
                  'wv': ['-c:a', 'wavpack'], 'wav': ['-c:a', 'pcm_s16le'], 'aiff': ['-c:a', 'pcm_s16be']}
 
 
@@ -429,8 +432,9 @@ class MutagenTests(unittest.TestCase):
             self.skipTest(f'this ffmpeg cannot make {fmt}')
         return path
 
-    def roundtrip(self, fmt):
-        path = self.make(fmt)
+    def roundtrip(self, ext):
+        path = self.make(ext)
+        fmt = ht.format_of(path)
         before = ht.read_file(path, fmt)
         ht.write_file(path, fmt, self.CHANGES, [])
         after = ht.read_file(path, fmt)
@@ -480,6 +484,43 @@ class MutagenTests(unittest.TestCase):
 
     def test_ogg(self):
         self.roundtrip('ogg')
+
+    def test_speex_and_flac_in_ogg(self):
+        # one "ogg" format for every codec in the container: mutagen tells
+        # them apart, and they all carry Vorbis comments
+        self.roundtrip('spx')
+        self.roundtrip('ogf')
+
+    def test_mp2(self):
+        self.roundtrip('mp2')
+
+    def test_tta(self):
+        path = self.roundtrip('tta')
+        import mutagen
+        self.assertEqual(mutagen.File(path).tags.version[:2], (2, 4))
+
+    def test_wma(self):
+        path = self.roundtrip('wma')
+        import mutagen
+        tags = mutagen.File(path).tags
+        self.assertEqual(str(tags['WM/TrackNumber'][0]), '1/12')
+        self.assertEqual(str(tags['WM/PartOfSet'][0]), '1/2')
+        self.assertEqual(str(tags['WM/AlbumTitle'][0]), 'The Dark Side of the Moon')
+        self.assertEqual(str(tags['Author'][0]), 'Pink Floyd')
+        self.assertIs(tags['WM/IsCompilation'][0].value, False)
+        self.assertEqual([str(v) for v in tags['MusicBrainz/Artist Id']], [MBID2, MBID])
+        # the 0-based WM/Track of old writers reads as the track number and
+        # goes once a real number is written
+        from mutagen.asf import ASFDWordAttribute
+        audio = mutagen.File(path)
+        del audio.tags['WM/TrackNumber']
+        audio.tags['WM/Track'] = [ASFDWordAttribute(4)]
+        audio.save()
+        self.assertEqual(ht.read_file(path, 'wma')['tags']['TRACKNUMBER'], ['5'])
+        ht.write_file(path, 'wma', {'TRACKNUMBER': ['6']}, [])
+        again = mutagen.File(path).tags
+        self.assertNotIn('WM/Track', again)
+        self.assertEqual(str(again['WM/TrackNumber'][0]), '6')
 
     def test_opus(self):
         self.roundtrip('opus')

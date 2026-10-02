@@ -23,12 +23,13 @@ changing one would change them all). Embedded pictures and every tag that is
 not being changed are preserved. Lyrion's incremental rescan, which picks the
 changes up, keys on the file's mtime, so the mtime is left to change.
 
-Writers: python3-mutagen when it is importable (FLAC, MP3/ID3v2.4, MP4/ALAC,
-Ogg Vorbis/Opus, WavPack/APE/Musepack, DSF/DSDIFF/WAV/AIFF with ID3), else
-`metaflac` for FLAC. A format with no writer is still shown, read-only, from
-the file when it can be parsed here (FLAC always is) or from Lyrion's own
-reading of the tags (`tags 0 200 track_id:N`). Nothing is vendored: mutagen
-comes from the Debian package.
+Writers: python3-mutagen when it is importable (FLAC, MP3/MP2 with ID3v2.4,
+MP4/AAC/ALAC, Ogg Vorbis/Opus/Speex/FLAC, WMA, WavPack/APE/Musepack/
+OptimFROG/TAK with APEv2, DSF/DSDIFF/WAV/AIFF/TTA with ID3), else `metaflac`
+for FLAC. A format with no writer (raw AAC streams have no tags at all) is
+still shown, read-only, from the file when it can be parsed here (FLAC always
+is) or from Lyrion's own reading of the tags (`tags 0 200 track_id:N`).
+Nothing is vendored: mutagen comes from the Debian package.
 
 Tag vocabulary: Vorbis-comment style upper-case keys (EDITABLE_KEYS), every
 value a list of strings. The per-format mapping (ID3 frames and TXXX, MP4
@@ -108,16 +109,23 @@ _DATE_RE = re.compile(r'^[0-9]{4}(-[0-9]{2}(-[0-9]{2}([T ][0-9]{2}(:[0-9]{2}(:[0
 _JOB_ID_RE = re.compile(r'^[0-9A-Za-z-]{6,64}$')
 _COVER_ID_RE = re.compile(r'^[0-9A-Za-z_-]{1,64}$')
 
+# Extension -> format. One format per tag container, so `.spx` and `.ogf`
+# (Speex and FLAC in Ogg) are "ogg" like Vorbis: mutagen tells them apart by
+# their headers and they all carry Vorbis comments. `.aac` (a raw ADTS stream)
+# has nowhere to keep tags: known, so the row says why, never written.
 EXTENSIONS = {
-    '.flac': 'flac', '.fla': 'flac', '.mp3': 'mp3', '.m4a': 'm4a', '.m4b': 'm4a', '.mp4': 'm4a', '.alac': 'm4a',
-    '.ogg': 'ogg', '.oga': 'ogg', '.opus': 'opus', '.wv': 'wv', '.ape': 'ape', '.mpc': 'mpc', '.dsf': 'dsf',
-    '.dff': 'dff', '.wav': 'wav', '.aif': 'aiff', '.aiff': 'aiff', '.aifc': 'aiff',
+    '.flac': 'flac', '.fla': 'flac', '.mp3': 'mp3', '.mp2': 'mp3', '.m4a': 'm4a', '.m4b': 'm4a', '.m4r': 'm4a',
+    '.m4p': 'm4a', '.mp4': 'm4a', '.alac': 'm4a', '.ogg': 'ogg', '.oga': 'ogg', '.ogx': 'ogg', '.spx': 'ogg',
+    '.ogf': 'ogg', '.opus': 'opus', '.wma': 'wma', '.asf': 'wma', '.wv': 'wv', '.ape': 'ape', '.mpc': 'mpc',
+    '.ofr': 'ofr', '.ofs': 'ofr', '.tak': 'tak', '.dsf': 'dsf', '.dff': 'dff', '.wav': 'wav', '.aif': 'aiff',
+    '.aiff': 'aiff', '.aifc': 'aiff', '.tta': 'tta', '.aac': 'aac',
 }
-FORMATS = ('flac', 'mp3', 'm4a', 'ogg', 'opus', 'wv', 'ape', 'mpc', 'dsf', 'dff', 'wav', 'aiff')
+FORMATS = ('flac', 'mp3', 'm4a', 'ogg', 'opus', 'wma', 'wv', 'ape', 'mpc', 'ofr', 'tak', 'dsf', 'dff', 'wav', 'aiff',
+           'tta')
 _MUTAGEN_MODULES = {'flac': 'flac', 'mp3': 'mp3', 'm4a': 'mp4', 'ogg': 'oggvorbis', 'opus': 'oggopus',
-                    'wv': 'wavpack', 'ape': 'monkeysaudio', 'mpc': 'musepack', 'dsf': 'dsf', 'dff': 'dsdiff',
-                    'wav': 'wave', 'aiff': 'aiff'}
-ID3_FORMATS = frozenset(('mp3', 'dsf', 'dff', 'wav', 'aiff'))
+                    'wma': 'asf', 'wv': 'wavpack', 'ape': 'monkeysaudio', 'mpc': 'musepack', 'ofr': 'optimfrog',
+                    'tak': 'tak', 'dsf': 'dsf', 'dff': 'dsdiff', 'wav': 'wave', 'aiff': 'aiff', 'tta': 'trueaudio'}
+ID3_FORMATS = frozenset(('mp3', 'dsf', 'dff', 'wav', 'aiff', 'tta'))
 
 
 def _log(msg):
@@ -464,6 +472,24 @@ APE_PAIRS = {'track': PAIRS[0], 'disc': PAIRS[1]}
 _APE_REV = {v.lower(): k for k, v in APE_NAMES.items()}
 
 
+# WMA (ASF attributes), the names Windows Media and Picard use; the rest
+# goes under WM/<Name> like any other extended attribute
+ASF_NAMES = {'TITLE': 'Title', 'ARTIST': 'Author', 'ALBUMARTIST': 'WM/AlbumArtist', 'ALBUM': 'WM/AlbumTitle',
+             'DATE': 'WM/Year', 'ORIGINALDATE': 'WM/OriginalReleaseTime', 'GENRE': 'WM/Genre',
+             'COMPOSER': 'WM/Composer', 'CONDUCTOR': 'WM/Conductor', 'LYRICIST': 'WM/Writer',
+             'REMIXER': 'WM/ModifiedBy', 'LABEL': 'WM/Publisher', 'ISRC': 'WM/ISRC', 'COMMENT': 'Description',
+             'PRODUCER': 'WM/Producer', 'ENGINEER': 'WM/Engineer', 'MIXER': 'WM/Mixer', 'ARRANGER': 'WM/Arranger',
+             'BAND': 'WM/Band', 'PERFORMER': 'WM/Performer', 'CATALOGNUMBER': 'WM/CatalogNo',
+             'RELEASETYPE': 'MusicBrainz/Album Type', 'MUSICBRAINZ_ALBUMID': 'MusicBrainz/Album Id',
+             'MUSICBRAINZ_ARTISTID': 'MusicBrainz/Artist Id', 'MUSICBRAINZ_ALBUMARTISTID': 'MusicBrainz/Album Artist Id',
+             'MUSICBRAINZ_TRACKID': 'MusicBrainz/Track Id', 'MUSICBRAINZ_RELEASETRACKID': 'MusicBrainz/Release Track Id',
+             'MUSICBRAINZ_RELEASEGROUPID': 'MusicBrainz/Release Group Id'}
+ASF_COMPILATION = 'WM/IsCompilation'
+ASF_PAIRS = {'WM/TrackNumber': PAIRS[0], 'WM/PartOfSet': PAIRS[1]}
+ASF_PICTURE = 'WM/Picture'
+_ASF_REV = {v.lower(): k for k, v in ASF_NAMES.items()}
+
+
 def _ape_name(key):
     if key in APE_NAMES:
         return APE_NAMES[key]
@@ -480,6 +506,8 @@ def _family(audio):
         return 'ape'
     if names & {'ID3FileType', 'DSF', 'DSDIFF', 'WAVE', 'AIFF'}:
         return 'id3'
+    if 'ASF' in names:
+        return 'asf'
     return None
 
 
@@ -512,6 +540,8 @@ def read_mutagen(path):
         _read_id3(tags, m)
     elif family == 'mp4':
         _read_mp4(tags, m)
+    elif family == 'asf':
+        _read_asf(tags, m)
     else:
         _read_ape(tags, m)
     return m.result()
@@ -594,6 +624,43 @@ def _read_ape(tags, m):
             m.add_other(name, list(value))
 
 
+def _asf_text(attr):
+    """An ASF attribute as text: unicode, a number, a bool, a GUID; bytes stay bytes."""
+    value = getattr(attr, 'value', attr)
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value)
+    if isinstance(value, bool):
+        return '1' if value else '0'
+    return str(value)
+
+
+def _read_asf(tags, m):
+    track_legacy = None
+    for name, attrs in tags.items():
+        low = name.lower()
+        values = [_asf_text(a) for a in attrs]
+        if low == ASF_PICTURE.lower():
+            m.picture = True
+        elif any(isinstance(v, bytes) for v in values):
+            m.add_other(name, [v if isinstance(v, bytes) else v.encode('utf-8') for v in values])
+        elif low == ASF_COMPILATION.lower():
+            m.add('COMPILATION', ['1' if values and values[0] not in ('0', '', 'False') else '0'])
+        elif low == 'wm/track':
+            track_legacy = values[0] if values else None     # 0-based, from before WM/TrackNumber
+        elif low in {k.lower() for k in ASF_PAIRS}:
+            key = next(k for k in ASF_PAIRS if k.lower() == low)
+            m.pair(*ASF_PAIRS[key], text=values[0] if values else '')
+        elif low in _ASF_REV:
+            m.add(_ASF_REV[low], values)
+        else:
+            m.add_other(name, values)
+    if track_legacy is not None and not m.tags.get('TRACKNUMBER'):
+        try:
+            m.pair(*PAIRS[0], text=str(int(track_legacy) + 1))
+        except ValueError:
+            m.add_other('WM/Track', [track_legacy])
+
+
 def _pair_after(current, set_, remove, number_key, total_key):
     """(number, total) a combined field ends up with."""
     n = (current.get(number_key) or [None])[0]
@@ -633,6 +700,8 @@ def write_mutagen(path, set_, remove):
             _write_id3(audio.tags, set_, remove, current)
         elif family == 'mp4':
             _write_mp4(audio.tags, set_, remove, current)
+        elif family == 'asf':
+            _write_asf(audio.tags, set_, remove, current)
         else:
             _write_ape(audio.tags, set_, remove, current)
     try:
@@ -721,6 +790,33 @@ def _write_ape(tags, set_, remove, current):
         values = set_.get(key)
         if values:
             tags[name] = list(values)
+
+
+def _write_asf(tags, set_, remove, current):
+    from mutagen.asf import ASFBoolAttribute, ASFUnicodeAttribute
+
+    def drop(name):
+        for existing in [k for k in tags.keys() if k.lower() == name.lower()]:
+            del tags[existing]
+    for name, (nkey, tkey) in ASF_PAIRS.items():
+        if nkey in set_ or tkey in set_ or nkey in remove or tkey in remove:
+            n, total = _pair_after(current, set_, remove, nkey, tkey)
+            drop(name)
+            if name == 'WM/TrackNumber':
+                drop('WM/Track')            # the 0-based one from before: it would contradict the new number
+            if n:
+                tags[name] = [ASFUnicodeAttribute(f'{n}/{total}' if total else n)]
+    for key in (set(set_) | set(remove)) - NUMBER_KEYS - TOTAL_KEYS:
+        values = set_.get(key)
+        if key == 'COMPILATION':
+            drop(ASF_COMPILATION)
+            if values:
+                tags[ASF_COMPILATION] = [ASFBoolAttribute(values[0] == '1')]
+            continue
+        name = ASF_NAMES.get(key, 'WM/' + key.title())
+        drop(name)
+        if values:
+            tags[name] = [ASFUnicodeAttribute(v) for v in values]
 
 
 # ── one file ─────────────────────────────────────────────────────────
