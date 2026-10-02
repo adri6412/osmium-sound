@@ -277,7 +277,7 @@
         <h2>Hardware requirements</h2>
         <table>
           <tr><th>Component</th><th>Requirement</th></tr>
-          <tr><td>Computer</td><td>x86-64 (64-bit) mini-PC with <strong>UEFI firmware — mandatory</strong>, see the box below. Legacy BIOS-only machines are not supported.</td></tr>
+          <tr><td>Computer</td><td>x86-64 (64-bit) mini-PC, with <strong>UEFI or with a traditional BIOS</strong> (both work from version 2.5.25), see the box below.</td></tr>
           <tr><td>Storage</td><td>Internal disk/SSD to install onto (16&nbsp;GB recommended, 8&nbsp;GB minimum)</td></tr>
           <tr><td>USB stick</td><td>8&nbsp;GB or larger, needed only for the initial install</td></tr>
           <tr><td>Screen (optional)</td><td>Touchscreen recommended for “with screen” mode. Supported resolutions are the ones in Settings: Automatic, 1280×720, 1920×1080 or the screen’s native resolution. Not needed in headless or server-only mode.</td></tr>
@@ -285,15 +285,15 @@
           <tr><td>Network</td><td>Ethernet or Wi-Fi</td></tr>
           <tr><td>Setup device</td><td>Any device with a browser — phone, tablet or PC — for installation and first setup</td></tr>
         </table>
-        <div class="box warn">
-          <span class="label">UEFI firmware is mandatory</span>
-          <p>Osmium Sound installs and boots <strong>only</strong> on PCs with <strong>UEFI</strong> firmware, started in UEFI mode. Machines with a legacy BIOS only, or set to "Legacy"/"CSM" boot, are not supported. As a rule of thumb, any PC built from <strong>2015 onwards</strong> is fine — in particular platforms based on these CPU families all ship UEFI firmware:</p>
+        <div class="box tip">
+          <span class="label">New: UEFI or BIOS, both work</span>
+          <p>From version 2.5.25 Osmium Sound installs and starts on PCs with <strong>UEFI</strong> firmware and also on older PCs with a traditional <strong>BIOS</strong>, or with UEFI set to "Legacy"/"CSM". You don't have to change anything: the installer sees how the PC started and prepares the disk to start the same way. Almost every PC built from <strong>2015 onwards</strong> has UEFI; these are the CPU families found in most mini-PCs:</p>
           <ul>
             <li><strong>Intel:</strong> Core i3/i5/i7/i9 from the 6th generation "Skylake" (2015) onwards — so 7th to 14th generation and Core Ultra too; the low-power Celeron/Pentium/Atom/N-series families "Braswell" (2015), "Apollo Lake" (2016), "Gemini Lake" (2017–2019), "Jasper Lake" (2021), "Alder Lake-N" (N95/N100/N200/i3-N305, 2023) and "Twin Lake" (N150, 2025) — the chips found in most mini-PCs.</li>
             <li><strong>AMD:</strong> any Ryzen (2017 onwards, every generation) or Athlon on the AM4 socket; the A-series APUs "Carrizo" (2015) and "Bristol Ridge" (2016).</li>
           </ul>
-          <p>Avoid Atom "Bay Trail"/"Cherry Trail" tablets and HDMI sticks (2013–2015): many of them have a 32-bit UEFI that cannot boot the 64-bit image. Older PCs may work if their firmware offers a UEFI mode, but we don't test them.</p>
-          <p>Not sure? If the PC came with Windows 8 or newer pre-installed, it has UEFI. On Windows, run <kbd>msinfo32</kbd> and check that "BIOS Mode" says <strong>UEFI</strong>. In the firmware setup make sure the boot mode is "UEFI" (not "Legacy" or "CSM only"), and when you pick the stick from the boot menu choose the entry that starts with <strong>UEFI:</strong> rather than the one without the prefix. Secure Boot can stay on — the installer and the installed system are signed; see <a href="#en-installation">Installation</a>.</p>
+          <p>Avoid Atom "Bay Trail"/"Cherry Trail" tablets and HDMI sticks (2013–2015): many of them have a 32-bit UEFI that cannot boot the 64-bit image. Older PCs without UEFI now work too: the stick starts in BIOS mode.</p>
+          <p>Not sure which one your PC has? It doesn't matter: start from the stick the way the PC offers. If the boot menu lists the stick twice, prefer the entry that starts with <strong>UEFI:</strong>. With UEFI, Secure Boot can stay on — the installer and the installed system are signed; see <a href="#en-installation">Installation</a>. With a BIOS there is no Secure Boot and nothing to set.</p>
         </div>
         <div class="box tip">
           <span class="label">Note</span>
@@ -696,7 +696,7 @@
         <h2>Requisiti hardware</h2>
         <table>
           <tr><th>Componente</th><th>Requisito</th></tr>
-          <tr><td>Computer</td><td>Mini-PC x86-64 (64 bit) con firmware <strong>UEFI — obbligatorio</strong>, vedi il riquadro qui sotto. Le macchine con solo BIOS legacy non sono supportate.</td></tr>
+          <tr><td>Computer</td><td>Mini-PC x86-64 (64 bit), con <strong>UEFI oppure con il BIOS tradizionale</strong> (dalla versione 2.5.25 vanno bene entrambi), vedi il riquadro qui sotto.</td></tr>
           <tr><td>Storage</td><td>Disco/SSD interno per l'installazione (16&nbsp;GB consigliati, 8&nbsp;GB minimo)</td></tr>
           <tr><td>Chiavetta USB</td><td>8&nbsp;GB o superiore, solo per l'installazione iniziale</td></tr>
           <tr><td>Schermo (opzionale)</td><td>Touchscreen consigliato per la modalità “con schermo”. Le risoluzioni supportate sono quelle nelle Impostazioni: Automatica, 1280×720, 1920×1080 o la risoluzione nativa dello schermo. Non necessario in modalità headless o solo server.</td></tr>
@@ -704,15 +704,15 @@
           <tr><td>Rete</td><td>Ethernet oppure Wi-Fi</td></tr>
           <tr><td>Per la configurazione</td><td>Qualunque dispositivo con un browser — telefono, tablet o PC — per l'installazione e la prima configurazione</td></tr>
         </table>
-        <div class="box warn">
-          <span class="label">Firmware UEFI obbligatorio</span>
-          <p>Osmium Sound si installa e si avvia <strong>solo</strong> su PC con firmware <strong>UEFI</strong>, avviati in modalità UEFI. Le macchine con solo BIOS legacy, o impostate sull'avvio "Legacy"/"CSM", non sono supportate. Come regola pratica va bene qualsiasi PC prodotto dal <strong>2015 in poi</strong> — in particolare le piattaforme basate su queste famiglie di CPU hanno tutte firmware UEFI:</p>
+        <div class="box tip">
+          <span class="label">Novità: UEFI o BIOS, vanno bene entrambi</span>
+          <p>Dalla versione 2.5.25 Osmium Sound si installa e si avvia sui PC con firmware <strong>UEFI</strong> e anche sui PC più vecchi con il <strong>BIOS</strong> tradizionale, o con l'UEFI impostato su "Legacy"/"CSM". Non devi cambiare niente: l'installer vede come è partito il PC e prepara il disco per partire allo stesso modo. Quasi tutti i PC prodotti dal <strong>2015 in poi</strong> hanno l'UEFI; queste sono le famiglie di CPU della maggior parte dei mini-PC:</p>
           <ul>
             <li><strong>Intel:</strong> Core i3/i5/i7/i9 dalla 6ª generazione "Skylake" (2015) in poi — quindi anche dalla 7ª alla 14ª generazione e Core Ultra; le famiglie a basso consumo Celeron/Pentium/Atom/serie N "Braswell" (2015), "Apollo Lake" (2016), "Gemini Lake" (2017–2019), "Jasper Lake" (2021), "Alder Lake-N" (N95/N100/N200/i3-N305, 2023) e "Twin Lake" (N150, 2025) — i chip della maggior parte dei mini-PC.</li>
             <li><strong>AMD:</strong> qualsiasi Ryzen (dal 2017, tutte le generazioni) o Athlon su socket AM4; le APU serie A "Carrizo" (2015) e "Bristol Ridge" (2016).</li>
           </ul>
-          <p>Evita invece tablet e "stick" HDMI con Atom "Bay Trail"/"Cherry Trail" (2013–2015): molti hanno un UEFI a 32 bit che non può avviare l'immagine a 64 bit. PC più vecchi possono funzionare se il firmware offre la modalità UEFI, ma non li testiamo.</p>
-          <p>Non sei sicuro? Se il PC è stato venduto con Windows 8 o successivo preinstallato, ha l'UEFI. Su Windows esegui <kbd>msinfo32</kbd> e controlla che "Modalità BIOS" indichi <strong>UEFI</strong>. Nel setup del firmware verifica che la modalità di avvio sia "UEFI" (non "Legacy" o "CSM only") e, quando scegli la chiavetta dal menu di boot, usa la voce che inizia con <strong>UEFI:</strong> anziché quella senza prefisso. Il Secure Boot può restare attivo — l'installer e il sistema installato sono firmati; vedi <a href="#it-installazione">Installazione</a>.</p>
+          <p>Evita invece tablet e "stick" HDMI con Atom "Bay Trail"/"Cherry Trail" (2013–2015): molti hanno un UEFI a 32 bit che non può avviare l'immagine a 64 bit. I PC più vecchi senza UEFI ora funzionano anche loro: la chiavetta parte in modalità BIOS.</p>
+          <p>Non sai quale ha il tuo PC? Non importa: avvia dalla chiavetta come il PC ti propone. Se nel menu di boot la chiavetta compare due volte, preferisci la voce che inizia con <strong>UEFI:</strong>. Con l'UEFI il Secure Boot può restare attivo — l'installer e il sistema installato sono firmati; vedi <a href="#it-installazione">Installazione</a>. Con il BIOS il Secure Boot non c'è e non c'è niente da impostare.</p>
         </div>
         <div class="box tip">
           <span class="label">Nota</span>
