@@ -960,7 +960,13 @@ OVERRIDE_LIMITS = {'lines': 500, 'people': 50, 'tracks': 1000, 'text': 300, 'key
 
 
 class OverrideError(ValueError):
-    """An override document that cannot be stored; the message says where."""
+    """An override document that cannot be stored. `detail` says where and
+    why, in words meant for the person editing: it is validation, not a
+    trace, and it is what the editor's answer carries."""
+
+    def __init__(self, detail):
+        super().__init__(detail)
+        self.detail = detail
 
 
 def _ov_str(value, field, limit=OVERRIDE_LIMITS['text'], required=False):
@@ -1674,6 +1680,13 @@ def pair_tag_artist(tags, target):
 
 class LyrionError(Exception):
     pass
+
+
+def _lyrion_failed(e, **fields):
+    """The answer when Lyrion could not be asked: the reason goes to the log,
+    the client learns only that it failed (no path or host of ours in it)."""
+    _log(f'lyrion: {e}')
+    return {'status': 'error', 'message': 'lyrion: request failed', **fields}
 
 
 class Lyrion:
@@ -2417,17 +2430,20 @@ class MetadataService:
             self._enqueue(key, fn, priority)
         except _Disabled:
             pass
+        # (the reason kept here reaches the client in a negative match: a
+        # word of ours, never the exception's text — that goes to the log)
         except OfflineError as e:
-            self._failures[key] = ('offline', str(e), time.monotonic())
+            _log(f'job {key}: offline: {e}')
+            self._failures[key] = ('offline', 'offline', time.monotonic())
         except HttpError as e:
             # MusicBrainz busy (503/429 past every retry) or a timeout: worth
             # another go shortly, and not an error to show anybody.
             kind = 'busy' if e.status in (0, 429, 502, 503, 504) else 'error'
             _log(f'job {key}: {e}')
-            self._failures[key] = (kind, str(e), time.monotonic())
+            self._failures[key] = (kind, 'service busy' if kind == 'busy' else 'service error', time.monotonic())
         except Exception as e:  # noqa: BLE001 — a job must never kill the worker
             _log(f'job {key} failed: {type(e).__name__}: {e}')
-            self._failures[key] = ('error', f'{type(e).__name__}: {e}', time.monotonic())
+            self._failures[key] = ('error', 'lookup failed', time.monotonic())
         finally:
             with self._cv:
                 if self._running and self._running[0] == key:
@@ -2728,7 +2744,7 @@ class MetadataService:
         try:
             lib = self._library_album(album_id)
         except LyrionError as e:
-            return {'status': 'error', 'album_id': album_id, 'message': f'lyrion: {e}'}
+            return _lyrion_failed(e, album_id=album_id)
         if lib is None:
             return {'status': 'error', 'album_id': album_id, 'message': 'unknown album'}
         return self._album_for(lib, lang, self.edits.album_overrides(lib['fingerprint']))
@@ -2993,7 +3009,7 @@ class MetadataService:
         try:
             lib = self._library_album(album_id)
         except LyrionError as e:
-            return {'status': 'error', 'album_id': album_id, 'message': f'lyrion: {e}'}
+            return _lyrion_failed(e, album_id=album_id)
         if lib is None:
             return {'status': 'error', 'album_id': album_id, 'message': 'unknown album'}
         overrides = self.edits.album_overrides(lib['fingerprint'])
@@ -3041,7 +3057,7 @@ class MetadataService:
         try:
             lib = self._library_album(album_id)
         except LyrionError as e:
-            return {'status': 'error', 'album_id': album_id, 'message': f'lyrion: {e}'}
+            return _lyrion_failed(e, album_id=album_id)
         if lib is None:
             return {'status': 'error', 'album_id': album_id, 'message': 'unknown album'}
         self.edits.set_album_overrides(lib['fingerprint'], lib['id'], lib['title'], lib['artist'], overrides)
@@ -3282,7 +3298,7 @@ class MetadataService:
         try:
             lib = self._library_album(album_id)
         except LyrionError as e:
-            return {'status': 'error', 'album_id': album_id, 'message': f'lyrion: {e}', 'candidates': []}
+            return _lyrion_failed(e, album_id=album_id, candidates=[])
         if lib is None:
             return {'status': 'error', 'album_id': album_id, 'message': 'unknown album', 'candidates': []}
         fp = lib['fingerprint']
@@ -3358,7 +3374,7 @@ class MetadataService:
         try:
             lib = self._library_album(album_id)
         except LyrionError as e:
-            return {'status': 'error', 'album_id': album_id, 'message': f'lyrion: {e}'}
+            return _lyrion_failed(e, album_id=album_id)
         if lib is None:
             return {'status': 'error', 'album_id': album_id, 'message': 'unknown album'}
         if mbid is not None and mbid != 'none':
@@ -3379,7 +3395,7 @@ class MetadataService:
         try:
             art = self.lyrion.artist(artist_id)
         except LyrionError as e:
-            return None, {'status': 'error', 'artist_id': artist_id, 'message': f'lyrion: {e}'}
+            return None, _lyrion_failed(e, artist_id=artist_id)
         if art is None:
             return None, {'status': 'error', 'artist_id': artist_id, 'message': 'unknown artist'}
         return art, None
@@ -3957,8 +3973,9 @@ def init_app(app, require_auth, service_getter=None):
             try:
                 return fn(*a, **kw)
             except Exception as e:  # noqa: BLE001
+                # the detail goes to the log; the client learns only that it failed
                 _log(f'{request.path} failed: {type(e).__name__}: {e}')
-                return jsonify({'status': 'error', 'message': f'{type(e).__name__}: {e}'}), 500
+                return jsonify({'status': 'error', 'message': 'internal error'}), 500
         wrapper.__name__ = 'meta_' + fn.__name__
         return wrapper
 
@@ -4017,7 +4034,7 @@ def init_app(app, require_auth, service_getter=None):
             try:
                 return jsonify(svc().album_edit_save(album_id, data.get('overrides'), request_lang(request)))
             except OverrideError as e:
-                return _fail('meta.badOverrides', detail=str(e))
+                return _fail('meta.badOverrides', detail=e.detail)
         album_id = _int_arg('album_id')
         if album_id is None:
             return _fail('meta.albumRequired')
@@ -4034,7 +4051,7 @@ def init_app(app, require_auth, service_getter=None):
             try:
                 return jsonify(svc().artist_edit_save(artist_id, data.get('overrides'), request_lang(request)))
             except OverrideError as e:
-                return _fail('meta.badOverrides', detail=str(e))
+                return _fail('meta.badOverrides', detail=e.detail)
         artist_id = _int_arg('artist_id')
         if artist_id is None:
             return _fail('meta.artistRequired')

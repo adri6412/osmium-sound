@@ -224,7 +224,8 @@ static void boxBlur1D(std::vector<float> &src, std::vector<float> &dst, int w, i
     const float iarr = 1.0f / (r + r + 1);
     if (horizontal) {
         for (int y = 0; y < h; y++) {
-            const float *row = &src[y * w]; float *out = &dst[y * w];
+            // size_t before the product: int * int would wrap on a huge texture
+            const float *row = &src[size_t(y) * w]; float *out = &dst[size_t(y) * w];
             float acc = 0;
             for (int x = -r; x <= r; x++) acc += row[std::clamp(x, 0, w - 1)];
             for (int x = 0; x < w; x++) {
@@ -235,10 +236,10 @@ static void boxBlur1D(std::vector<float> &src, std::vector<float> &dst, int w, i
     } else {
         for (int x = 0; x < w; x++) {
             float acc = 0;
-            for (int y = -r; y <= r; y++) acc += src[std::clamp(y, 0, h - 1) * w + x];
+            for (int y = -r; y <= r; y++) acc += src[size_t(std::clamp(y, 0, h - 1)) * w + x];
             for (int y = 0; y < h; y++) {
-                dst[y * w + x] = acc * iarr;
-                acc += src[std::clamp(y + r + 1, 0, h - 1) * w + x] - src[std::clamp(y - r, 0, h - 1) * w + x];
+                dst[size_t(y) * w + x] = acc * iarr;
+                acc += src[size_t(std::clamp(y + r + 1, 0, h - 1)) * w + x] - src[size_t(std::clamp(y - r, 0, h - 1)) * w + x];
             }
         }
     }
