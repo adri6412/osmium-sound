@@ -304,8 +304,8 @@ jobs:
           ls -lh "$ISO" "${ISO}.sha256" "${ISO}.sha256.sig"
 
       # latest.json is what Osmium Flasher polls to discover the current image.
-      # It is NOT deployed anywhere by this job: upload it to
-      # file.osmiumsound.it by hand, in the same pass as the ISO it describes.
+      # It goes to file.osmiumsound.it with the ISO, through the publish-iso
+      # job below (publish-iso-r2.yml), once the ISO is on the release.
       - name: Build the flasher manifest (latest.json)
         run: |
           set -euo pipefail
@@ -384,3 +384,14 @@ jobs:
             ${{ steps.iso.outputs.iso }}
             ${{ steps.iso.outputs.iso }}.sha256
             ${{ steps.iso.outputs.iso }}.sha256.sig
+
+  # The stable ISO, its sidecars and latest.json to the root of the bucket
+  # behind file.osmiumsound.it, where the site links it and the flasher looks
+  # for it. Reads the files back from the release, so it also runs by hand.
+  publish-iso:
+    needs: build-iso
+    if: ${{ inputs.make_release && !contains(inputs.tag, '-') }}
+    uses: ./.github/workflows/publish-iso-r2.yml
+    with:
+      tag: ${{ inputs.tag }}
+    secrets: inherit

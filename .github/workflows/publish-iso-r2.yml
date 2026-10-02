@@ -1,0 +1,94 @@
+name: Publish the installer ISO to file.osmiumsound.it
+
+# The ISO of a stable release goes where the site links it and where Osmium
+# Flasher looks for it: the root of the bucket behind file.osmiumsound.it,
+# with its sha256, its signature and latest.json, the flasher's manifest.
+#
+# Called by build-iso.yml once the ISO is on the GitHub release; runnable by
+# hand for a release whose ISO is already there. Files reach the bucket this
+# way and no other: nothing is ever uploaded by hand.
+# A dev or alpha ISO stays on GitHub only: latest.json names the stable image.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag whose ISO is attached (e.g. v2.5.25)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(inputs.tag, '-') }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch the ISO from the release and check it
+        id: iso
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p iso
+          cd iso
+          gh release download "$TAG" -R "${{ github.repository }}" \
+            -p 'hifi-player-*.iso' -p 'hifi-player-*.iso.sha256' -p 'hifi-player-*.iso.sha256.sig'
+          ls -l
+          ISO=$(ls hifi-player-*.iso | head -n 1)
+          [ -s "$ISO" ] && [ -s "$ISO.sha256" ] && [ -s "$ISO.sha256.sig" ] \
+            || { echo "::error::release $TAG carries no complete ISO (iso + sha256 + sig)"; exit 1; }
+          # the digest file names the ISO by whatever path the build used: compare the digests
+          [ "$(sha256sum "$ISO" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$ISO.sha256")" ] \
+            || { echo "::error::$ISO does not match its sha256"; exit 1; }
+          openssl pkeyutl -verify -pubin -inkey ../distro/ota-keys/ota-pubkey.pem \
+            -rawin -in "$ISO.sha256" -sigfile "$ISO.sha256.sig" \
+            || { echo "::error::the signature does not verify against the shipped public key"; exit 1; }
+          echo "iso=$ISO" >> "$GITHUB_OUTPUT"
+
+      - name: Build latest.json
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/make-iso-manifest.py "${{ inputs.tag }}" "iso/${{ steps.iso.outputs.iso }}"
+          cat manifest-out/latest.json
+
+      - name: Upload to the bucket and read it back
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: osmium-sound-iso-beta
+          ISO: ${{ steps.iso.outputs.iso }}
+        run: |
+          set -euo pipefail
+          put() {
+            aws s3 cp "$1" "s3://$R2_BUCKET/$2" --endpoint-url "$R2_ENDPOINT" \
+              --content-type "$3" --cache-control "$4" --only-show-errors
+          }
+          # the ISO and its sidecars carry the version in their name: immutable
+          put "iso/$ISO" "$ISO" application/octet-stream "public, max-age=31536000, immutable"
+          put "iso/$ISO.sha256" "$ISO.sha256" text/plain "public, max-age=31536000, immutable"
+          put "iso/$ISO.sha256.sig" "$ISO.sha256.sig" application/octet-stream "public, max-age=31536000, immutable"
+          # the manifest changes with every stable release: never cached
+          put manifest-out/latest.json latest.json application/json no-cache
+          for f in "$ISO" "$ISO.sha256" "$ISO.sha256.sig"; do
+            SIZE=$(aws s3api head-object --bucket "$R2_BUCKET" --key "$f" --endpoint-url "$R2_ENDPOINT" \
+                     --query ContentLength --output text)
+            [ "$SIZE" = "$(stat -c %s "iso/$f")" ] \
+              || { echo "::error::$f: $SIZE bytes in the bucket, $(stat -c %s "iso/$f") here"; exit 1; }
+          done
+          aws s3api get-object --bucket "$R2_BUCKET" --key latest.json --endpoint-url "$R2_ENDPOINT" /tmp/latest.json >/dev/null
+          grep -q "\"tag_name\": \"${{ inputs.tag }}\"" /tmp/latest.json \
+            || { echo "::error::latest.json in the bucket does not name ${{ inputs.tag }}"; exit 1; }
+          echo "published $ISO, its sidecars and latest.json for ${{ inputs.tag }}"
