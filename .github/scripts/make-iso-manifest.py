@@ -8,10 +8,11 @@ Writes ``manifest-out/latest.json`` in the same shape as the OTA manifests
 produced by make-ota-manifest.py (``tag_name`` + ``assets[]`` with
 ``browser_download_url`` and ``size``), so both consumers parse one format.
 
-Unlike the OTA manifests, this one is not pushed to gh-pages: the ISO is
-uploaded by hand to file.osmiumsound.it, and latest.json travels with it in the
-same upload. The flasher reads it from there, which is also why the URLs are
-built from ``base_url`` rather than from the GitHub release CDN.
+Unlike the OTA manifests, this one is not pushed to gh-pages: the ISO goes
+to the root of file.osmiumsound.it (publish-iso-r2.yml, after build-iso.yml),
+and latest.json travels with it in the same upload. The flasher reads it from
+there, which is also why the URLs are built from ``base_url`` rather than
+from the GitHub release CDN.
 """
 import json
 import os

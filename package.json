@@ -1,6 +1,6 @@
 {
   "name": "hifi-media-player",
-  "version": "2.5.25",
+  "version": "2.5.26",
   "description": "Osmium Sound. Only the version lives here: the build workflows and distro/build-distro.sh read it for the on-screen interface and the OTA bundles. The on-screen interface is native-ui-qt/, the web admin admin-webui/.",
   "private": true,
   "license": "AGPL-3.0-only"
