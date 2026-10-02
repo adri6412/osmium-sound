@@ -56,7 +56,8 @@ Item {
     // OSMIUM / SOUND in the free slot, centred on where the DSP tile and its
     // label would be (x 718..799 and y 23..154 of the 897x175 artwork), so it
     // lines up with the column of the BitPerfect and ReplayGain tiles.
-    // Body 2.1 % of the width, bold, tracking 0.1 em, line height 1.05.
+    // Body 2.1 % of the width, bold, tracking 0.1 em, line height 1.05;
+    // OSMIUM in gold and SOUND in off-white, the colours of the mark.
     Column {
         readonly property real cx: root.width * 758.5 / 897
         readonly property real cy: root.height * 88.5 / 175
@@ -65,13 +66,13 @@ Item {
         property real px: Math.max(5, root.width * 0.021)
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "OSMIUM"; color: Theme.wa(0.9)
+            text: "OSMIUM"; color: Theme.gold
             font.family: Theme.font; font.bold: true; font.pixelSize: parent.px; font.letterSpacing: parent.px * 0.1
             lineHeight: 1.05
         }
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "SOUND"; color: Theme.gold
+            text: "SOUND"; color: "#f1f0ea"
             font.family: Theme.font; font.bold: true; font.pixelSize: parent.px; font.letterSpacing: parent.px * 0.1
             lineHeight: 1.05
         }

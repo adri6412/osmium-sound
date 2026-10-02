@@ -107,13 +107,8 @@ Item {
             text: (I18n.lang === "it" ? root.now.toLocaleDateString(Qt.locale("it_IT"), "dddd d MMMM yyyy") : root.now.toLocaleDateString(Qt.locale("en_US"), "dddd, MMMM d, yyyy")).toUpperCase()
             color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 24; font.letterSpacing: 2.4
         }
-        Row {
-            anchors.horizontalCenter: parent.horizontalCenter; y: parent.cy + 256 - 8; spacing: 8; opacity: 0.2
-            Rectangle { width: 8; height: 8; radius: 4; color: Theme.gold; anchors.verticalCenter: parent.verticalCenter }
-            // two-tone like the top bar: SOUND in gold
-            Text { text: "OSMIUM"; color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true; font.letterSpacing: 7; anchors.verticalCenter: parent.verticalCenter }
-            Text { text: "SOUND"; color: Theme.gold; font.family: Theme.font; font.pixelSize: 14; font.bold: true; font.letterSpacing: 7; anchors.verticalCenter: parent.verticalCenter }
-        }
+        // the mark, faint, under the date
+        BrandMark { anchors.horizontalCenter: parent.horizontalCenter; y: parent.cy + 256 - 8; cap: 11; opacity: 0.25 }
     }
     // il tocco sveglia sempre; il movimento del mouse solo se non e' voluto
     MouseArea {

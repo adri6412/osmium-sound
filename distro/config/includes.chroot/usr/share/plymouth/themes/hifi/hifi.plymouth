@@ -1,6 +1,6 @@
 [Plymouth Theme]
-Name=HiFi Player
-Description=HiFi Player branded boot splash
+Name=Osmium Sound
+Description=Osmium Sound boot splash: the mark builds up, then shimmers until the interface takes over
 ModuleName=script
 
 [script]

@@ -469,17 +469,10 @@ Item {
         // tabs need their space; the power button always stays.
         Item {
             id: brandMark
-            width: 16 + brandText.width + 4; height: 40
+            width: 16 + brandText.implicitWidth + 4; height: 40
             x: netIcon.x - width
             visible: tabRow.width <= x
-            Row {
-                id: brandText
-                x: 16; anchors.verticalCenter: parent.verticalCenter
-                spacing: 6
-                // two-tone like the status plate: SOUND in gold
-                Text { text: "OSMIUM"; color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
-                Text { text: "SOUND"; color: Theme.gold; font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
-            }
+            BrandMark { id: brandText; x: 16; anchors.verticalCenter: parent.verticalCenter; cap: 8 }
         }
         // the connection, as an OS's tray shows it: the link's shape (Wi-Fi
         // or cable) when the internet answers, the same with a gold dot when

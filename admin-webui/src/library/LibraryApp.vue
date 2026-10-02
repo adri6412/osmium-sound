@@ -22,7 +22,7 @@ async function logout() {
 <template>
   <div class="topbar lb-topbar">
     <RouterLink to="/" class="lb-brand">
-      <span class="brand">OSMIUM <span class="gold">SOUND</span></span>
+      <span class="brand"><svg class="bars" viewBox="0 0 167 81" aria-hidden="true"><rect x="0" width="6" height="81"/><rect x="46" width="6" height="81"/><rect x="82" width="6" height="81"/><rect x="109" width="6" height="81"/><rect x="130" width="6" height="81"/><rect x="147" width="6" height="81"/><rect x="161" width="6" height="81"/></svg>OSMIUM <span class="ink">SOUND</span></span>
       <span class="lb-brand-sub">{{ t('library.title') }}</span>
     </RouterLink>
     <nav class="lb-nav">

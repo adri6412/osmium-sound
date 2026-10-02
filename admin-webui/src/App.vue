@@ -26,7 +26,7 @@ async function logout() {
 
 <template>
   <div class="topbar">
-    <div class="brand">OSMIUM <span class="gold">SOUND</span></div>
+    <div class="brand"><svg class="bars" viewBox="0 0 167 81" aria-hidden="true"><rect x="0" width="6" height="81"/><rect x="46" width="6" height="81"/><rect x="82" width="6" height="81"/><rect x="109" width="6" height="81"/><rect x="130" width="6" height="81"/><rect x="147" width="6" height="81"/><rect x="161" width="6" height="81"/></svg>OSMIUM <span class="ink">SOUND</span></div>
     <div class="topbar-actions">
       <!-- The only place a person who already uses the appliance is reminded
            that the project can be supported. The link goes through the site so
