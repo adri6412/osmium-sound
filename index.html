@@ -643,6 +643,38 @@
       text-align: center;
     }
     #android .install-inner, #android .quickstart { margin-left: auto; margin-right: auto; }
+    /* Google Play is the main way to get the app: the official badge, a code
+       to scan from a computer screen, then APK and F-Droid in a quieter row. */
+    .play-hero {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1.75rem; flex-wrap: wrap; margin-top: 2.25rem;
+    }
+    .play-badge { display: inline-block; line-height: 0; transition: transform 0.15s; }
+    .play-badge:hover { transform: translateY(-2px); }
+    .play-badge img { height: 96px; width: auto; }
+    /* One badge per language; the page's lang attribute picks it. */
+    html[lang="it"] .only-en, html:not([lang="it"]) .only-it { display: none; }
+    .play-qr { display: flex; align-items: center; gap: 0.9rem; text-align: left; }
+    .play-qr .qr {
+      width: 128px; height: 128px; flex: none;
+      border-radius: 6px; background: #fff; padding: 4px;
+    }
+    .play-qr p { margin: 0; font-size: 0.82rem; color: var(--muted); max-width: 200px; line-height: 1.5; }
+    .play-note { margin: 1rem auto 0; font-size: 0.9rem; color: var(--muted); }
+    .other-ways { margin-top: 2.5rem; }
+    .other-ways-label {
+      font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 0.8rem;
+    }
+    .other-ways-btns { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+    .other-ways-btns .btn-secondary { padding: 10px 20px; font-size: 0.88rem; }
+    @media (max-width: 520px) {
+      .play-badge img { height: 80px; }
+      .play-qr { flex-direction: column; text-align: center; }
+    }
+    /* The hero pill that points at the app on Google Play is a link. */
+    a.pill { text-decoration: none; border-color: rgba(245,184,32,0.45); transition: border-color 0.2s, background 0.2s; }
+    a.pill:hover { border-color: var(--accent); background: var(--accent-dim); }
 
     /* ── RECENSIONI + KO-FI ───────────────────────────── */
     #review {
@@ -842,6 +874,7 @@
     <span class="pill"><strong>FLAC · DSD · 192kHz</strong></span>
     <span class="pill"><strong>Deezer · Qobuz · TIDAL · Spotify</strong></span>
     <span class="pill"><strong>AGPL-3.0</strong> Open Source</span>
+    <a class="pill" href="#android" data-en="&lt;strong&gt;Android app&lt;/strong&gt; on Google Play" data-it="&lt;strong&gt;App Android&lt;/strong&gt; su Google Play"><strong>Android app</strong> on Google Play</a>
   </div>
 </section>
 
@@ -1144,9 +1177,9 @@
     <div class="feature-card">
       <div class="feature-icon">📱</div>
       <h3 data-en="Android Companion App" data-it="App companion per Android">Android Companion App</h3>
-      <p data-en="Browse, control playback and the queue, adjust volume and reach the web admin&#x27;s settings from your phone, or turn the device off. Pair by QR code. The phone can also be a player itself." data-it="Dal telefono sfogli la libreria, comandi riproduzione e coda, regoli il volume, raggiungi le impostazioni dell&#x27;amministrazione web o spegni il dispositivo. Abbinamento con QR code. Il telefono può anche fare da player.">Browse, control playback and the queue, adjust volume and reach the web admin&#x27;s settings from your phone, or turn the device off. Pair by QR code. The phone can also be a player itself.</p>
+      <p data-en="Browse, control playback and the queue, adjust volume and reach the web admin&#x27;s settings from your phone, or turn the device off. Pair by QR code. The phone can also be a player itself. Free on &lt;a href=&quot;https://play.google.com/store/apps/details?id=com.osmium.sound.companion&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;Google Play&lt;/a&gt;." data-it="Dal telefono sfogli la libreria, comandi riproduzione e coda, regoli il volume, raggiungi le impostazioni dell&#x27;amministrazione web o spegni il dispositivo. Abbinamento con QR code. Il telefono può anche fare da player. Gratuita su &lt;a href=&quot;https://play.google.com/store/apps/details?id=com.osmium.sound.companion&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;Google Play&lt;/a&gt;.">Browse, control playback and the queue, adjust volume and reach the web admin&#x27;s settings from your phone, or turn the device off. Pair by QR code. The phone can also be a player itself. Free on <a href="https://play.google.com/store/apps/details?id=com.osmium.sound.companion" target="_blank" rel="noopener">Google Play</a>.</p>
       <div class="feature-tags">
-        <span class="tag" data-en="QR pairing" data-it="Abbinamento QR">QR pairing</span><span class="tag" data-en="Settings" data-it="Impostazioni">Settings</span><span class="tag" data-en="Phone as player" data-it="Telefono come player">Phone as player</span>
+        <span class="tag">Google Play</span><span class="tag" data-en="QR pairing" data-it="Abbinamento QR">QR pairing</span><span class="tag" data-en="Settings" data-it="Impostazioni">Settings</span><span class="tag" data-en="Phone as player" data-it="Telefono come player">Phone as player</span>
       </div>
     </div>
     <div class="feature-card">
@@ -1244,9 +1277,28 @@
     <h2 class="section-title" data-en="Android companion app" data-it="App companion per Android">Android companion app</h2>
     <p class="section-desc" data-en="Control Osmium Sound from your phone. Browse your library, drive playback and the queue, and adjust volume — pair in seconds by scanning the QR code on the device's Settings screen." data-it="Controlla Osmium Sound dal telefono. Sfoglia la libreria, gestisci la riproduzione e la coda, regola il volume — abbina in pochi secondi scansionando il QR code nella schermata Impostazioni del dispositivo.">Control Osmium Sound from your phone. Browse your library, drive playback and the queue, and adjust volume — pair in seconds by scanning the QR code on the device's Settings screen.</p>
 
-    <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; margin-top:2.25rem;">
-      <a class="btn-primary" href="https://github.com/adri6412/osmium-sound/releases/download/companion-v1.0.12/HiFiMediaPlayer-companion-v1.0.12-release.apk">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    <!-- The app is on Google Play: the official badge leads, with a code to
+         scan from a computer screen. APK and F-Droid stay below, quieter. -->
+    <div class="play-hero">
+      <a class="play-badge" href="https://play.google.com/store/apps/details?id=com.osmium.sound.companion" target="_blank" rel="noopener">
+        <img class="only-en" src="google-play-en.png" alt="Get it on Google Play" width="646" height="250">
+        <img class="only-it" src="google-play-it.png" alt="Disponibile su Google Play" width="646" height="250">
+      </a>
+      <div class="play-qr">
+        <svg class="qr" viewBox="0 0 45 45" role="img" aria-label="Osmium Sound on Google Play">
+          <rect width="100%" height="100%" fill="#fff"/>
+          <path d="M4 4h7v1h-7zM13 4h1v1h-1zM16 4h4v1h-4zM25 4h1v1h-1zM27 4h1v1h-1zM29 4h1v1h-1zM32 4h1v1h-1zM34 4h7v1h-7zM4 5h1v1h-1zM10 5h1v1h-1zM15 5h3v1h-3zM21 5h2v1h-2zM24 5h1v1h-1zM28 5h5v1h-5zM34 5h1v1h-1zM40 5h1v1h-1zM4 6h1v1h-1zM6 6h3v1h-3zM10 6h1v1h-1zM12 6h2v1h-2zM16 6h2v1h-2zM20 6h1v1h-1zM25 6h2v1h-2zM28 6h1v1h-1zM30 6h1v1h-1zM34 6h1v1h-1zM36 6h3v1h-3zM40 6h1v1h-1zM4 7h1v1h-1zM6 7h3v1h-3zM10 7h1v1h-1zM12 7h2v1h-2zM15 7h2v1h-2zM18 7h1v1h-1zM20 7h3v1h-3zM24 7h1v1h-1zM26 7h1v1h-1zM29 7h3v1h-3zM34 7h1v1h-1zM36 7h3v1h-3zM40 7h1v1h-1zM4 8h1v1h-1zM6 8h3v1h-3zM10 8h1v1h-1zM12 8h2v1h-2zM16 8h2v1h-2zM19 8h9v1h-9zM29 8h1v1h-1zM32 8h1v1h-1zM34 8h1v1h-1zM36 8h3v1h-3zM40 8h1v1h-1zM4 9h1v1h-1zM10 9h1v1h-1zM12 9h1v1h-1zM14 9h2v1h-2zM19 9h1v1h-1zM21 9h1v1h-1zM25 9h1v1h-1zM29 9h4v1h-4zM34 9h1v1h-1zM40 9h1v1h-1zM4 10h7v1h-7zM12 10h1v1h-1zM14 10h1v1h-1zM16 10h1v1h-1zM18 10h1v1h-1zM20 10h1v1h-1zM22 10h1v1h-1zM24 10h1v1h-1zM26 10h1v1h-1zM28 10h1v1h-1zM30 10h1v1h-1zM32 10h1v1h-1zM34 10h7v1h-7zM12 11h1v1h-1zM14 11h1v1h-1zM17 11h1v1h-1zM19 11h1v1h-1zM21 11h2v1h-2zM25 11h3v1h-3zM30 11h1v1h-1zM32 11h1v1h-1zM4 12h1v1h-1zM6 12h5v1h-5zM14 12h1v1h-1zM20 12h1v1h-1zM26 12h2v1h-2zM29 12h2v1h-2zM32 12h1v1h-1zM34 12h5v1h-5zM4 13h2v1h-2zM8 13h2v1h-2zM12 13h2v1h-2zM15 13h1v1h-1zM18 13h2v1h-2zM21 13h2v1h-2zM24 13h2v1h-2zM27 13h1v1h-1zM30 13h1v1h-1zM32 13h2v1h-2zM35 13h1v1h-1zM39 13h1v1h-1zM4 14h4v1h-4zM10 14h1v1h-1zM12 14h3v1h-3zM17 14h1v1h-1zM19 14h3v1h-3zM23 14h1v1h-1zM25 14h2v1h-2zM29 14h3v1h-3zM34 14h4v1h-4zM39 14h2v1h-2zM4 15h1v1h-1zM6 15h1v1h-1zM8 15h1v1h-1zM11 15h2v1h-2zM14 15h1v1h-1zM16 15h4v1h-4zM23 15h3v1h-3zM30 15h1v1h-1zM32 15h1v1h-1zM34 15h4v1h-4zM40 15h1v1h-1zM4 16h4v1h-4zM10 16h2v1h-2zM13 16h1v1h-1zM15 16h2v1h-2zM19 16h3v1h-3zM23 16h2v1h-2zM26 16h5v1h-5zM33 16h4v1h-4zM38 16h3v1h-3zM5 17h1v1h-1zM9 17h1v1h-1zM13 17h1v1h-1zM15 17h1v1h-1zM20 17h1v1h-1zM22 17h3v1h-3zM27 17h2v1h-2zM32 17h1v1h-1zM35 17h1v1h-1zM5 18h1v1h-1zM7 18h1v1h-1zM9 18h3v1h-3zM14 18h4v1h-4zM19 18h1v1h-1zM22 18h1v1h-1zM26 18h1v1h-1zM30 18h3v1h-3zM34 18h4v1h-4zM39 18h2v1h-2zM5 19h1v1h-1zM13 19h1v1h-1zM16 19h1v1h-1zM18 19h3v1h-3zM25 19h1v1h-1zM30 19h1v1h-1zM32 19h2v1h-2zM35 19h2v1h-2zM39 19h2v1h-2zM5 20h4v1h-4zM10 20h1v1h-1zM13 20h1v1h-1zM16 20h2v1h-2zM22 20h1v1h-1zM24 20h1v1h-1zM26 20h6v1h-6zM33 20h2v1h-2zM36 20h1v1h-1zM38 20h1v1h-1zM5 21h2v1h-2zM8 21h1v1h-1zM11 21h1v1h-1zM16 21h1v1h-1zM19 21h2v1h-2zM27 21h1v1h-1zM29 21h1v1h-1zM35 21h1v1h-1zM38 21h2v1h-2zM6 22h5v1h-5zM13 22h1v1h-1zM16 22h3v1h-3zM24 22h1v1h-1zM26 22h1v1h-1zM30 22h4v1h-4zM36 22h1v1h-1zM39 22h2v1h-2zM5 23h1v1h-1zM7 23h2v1h-2zM11 23h1v1h-1zM14 23h3v1h-3zM20 23h1v1h-1zM22 23h1v1h-1zM25 23h3v1h-3zM31 23h2v1h-2zM34 23h3v1h-3zM40 23h1v1h-1zM4 24h3v1h-3zM8 24h1v1h-1zM10 24h1v1h-1zM12 24h1v1h-1zM14 24h1v1h-1zM16 24h1v1h-1zM21 24h1v1h-1zM24 24h1v1h-1zM26 24h5v1h-5zM33 24h2v1h-2zM36 24h3v1h-3zM5 25h2v1h-2zM14 25h3v1h-3zM18 25h1v1h-1zM20 25h5v1h-5zM26 25h2v1h-2zM29 25h1v1h-1zM32 25h1v1h-1zM37 25h1v1h-1zM6 26h6v1h-6zM15 26h1v1h-1zM17 26h1v1h-1zM19 26h3v1h-3zM24 26h2v1h-2zM29 26h3v1h-3zM33 26h1v1h-1zM35 26h3v1h-3zM39 26h2v1h-2zM5 27h1v1h-1zM9 27h1v1h-1zM11 27h5v1h-5zM17 27h3v1h-3zM21 27h2v1h-2zM25 27h3v1h-3zM32 27h5v1h-5zM39 27h1v1h-1zM4 28h1v1h-1zM6 28h2v1h-2zM10 28h2v1h-2zM13 28h2v1h-2zM20 28h1v1h-1zM26 28h5v1h-5zM33 28h2v1h-2zM36 28h1v1h-1zM38 28h2v1h-2zM4 29h1v1h-1zM6 29h1v1h-1zM8 29h1v1h-1zM12 29h1v1h-1zM16 29h4v1h-4zM22 29h1v1h-1zM24 29h2v1h-2zM27 29h1v1h-1zM32 29h1v1h-1zM37 29h1v1h-1zM4 30h1v1h-1zM6 30h2v1h-2zM9 30h2v1h-2zM12 30h4v1h-4zM17 30h1v1h-1zM19 30h2v1h-2zM23 30h1v1h-1zM30 30h3v1h-3zM34 30h2v1h-2zM38 30h3v1h-3zM4 31h1v1h-1zM8 31h2v1h-2zM12 31h1v1h-1zM19 31h1v1h-1zM23 31h3v1h-3zM27 31h2v1h-2zM30 31h7v1h-7zM40 31h1v1h-1zM4 32h1v1h-1zM6 32h1v1h-1zM8 32h3v1h-3zM12 32h2v1h-2zM17 32h3v1h-3zM21 32h1v1h-1zM23 32h1v1h-1zM26 32h1v1h-1zM28 32h2v1h-2zM31 32h8v1h-8zM12 33h1v1h-1zM14 33h2v1h-2zM17 33h2v1h-2zM20 33h1v1h-1zM23 33h2v1h-2zM27 33h1v1h-1zM31 33h2v1h-2zM36 33h2v1h-2zM39 33h1v1h-1zM4 34h7v1h-7zM14 34h1v1h-1zM16 34h1v1h-1zM18 34h3v1h-3zM22 34h1v1h-1zM24 34h1v1h-1zM26 34h1v1h-1zM30 34h1v1h-1zM32 34h1v1h-1zM34 34h1v1h-1zM36 34h1v1h-1zM38 34h1v1h-1zM40 34h1v1h-1zM4 35h1v1h-1zM10 35h1v1h-1zM12 35h8v1h-8zM23 35h6v1h-6zM31 35h2v1h-2zM36 35h2v1h-2zM39 35h1v1h-1zM4 36h1v1h-1zM6 36h3v1h-3zM10 36h1v1h-1zM12 36h1v1h-1zM14 36h1v1h-1zM17 36h3v1h-3zM22 36h2v1h-2zM26 36h1v1h-1zM28 36h2v1h-2zM31 36h6v1h-6zM38 36h1v1h-1zM40 36h1v1h-1zM4 37h1v1h-1zM6 37h3v1h-3zM10 37h1v1h-1zM12 37h3v1h-3zM16 37h1v1h-1zM18 37h3v1h-3zM25 37h1v1h-1zM27 37h1v1h-1zM29 37h1v1h-1zM33 37h2v1h-2zM36 37h1v1h-1zM38 37h1v1h-1zM40 37h1v1h-1zM4 38h1v1h-1zM6 38h3v1h-3zM10 38h1v1h-1zM12 38h1v1h-1zM14 38h1v1h-1zM25 38h2v1h-2zM28 38h6v1h-6zM38 38h3v1h-3zM4 39h1v1h-1zM10 39h1v1h-1zM15 39h2v1h-2zM18 39h1v1h-1zM20 39h1v1h-1zM22 39h6v1h-6zM32 39h1v1h-1zM36 39h1v1h-1zM40 39h1v1h-1zM4 40h7v1h-7zM12 40h5v1h-5zM18 40h1v1h-1zM21 40h1v1h-1zM23 40h1v1h-1zM27 40h4v1h-4zM33 40h2v1h-2zM36 40h5v1h-5z" fill="#000"/>
+        </svg>
+        <p data-en="Reading this on a computer? Scan the code with your phone to open the app on Google Play." data-it="Stai leggendo da un computer? Inquadra il codice col telefono per aprire l&#x27;app su Google Play.">Reading this on a computer? Scan the code with your phone to open the app on Google Play.</p>
+      </div>
+    </div>
+    <p class="play-note" data-en="Free on Google Play, with automatic updates. Requires Android 8.0 or newer." data-it="Gratuita su Google Play, con aggiornamenti automatici. Richiede Android 8.0 o superiore.">Free on Google Play, with automatic updates. Requires Android 8.0 or newer.</p>
+
+    <div class="other-ways">
+      <p class="other-ways-label" data-en="Prefer not to use Google Play?" data-it="Preferisci non usare Google Play?">Prefer not to use Google Play?</p>
+      <div class="other-ways-btns">
+      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/download/companion-v1.0.12/HiFiMediaPlayer-companion-v1.0.12-release.apk">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span class="iso-badge"><span data-en="Download APK" data-it="Scarica l'APK">Download APK</span><small>v1.0.12</small></span>
       </a>
       <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/tag/companion-v1.0.12" target="_blank">
@@ -1257,23 +1309,24 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         <span data-en="Add F-Droid repo" data-it="Aggiungi repo F-Droid">Add F-Droid repo</span>
       </a>
+      </div>
     </div>
 
     <div class="quickstart">
       <div class="qs-step">
         <div class="qs-num">1</div>
-        <h4 data-en="Download the APK" data-it="Scarica l'APK">Download the APK</h4>
-        <p data-en="Grab &lt;strong&gt;HiFiMediaPlayer-companion-v1.0.12-release.apk&lt;/strong&gt; using the button above." data-it="Prendi &lt;strong&gt;HiFiMediaPlayer-companion-v1.0.12-release.apk&lt;/strong&gt; con il pulsante qui sopra.">Grab <strong>HiFiMediaPlayer-companion-v1.0.12-release.apk</strong> using the button above.</p>
+        <h4 data-en="Install from Google Play" data-it="Installa da Google Play">Install from Google Play</h4>
+        <p data-en="Tap the badge above, scan the code, or search for &lt;strong&gt;Osmium Sound Companion&lt;/strong&gt; in Google Play. If you would rather skip Google Play, the APK and F-Droid buttons give you the very same app." data-it="Tocca il badge qui sopra, inquadra il codice oppure cerca &lt;strong&gt;Osmium Sound Companion&lt;/strong&gt; su Google Play. Se preferisci evitare Google Play, i pulsanti APK e F-Droid danno la stessa identica app.">Tap the badge above, scan the code, or search for <strong>Osmium Sound Companion</strong> in Google Play. If you would rather skip Google Play, the APK and F-Droid buttons give you the very same app.</p>
       </div>
       <div class="qs-step">
         <div class="qs-num">2</div>
-        <h4 data-en="Install it" data-it="Installala">Install it</h4>
-        <p data-en="Open the APK on your phone and allow install from &lt;strong&gt;unknown sources&lt;/strong&gt; when prompted. Requires Android 8.0 or newer." data-it="Apri l'APK sul telefono e consenti l'installazione da &lt;strong&gt;origini sconosciute&lt;/strong&gt; quando richiesto. Richiede Android 8.0 o superiore.">Open the APK on your phone and allow install from <strong>unknown sources</strong> when prompted. Requires Android 8.0 or newer.</p>
+        <h4 data-en="Pair by QR" data-it="Abbina con QR">Pair by QR</h4>
+        <p data-en="On the same Wi-Fi, open the app and scan the &lt;strong&gt;pairing QR code&lt;/strong&gt; from the device's Settings → Phone control." data-it="Sulla stessa rete Wi-Fi, apri l'app e scansiona il &lt;strong&gt;QR code di abbinamento&lt;/strong&gt; da Impostazioni → Controllo da telefono del dispositivo.">On the same Wi-Fi, open the app and scan the <strong>pairing QR code</strong> from the device's Settings → Phone control.</p>
       </div>
       <div class="qs-step">
         <div class="qs-num">3</div>
-        <h4 data-en="Pair by QR" data-it="Abbina con QR">Pair by QR</h4>
-        <p data-en="On the same Wi-Fi, open the app and scan the &lt;strong&gt;pairing QR code&lt;/strong&gt; from the device's Settings → Phone control." data-it="Sulla stessa rete Wi-Fi, apri l'app e scansiona il &lt;strong&gt;QR code di abbinamento&lt;/strong&gt; da Impostazioni → Controllo da telefono del dispositivo.">On the same Wi-Fi, open the app and scan the <strong>pairing QR code</strong> from the device's Settings → Phone control.</p>
+        <h4 data-en="Sit back" data-it="Mettiti comodo">Sit back</h4>
+        <p data-en="Browse your library, drive playback and the queue, adjust the volume and reach the device's settings — all from the couch." data-it="Sfoglia la libreria, comanda riproduzione e coda, regola il volume e raggiungi le impostazioni del dispositivo, tutto dal divano.">Browse your library, drive playback and the queue, adjust the volume and reach the device's settings — all from the couch.</p>
       </div>
     </div>
 
@@ -1292,8 +1345,8 @@
       </div>
     </div>
 
-    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid repo — it is not on the Play Store. Prefer F-Droid if you want automatic updates: tap &lt;strong&gt;Add F-Droid repo&lt;/strong&gt; above (F-Droid app required), or add &lt;code&gt;https://osmiumsound.it/fdroid/repo&lt;/code&gt; manually under Settings → Repositories. Your phone and the appliance must be on the same local network." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'app companion è distribuita come APK firmato (sideload) oppure tramite il nostro repo F-Droid self-hosted — non è sul Play Store. Se vuoi gli aggiornamenti automatici usa F-Droid: tocca &lt;strong&gt;Aggiungi repo F-Droid&lt;/strong&gt; qui sopra (serve l'app F-Droid), oppure aggiungi manualmente &lt;code&gt;https://osmiumsound.it/fdroid/repo&lt;/code&gt; in Impostazioni → Repository. Il telefono e il dispositivo devono essere sulla stessa rete locale.">
-      <strong>Note:</strong> the companion app is distributed as a signed APK (sideload) or via our self-hosted F-Droid repo — it is not on the Play Store. Prefer F-Droid if you want automatic updates: tap <strong>Add F-Droid repo</strong> above (F-Droid app required), or add <code>https://osmiumsound.it/fdroid/repo</code> manually under Settings → Repositories. Your phone and the appliance must be on the same local network.
+    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the APK and our own F-Droid repository give you the very same app as Google Play, for phones without Google services or if you simply prefer it that way. For automatic updates outside Google Play use F-Droid: tap &lt;strong&gt;Add F-Droid repo&lt;/strong&gt; above (F-Droid app required), or add &lt;code&gt;https://osmiumsound.it/fdroid/repo&lt;/code&gt; manually under Settings → Repositories. Whichever way you install it, your phone and the device must be on the same local network." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'APK e il nostro repository F-Droid danno la stessa identica app di Google Play, per i telefoni senza servizi Google o se semplicemente preferisci così. Per gli aggiornamenti automatici fuori da Google Play usa F-Droid: tocca &lt;strong&gt;Aggiungi repo F-Droid&lt;/strong&gt; qui sopra (serve l'app F-Droid), oppure aggiungi manualmente &lt;code&gt;https://osmiumsound.it/fdroid/repo&lt;/code&gt; in Impostazioni → Repository. In qualunque modo la installi, il telefono e il dispositivo devono essere sulla stessa rete locale.">
+      <strong>Note:</strong> the APK and our own F-Droid repository give you the very same app as Google Play, for phones without Google services or if you simply prefer it that way. For automatic updates outside Google Play use F-Droid: tap <strong>Add F-Droid repo</strong> above (F-Droid app required), or add <code>https://osmiumsound.it/fdroid/repo</code> manually under Settings → Repositories. Whichever way you install it, your phone and the device must be on the same local network.
     </p>
 
   </div>

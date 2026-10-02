@@ -1,7 +1,8 @@
 /* Osmium Sound — cookieless visit counter, modelled on the Plausible and
    Umami trackers. Sends to /api/o (functions/api/o.js):
    - pageview when the page is shown (prerendered pages wait until visible)
-   - download clicks on file links (ISO, flasher, APK); pages can also call
+   - download clicks on file links (ISO, flasher, APK) and on the app's
+     Google Play badge; pages can also call
               window.osmiumTrack('download', url) for downloads they start
    Two numbers come out of it, unique visitors and downloads, and nothing is
    kept per visitor on the server: counts per day and a sketch that cannot be
@@ -15,6 +16,9 @@
   var ENDPOINT = '/api/o';
   var FILE_LINK = /\.(iso|img|zip|exe|run|apk|dmg|appimage|deb|rpm|gz|xz|7z|pdf)$/i;
   var FILE_HOSTS = /^file\.osmiumsound\.it$/i;
+  // The app's page on Google Play counts like a download button: it is the
+  // main way to get the companion app.
+  var STORE_HOSTS = /^play\.google\.com$/i;
 
   if (location.protocol === 'file:' ||
       /^localhost$|^127(\.\d+){3}$|^\[::1?\]$/.test(location.hostname)) return;
@@ -66,7 +70,7 @@
     var url;
     try { url = new URL(a.href, location.href); } catch (err) { return; }
     if (!/^https?:$/.test(url.protocol)) return;
-    if (FILE_HOSTS.test(url.hostname) || FILE_LINK.test(url.pathname)) {
+    if (FILE_HOSTS.test(url.hostname) || STORE_HOSTS.test(url.hostname) || FILE_LINK.test(url.pathname)) {
       trackGoal('download', url.href);
     }
   }
