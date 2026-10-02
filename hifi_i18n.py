@@ -631,6 +631,8 @@ MESSAGES = {
     'library.reason.unreadable': {'en': 'the file could not be read', 'it': 'il file non si riesce a leggere'},
     'library.reason.not_a_file': {'en': 'the track is not a file on this player',
                                   'it': 'il brano non è un file di questo lettore'},
+    'library.reason.streamed': {'en': 'the track comes from an online streaming service',
+                                'it': 'il brano arriva da un servizio di streaming online'},
     'library.reason.outside_sources': {'en': 'the file is outside the music folders',
                                        'it': 'il file è fuori dalle cartelle della musica'},
     'library.reason.missing': {'en': 'the file was not found', 'it': 'il file non è stato trovato'},

@@ -883,6 +883,16 @@ def lyrion_tags_model(raw):
 
 
 # ── paths ────────────────────────────────────────────────────────────
+def streamed_url(url):
+    """A track that lives on an online service (qobuz://, tidal://, spotify://,
+    deezer://, an http stream): nothing of it is here to change."""
+    try:
+        scheme = urllib.parse.urlsplit(str(url or '')).scheme
+    except ValueError:
+        return False
+    return scheme not in ('', 'file')
+
+
 def path_from_url(url):
     """(local path, cue) from a Lyrion track URL; (None, False) for anything
     that is not a file. `cue` marks a track cut out of a bigger file."""
@@ -1173,11 +1183,13 @@ class TagService:
         return [t for t in r.get('titles_loop') or [] if _int_or_none(t.get('id')) is not None]
 
     # ── one album's files ──
-    def access(self, path, fmt, cue=False, writer_map=None):
+    def access(self, path, fmt, cue=False, writer_map=None, url=None):
         """(confined real path or None, reason). The path is only handed back
-        when the file may be read here; `reason` is "" when it may be written."""
+        when the file may be read here; `reason` is "" when it may be written.
+        `url` tells a streamed track (an album imported from Qobuz, TIDAL...)
+        from one that is simply not a file."""
         if not path:
-            return None, 'not_a_file'
+            return None, ('streamed' if streamed_url(url) else 'not_a_file')
         real = confine(path, self.roots)
         if real is None:
             return None, 'outside_sources'
@@ -1234,7 +1246,7 @@ class TagService:
                '_n': _int_or_none(str(t.get('tracknum') or '0').split('/')[0]) or 0}
         real = None
         if local:
-            real, reason = self.access(path, fmt, cue, writer_map)
+            real, reason = self.access(path, fmt, cue, writer_map, url=t.get('url'))
             row['reason'] = reason
             row['writable'] = reason == ''
         else:
@@ -1296,7 +1308,7 @@ class TagService:
                 raise TagError('library.trackNotInAlbum', track_id=ch['track_id'])
             path, cue = path_from_url(t.get('url'))
             fmt = format_of(path)
-            real, reason = self.access(path, fmt, cue, writer_map)
+            real, reason = self.access(path, fmt, cue, writer_map, url=t.get('url'))
             if reason:
                 raise TagError('library.trackNotWritable', 409, track_id=ch['track_id'], reason=reason)
             if fmt in ID3_FORMATS:

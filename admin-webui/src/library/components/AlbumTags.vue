@@ -44,6 +44,8 @@ const tracks = computed(() => props.data.tracks || []);
 const writableTracks = computed(() => tracks.value.filter((tr) => tr.writable));
 const readOnlyCount = computed(() => tracks.value.length - writableTracks.value.length);
 const canEdit = computed(() => writableTracks.value.length > 0);
+// why nothing can be changed: the album's reason, else the first track's
+const allReason = computed(() => props.data.reason || (tracks.value[0] && tracks.value[0].reason) || '');
 const discs = computed(() => {
   const n = Number((props.data.album && props.data.album.disc_count) || 0);
   if (n > 1) return n;
@@ -349,7 +351,8 @@ const rescanText = computed(() => {
   <div class="lb-tags" :class="{ 'has-bar': dirty || barBusy }">
     <div class="lb-banner" v-if="!canEdit">
       <Icon name="info" :size="18" />
-      <span>{{ reasonText(data.reason || (tracks[0] && tracks[0].reason)) }} {{ t('library.tags.readOnlyAll') }}</span>
+      <!-- a streamed album says it all in one sentence: "nothing can be changed in these files" would speak of files it does not have -->
+      <span>{{ reasonText(allReason) }}<template v-if="allReason !== 'streamed'"> {{ t('library.tags.readOnlyAll') }}</template></span>
     </div>
     <div class="lb-banner soft" v-else-if="readOnlyCount > 0">
       <Icon name="info" :size="18" />

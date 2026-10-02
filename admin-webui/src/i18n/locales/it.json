@@ -1301,6 +1301,7 @@
         "cue_track": "Questo brano fa parte di un unico file diviso da un cue sheet: i suoi tag non si possono cambiare brano per brano.",
         "unreadable": "Questo file non si riesce a leggere: potrebbe essere danneggiato.",
         "not_a_file": "Questo brano non è un file di questo lettore.",
+        "streamed": "Questo album, artista o brano arriva da un servizio di streaming online: non si può modificare.",
         "outside_sources": "Questo file è fuori dalle cartelle musicali del lettore.",
         "missing": "Il file non è stato trovato: forse è stato spostato o cancellato.",
         "remote_server": "I file sono su un altro server: solo quel server può modificarli.",

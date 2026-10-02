@@ -1301,6 +1301,7 @@
         "cue_track": "This track is part of a single file split by a cue sheet: its tags cannot be changed one track at a time.",
         "unreadable": "This file could not be read: it may be damaged.",
         "not_a_file": "This track is not a file on this player.",
+        "streamed": "This album, artist or track comes from an online streaming service: you cannot edit it.",
         "outside_sources": "This file is outside the music folders of this player.",
         "missing": "The file was not found: it may have been moved or deleted.",
         "remote_server": "The files are on another server: only that server can change them.",

@@ -287,6 +287,11 @@ class PathTests(unittest.TestCase):
         self.assertEqual(svc.access(good, 'flac', writer_map={'flac': False})[1], 'unsupported_format')
         self.assertEqual(svc.access(good, 'flac', cue=True, writer_map=writable)[1], 'cue_track')
         self.assertEqual(svc.access(None, 'flac', writer_map=writable), (None, 'not_a_file'))
+        # a track of an album imported from a streaming service: its own reason
+        self.assertEqual(svc.access(None, '', writer_map=writable, url='qobuz://1234.flac'), (None, 'streamed'))
+        self.assertTrue(ht.streamed_url('tidal://5678.flac'))
+        self.assertFalse(ht.streamed_url(file_url(good)))
+        self.assertFalse(ht.streamed_url(''))
         with mock.patch.object(ht, 'fs_readonly', return_value=True):
             self.assertEqual(svc.access(good, 'flac', writer_map=writable)[1], 'readonly')
         if os.geteuid() != 0:
@@ -647,6 +652,7 @@ class ServiceTests(unittest.TestCase):
         self.lyrion.tracks[704].append({'id': 201, 'url': file_url(self.paths[0]) + '#10.0-20.0', 'tracknum': '5'})
         self.lyrion.tracks[704].append({'id': 202, 'url': file_url(os.path.join(self.music, 'gone.mp3')),
                                         'tracknum': '6'})
+        self.lyrion.tracks[704].append({'id': 203, 'url': 'qobuz://987654.flac', 'tracknum': '7', 'type': 'flc'})
         self.lyrion.raw[200] = {'TITLE': 'From Lyrion', 'TRCK': '4/6'}
         out = self.svc.album(704)
         self.assertEqual(out['album'], {'album_id': 704, 'title': 'The Dark Side of the Moon', 'artist': 'Pink Floyd',
@@ -665,7 +671,8 @@ class ServiceTests(unittest.TestCase):
                          ('outside_sources', {'TITLE': ['From Lyrion'], 'TRACKNUMBER': ['4'], 'TRACKTOTAL': ['6']}))
         self.assertEqual(rows[201]['reason'], 'cue_track')                 # cue track: never written
         self.assertEqual(rows[202]['reason'], 'missing')
-        self.assertEqual([r['track_id'] for r in out['tracks']], [101, 102, 103, 200, 201, 202])
+        self.assertEqual((rows[203]['reason'], rows[203]['writable'], rows[203]['file']), ('streamed', False, ''))
+        self.assertEqual([r['track_id'] for r in out['tracks']], [101, 102, 103, 200, 201, 202, 203])
         # a file that cannot be parsed here is shown read-only, from Lyrion
         with mock.patch.object(ht, 'read_file', side_effect=ht.FileTagError('damaged')):
             rows = {r['track_id']: r for r in self.svc.album(704)['tracks']}
