@@ -282,7 +282,8 @@ class PathTests(unittest.TestCase):
         self.assertEqual(svc.access(os.path.join(self.music, 'gone.flac'), 'flac', writer_map=writable),
                          (None, 'missing'))
         self.assertEqual(svc.access(good, 'flac', writer_map={'flac': False})[1], 'unsupported_format')
-        self.assertEqual(svc.access(good, 'flac', cue=True, writer_map=writable)[1], 'unsupported_format')
+        self.assertEqual(svc.access(good, 'flac', cue=True, writer_map=writable)[1], 'cue_track')
+        self.assertEqual(svc.access(None, 'flac', writer_map=writable), (None, 'not_a_file'))
         with mock.patch.object(ht, 'fs_readonly', return_value=True):
             self.assertEqual(svc.access(good, 'flac', writer_map=writable)[1], 'readonly')
         if os.geteuid() != 0:
@@ -621,9 +622,13 @@ class ServiceTests(unittest.TestCase):
                                       'has_picture', 'duration'})
         self.assertEqual((rows[200]['reason'], rows[200]['tags']),
                          ('outside_sources', {'TITLE': ['From Lyrion'], 'TRACKNUMBER': ['4'], 'TRACKTOTAL': ['6']}))
-        self.assertEqual(rows[201]['reason'], 'unsupported_format')        # cue track: never written
+        self.assertEqual(rows[201]['reason'], 'cue_track')                 # cue track: never written
         self.assertEqual(rows[202]['reason'], 'missing')
         self.assertEqual([r['track_id'] for r in out['tracks']], [101, 102, 103, 200, 201, 202])
+        # a file that cannot be parsed here is shown read-only, from Lyrion
+        with mock.patch.object(ht, 'read_file', side_effect=ht.FileTagError('damaged')):
+            rows = {r['track_id']: r for r in self.svc.album(704)['tracks']}
+        self.assertEqual((rows[101]['writable'], rows[101]['reason']), (False, 'unreadable'))
         # Lyrion's `tags` failing: the row comes from the track list, composer included
         self.lyrion.tracks[704][3].update(title='Us and Them', composer='Richard Wright, Roger Waters')
         self.lyrion.tags_down = True

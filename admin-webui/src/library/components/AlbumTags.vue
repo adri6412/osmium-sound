@@ -247,6 +247,8 @@ const sending = ref(false);
 const { job, follow } = useJob();
 const jobKind = ref('save');         // 'save' | 'undo'
 const forceOffer = ref(null);        // an undo refused because a file changed since
+const sentIds = ref([]);             // the tracks the running save was asked to write
+const beforeSave = ref(null);        // what the files held before it, kept for the undo
 
 const running = computed(() => job.value && (job.value.state === 'running' || job.value.state === 'queued'));
 // A new album name or artist gives the album a new number once the music
@@ -262,6 +264,34 @@ const pct = computed(() => {
   const j = job.value;
   if (!j || !j.total) return 0;
   return Math.min(100, Math.round((100 * (j.done || 0)) / j.total));
+});
+
+// The Save bar has to stop saying "unsaved" the moment the files are written,
+// not when the dialog is closed: each track the job wrote becomes the new
+// baseline (one it could not write stays in the bar), and an undo puts the
+// old baseline back, so the bar comes back with the changes it gave up.
+watch(() => job.value && job.value.state, (state) => {
+  const j = job.value;
+  if (!j || state !== 'done') return;
+  if (jobKind.value === 'undo') {
+    if (beforeSave.value) { orig.value = beforeSave.value; beforeSave.value = null; }
+    return;
+  }
+  const failed = new Set((j.errors || []).map((e) => String(e.track_id)));
+  const before = {};
+  for (const [id, tags] of Object.entries(orig.value)) before[id] = clone(tags);
+  for (const id of sentIds.value) {
+    if (failed.has(String(id))) continue;
+    orig.value[id] = clone(work[id] || {});
+  }
+  beforeSave.value = before;
+});
+
+// What the bar says: the job while it is running, the pending changes otherwise.
+const barBusy = computed(() => !!running.value);
+const barText = computed(() => {
+  if (barBusy.value) return jobKind.value === 'undo' ? t('library.tags.undoingBar') : t('library.tags.savingBar');
+  return changes.value.length === 1 ? t('library.tags.pendingOne') : t('library.tags.pending', { n: changes.value.length });
 });
 
 function askSave() {
@@ -280,6 +310,8 @@ async function doSave() {
     return;
   }
   jobKind.value = 'save';
+  sentIds.value = changes.value.map((c) => c.track_id);
+  beforeSave.value = null;
   follow(r.data.job_id, changes.value.length);
 }
 async function undoJob(force = false) {
@@ -314,7 +346,7 @@ const rescanText = computed(() => {
 </script>
 
 <template>
-  <div class="lb-tags" :class="{ 'has-bar': dirty }">
+  <div class="lb-tags" :class="{ 'has-bar': dirty || barBusy }">
     <div class="lb-banner" v-if="!canEdit">
       <Icon name="info" :size="18" />
       <span>{{ reasonText(data.reason || (tracks[0] && tracks[0].reason)) }} {{ t('library.tags.readOnlyAll') }}</span>
@@ -427,12 +459,14 @@ const rescanText = computed(() => {
     </div>
 
     <!-- save bar -->
-    <div class="lb-savebar" v-if="dirty">
-      <span class="lb-savebar-t">{{ changes.length === 1 ? t('library.tags.pendingOne') : t('library.tags.pending', { n: changes.length }) }}</span>
-      <button type="button" class="ghost fit" @click="discard">{{ t('library.tags.discard') }}</button>
-      <button type="button" class="fit" :disabled="invalid" @click="askSave">
-        <Icon name="save" :size="15" /> {{ changes.length === 1 ? t('library.tags.saveOne') : t('library.tags.save', { n: changes.length }) }}
-      </button>
+    <div class="lb-savebar" v-if="dirty || barBusy">
+      <span class="lb-savebar-t">{{ barText }}</span>
+      <template v-if="!barBusy">
+        <button type="button" class="ghost fit" @click="discard">{{ t('library.tags.discard') }}</button>
+        <button type="button" class="fit" :disabled="invalid" @click="askSave">
+          <Icon name="save" :size="15" /> {{ changes.length === 1 ? t('library.tags.saveOne') : t('library.tags.save', { n: changes.length }) }}
+        </button>
+      </template>
     </div>
 
     <!-- confirm / progress / result -->

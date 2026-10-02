@@ -1081,13 +1081,15 @@ class TagService:
         """(confined real path or None, reason). The path is only handed back
         when the file may be read here; `reason` is "" when it may be written."""
         if not path:
-            return None, 'unsupported_format'
+            return None, 'not_a_file'
         real = confine(path, self.roots)
         if real is None:
             return None, 'outside_sources'
         if not os.path.isfile(real):
             return None, 'missing'
-        if cue or not (writer_map if writer_map is not None else writers()).get(fmt):
+        if cue:
+            return real, 'cue_track'
+        if not (writer_map if writer_map is not None else writers()).get(fmt):
             return real, 'unsupported_format'
         if fs_readonly(real) or not os.access(real, os.W_OK):
             return real, 'readonly'
@@ -1148,7 +1150,7 @@ class TagService:
             except FileTagError as e:
                 if row['writable'] or row['reason'] == 'readonly':
                     _log(f'track {tid}: unreadable ({e}): shown read-only')
-                    row['writable'], row['reason'] = False, 'unsupported_format'
+                    row['writable'], row['reason'] = False, 'unreadable'
         if model is None:
             model = self._lyrion_model(t, fmt, dump_state)
         row.update(tags=model['tags'], other_tags=model['other_tags'], has_picture=model['has_picture'])

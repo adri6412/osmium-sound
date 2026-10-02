@@ -1259,8 +1259,7 @@
     },
     "status": {
       "remote": "Questo lettore suona la musica di un altro server: i file non sono qui, quindi si possono correggere solo le informazioni dal web.",
-      "unavailable": "Al momento su questo lettore non si possono modificare i file musicali.",
-      "formatsLater": "I file {formats} si potranno modificare dopo il prossimo aggiornamento del sistema."
+      "unavailable": "Al momento su questo lettore non si possono modificare i file musicali."
     },
     "album": {
       "back": "Libreria",
@@ -1298,7 +1297,10 @@
       "someReadOnly": "{n} file non si possono modificare: qui sotto sono in grigio.",
       "reason": {
         "readonly": "Questo file non si può modificare: la cartella o la condivisione di rete è in sola lettura.",
-        "unsupported_format": "Questo tipo di file si potrà modificare dopo il prossimo aggiornamento del sistema.",
+        "unsupported_format": "In questo tipo di file non si possono scrivere i tag.",
+        "cue_track": "Questo brano fa parte di un unico file diviso da un cue sheet: i suoi tag non si possono cambiare brano per brano.",
+        "unreadable": "Questo file non si riesce a leggere: potrebbe essere danneggiato.",
+        "not_a_file": "Questo brano non è un file di questo lettore.",
         "outside_sources": "Questo file è fuori dalle cartelle musicali del lettore.",
         "missing": "Il file non è stato trovato: forse è stato spostato o cancellato.",
         "remote_server": "I file sono su un altro server: solo quel server può modificarli.",

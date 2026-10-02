@@ -1259,8 +1259,7 @@
     },
     "status": {
       "remote": "This player plays the music of another server: the files are not here, so only the information from the web can be corrected.",
-      "unavailable": "The music files cannot be changed on this player right now.",
-      "formatsLater": "{formats} files can be edited after the next system update."
+      "unavailable": "The music files cannot be changed on this player right now."
     },
     "album": {
       "back": "Library",
@@ -1298,7 +1297,10 @@
       "someReadOnly": "{n} files cannot be changed: they are greyed out below.",
       "reason": {
         "readonly": "This file cannot be changed: its folder or network share is read-only.",
-        "unsupported_format": "This kind of file can be edited after the next system update.",
+        "unsupported_format": "Tags cannot be written into this kind of file.",
+        "cue_track": "This track is part of a single file split by a cue sheet: its tags cannot be changed one track at a time.",
+        "unreadable": "This file could not be read: it may be damaged.",
+        "not_a_file": "This track is not a file on this player.",
         "outside_sources": "This file is outside the music folders of this player.",
         "missing": "The file was not found: it may have been moved or deleted.",
         "remote_server": "The files are on another server: only that server can change them.",
