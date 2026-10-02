@@ -143,9 +143,13 @@ def probe(device, proc_asound=None):
     card, dev = parse_device(device)
     if card is None:
         return 'dop'
-    proc_asound = proc_asound or PROC_ASOUND     # looked up at call time: tests point it elsewhere
+    root = os.path.realpath(proc_asound or PROC_ASOUND)     # looked up at call time: tests point it elsewhere
+    # the card comes from the device string the owner chose: stay under the tree
+    stream = os.path.realpath(os.path.join(root, card, f'stream{dev}'))
+    if not stream.startswith(root + os.sep):
+        return 'dop'
     try:
-        with open(os.path.join(proc_asound, card, f'stream{dev}'), encoding='utf-8', errors='replace') as f:
+        with open(stream, encoding='utf-8', errors='replace') as f:
             text = f.read()
     except OSError:
         return 'dop'

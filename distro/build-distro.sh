@@ -3,11 +3,11 @@
 # build-distro.sh — Build the HiFi Player Debian appliance ISO with live-build.
 #
 # Run this AS ROOT on a Debian machine (bookworm recommended):
-#     sudo ./build-distro.sh --app-dir /path/to/linux-unpacked
+#     sudo ./build-distro.sh --qt-dir /path/to/qtui
 #
-# The Electron app must already be compiled into an unpacked directory
-# (the `linux-unpacked` folder produced by electron-builder). This script
-# does NOT need Node/npm — it only assembles and builds the ISO.
+# The Qt on-screen interface must already be built into a payload folder
+# (native-ui-qt/ci/build-payload.sh). This script does NOT need Node/npm —
+# it only assembles and builds the ISO.
 #
 # ── Incremental / staged builds ──────────────────────────────────────
 # live-build runs three stages: bootstrap → chroot → binary. They are slow to
@@ -25,8 +25,8 @@
 #                    tranne --no-bundle che si passa qui e viene inoltrato.
 #
 # Typical loop while iterating on boot menus / splash / ISO layout:
-#   sudo ./build-distro.sh --app-dir … --stage all      # once
-#   sudo ./build-distro.sh --app-dir … --stage binary   # fast re-spins
+#   sudo ./build-distro.sh --qt-dir … --stage all      # once
+#   sudo ./build-distro.sh --qt-dir … --stage binary   # fast re-spins
 #
 # The Debian package cache (config/../cache/) is preserved across runs unless
 # you pass --clean-cache.
@@ -49,7 +49,6 @@ BRAND_NAME="${BRAND_NAME:-Osmium Sound}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG="$SCRIPT_DIR/config"
-APP_DIR=""
 QT_DIR=""            # pacchetto dell'interfaccia Qt (vuoto → cercato da solo)
 APP_VERSION=""
 STAGE="all"          # all | chroot | binary
@@ -61,7 +60,6 @@ die()  { printf '\033[1;31m[hifi-build ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 # ─────────────────────────── Args ───────────────────────────────────
 while [ $# -gt 0 ]; do
     case "$1" in
-        --app-dir) APP_DIR="$2"; shift 2 ;;
         --qt-dir) QT_DIR="$2"; shift 2 ;;
         --app-version) APP_VERSION="$2"; shift 2 ;;
         --lyrion-url) LYRION_DEB_URL="$2"; shift 2 ;;
@@ -110,23 +108,9 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y --no-install-recommends live-build imagemagick curl xorriso ca-certificates
 
-# The Electron app + python daemons are only needed when we (re)build the
-# chroot. A binary-only re-spin reuses the existing chroot, so skip these.
+# The python daemons are only needed when we (re)build the chroot. A
+# binary-only re-spin reuses the existing chroot, so skip these.
 if [ "$STAGE" != "binary" ]; then
-    # Locate the Electron unpacked app dir if not given
-    if [ -z "$APP_DIR" ]; then
-        for c in \
-            "$REPO_ROOT/dist/linux-unpacked" \
-            "$REPO_ROOT/linux-unpacked" \
-            "$HOME/hifi-build/dist/linux-unpacked" \
-            /root/hifi-build/dist/linux-unpacked ; do
-            [ -x "$c/hifi-media-player" ] && APP_DIR="$c" && break
-        done
-    fi
-    [ -n "$APP_DIR" ] && [ -x "$APP_DIR/hifi-media-player" ] \
-        || die "Electron app not found. Pass --app-dir /path/to/linux-unpacked (must contain ./hifi-media-player)."
-    log "Using Electron app from: $APP_DIR"
-
     [ -f "$REPO_ROOT/api_server.py" ]      || die "Missing $REPO_ROOT/api_server.py"
     [ -f "$REPO_ROOT/vu_meter_daemon.py" ] || die "Missing $REPO_ROOT/vu_meter_daemon.py"
     [ -f "$REPO_ROOT/sources_server.py" ]  || die "Missing $REPO_ROOT/sources_server.py"
@@ -156,10 +140,10 @@ if [ "$STAGE" = "binary" ]; then
     log "Skipping chroot payload injection (binary-only re-spin)."
 else
 
-log "Injecting Electron app → includes.chroot/opt/hifi-media-player"
-APP_DEST="$CONFIG/includes.chroot/opt/hifi-media-player"
-rm -rf "$APP_DEST"; mkdir -p "$APP_DEST"
-cp -a "$APP_DIR/." "$APP_DEST/"
+# The Electron app is no longer built nor shipped (removed from the
+# repository on 2026-10-02): /opt/hifi-media-player stays empty in new images.
+# A legacy install that still runs it keeps what it has.
+rm -rf "$CONFIG/includes.chroot/opt/hifi-media-player"
 
 # Seed the installed UI version (baseline for OTA update comparison). Default to
 # the version in package.json unless overridden with --app-version.
@@ -167,21 +151,17 @@ if [ -z "$APP_VERSION" ] && [ -f "$REPO_ROOT/package.json" ]; then
     APP_VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$REPO_ROOT/package.json" | head -n1)"
 fi
 [ -n "$APP_VERSION" ] || APP_VERSION="unknown"
-printf '%s\n' "$APP_VERSION" > "$APP_DEST/UI_VERSION"
-# 🚨 Da 2.5.24 la versione dell'interfaccia sta anche fuori dalle due cartelle
-# (Qt ed Electron), così vale per entrambe e sopravvive al passaggio dall'una
-# all'altra — è quella che legge l'aggiornatore. La copia qui sopra resta per
-# gli aggiornatori più vecchi.
+# 🚨 Da 2.5.24 la versione dell'interfaccia sta fuori dalla cartella del
+# programma: è quella che legge l'aggiornatore.
 mkdir -p "$CONFIG/includes.chroot/etc/hifi-player"
 printf '%s\n' "$APP_VERSION" > "$CONFIG/includes.chroot/etc/hifi-player/UI_VERSION"
 log "Seeded UI_VERSION = $APP_VERSION"
 
-# ── seconda interfaccia (Qt), quella predefinita da 2.5.24 ──────────
+# ── l'interfaccia Qt, l'unica da 2.5.24 ─────────────────────────────
 # La costruisce native-ui-qt/ci/build-payload.sh (in CI è un lavoro a parte,
-# perché serve docker); qui viene solo copiata dentro l'immagine. Se manca,
-# l'immagine parte con Electron: è l'hook 0400 a scegliere in base ai file
-# presenti, così non c'è modo di ritrovarsi con un motore attivo senza il
-# programma da avviare (schermo nero).
+# perché serve docker); qui viene solo copiata dentro l'immagine. Senza di
+# lei non si va avanti: un'immagine senza programma da avviare sarebbe uno
+# schermo nero (l'hook 0400 abilita hifi-qt.service solo se la trova).
 QT_DEST="$CONFIG/includes.chroot/opt/hifi-qt"
 if [ -z "$QT_DIR" ]; then
     for c in "$REPO_ROOT/qtui" "$QT_DEST"; do
@@ -198,7 +178,7 @@ if [ -n "$QT_DIR" ] && [ -x "$QT_DIR/hifi-qt" ]; then
     if [ -f "$QT_DEST/hifi-media-player" ]; then chmod 755 "$QT_DEST/hifi-media-player"; fi
     printf '%s\n' "$APP_VERSION" > "$QT_DEST/UI_VERSION"
 else
-    log "Qt UI payload not found — the image will boot the Electron UI"
+    die "Qt UI payload not found: build it with native-ui-qt/ci/build-payload.sh and pass --qt-dir"
 fi
 
 log "Injecting canonical kiosk X session → includes.chroot/home/hifi/.xsession"
@@ -499,8 +479,8 @@ if [ "$STAGE" != "binary" ]; then
     # No debian-installer at all: this is a live-only ISO. Both boot menu
     # entries ("Install Osmium Sound" and "Try Osmium Sound") boot the SAME
     # live kernel/initrd/squashfs — they differ only by a kernel parameter
-    # (hifi.installer=1) that the Electron app reads at startup to decide
-    # whether to show the installer UI or the normal kiosk UI. The actual
+    # (hifi.installer=1) that the on-screen interface reads at startup to
+    # decide whether to show the installer UI or the normal kiosk UI. The actual
     # disk installation (partition/format/copy/bootloader) is driven by
     # hifi-disk-install.sh from inside that live session, not by d-i.
     # See config/hooks/normal/0500-brand-boot.hook.binary for the boot menu

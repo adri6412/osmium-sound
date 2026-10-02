@@ -66,8 +66,7 @@ for m in firetv g20s xiaomi; do
     test -s "$QT/assets/remotes/$m-$l.jpg" || { echo "::error::remote key map $m-$l missing"; exit 1; }
   done
 done
-# the status plate under the cover (V3 bis, without DSP): Qt-only artwork.
-# src/assets/ledbar keeps the old plate for the Electron app the ISO still builds.
+# the status plate under the cover (V3 bis, without DSP)
 cp native-ui-qt/assets/ledbar/*.png "$QT/assets/"
 test -s "$QT/assets/led-bar-base.png" || { echo "::error::status plate artwork missing"; exit 1; }
 docker run --rm -e QT="$QT" -v "$PWD:/w" -w /w debian:trixie bash -eu -c '

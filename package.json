@@ -1,68 +1,7 @@
 {
   "name": "hifi-media-player",
   "version": "2.5.25",
-  "description": "Touchscreen-friendly hi-fi media player for DietPi",
-  "main": "main/main.js",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "electron": "electron .",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "package": "npm run build && electron-builder"
-  },
-  "keywords": [
-    "media-player",
-    "electron",
-    "hifi",
-    "touchscreen"
-  ],
-  "author": "HiFi Audio <admin@hifiaudio.local>",
-  "license": "AGPL-3.0-only",
-  "dependencies": {
-    "framer-motion": "^13.0.0",
-    "lucide-react": "^0.294.0",
-    "qrcode.react": "^4.2.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-use-websocket": "^4.13.0",
-    "simple-keyboard": "^3.8.87"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.16",
-    "concurrently": "^10.0.4",
-    "electron": "^43.3.0",
-    "electron-builder": "^26.15.3",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "playwright": "^1.58.2",
-    "postcss": "^8.5.26",
-    "tailwindcss": "^3.3.6",
-    "vite": "^6.4.3",
-    "wait-on": "^7.2.0"
-  },
-  "overrides": {
-    "brace-expansion": "^5.0.8"
-  },
-  "build": {
-    "appId": "com.hifi.mediaplayer",
-    "productName": "Osmium Sound",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "main/**/*",
-      "renderer-dist/**/*"
-    ],
-    "linux": {
-      "target": [
-        "deb"
-      ],
-      "executableName": "hifi-media-player",
-      "category": "Audio",
-      "maintainer": "HiFi Audio <admin@hifiaudio.local>"
-    }
-  }
+  "description": "Osmium Sound. Only the version lives here: the build workflows and distro/build-distro.sh read it for the on-screen interface and the OTA bundles. The on-screen interface is native-ui-qt/, the web admin admin-webui/.",
+  "private": true,
+  "license": "AGPL-3.0-only"
 }

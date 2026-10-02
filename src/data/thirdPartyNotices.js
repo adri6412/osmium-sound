@@ -106,18 +106,6 @@ export const thirdPartyNotices = [
     ]
   },
   {
-    section: 'Earlier Electron Kiosk (npm)',
-    entries: [
-      { name: 'React, react-dom', license: 'MIT' },
-      { name: 'react-use-websocket', license: 'MIT' },
-      { name: 'qrcode.react', license: 'MIT' },
-      { name: 'framer-motion', license: 'MIT' },
-      { name: 'lucide-react', license: 'ISC' },
-      { name: 'simple-keyboard', license: 'MIT' },
-      { name: 'Electron', license: 'MIT' }
-    ]
-  },
-  {
     section: 'Python Service Dependencies',
     entries: [
       { name: 'Flask', license: 'BSD-3-Clause', notes: 'Web framework for API and settings server.' },

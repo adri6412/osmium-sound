@@ -1255,7 +1255,7 @@ class ServiceTests(unittest.TestCase):
 
         def fake_wiki(ctx, url):
             calls.append(url)
-            return fixture('wikidata-Q150901.json') if 'wikidata.org' in url else fixture('wikipedia-it-dsotm.json')
+            return fixture('wikidata-Q150901.json') if url.startswith(hm.WIKIDATA_API) else fixture('wikipedia-it-dsotm.json')
         self.svc._wiki = fake_wiki
         self.svc._job_about(hm._Ctx(self.svc, hm.PRIO_INTERACTIVE), 'Q150901', 'it')
         about, status = self.svc._about('Q150901', 'it', hm.PRIO_INTERACTIVE)

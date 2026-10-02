@@ -220,6 +220,18 @@ def _oserror_detail(e):
         return "error"
 
 
+def _exc_detail(e):
+    """What a failed call may say about itself to a client: the errno's text
+    for a filesystem error, the status for an HTTP one, else just the kind.
+    Never the exception's own string, which can carry paths and internals."""
+    if isinstance(e, OSError) and getattr(e, "errno", None):
+        return _oserror_detail(e)
+    code = getattr(e, "code", None)
+    if isinstance(code, int):
+        return f"HTTP {code}"
+    return type(e).__name__
+
+
 def _run(cmd, timeout=30):
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
@@ -6847,17 +6859,23 @@ def _cd_settings():
 
 
 def _cd_target_root(path):
-    """(mountpoint, source) of the writable source `path` sits in, or
-    (None, None): a destination is only ever a folder inside an adopted
-    internal or USB disk, or a network share mounted read-write."""
+    """(mountpoint, source, real path) of the writable source `path` sits in,
+    or (None, None, None): a destination is only ever a folder inside an
+    adopted internal or USB disk, or a network share mounted read-write. The
+    real path handed back is the one to use from here on: it is the resolved
+    one, checked to be under the mountpoint."""
     if not path:
-        return None, None
+        return None, None, None
     real = os.path.realpath(path)
     for src in _rip_writable_sources():
         mp = os.path.realpath(src.get("mountpoint") or "")
-        if mp and (real == mp or real.startswith(mp + os.sep)):
-            return mp, src
-    return None, None
+        if not mp:
+            continue
+        if real == mp:
+            return mp, src, mp
+        if real.startswith(mp + os.sep):
+            return mp, src, real
+    return None, None, None
 
 
 def _cd_default_target(settings=None):
@@ -6865,7 +6883,7 @@ def _cd_default_target(settings=None):
     source_id}; None when unset, unmounted or not writable."""
     s = settings or _cd_settings()
     path = s.get("target") or ""
-    mp, src = _cd_target_root(path)
+    mp, src, _real = _cd_target_root(path)
     if not mp or not os.path.isdir(path) or not os.access(path, os.W_OK):
         return None
     return {"path": path, "name": path, "source_id": src.get("id")}
@@ -6883,10 +6901,10 @@ def _cd_start_rip(data, toc, auto=False):
     default = _cd_default_target(settings)
     if target:
         # a folder picked in the rip page's browser: inside a writable source
-        mp, _src = _cd_target_root(target)
-        if not mp or not os.path.isdir(target) or not os.access(target, os.W_OK):
+        mp, _src, real = _cd_target_root(target)
+        if not mp or not os.path.isdir(real) or not os.access(real, os.W_OK):
             return _err("msg.cdTargetOutside", 400)
-        root = target
+        root = real
     elif source_id in ("", "__default__") and default:
         root = default["path"]
     else:
@@ -7012,15 +7030,15 @@ def api_cd_settings():
         except hcd.InvalidField as e:
             return _err("msg.cdInvalidValue", 400, field=e.field)
         if settings["target"]:
-            mp, _src = _cd_target_root(settings["target"])
+            mp, _src, real = _cd_target_root(settings["target"])
             if not mp:
                 return _err("msg.cdTargetOutside", 400)
-            if not os.path.isdir(settings["target"]):
+            if not os.path.isdir(real):
                 return _err("msg.folderMissing", 400, path=settings["target"])
         try:
             settings = hcd.save(settings, CDRIP_CONF)
         except OSError as e:
-            return jsonify({"success": False, "message": str(e)}), 500
+            return jsonify({"success": False, "message": _oserror_detail(e)}), 500
     return jsonify({
         "success": True,
         "settings": settings,
@@ -7048,7 +7066,7 @@ def api_cd_offset_lookup():
     try:
         found = hcd.lookup_offset(drive.get("vendor"), drive.get("model"))
     except Exception as e:
-        return _err("msg.cdOffsetLookupFailed", 502, err=str(e))
+        return _err("msg.cdOffsetLookupFailed", 502, err=_exc_detail(e))
     if not found.get("found"):
         return _err("msg.cdOffsetNotFound", 404, drive=drive.get("label") or drive.get("node"))
     settings = hcd.save(hcd.set_fields(_cd_settings(), {"offset": int(found["offset"])}), CDRIP_CONF)

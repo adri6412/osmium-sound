@@ -4025,6 +4025,18 @@ VU_STYLE_DEFAULT = 'classic'
 VU_STORE_DIR = os.environ.get('HIFI_VU_STORE_DIR', '/var/lib/hifi-player/vu-skins')
 _VU_STYLE_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,40}$')
 
+
+def _inside(root, *parts):
+    """The real path of root/parts, only while it stays inside root (a
+    symlink or a stray `..` would take it out): None otherwise. The ids are
+    already checked against _VU_STYLE_RE; this is the check the filesystem
+    itself answers to."""
+    base = os.path.realpath(root)
+    p = os.path.realpath(os.path.join(base, *parts))
+    if p.startswith(base + os.sep):
+        return p
+    return None
+
 def list_vu_styles():
     """The installed skins, [{id, name:{en,it}}], in their declared order
     (classic first): the ones the interface ships, then the ones downloaded
@@ -4647,8 +4659,11 @@ def vu_store_remove(sid):
         if _vu_store['jobs'].get(sid, {}).get('state') in ('downloading', 'installing'):
             return {'success': False, **_vu_msg('vuStore.busy')}
         _vu_store['jobs'].pop(sid, None)
+    target = _inside(VU_STORE_DIR, sid)
+    if not target:
+        return {'success': False, **_vu_msg('vuStore.notInstalled')}
     try:
-        shutil.rmtree(os.path.join(VU_STORE_DIR, sid))
+        shutil.rmtree(target)
     except OSError:
         log.exception("vu store: removing %s failed", sid)
         return {'success': False, **_vu_msg('vuStore.removeFailed')}
@@ -5120,8 +5135,11 @@ def anim_store_remove(aid):
         if _anim_store['jobs'].get(aid, {}).get('state') in ('downloading', 'installing'):
             return {'success': False, **_anim_msg('animStore.busy')}
         _anim_store['jobs'].pop(aid, None)
+    target = _inside(ANIM_STORE_DIR, aid)
+    if not target:
+        return {'success': False, **_anim_msg('animStore.notInstalled')}
     try:
-        shutil.rmtree(os.path.join(ANIM_STORE_DIR, aid))
+        shutil.rmtree(target)
     except OSError:
         log.exception("anim store: removing %s failed", aid)
         return {'success': False, **_anim_msg('animStore.removeFailed')}
@@ -9570,10 +9588,14 @@ def api_vu_skin_file(sid, name):
     if not _VU_STYLE_RE.match(sid) or not _VU_SKIN_FILE_RE.match(name):
         return jsonify({'success': False}), 404
     for base in (VU_SKINS_DIR, VU_STORE_DIR):
-        if not os.path.isfile(os.path.join(base, sid, 'skin.json')):
+        skin = _inside(base, sid, 'skin.json')
+        if not skin or not os.path.isfile(skin):
             continue
+        path = _inside(base, sid, name)
+        if not path:
+            break
         try:
-            with open(os.path.join(base, sid, name), 'rb') as f:
+            with open(path, 'rb') as f:
                 data = f.read()
         except OSError:
             break

@@ -69,7 +69,7 @@ jobs:
 
   # The system image that the installer writes into slot A. Built in its own
   # chroot (trixie, privileged) exactly like the OTA one: it CANNOT be carved
-  # out of the ISO's live filesystem, which keeps live-boot and Electron and is
+  # out of the ISO's live filesystem, which keeps live-boot and is
   # a different system. --no-bundle stops at the squashfs, so this job needs no
   # signing keys — the installer copies those blocks straight into the slot.
   image:
@@ -109,13 +109,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
-      - name: Build renderer + unpacked Electron app
-        run: |
-          npm run build
-          npx electron-builder --linux dir
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cache-dependency-path: admin-webui/package-lock.json
       - uses: actions/download-artifact@v8
         with:
           name: qt-payload
@@ -134,7 +128,7 @@ jobs:
           chmod +x distro/build-distro.sh distro/build-image.sh
           cd distro
           ./build-distro.sh --stage image --suite trixie --no-bundle \
-            --app-dir "$GITHUB_WORKSPACE/dist/linux-unpacked" --qt-dir "$GITHUB_WORKSPACE/qtui" \
+            --qt-dir "$GITHUB_WORKSPACE/qtui" \
             --app-version "${INPUT_TAG#v}"
           ls -lh /mnt/image-out
       - uses: actions/upload-artifact@v4
@@ -180,20 +174,12 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
+        # for the web admin's build; the root has no npm project any more
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build renderer + unpacked Electron app
-        run: |
-          npm run build
-          npx electron-builder --linux dir
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cache-dependency-path: admin-webui/package-lock.json
 
       - name: Fetch the Qt interface built by the qt-payload job
         uses: actions/download-artifact@v8
@@ -240,9 +226,8 @@ jobs:
       - name: Build installer ISO (live-build, as root)
         run: |
           set -euo pipefail
-          ARGS="--app-dir $GITHUB_WORKSPACE/dist/linux-unpacked --app-version ${INPUT_TAG#v} --suite $INPUT_SUITE"
-          # l'interfaccia Qt e' quella predefinita da 2.5.24: senza di lei
-          # l'immagine partirebbe con Electron, quindi qui si pretende
+          ARGS="--app-version ${INPUT_TAG#v} --suite $INPUT_SUITE"
+          # the Qt interface is the only one: build-distro.sh refuses to go on without it
           ARGS="$ARGS --qt-dir $GITHUB_WORKSPACE/qtui"
           if [ -n "${INPUT_LYRION_URL}" ]; then
             ARGS="$ARGS --lyrion-url ${INPUT_LYRION_URL}"
