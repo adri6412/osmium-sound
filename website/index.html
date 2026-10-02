@@ -536,6 +536,7 @@
       border-radius: 10px; padding: 0.9rem 1.2rem; text-align: left;
     }
     .install-note strong { color: var(--accent); }
+    .bios-note { max-width: 760px; margin: 1.25rem auto 0; text-align: left; }
     .install-note a { color: var(--accent); font-weight: 600; text-decoration: underline; }
     .install-note a:hover { text-decoration: none; }
     /* Collapsed boxes: install issues, returning beta testers. */
@@ -669,6 +670,8 @@
       .play-qr { flex-direction: column; text-align: center; }
     }
     /* The hero pill that points at the app on Google Play is a link. */
+    .pill-new { background: var(--accent-dim); }
+    .pill-new strong { color: var(--accent); }
     a.pill { text-decoration: none; border-color: rgba(245,184,32,0.45); transition: border-color 0.2s, background 0.2s; }
     a.pill:hover { border-color: var(--accent); background: var(--accent-dim); }
 
@@ -861,6 +864,7 @@
     </a>
   </div>
   <div class="hero-pills">
+    <a class="pill pill-new" href="#hardware" data-en="&lt;strong&gt;New:&lt;/strong&gt; older PCs with BIOS work too" data-it="&lt;strong&gt;Novità:&lt;/strong&gt; funziona anche sui PC con BIOS"><strong>New:</strong> older PCs with BIOS work too</a>
     <span class="pill"><strong>x86</strong> · Debian</span>
     <span class="pill"><strong>FLAC · DSD · 192kHz</strong></span>
     <span class="pill"><strong>Deezer · Qobuz · TIDAL · Spotify</strong></span>
@@ -903,13 +907,14 @@
   <div class="centered">
     <div class="section-label" data-en="Hardware requirements" data-it="Requisiti hardware">Hardware requirements</div>
     <h2 class="section-title" data-en="What you need" data-it="Cosa ti serve">What you need</h2>
-    <p class="section-desc" data-en="No high-end hardware needed: Osmium Sound runs well on inexpensive or recycled mini PCs. It needs UEFI firmware: every PC sold with Windows 8 or newer has it, and almost every PC built from 2015 onwards. Details in the &lt;a href=&quot;manual.html#en-requirements&quot; target=&quot;_blank&quot;&gt;manual&lt;/a&gt;." data-it="Non serve un dispositivo di fascia alta: Osmium Sound gira bene su mini PC economici o riciclati. Serve il firmware UEFI: ce l&#x27;hanno tutti i PC venduti con Windows 8 o successivo e quasi tutti quelli prodotti dal 2015. I dettagli sono nel &lt;a href=&quot;manual.html#it-requisiti&quot; target=&quot;_blank&quot;&gt;manuale&lt;/a&gt;.">No high-end hardware needed: Osmium Sound runs well on inexpensive or recycled mini PCs. It needs UEFI firmware: every PC sold with Windows 8 or newer has it, and almost every PC built from 2015 onwards. Details in the <a href="manual.html#en-requirements" target="_blank">manual</a>.</p>
+    <p class="section-desc" data-en="No high-end hardware needed: Osmium Sound runs well on inexpensive or recycled mini PCs. Details in the &lt;a href=&quot;manual.html#en-requirements&quot; target=&quot;_blank&quot;&gt;manual&lt;/a&gt;." data-it="Non serve un dispositivo di fascia alta: Osmium Sound gira bene su mini PC economici o riciclati. I dettagli sono nel &lt;a href=&quot;manual.html#it-requisiti&quot; target=&quot;_blank&quot;&gt;manuale&lt;/a&gt;.">No high-end hardware needed: Osmium Sound runs well on inexpensive or recycled mini PCs. Details in the <a href="manual.html#en-requirements" target="_blank">manual</a>.</p>
+    <p class="install-note bios-note" data-en="&lt;strong&gt;New: UEFI is no longer a requirement.&lt;/strong&gt; From version 2.5.25 Osmium Sound installs and starts on PCs with UEFI and also on older PCs with a traditional BIOS, so even a PC from before 2015 can become your music player." data-it="&lt;strong&gt;Novità: l&#x27;UEFI non è più un requisito.&lt;/strong&gt; Dalla versione 2.5.25 Osmium Sound si installa e parte sui PC con UEFI e anche sui PC più vecchi con il BIOS tradizionale: anche un PC di prima del 2015 può diventare il tuo lettore musicale."><strong>New: UEFI is no longer a requirement.</strong> From version 2.5.25 Osmium Sound installs and starts on PCs with UEFI and also on older PCs with a traditional BIOS, so even a PC from before 2015 can become your music player.</p>
   </div>
   <div class="specs-inner req-box">
     <div class="specs-group">
       <h4 data-en="Components" data-it="Componenti">Components</h4>
       <table class="specs-table">
-        <tr><td data-en="Computer" data-it="Computer">Computer</td><td data-en="x86-64 (64-bit) mini PC with &lt;strong&gt;UEFI firmware — mandatory&lt;/strong&gt;. Legacy BIOS-only machines are not supported." data-it="Mini PC x86-64 (64 bit) con firmware &lt;strong&gt;UEFI — obbligatorio&lt;/strong&gt;. Le macchine con solo BIOS legacy non sono supportate.">x86-64 (64-bit) mini PC with <strong>UEFI firmware — mandatory</strong>. Legacy BIOS-only machines are not supported.</td></tr>
+        <tr><td data-en="Computer" data-it="Computer">Computer</td><td data-en="x86-64 (64-bit) mini PC, with &lt;strong&gt;UEFI or with a traditional BIOS&lt;/strong&gt;: both work from version 2.5.25." data-it="Mini PC x86-64 (64 bit), con &lt;strong&gt;UEFI oppure con il BIOS tradizionale&lt;/strong&gt;: dalla versione 2.5.25 vanno bene entrambi.">x86-64 (64-bit) mini PC, with <strong>UEFI or with a traditional BIOS</strong>: both work from version 2.5.25.</td></tr>
         <tr><td data-en="Storage" data-it="Storage">Storage</td><td data-en="Internal disk/SSD to install onto (16&amp;nbsp;GB recommended, 8&amp;nbsp;GB minimum)" data-it="Disco/SSD interno per l&#x27;installazione (16&amp;nbsp;GB consigliati, 8&amp;nbsp;GB minimo)">Internal disk/SSD to install onto (16&nbsp;GB recommended, 8&nbsp;GB minimum)</td></tr>
         <tr><td data-en="USB stick" data-it="Chiavetta USB">USB stick</td><td data-en="8&amp;nbsp;GB or larger, needed only for the initial install" data-it="8&amp;nbsp;GB o superiore, solo per l&#x27;installazione iniziale">8&nbsp;GB or larger, needed only for the initial install</td></tr>
         <tr><td data-en="Screen (optional)" data-it="Schermo (opzionale)">Screen (optional)</td><td data-en="Touchscreen recommended for “with screen” mode. Supported resolutions are the ones in Settings: Automatic, 1280×720, 1920×1080 or the screen’s native resolution. Not needed in headless or server-only mode." data-it="Touchscreen consigliato per la modalità “con schermo”. Le risoluzioni supportate sono quelle nelle Impostazioni: Automatica, 1280×720, 1920×1080 o la risoluzione nativa dello schermo. Non necessario in modalità headless o solo server.">Touchscreen recommended for “with screen” mode. Supported resolutions are the ones in Settings: Automatic, 1280×720, 1920×1080 or the screen’s native resolution. Not needed in headless or server-only mode.</td></tr>
@@ -919,12 +924,12 @@
       </table>
     </div>
     <div class="specs-group">
-      <h4 data-en="Processors that always come with UEFI" data-it="Processori che hanno sempre l&#x27;UEFI">Processors that always come with UEFI</h4>
+      <h4 data-en="Processors found in most mini PCs" data-it="I processori dei mini PC più diffusi">Processors found in most mini PCs</h4>
       <table class="specs-table">
         <tr><td data-en="Intel Core" data-it="Intel Core">Intel Core</td><td data-en="i3/i5/i7/i9 from the 6th generation “Skylake” (2015) onwards, Core Ultra too" data-it="i3/i5/i7/i9 dalla 6ª generazione “Skylake” (2015) in poi, anche Core Ultra">i3/i5/i7/i9 from the 6th generation “Skylake” (2015) onwards, Core Ultra too</td></tr>
         <tr><td data-en="Intel Celeron / Pentium / Atom / N-series" data-it="Intel Celeron / Pentium / Atom / serie N">Intel Celeron / Pentium / Atom / N-series</td><td data-en="“Braswell” (2015), “Apollo Lake” (2016), “Gemini Lake” (2017–2019), “Jasper Lake” (2021), “Alder Lake-N” (N95/N100/N200/i3-N305, 2023), “Twin Lake” (N150, 2025) — the chips found in most mini PCs" data-it="“Braswell” (2015), “Apollo Lake” (2016), “Gemini Lake” (2017–2019), “Jasper Lake” (2021), “Alder Lake-N” (N95/N100/N200/i3-N305, 2023), “Twin Lake” (N150, 2025) — i chip della maggior parte dei mini PC">“Braswell” (2015), “Apollo Lake” (2016), “Gemini Lake” (2017–2019), “Jasper Lake” (2021), “Alder Lake-N” (N95/N100/N200/i3-N305, 2023), “Twin Lake” (N150, 2025) — the chips found in most mini PCs</td></tr>
         <tr><td data-en="AMD" data-it="AMD">AMD</td><td data-en="Any Ryzen (2017 onwards, every generation) or Athlon on the AM4 socket; A-series APUs “Carrizo” (2015) and “Bristol Ridge” (2016)" data-it="Qualsiasi Ryzen (dal 2017, tutte le generazioni) o Athlon su socket AM4; APU serie A “Carrizo” (2015) e “Bristol Ridge” (2016)">Any Ryzen (2017 onwards, every generation) or Athlon on the AM4 socket; A-series APUs “Carrizo” (2015) and “Bristol Ridge” (2016)</td></tr>
-        <tr><td data-en="Older PCs" data-it="PC più vecchi">Older PCs</td><td data-en="Many have UEFI too: they may work if their firmware offers a UEFI mode (any PC sold with Windows 8 or newer has it), but we don&#x27;t test them" data-it="Molti hanno già l&#x27;UEFI: possono funzionare se il firmware offre la modalità UEFI (ce l&#x27;ha qualsiasi PC venduto con Windows 8 o successivo), ma non li testiamo">Many have UEFI too: they may work if their firmware offers a UEFI mode (any PC sold with Windows 8 or newer has it), but we don't test them</td></tr>
+        <tr><td data-en="Older PCs" data-it="PC più vecchi">Older PCs</td><td data-en="From version 2.5.25 they work too, even without UEFI: the installer also starts in BIOS mode" data-it="Dalla versione 2.5.25 funzionano anche loro, pure senza UEFI: l&#x27;installer parte anche in modalità BIOS">From version 2.5.25 they work too, even without UEFI: the installer also starts in BIOS mode</td></tr>
         <tr><td data-en="Avoid" data-it="Da evitare">Avoid</td><td data-en="Atom “Bay Trail”/“Cherry Trail” tablets and HDMI sticks (2013–2015): many have a 32-bit UEFI that cannot boot the 64-bit image" data-it="Tablet e “stick” HDMI con Atom “Bay Trail”/“Cherry Trail” (2013–2015): molti hanno un UEFI a 32 bit che non può avviare l&#x27;immagine a 64 bit">Atom “Bay Trail”/“Cherry Trail” tablets and HDMI sticks (2013–2015): many have a 32-bit UEFI that cannot boot the 64-bit image</td></tr>
       </table>
     </div>
@@ -938,7 +943,7 @@
     <h2 class="section-title" data-en="Download &amp; install" data-it="Scarica e installa">Download &amp; install</h2>
     <p class="section-desc" data-en="Flash one ISO image to a USB stick for the first install. From then on, every new version arrives over the air: it is installed next to the current one while the device keeps playing, and if it does not start properly the device goes back to the previous one by itself." data-it="Flasha una sola immagine ISO su una chiavetta USB per la prima installazione. Da lì in poi ogni nuova versione arriva via OTA: viene installata accanto a quella attuale mentre il dispositivo continua a suonare, e se non parte correttamente il dispositivo torna da solo alla versione precedente.">Flash one ISO image to a USB stick for the first install. From then on, every new version arrives over the air: it is installed next to the current one while the device keeps playing, and if it does not start properly the device goes back to the previous one by itself.</p>
 
-    <p class="install-req" data-en="Runs on standard x86 PCs with &lt;strong&gt;UEFI firmware&lt;/strong&gt;: every PC sold with Windows 8 or newer has it, and almost every PC built from 2015 onwards. Legacy BIOS-only machines and Chromebooks are not supported. &lt;a href=&quot;#hardware&quot;&gt;See the requirements&lt;/a&gt;." data-it="Funziona sui PC x86 standard con &lt;strong&gt;firmware UEFI&lt;/strong&gt;: ce l&#x27;hanno tutti i PC venduti con Windows 8 o successivo e quasi tutti quelli prodotti dal 2015. Le macchine con solo BIOS legacy e i Chromebook non sono supportati. &lt;a href=&quot;#hardware&quot;&gt;Vedi i requisiti&lt;/a&gt;.">Runs on standard x86 PCs with <strong>UEFI firmware</strong>: every PC sold with Windows 8 or newer has it, and almost every PC built from 2015 onwards. Legacy BIOS-only machines and Chromebooks are not supported. <a href="#hardware">See the requirements</a>.</p>
+    <p class="install-req" data-en="Runs on standard x86 PCs, &lt;strong&gt;with UEFI or with a traditional BIOS&lt;/strong&gt;: from version 2.5.25 older PCs without UEFI work too. Chromebooks are not supported. &lt;a href=&quot;#hardware&quot;&gt;See the requirements&lt;/a&gt;." data-it="Funziona sui PC x86 standard, &lt;strong&gt;con UEFI oppure con il BIOS tradizionale&lt;/strong&gt;: dalla versione 2.5.25 vanno bene anche i PC più vecchi senza UEFI. I Chromebook non sono supportati. &lt;a href=&quot;#hardware&quot;&gt;Vedi i requisiti&lt;/a&gt;.">Runs on standard x86 PCs, <strong>with UEFI or with a traditional BIOS</strong>: from version 2.5.25 older PCs without UEFI work too. Chromebooks are not supported. <a href="#hardware">See the requirements</a>.</p>
 
     <div class="flasher-block" data-flasher-version="1.0.1">
       <h3 data-en="The simplest way" data-it="Il modo più semplice">The simplest way</h3>
@@ -1027,8 +1032,8 @@
       <p data-en="&lt;strong&gt;Chromebooks&lt;/strong&gt; — their firmware is locked down by the manufacturer and refuses to boot anything else, unless you flash third-party modified firmware (not provided or endorsed by the manufacturer) and/or use drivers dedicated to that specific platform — neither of which this project provides or supports." data-it="&lt;strong&gt;Chromebook&lt;/strong&gt; — il loro firmware è bloccato dal produttore e impedisce l&#x27;avvio di qualsiasi altro sistema operativo, se non tramite un firmware modificato di terze parti (non fornito né avallato dal produttore) e/o driver dedicati a quella specifica piattaforma — che questo progetto non fornisce né supporta."><strong>Chromebooks</strong> — their firmware is locked down by the manufacturer and refuses to boot anything else, unless you flash third-party modified firmware (not provided or endorsed by the manufacturer) and/or use drivers dedicated to that specific platform — neither of which this project provides or supports.</p>
     </details>
 
-    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the installer asks which disk to install on before formatting it — nothing is wiped without confirmation (tested on UEFI; the ISO is only needed for the first install, every later version arrives automatically over the air)." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'installer chiede su quale disco installare prima di formattarlo — nulla viene cancellato senza conferma (testato su UEFI; la ISO serve solo per la prima installazione, tutte le versioni successive arrivano automaticamente via OTA).">
-      <strong>Note:</strong> the installer asks which disk to install on before formatting it — nothing is wiped without confirmation (tested on UEFI; the ISO is only needed for the first install, every later version arrives automatically over the air).
+    <p class="install-note" data-en="&lt;strong&gt;Note:&lt;/strong&gt; the installer asks which disk to install on before formatting it — nothing is wiped without confirmation (the ISO is only needed for the first install, every later version arrives automatically over the air)." data-it="&lt;strong&gt;Nota:&lt;/strong&gt; l'installer chiede su quale disco installare prima di formattarlo — nulla viene cancellato senza conferma (la ISO serve solo per la prima installazione, tutte le versioni successive arrivano automaticamente via OTA).">
+      <strong>Note:</strong> the installer asks which disk to install on before formatting it — nothing is wiped without confirmation (the ISO is only needed for the first install, every later version arrives automatically over the air).
     </p>
 
     <p class="install-note" data-en="&lt;strong&gt;Try it live:&lt;/strong&gt; pick &lt;strong&gt;Try Osmium Sound (no install)&lt;/strong&gt; at the boot menu to run the interface straight from the USB stick, nothing written to disk." data-it="&lt;strong&gt;Provala in live:&lt;/strong&gt; scegli &lt;strong&gt;Try Osmium Sound (no install)&lt;/strong&gt; nel menu di avvio per far partire l&#x27;interfaccia direttamente dalla chiavetta, senza scrivere nulla sul disco.">
@@ -1204,8 +1209,8 @@
     <div class="video-title" data-en="Watch it in action" data-it="Guardalo in azione">Watch it in action</div>
     <div class="video-frame">
       <button class="video-facade" id="videoFacade" aria-label="Play demo video">
-        <img src="https://i.ytimg.com/vi/SlzFc82tAqM/sddefault.jpg"
-             onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/SlzFc82tAqM/hqdefault.jpg';"
+        <img src="https://i.ytimg.com/vi/rjRoFLyGVNM/sddefault.jpg"
+             onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/rjRoFLyGVNM/hqdefault.jpg';"
              alt="" loading="lazy">
         <span class="video-play" aria-hidden="true">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -1587,7 +1592,7 @@
   if (videoFacade) {
     videoFacade.addEventListener('click', () => {
       const iframe = document.createElement('iframe');
-      iframe.src = 'https://www.youtube-nocookie.com/embed/JFMg-tU8ktE?si=1QWxR7pIUDRsxvCM?autoplay=1&modestbranding=1&rel=0&playsinline=1';
+      iframe.src = 'https://www.youtube-nocookie.com/embed/rjRoFLyGVNM?autoplay=1&modestbranding=1&rel=0&playsinline=1';
       iframe.title = 'Osmium Sound — Demo video';
       iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
       iframe.allowFullscreen = true;
