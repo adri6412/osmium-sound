@@ -86,7 +86,7 @@ Control Osmium Sound from your phone — browse the library, drive playback and 
 
 ## 📄 Licensing
 
-**The application code authored by this project** (the Qt/QML on-screen interface, the earlier Electron/React kiosk, Vue web admin, Python services, distro packaging, flasher, hardware designs) is released under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)** — see [`LICENSE`](LICENSE). The project is **dual-licensed**: if the AGPL doesn't fit your use case (e.g. a commercial product or service that can't publish its source), commercial licenses are available — write to **info@osmiumsound.it**. See [`LICENSING.md`](LICENSING.md) for details.
+**The application code authored by this project** (the Qt/QML on-screen interface, Vue web admin, Python services, distro packaging, flasher, hardware designs) is released under the **GNU Affero General Public License v3.0 only (AGPL-3.0-only)** — see [`LICENSE`](LICENSE). The project is **dual-licensed**: if the AGPL doesn't fit your use case (e.g. a commercial product or service that can't publish its source), commercial licenses are available — write to **info@osmiumsound.it**. See [`LICENSING.md`](LICENSING.md) for details.
 
 **Exception:** the Android companion app (`android-companion/`) remains under **Apache-2.0**, as it is a rebranded derivative of [android-squeezer](https://github.com/kaaholst/android-squeezer).
 

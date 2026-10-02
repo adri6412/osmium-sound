@@ -66,20 +66,6 @@ The interface on the device's screen is this project's own C++/QML code (AGPL-3.
 
 ---
 
-## Earlier Electron Kiosk (npm, `src/` and `main/`)
-
-Used on screen by installs that predate the A/B image layout; image-based installs ship the Qt interface only. All npm dependencies bundled in the Electron kiosk build are permissive open source licenses:
-
-- **React, react-dom** (MIT)
-- **react-use-websocket** (MIT)
-- **qrcode.react** (MIT)
-- **framer-motion** (MIT)
-- **lucide-react** (ISC)
-- **simple-keyboard** (MIT)
-- **Electron** (MIT)
-
-For a complete list with versions, see `package.json` and `package-lock.json`.
-
 ### Web admin (`admin-webui/`, served by `webui_server.py`)
 
 - **Vue 3, vue-router** (MIT)

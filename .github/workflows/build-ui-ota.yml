@@ -1,7 +1,7 @@
 name: Build HiFi Player OTA bundles (UI + system)
 
 # Builds two OTA payloads and publishes them as assets of the GitHub Release:
-#  • hifi-ui-<ver>.tar.gz     — the Electron UI (unpacked linux dir)
+#  • hifi-qtui-<ver>.tar.gz   — the Qt on-screen interface (/opt/hifi-qt)
 #  • hifi-system-<ver>.tar.gz — the custom system components (Python API/daemons,
 #                                helper scripts, systemd units)
 # The appliance's OTA updaters (Settings → Aggiornamenti) download these.
@@ -35,20 +35,13 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
+        # for the web admin's build and the payload script's node one-liners;
+        # the root has no npm project any more (the Electron kiosk is gone)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build renderer + unpacked Electron app
-        run: |
-          npm run build
-          npx electron-builder --linux dir
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cache-dependency-path: admin-webui/package-lock.json
 
       - name: Build web-admin (Vue) — shipped in the system bundle
         # Separate, self-contained Vue project (does not touch the Electron
@@ -559,13 +552,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
-      - name: Build renderer + unpacked Electron app
-        run: |
-          npm run build
-          npx electron-builder --linux dir
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cache-dependency-path: admin-webui/package-lock.json
       - uses: actions/download-artifact@v8
         with:
           name: qt-payload
@@ -591,7 +578,7 @@ jobs:
           chmod +x distro/build-distro.sh distro/build-image.sh
           cd distro
           ./build-distro.sh --stage image --suite trixie \
-            --app-dir "$GITHUB_WORKSPACE/dist/linux-unpacked" --qt-dir "$GITHUB_WORKSPACE/qtui" \
+            --qt-dir "$GITHUB_WORKSPACE/qtui" \
             --app-version "${INPUT_VERSION#v}"
           ls -lh /mnt/image-out
       - uses: actions/upload-artifact@v4

@@ -50,7 +50,7 @@ flowchart TB
 |---|---|---|
 | On-screen UI — C++ core | `native-ui-qt/src/` | `hifi-qt`, the touchscreen UI since v2.5.24: a Qt 6 Quick application that draws straight to the panel through Qt's eglfs platform on DRM/KMS — no X server, no Wayland compositor, no LightDM. `main.cpp` sets the video mode (`kmsmode.cpp`, from `/etc/hifi-player/ui-resolution`) and loads the QML; the objects it exposes are `Api` (async HTTP to the local services via `QNetworkAccessManager`, Lyrion JSON-RPC included), `Player` (Lyrion `status`/playerprefs polling and playback commands), `VuMeter` (WebSocket client of `vu_meter_daemon.py`, needle spring), `LibraryModel` (the browser lists), `I18n` and `Sys` (small files under `/etc/hifi-player`, physical-keyboard detection, pointer), plus the `Spring` and `QrCode` QML types. Only UI-local preferences (language, Now Playing view, update auto-check) are written directly; **system control goes through `api_server.py`**. Installed at `/opt/hifi-qt`, run by `hifi-qt.service`. Chosen over Electron for its footprint: on the reference mini PC, Now Playing with the VU meters at 720p measured about 3.3 W / ~175 MB RSS versus 4.9 W / ~653 MB. |
 | On-screen UI — QML | `native-ui-qt/qml/` | `Main.qml` scales the 1024x600 logical canvas to the real mode, `App.qml` stacks the screens and shared overlays: `MainScreen.qml` (mini player + `Browser.qml` library/radio/apps, `DiscoverTab.qml`), `NowPlaying.qml` (with `VuPanel.qml`, `NpAnimation.qml`, `LedBar.qml`, `Lyrics.qml`), `SettingsTab.qml` + `SettingsRows.qml`, `Wizard.qml` (first-boot setup and installer screens), `Dialogs.qml`, `VirtualKeyboard.qml`, `OtaOverlay.qml`, `BootIntro.qml`, `CdRip.qml`, `Screensaver.qml`, … Strings come from the same `src/i18n/locales/{en,it}.json` (copied to `/opt/hifi-qt/locales`), English default; the third-party notices from `third_party.json`, generated from `src/data/thirdPartyNotices.js`. |
-| Legacy Electron kiosk | `main/`, `src/` | The previous on-screen UI (Electron main process + React renderer). Image slots don't ship it; it survives only on legacy (pre-A/B) installs and is no longer updated — see [Legacy Electron kiosk](#legacy-electron-kiosk-pre-ab-installs). |
+| Shared interface data | `src/i18n/locales/`, `src/assets/intro.mp4`, `src/data/thirdPartyNotices.js` | The on-screen strings (en/it), the start clip and the third-party notices, read by `native-ui-qt/ci/build-payload.sh`. All that is left of the earlier Electron kiosk, removed on 2026-10-02 |
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
 | Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, Samba share config, audio-CD ripping, backup/restore (core logic shared via `hifi_backup.py`), and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Binds `0.0.0.0:8080` — LAN-reachable like the web admin, but every route is gated by a pairing token (see [Pairing & security](#pairing--security)), which is what lets the Android companion talk to it directly. |
 | Web admin / provisioning gateway | `webui_server.py` | The primary LAN-facing service (the other one is the pairing-gated sources API above): serves the Vue admin app (`admin-webui/`) behind a session, reverse-proxies a whitelisted subset of `api_server.py`/`sources_server.py` calls, and — while `/etc/hifi-player/provisioning-pending` exists — serves the first-boot setup portal (plus, in installer boot mode, a Wi-Fi hotspot and captive portal). Plain HTTP on `:80`, no TLS: a per-device self-signed cert made every browser show a "connection not private" click-through on first visit, which was worse UX than the plain-HTTP tradeoff. See [Provisioning & first boot](#provisioning--first-boot). |
@@ -1300,55 +1300,14 @@ stopped or hidden they go fully idle, never an infinite animation. Shadows and
 reflections are baked into the PNGs; with `live: false` they draw a still pose
 for the Settings previews.
 
-### Legacy Electron kiosk (pre-A/B installs)
+### The earlier Electron kiosk
 
-The Electron + React app (`main/`, `src/`, `package.json`) survives only on
-legacy single-root installs that have not switched `ui-engine` to `qt`, and
-it is no longer updated. There LightDM autologs the `hifi` user into the `hifi-kiosk`
-session, which is one of two interchangeable implementations of "start
-Electron fullscreen on the panel":
-
-- **Wayland** (`/usr/local/bin/hifi-kiosk-wayland` + `hifi-kiosk-launch`,
-  `hifi-kiosk-wayland.desktop`): a bare **labwc** (wlroots) compositor with
-  the kiosk window in direct scanout. Introduced by `apply.d/0049-wayland-kiosk.sh`
-  because on X11 two thirds of the GPU load was the X server itself — with
-  the UI-resolution scaling (`hifi-ui-resolution.sh`, RandR `--scale-from`)
-  Xorg had to recompose and rescale every frame. Measured on a Gemini Lake
-  iGPU: 1.74 W (X11 + scaling) → 0.59 W (Wayland), which matters on the
-  passively-cooled mini-PCs this targets.
-- **X11** (`~/.xsession`, `distro/os-update/files/xsession`): the previous
-  session, kept as the fallback. Xorg with modesetting/fbdev renders even in
-  software; wlroots refuses a software GLES2 renderer and XWayland then loses
-  glamor, so in a VM (VMware, VirtualBox, QEMU) the Wayland session comes up
-  as a black screen.
-
-`hifi-kiosk-session.service` (`kiosk-session-select`, `apply.d/0050`) therefore
-decides **at every boot**, before LightDM: `/etc/hifi-player/kiosk-session`
-(`wayland` | `x11`) wins if present; otherwise X11 when labwc is missing, when
-there is no `/dev/dri/card*`, when the DRM driver is a virtual one (vmwgfx,
-vboxvideo, qxl, bochs, virtio_gpu, simpledrm, …), or when a headless labwc
-probe can't get a hardware EGL context — Wayland only on a real GPU. The
-session files are the same in new images (`build-distro.sh` injects them) and
-on updated devices (the OS payload ships them), so the two paths never drift.
-`main/main.js` detects the compositor session (`isCompositorSession`) and asks
-for fullscreen itself, since under labwc no window manager will do it from the
-outside. The UI-resolution and refresh-rate settings apply in both sessions
-(`hifi-ui-resolution.sh` / `hifi-ui-refresh.sh` via `wlr-randr` or `xrandr`).
-
-Inside the app, `main/main.js` owns the window and renderer crash recovery and
-relaxes CSP only for the local Lyrion origin; the React renderer calls the
-same services as the Qt UI (`src/utils/api.js`, `src/utils/lyrionApi.js`,
-loopback `:8080`, the VU WebSocket). The only IPC is the minimal preload
-surface, for UI-local concerns:
-
-```javascript
-// main/preload.cjs
-window.electronAPI.setFrameRate(fps)                       // 60 during the boot intro, 30 otherwise (weak iGPU budget)
-window.electronAPI.showGlobalKeyboard() / hideGlobalKeyboard()
-window.electronAPI.onToggleSimpleKeyboard(cb) / removeToggleSimpleKeyboard(cb)
-window.electronAPI.getPhysicalKeyboard()                   // is a hardware keyboard attached? (hides the on-screen one)
-window.electronAPI.onPhysicalKeyboardChanged(cb) / removePhysicalKeyboardChanged(cb)
-```
+The Electron + React app that drew the screen before v2.5.24 was removed from
+the repository on 2026-10-02: nothing builds or ships it any more. A legacy
+single-root install that still runs it keeps what it has on disk, together
+with the LightDM session scripts (`hifi-kiosk-session.sh`, the labwc/X11
+launchers) that only it needs; the `ui-engine` setting and
+`hifi-display-mode.sh engine` still know the name `electron` for that reason.
 
 ## Image layout: A/B slots
 
@@ -1935,12 +1894,6 @@ QT_QPA_PLATFORM=xcb HIFI_WINDOW=1280x720 HIFI_HOST=<device-ip> \
   qtui/hifi-qt --assets qtui/assets --locales qtui/locales   # windowed on a desktop, against a real device's services
 python3 native-ui-qt/tools/mock-server.py           # or a fake device (Lyrion :9000, api :8000, sources :8080, VU :9001) — see native-ui-qt/tools/README.md
 
-npm install                                         # legacy Electron kiosk
-npm run electron:dev    # Vite + Electron with hot reload (kiosk)
-npm run build           # production renderer build → renderer-dist/
-npm run electron        # run the built app
-npm run package         # electron-builder distributable (dist/)
-
 (cd admin-webui && npm install && npm run dev)   # web admin with hot reload
 python3 webui_server.py                            # HIFI_WEBUI_PORT=8081 HIFI_PROVISION_FAKE=1 HIFI_WEBUI_STATE_DIR=/tmp/hifi HIFI_WEBUI_DIST=admin-webui/dist for a laptop
 
@@ -1956,7 +1909,7 @@ sh tests/test-ext-guardian.sh && sh tests/test-apt-shim.sh                      
 The Python services expect the appliance layout (root, `nmcli`, systemd,
 `/etc/hifi-player`) — for real end-to-end work use a test VM or a device and
 the offline dev installer (`hifi-install-<ver>.sh` on every Release) rather
-than running them on a workstation. `install-dietpi.sh` / `start-fullscreen.sh`
+than running them on a workstation. The old DietPi scripts
 are old developer conveniences for testing the Electron kiosk on a bare Debian box by
 hand — they are **not** how the appliance ships. The real production path is:
 flash the install ISO once, then let the OTA system above keep the device
