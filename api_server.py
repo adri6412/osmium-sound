@@ -1611,6 +1611,23 @@ def _wifi_join(ssid, password, dev, band=''):
     return r
 
 
+def wifi_saved():
+    """The Wi-Fi networks this player has saved (its NetworkManager Wi-Fi
+    profiles, named after their SSID), the one in use marked: what the
+    network pages list, each with its own Forget."""
+    active = set()
+    try:
+        r = _run(['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show', '--active'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if len(parts) >= 2 and parts[1] == '802-11-wireless':
+                active.add(parts[0])
+    except Exception:
+        pass
+    names = sorted(_connection_ids_for_device_type('wifi'), key=lambda n: (n not in active, n.lower()))
+    return {'networks': [{'ssid': n, 'in_use': n in active} for n in names]}
+
+
 def wifi_forget(ssid):
     """Drop the NetworkManager profile of a Wi-Fi network: the player leaves
     it now, if it is on it, and never joins it again by itself. Profiles are
@@ -9450,6 +9467,10 @@ def api_wifi_connect():
     data = request.get_json(silent=True) or {}
     return jsonify(wifi_connect(data.get('ssid'), data.get('password', ''),
                                 (data.get('band') or '').strip()))
+
+@app.route('/wifi_saved', methods=['GET'])
+def api_wifi_saved():
+    return jsonify(wifi_saved())
 
 @app.route('/wifi_forget', methods=['POST'])
 def api_wifi_forget():

@@ -174,10 +174,11 @@ function pickNet(n) {
 // What the kiosk's network page shows, read the same way: the interfaces
 // with their addresses (system_info), the connection in use
 // (network_status) and the subnet (network_info).
-const netIfaces = ref([]); const netSubnet = ref('');
+const netIfaces = ref([]); const netSubnet = ref(''); const wifiSaved = ref([]);
 async function loadNet(announce = false) {
   if (announce) say(t('settings.network.loading'));
-  const [r, i, m] = await Promise.all([api.sys('network_status'), api.sys('info'), api.sys('network_info')]);
+  const [r, i, m, w] = await Promise.all([api.sys('network_status'), api.sys('info'), api.sys('network_info'), api.sys('wifi_saved')]);
+  if (w.ok) wifiSaved.value = w.data.networks || [];
   if (r.ok) net.value = r.data;
   if (i.ok) netIfaces.value = (i.data.network_interfaces || []).map((f) => ({ name: String(f.name || ''), addr: String(f.address || ''), active: !!f.active, wifi: String(f.name || '').startsWith('w') }));
   if (m.ok) netSubnet.value = String(m.data.netmask || '');
@@ -190,8 +191,7 @@ async function scanWifi() {
 // Forget the network in use: the player leaves it now and never joins it
 // again by itself. Said plainly in the confirmation, because a browser
 // reaching this page over that Wi-Fi loses the player with it.
-async function forgetWifi() {
-  const s = net.value.ssid;
+async function forgetWifi(s) {
   if (!s || !confirm(t('settings.network.forgetConfirm', { ssid: s }))) return;
   netBusy.value = true; const r = await api.sysPost('wifi_forget', { ssid: s }); netBusy.value = false;
   const done = r.ok && r.data && r.data.success !== false;
@@ -1787,7 +1787,13 @@ onUnmounted(() => {
       <div class="row">
         <button class="secondary" :disabled="netBusy" @click="scanWifi">{{ t('settings.network.scanWifi') }}</button>
         <button class="secondary" :disabled="netBusy" @click="wired">{{ t('settings.network.useWired') }}</button>
-        <button v-if="net.type === 'wireless' && net.ssid" class="secondary" :disabled="netBusy" @click="forgetWifi">{{ t('settings.network.forget', { ssid: net.ssid }) }}</button>
+      </div>
+      <!-- the saved Wi-Fi networks, each with its Forget (also while on the cable) -->
+      <p class="sub" style="margin-top: 14px;">{{ t('settings.network.savedLabel') }}</p>
+      <p v-if="!wifiSaved.length" class="sub">{{ t('settings.network.savedNone') }}</p>
+      <div v-for="n in wifiSaved" :key="n.ssid" class="net between" style="cursor: default;">
+        <span>{{ n.ssid }} <span v-if="n.in_use" class="check">· {{ t('settings.network.inUse') }}</span></span>
+        <button class="secondary" :disabled="netBusy" @click="forgetWifi(n.ssid)">{{ t('settings.network.forgetShort') }}</button>
       </div>
       <div v-for="n in wifi" :key="n.ssid + '|' + (n.band || '')" class="net between" @click="pickNet(n)">
         <span>{{ n.ssid }}

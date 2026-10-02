@@ -1000,6 +1000,7 @@ _AUTH_ROUTES = {
     ('/api/system/wifi_scan', 'GET'): '/wifi_scan',
     ('/api/system/wifi_connect', 'POST'): '/wifi_connect',
     ('/api/system/wifi_forget', 'POST'): '/wifi_forget',
+    ('/api/system/wifi_saved', 'GET'): '/wifi_saved',
     ('/api/system/wired_dhcp', 'POST'): '/wired_dhcp',
     # Fixed (static) address for the active uplink — Settings.vue's Network
     # page. No provisioning counterpart on purpose: the first-setup wizard

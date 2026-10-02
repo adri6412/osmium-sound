@@ -215,6 +215,7 @@ Item {
         property string netType: ""; property string netSsid: ""; property string netIp: ""; property string netDev: ""; property string netSubnet: ""; property bool netConnected: false
         property var ifaces: []                                     // [{name,addr,wifi,active}]
         property var wifi: []                                       // [{ssid,security,signal,band}]
+        property var wifiSaved: []                                  // [{ssid,in_use}] — saved profiles
         property var upd: [{cur: "", latest: "", avail: false}, {cur: "", latest: "", avail: false}, {cur: "", latest: "", avail: false}]
         property bool updChecking: false; property bool updCheckFailed: false
         property string otaState: ""; property string otaMsg: ""; property int otaPct: 0
@@ -400,6 +401,7 @@ Item {
             get(api("/lyrion_update/status"), function(d) { lyrStatus = str(d, "message"); lyrPct = Number(d.percent || 0); lyrRunning = !!d.running })
             get(api("/network_status"), function(d) { netConnected = !!d.connected; netType = str(d, "type"); netSsid = str(d, "ssid"); netIp = str(d, "ip"); netDev = str(d, "device") })
             get(api("/network_info"), function(d) { netSubnet = str(d, "netmask") })
+            get(api("/wifi_saved"), function(d) { wifiSaved = (d.networks || []).map(function(n) { return { ssid: String(n.ssid || ""), in_use: !!n.in_use } }) })
             checkUpdates()
             get(api("/update/status"), function(d) { otaState = str(d, "state"); otaMsg = str(d, "message"); otaPct = Number(d.percent || 0) })
             get(src("/api/lms_skin"), function(d) { lmsSkin = str(d, "skin", "unset") })
@@ -1740,10 +1742,14 @@ Item {
         var ai = info(Tr.t("settings.network.activeLabel"), act); ai.mono = true; ai.style = "row"; ai.icon = wifi ? "wifi" : "network"
         grid([acell(Tr.t("settings.network.configureWifiButton"), "wifi_panel", "light", { hh: 40, icon: "wifi" }),
               acell(Tr.t("settings.network.useWiredButton"), "wired_dhcp", "light", { hh: 40, icon: "network" })])   // bg-hifi-light
-        // forget the network in use: the player leaves it and never joins it again by itself
-        if (wifi && cfg.netSsid) {
-            var fg = action(Tr.tf("settings.network.forgetButton", "ssid", cfg.netSsid), "wifi_forget", "light")
-            fg.icon = "wifi-off"; fg.hh = 40
+        // the Wi-Fi networks the player has saved, each with its Forget: also
+        // while on the cable, where none of them is in use
+        label("settings.network.savedLabel")
+        if (!cfg.wifiSaved.length) note(Tr.t("settings.network.savedNone"), "dark", "info", 13)
+        for (var si = 0; si < cfg.wifiSaved.length; si++) {
+            var sv = cfg.wifiSaved[si]
+            var fg = action(Tr.tf("settings.network.forgetButton", "ssid", sv.ssid) + (sv.in_use ? " · " + Tr.t("settings.network.inUse") : ""), "wifi_forget", "light")
+            fg.icon = "wifi-off"; fg.hh = 40; fg.arg = sv.ssid
         }
         var ip = info(Tr.tf("settings.network.currentIp", "name", cfg.netDev || "—"), cfg.netIp || "—"); ip.mono = true; ip.style = "row"
         if (cfg.netSubnet) { ip.extra = Tr.tf("settings.network.typeSubnet", "type", wifi ? "wireless" : "wired").replace("{subnet}", cfg.netSubnet); ip.hh = 64 }
@@ -2404,7 +2410,7 @@ Item {
         case "upd_autocheck": autoCheck = !autoCheck; Sys.setConf("ota-autocheck", autoCheck ? "1" : "0"); if (Ui.app && Ui.app.main) Ui.app.main.browser.checkUpdates(); break
         case "wifi_panel": wifiAsk(); return
         case "wifi_forget": {
-            var fssid = cfg.netSsid
+            var fssid = arg
             if (!fssid) return
             Ui.dialogs.confirm(Tr.tf("settings.network.forgetConfirm", "ssid", fssid), Tr.t("settings.network.forgetShort"), true, function(ok) {
                 if (!ok) return

@@ -367,3 +367,12 @@ class WifiForgetTests(unittest.TestCase):
         r = self._forget('HomeNet')
         self.assertEqual((r['success'], r['code']), (False, 'network.forgetFailed'))
 
+    def test_saved_lists_every_profile_with_the_one_in_use_first(self):
+        def run(cmd, timeout=20):
+            if cmd[-1] == '--active':
+                return _cp(cmd, stdout='Cafe:802-11-wireless\nWired:802-3-ethernet\n')
+            return self._fake_run(cmd, timeout)
+        with patch.object(api_server, '_run', run):
+            r = api_server.wifi_saved()
+        self.assertEqual(r['networks'], [{'ssid': 'Cafe', 'in_use': True}, {'ssid': 'HomeNet', 'in_use': False}])
+
