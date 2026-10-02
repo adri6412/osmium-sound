@@ -59,17 +59,13 @@
       display: flex; align-items: center; gap: 10px;
       text-decoration: none;
     }
-    .nav-logo-mark {
-      width: 28px; height: 28px; border-radius: 6px;
-      background: var(--accent);
-      display: flex; align-items: center; justify-content: center;
-    }
-    .nav-logo-mark svg { width: 16px; height: 16px; }
+    .nav-logo-bars { height: 13px; width: auto; fill: #d4af37; flex: none; }
     .nav-logo-name {
       font-size: 0.82rem; font-weight: 700;
-      letter-spacing: 0.14em; color: var(--text);
-      text-transform: uppercase;
+      letter-spacing: 0.14em; color: #d4af37;
+      text-transform: uppercase; white-space: nowrap;
     }
+    .nav-logo-name .ink { color: #f1f0ea; }
     .nav-dot {
       width: 7px; height: 7px; border-radius: 50%;
       background: #3dcf5f; box-shadow: 0 0 7px #3dcf5f;
@@ -814,13 +810,8 @@
 <!-- NAV -->
 <nav>
   <a class="nav-logo" href="#">
-    <div class="nav-logo-mark">
-      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="8" cy="8" r="5" stroke="#000" stroke-width="2"/>
-        <circle cx="8" cy="8" r="2" fill="#000"/>
-      </svg>
-    </div>
-    <span class="nav-logo-name">Osmium Sound</span>
+    <svg class="nav-logo-bars" viewBox="0 0 167 81" aria-hidden="true"><rect x="0" width="6" height="81"/><rect x="46" width="6" height="81"/><rect x="82" width="6" height="81"/><rect x="109" width="6" height="81"/><rect x="130" width="6" height="81"/><rect x="147" width="6" height="81"/><rect x="161" width="6" height="81"/></svg>
+    <span class="nav-logo-name">Osmium <span class="ink">Sound</span></span>
     <span class="nav-dot"></span>
   </a>
   <ul class="nav-links">
@@ -904,29 +895,6 @@
         <ul class="supporters-track" id="supportersTrack" aria-label="Ko-fi supporters"></ul>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- HELP, KO-FI, SOCIAL: high on the page, so somebody who needs a hand
-     does not have to read the whole pitch first -->
-<section id="review">
-  <div class="review-inner">
-    <p data-en="&lt;strong&gt;Stuck, or just want to tell us how it is going?&lt;/strong&gt; Open the chat: the assistant answers straight away from the manual, and if that is not enough your question goes to a person and stays there as a ticket. Prefer email or GitHub? &lt;a href=&quot;#support&quot;&gt;Every way to reach us&lt;/a&gt;. If you enjoy Osmium Sound you can also support the work with a voluntary donation, or follow the news on Facebook." data-it="&lt;strong&gt;Sei bloccato, o vuoi solo raccontarci come ti trovi?&lt;/strong&gt; Apri la chat: l&#x27;assistente risponde subito con quello che c&#x27;&egrave; nel manuale, e se non basta la domanda arriva a una persona e resta l&igrave; come ticket. Preferisci l&#x27;email o GitHub? &lt;a href=&quot;#support&quot;&gt;Tutti i modi per contattarci&lt;/a&gt;. Se Osmium Sound ti piace puoi anche sostenere il lavoro con una donazione volontaria, o seguire le novit&agrave; su Facebook."><strong>Stuck, or just want to tell us how it is going?</strong> Open the chat: the assistant answers straight away from the manual, and if that is not enough your question goes to a person and stays there as a ticket. Prefer email or GitHub? <a href="#support">Every way to reach us</a>. If you enjoy Osmium Sound you can also support the work with a voluntary donation, or follow the news on Facebook.</p>
-    <div class="review-actions">
-      <button type="button" class="btn-primary review-btn" data-chat>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C6.98 3 3 6.36 3 10.5c0 2.3 1.23 4.35 3.17 5.72-.14 1.22-.6 2.4-1.37 3.36-.2.25-.03.62.29.6 1.9-.12 3.6-.79 4.94-1.8.94.21 1.94.32 2.97.32 5.02 0 9-3.36 9-7.5S17.02 3 12 3z"/></svg>
-        <span data-en="Open the chat" data-it="Apri la chat">Open the chat</span>
-      </button>
-      <a class="btn-secondary kofi-btn" href="/kofi?from=reviews" target="_blank" rel="noopener">
-        <img src="kofi.png" alt="Ko-fi" width="24" height="19">
-        <span data-en="Support us on Ko-fi" data-it="Sostienici su Ko-fi">Support us on Ko-fi</span>
-      </a>
-      <a class="btn-secondary social-btn" href="https://www.facebook.com/profile.php?id=61593595246369" target="_blank" rel="noopener">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></svg>
-        <span data-en="Follow us on Facebook" data-it="Seguici su Facebook">Follow us on Facebook</span>
-      </a>
-    </div>
-    <p class="chat-note" data-en="The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then this page stores nothing. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;" data-it="La chat &egrave; di Featurebase e si carica solo quando la apri: da quel momento tiene qualche voce nel tuo browser per ricordare la conversazione. Fino ad allora questa pagina non salva nulla. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;">The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then this page stores nothing. <a href="privacy">Privacy</a></p>
   </div>
 </section>
 
