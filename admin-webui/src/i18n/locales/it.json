@@ -372,7 +372,7 @@
       "sourceOffer": "I componenti GPL e LGPL sono binari non modificati di Debian e della LMS-Community. I loro sorgenti sono su deb.debian.org (la suite indicata sopra) e su GitHub; un archivio completo dei sorgenti di questa immagine si può richiedere a info@osmiumsound.it."
     },
     "cdRip": {
-      "hint": "Come un CD audio viene copiato nella libreria. Ogni controllo si applica subito; i nomi seguono la pagina CD Ripping di Daphile.",
+      "hint": "Come un CD audio viene copiato nella libreria. Ogni controllo si applica subito.",
       "saved": "Salvato",
       "saveFailed": "Salvataggio fallito",
       "on": "Attivo",

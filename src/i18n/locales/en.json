@@ -960,7 +960,7 @@
       "debianMissing": "The package list of this image is not available."
     },
     "cdRip": {
-      "help": "How an audio CD is copied into the library. Every row applies at once; the names follow Daphile's CD Ripping page.",
+      "help": "How an audio CD is copied into the library. Every row applies at once.",
       "saved": "Saved.",
       "saveFailed": "Could not save.",
       "enableLabel": "CD Ripping",

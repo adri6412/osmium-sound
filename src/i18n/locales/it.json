@@ -960,7 +960,7 @@
       "debianMissing": "L'elenco dei pacchetti di questa immagine non è disponibile."
     },
     "cdRip": {
-      "help": "Come un CD audio viene copiato nella libreria. Ogni riga si applica subito; i nomi seguono la pagina CD Ripping di Daphile.",
+      "help": "Come un CD audio viene copiato nella libreria. Ogni riga si applica subito.",
       "saved": "Salvato.",
       "saveFailed": "Salvataggio fallito.",
       "enableLabel": "Rip dei CD",

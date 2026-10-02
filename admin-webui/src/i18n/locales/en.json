@@ -372,7 +372,7 @@
       "sourceOffer": "The GPL and LGPL components are unmodified binaries from Debian and from the LMS-Community. Their source code is at deb.debian.org (the suite named above) and on GitHub; a complete source archive matching this image can be requested from info@osmiumsound.it."
     },
     "cdRip": {
-      "hint": "How an audio CD is copied into the library. Every control applies at once; the names follow Daphile's CD Ripping page.",
+      "hint": "How an audio CD is copied into the library. Every control applies at once.",
       "saved": "Saved",
       "saveFailed": "Could not save",
       "on": "Enable",
