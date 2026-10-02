@@ -28,7 +28,7 @@ set -e
 QT="${1:-qtui}"
 case "$QT" in /*) echo "la cartella va indicata relativa alla radice del progetto" >&2; exit 2 ;; esac
 rm -rf "$QT"
-mkdir -p "$QT/qml" "$QT/icons" "$QT/assets/intro" "$QT/locales"
+mkdir -p "$QT/qml" "$QT/icons" "$QT/assets" "$QT/locales"
 install -m755 native-ui-qt/hifi-qt "$QT/hifi-qt"
 cp native-ui-qt/qml/*.qml "$QT/qml/"
 MISSING=0
@@ -69,12 +69,7 @@ done
 # the status plate under the cover (V3 bis, without DSP)
 cp native-ui-qt/assets/ledbar/*.png "$QT/assets/"
 test -s "$QT/assets/led-bar-base.png" || { echo "::error::status plate artwork missing"; exit 1; }
-docker run --rm -e QT="$QT" -v "$PWD:/w" -w /w debian:trixie bash -eu -c '
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq && apt-get install -y --no-install-recommends ffmpeg > /dev/null
-  ffmpeg -nostdin -loglevel error -i src/assets/intro.mp4 \
-    -vf "fps=15,scale=960:-2" -q:v 4 "$QT"/assets/intro/%03d.jpg
-'
+# (no start clip any more: the screen opens on the interface itself)
 cp src/i18n/locales/en.json src/i18n/locales/it.json "$QT/locales/"
 # le note di terze parti sono un array JS: lo stesso elenco che
 # Settings.jsx rende in Electron, riusato senza duplicarlo
@@ -86,7 +81,6 @@ QT="$QT" node -e '
   fs.writeFileSync(process.env.QT + "/locales/third_party.json", JSON.stringify(require("/tmp/tpn.cjs")));
 '
 test -s "$QT/locales/third_party.json"
-test "$(ls "$QT/assets/intro" | wc -l)" -gt 50 || { echo "::error::intro frames missing"; exit 1; }
 # 🚨 Ponte per gli apparecchi fermi alla 2.5.24-dev.4: la loro verifica di
 # staging pretende ancora un file `hifi-media-player` e senza di esso rifiuta
 # il pacchetto, bloccando tutto l'aggiornamento. Chi installa guarda `hifi-qt`
