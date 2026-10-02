@@ -4980,25 +4980,41 @@ def _protected_paths():
     return out
 
 
+# Entries owned by one of these are this server's own doing (it runs as root,
+# and so does the rip worker): they are handed to the share account. Anybody
+# else's (Lyrion's, a user's over SSH) keep their owner and take the group.
+_ROOT_UIDS = (0,)
+# Where ownership is ours to fix: the local disks and the playlist folder. A
+# network share carries no ownership of ours; a FAT-like disk gets uid and
+# gid from its mount options (and refuses chown, which hand_over ignores).
+_OWNED_ROOTS = (DATA_MUSIC_ROOT, INTERNAL_MOUNT_ROOT, USB_ADOPTED_ROOT, DEFAULT_PLAYLISTDIR)
+
+
 def _claim_for_share(path):
-    """Hand a newly written file or folder to the group Samba and Lyrion
-    share, so what the file manager creates stays writable from a PC too --
-    without this the two fight over ownership exactly as described at
-    SHARE_GROUP."""
+    """Hand a file or folder the file manager just made to the share account
+    and group -- hifimusic:hifishare, folders 2775, files 0664, the shape of
+    a published folder (hifi_cdrip.hand_over). This server runs as root, and
+    what root leaves behind plays fine but cannot be renamed or deleted from
+    a PC over the network: with the forced Samba user neither the owner nor
+    the group bits let it in. Somebody else's entry keeps its owner and takes
+    the group, so the two never fight over it (see SHARE_GROUP)."""
     uid, gid = _ensure_samba_uid_gid()
-    if not gid:
+    if not uid or not gid:
         return
+    hcd.hand_over(path, (uid, gid), from_uids=_ROOT_UIDS)
+
+
+def _ownership_ours(path):
+    """Whether `path` lies where ownership is ours to put right: a local disk,
+    the playlist folder or a folder published over the network -- not a
+    network share."""
+    roots = list(_OWNED_ROOTS)
     try:
-        st = os.lstat(path)
-        if stat.S_ISLNK(st.st_mode):
-            return
-        if st.st_gid != gid:
-            os.chown(path, st.st_uid, gid)
-        want = (st.st_mode & 0o7777) | (0o2775 if stat.S_ISDIR(st.st_mode) else 0o0664)
-        if (st.st_mode & 0o7777) != want:
-            os.chmod(path, want)
-    except OSError:
-        pass    # FAT/exFAT/NTFS carry no POSIX ownership, and a race is fine
+        roots += [s["path"] for s in load_state().get("sources", [])
+                  if s.get("type") == "local" and s.get("samba") and s.get("path")]
+    except Exception:
+        pass
+    return _under_roots(path, roots) is not None
 
 
 # The top level of the file manager is the allowed roots themselves. Showing
@@ -5498,6 +5514,8 @@ def api_mkdir_local():
         os.makedirs(target, exist_ok=True)
     except OSError as e:
         return _err("msg.mountFailed", 400, detail=_oserror_detail(e))
+    # Made by root: hand it over, or nothing can be put into it from a PC.
+    _claim_for_share(target)
     return jsonify({"success": True, "path": target})
 
 
@@ -5691,6 +5709,11 @@ def api_files_list():
                         "protected": True, "entries": roots})
     if not os.path.isdir(cand):
         return _err("msg.folderMissing", 400, path=rel)
+    # What an earlier version of this server (new folders, copies, moves) or
+    # of the rip worker left root-owned becomes the share account's as the
+    # owner browses past it -- the rest of the backlog is for
+    # _repair_shared_ownership() at start. Local disks only.
+    fix_owner = _ownership_ours(cand)
     entries = []
     try:
         for e in os.scandir(cand):
@@ -5701,6 +5724,8 @@ def api_files_list():
                 is_dir = e.is_dir(follow_symlinks=False)
             except OSError:
                 continue
+            if fix_owner and st.st_uid in _ROOT_UIDS:
+                _claim_for_share(os.path.join(cand, e.name))
             entries.append({"name": e.name, "path": os.path.join(cand, e.name),
                             "dir": is_dir, "size": 0 if is_dir else st.st_size,
                             "mtime": int(st.st_mtime)})
@@ -6707,42 +6732,65 @@ def _rip_plan_root(dest):
     return root if root and dest.startswith(root.rstrip("/") + "/") else os.path.dirname(dest)
 
 
-def _repair_rip_ownership(limit=250000):
-    """Rips made before the worker handed its files over were root's — the
-    prefix and artist folders it created, the albums, the logs: playable, but
-    not renameable or deletable from a PC on the network. Walk the folder set
-    in Settings → CD ripping and hand every root-owned entry to the share
-    account. Local disks only: a network share carries no POSIX ownership of
-    ours to fix. Bounded, so a target that is a whole library cannot turn
-    this into a long walk. Returns how many entries changed, or None when the
-    target is not available right now (unset, or its disk not mounted yet)."""
-    settings = _cd_settings()
-    target = settings.get("target") or ""
-    mp, src = _cd_target_root(target)
-    if not mp:
-        return None
-    if (src or {}).get("type") == "smb" or not os.path.isdir(target):
-        return 0
+def _shared_local_roots():
+    """Folders whose contents must be the share account's, on filesystems
+    that carry ownership at all: the appliance's own music folder, every
+    folder published over the network, and every adopted internal or USB
+    disk that is mounted and not FAT-like (those get uid and gid from their
+    mount options). The rip folder always sits inside one of these. One
+    inside another is dropped."""
+    roots = []
+    if os.path.isdir(DATA_MUSIC_ROOT):
+        roots.append(os.path.realpath(DATA_MUSIC_ROOT))
+    for s in load_state().get("sources", []):
+        t = s.get("type")
+        if t == "local" and s.get("samba") and s.get("path") and os.path.isdir(s["path"]):
+            roots.append(os.path.realpath(s["path"]))
+        mp = s.get("mountpoint") or ""
+        if t in ("internal", "usb") and mp and os.path.ismount(mp) \
+                and (s.get("fstype") or "").lower() not in _FAT_LIKE:
+            roots.append(os.path.realpath(mp))
+    out = []
+    for r in sorted(set(roots), key=len):
+        if not any(r == o or r.startswith(o + os.sep) for o in out):
+            out.append(r)
+    return out
+
+
+def _repair_shared_ownership(roots=None, limit=250000):
+    """What an earlier version of this server (the file manager's new
+    folders, copies and moves) or of the rip worker left root-owned under
+    the shared folders: playable, but not renameable or deletable from a PC
+    on the network. Hand every such entry to the share account; the roots
+    themselves are left as they are. Bounded per root, so a whole library
+    cannot turn this into a long walk. Returns how many entries changed."""
     owner = _ensure_samba_uid_gid()
-    if not owner[0]:
+    if not owner[0] or not owner[1]:
         return 0
-    n = hcd.hand_over_tree(target, target, owner, limit=limit)
-    if n:
-        print(f"[sources] rip folder {target}: {n} entries handed to {SAMBA_USER}:{SHARE_GROUP}")
+    n = 0
+    for root in (_shared_local_roots() if roots is None else roots):
+        k = hcd.hand_over_tree(root, root, owner, from_uids=_ROOT_UIDS, limit=limit,
+                               skip_names=("lost+found",))
+        if k:
+            print(f"[sources] {root}: {k} entries handed to {SAMBA_USER}:{SHARE_GROUP}")
+        n += k
     return n
 
 
-def _repair_rip_ownership_retry(attempts=10, interval=30):
-    """_repair_rip_ownership() once the rip folder's disk is mounted: at boot
-    the adopted disks come up in their own time."""
-    for _ in range(attempts):
+def _repair_shared_ownership_loop(delays=(20, 60, 180, 600)):
+    """_repair_shared_ownership() a few times after start, each pass on the
+    folders not seen yet: at boot the adopted disks come up in their own
+    time."""
+    done = set()
+    for d in delays:
+        time.sleep(d)
         try:
-            if _repair_rip_ownership() is not None:
-                return
+            roots = [r for r in _shared_local_roots() if r not in done]
+            if roots:
+                _repair_shared_ownership(roots)
+                done.update(roots)
         except Exception as e:
-            print(f"[sources] _repair_rip_ownership error: {e}")
-            return
-        time.sleep(interval)
+            print(f"[sources] _repair_shared_ownership error: {e}")
 
 
 def _rip_writable_sources():
@@ -8131,10 +8179,11 @@ if __name__ == "__main__":
         _ensure_music_root()
     except Exception as e:
         print(f"[sources] _ensure_music_root error: {e}")
-    # Rips an earlier worker left root-owned become the share account's, once
-    # the rip folder's disk is up (see _repair_rip_ownership).
-    threading.Thread(target=_repair_rip_ownership_retry, daemon=True,
-                     name="rip-owner-repair").start()
+    # What earlier versions left root-owned in the shared folders (file
+    # manager, rip worker) becomes the share account's, as the disks come up
+    # (see _repair_shared_ownership).
+    threading.Thread(target=_repair_shared_ownership_loop, daemon=True,
+                     name="owner-repair").start()
     # Make sure Lyrion has a writable playlist folder ("save as playlist"),
     # owned so that a PC on the network can write into it too.
     try:

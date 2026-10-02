@@ -481,37 +481,49 @@ class TestApi(unittest.TestCase):
             plan = json.load(f)
         self.assertEqual(plan['root'], self.mount)
 
-    def test_repair_rip_ownership(self):
-        """At start, what an earlier worker left root-owned under the rip
-        folder goes to the share account; the folder itself is not touched,
-        and nothing happens without a usable target."""
+    def test_repair_shared_ownership(self):
+        """At start, what an earlier server or worker left root-owned under
+        the shared folders goes to the share account; the folders themselves,
+        lost+found, FAT disks, unmounted disks and network shares are left
+        alone."""
         ss = self.ss
         self._patch('_ensure_samba_uid_gid', lambda: (1234, 902))
-        with mock.patch('os.chown') as chown:
-            self.assertIsNone(ss._repair_rip_ownership())            # no target set
-            hcd.save({'target': '/somewhere/else'}, ss.CDRIP_CONF)
-            self.assertIsNone(ss._repair_rip_ownership())            # outside every writable source
-        chown.assert_not_called()
-        target = os.path.join(self.mount, 'Rips')
-        hcd.save({'target': target}, ss.CDRIP_CONF)
-        album = os.path.join(target, 'rip', 'Artist', 'Album')
+        self._patch('_ROOT_UIDS', (os.geteuid(),))       # what the test made plays root's part
+        music = os.path.join(self.tmp, 'music')
+        album = os.path.join(music, 'rip', 'Artist', 'Album')
         os.makedirs(album)
+        os.makedirs(os.path.join(music, 'lost+found'))
         open(os.path.join(album, '01.flac'), 'wb').close()
+        self._patch('DATA_MUSIC_ROOT', music)
+        fat = os.path.join(self.tmp, 'fat')
+        os.makedirs(fat)
+        self._patch('load_state', lambda: {'sources': [
+            {'type': 'usb', 'mountpoint': self.mount, 'fstype': 'ext4'},
+            {'type': 'usb', 'mountpoint': fat, 'fstype': 'exfat'},
+            {'type': 'internal', 'mountpoint': os.path.join(self.tmp, 'unmounted'), 'fstype': 'ext4'},
+            {'type': 'local', 'path': os.path.join(music, 'rip'), 'samba': True},   # inside music: dropped
+            {'type': 'local', 'path': os.path.join(self.tmp, 'nope'), 'samba': True},  # gone
+            {'type': 'smb', 'mountpoint': os.path.join(self.tmp, 'nas')}]})
+        with mock.patch('os.path.ismount', side_effect=lambda p: p in (self.mount, fat)):
+            roots = ss._shared_local_roots()
+        self.assertEqual(set(roots), {os.path.realpath(music), os.path.realpath(self.mount)})
         calls = []
-        me = os.geteuid()
         with mock.patch('os.chown', side_effect=lambda p, u, g: calls.append((p, u, g))):
-            n = ss._repair_rip_ownership()
+            n = ss._repair_shared_ownership(roots)
         owned = {p for p, _, _ in calls}
         self.assertEqual(n, len(calls))
-        self.assertNotIn(target, owned)
-        for p in (os.path.join(target, 'rip'), album, os.path.join(album, '01.flac')):
+        for p in (os.path.realpath(music), os.path.realpath(self.mount), os.path.join(os.path.realpath(music), 'lost+found')):
+            self.assertNotIn(p, owned)
+        rm = os.path.realpath(music)
+        for p in (os.path.join(rm, 'rip'), os.path.join(rm, 'rip', 'Artist', 'Album'),
+                  os.path.join(rm, 'rip', 'Artist', 'Album', '01.flac'), os.path.join(os.path.realpath(self.mount), 'Rips')):
             self.assertIn(p, owned)
-        # not root's: the owner stays, the group becomes the shared one
-        self.assertTrue(all((u, g) == (me, 902) for _, u, g in calls), calls)
-        # a network share: nothing of ours to fix there
-        self._patch('_rip_writable_sources', lambda: [{'id': 'nas', 'type': 'smb', 'mountpoint': self.mount}])
+        self.assertTrue(all((u, g) == (1234, 902) for _, u, g in calls), calls)
+        self.assertEqual(os.stat(os.path.join(rm, 'rip')).st_mode & 0o7777, 0o2775)
+        # no share account: nothing happens
+        self._patch('_ensure_samba_uid_gid', lambda: (0, 0))
         with mock.patch('os.chown') as chown:
-            self.assertEqual(ss._repair_rip_ownership(), 0)
+            self.assertEqual(ss._repair_shared_ownership(roots), 0)
         chown.assert_not_called()
 
     def test_watcher_hands_over_on_done(self):

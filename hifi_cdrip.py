@@ -251,11 +251,12 @@ def hand_over(path, owner, from_uids=(0,)):
     return changed
 
 
-def hand_over_tree(root, dest, owner, from_uids=(0,), limit=None):
+def hand_over_tree(root, dest, owner, from_uids=(0,), limit=None, skip_names=()):
     """hand_over() for `dest`, everything under it and the folders between
     `dest` and `root` — the whole path a rip made, not just the album. `root`
     itself (the destination the user chose) is never touched. `limit` bounds
-    the walk. Returns how many entries changed."""
+    the walk; entries named in `skip_names` (lost+found) are left out, with
+    whatever is under them. Returns how many entries changed."""
     if not owner:
         return 0
     n = 0
@@ -264,6 +265,9 @@ def hand_over_tree(root, dest, owner, from_uids=(0,), limit=None):
     if os.path.isdir(dest):
         seen = 0
         for dirpath, dirnames, filenames in os.walk(dest):
+            if skip_names:
+                dirnames[:] = [d for d in dirnames if d not in skip_names]
+                filenames = [f for f in filenames if f not in skip_names]
             for name in dirnames + filenames:
                 seen += 1
                 if limit is not None and seen > limit:
