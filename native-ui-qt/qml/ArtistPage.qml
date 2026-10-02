@@ -304,7 +304,7 @@ Item {
                     Row {
                         visible: !root.person
                         spacing: 10
-                        PageButton { icon: "play"; filled: true; primary: true; label: Tr.t("player.page.play"); onClicked: root.play("load") }
+                        PageButton { id: playBtn; icon: "play"; filled: true; primary: true; label: Tr.t("player.page.play"); onClicked: root.play("load") }
                         PageButton { icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: if (root.browser) root.browser.loadShuffled("artist_id", root.artistId) }
                         PageButton { icon: "list-plus"; onClicked: root.play("add") }
                         PageButton { id: favBtn; icon: "heart"; visible: root.favUrl !== ""; onClicked: { burst(); if (root.browser) root.browser.addFavorite(root.favUrl, root.name, "playlist") } }

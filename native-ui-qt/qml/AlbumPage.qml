@@ -30,6 +30,8 @@ Item {
     // the cover is on screen: the Cover Flow's flying copy can go (Browser)
     readonly property bool coverReady: state_ === 2 && cover.ready
     readonly property bool metaOk: meta !== null && !!meta.release
+    // where the remote's spotlight starts on this page: Play (Browser.landing)
+    readonly property Item navFirst: playBtn.navTap
 
     function load() {
         state_ = 0; meta = null; metaStatus = ""; metaTries = 0; aboutOpen = false; byTrack = false
@@ -232,7 +234,7 @@ Item {
             Item { width: 1; height: 14 }
             Row {
                 spacing: 10
-                PageButton { icon: "play"; filled: true; primary: true; label: Tr.t("player.page.play"); onClicked: root.play("load") }
+                PageButton { id: playBtn; icon: "play"; filled: true; primary: true; label: Tr.t("player.page.play"); onClicked: root.play("load") }
                 PageButton { icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: root.shuffle() }
                 PageButton { icon: "list-plus"; onClicked: root.play("add") }
                 PageButton { icon: "list-start"; onClicked: root.play("insert") }

@@ -68,6 +68,7 @@ public:
     // highlight on. `holdMs` > 0 keeps the finger down that long, which is
     // what opens a long-press menu.
     Q_INVOKABLE void tapAt(qreal x, qreal y, int holdMs = 0);
+    bool injecting() const;                          // a tapAt is under way: its mouse events are ours
     Q_INVOKABLE void quit() const;
     Q_INVOKABLE qint64 now() const;                  // ms monotonici
     Q_INVOKABLE QString upper(const QString &s) const { return s.toUpper(); }

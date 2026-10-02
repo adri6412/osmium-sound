@@ -12,6 +12,7 @@ Rectangle {
     property bool dim: false
     signal clicked()
     readonly property bool round: label === ""
+    property alias navTap: tap                   // the remote's stop (Nav.land on a page)
     width: round ? 38 : Math.max(38, row.implicitWidth + 28); height: 38; radius: 19
     color: primary ? tap.mix(Theme.gold, Theme.mix(Theme.gold, Theme.white, 0.25)) : tap.mix(Theme.surface, Theme.light)
     border.width: primary ? 0 : 1; border.color: Theme.border

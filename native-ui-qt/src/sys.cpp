@@ -162,9 +162,10 @@ void Sys::noteInput() {
 }
 
 void Sys::notePointer() {
-    if (g_clock.elapsed() < m_injectUntil) return;
+    if (injecting()) return;
     emit pointerTouched();
 }
+bool Sys::injecting() const { return g_clock.elapsed() < m_injectUntil; }
 
 // ─── icone tinte ────────────────────────────────────────────────────────────
 // Le icone sono SVG lucide con stroke/fill "#ffffff" (gen-icons.mjs). Qui si

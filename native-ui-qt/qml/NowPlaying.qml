@@ -28,6 +28,9 @@ Item {
     signal openSleep()
     signal openPlayerPicker()
     signal startScreensaver()
+    // where the remote's spotlight starts here: Play, not the button that
+    // closes the player in the top-left corner (App.setExpanded)
+    readonly property Item navFirst: playTap
     signal toggleView()
     signal openPlaybackSetting(string which)
     signal openSettings()

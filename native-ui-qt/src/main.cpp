@@ -61,6 +61,23 @@ static Remote *g_remote = nullptr;
 class InputWatch : public QObject {
 public:
     InputWatch(Sys *s, Remote *r, QQuickView *v, TouchWatch *t) : m_sys(s), m_remote(r), m_view(v), m_touch(t) {}
+    // The arrow cursor goes while the remote drives. A remote that Qt also
+    // counts as a mouse (an air mouse, the bridge of one) put the arrow on
+    // the screen, standing wherever it last was, while the keys moved the
+    // spotlight. From the first remote action the cursor is parked; a real
+    // mouse movement (not one of our injected presses) brings it back.
+    void park() {
+        if (m_parked || !m_sys->pointerEnabled()) return;
+        m_parked = true;
+        QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
+    }
+    void unpark() {
+        if (!m_parked) return;
+        m_parked = false;
+        QGuiApplication::restoreOverrideCursor();
+    }
+    // Settings switched the pointer: Sys cleared every override, ours too
+    void pointerChanged() { m_parked = false; }
 protected:
     bool eventFilter(QObject *, QEvent *e) override {
         switch (e->type()) {
@@ -77,7 +94,9 @@ protected:
             if (e->type() == QEvent::TouchUpdate) m_sys->noteInput();
             break;
         case QEvent::MouseMove: case QEvent::Wheel:
-            m_sys->noteInput(); break;
+            m_sys->noteInput();
+            if (!m_sys->injecting()) unpark();
+            break;
         case QEvent::KeyPress: {
             m_sys->noteInput();
             QKeyEvent *ke = static_cast<QKeyEvent *>(e);
@@ -109,6 +128,7 @@ private:
     Remote *m_remote;
     QQuickView *m_view;
     TouchWatch *m_touch;
+    bool m_parked = false;
 };
 static volatile sig_atomic_t g_shot = 0;
 static void onUsr1(int) { g_shot = 1; }
@@ -338,6 +358,8 @@ int main(int argc, char *argv[]) {
     sys.setWindow(&view);
     InputWatch watch(&sys, &remote, &view, &touch);
     view.installEventFilter(&watch);
+    QObject::connect(&remote, &Remote::action, &watch, [&watch]() { watch.park(); });
+    QObject::connect(&sys, &Sys::pointerEnabledChanged, &watch, [&watch]() { watch.pointerChanged(); });
     if (!sys.pointerEnabled()) QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
 
     view.setSource(QUrl::fromLocalFile(base + "/qml/Main.qml"));

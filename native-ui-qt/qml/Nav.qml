@@ -38,6 +38,12 @@ QtObject {
     // e in quali scatole stava: quando la schermata cambia si riparte dalla
     // scatola piu' interna ancora viva, non dal punto piu' vicino in assoluto
     property var lastChain: []
+    // whether the remote has been used at all: before that nothing is placed
+    // in advance (a finger needs no spotlight)
+    property bool used: false
+    // where a fresh spotlight starts on the bottom layer when nothing else
+    // says: App.qml gives a function returning { box, pick } (see land)
+    property var rootLanding: null
 
     // ─── strati modali ─────────────────────────────────────────────────────
     function pushScope(area) {
@@ -84,6 +90,87 @@ QtObject {
         }
     }
     function scope() { return scopes.length ? scopes[scopes.length - 1] : root }
+
+    // ─── atterraggio ───────────────────────────────────────────────────────
+    // Where the spotlight lands when a screen opens. Before this, after an
+    // OK that changed the screen it went to the box nearest to where it had
+    // been: a home tile sits level with the third row of the list it opens,
+    // so Favourites opened on the third favourite and Composers on the
+    // fourth, and nobody knew where the spotlight was without moving it.
+    // Now every screen says where its spotlight starts: `box` is its content
+    // (the list, the tiles, the page — never the bars above them) and `pick`,
+    // optional, a function giving the preferred box (Play on an album page,
+    // the tile one came back from on the home). Nothing there yet (the
+    // content fades in, the rows come from the server): it tries again for a
+    // while, and stops the moment the user moves.
+    // 🚨 It places without lighting: with the spotlight hidden (a finger had
+    // the screen) the first arrow then shows it right there — see move().
+    function land(box, pick) {
+        if (!used || !box) return
+        landing.box = box; landing.pick = pick || null
+        landing.tries = 0; landing.since = userMoves
+        landing.restart()
+    }
+    property Timer landing: Timer {
+        property var box: null
+        property var pick: null
+        property int tries: 0
+        property int since: 0
+        interval: 80; repeat: true
+        onTriggered: {
+            tries++
+            if (nav.userMoves !== since || nav.landTry() || tries >= 40) stop()
+        }
+    }
+    // one attempt: the preferred box, else the top-left one inside the box
+    function landTry() {
+        var box = landing.box
+        if (!alive(box) || !box.visible || !inScope(box)) return false
+        var want = landing.pick ? landing.pick() : null
+        if (usable(want)) { place(want); return true }
+        var inside = within(box)
+        if (!inside.length) return false
+        place(topLeft(inside))
+        return true
+    }
+    // the same for the bottom layer, for a spotlight with nowhere to start
+    function landRoot() {
+        var l = typeof rootLanding === "function" ? rootLanding() : null
+        if (!l) return false
+        var want = l.pick ? l.pick() : null
+        if (usable(want)) { focus(want); return true }
+        if (!alive(l.box) || !l.box.visible) return false
+        var inside = within(l.box)
+        if (!inside.length) return false
+        focus(topLeft(inside))
+        return true
+    }
+    function usable(it) {
+        return alive(it) && it.navigable === true && it.enabled && inScope(it) && !!rectOf(it)
+    }
+    function within(box) {
+        var list = candidates(), inside = []
+        for (var i = 0; i < list.length; i++) if (isInside(box, list[i].it)) inside.push(list[i])
+        return inside
+    }
+    function topLeft(list) {
+        var best = null, bestScore = 0
+        for (var i = 0; i < list.length; i++) {
+            var s = list[i].r.y * 2 + list[i].r.x
+            if (!best || s < bestScore) { best = list[i].it; bestScore = s }
+        }
+        return best
+    }
+    // The box under the spotlight is gone (the screen changed) or there was
+    // none: light up without moving — where the screen says a spotlight
+    // starts if that is still pending, else on the box nearest to where it
+    // was, else at the beginning.
+    function relight() {
+        if (landing.running) { landing.stop(); if (landTry()) return true }
+        if (item && inScope(item) && rectOf(item)) return true
+        if (lastRect) return focusNearest(lastRect)
+        return focusFirst()
+    }
     function inScope(it) {
         var top = scope()
         if (!top) return true
@@ -183,6 +270,13 @@ QtObject {
             var cross = vertical ? Math.min(cur.width, r.width) : Math.min(cur.height, r.height)
             var aligned = ov > Math.max(1, cross * 0.25)
             var off = vertical ? Math.abs(cx(r) - cx(cur)) : Math.abs(cy(r) - cy(cur))
+            // 🚨 Out of line, only within 45° measured between the boxes'
+            // edges, not their centres: "right" from the last home tile went
+            // to the power button in the top corner (its centre is further
+            // right, three hundred points up), and from the Album tile to the
+            // search button sitting just above it. At the edge of the screen
+            // an arrow does nothing, which is what one expects.
+            if (!aligned && Math.max(0, -ov) > edge) continue
             // (in line, the column is only a tie-break: at 0.2, "up" from the
             // first row jumped the breadcrumbs and landed on the tabs)
             var s = edge + dc * 0.2 + off * (aligned ? 0.05 : 2.5)
@@ -249,14 +343,20 @@ QtObject {
 
     function move(dir) {
         userMoves++
-        show()
+        used = true
+        var wasActive = active
+        active = true
         var list = candidates()
         if (!list.length) return false
         // Il riquadro che avevamo sotto il riflettore non c'e' piu' (lo schermo
-        // e' cambiato): questa freccia non muove, riaccende — sul riquadro piu'
-        // vicino a dov'eravamo, che e' quello che l'occhio si aspetta.
+        // e' cambiato): questa freccia non muove, riaccende — dove la
+        // schermata dice che si parte, o sul riquadro piu' vicino a dov'eravamo.
         var cur = (item && inScope(item)) ? rectOf(item) : null
-        if (!cur) return focusNearest(lastRect)
+        if (!cur) return relight()
+        // The spotlight was hidden (a finger had the screen): the first arrow
+        // only shows where it is, the next ones move it. Moving blind was how
+        // one "went right to find out where I am".
+        if (!wasActive) { ensureVisible(item); return true }
         // A box may keep the arrows for itself: `navKey(dir)` returning true.
         // Cover Flow flips albums with left/right, the A-Z index changes letter
         // with up/down. Whatever it does not keep goes on from here.
@@ -321,22 +421,25 @@ QtObject {
         var top = scope()
         var pref = top && top.navFirst !== undefined ? top.navFirst : null
         if (pref && pref.navigable === true && pref.enabled && inScope(pref) && rectOf(pref)) { focus(pref); return true }
+        // the bottom layer: where its current screen says (the content,
+        // not the player's pill in the top-left corner of the canvas)
+        if (top === root && landRoot()) return true
         var list = candidates()
         if (!list.length) { item = null; return false }
-        var best = null, bestScore = 0
-        for (var i = 0; i < list.length; i++) {
-            var s = list[i].r.y * 2 + list[i].r.x
-            if (!best || s < bestScore) { best = list[i].it; bestScore = s }
-        }
-        focus(best)
+        focus(topLeft(list))
         return true
     }
 
     function focus(it) {
         if (!it) return
-        item = it
         active = true
-        ensureVisible(it)
+        place(it)
+    }
+    // the spotlight on a box, lit or not as it was
+    function place(it) {
+        if (!it) return
+        item = it
+        if (active) ensureVisible(it)
         lastRect = rectOf(it)
         var chain = []
         for (var p = it.parent; p && chain.length < 12; p = p.parent) chain.push(p)
@@ -433,12 +536,14 @@ QtObject {
     // `hold` = pressione lunga: e' il menu che si apre tenendo il dito su una
     // riga (620 ms, oltre i 500 di pressAndHoldInterval)
     function activate(hold) {
+        used = true
         if (!item || !inScope(item)) { if (!focusFirst()) return false; }
         // like navKey: a box that is not pressed at one point (the A-Z index:
         // its centre would be the letter M) says itself what OK means
         if (!hold && typeof item.navOk === "function" && item.navOk()) return true
         var r = rectOf(item)
-        if (!r) return false
+        // nothing under the spotlight any more: OK lights, it presses nothing
+        if (!r) { active = true; relight(); return false }
         Sys.tapAt(r.x + r.width / 2, r.y + r.height / 2, hold ? 620 : 0)
         // Quello che si e' appena premuto cambia spesso la schermata (una
         // tessera apre una lista, una riga apre una pagina). Se il riquadro
@@ -447,12 +552,13 @@ QtObject {
         after.restart()
         return true
     }
+    // (not while a landing is pending: the screen that opened says where)
     property Timer after: Timer {
         interval: 280; repeat: false
-        onTriggered: if (nav.active && !nav.rectOf(nav.item)) nav.focusNearest(nav.lastRect)
+        onTriggered: if (nav.active && !nav.landing.running && !nav.rectOf(nav.item)) nav.focusNearest(nav.lastRect)
     }
 
-    function show() { if (!active) { active = true; if (!item || !inScope(item)) focusFirst() } }
+    function show() { used = true; if (!active) { active = true; if (!item || !inScope(item)) focusFirst() } }
     function hide() { if (active) active = false }
     function clear() { item = null; lastRect = null }
 }

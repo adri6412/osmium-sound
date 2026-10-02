@@ -21,15 +21,28 @@ Item {
 
     // ─── principale <-> Now Playing: y:'100%' con molla 200/26 ─────────────
     Spring { id: npSpring; stiffness: 200; damping: 26; rate: Theme.motionRate }
+    // The remote's spotlight: opening the player it goes to Play; closing
+    // it, back to the box it had in the library if that is still there,
+    // else where the library's screen says a spotlight starts.
+    property var librarySpot: null
     function setExpanded(on) {
         if (expanded === on) return
+        if (on) librarySpot = Nav.item && Nav.isInside(mainScreen, Nav.item) ? Nav.item : null
         expanded = on
         npSpring.to = on ? 0 : 1
-        if (on) autoexpand.armed = false
+        if (on) { autoexpand.armed = false; Nav.land(np, function() { return np.navFirst }) }
+        else {
+            var keep = librarySpot, l = mainScreen.browser.landing(null)
+            Nav.land(l.box, function() { return Nav.usable(keep) ? keep : (l.pick ? l.pick() : null) })
+        }
     }
     Component.onCompleted: {
         Ui.app = app; Ui.vk = vk; Ui.dialogs = dialogs; Ui.toast = toast; Ui.overlays = overlays
         Nav.root = app                                     // il telecomando cerca i riquadri da qui
+        // and where a spotlight with nowhere to start goes (Nav.focusFirst)
+        Nav.rootLanding = function() {
+            return app.expanded ? { box: np, pick: function() { return np.navFirst } } : mainScreen.browser.landing(null)
+        }
         firstStart = !tutorial.wasShown()                  // before the tour can write its file
         npSpring.set(Sys.startExpanded ? 0 : 1)
         expanded = Sys.startExpanded
@@ -216,8 +229,7 @@ Item {
         if (overlays.busy) overlays.close()
         setExpanded(false)
         mainScreen.browser.showMusicTab()
-        mainScreen.browser.navHome()
-        Nav.clear()
+        mainScreen.browser.navHome()                      // and the spotlight on the first tile
     }
 
     // per il canale di collaudo (eval): app.settings.openSection(n) ecc.

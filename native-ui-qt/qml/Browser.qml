@@ -89,32 +89,50 @@ Item {
         if (!(replace && msearchOpen)) msearchOpen = false
         loadTop()
         appear()
+        landNav(null)
     }
+    // Where the remote's spotlight lands when this panel shows a new screen
+    // (Nav.land): the content, never the bars above it. `from` is the entry
+    // one came back from, so the home lights the tile that had been opened.
+    function landing(from) {
+        if (tab === 4) return { box: settingsTab, pick: null }
+        if (tab === 3) return { box: discoverTab, pick: null }
+        if (view === LibraryModel.Home) return { box: tilesBox, pick: function() { return tilesBox.tileFor(from) } }
+        if (isPage) return { box: pageLoader, pick: function() { return pageLoader.item ? pageLoader.item.navFirst : null } }
+        return { box: list, pick: null }
+    }
+    function landNav(from) { var l = landing(from); Nav.land(l.box, l.pick) }
     // 🚨 Se l'apparecchio passa a un altro Lyrion (multiroom "segui", o server
     // esterno), quello che si sta guardando e' l'elenco del server di prima:
     // si riparte dalla home di quello nuovo.
     Connections { target: Api; function onLmsBaseChanged() { root.navHome() } }
 
     function navHome() {
+        var from = nav.length > 1 ? nav[1] : null
         nav = [{ view: LibraryModel.Home, title: Tr.t("player.titles.home"), p1: "", p2: "", input: "" }]
         navDir = -1
         msearchOpen = false; ctx.close(); search.text = ""
         pageLoader.sourceComponent = null
         appear()
+        landNav(from)
     }
     function navBack() {
         if (nav.length <= 1) return
+        var from = nav[nav.length - 1]
         var n = nav.slice(); n.pop(); nav = n
         navDir = -1
         msearchOpen = false; search.text = ""; ctx.close()
         loadTop(); appear()
+        landNav(from)
     }
     function navToCrumb(i) {
         if (i >= nav.length - 1) return
+        var from = nav[i + 1]
         nav = nav.slice(0, i + 1)
         navDir = -1
         msearchOpen = false; search.text = ""; ctx.close()
         loadTop(); appear()
+        landNav(from)
     }
     function openTab(i) {
         navDir = i > tab ? 1 : i < tab ? -1 : 0
@@ -130,6 +148,7 @@ Item {
         } else if (i === 4) settingsTab.enter()
         else if (i === 3) discoverTab.enter()
         appear()
+        landNav(null)
     }
     function showPlaylists() { tab = 0; navHome(); goView(LibraryModel.Playlists, Tr.t("player.titles.playlists")) }
     // the album and artist pages, from anywhere (library, search, Now Playing,
@@ -691,26 +710,44 @@ Item {
                         Icon { anchors.centerIn: parent; name: "search"; size: 16; color: homeSearch.text.trim().length >= 2 ? Theme.gold : Theme.goldA(0.4) }
                         Tap { onClicked: root.submitLibrarySearch(homeSearch.text) }
                     }
-                    Repeater {
-                        model: root.tiles
-                        Rectangle {
-                            required property var modelData
-                            required property int index
-                            readonly property real tw: (root.width - 32 - 24) / 3
-                            // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
-                            // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno).
-                            // A taller canvas (16:10: 640) shares its extra height among the rows.
-                            readonly property real th: 117 + Math.max(0, root.height - 600) / 3
-                            x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (th + 12)
-                            width: tw; height: th; radius: 12
-                            color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
-                            Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
-                            Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
-                            Tap {
-                                id: tileTap
-                                onClicked: {
-                                    if (modelData.view === LibraryModel.PluginItems) root.goView(LibraryModel.PluginItems, Tr.t(modelData.key), "favorites")
-                                    else root.goView(modelData.view, Tr.t(modelData.key))
+                    // the tiles: where the spotlight lands on the home (Nav.land)
+                    Item {
+                        id: tilesBox
+                        anchors.fill: parent
+                        // the tile that opens `e` (a nav entry): coming back,
+                        // the spotlight returns to the one that was opened
+                        function tileFor(e) {
+                            if (!e) return null
+                            for (var i = 0; i < children.length; i++) {
+                                var c = children[i]
+                                if (!c.modelData || c.modelData.view !== e.view) continue
+                                if (e.view === LibraryModel.PluginItems && e.p1 !== "favorites") continue
+                                return c.navTap
+                            }
+                            return null
+                        }
+                        Repeater {
+                            model: root.tiles
+                            Rectangle {
+                                required property var modelData
+                                required property int index
+                                property alias navTap: tileTap
+                                readonly property real tw: (root.width - 32 - 24) / 3
+                                // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
+                                // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno).
+                                // A taller canvas (16:10: 640) shares its extra height among the rows.
+                                readonly property real th: 117 + Math.max(0, root.height - 600) / 3
+                                x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (th + 12)
+                                width: tw; height: th; radius: 12
+                                color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
+                                Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
+                                Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                                Tap {
+                                    id: tileTap
+                                    onClicked: {
+                                        if (modelData.view === LibraryModel.PluginItems) root.goView(LibraryModel.PluginItems, Tr.t(modelData.key), "favorites")
+                                        else root.goView(modelData.view, Tr.t(modelData.key))
+                                    }
                                 }
                             }
                         }
