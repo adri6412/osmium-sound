@@ -153,6 +153,12 @@ label.upload-btn:hover { filter: brightness(1.1); }
 .net:hover { background: rgba(255, 255, 255, 0.02); }
 .net:last-child { border-bottom: 0; }
 .check { color: var(--gold); font-weight: 700; }
+/* the network interfaces, as the kiosk lists them: the one in use in gold */
+.ifaces { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin: 6px 0 14px; }
+.iface { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); min-width: 0; }
+.iface .nm { font-weight: 600; }
+.iface .ad { margin-left: auto; font-family: ui-monospace, monospace; font-size: 13px; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; }
+.iface.on { border-color: rgba(212, 175, 55, 0.6); color: var(--gold); background: rgba(212, 175, 55, 0.08); }
 /* The band of a Wi-Fi network, shown only when the same name is on more
    than one of them (2.4 / 5 GHz) — the only thing telling the rows apart. */
 .band { color: var(--gold); border: 1px solid var(--border); border-radius: 4px;

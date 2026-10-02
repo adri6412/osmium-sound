@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
 import Toggle from '../components/Toggle.vue';
+import Icon from '../components/Icon.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
 import VuSkinPreview from '../components/VuSkinPreview.vue';
@@ -170,7 +171,18 @@ function pickNet(n) {
   ssid.value = n.ssid;
   wifiBand.value = dualSsids.value.has(n.ssid) ? (n.band || '') : '';
 }
-async function loadNet() { const r = await api.sys('network_status'); if (r.ok) net.value = r.data; }
+// What the kiosk's network page shows, read the same way: the interfaces
+// with their addresses (system_info), the connection in use
+// (network_status) and the subnet (network_info).
+const netIfaces = ref([]); const netSubnet = ref('');
+async function loadNet(announce = false) {
+  if (announce) say(t('settings.network.loading'));
+  const [r, i, m] = await Promise.all([api.sys('network_status'), api.sys('info'), api.sys('network_info')]);
+  if (r.ok) net.value = r.data;
+  if (i.ok) netIfaces.value = (i.data.network_interfaces || []).map((f) => ({ name: String(f.name || ''), addr: String(f.address || ''), active: !!f.active, wifi: String(f.name || '').startsWith('w') }));
+  if (m.ok) netSubnet.value = String(m.data.netmask || '');
+  if (announce) say('');
+}
 async function scanWifi() {
   netBusy.value = true; const r = await api.sys('wifi_scan'); netBusy.value = false;
   if (r.ok) wifi.value = r.data.networks || []; else say(t('settings.network.scanFailed'), true);
@@ -1760,8 +1772,18 @@ onUnmounted(() => {
 
     <!-- Network -->
     <div class="card" v-if="open === 'network'">
-      <p class="sub">{{ t('settings.network.activeLabel') }}: {{ net.type === 'wireless' ? t('dashboard.wifi') : net.type === 'wired' ? t('settings.network.cable') : '—' }}
-        <span v-if="net.ssid"> · {{ net.ssid }}</span><span v-if="net.ip"> · {{ net.ip }}</span></p>
+      <!-- the same rows as the kiosk's network page (SettingsTab.qml secNetwork) -->
+      <p class="sub">{{ t('settings.network.interfaceLabel') }}</p>
+      <div class="ifaces">
+        <div v-for="f in netIfaces" :key="f.name" class="iface" :class="{ on: f.active }">
+          <Icon :name="f.wifi ? 'wifi' : 'network'" :size="16" />
+          <span class="nm">{{ f.name }}</span><span class="ad">{{ f.addr || '—' }}</span>
+        </div>
+      </div>
+      <p class="sub">{{ t('settings.network.activeLabel') }}:
+        <template v-if="!net.connected">{{ t('settings.network.activeNone') }}</template>
+        <template v-else>{{ net.type === 'wireless' ? t('dashboard.wifi') : net.type === 'wired' ? t('settings.network.cable') : '—' }}
+        <span v-if="net.ssid"> · {{ net.ssid }}</span><span v-if="net.ip"> · {{ net.ip }}</span></template></p>
       <div class="row">
         <button class="secondary" :disabled="netBusy" @click="scanWifi">{{ t('settings.network.scanWifi') }}</button>
         <button class="secondary" :disabled="netBusy" @click="wired">{{ t('settings.network.useWired') }}</button>
@@ -1781,6 +1803,13 @@ onUnmounted(() => {
         <input v-model="wifiPass" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
         <div style="margin-top: 12px;"><button :disabled="netBusy" @click="connectWifi">{{ t('settings.network.connect') }}</button></div>
       </template>
+
+      <div class="between" style="margin-top: 14px;">
+        <span>{{ t('settings.network.currentIp', { name: net.device || '—' }) }}</span><b class="gold" style="font-family: ui-monospace, monospace;">{{ net.ip || '—' }}</b>
+      </div>
+      <p v-if="netSubnet" class="sub" style="margin-top: 2px;">{{ t('settings.network.typeSubnet', { type: net.type === 'wireless' ? 'wireless' : 'wired', subnet: netSubnet }) }}</p>
+      <p class="sub" style="margin-top: 10px;">{{ t('settings.network.dhcpNotice') }}</p>
+      <button class="secondary" :disabled="netBusy" @click="loadNet(true)">{{ t('settings.network.reloadData') }}</button>
 
       <!-- Fixed (static) address. Applies to whichever interface is carrying
            traffic right now, wired or Wi-Fi (named below). -->
