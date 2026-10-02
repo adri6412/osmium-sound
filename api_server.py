@@ -1611,6 +1611,32 @@ def _wifi_join(ssid, password, dev, band=''):
     return r
 
 
+def wifi_forget(ssid):
+    """Drop the NetworkManager profile of a Wi-Fi network: the player leaves
+    it now, if it is on it, and never joins it again by itself. Profiles are
+    named after their SSID, by nmcli and by _wifi_join alike, so the name is
+    the key (see _wifi_profile_exists)."""
+    ssid = (ssid or '').strip()
+    if not ssid:
+        return {'success': False, 'code': 'network.ssidMissing', 'message': _t('network.ssidMissing', _lang())}
+    if not re.fullmatch(r'(?!-)[^\x00-\x1f]+', ssid):
+        return {'success': False, 'code': 'network.invalidField',
+                'message': _t('network.invalidField', _lang(), label='SSID')}
+    if ssid not in _connection_ids_for_device_type('wifi'):
+        return {'success': False, 'code': 'network.notSaved',
+                'message': _t('network.notSaved', _lang(), ssid=ssid)}
+    try:
+        r = _run(['nmcli', 'connection', 'delete', 'id', ssid], timeout=20)
+        ok = r.returncode == 0
+    except Exception:
+        log.exception("wifi_forget: deleting the profile of %s failed", ssid)
+        ok = False
+    if not ok:
+        return {'success': False, 'code': 'network.forgetFailed',
+                'message': _t('network.forgetFailed', _lang(), ssid=ssid)}
+    return {'success': True, 'ssid': ssid, 'message': _t('network.forgotten', _lang(), ssid=ssid)}
+
+
 def wifi_connect(ssid, password, band=''):
     if not ssid:
         return {'success': False, 'code': 'network.ssidMissing', 'message': _t('network.ssidMissing', _lang())}
@@ -9424,6 +9450,11 @@ def api_wifi_connect():
     data = request.get_json(silent=True) or {}
     return jsonify(wifi_connect(data.get('ssid'), data.get('password', ''),
                                 (data.get('band') or '').strip()))
+
+@app.route('/wifi_forget', methods=['POST'])
+def api_wifi_forget():
+    data = request.get_json(silent=True) or {}
+    return jsonify(wifi_forget(data.get('ssid')))
 
 @app.route('/wired_dhcp', methods=['POST'])
 def api_wired_dhcp():

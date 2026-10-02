@@ -175,6 +175,17 @@ async function scanWifi() {
   netBusy.value = true; const r = await api.sys('wifi_scan'); netBusy.value = false;
   if (r.ok) wifi.value = r.data.networks || []; else say(t('settings.network.scanFailed'), true);
 }
+// Forget the network in use: the player leaves it now and never joins it
+// again by itself. Said plainly in the confirmation, because a browser
+// reaching this page over that Wi-Fi loses the player with it.
+async function forgetWifi() {
+  const s = net.value.ssid;
+  if (!s || !confirm(t('settings.network.forgetConfirm', { ssid: s }))) return;
+  netBusy.value = true; const r = await api.sysPost('wifi_forget', { ssid: s }); netBusy.value = false;
+  const done = r.ok && r.data && r.data.success !== false;
+  say((r.data && r.data.message) || t(done ? 'settings.network.forgotten' : 'settings.network.forgetFailed', { ssid: s }), !done);
+  loadNet();
+}
 async function connectWifi() {
   netBusy.value = true; say(t('settings.network.connecting'));
   const r = await api.sysPost('wifi_connect', { ssid: ssid.value, password: wifiPass.value, band: wifiBand.value });
@@ -1754,6 +1765,7 @@ onUnmounted(() => {
       <div class="row">
         <button class="secondary" :disabled="netBusy" @click="scanWifi">{{ t('settings.network.scanWifi') }}</button>
         <button class="secondary" :disabled="netBusy" @click="wired">{{ t('settings.network.useWired') }}</button>
+        <button v-if="net.type === 'wireless' && net.ssid" class="secondary" :disabled="netBusy" @click="forgetWifi">{{ t('settings.network.forget', { ssid: net.ssid }) }}</button>
       </div>
       <div v-for="n in wifi" :key="n.ssid + '|' + (n.band || '')" class="net between" @click="pickNet(n)">
         <span>{{ n.ssid }}

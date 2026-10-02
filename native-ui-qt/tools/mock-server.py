@@ -433,7 +433,10 @@ class H(BaseHTTPRequestHandler):
                 "/update/status": STATE["ota"], "/boot_mode": {"mode": "live"}, "/provision_status": {"pending": False, "completed": True, "networks": [{"ssid": "CasaWiFi", "security": "WPA2", "signal": 78, "band": "2.4"}, {"ssid": "CasaWiFi", "security": "WPA2", "signal": 64, "band": "5"}, {"ssid": "Ospiti", "security": "", "signal": 40, "band": "2.4"}]},
                 "/player_name": {"name": "Osmium"}, "/ui_language": {"lang": STATE["lang"]},
                 "/display_mode": {"mode": STATE["display_mode"]}, "/ui_resolution": {"mode": STATE["ui_resolution"]}, "/ui_refresh": {"supported": True, "mode": STATE["ui_refresh"]},
-                "/network_status": {"connected": True, "type": "wired", "ssid": None, "ip": "192.168.0.133", "device": "eth0"},
+                # follows MOCK_NET_TYPE like /connectivity: wireless shows the Wi-Fi rows of Settings (forget the network)
+                "/network_status": {"connected": STATE["net_type"] != "none", "type": STATE["net_type"],
+                                    "ssid": "CasaWiFi" if STATE["net_type"] == "wireless" else None,
+                                    "ip": "192.168.0.133", "device": "wlan0" if STATE["net_type"] == "wireless" else "eth0"},
                 "/connectivity": {"state": STATE["net"], "type": STATE["net_type"], "ssid": "CasaWiFi" if STATE["net_type"] == "wireless" else None,
                                   "ip": None if STATE["net"] == "offline" and STATE["net_type"] == "none" else "192.168.0.133",
                                   "device": None if STATE["net_type"] == "none" else ("wlan0" if STATE["net_type"] == "wireless" else "eth0"),
@@ -544,6 +547,12 @@ class H(BaseHTTPRequestHandler):
                 r["remotes"] = [d for d in r["remotes"] if d["mac"] != mac]
                 return self._json(dict(r, success=True, message="Telecomando dimenticato"))
         if port == 8000:
+            if u.path == "/wifi_forget":
+                ssid = str(data.get("ssid") or "")
+                if ssid != "CasaWiFi":
+                    return self._json({"success": False, "code": "network.notSaved", "message": f"{ssid} non e' una rete salvata"})
+                STATE["net_type"] = "wired"        # the box falls back to the cable
+                return self._json({"success": True, "ssid": ssid, "message": f"{ssid} dimenticata: il lettore non vi si collegher\u00e0 pi\u00f9 da solo"})
             if u.path == "/wifi_connect":
                 time.sleep(1.0)                      # nmcli takes its time
                 if os.environ.get("MOCK_WIFI_FAIL"):

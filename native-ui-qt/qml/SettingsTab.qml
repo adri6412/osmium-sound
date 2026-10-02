@@ -1740,6 +1740,11 @@ Item {
         var ai = info(Tr.t("settings.network.activeLabel"), act); ai.mono = true; ai.style = "row"; ai.icon = wifi ? "wifi" : "network"
         grid([acell(Tr.t("settings.network.configureWifiButton"), "wifi_panel", "light", { hh: 40, icon: "wifi" }),
               acell(Tr.t("settings.network.useWiredButton"), "wired_dhcp", "light", { hh: 40, icon: "network" })])   // bg-hifi-light
+        // forget the network in use: the player leaves it and never joins it again by itself
+        if (wifi && cfg.netSsid) {
+            var fg = action(Tr.tf("settings.network.forgetButton", "ssid", cfg.netSsid), "wifi_forget", "light")
+            fg.icon = "wifi-off"; fg.hh = 40
+        }
         var ip = info(Tr.tf("settings.network.currentIp", "name", cfg.netDev || "—"), cfg.netIp || "—"); ip.mono = true; ip.style = "row"
         if (cfg.netSubnet) { ip.extra = Tr.tf("settings.network.typeSubnet", "type", wifi ? "wireless" : "wired").replace("{subnet}", cfg.netSubnet); ip.hh = 64 }
         note(Tr.t("settings.network.dhcpNotice"), "dark", "info", 12)
@@ -2398,6 +2403,18 @@ Item {
             return
         case "upd_autocheck": autoCheck = !autoCheck; Sys.setConf("ota-autocheck", autoCheck ? "1" : "0"); if (Ui.app && Ui.app.main) Ui.app.main.browser.checkUpdates(); break
         case "wifi_panel": wifiAsk(); return
+        case "wifi_forget": {
+            var fssid = cfg.netSsid
+            if (!fssid) return
+            Ui.dialogs.confirm(Tr.tf("settings.network.forgetConfirm", "ssid", fssid), Tr.t("settings.network.forgetShort"), true, function(ok) {
+                if (!ok) return
+                post(cfg.api("/wifi_forget"), { ssid: fssid }, function(ok2, d) {
+                    var done = ok2 && d && d.success
+                    say((d && d.message) || Tr.tf(done ? "settings.network.forgotten" : "settings.network.forgetFailed", "ssid", fssid), !done)
+                })
+            })
+            return
+        }
         case "wired_dhcp":
             say(Tr.t("settings.network.connectingWired"))
             Api.post(A("/wired_dhcp"), {}, function(ok, d) {

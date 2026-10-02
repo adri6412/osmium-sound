@@ -317,3 +317,53 @@ class WifiConnectTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class WifiForgetTests(unittest.TestCase):
+    """Forgetting a network (api_server.wifi_forget): the profile named after
+    the SSID goes, nothing else is touched, and an SSID the box never saved
+    or that is not a valid argument is refused before nmcli is called."""
+
+    def setUp(self):
+        self.calls = []
+        self.profiles = {'HomeNet', 'Cafe'}
+        self.delete_rc = 0
+
+    def _fake_run(self, cmd, timeout=20):
+        self.calls.append(cmd)
+        if cmd[:5] == ['nmcli', '-t', '-f', 'NAME,TYPE', 'connection']:
+            rows = ''.join(f'{n}:802-11-wireless\n' for n in sorted(self.profiles))
+            return _cp(cmd, stdout=rows)
+        if cmd[1:3] == ['connection', 'delete']:
+            if self.delete_rc == 0:
+                self.profiles.discard(cmd[-1])
+            return _cp(cmd, rc=self.delete_rc, stderr='refused' if self.delete_rc else '')
+        return _cp(cmd)
+
+    def _forget(self, ssid):
+        with patch.object(api_server, '_run', self._fake_run):
+            return api_server.wifi_forget(ssid)
+
+    def test_forgets_the_profile_named_after_the_ssid(self):
+        r = self._forget('HomeNet')
+        self.assertTrue(r['success'], r)
+        self.assertIn(['nmcli', 'connection', 'delete', 'id', 'HomeNet'], self.calls)
+        self.assertEqual(self.profiles, {'Cafe'})
+        self.assertIn('HomeNet', r['message'])
+
+    def test_a_network_never_saved_is_refused_before_nmcli(self):
+        r = self._forget('Elsewhere')
+        self.assertEqual((r['success'], r['code']), (False, 'network.notSaved'))
+        self.assertFalse(any(c[1:3] == ['connection', 'delete'] for c in self.calls))
+
+    def test_bad_arguments_never_reach_nmcli(self):
+        for bad in ('', '-flag', 'ctrl\x01char'):
+            r = self._forget(bad)
+            self.assertFalse(r['success'], bad)
+        self.assertEqual(self.calls, [])
+
+    def test_a_refused_delete_is_reported(self):
+        self.delete_rc = 4
+        r = self._forget('HomeNet')
+        self.assertEqual((r['success'], r['code']), (False, 'network.forgetFailed'))
+
