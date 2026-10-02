@@ -194,6 +194,30 @@ class TestWorkerLog(unittest.TestCase):
         self.assertIn('No errors occurred', clean)
         self.assertIn('Copy OK (read once)', clean)
 
+    def test_read_track_reports_progress(self):
+        """The bar moves inside a track: a fake cdparanoia writes the WAV in
+        slices and read_track() reports the growing fraction."""
+        tmp = tempfile.mkdtemp()
+        fake = os.path.join(tmp, 'cdparanoia')
+        with open(fake, 'w') as f:
+            f.write('#!/usr/bin/env python3\nimport sys, time\nout = sys.argv[-1]\n'
+                    'with open(out, "wb") as f:\n    for _ in range(8):\n        f.write(b"x" * 1000); f.flush(); time.sleep(0.12)\n')
+        os.chmod(fake, 0o755)
+        wav = os.path.join(tmp, 'track01.wav')
+        seen = []
+        env_path = os.environ['PATH']
+        os.environ['PATH'] = tmp + os.pathsep + env_path
+        try:
+            ok, err = self.rip.read_track('/dev/null', 1, wav, hcd.normalize({}), expected_bytes=8000, on_progress=seen.append)
+        finally:
+            os.environ['PATH'] = env_path
+        self.assertTrue(ok, err)
+        self.assertEqual(os.path.getsize(wav), 8000)
+        self.assertGreaterEqual(len(seen), 2, seen)
+        self.assertEqual(seen, sorted(seen))
+        self.assertTrue(all(0 <= v <= 1 for v in seen), seen)
+        self.assertFalse(os.path.exists(wav + '.err'))
+
     def test_extra_tags(self):
         self.assertEqual(self.rip.extra_tags([['artist', ' Miles  Davis '], ['bad name', 'x'], ['LABEL', '']]), ['--tag=ARTIST=Miles Davis'])
 

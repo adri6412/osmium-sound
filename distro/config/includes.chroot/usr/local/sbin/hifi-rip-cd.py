@@ -23,6 +23,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 
 # hifi_logging.py and hifi_cdrip.py ship in /usr/local/bin alongside the
 # Python daemons; this script lives in /usr/local/sbin.
@@ -110,8 +111,17 @@ def read_toc(device):
     return hifi_cdrip.parse_cdparanoia_toc((r.stdout or "") + "\n" + (r.stderr or ""))
 
 
-def read_track(device, num, wav, opt):
-    """One cdparanoia read of track `num` into `wav`. Returns (ok, stderr)."""
+CD_FRAME_BYTES = 2352      # one CD frame of audio: 588 stereo 16-bit samples
+
+
+def read_track(device, num, wav, opt, expected_bytes=0, on_progress=None):
+    """One cdparanoia read of track `num` into `wav`. Returns (ok, stderr).
+
+    cdparanoia writes the WAV as it reads, so with the track's length known
+    (`expected_bytes`, from the TOC) the file's size says how far it is:
+    `on_progress(fraction)` is called every half second with 0..1, which is
+    what moves the bar between one track and the next."""
+    global _proc
     cmd = ["cdparanoia", "-q", "-d", device]
     if not opt["paranoia"]:
         cmd.append("-Z")
@@ -124,16 +134,45 @@ def read_track(device, num, wav, opt):
         os.remove(wav)
     except OSError:
         pass
-    r = run(cmd, timeout=1800)
-    ok = r.returncode == 0 and os.path.isfile(wav) and os.path.getsize(wav) > 44
-    return ok, (r.stderr or "").strip()
+    err_path = wav + ".err"
+    with open(err_path, "w") as err:
+        _proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=err)
+        deadline = time.monotonic() + 1800
+        last = -1.0
+        while True:
+            rc = _proc.poll()
+            if rc is not None:
+                break
+            if time.monotonic() > deadline:
+                _proc.kill()
+                _proc.wait()
+                rc = -9
+                break
+            if on_progress and expected_bytes > 0:
+                try:
+                    frac = min(1.0, os.path.getsize(wav) / expected_bytes)
+                except OSError:
+                    frac = 0.0
+                if frac - last >= 0.01:
+                    last = frac
+                    on_progress(frac)
+            time.sleep(0.5)
+    _proc = None
+    try:
+        with open(err_path, encoding="utf-8", errors="replace") as f:
+            stderr = f.read().strip()
+        os.remove(err_path)
+    except OSError:
+        stderr = ""
+    ok = rc == 0 and os.path.isfile(wav) and os.path.getsize(wav) > 44
+    return ok, stderr
 
 
-def rip_track(device, num, wav, opt):
+def rip_track(device, num, wav, opt, expected_bytes=0, on_progress=None):
     """Read the track, and with retries read it again until two consecutive
     reads carry the same audio. Returns a dict for the log: crc, reads,
     accurate (True when two reads agreed, None when no retry was asked)."""
-    ok, err = read_track(device, num, wav, opt)
+    ok, err = read_track(device, num, wav, opt, expected_bytes, on_progress)
     if not ok:
         return {"ok": False, "error": err}
     crc = hifi_cdrip.wav_crc32(wav)
@@ -314,11 +353,15 @@ def main():
     for i, tr in enumerate(tracks):
         num = int(tr.get("num") or (i + 1))
         title = tr.get("title") or f"Track {num:02d}"
-        write_status("ripping", num, total, int(i * 100 / total),
-                     f"Traccia {num}/{total}: {title}")
+        label = f"Traccia {num}/{total}: {title}"
+        write_status("ripping", num, total, int(i * 100 / total), label)
         wav = os.path.join(work, f"track{num:02d}.wav")
         fname = f"{num:02d} - {hifi_cdrip.safe_name(title, f'Track {num:02d}', clean)}"
-        res = rip_track(device, num, wav, opt)
+        expected = int((toc.get(num) or {}).get("length") or 0) * CD_FRAME_BYTES + 44
+
+        def on_progress(frac, _i=i, _label=label):
+            write_status("ripping", num, total, int((_i + frac) * 100 / total), _label)
+        res = rip_track(device, num, wav, opt, expected, on_progress)
         cancelled()
         if not res.get("ok"):
             shutil.rmtree(work, ignore_errors=True)

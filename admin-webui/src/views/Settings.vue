@@ -2789,7 +2789,7 @@ onUnmounted(() => {
 
     <!-- Debug: boot / kernel-panic troubleshooting flags -->
     <!-- Licenses & credits: see loadCredits() above -->
-    <div class="card" v-if="open === 'notices'">
+    <div class="card wide" v-if="open === 'notices'">
       <p class="sub">{{ t('settings.notices.intro') }}</p>
       <p class="muted" v-if="!credits">{{ t('common.loading') }}</p>
       <template v-else>
@@ -2817,7 +2817,7 @@ onUnmounted(() => {
               <span class="muted" style="display:block;" v-if="e.notes">{{ e.notes }}</span>
               <a class="muted" style="display:block;" v-if="e.url" :href="e.url" target="_blank" rel="noopener">{{ e.url }}</a>
             </span>
-            <span class="muted" style="white-space: nowrap; margin-left: 12px;">{{ e.license }}</span>
+            <span class="muted" style="margin-left: 12px; max-width: 48%; text-align: right; overflow-wrap: anywhere;">{{ e.license }}</span>
           </div>
         </div>
 
@@ -2832,7 +2832,7 @@ onUnmounted(() => {
                 <span style="display:block;">{{ p.name }} <span class="muted">{{ p.version }}</span></span>
                 <a class="muted" style="display:block;" v-if="p.homepage" :href="p.homepage" target="_blank" rel="noopener">{{ p.homepage }}</a>
               </span>
-              <span class="muted" style="white-space: nowrap; margin-left: 12px;">{{ p.license }}</span>
+              <span class="muted" style="margin-left: 12px; max-width: 48%; text-align: right; overflow-wrap: anywhere;">{{ p.license }}</span>
             </div>
           </template>
         </div>
