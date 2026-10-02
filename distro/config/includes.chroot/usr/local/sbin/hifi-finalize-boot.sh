@@ -25,8 +25,8 @@ grep -q '^GRUB_TIMEOUT=' "$GRUB" \
     && sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' "$GRUB" \
     || echo 'GRUB_TIMEOUT=0' >> "$GRUB"
 grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB" \
-    && sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 vt.global_cursor_default=0 rd.udev.log_level=3 udev.log_priority=3"/' "$GRUB" \
-    || echo 'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 vt.global_cursor_default=0 rd.udev.log_level=3 udev.log_priority=3"' >> "$GRUB"
+    && sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 systemd.show_status=0 rd.systemd.show_status=0 vt.global_cursor_default=0 rd.udev.log_level=3 udev.log_priority=3"/' "$GRUB" \
+    || echo 'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 systemd.show_status=0 rd.systemd.show_status=0 vt.global_cursor_default=0 rd.udev.log_level=3 udev.log_priority=3"' >> "$GRUB"
 if grep -q '^GRUB_TIMEOUT_STYLE=' "$GRUB"; then
     sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=hidden/' "$GRUB"
 else

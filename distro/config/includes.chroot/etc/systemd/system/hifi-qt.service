@@ -7,11 +7,19 @@ Description=Osmium Sound — Qt on-screen interface (DRM/KMS, eglfs)
 # here is the safety net for if both ever ended up active.
 Conflicts=lightdm.service
 After=hifi-api.service hifi-vumeter.service
-# Like the display managers: start AFTER plymouth has let go of the screen, or
-# the first attempt dies with "setCrtc: Permission denied" (plymouth still
-# holds the DRM master) and the screen stays black until Restart= tries
-# again.
-After=systemd-user-sessions.service plymouth-quit-wait.service
+# The boot splash is handed over the way the display managers do it: this
+# unit keeps plymouth-quit.service out (Conflicts) and quits Plymouth itself,
+# just before starting, with --retain-splash, so the last frame of the splash
+# stays on the panel until the interface draws its first one. Before, the
+# interface waited for plymouth-quit-wait.service: in between, the text
+# console showed systemd's "[ OK ] Finished Terminate Plymouth Boot Screen"
+# lines for a second or two (they are also switched off on the kernel command
+# line, systemd.show_status=0, so a late unit never prints there either).
+# Plymouth must have let go of the DRM master before the start, or the
+# first attempt dies with "setCrtc: Permission denied": `plymouth quit`
+# returns once the daemon has gone, and Restart= below is the parachute.
+Conflicts=plymouth-quit.service
+After=systemd-user-sessions.service plymouth-start.service
 # No ceiling on the attempts: if the first one finds the DRM still busy (a hot
 # swap from the other interface), with the stock limit systemd gives up after
 # five tries and the screen stays black for good.
@@ -40,6 +48,7 @@ Environment=QT_LOGGING_RULES=qt.qpa.input=false
 # "won't start", while starting it by hand from a terminal works. The package
 # is installed now (image package list + migration 0056); this is the parachute
 # for devices that do not have it yet.
+ExecStartPre=-/usr/bin/plymouth quit --retain-splash
 ExecStartPre=-/usr/bin/chvt 1
 ExecStart=/opt/hifi-qt/hifi-qt --assets /opt/hifi-qt/assets --locales /opt/hifi-qt/locales
 Restart=on-failure

@@ -434,7 +434,7 @@ done
 # ── 7. grub.cfg statico dello slot; fstab; machine-id vuoto ───────────────
 log "grub.cfg dello slot (kernel $KVER), fstab, machine-id"
 CMDLINE=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"$/\1/p' "$CH/etc/default/grub" | tail -n 1)
-[ -n "$CMDLINE" ] || CMDLINE="quiet splash loglevel=0"
+[ -n "$CMDLINE" ] || CMDLINE="quiet splash loglevel=0 systemd.show_status=0 rd.systemd.show_status=0 vt.global_cursor_default=0"
 mkdir -p "$CH/boot/grub"
 sed -e "s|@KVER@|$KVER|g" -e "s|@CMDLINE@|$CMDLINE|g" "$SHARE/slot-grub.cfg.tmpl" > "$CH/boot/grub/grub.cfg"
 if command -v grub-script-check >/dev/null 2>&1; then grub-script-check "$CH/boot/grub/grub.cfg" || die "grub.cfg dello slot non valido"; fi
