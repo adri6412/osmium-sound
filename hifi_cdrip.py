@@ -28,6 +28,7 @@ Ripping page, field by field:
 import json
 import os
 import re
+import stat
 import struct
 import unicodedata
 import urllib.request
@@ -177,6 +178,98 @@ def save(settings, path=CONF):
         f.write('\n')
     os.replace(tmp, path)
     return s
+
+
+# ── Who owns what a rip writes ───────────────────────────────────────
+# The worker runs as root, but music folders belong to the account the
+# network shares write as, in the group Lyrion has in common with it (see
+# SAMBA_USER / SHARE_GROUP in sources_server.py). Anything left root-owned
+# plays fine but cannot be renamed or deleted from a PC on the network.
+SHARE_USER = 'hifimusic'
+SHARE_GROUP = 'hifishare'
+
+
+def share_owner(user=SHARE_USER, group=SHARE_GROUP):
+    """(uid, gid) rips are handed to, or None when the account is missing
+    (a development machine): the shared group's gid, else the user's own."""
+    import grp
+    import pwd
+    try:
+        ent = pwd.getpwnam(user)
+    except KeyError:
+        return None
+    try:
+        gid = grp.getgrnam(group).gr_gid
+    except KeyError:
+        gid = ent.pw_gid
+    return ent.pw_uid, gid
+
+
+def parents_within(root, dest):
+    """`dest` and its parent folders up to, not including, `root`: the
+    prefix and artist folders a rip creates on the way to the album. Empty
+    when dest is not inside root."""
+    root = os.path.realpath(root)
+    p = os.path.realpath(dest)
+    out = []
+    while p != root and p.startswith(root + os.sep):
+        out.append(p)
+        p = os.path.dirname(p)
+    return out
+
+
+def hand_over(path, owner, from_uids=(0,)):
+    """Give `path` to the share account: an entry owned by one of `from_uids`
+    (root, i.e. the rip worker) becomes owner's, every entry takes the shared
+    group, folders get setgid + group write (2775) and files group write
+    (0664) — the shape sources_server gives a published folder. Symlinks are
+    left alone. Filesystems without POSIX ownership (FAT, exFAT, NTFS, SMB)
+    refuse and are ignored: their mount options already fix uid and gid.
+    Returns True when something changed."""
+    if not owner:
+        return False
+    uid, gid = owner
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return False
+    if stat.S_ISLNK(st.st_mode):
+        return False
+    changed = False
+    want_uid = uid if st.st_uid in from_uids else st.st_uid
+    try:
+        if want_uid != st.st_uid or st.st_gid != gid:
+            os.chown(path, want_uid, gid)
+            changed = True
+        bits = st.st_mode & 0o7777
+        want = bits | (0o2775 if stat.S_ISDIR(st.st_mode) else 0o664)
+        if want != bits:
+            os.chmod(path, want)
+            changed = True
+    except OSError:
+        pass
+    return changed
+
+
+def hand_over_tree(root, dest, owner, from_uids=(0,), limit=None):
+    """hand_over() for `dest`, everything under it and the folders between
+    `dest` and `root` — the whole path a rip made, not just the album. `root`
+    itself (the destination the user chose) is never touched. `limit` bounds
+    the walk. Returns how many entries changed."""
+    if not owner:
+        return 0
+    n = 0
+    for p in parents_within(root, dest):
+        n += hand_over(p, owner, from_uids)
+    if os.path.isdir(dest):
+        seen = 0
+        for dirpath, dirnames, filenames in os.walk(dest):
+            for name in dirnames + filenames:
+                seen += 1
+                if limit is not None and seen > limit:
+                    return n
+                n += hand_over(os.path.join(dirpath, name), owner, from_uids)
+    return n
 
 
 # ── The drive ───────────────────────────────────────────────────────

@@ -165,6 +165,68 @@ class TestTocAndNames(unittest.TestCase):
         self.assertIsNone(hcd.wav_crc32(os.path.join(tmp, 'missing.wav')))
 
 
+class TestHandOver(unittest.TestCase):
+    """hifi_cdrip.hand_over*: what a rip writes belongs to the share account,
+    not to the root the worker runs as."""
+
+    def test_parents_within(self):
+        self.assertEqual(hcd.parents_within('/m/usb', '/m/usb/CD rips/Artist/Album'),
+                         ['/m/usb/CD rips/Artist/Album', '/m/usb/CD rips/Artist', '/m/usb/CD rips'])
+        self.assertEqual(hcd.parents_within('/m/usb', '/m/usb'), [])
+        self.assertEqual(hcd.parents_within('/m/usb', '/elsewhere/x'), [])
+        self.assertEqual(hcd.parents_within('/m/usb', '/m/usb2/x'), [])
+
+    def test_hand_over_tree(self):
+        tmp = tempfile.mkdtemp()
+        root = os.path.join(tmp, 'usb')
+        dest = os.path.join(root, 'CD rips', 'Artist', 'Album')
+        os.makedirs(dest)
+        for name in ('01 - A.flac', 'cover.jpg', 'Artist - Album.log'):
+            with open(os.path.join(dest, name), 'wb') as f:
+                f.write(b'x')
+        os.symlink('01 - A.flac', os.path.join(dest, 'link'))
+        for p in (os.path.join(root, 'CD rips'), os.path.join(root, 'CD rips', 'Artist'), dest):
+            os.chmod(p, 0o755)                      # what root's umask 022 leaves
+        os.chmod(os.path.join(dest, '01 - A.flac'), 0o644)
+        me = os.geteuid()
+        calls = []
+        with mock.patch('os.chown', side_effect=lambda p, u, g: calls.append((p, u, g))):
+            n = hcd.hand_over_tree(root, dest, (1234, 902), from_uids=(me,))
+        owned = {p for p, _, _ in calls}
+        # the prefix and artist folders the rip made on the way, the album, the files
+        for p in (os.path.join(root, 'CD rips'), os.path.join(root, 'CD rips', 'Artist'), dest,
+                  os.path.join(dest, '01 - A.flac'), os.path.join(dest, 'Artist - Album.log')):
+            self.assertIn(p, owned)
+        self.assertNotIn(root, owned)               # the destination the user chose stays as it is
+        self.assertNotIn(os.path.join(dest, 'link'), owned)
+        self.assertTrue(all((u, g) == (1234, 902) for _, u, g in calls), calls)
+        self.assertEqual(n, len(calls))
+        self.assertEqual(os.stat(dest).st_mode & 0o7777, 0o2775)
+        self.assertEqual(os.stat(os.path.join(root, 'CD rips')).st_mode & 0o7777, 0o2775)
+        self.assertEqual(os.stat(os.path.join(dest, '01 - A.flac')).st_mode & 0o777, 0o664)
+        # someone else's file: keeps its owner, takes the group
+        other = os.path.join(dest, 'theirs.flac')
+        open(other, 'wb').close()
+        calls.clear()
+        with mock.patch('os.chown', side_effect=lambda p, u, g: calls.append((p, u, g))):
+            hcd.hand_over(other, (1234, 902), from_uids=(0,))
+        self.assertEqual(calls, [(other, me, 902)])
+        # no share account (a development machine): nothing happens
+        with mock.patch('os.chown') as chown:
+            self.assertFalse(hcd.hand_over(other, None))
+            self.assertEqual(hcd.hand_over_tree(root, dest, None), 0)
+        chown.assert_not_called()
+        # the walk is bounded
+        with mock.patch('os.chown'):
+            self.assertLessEqual(hcd.hand_over_tree(root, dest, (1234, 902), from_uids=(me,), limit=1), 4)
+
+    def test_share_owner(self):
+        self.assertIsNone(hcd.share_owner('no-such-user-here', 'no-such-group'))
+        import pwd
+        me = pwd.getpwuid(os.geteuid())
+        self.assertEqual(hcd.share_owner(me.pw_name, 'no-such-group'), (me.pw_uid, me.pw_gid))
+
+
 class TestWorkerLog(unittest.TestCase):
     """hifi-rip-cd.py's log, with the worker imported as a module."""
 
@@ -220,6 +282,40 @@ class TestWorkerLog(unittest.TestCase):
 
     def test_extra_tags(self):
         self.assertEqual(self.rip.extra_tags([['artist', ' Miles  Davis '], ['bad name', 'x'], ['LABEL', '']]), ['--tag=ARTIST=Miles Davis'])
+
+    def test_place_album_hands_over(self):
+        """The finished album is moved into place and every folder the rip
+        made (prefix, artist, album) plus every file goes to the share
+        account; the destination the user chose is left alone."""
+        tmp = tempfile.mkdtemp()
+        root = os.path.join(tmp, 'usb')
+        work = os.path.join(root, '.partial-rip')
+        os.makedirs(work)
+        dest = os.path.join(root, 'rips', 'Artist', 'Album')
+        for name in ('01 - A.flac', 'cover.jpg', 'Artist - Album.log'):
+            open(os.path.join(work, name), 'wb').close()
+        calls = []
+        with mock.patch('os.chown', side_effect=lambda p, u, g: calls.append((p, u, g))):
+            self.rip.place_album(work, dest, root, (1234, 902))
+        self.assertFalse(os.path.exists(work))
+        self.assertEqual(sorted(os.listdir(dest)), ['01 - A.flac', 'Artist - Album.log', 'cover.jpg'])
+        owned = {p for p, _, _ in calls}
+        for p in (os.path.join(root, 'rips'), os.path.join(root, 'rips', 'Artist'), dest,
+                  os.path.join(dest, '01 - A.flac'), os.path.join(dest, 'cover.jpg')):
+            self.assertIn(p, owned)
+        self.assertNotIn(root, owned)
+        self.assertTrue(all((u, g) == (1234, 902) for _, u, g in calls), calls)
+        self.assertEqual(os.stat(dest).st_mode & 0o7777, 0o2775)
+        self.assertEqual(os.stat(os.path.join(dest, '01 - A.flac')).st_mode & 0o777, 0o664)
+
+    def test_rip_owner(self):
+        self.assertEqual(self.rip.rip_owner({'owner': [1234, 902]}), (1234, 902))
+        with mock.patch.object(hcd, 'share_owner', return_value=(5, 6)):
+            self.assertEqual(self.rip.rip_owner({}), (5, 6))            # nothing in the plan: look it up
+            self.assertEqual(self.rip.rip_owner({'owner': [0, 0]}), (5, 6))  # root is not an owner
+            self.assertEqual(self.rip.rip_owner({'owner': 'junk'}), (5, 6))
+        with mock.patch.object(hcd, 'share_owner', return_value=None):
+            self.assertIsNone(self.rip.rip_owner({}))
 
 
 class TestApi(unittest.TestCase):
@@ -349,6 +445,7 @@ class TestApi(unittest.TestCase):
         self._patch('RIP_COVER', os.path.join(self.tmp, 'rip-cover.jpg'))
         self._patch('_cd_lookup', lambda toc: None)
         self._patch('_rip_watcher', lambda: None)
+        self._patch('_ensure_samba_uid_gid', lambda: (1234, 902))
         toc = {'discid': 'abcd1234', 'ntracks': 2, 'offsets': [150, 20000], 'total_sec': 500, 'lengths': [264, 235], 'leadout': 37500}
         self._patch('_cd_toc', lambda: toc)
         picked = os.path.join(self.mount, 'Rips')
@@ -359,6 +456,7 @@ class TestApi(unittest.TestCase):
         self.assertEqual(plan['root'], picked)
         self.assertEqual(plan['options']['retries'], 2)
         self.assertEqual(len(plan['tracks']), 2)
+        self.assertEqual(plan['owner'], [1234, 902])    # who the rip is handed to
         self.assertIn(['systemd-run', '--no-block', '--collect', '--unit=hifi-rip-cd', ss.RIP_SCRIPT, ss.RIP_PLAN], self.calls)
         # a folder outside every writable source is refused
         with open(ss.RIP_STATUS, 'w') as f:
@@ -382,6 +480,65 @@ class TestApi(unittest.TestCase):
         with open(ss.RIP_PLAN) as f:
             plan = json.load(f)
         self.assertEqual(plan['root'], self.mount)
+
+    def test_repair_rip_ownership(self):
+        """At start, what an earlier worker left root-owned under the rip
+        folder goes to the share account; the folder itself is not touched,
+        and nothing happens without a usable target."""
+        ss = self.ss
+        self._patch('_ensure_samba_uid_gid', lambda: (1234, 902))
+        with mock.patch('os.chown') as chown:
+            self.assertIsNone(ss._repair_rip_ownership())            # no target set
+            hcd.save({'target': '/somewhere/else'}, ss.CDRIP_CONF)
+            self.assertIsNone(ss._repair_rip_ownership())            # outside every writable source
+        chown.assert_not_called()
+        target = os.path.join(self.mount, 'Rips')
+        hcd.save({'target': target}, ss.CDRIP_CONF)
+        album = os.path.join(target, 'rip', 'Artist', 'Album')
+        os.makedirs(album)
+        open(os.path.join(album, '01.flac'), 'wb').close()
+        calls = []
+        me = os.geteuid()
+        with mock.patch('os.chown', side_effect=lambda p, u, g: calls.append((p, u, g))):
+            n = ss._repair_rip_ownership()
+        owned = {p for p, _, _ in calls}
+        self.assertEqual(n, len(calls))
+        self.assertNotIn(target, owned)
+        for p in (os.path.join(target, 'rip'), album, os.path.join(album, '01.flac')):
+            self.assertIn(p, owned)
+        # not root's: the owner stays, the group becomes the shared one
+        self.assertTrue(all((u, g) == (me, 902) for _, u, g in calls), calls)
+        # a network share: nothing of ours to fix there
+        self._patch('_rip_writable_sources', lambda: [{'id': 'nas', 'type': 'smb', 'mountpoint': self.mount}])
+        with mock.patch('os.chown') as chown:
+            self.assertEqual(ss._repair_rip_ownership(), 0)
+        chown.assert_not_called()
+
+    def test_watcher_hands_over_on_done(self):
+        ss = self.ss
+        self._patch('_ensure_samba_uid_gid', lambda: (1234, 902))
+        self._patch('_lyrion_add_mediadir_live', lambda dest: None)
+        root = os.path.join(self.mount, 'Rips')
+        dest = os.path.join(root, 'Artist', 'Album')
+        os.makedirs(dest)
+        with open(ss.RIP_STATUS, 'w') as f:
+            json.dump({'state': 'done', 'dest': dest, 'root': root}, f)
+        with mock.patch.object(ss.time, 'sleep'), mock.patch.object(hcd, 'hand_over_tree', return_value=3) as hot:
+            ss._rip_watcher()
+        hot.assert_called_once_with(root, dest, (1234, 902))
+        # an older worker reports no root: the plan's root, else the album's parent
+        self._patch('RIP_PLAN', os.path.join(self.tmp, 'rip-plan.json'))
+        with open(ss.RIP_STATUS, 'w') as f:
+            json.dump({'state': 'done', 'dest': dest}, f)
+        with open(ss.RIP_PLAN, 'w') as f:
+            json.dump({'root': root}, f)
+        with mock.patch.object(ss.time, 'sleep'), mock.patch.object(hcd, 'hand_over_tree', return_value=3) as hot:
+            ss._rip_watcher()
+        hot.assert_called_once_with(root, dest, (1234, 902))
+        os.remove(ss.RIP_PLAN)
+        with mock.patch.object(ss.time, 'sleep'), mock.patch.object(hcd, 'hand_over_tree', return_value=3) as hot:
+            ss._rip_watcher()
+        hot.assert_called_once_with(os.path.dirname(dest), dest, (1234, 902))
 
     def test_terminal_states(self):
         for state in ('idle', 'done', 'error', 'cancelled'):

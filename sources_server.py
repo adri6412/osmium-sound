@@ -6661,12 +6661,14 @@ def _lyrion_remove_mediadir_live(roots):
 
 
 def _rip_watcher():
-    """Background thread (spawned per rip): when the worker reports done, fix
-    ownership for Samba access (ext4 destinations only — see
-    _mount_adopted_disk()'s docstring; SMB/FAT-like destinations already
-    present every file under a fixed uid/gid via mount options, so nothing to
-    fix there) and add the destination to Lyrion's library live — not
-    apply_to_lyrion(), so LMS is not restarted mid-listen."""
+    """Background thread (spawned per rip): when the worker reports done,
+    make sure the rip belongs to the share account (the worker hands its
+    files over itself — hifi_cdrip.hand_over_tree — this is the safety net
+    behind it, for a worker that died between the move and the hand-over)
+    and add the destination to Lyrion's library live — not apply_to_lyrion(),
+    so LMS is not restarted mid-listen. Filesystems without POSIX ownership
+    (FAT, exFAT, NTFS, SMB) ignore the chown; their mount options already
+    fix uid and gid."""
     deadline = time.monotonic() + 3 * 60 * 60
     while time.monotonic() < deadline:
         time.sleep(3)
@@ -6676,19 +6678,14 @@ def _rip_watcher():
             if state in ("done", "error", "idle", "cancelled"):
                 if state == "done":
                     dest = st.get("dest") or ""
-                    uid, gid = _ensure_samba_uid_gid()
-                    local_roots = (INTERNAL_MOUNT_ROOT + "/", USB_ADOPTED_ROOT + "/")
-                    if dest.startswith(local_roots) and os.path.isdir(dest):
-                        for root, dirs, files in os.walk(dest):
-                            for name in dirs + files:
-                                try:
-                                    os.chown(os.path.join(root, name), uid, gid)
-                                except OSError:
-                                    pass
-                        try:
-                            os.chown(dest, uid, gid)
-                        except OSError:
-                            pass
+                    try:
+                        owner = _ensure_samba_uid_gid()
+                        if dest and owner[0]:
+                            # the root the rip started from: in the status, or
+                            # in the plan for a worker that does not report it
+                            hcd.hand_over_tree(st.get("root") or _rip_plan_root(dest), dest, owner)
+                    except Exception as e:
+                        print(f"[sources] rip ownership fix failed: {e}")
                     try:
                         _lyrion_add_mediadir_live(dest)
                     except Exception as e:
@@ -6696,6 +6693,56 @@ def _rip_watcher():
                 return
         except Exception as e:
             print(f"[sources] rip watcher error: {e}")
+
+
+def _rip_plan_root(dest):
+    """The destination root of the rip that is running or just finished
+    (from the plan the worker was given), else the parent of `dest` so the
+    album folder itself is still covered."""
+    try:
+        with open(RIP_PLAN) as f:
+            root = (json.load(f) or {}).get("root") or ""
+    except Exception:
+        root = ""
+    return root if root and dest.startswith(root.rstrip("/") + "/") else os.path.dirname(dest)
+
+
+def _repair_rip_ownership(limit=250000):
+    """Rips made before the worker handed its files over were root's — the
+    prefix and artist folders it created, the albums, the logs: playable, but
+    not renameable or deletable from a PC on the network. Walk the folder set
+    in Settings → CD ripping and hand every root-owned entry to the share
+    account. Local disks only: a network share carries no POSIX ownership of
+    ours to fix. Bounded, so a target that is a whole library cannot turn
+    this into a long walk. Returns how many entries changed, or None when the
+    target is not available right now (unset, or its disk not mounted yet)."""
+    settings = _cd_settings()
+    target = settings.get("target") or ""
+    mp, src = _cd_target_root(target)
+    if not mp:
+        return None
+    if (src or {}).get("type") == "smb" or not os.path.isdir(target):
+        return 0
+    owner = _ensure_samba_uid_gid()
+    if not owner[0]:
+        return 0
+    n = hcd.hand_over_tree(target, target, owner, limit=limit)
+    if n:
+        print(f"[sources] rip folder {target}: {n} entries handed to {SAMBA_USER}:{SHARE_GROUP}")
+    return n
+
+
+def _repair_rip_ownership_retry(attempts=10, interval=30):
+    """_repair_rip_ownership() once the rip folder's disk is mounted: at boot
+    the adopted disks come up in their own time."""
+    for _ in range(attempts):
+        try:
+            if _repair_rip_ownership() is not None:
+                return
+        except Exception as e:
+            print(f"[sources] _repair_rip_ownership error: {e}")
+            return
+        time.sleep(interval)
 
 
 def _rip_writable_sources():
@@ -6850,6 +6897,10 @@ def _cd_start_rip(data, toc, auto=False):
         # Settings → CD ripping, frozen for this rip (hifi-rip-cd.py reads them)
         "options": settings,
         "auto": bool(auto),
+        # The worker runs as root; the rip is handed to the share account
+        # (hifi_cdrip.hand_over_tree) so a PC on the network can rename or
+        # delete it.
+        "owner": list(_ensure_samba_uid_gid()),
     }
     with open(RIP_PLAN, "w") as f:
         json.dump(plan, f)
@@ -8080,6 +8131,10 @@ if __name__ == "__main__":
         _ensure_music_root()
     except Exception as e:
         print(f"[sources] _ensure_music_root error: {e}")
+    # Rips an earlier worker left root-owned become the share account's, once
+    # the rip folder's disk is up (see _repair_rip_ownership).
+    threading.Thread(target=_repair_rip_ownership_retry, daemon=True,
+                     name="rip-owner-repair").start()
     # Make sure Lyrion has a writable playlist folder ("save as playlist"),
     # owned so that a PC on the network can write into it too.
     try:

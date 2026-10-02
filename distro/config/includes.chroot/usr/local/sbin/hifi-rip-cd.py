@@ -298,6 +298,33 @@ def build_log(plan, opt, drive, toc, results, dest_name):
     return "\n".join(L) + "\n"
 
 
+def rip_owner(plan):
+    """(uid, gid) the rip is handed to: what the service put in the plan,
+    else the share account looked up here; None when there is none (then
+    everything stays the worker's, as on a development machine)."""
+    owner = plan.get("owner")
+    try:
+        owner = (int(owner[0]), int(owner[1])) if owner else None
+    except (TypeError, ValueError, IndexError):
+        owner = None
+    if not owner or owner[0] == 0:
+        owner = hifi_cdrip.share_owner()
+    return owner
+
+
+def place_album(work, dest, root, owner):
+    """Album complete: move into place in one pass so the library never sees
+    a half-ripped folder, then hand the folders made on the way (prefix,
+    artist, album) and every file to the share account. The worker runs as
+    root; what it leaves root-owned plays fine but cannot be renamed or
+    deleted from a PC on the network."""
+    os.makedirs(dest, exist_ok=True)
+    for name in sorted(os.listdir(work)):
+        os.replace(os.path.join(work, name), os.path.join(dest, name))
+    shutil.rmtree(work, ignore_errors=True)
+    hifi_cdrip.hand_over_tree(root, dest, owner, from_uids=(0, os.geteuid()))
+
+
 def main():
     if len(sys.argv) != 2:
         fail("usage: hifi-rip-cd.py <plan.json>")
@@ -329,6 +356,11 @@ def main():
     if cover and not os.path.isfile(cover):
         cover = ""
 
+    # Group-writable from the first byte, and the share account's once in
+    # place (place_album): the worker is root, the music is not.
+    os.umask(0o002)
+    owner = rip_owner(plan)
+
     base = root
     for seg in [p for p in opt["dir_prefix"].split("/") if p]:
         base = os.path.join(base, hifi_cdrip.safe_name(seg, "rip", clean))
@@ -337,6 +369,7 @@ def main():
     work = os.path.join(root, ".partial-rip")
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work, exist_ok=True)
+    hifi_cdrip.hand_over(work, owner)   # deletable from a PC even if the rip dies here
 
     def cancelled():
         if _cancelled:
@@ -420,12 +453,7 @@ def main():
         with open(os.path.join(work, log_name), "w", encoding="utf-8") as f:
             f.write(build_log(plan, opt, drive, toc, results, os.path.relpath(dest, root)))
 
-    # Album complete: move into place in one pass so the library never sees a
-    # half-ripped folder.
-    os.makedirs(dest, exist_ok=True)
-    for name in sorted(os.listdir(work)):
-        os.replace(os.path.join(work, name), os.path.join(dest, name))
-    shutil.rmtree(work, ignore_errors=True)
+    place_album(work, dest, root, owner)
 
     inaccurate = sum(1 for r in results if r.get("accurate") is False)
     msg = f"{album} — {total} tracce"
@@ -434,7 +462,7 @@ def main():
     ejected = False
     if opt["eject"]:
         ejected = run(["eject", device], timeout=30).returncode == 0
-    write_status("done", total, total, 100, msg, dest=dest, inaccurate=inaccurate, ejected=ejected)
+    write_status("done", total, total, 100, msg, dest=dest, root=root, inaccurate=inaccurate, ejected=ejected)
 
 
 if __name__ == "__main__":
