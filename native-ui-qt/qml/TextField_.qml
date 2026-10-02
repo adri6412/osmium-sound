@@ -16,17 +16,19 @@ Rectangle {
     property real padding: 16
     property alias input: input
     property bool active: input.activeFocus
+    // 🚨 Il riflettore deve poterci arrivare. Senza questo un telecomando non
+    // raggiungeva NESSUN campo di testo — la tastiera a schermo si apriva solo
+    // toccando lo schermo, e chi comanda l'apparecchio da poltrona non aveva
+    // modo di scrivere una password Wi-Fi o una ricerca. L'attivazione e' una
+    // pressione vera al centro del riquadro, quindi apre il campo e con esso
+    // la tastiera, esattamente come un dito.
+    property bool navigable: true
     signal textEdited(string t)
     signal accepted()
     // Confirming the on-screen keyboard also counts as Enter: for the search
     // fields, where "done typing" is the search itself (opt-in, the other
     // fields keep their own confirm button)
     property bool acceptOnVkConfirm: false
-    // A keyboard key at the right end that opens the on-screen keyboard no
-    // matter what: with a physical keyboard detected (a USB receiver, a
-    // remote, one letter typed once) the field alone would never offer it,
-    // and a Wi-Fi password has to be typeable from the touch screen.
-    property bool vkButton: false
     radius: 8; color: Theme.dark
     border.width: 1
     border.color: input.activeFocus && focusBorder ? focusColor : restBorder
@@ -35,7 +37,11 @@ Rectangle {
     // App/Radio) e quando si apre "salva come playlist". Prima compariva il
     // campo col cursore lampeggiante e nessun modo di scrivere.
     function takeFocus() { input.forceActiveFocus(); openVk() }
-    function openVk() { if (!Sys.hasKeyboard) vkOpen(root) }
+    // 🚨 SEMPRE. Prima si apriva solo quando non si vedeva una tastiera vera
+    // collegata — e un telecomando si presenta come tastiera: chi ne ha uno
+    // non avrebbe mai avuto modo di scrivere una password Wi-Fi. E anche con
+    // una tastiera vera attaccata, offrirla non toglie niente a nessuno.
+    function openVk() { vkOpen(root) }
     // aggancio alla tastiera a schermo, fornito dalla radice
     property var vkOpen: function(field) { if (Ui.vk) Ui.vk.open(field) }
     // 🚨 If the field goes away while the on-screen keyboard is typing into it
@@ -46,7 +52,7 @@ Rectangle {
 
     TextInput {
         id: input
-        x: root.padding; width: parent.width - root.padding * 2 - (vkKey.visible ? vkKey.width : 0); height: parent.height
+        x: root.padding; width: parent.width - root.padding * 2; height: parent.height
         verticalAlignment: TextInput.AlignVCenter
         text: root.text
         echoMode: root.password ? TextInput.Password : TextInput.Normal
@@ -69,12 +75,8 @@ Rectangle {
         anchors.fill: parent
         onClicked: { input.forceActiveFocus(); root.openVk() }
     }
-    Item {
-        id: vkKey
-        visible: root.vkButton
-        width: visible ? root.textSize + 20 : 0; height: parent.height
-        x: parent.width - width - root.padding / 2
-        Icon { anchors.centerIn: parent; name: "keyboard"; size: root.textSize + 4; color: vkTap.mix(Theme.silverA(0.5), Theme.gold); scale: vkTap.tapScale }
-        Tap { id: vkTap; tap: 0.9; onClicked: { input.forceActiveFocus(); root.vkOpen(root) } }
-    }
+    // 🚨 Il riflettore lo disegna Tap, e qui di Tap non ce n'e': senza questo
+    // il campo si poteva raggiungere col telecomando ma non si vedeva che ci
+    // si era sopra — si premeva OK alla cieca.
+    NavRing { target: root; radius: root.radius }
 }

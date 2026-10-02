@@ -39,6 +39,7 @@ from datetime import datetime, timezone
 import hifi_backup as hb
 import hifi_metadata as hmeta
 import hifi_tags as htags
+import hifi_cdrip as hcd
 from hifi_logging import tee_stdio_to_file
 from hifi_i18n import t as _ht
 # Every print() below keeps reaching the console/journald unchanged AND now also
@@ -137,6 +138,8 @@ RIP_PLAN = "/run/hifi-rip-plan.json"
 RIP_COVER = "/run/hifi-rip-cover.jpg"
 RIP_UNIT = "hifi-rip-cd"
 RIP_SCRIPT = "/usr/local/sbin/hifi-rip-cd.py"
+# Settings → CD ripping (hifi_cdrip.py): Daphile's page, field by field.
+CDRIP_CONF = hcd.CONF
 LYRION_RPC = "http://127.0.0.1:9000/jsonrpc.js"
 PREFS_GLOBS = [
     "/var/lib/squeezeboxserver/prefs/server.prefs",
@@ -162,6 +165,10 @@ def load_state():
 
 
 def save_state(state):
+    # A share's login never reaches the disk in the clear, whichever path
+    # built this state (see hifi_backup.seal_login). Costs nothing when every
+    # login is already sealed.
+    hb.seal_plain_logins(state)
     tmp = STATE_FILE + ".tmp"
     with open(tmp, "w") as f:
         json.dump(state, f, indent=2)
@@ -285,8 +292,11 @@ def mount_smb(src):
     destination)."""
     server = src["server"].strip().strip("/")
     share = src["share"].strip().strip("/")
-    username = src.get("username", "")
-    password = src.get("password", "")
+    try:
+        username, password = _smb_login(src)
+    except hb.LoginUnreadable as e:
+        print(f"[sources] login of {server}/{share} cannot be opened: {e}")
+        return False, _ht('mount.loginUnreadable', _hlang()), ""
     for value in (server, share, username, password):
         if not _field_ok(value):
             return False, _ht('mount.invalidFields', _hlang()), ""
@@ -328,10 +338,7 @@ def mount_smb(src):
         if username:
             # Credentials go in a private temp file rather than the -o string,
             # so the password never shows up in argv / `ps aux` output.
-            fd, cred_path = tempfile.mkstemp(prefix="hifi-smb-cred-")
-            with os.fdopen(fd, "w") as f:
-                f.write(f"username={username}\npassword={password}\n")
-            os.chmod(cred_path, 0o600)
+            cred_path = _smb_cred_file(username, password)
             cred_opt = f",credentials={cred_path}"
         else:
             cred_opt = ",guest"
@@ -736,6 +743,18 @@ def _samba_account_exists():
 
 def _create_samba_user(force_new_password=False):
     """Ensure a dedicated local + Samba user exists; return its password."""
+    # Samba does not recreate its own state folders: without private/ both
+    # smbpasswd ("Failed to open .../secrets.tdb") and smbd fail. Every device
+    # installed straight as an image started with an empty /var (see
+    # scripts/local-bottom/hifi-state), so they are made here if missing.
+    for d, mode in (("/var/lib/samba", 0o755), ("/var/lib/samba/private", 0o700),
+                    ("/var/cache/samba", 0o755), ("/var/log/samba", 0o750)):
+        try:
+            if not os.path.isdir(d):
+                os.makedirs(d, exist_ok=True)
+                os.chmod(d, mode)
+        except OSError as e:
+            print(f"[sources] cannot create {d}: {e}")
     _ensure_samba_uid_gid()
     cred = {}
     if os.path.exists(SAMBA_CRED_FILE):
@@ -1729,6 +1748,15 @@ def ensure_playlistdir():
         return False
     _run(["systemctl", "stop", LYRION_SERVICE], timeout=60)
     try:
+        # 🚨 Read the file AGAIN, now that Lyrion is stopped: it writes its
+        # prefs out on the way down, and the copy read above can be older than
+        # what it had in memory. In the setup wizard the skin step sets
+        # skin=material live seconds before this runs (1edc819 moved it
+        # first), and writing the stale copy back put the default skin back:
+        # "the wizard no longer turns on Material". Only playlistdir changes.
+        with open(prefs) as f:
+            data = yaml.safe_load(f) or {}
+        data, _ = _provision_playlistdir(data)
         tmp = prefs + ".tmp"
         with open(tmp, "w") as f:
             yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
@@ -2769,9 +2797,10 @@ def _lms_setup_apply(plugins, analytics, language):
     """Worker thread behind POST /api/lms_setup.
 
     Order matters twice over:
-      * playlistdir FIRST — ensure_playlistdir() reads the prefs file, then
-        stops Lyrion, then writes the whole dict back, so anything set live
-        just before it would be clobbered by that stale read. It also used to
+      * playlistdir FIRST — ensure_playlistdir() stops Lyrion, reads the prefs
+        file it wrote on the way down and writes it back with the folder (it
+        used to read before stopping, and the stale copy undid the skin the
+        wizard had just set). It also used to
         run right after the plugin install had restarted Lyrion, and stopped
         the server two seconds into extracting the new plugins (a Perl panic
         in the log of a fresh install). Before the install, the only start it
@@ -3566,6 +3595,18 @@ def _restore_apply_side_effects(restored):
         except Exception as e:
             print(f"[sources] restore side-effect (timezone) failed: {e}")
     if any(p in restored for p in ("/etc/default/squeezelite", "/var/lib/hifi-player/dsp-target")):
+        # /etc/default/squeezelite is rendered from /etc/hifi-player/
+        # squeezelite.json at every start of the service. A backup from
+        # before the JSON existed restores only the file: without this the
+        # restart would render the live JSON over it and the restored DAC,
+        # name and server would be gone. No JSON → the file is imported.
+        if "/etc/default/squeezelite" in restored and "/etc/hifi-player/squeezelite.json" not in restored:
+            try:
+                os.remove("/etc/hifi-player/squeezelite.json")
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                print(f"[sources] restore side-effect (squeezelite model) failed: {e}")
         _run(["systemctl", "restart", "squeezelite"], timeout=30)
         notes.append(_ht('restore.squeezeliteRestarted', _hlang()))
     if any(p in restored for p in ("/etc/camilladsp/config.yml", "/etc/hifi-player/dsp.json")) \
@@ -3676,6 +3717,12 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
                 report("restoring", pct, _ht('restore.restoringFiles', _hlang(), done=done, total=total))
             restored, errors = _restore_members(tar, manifest, categories, _member_progress)
             _fix_restored_permissions(restored)
+            if STATE_FILE in restored:
+                # An encrypted backup brings the share logins back opened.
+                try:
+                    _seal_stored_logins()
+                except Exception as e:
+                    print(f"[sources] sealing restored logins failed: {e}")
         finally:
             if lyrion_stopped:
                 report("starting_lyrion", 80, _ht('restore.startingLyrion', _hlang()))
@@ -4429,8 +4476,8 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/ui_refresh", "POST", "/ui_refresh"),
     # The rest of the web admin's Settings the companion shows too: which
     # interface runs on the screen, the pointer, whether this device plays at
-    # all, the timezone, the VU meter style and store, the now-playing
-    # auto-open delay, and the Tidal connector. Same rationale as the display
+    # all, the timezone, the VU meter style and store, and the now-playing
+    # auto-open delay. Same rationale as the display
     # settings above — none of them can cut the box off the network, lock
     # anyone out or hand out a login, so the pairing token is enough. Network
     # addressing, Tailscale, the SSH login, the admin account, factory reset
@@ -4453,8 +4500,6 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/vu_store/seen", "POST", "/vu_store/seen"),
     ("/api/system/nowplaying_autoexpand", "GET", "/nowplaying_autoexpand"),
     ("/api/system/nowplaying_autoexpand", "POST", "/nowplaying_autoexpand"),
-    ("/api/system/tidal", "GET", "/tidal_status"),
-    ("/api/system/tidal", "POST", "/tidal_set"),
     ("/api/system/player_name", "GET", "/player_name"),
     ("/api/system/player_name", "POST", "/player_name"),
     # Renames BOTH the hostname and the squeezelite/Bluetooth player name
@@ -4497,7 +4542,7 @@ _SYSTEM_PROXY_ROUTES = [
     ("/api/system/shutdown", "POST", "/shutdown"),
 ]
 
-_SLOW_SYSTEM_PROXY_POSTS = {"/ui_engine", "/player_enabled", "/tidal_set", "/timezone"}
+_SLOW_SYSTEM_PROXY_POSTS = {"/ui_engine", "/player_enabled", "/timezone"}
 
 
 def _make_system_proxy_view(remote_path, method):
@@ -4506,8 +4551,8 @@ def _make_system_proxy_view(remote_path, method):
     # write the plan. Timing out here would tell the phone the update failed
     # while the appliance was in fact about to start it — and the phone would
     # then fall back to driving the sequence itself, on top of a running plan.
-    # Switching the screen's interface, turning the player on/off or the Tidal
-    # connector on/off each wait on a systemctl call of up to 30s over there.
+    # Switching the screen's interface or turning the player on/off each wait
+    # on a systemctl call of up to 30s over there.
     if "apply" in remote_path:
         timeout = 90
     elif method == "POST" and remote_path in _SLOW_SYSTEM_PROXY_POSTS:
@@ -4796,12 +4841,36 @@ def _smb_cred_file(username, password):
     """Credentials in a 0600 temp file. NEVER on the command line: argv is
     readable through /proc, so -U user%pass would put the NAS password in
     `ps aux` for every account on the box. Same reason mount_smb() writes a
-    credentials= file instead of using -o."""
-    fd, path = tempfile.mkstemp(prefix="hifi-smb-cred-")
+    credentials= file instead of using -o.
+
+    In /run, which is RAM: /tmp is on the disk here, and a deleted file's
+    blocks still hold the password until something overwrites them."""
+    run_dir = "/run" if os.access("/run", os.W_OK) else None
+    fd, path = tempfile.mkstemp(prefix="hifi-smb-cred-", dir=run_dir)
+    os.fchmod(fd, 0o600)
     with os.fdopen(fd, "w") as f:
         f.write(f"username={username}\npassword={password}\n")
-    os.chmod(path, 0o600)
     return path
+
+
+def _smb_login(src):
+    """(username, password) of a stored SMB source. Sealed on disk (see
+    hifi_backup.seal_login); a clear pair is only still there when it could
+    not be sealed yet, and is used as it is rather than failing the mount.
+    Raises hb.LoginUnreadable when the sealed login cannot be opened."""
+    if src.get("login"):
+        return hb.open_login(src["login"])
+    return src.get("username") or "", src.get("password") or ""
+
+
+def _seal_stored_logins():
+    """Seal any clear login in the state file: the ones written before this
+    existed, and the ones an encrypted backup brings back."""
+    with _lock:
+        state = load_state()
+        if any(isinstance(s, dict) and ("username" in s or "password" in s)
+               for s in state.get("sources", [])):
+            save_state(state)
 
 
 def _smbclient(args, username, password, timeout=25):
@@ -4911,25 +4980,41 @@ def _protected_paths():
     return out
 
 
+# Entries owned by one of these are this server's own doing (it runs as root,
+# and so does the rip worker): they are handed to the share account. Anybody
+# else's (Lyrion's, a user's over SSH) keep their owner and take the group.
+_ROOT_UIDS = (0,)
+# Where ownership is ours to fix: the local disks and the playlist folder. A
+# network share carries no ownership of ours; a FAT-like disk gets uid and
+# gid from its mount options (and refuses chown, which hand_over ignores).
+_OWNED_ROOTS = (DATA_MUSIC_ROOT, INTERNAL_MOUNT_ROOT, USB_ADOPTED_ROOT, DEFAULT_PLAYLISTDIR)
+
+
 def _claim_for_share(path):
-    """Hand a newly written file or folder to the group Samba and Lyrion
-    share, so what the file manager creates stays writable from a PC too --
-    without this the two fight over ownership exactly as described at
-    SHARE_GROUP."""
+    """Hand a file or folder the file manager just made to the share account
+    and group -- hifimusic:hifishare, folders 2775, files 0664, the shape of
+    a published folder (hifi_cdrip.hand_over). This server runs as root, and
+    what root leaves behind plays fine but cannot be renamed or deleted from
+    a PC over the network: with the forced Samba user neither the owner nor
+    the group bits let it in. Somebody else's entry keeps its owner and takes
+    the group, so the two never fight over it (see SHARE_GROUP)."""
     uid, gid = _ensure_samba_uid_gid()
-    if not gid:
+    if not uid or not gid:
         return
+    hcd.hand_over(path, (uid, gid), from_uids=_ROOT_UIDS)
+
+
+def _ownership_ours(path):
+    """Whether `path` lies where ownership is ours to put right: a local disk,
+    the playlist folder or a folder published over the network -- not a
+    network share."""
+    roots = list(_OWNED_ROOTS)
     try:
-        st = os.lstat(path)
-        if stat.S_ISLNK(st.st_mode):
-            return
-        if st.st_gid != gid:
-            os.chown(path, st.st_uid, gid)
-        want = (st.st_mode & 0o7777) | (0o2775 if stat.S_ISDIR(st.st_mode) else 0o0664)
-        if (st.st_mode & 0o7777) != want:
-            os.chmod(path, want)
-    except OSError:
-        pass    # FAT/exFAT/NTFS carry no POSIX ownership, and a race is fine
+        roots += [s["path"] for s in load_state().get("sources", [])
+                  if s.get("type") == "local" and s.get("samba") and s.get("path")]
+    except Exception:
+        pass
+    return _under_roots(path, roots) is not None
 
 
 # The top level of the file manager is the allowed roots themselves. Showing
@@ -5147,6 +5232,8 @@ def api_list():
         item = dict(s)
         item.pop("password", None)
         item.pop("smbpassword", None)
+        item.pop("username", None)
+        item.pop("login", None)
         t = s.get("type")
         if t == "smb":
             item["mounted"] = os.path.ismount(s["mountpoint"])
@@ -5427,6 +5514,8 @@ def api_mkdir_local():
         os.makedirs(target, exist_ok=True)
     except OSError as e:
         return _err("msg.mountFailed", 400, detail=_oserror_detail(e))
+    # Made by root: hand it over, or nothing can be put into it from a PC.
+    _claim_for_share(target)
     return jsonify({"success": True, "path": target})
 
 
@@ -5455,8 +5544,6 @@ def api_add_smb():
         "name": name,
         "server": server,
         "share": share,
-        "username": (data.get("username") or "").strip(),
-        "password": data.get("password") or "",
         "mountpoint": os.path.join(MOUNT_ROOT, _slug(server, share)),
         # On by default — see mount_smb()'s docstring. A caller that asks
         # for read-only still gets it, and so does a share the server only
@@ -5469,6 +5556,18 @@ def api_add_smb():
         # this, so it can't reach Lyrion by any path until api_set_subpath()
         # clears the flag -- see current_paths()'s docstring.
         src["pending_activation"] = True
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if username or password:
+        # Sealed before anything else: a login that cannot be stored safely
+        # is refused, never kept in the clear. Adding a share again is also
+        # how an owner puts back a login that no longer opens (same id, so
+        # the entry below replaces the old one).
+        try:
+            src["login"] = hb.seal_login(username, password)
+        except hb.LoginUnreadable as e:
+            print(f"[sources] cannot seal the login of {server}/{share}: {e}")
+            return _err("msg.smbLoginNotStored", 500)
     ok, msg, detail = mount_smb(src)
     if not ok:
         return _err_detail(_smb_reason(detail) or "msg.mountFailed", 400,
@@ -5610,6 +5709,11 @@ def api_files_list():
                         "protected": True, "entries": roots})
     if not os.path.isdir(cand):
         return _err("msg.folderMissing", 400, path=rel)
+    # What an earlier version of this server (new folders, copies, moves) or
+    # of the rip worker left root-owned becomes the share account's as the
+    # owner browses past it -- the rest of the backlog is for
+    # _repair_shared_ownership() at start. Local disks only.
+    fix_owner = _ownership_ours(cand)
     entries = []
     try:
         for e in os.scandir(cand):
@@ -5620,6 +5724,8 @@ def api_files_list():
                 is_dir = e.is_dir(follow_symlinks=False)
             except OSError:
                 continue
+            if fix_owner and st.st_uid in _ROOT_UIDS:
+                _claim_for_share(os.path.join(cand, e.name))
             entries.append({"name": e.name, "path": os.path.join(cand, e.name),
                             "dir": is_dir, "size": 0 if is_dir else st.st_size,
                             "mtime": int(st.st_mtime)})
@@ -6441,7 +6547,7 @@ def _rip_state():
 
 
 def _rip_running():
-    return _rip_state().get("state") not in ("idle", "done", "error")
+    return _rip_state().get("state") not in ("idle", "done", "error", "cancelled")
 
 
 def _lyrion_request(params, timeout=10):
@@ -6580,34 +6686,31 @@ def _lyrion_remove_mediadir_live(roots):
 
 
 def _rip_watcher():
-    """Background thread (spawned per rip): when the worker reports done, fix
-    ownership for Samba access (ext4 destinations only — see
-    _mount_adopted_disk()'s docstring; SMB/FAT-like destinations already
-    present every file under a fixed uid/gid via mount options, so nothing to
-    fix there) and add the destination to Lyrion's library live — not
-    apply_to_lyrion(), so LMS is not restarted mid-listen."""
+    """Background thread (spawned per rip): when the worker reports done,
+    make sure the rip belongs to the share account (the worker hands its
+    files over itself — hifi_cdrip.hand_over_tree — this is the safety net
+    behind it, for a worker that died between the move and the hand-over)
+    and add the destination to Lyrion's library live — not apply_to_lyrion(),
+    so LMS is not restarted mid-listen. Filesystems without POSIX ownership
+    (FAT, exFAT, NTFS, SMB) ignore the chown; their mount options already
+    fix uid and gid."""
     deadline = time.monotonic() + 3 * 60 * 60
     while time.monotonic() < deadline:
         time.sleep(3)
         try:
             st = _rip_state()
             state = st.get("state")
-            if state in ("done", "error", "idle"):
+            if state in ("done", "error", "idle", "cancelled"):
                 if state == "done":
                     dest = st.get("dest") or ""
-                    uid, gid = _ensure_samba_uid_gid()
-                    local_roots = (INTERNAL_MOUNT_ROOT + "/", USB_ADOPTED_ROOT + "/")
-                    if dest.startswith(local_roots) and os.path.isdir(dest):
-                        for root, dirs, files in os.walk(dest):
-                            for name in dirs + files:
-                                try:
-                                    os.chown(os.path.join(root, name), uid, gid)
-                                except OSError:
-                                    pass
-                        try:
-                            os.chown(dest, uid, gid)
-                        except OSError:
-                            pass
+                    try:
+                        owner = _ensure_samba_uid_gid()
+                        if dest and owner[0]:
+                            # the root the rip started from: in the status, or
+                            # in the plan for a worker that does not report it
+                            hcd.hand_over_tree(st.get("root") or _rip_plan_root(dest), dest, owner)
+                    except Exception as e:
+                        print(f"[sources] rip ownership fix failed: {e}")
                     try:
                         _lyrion_add_mediadir_live(dest)
                     except Exception as e:
@@ -6615,6 +6718,79 @@ def _rip_watcher():
                 return
         except Exception as e:
             print(f"[sources] rip watcher error: {e}")
+
+
+def _rip_plan_root(dest):
+    """The destination root of the rip that is running or just finished
+    (from the plan the worker was given), else the parent of `dest` so the
+    album folder itself is still covered."""
+    try:
+        with open(RIP_PLAN) as f:
+            root = (json.load(f) or {}).get("root") or ""
+    except Exception:
+        root = ""
+    return root if root and dest.startswith(root.rstrip("/") + "/") else os.path.dirname(dest)
+
+
+def _shared_local_roots():
+    """Folders whose contents must be the share account's, on filesystems
+    that carry ownership at all: the appliance's own music folder, every
+    folder published over the network, and every adopted internal or USB
+    disk that is mounted and not FAT-like (those get uid and gid from their
+    mount options). The rip folder always sits inside one of these. One
+    inside another is dropped."""
+    roots = []
+    if os.path.isdir(DATA_MUSIC_ROOT):
+        roots.append(os.path.realpath(DATA_MUSIC_ROOT))
+    for s in load_state().get("sources", []):
+        t = s.get("type")
+        if t == "local" and s.get("samba") and s.get("path") and os.path.isdir(s["path"]):
+            roots.append(os.path.realpath(s["path"]))
+        mp = s.get("mountpoint") or ""
+        if t in ("internal", "usb") and mp and os.path.ismount(mp) \
+                and (s.get("fstype") or "").lower() not in _FAT_LIKE:
+            roots.append(os.path.realpath(mp))
+    out = []
+    for r in sorted(set(roots), key=len):
+        if not any(r == o or r.startswith(o + os.sep) for o in out):
+            out.append(r)
+    return out
+
+
+def _repair_shared_ownership(roots=None, limit=250000):
+    """What an earlier version of this server (the file manager's new
+    folders, copies and moves) or of the rip worker left root-owned under
+    the shared folders: playable, but not renameable or deletable from a PC
+    on the network. Hand every such entry to the share account; the roots
+    themselves are left as they are. Bounded per root, so a whole library
+    cannot turn this into a long walk. Returns how many entries changed."""
+    owner = _ensure_samba_uid_gid()
+    if not owner[0] or not owner[1]:
+        return 0
+    n = 0
+    for root in (_shared_local_roots() if roots is None else roots):
+        k = hcd.hand_over_tree(root, root, owner, from_uids=_ROOT_UIDS, limit=limit,
+                               skip_names=("lost+found",))
+        if k:
+            print(f"[sources] {root}: {k} entries handed to {SAMBA_USER}:{SHARE_GROUP}")
+        n += k
+    return n
+
+
+def _repair_shared_ownership_loop(delays=(20, 60, 180, 600)):
+    """_repair_shared_ownership() a few times after start, each pass on the
+    folders not seen yet: at boot the adopted disks come up in their own
+    time."""
+    done = set()
+    for d in delays:
+        time.sleep(d)
+        try:
+            roots = [r for r in _shared_local_roots() if r not in done]
+            if roots:
+                _repair_shared_ownership(roots)
+                done.update(roots)
+        except Exception as e:
+            print(f"[sources] _repair_shared_ownership error: {e}")
 
 
 def _rip_writable_sources():
@@ -6641,8 +6817,14 @@ def api_cd_info():
     if not toc:
         return jsonify({"no_disc": True, "releases": []})
     meta = _cd_metadata(toc, request.args.get("release"))
+    settings = _cd_settings()
     return jsonify({
         "no_disc": False,
+        "enabled": settings["enabled"],
+        # the folder set in Settings → CD ripping, when it is usable right now
+        "default_target": _cd_default_target(settings),
+        "eject_after": settings["eject"],
+        "auto_start": settings["auto_start"],
         "discid": toc["discid"],
         "mbid": meta["mbid"],
         "artist": meta["artist"],
@@ -6653,33 +6835,67 @@ def api_cd_info():
         # choice: pass one back as `release` here or to /api/cd/rip.
         "releases": meta["releases"],
         "destinations": [
-            {"source_id": s.get("id"), "name": s.get("name") or s.get("label")}
+            {"source_id": s.get("id"), "name": s.get("name") or s.get("label"), "path": s.get("mountpoint")}
             for s in _rip_writable_sources()
         ],
         "ripping": _rip_running(),
     })
 
 
-@app.route("/api/cd/rip", methods=["POST"])
-def api_cd_rip():
-    denied = _require_pair_token()
-    if denied:
-        return denied
-    data = request.get_json(silent=True) or {}
-    toc = _cd_toc()
-    if not toc:
-        return _err("msg.noAudioCd", 400)
-    if _rip_running():
-        return _err("msg.ripInProgress", 409)
+def _cd_settings():
+    return hcd.load(CDRIP_CONF)
 
+
+def _cd_target_root(path):
+    """(mountpoint, source) of the writable source `path` sits in, or
+    (None, None): a destination is only ever a folder inside an adopted
+    internal or USB disk, or a network share mounted read-write."""
+    if not path:
+        return None, None
+    real = os.path.realpath(path)
+    for src in _rip_writable_sources():
+        mp = os.path.realpath(src.get("mountpoint") or "")
+        if mp and (real == mp or real.startswith(mp + os.sep)):
+            return mp, src
+    return None, None
+
+
+def _cd_default_target(settings=None):
+    """The configured destination when it is usable right now: {path, name,
+    source_id}; None when unset, unmounted or not writable."""
+    s = settings or _cd_settings()
+    path = s.get("target") or ""
+    mp, src = _cd_target_root(path)
+    if not mp or not os.path.isdir(path) or not os.access(path, os.W_OK):
+        return None
+    return {"path": path, "name": path, "source_id": src.get("id")}
+
+
+def _cd_start_rip(data, toc, auto=False):
+    """Start the worker for the disc `toc`. `data` may carry source_id (a
+    writable source, or "__default__" for the folder from Settings), release,
+    artist, album, year and track titles; without a source the default folder
+    is used, or the only writable source. Returns (body, status)."""
+    settings = _cd_settings()
     sources = _rip_writable_sources()
     source_id = (data.get("source_id") or "").strip()
-    src = next((s for s in sources if s.get("id") == source_id), None)
-    if src is None:
-        if len(sources) == 1 and not source_id:
+    target = str(data.get("target") or "").strip()
+    default = _cd_default_target(settings)
+    if target:
+        # a folder picked in the rip page's browser: inside a writable source
+        mp, _src = _cd_target_root(target)
+        if not mp or not os.path.isdir(target) or not os.access(target, os.W_OK):
+            return _err("msg.cdTargetOutside", 400)
+        root = target
+    elif source_id in ("", "__default__") and default:
+        root = default["path"]
+    else:
+        src = next((s for s in sources if s.get("id") == source_id), None)
+        if src is None and len(sources) == 1 and not source_id:
             src = sources[0]
-        else:
+        if src is None:
             return _err("msg.noWritableTarget", 400)
+        root = src["mountpoint"]
 
     meta = _cd_metadata(toc, data.get("release"))
     artist = str(data.get("artist") or meta["artist"]).strip() or "Unknown Artist"
@@ -6718,7 +6934,7 @@ def api_cd_rip():
         tr["tags"] = [list(t) for t in (track_tags[i] or [])] if i < len(track_tags) else []
     plan = {
         "device": CD_DEVICE,
-        "root": src["mountpoint"],
+        "root": root,
         "artist": artist,
         "album": album,
         "year": year,
@@ -6726,6 +6942,13 @@ def api_cd_rip():
         "cover": RIP_COVER if os.path.exists(RIP_COVER) else "",
         "tracks": tracks,
         "album_tags": [list(t) for t in album_tags],
+        # Settings → CD ripping, frozen for this rip (hifi-rip-cd.py reads them)
+        "options": settings,
+        "auto": bool(auto),
+        # The worker runs as root; the rip is handed to the share account
+        # (hifi_cdrip.hand_over_tree) so a PC on the network can rename or
+        # delete it.
+        "owner": list(_ensure_samba_uid_gid()),
     }
     with open(RIP_PLAN, "w") as f:
         json.dump(plan, f)
@@ -6738,6 +6961,135 @@ def api_cd_rip():
           RIP_SCRIPT, RIP_PLAN], timeout=10)
     threading.Thread(target=_rip_watcher, daemon=True, name="rip-watcher").start()
     return jsonify({"success": True, "total": len(tracks)}), 202
+
+
+@app.route("/api/cd/rip", methods=["POST"])
+def api_cd_rip():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    if not _cd_settings().get("enabled", True):
+        return _err("msg.cdDisabled", 403)
+    toc = _cd_toc()
+    if not toc:
+        return _err("msg.noAudioCd", 400)
+    if _rip_running():
+        return _err("msg.ripInProgress", 409)
+    return _cd_start_rip(data, toc)
+
+
+@app.route("/api/cd/cancel", methods=["POST"])
+def api_cd_cancel():
+    """Stop a running rip: the worker catches the SIGTERM, removes its work
+    folder and reports "cancelled"; the disc can then be ejected."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if not _rip_running():
+        return _err("msg.ripNotRunning", 409)
+    _run(["systemctl", "stop", RIP_UNIT + ".service"], timeout=60)
+    if _rip_running():
+        with open(RIP_STATUS, "w") as f:
+            json.dump({"state": "cancelled", "track": 0, "total": 0, "progress": 0,
+                       "message": _ht('common.cancelled', _hlang())}, f)
+    return jsonify({"success": True})
+
+
+@app.route("/api/cd/settings", methods=["GET", "POST"])
+def api_cd_settings():
+    """Settings → CD ripping: Daphile's page, field by field (hifi_cdrip.py).
+    A POST is a partial update; the destination folder must be inside a
+    writable source and exist."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    settings = _cd_settings()
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        try:
+            settings = hcd.set_fields(settings, data if isinstance(data, dict) else {})
+        except hcd.InvalidField as e:
+            return _err("msg.cdInvalidValue", 400, field=e.field)
+        if settings["target"]:
+            mp, _src = _cd_target_root(settings["target"])
+            if not mp:
+                return _err("msg.cdTargetOutside", 400)
+            if not os.path.isdir(settings["target"]):
+                return _err("msg.folderMissing", 400, path=settings["target"])
+        try:
+            settings = hcd.save(settings, CDRIP_CONF)
+        except OSError as e:
+            return jsonify({"success": False, "message": str(e)}), 500
+    return jsonify({
+        "success": True,
+        "settings": settings,
+        "drive": hcd.drive_info(CD_DEVICE),
+        "target_ok": _cd_default_target(settings) is not None,
+        "targets": [{"source_id": s.get("id"), "name": s.get("name") or s.get("label"), "path": s.get("mountpoint")}
+                    for s in _rip_writable_sources()],
+        "ripping": _rip_running(),
+        "choices": {"auto_start": list(hcd.AUTO_START), "retries": list(hcd.RETRIES),
+                    "pre_emphasis": list(hcd.PRE_EMPHASIS), "speed": list(hcd.SPEEDS)},
+    })
+
+
+@app.route("/api/cd/settings/offset_lookup", methods=["POST"])
+def api_cd_offset_lookup():
+    """Daphile's "Calibrate": the drive's read offset from AccurateRip's
+    public list (accuraterip.com/driveoffsets.htm), matched on vendor and
+    model and saved into the settings."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    drive = hcd.drive_info(CD_DEVICE)
+    if not (drive.get("vendor") or drive.get("model")):
+        return _err("msg.cdNoDrive", 400)
+    try:
+        found = hcd.lookup_offset(drive.get("vendor"), drive.get("model"))
+    except Exception as e:
+        return _err("msg.cdOffsetLookupFailed", 502, err=str(e))
+    if not found.get("found"):
+        return _err("msg.cdOffsetNotFound", 404, drive=drive.get("label") or drive.get("node"))
+    settings = hcd.save(hcd.set_fields(_cd_settings(), {"offset": int(found["offset"])}), CDRIP_CONF)
+    return jsonify({"success": True, "offset": found["offset"], "drive": found["drive"],
+                    "submitted": found["submitted"], "agree": found["agree"], "settings": settings,
+                    "message": _m("msg.cdOffsetFound", offset=f"{found['offset']:+d}", drive=found["drive"])})
+
+
+_cd_auto_seen = {}   # discid -> True once auto-start has decided about that disc
+
+
+def cd_monitor(interval=5):
+    """Automatic start: when a disc appears and Settings → CD ripping says so,
+    rip it into the default folder without anyone touching a screen. One
+    decision per disc — a failed or cancelled rip is not retried until the
+    disc comes out and back in."""
+    while True:
+        time.sleep(interval)
+        try:
+            s = _cd_settings()
+            if not s.get("enabled") or s.get("auto_start") == "off":
+                continue
+            toc = _cd_toc()
+            if not toc:
+                _cd_auto_seen.clear()
+                continue
+            if toc["discid"] in _cd_auto_seen or _rip_running():
+                continue
+            _cd_auto_seen[toc["discid"]] = True
+            meta = _cd_metadata(toc)
+            if s["auto_start"] == "if_tags" and not meta.get("mbid"):
+                print(f"[sources] cd auto-start: disc {toc['discid']} unknown to MusicBrainz, waiting for the owner")
+                continue
+            if not _cd_default_target(s) and len(_rip_writable_sources()) != 1:
+                print("[sources] cd auto-start: no default folder set and more than one writable source")
+                continue
+            with app.app_context():
+                _body, status = _cd_start_rip({}, toc, auto=True)
+            print(f"[sources] cd auto-start: disc {toc['discid']} -> {status}")
+        except Exception as e:
+            print(f"[sources] cd monitor error: {e}")
 
 
 @app.route("/api/cd/rip/status", methods=["GET"])
@@ -7001,12 +7353,21 @@ SOURCES_I18N = {
         "msg.noAudioCd": "No audio CD in the drive.",
         "msg.ripInProgress": "A rip is already running.",
         "msg.noWritableTarget": "No writable destination: adopt an internal disk first.",
+        "msg.cdDisabled": "CD ripping is turned off in Settings.",
+        "msg.cdInvalidValue": "Invalid value for {field}.",
+        "msg.cdTargetOutside": "The destination folder must be inside a writable music source (internal disk, USB disk or a writable network share).",
+        "msg.cdNoDrive": "No optical drive found.",
+        "msg.cdOffsetLookupFailed": "Could not reach the AccurateRip drive list: {err}",
+        "msg.cdOffsetNotFound": "{drive} is not in the AccurateRip drive list. Look it up at accuraterip.com/driveoffsets.htm and type the offset by hand.",
+        "msg.cdOffsetFound": "Offset {offset} set, as listed for {drive}.",
+        "msg.ripNotRunning": "No rip is running.",
         "msg.sambaMissing": "Samba is not installed.",
 
         # ── Network folders: what went wrong, in words ──────────────
         "msg.smbBadCredentials": "Wrong username or password for this device.",
         "msg.smbPasswordExpired": "That account's password has expired — change it on the device that shares the folder.",
         "msg.smbAccountLocked": "That account is locked or disabled on the device that shares the folder.",
+        "msg.smbLoginNotStored": "The username and password could not be stored safely on this device, so the folder was not added.",
         "msg.smbNoSuchShare": "There is no shared folder with this name on that device.",
         "msg.smbUnreachable": "{server} is not answering. Check that it is switched on and on the same network.",
         "msg.smbProtocol": "This device speaks a version of file sharing the player cannot use.",
@@ -7170,12 +7531,21 @@ SOURCES_I18N = {
         "msg.noAudioCd": "Nessun CD audio nel lettore.",
         "msg.ripInProgress": "Rip già in corso.",
         "msg.noWritableTarget": "Nessuna destinazione scrivibile: adotta un disco interno.",
+        "msg.cdDisabled": "Il rip dei CD è disattivato nelle Impostazioni.",
+        "msg.cdInvalidValue": "Valore non valido per {field}.",
+        "msg.cdTargetOutside": "La cartella di destinazione deve stare dentro una sorgente musicale scrivibile (disco interno, disco USB o condivisione di rete scrivibile).",
+        "msg.cdNoDrive": "Nessun lettore ottico trovato.",
+        "msg.cdOffsetLookupFailed": "Elenco AccurateRip dei lettori non raggiungibile: {err}",
+        "msg.cdOffsetNotFound": "{drive} non è nell'elenco AccurateRip dei lettori. Cercalo su accuraterip.com/driveoffsets.htm e scrivi l'offset a mano.",
+        "msg.cdOffsetFound": "Offset {offset} impostato, come indicato per {drive}.",
+        "msg.ripNotRunning": "Nessun rip in corso.",
         "msg.sambaMissing": "Samba non installato.",
 
         # ── Network folders: what went wrong, in words ──────────────
         "msg.smbBadCredentials": "Nome utente o password non corretti per questo dispositivo.",
         "msg.smbPasswordExpired": "La password di questo account è scaduta: cambiala sul dispositivo che condivide la cartella.",
         "msg.smbAccountLocked": "Questo account è bloccato o disattivato sul dispositivo che condivide la cartella.",
+        "msg.smbLoginNotStored": "Non è stato possibile conservare in modo sicuro nome utente e password su questo dispositivo: la cartella non è stata aggiunta.",
         "msg.smbNoSuchShare": "Su quel dispositivo non c'è nessuna cartella condivisa con questo nome.",
         "msg.smbUnreachable": "{server} non risponde. Controlla che sia acceso e sulla stessa rete.",
         "msg.smbProtocol": "Questo dispositivo usa una versione della condivisione file che il lettore non sa usare.",
@@ -7773,6 +8143,12 @@ if __name__ == "__main__":
         os.makedirs(MOUNT_ROOT, exist_ok=True)
     except Exception:
         pass
+    # Share logins written in the clear before they were sealed at rest: done
+    # once here, before the remount below reads them.
+    try:
+        _seal_stored_logins()
+    except Exception as e:
+        print(f"[sources] _seal_stored_logins error: {e}")
     # Re-mount known SMB shares on startup (survives reboots). Runs in the
     # background with retries: boot no longer waits for the network, so the NAS
     # may not be reachable yet — keep trying instead of failing once.
@@ -7780,6 +8156,7 @@ if __name__ == "__main__":
     # Auto-adopt USB sticks/drives as soon as they're plugged in (mount
     # read-write + Samba share, no user action needed — see usb_sync()).
     threading.Thread(target=usb_monitor, daemon=True, name="usb-monitor").start()
+    threading.Thread(target=cd_monitor, daemon=True, name="cd-monitor").start()
     # One-time cleanup of "local" sources left over from the old ephemeral
     # read-only USB browse mount (removed — see the USB drives section above).
     try:
@@ -7802,6 +8179,11 @@ if __name__ == "__main__":
         _ensure_music_root()
     except Exception as e:
         print(f"[sources] _ensure_music_root error: {e}")
+    # What earlier versions left root-owned in the shared folders (file
+    # manager, rip worker) becomes the share account's, as the disks come up
+    # (see _repair_shared_ownership).
+    threading.Thread(target=_repair_shared_ownership_loop, daemon=True,
+                     name="owner-repair").start()
     # Make sure Lyrion has a writable playlist folder ("save as playlist"),
     # owned so that a PC on the network can write into it too.
     try:

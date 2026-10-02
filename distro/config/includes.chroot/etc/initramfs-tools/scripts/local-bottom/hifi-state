@@ -121,14 +121,38 @@ fi
 mkdir -p "$D/etc/upper" "$D/etc/work" "$D/var" "$D/home" "$D/rauc" "$D/lyrion"
 
 # /var and /home: at the first boot of EVERY image version, the image's own
-# entries that /data is still missing are copied in (cp -an: never overwrite).
-# That holds both for a partition just created and for one already seeded from
-# the legacy root (hifi-ab-seed.sh): existing state is left alone, while the
-# image's dpkg database, /var/lib/systemd and so on arrive all the same.
+# entries that /data is still missing are copied in, and nothing already there
+# is overwritten. That holds both for a partition just created and for one
+# already seeded from the legacy root (hifi-ab-seed.sh): existing state is left
+# alone, while the image's dpkg database, /var/lib/samba and so on arrive all
+# the same.
+#
+# 🚨 NOT `cp -an src/. dst/`: that is what this did, and busybox's cp (the one
+# in this initramfs) takes the destination folder already existing as the one
+# thing not to overwrite and stops right there — exit 0, nothing copied. Every
+# device installed straight as an image ran with an empty /var, and Samba,
+# which does not recreate /var/lib/samba/private by itself, never started.
+merge_missing() {  # <from> <to>: copy what <to> lacks, descend where both have a folder
+    # shellcheck disable=SC3043  # busybox ash and dash both have `local`, and the recursion needs it
+    local e n
+    for e in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+        [ -e "$e" ] || [ -L "$e" ] || continue
+        n=${e##*/}
+        if [ -e "$2/$n" ] || [ -L "$2/$n" ]; then
+            if [ -d "$e" ] && [ ! -L "$e" ] && [ -d "$2/$n" ] && [ ! -L "$2/$n" ]; then
+                merge_missing "$e" "$2/$n" || merge_ok=1
+            fi
+        else
+            cp -a "$e" "$2/" || merge_ok=1
+        fi
+    done
+}
 imgver=$(cat "${rootmnt}/usr/lib/osmium/IMAGE_VERSION" 2>/dev/null || echo unknown)
 if [ "$(cat "$D/var/.hifi-image-version" 2>/dev/null)" != "$imgver" ]; then
-    cp -an "${rootmnt}/var/." "$D/var/" 2>/dev/null || log_warning_msg "hifi-state: copia di /var incompleta"
-    cp -an "${rootmnt}/home/." "$D/home/" 2>/dev/null || true
+    merge_ok=0
+    merge_missing "${rootmnt}/var" "$D/var" 2>/dev/null
+    [ "$merge_ok" = 0 ] || log_warning_msg "hifi-state: copia di /var incompleta"
+    merge_missing "${rootmnt}/home" "$D/home" 2>/dev/null || true
     printf '%s\n' "$imgver" > "$D/var/.hifi-image-version"
 fi
 

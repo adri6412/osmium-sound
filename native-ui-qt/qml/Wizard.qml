@@ -14,6 +14,8 @@ Item {
     readonly property bool active: mode !== 0
     property bool dry: false
     visible: active
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.active }
     anchors.fill: parent
     // primo avvio
     property string ip: ""
@@ -247,7 +249,7 @@ Item {
                     // una tastiera a schermo, e un carattere sbagliato dietro i
                     // pallini e' il motivo piu' comune di una connessione fallita.
                     color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)   // bg-white/5, border-white/10, focus oro/50
-                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder"); vkButton: true
+                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder")
                     onTextEdited: (t) => root.pass = t
                     onAccepted: root.wifiConnect()
                 }
@@ -271,9 +273,7 @@ Item {
                 visible: !parent.busy && (root.step === 1 || root.step === 2)
                 anchors.fill: parent
                 Rectangle { y: 47; width: parent.width; height: 1; color: Theme.borderA(0.6) }
-                Glow { x: 24 + 4 - outer; y: 20 + 4 - outer; radius: 4; blur: 6; color: Theme.goldA(0.8) }   // shadow 0 0 6px oro/80
-                Rectangle { x: 24; y: 20; width: 8; height: 8; radius: 4; color: Theme.gold }
-                Text { x: 40; y: 0; height: 48; verticalAlignment: Text.AlignVCenter; text: "OSMIUM SOUND"; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2.2 }
+                BrandMark { x: 24; y: 24 - height / 2; cap: 8 }
                 Rectangle { y: root.height - 56; width: parent.width; height: 1; color: Theme.borderA(0.6) }
                 Item {
                     x: 32; y: root.height - 56 + 11; width: 88; height: 34

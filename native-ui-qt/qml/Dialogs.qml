@@ -13,6 +13,15 @@ Item {
     readonly property bool active: kind !== 0
     property bool closing: false
     visible: active
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.active && !root.closing }
+    // In a list to choose from, the spotlight starts on the entry already
+    // chosen (the one with the tick), like the list itself: from the top, the
+    // remote needed a dozen presses to get back to where the list opened.
+    property Item pickFirst: null
+    // 🚨 In the restart / shut down menu it starts on Cancel: the remote's
+    // power key opens it, and one OK too many must not switch the box off.
+    readonly property Item navFirst: kind === 2 ? pickFirst : kind === 7 ? pwcTap : null
     anchors.fill: parent
 
     property string title: ""
@@ -55,10 +64,15 @@ Item {
     }
     function confirm(text, ok, dang, f) { openCommon(1); body = text || ""; okLabel = ok || Tr.t("common.confirm"); danger = !!dang; cb = f }
     function pick(t, list, cur, f) {
-        openCommon(2); title = t || ""; items = list || []; current = cur; cb = f
+        openCommon(2); title = t || ""; items = list || []; current = cur; cb = f; pickFirst = null
         // porta la voce corrente sotto gli occhi, come fa la select di Chromium
         // con 487 fusi orari in elenco
-        Qt.callLater(function() { if (root.current >= 0) pickList.positionViewAtIndex(root.current, ListView.Center) })
+        Qt.callLater(function() {
+            if (root.current < 0) return
+            pickList.positionViewAtIndex(root.current, ListView.Center)
+            var d = pickList.itemAtIndex(root.current)
+            root.pickFirst = d ? d.tap : null
+        })
     }
     function text(t, b) { openCommon(3); title = t || ""; body = b || "" }
     // `pre` ({ssid, pass, band, err}) reopens the window as it was after a
@@ -211,6 +225,7 @@ Item {
                         required property var modelData
                         required property int index
                         readonly property bool cur: index === root.current
+                        readonly property Item tap: pTap
                         width: pickList.width; height: 44; radius: 8
                         color: cur ? Theme.goldA(0.2) : pTap.mix(Qt.rgba(0,0,0,0), Theme.wa(0.05))
                         Text { x: 12; width: parent.width - 48; anchors.verticalCenter: parent.verticalCenter; text: String(modelData); elide: Text.ElideRight; color: parent.cur ? Theme.gold : Theme.white; font.family: Theme.font; font.pixelSize: 14 }
@@ -298,7 +313,7 @@ Item {
                 TextField_ {
                     id: ssidField
                     width: parent.width; height: 40; textSize: 14; padding: 12
-                    text: root.ssid; placeholder: Tr.t("wizard.wifi.title"); vkButton: true
+                    text: root.ssid; placeholder: Tr.t("wizard.wifi.title")
                     color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)   // focus:border-hifi-gold/50
                     // Un nome scritto a mano non e' piu' la riga toccata: nessuna
                     // banda da fissare.
@@ -311,7 +326,7 @@ Item {
                     // In chiaro: la chiave si scrive una volta sola, sulla tastiera
                     // a schermo, e un carattere sbagliato dietro i pallini e' il
                     // motivo piu' comune di una connessione fallita.
-                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder"); vkButton: true
+                    text: root.pass; placeholder: Tr.t("wizard.wifi.passwordPlaceholder")
                     color: Theme.wa(0.05); restBorder: Theme.wa(0.1); focusColor: Theme.goldA(0.5)
                     onTextEdited: (t) => root.pass = t
                 }

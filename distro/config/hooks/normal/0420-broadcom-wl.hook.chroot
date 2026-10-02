@@ -1,0 +1,88 @@
+#!/bin/sh
+# HiFi Player appliance — Broadcom BCM4360/BCM4352 Wi-Fi (802.11ac).
+#
+# No in-kernel driver handles these chips (b43 has no AC PHY, brcmfmac does not
+# cover them): the only one is Broadcom's proprietary `wl`, shipped by Debian as
+# broadcom-sta-dkms (non-free). They are common in 2013-2015 Macs (MacBook Air
+# 6,x, MacBook Pro 11,x, iMac 14,x) and in PCIe cards (Asus PCE-AC68,
+# TP-Link Archer T8E, ...).
+#
+# The image has a read-only root and no compiler, so the module is built HERE,
+# against the image's own kernel, and the whole toolchain (dkms, gcc, headers)
+# is purged again afterwards: only wl.ko stays, under /lib/modules/*/updates.
+# The kernel only ever changes with a new image, which rebuilds it.
+#
+# `wl` is NOT allowed to autoload: its alias table claims every Broadcom
+# wireless chip, and on the ones the kernel drives fine (brcmsmac/brcmfmac/b43)
+# it would race the in-kernel driver. It is blacklisted by alias and loaded by
+# name only for the 802.11ac IDs below, where a udev rule also sets
+# driver_override so bcma (which claims 14e4:43b1) cannot take the card first.
+#
+# Not signed by Debian: with UEFI Secure Boot ON the kernel refuses the module
+# and the card stays without a driver (it had none before either). Macs have
+# no UEFI Secure Boot, so this only matters for PCIe cards in a PC.
+set -e
+
+# 14e4:43a0 BCM4360, 14e4:43a1 / 43a2 BCM4360 variants, 14e4:43b1 BCM4352
+WL_IDS="0x43a0|0x43a1|0x43a2|0x43b1"
+
+KVERS=$(ls /lib/modules)
+[ -n "$KVERS" ] || { echo "E: [hifi] no kernel in /lib/modules" >&2; exit 1; }
+
+echo "I: [hifi] building the Broadcom wl driver for: $KVERS"
+before=$(mktemp)
+dpkg-query -W -f='${Package}\n' | sort > "$before"
+
+HEADERS=""
+for k in $KVERS; do HEADERS="$HEADERS linux-headers-$k"; done
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    broadcom-sta-dkms $HEADERS
+
+keep=$(mktemp -d)
+for k in $KVERS; do
+    if ! find "/lib/modules/$k" -name 'wl.ko*' | grep -q .; then
+        ver=$(dpkg-query -W -f='${Version}' broadcom-sta-dkms | sed 's/-[^-]*$//; s/^[0-9]*://')
+        dkms install "broadcom-sta/$ver" -k "$k"
+    fi
+    ko=$(find "/lib/modules/$k" -name 'wl.ko*' | head -n1)
+    [ -n "$ko" ] || { echo "E: [hifi] wl.ko not built for $k" >&2; exit 1; }
+    mkdir -p "$keep/$k"
+    cp "$ko" "$keep/$k/"
+done
+
+# Purge everything this hook pulled in (dkms remove deletes the dkms copy of
+# wl.ko, hence the copy above) and dkms' state, including the throwaway
+# module-signing key it generated for the build.
+after=$(mktemp)
+dpkg-query -W -f='${Package}\n' | sort > "$after"
+added=$(comm -13 "$before" "$after" | tr '\n' ' ')
+echo "I: [hifi] purging build-only packages: $added"
+DEBIAN_FRONTEND=noninteractive apt-get purge -y $added
+DEBIAN_FRONTEND=noninteractive apt-get autoremove --purge -y
+rm -rf /var/lib/dkms /etc/dkms /usr/src/broadcom-sta-* "$before" "$after"
+
+for k in $KVERS; do
+    mkdir -p "/lib/modules/$k/updates/broadcom-wl"
+    cp "$keep/$k"/wl.ko* "/lib/modules/$k/updates/broadcom-wl/"
+    depmod -a "$k"
+done
+rm -rf "$keep"
+
+cat > /etc/modprobe.d/hifi-broadcom-wl.conf <<'EOF'
+# Osmium Sound — the proprietary Broadcom `wl` driver loads ONLY for the
+# BCM4360/BCM4352 IDs listed in /etc/udev/rules.d/70-hifi-broadcom-wl.rules.
+# Its alias table claims every Broadcom wireless chip, so without this it
+# would race brcmsmac/brcmfmac/b43 on the cards the kernel drives by itself.
+# (A blacklist only stops alias autoloading; `modprobe wl` by name still works.)
+blacklist wl
+EOF
+
+cat > /etc/udev/rules.d/70-hifi-broadcom-wl.rules <<EOF
+# Osmium Sound — Broadcom 802.11ac chips with no in-kernel driver: bind them to
+# the proprietary wl (built into the image by hook 0420-broadcom-wl).
+# driver_override is set before 80-drivers.rules loads bcma, which would
+# otherwise claim 14e4:43b1 and keep wl from binding.
+ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x14e4", ATTR{device}=="$WL_IDS", ATTR{driver_override}="wl", RUN+="/usr/sbin/modprobe wl"
+EOF
+
+echo "I: [hifi] broadcom-wl hook done"

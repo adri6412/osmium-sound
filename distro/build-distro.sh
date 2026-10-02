@@ -135,6 +135,8 @@ if [ "$STAGE" != "binary" ]; then
     [ -f "$REPO_ROOT/hifi_i18n.py" ]       || die "Missing $REPO_ROOT/hifi_i18n.py"
     [ -f "$REPO_ROOT/hifi_metadata.py" ]   || die "Missing $REPO_ROOT/hifi_metadata.py"
     [ -f "$REPO_ROOT/hifi_tags.py" ]       || die "Missing $REPO_ROOT/hifi_tags.py"
+    [ -f "$REPO_ROOT/hifi_squeezelite.py" ] || die "Missing $REPO_ROOT/hifi_squeezelite.py"
+    [ -f "$REPO_ROOT/hifi_cdrip.py" ]      || die "Missing $REPO_ROOT/hifi_cdrip.py"
 fi
 
 # ─────────────────────────── Normalise text files ──────────────────
@@ -310,7 +312,9 @@ cp -f "$REPO_ROOT/hifi_backup.py"     "$BIN_DEST/"
 cp -f "$REPO_ROOT/hifi_i18n.py"       "$BIN_DEST/"
 cp -f "$REPO_ROOT/hifi_metadata.py"   "$BIN_DEST/"
 cp -f "$REPO_ROOT/hifi_tags.py"       "$BIN_DEST/"
-sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py" "$BIN_DEST/hifi_logging.py" "$BIN_DEST/hifi_backup.py" "$BIN_DEST/hifi_i18n.py" "$BIN_DEST/hifi_metadata.py" "$BIN_DEST/hifi_tags.py"
+cp -f "$REPO_ROOT/hifi_squeezelite.py" "$BIN_DEST/"
+cp -f "$REPO_ROOT/hifi_cdrip.py"      "$BIN_DEST/"
+sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py" "$BIN_DEST/hifi_logging.py" "$BIN_DEST/hifi_backup.py" "$BIN_DEST/hifi_i18n.py" "$BIN_DEST/hifi_metadata.py" "$BIN_DEST/hifi_tags.py" "$BIN_DEST/hifi_squeezelite.py" "$BIN_DEST/hifi_cdrip.py"
 chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py"
 
 # Web-admin Vue build (built by CI before this script runs). REQUIRED: a
@@ -394,7 +398,10 @@ log "Lyrion Music Server will be downloaded on-demand by hook 0050 (during chroo
 # installed, and the .deb file is removed. The installed package (dpkg metadata)
 # survives the installer; hifi-firstboot.sh will re-ensure it on first boot.
 
-log "Copying Plymouth boot logo from repo root"
+# The splash itself is the animated mark (frame-*.png + hifi.script in the
+# theme dir). logo.png still goes in next to it: it is what the legacy
+# single-image script showed, and apply.d/0003 keeps that file in place.
+log "Copying the static logo into the Plymouth theme"
 THEME_DIR="$CONFIG/includes.chroot/usr/share/plymouth/themes/hifi"
 mkdir -p "$THEME_DIR"
 if [ -f "$REPO_ROOT/logo osmium.png" ]; then
@@ -420,8 +427,9 @@ convert -size 1920x1080 xc:black "$GRUB_BG_DIR/hifi-bg.png" 2>/dev/null \
 fi  # end: chroot payload injection (skipped for --stage binary)
 
 # ─────────────────────────── Installer boot splash ─────────────────
-# Brand the ISO boot menu (isolinux/BIOS + grub/UEFI) with the SAME logo
-# look as the Plymouth splash: gold "HiFi Player" + grey subtitle on black.
+# Brand the ISO boot menu (isolinux/BIOS + grub/UEFI) with the mark itself:
+# the logo file, scaled, on the near-black of the mark's own background. The
+# text version stays as the fallback for a checkout without the logo.
 # isolinux wants a 640x480 splash.png; grub a 640x480 background too.
 #
 # IMPORTANT: we do NOT overwrite the menu .cfg files (they contain the
@@ -435,21 +443,22 @@ ISOLINUX_DIR="$BINARY/isolinux"
 GRUB_DIR="$BINARY/boot/grub"
 mkdir -p "$ISOLINUX_DIR" "$GRUB_DIR"
 
-# isolinux/BIOS splash — 640x480, logo centred on black.
-convert -size 640x480 xc:black \
-    -gravity center \
-    -fill '#d4af37' -font DejaVu-Sans-Bold -pointsize 56 -annotate +0-30 'Osmium Sound' \
-    -fill '#888888' -font DejaVu-Sans -pointsize 18 -annotate +0+20 'network audio streamer' \
-    "$ISOLINUX_DIR/splash.png" \
-    || convert -size 640x480 xc:black -gravity center -fill white -pointsize 48 -annotate 0 'Osmium Sound' "$ISOLINUX_DIR/splash.png"
-
-# grub/UEFI background — 640x480 (works on gfxterm), same look.
-convert -size 640x480 xc:black \
-    -gravity center \
-    -fill '#d4af37' -font DejaVu-Sans-Bold -pointsize 56 -annotate +0-30 'Osmium Sound' \
-    -fill '#888888' -font DejaVu-Sans -pointsize 18 -annotate +0+20 'network audio streamer' \
-    "$GRUB_DIR/splash.png" \
-    || convert -size 640x480 xc:black -gravity center -fill white -pointsize 48 -annotate 0 'Osmium Sound' "$GRUB_DIR/splash.png"
+# 640x480 for both isolinux/BIOS and grub/UEFI (gfxterm): the mark centred.
+make_splash() {
+    if [ -f "$REPO_ROOT/logo osmium.png" ]; then
+        convert -size 640x480 xc:'#0c0c0c' \
+            \( "$REPO_ROOT/logo osmium.png" -resize 480x \) \
+            -gravity center -composite "$1" && return 0
+    fi
+    convert -size 640x480 xc:black \
+        -gravity center \
+        -fill '#d4af37' -font DejaVu-Sans-Bold -pointsize 56 -annotate +0-30 'Osmium Sound' \
+        -fill '#888888' -font DejaVu-Sans -pointsize 18 -annotate +0+20 'network audio streamer' \
+        "$1" \
+        || convert -size 640x480 xc:black -gravity center -fill white -pointsize 48 -annotate 0 'Osmium Sound' "$1"
+}
+make_splash "$ISOLINUX_DIR/splash.png"
+make_splash "$GRUB_DIR/splash.png"
 
 # ─────────────────────────── Make hooks executable ─────────────────
 chmod +x "$CONFIG"/hooks/normal/*.hook.chroot

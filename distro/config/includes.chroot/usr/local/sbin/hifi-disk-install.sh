@@ -21,12 +21,12 @@
 #      mounted root", which is exactly what the chroot gives them).
 #
 # TWO LAYOUTS. When the boot medium carries a system image
-# (<medium>/osmium/rootfs.squashfs) and the machine boots UEFI, the installer
-# writes the A/B layout instead: five partitions, the image copied block for
-# block into slot A, /data formatted and seeded, and the A/B boot selector and
-# grubenv written on the ESP. Nothing is downloaded — the appliance is an image
-# system from its very first boot, with no conversion round to go through. When
-# the image is not on the medium (or the firmware is BIOS) the historical
+# (<medium>/osmium/rootfs.squashfs), the installer writes the A/B layout
+# instead: five partitions, the image copied block for block into slot A,
+# /data formatted and seeded, and the A/B boot selector and grubenv written on
+# the ESP, with GRUB for both UEFI and legacy BIOS. Nothing is downloaded — the
+# appliance is an image system from its very first boot, with no conversion
+# round to go through. When the image is not on the medium the historical
 # single-root install below runs unchanged.
 set -eu
 
@@ -154,8 +154,10 @@ install_ab() {
     # shellcheck disable=SC1091
     . /usr/local/sbin/hifi-ab-lib.sh
 
-    [ -d /sys/firmware/efi ] \
-        || fail "This machine booted in legacy BIOS mode. Osmium Sound installs in UEFI mode only: enable UEFI in the firmware settings and boot the installer again."
+    # Old PCs with a legacy BIOS (or UEFI set to "Legacy"/"CSM") install the
+    # same A/B layout: only the bootloader step below differs.
+    _uefi=0
+    [ -d /sys/firmware/efi ] && _uefi=1
 
     _img_bytes=$(stat -c %s "$AB_IMAGE" 2>/dev/null || echo 0)
     [ "$_img_bytes" -gt 0 ] || fail "the system image on the boot medium is empty"
@@ -285,8 +287,17 @@ install_ab() {
     # that failing here would mean refusing to install on a perfectly good
     # machine. Drop to --no-nvram and let the removable path below carry the
     # boot, which every firmware looks at.
+    #
+    # Both boot chains go on every disk, whatever firmware the installer runs
+    # on. The one this machine uses must work, or the install fails; the other
+    # is best effort, and is what lets the same disk start after the firmware
+    # is switched between UEFI and Legacy/CSM, or the disk moves to another PC.
     _nvram=1
-    if ! _grub_install; then
+    if [ "$_uefi" = 0 ]; then
+        _nvram=0    # a BIOS has no boot entries to register
+        _grub_install --no-nvram \
+            || log "WARNING: the UEFI boot chain could not be installed (non-fatal on a BIOS machine)"
+    elif ! _grub_install; then
         log "WARNING: registering the firmware boot entry failed; retrying without it"
         _nvram=0
         _grub_install --no-nvram || fail_log "grub-install (UEFI) failed" "$UNSQUASHFS_LOG"
@@ -294,12 +305,32 @@ install_ab() {
     # Fallback removable path: some firmwares lose NVRAM entries
     _grub_install --removable --no-nvram \
         || log "WARNING: the removable-media fallback install failed (non-fatal)"
-    if [ "$_nvram" = 0 ] && [ ! -e "$_esp/EFI/BOOT/BOOTX64.EFI" ] \
-       && [ ! -e "$_esp/EFI/BOOT/bootx64.efi" ]; then
-        fail_log "the firmware boot entry could not be written and the removable fallback is missing" "$UNSQUASHFS_LOG"
+    if [ "$_uefi" = 1 ]; then
+        if [ "$_nvram" = 0 ] && [ ! -e "$_esp/EFI/BOOT/BOOTX64.EFI" ] \
+           && [ ! -e "$_esp/EFI/BOOT/bootx64.efi" ]; then
+            fail_log "the firmware boot entry could not be written and the removable fallback is missing" "$UNSQUASHFS_LOG"
+        fi
+        [ -e "$_esp/EFI/debian/grubx64.efi" ] || [ -e "$_esp/EFI/debian/shimx64.efi" ] \
+            || fail "grub-install wrote no boot files under EFI/debian"
     fi
-    [ -e "$_esp/EFI/debian/grubx64.efi" ] || [ -e "$_esp/EFI/debian/shimx64.efi" ] \
-        || fail "grub-install wrote no boot files under EFI/debian"
+    # Legacy BIOS: boot.img in the MBR, core.img in p1 ("BIOS boot"), modules
+    # in ESP/grub/i386-pc. core.img finds the ESP by its UUID and reads
+    # ESP/grub/grub.cfg, which hands over to the same selector as UEFI (below).
+    _bios_ok=1
+    if ! grub-install --target=i386-pc --boot-directory="$_esp" --recheck "$DEVICE" \
+            >>"$UNSQUASHFS_LOG" 2>&1; then
+        _bios_ok=0
+        [ "$_uefi" = 1 ] || fail_log "grub-install (BIOS) failed" "$UNSQUASHFS_LOG"
+        log "WARNING: the legacy BIOS boot chain could not be installed (non-fatal on a UEFI machine)"
+    fi
+    if [ "$_uefi" = 0 ]; then
+        # Some BIOSes only start a disk with a partition marked active, and on
+        # GPT that can only be the protective MBR entry (what parted calls
+        # pmbr_boot). Not on UEFI machines: the spec says to ignore the flag,
+        # but a few firmwares read it as "this is an MBR disk" and skip the ESP.
+        printf '\200' | dd of="$DEVICE" bs=1 seek=446 count=1 conv=notrunc 2>/dev/null \
+            || log "WARNING: could not mark the protective MBR bootable"
+    fi
 
     write_status running 92 "Writing the A/B boot selector…"
     _sel=/run/hifi-selector.cfg
@@ -318,6 +349,25 @@ install_ab() {
         || fail "could not initialise the GRUB environment"
     cp -f "$_sel" "$_esp/EFI/debian/grub.cfg" || fail "could not write the boot selector"
     [ -d "$_esp/EFI/BOOT" ] && cp -f "$_sel" "$_esp/EFI/BOOT/grub.cfg" 2>/dev/null || true
+    # One selector for both firmwares: BIOS GRUB reads this file and runs the
+    # UEFI one, so anything that rewrites the selector later covers both.
+    # 🚨 The insmod line is not optional. BIOS GRUB loads each module from
+    # $prefix the first time a command needs it, and the selector points
+    # $prefix into the slot, which carries no i386-pc modules: without this the
+    # slot's `linux` fails ("linux.mod not found") and the box sits at a grub>
+    # prompt. Signed UEFI GRUB is one monolithic file and never notices.
+    # insmod loads only its first argument, hence one line per module.
+    if [ "$_bios_ok" = 1 ]; then
+        {
+            echo "# Osmium Sound: legacy BIOS entry, runs the same A/B selector as UEFI."
+            echo "# Every module the selector and the slot scripts use, loaded while \$prefix is still on the ESP."
+            for _m in part_gpt fat squash4 gzio xzio ext2 regexp test loadenv probe \
+                      configfile search_fs_uuid sleep reboot linux boot; do
+                echo "insmod $_m"
+            done
+            echo 'configfile ($root)/EFI/debian/grub.cfg'
+        } > "$_esp/grub/grub.cfg" || fail "could not write the BIOS boot entry"
+    fi
     : > "$_esp/EFI/debian/ab-enabled"
     sync
     umount "$_esp" 2>/dev/null || true
@@ -327,10 +377,9 @@ install_ab() {
     exit 0
 }
 
-if [ -n "$AB_IMAGE" ] && [ -d /sys/firmware/efi ]; then
+if [ -n "$AB_IMAGE" ]; then
     install_ab
 fi
-[ -z "$AB_IMAGE" ] || log "system image present but the firmware is BIOS: installing the single-root layout"
 
 # ─────────────────────────── locate the squashfs source ────────────
 SQUASHFS=""

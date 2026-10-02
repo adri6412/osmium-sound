@@ -8,6 +8,8 @@ import Toggle from '../components/Toggle.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
 import VuSkinPreview from '../components/VuSkinPreview.vue';
+import RemoteIntro from '../components/RemoteIntro.vue';
+import RemotePairing from '../components/RemotePairing.vue';
 import animCd from '../assets/anim/cd.jpg';
 import animCdfront from '../assets/anim/cdfront.jpg';
 import animVinyl from '../assets/anim/vinyl.jpg';
@@ -23,7 +25,10 @@ const sections = computed(() => [
   { key: 'network',   label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
   { key: 'audio',     label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
   { key: 'btSpeakers', label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
+  { key: 'remote',    label: t('settings.sections.remote.label'),    desc: t('settings.sections.remote.desc') },
   { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
+  // Daphile's CD Ripping page, field by field (sources_server /api/cd/settings)
+  { key: 'cdRip',     label: t('settings.sections.cdRip.label'),     desc: t('settings.sections.cdRip.desc') },
   // 'dsp' is deliberately NOT listed here — the feature (and its room-correction
   // sub-flow) is being held back for a future paid tier. The card markup below
   // (v-if="open === 'dsp'") and all its backing code/API endpoints are left
@@ -48,6 +53,9 @@ const sections = computed(() => [
   { key: 'backup',    label: t('settings.sections.backup.label'),    desc: t('settings.sections.backup.desc') },
   { key: 'language',  label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
   { key: 'system',    label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
+  // What the device is made of and under which licenses: the project, Lyrion,
+  // the third-party notices and every Debian package of the image.
+  { key: 'notices',   label: t('settings.sections.notices.label'),   desc: t('settings.sections.notices.desc') },
   { key: 'debug',     label: t('settings.sections.debug.label'),     desc: t('settings.sections.debug.desc') },
   // Reached from System and Updates ("Check the network"), not listed itself.
   { key: 'netCheck',  label: t('settings.sections.netCheck.label'),  desc: t('settings.sections.netCheck.desc'), hidden: true },
@@ -232,12 +240,115 @@ async function loadAudio() {
   const r = await api.sys('audio_devices');
   if (r.ok) { devices.value = r.data.devices || []; currentDevice.value = r.data.current || 'default'; }
   const p = await api.sys('device_name'); if (p.ok) playerName.value = p.data.name || '';
+  loadSq();
 }
 async function pickDevice(id) {
   currentDevice.value = id;
   const r = await api.sysPost('audio_device', { device: id });
   say(r.ok && r.data.success !== false ? t('settings.audio.changed') : bodyMsg(r, t('settings.audio.changeFailed')), !(r.ok && r.data.success !== false));
+  loadSq();   // what the new DAC declares for DSD, and its mixer controls
 }
+
+// ── Audio → Advanced: the rest of squeezelite's command line ──────
+// api_server.py get/set/reset_squeezelite_conf; the model lives in
+// hifi_squeezelite.py and /etc/default/squeezelite is rendered from it, so
+// this page — not SSH — is where every option gets changed. Each control
+// applies at once and restarts the player for a moment.
+const sq = ref(null); const sqBusy = ref(false); const sqExtra = ref('');
+function sqTake(data) { sq.value = data; sqExtra.value = (data.conf && data.conf.extra) || ''; }
+async function loadSq() {
+  const r = await api.sys('squeezelite_conf');
+  if (r.ok && r.data.conf) sqTake(r.data);
+}
+async function sqCall(path, body, okMsg) {
+  sqBusy.value = true;
+  try {
+    const r = await api.sysPost(path, body);
+    const ok = r.ok && r.data.success !== false;
+    if (ok && r.data.conf) sqTake(r.data);
+    say(bodyMsg(r, ok ? okMsg : t('settings.audio.saveFailed')), !ok);
+  } finally { sqBusy.value = false; }
+}
+const setSq = (patch) => sqCall('squeezelite_conf', patch, t('settings.audio.sqSaved'));
+const resetSq = () => sqCall('squeezelite_conf/reset', {}, t('settings.audio.sqReset'));
+
+// ── Licenses & credits ─────────────────────────────────────────────
+// api_server.py get_credits: the project, Lyrion, the hand-kept third-party
+// notices (the same the kiosk shows) and every Debian package of the image
+// with its license (distro/gen-credits.py at image build). Loaded when the
+// section opens: the package list runs to several hundred rows.
+const credits = ref(null); const pkgFilter = ref('');
+async function loadCredits() {
+  const r = await api.sys('credits');
+  if (r.ok && r.data.project) credits.value = r.data;
+}
+watch(open, (v) => { if (v === 'notices' && !credits.value) loadCredits(); }, { immediate: true });
+
+// ── CD ripping ─────────────────────────────────────────────────────
+// Settings → CD ripping: Daphile's page, field by field, on sources_server's
+// /api/cd/settings (hifi_cdrip.py). Every control applies at once; the
+// destination folder is picked with the same FolderPicker as Music sources.
+const cd = ref(null); const cdBusy = ref(false); const cdPickOpen = ref(false); const cdPrefixOpen = ref(false);
+const cdOffset = ref('');
+function cdTake(data) {
+  cd.value = data;
+  cdOffset.value = String(data.settings.offset ?? 0);
+}
+async function loadCd() {
+  const r = await api.cdSettings();
+  if (r.ok && r.data.settings) cdTake(r.data);
+}
+async function cdCall(call, okMsg) {
+  cdBusy.value = true;
+  try {
+    const r = await call();
+    const ok = r.ok && r.data.success !== false;
+    if (ok && r.data.settings) cdTake(r.data);
+    say(bodyMsg(r, ok ? okMsg : t('settings.cdRip.saveFailed')), !ok);
+    return ok;
+  } finally { cdBusy.value = false; }
+}
+const setCd = (patch) => cdCall(() => api.cdSettingsSet(patch), t('settings.cdRip.saved'));
+async function cdPickTarget(path) { if (await setCd({ target: path })) cdPickOpen.value = false; }
+// The prefix is a folder picked INSIDE the default target folder, never typed.
+const cdPrefixStart = computed(() => {
+  const t = (cd.value && cd.value.settings.target) || '';
+  const p = (cd.value && cd.value.settings.dir_prefix) || '';
+  return t ? (p ? t.replace(/\/+$/, '') + '/' + p : t) : '';
+});
+async function cdPickPrefix(path) {
+  const t = ((cd.value && cd.value.settings.target) || '').replace(/\/+$/, '');
+  if (!t) { say(t('settings.cdRip.prefixNeedsTarget'), true); return; }
+  let prefix;
+  if (path === t) prefix = '';
+  else if (path.startsWith(t + '/')) prefix = path.slice(t.length + 1);
+  else { say(t('settings.cdRip.prefixOutside'), true); return; }
+  if (await setCd({ dir_prefix: prefix })) cdPrefixOpen.value = false;
+}
+function cdSaveOffset() {
+  const n = parseInt(cdOffset.value, 10);
+  if (Number.isNaN(n)) { say(t('settings.cdRip.offsetInvalid'), true); return; }
+  setCd({ offset: n });
+}
+const cdCalibrate = () => cdCall(() => api.cdOffsetLookup(), t('settings.cdRip.offsetFound'));
+async function cdEject() {
+  const r = await api.cdEject();
+  say(bodyMsg(r, r.ok && r.data.success !== false ? t('settings.cdRip.ejected') : t('settings.cdRip.ejectFailed')), !(r.ok && r.data.success !== false));
+  loadCd();
+}
+async function cdCancel() {
+  const r = await api.cdCancel();
+  say(bodyMsg(r, r.ok && r.data.success !== false ? t('settings.cdRip.cancelled') : t('settings.cdRip.cancelFailed')), !(r.ok && r.data.success !== false));
+  loadCd();
+}
+watch(open, (v) => { if (v === 'cdRip') { cdPickOpen.value = false; cdPrefixOpen.value = false; loadCd(); } }, { immediate: true });
+const cdSpeedLabel = (v) => (v ? v + 'x' : t('settings.cdRip.speedMax'));
+const cdRetriesLabel = (v) => t('settings.cdRip.retries.' + v);
+const filteredPackages = computed(() => {
+  const list = (credits.value && credits.value.packages) || [];
+  const q = pkgFilter.value.trim().toLowerCase();
+  return q ? list.filter((p) => (p.name + ' ' + (p.license || '')).toLowerCase().includes(q)) : list;
+});
 async function saveName() {
   const r = await api.sysPost('device_name', { name: playerName.value });
   say(r.ok && r.data.success !== false ? t('settings.audio.nameSaved') : bodyMsg(r, t('settings.audio.saveFailed')), !(r.ok && r.data.success !== false));
@@ -356,16 +467,10 @@ async function removeFir() {
   loadFir();
 }
 
-// ── Tidal / SSH ─────────────────────────────────────────────────
-const tidal = reactive({ available: false, enabled: false });
+// ── SSH ─────────────────────────────────────────────────────────
 const sshState = reactive({ available: false, enabled: false });
 async function loadToggles() {
-  const tv = await api.sys('tidal'); if (tv.ok) { tidal.available = !!tv.data.available; tidal.enabled = !!tv.data.enabled; }
   const s = await api.sys('ssh'); if (s.ok) { sshState.available = !!s.data.available; sshState.enabled = !!s.data.enabled; }
-}
-async function setTidal(v) {
-  tidal.enabled = v; const r = await api.sysPost('tidal', { enable: v });
-  say(bodyMsg(r, t('settings.services.tidalUpdated')), !(r.ok && r.data.success !== false)); loadToggles();
 }
 async function setSsh(v) {
   sshState.enabled = v; const r = await api.sysPost('ssh', { enable: v });
@@ -466,6 +571,115 @@ watch(open, (k) => {
   loadBt();
   btPoll = setInterval(() => { if (!bt.busy) loadBt(); }, 5000);
 }, { immediate: true });
+
+// ── Telecomando ───────────────────────────────────────────────────
+// I tasti li legge l'interfaccia sullo schermo, che possiede /dev/input
+// (native-ui-qt/src/remote.cpp); qui si vede la stessa fotografia attraverso
+// api_server (/remote) e si accoppia un telecomando Bluetooth (/bt_remotes).
+// 🚨 La prova dei tasti apre una finestra con scadenza sull'apparecchio: per
+// quel tempo i tasti si vedono qui e NON comandano l'interfaccia, cosi' chi
+// prova da lontano non fa partire un album per sbaglio. Si chiude da sola.
+const rc = reactive({
+  devices: [], chosen: '', keys: { all: {}, devices: {} }, actions: [],
+  lastKey: {}, learning: false, interfaceRunning: false,
+  busy: false, testing: false,
+  bt: { available: false, supported: false, adapter: false, remotes: [], found: [], scanning: false },
+});
+let rcPoll = null;
+
+async function loadRemote() {
+  const r = await api.sys('remote');
+  if (r.ok && r.data) Object.assign(rc, r.data);
+}
+async function loadRemoteBt() {
+  const r = await api.sys('bt_remotes');
+  if (r.ok && r.data && r.data.available !== undefined) Object.assign(rc.bt, r.data);
+}
+async function rcCall(path, body, reload = loadRemote) {
+  rc.busy = true;
+  const r = await api.sysPost(path, body || {});
+  rc.busy = false; rc.bt.scanning = false;
+  if (r.ok && r.data) {
+    if (r.data.available !== undefined) Object.assign(rc.bt, r.data);
+    else Object.assign(rc, r.data);
+    if (r.data.message) say(r.data.message, r.data.success === false);
+    if (reload) await reload();
+    return r.data.success !== false;
+  }
+  say(bodyMsg(r, t('settings.remote.opFailed')), true);
+  return false;
+}
+// "questo e' il mio telecomando": l'unico modo per non confondere una
+// tastiera e un telecomando, che mandano gli stessi codici
+const rcMine = (d) => rcCall('remote/device', { device: rc.chosen === d.name ? '' : d.name });
+// La prova dei tasti: si accende mentre la scheda e' aperta, e si spegne
+// uscendo. La scadenza sull'apparecchio e' la rete di sicurezza.
+async function rcTest(on) {
+  rc.testing = on;
+  await rcCall('remote/learn', { enable: on });
+}
+const rcAssign = (code, action, device) => rcCall('remote/keys', { code, action, device: device || '' });
+const rcUnassign = (code, device) => rcCall('remote/keys', { code, device: device || '' });
+// quale azione fa oggi quel tasto su quel dispositivo
+function rcActionOf(code, device) {
+  const k = String(code);
+  const d = (rc.keys.devices || {})[device] || {};
+  if (k in d) return d[k];
+  const all = rc.keys.all || {};
+  if (k in all) return all[k];
+  // 🚨 Not assigned by hand: what the key does out of the box (the generic
+  // map, or the one of that model of remote) only the kiosk knows, and it
+  // writes it next to the last key. Returning '' here showed "does nothing"
+  // for every key that worked without being assigned.
+  const lk = rc.lastKey || {};
+  return String(lk.code) === k && lk.device === device ? (lk.action || '') : '';
+}
+const rcIsCustom = (code, device) => {
+  const k = String(code);
+  return k in ((rc.keys.devices || {})[device] || {}) || k in (rc.keys.all || {});
+};
+const rcActionLabel = (a) => (a ? t('settings.remote.actions.' + a) : t('settings.remote.doesNothing'));
+const rcWhere = (d) => (d.bus === 'bluetooth' ? t('settings.remote.viaBluetooth')
+                      : d.bus === 'usb' ? t('settings.remote.viaUsb') : t('settings.remote.viaOther'));
+async function rcScan() { rc.bt.scanning = true; await rcCall('bt_remotes/scan', { seconds: 12 }, loadRemoteBt); }
+// La "scheda del telecomando": quello che dichiara il telecomando, come
+// l'abbiamo classificato e cosa ne ha detto il nucleo, in un file solo.
+// 🚨 Serve a far diagnosticare un telecomando che chi assiste non ha in mano —
+// e' l'insieme di dati con cui si e' risolto il caso del G20S. Dentro ci sono
+// nomi dei dispositivi e indirizzi Bluetooth: la riga sotto il pulsante lo dice.
+async function rcReport() {
+  rc.busy = true;
+  const r = await api.sys('remote/report');
+  rc.busy = false;
+  if (!r.ok || !r.data) { say(bodyMsg(r, t('settings.remote.opFailed')), true); return; }
+  const name = 'telecomando-' + ((r.data.device && r.data.device.hostname) || 'osmium')
+             + '-' + new Date().toISOString().slice(0, 10) + '.json';
+  const url = URL.createObjectURL(new Blob([JSON.stringify(r.data, null, 1)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  say(t('settings.remote.reportSaved'));
+}
+const rcPair = (mac) => rcCall('bt_remotes/add', { mac }, loadRemoteBt);
+const rcForget = (mac) => rcCall('bt_remotes/remove', { mac }, loadRemoteBt);
+// Un telecomando Bluetooth collegato dovrebbe comparire anche fra i
+// dispositivi di input: se non c'e', i suoi tasti non arrivano (succede
+// quando il nucleo rifiuta la mappa che il telecomando dichiara).
+const rmIntro = ref(null);
+// adding a Bluetooth remote: the certified models first, the plain scan and
+// list only for "another remote" (RemotePairing.vue)
+const rcOther = ref(false);
+const rcFirstOfModel = (d) => rc.devices.find((x) => x.model === d.model) === d;
+const rcHasKeys = (name) => !name || rc.devices.some((d) => d.name.startsWith(name) || name.startsWith(d.name));
+
+watch(open, (k) => {
+  if (rcPoll) { clearInterval(rcPoll); rcPoll = null; }
+  if (k !== 'remote') { if (rc.testing) rcTest(false); return; }
+  loadRemote(); loadRemoteBt();
+  rcPoll = setInterval(() => { if (!rc.busy) loadRemote(); }, rc.testing ? 1000 : 4000);
+}, { immediate: true });
+onUnmounted(() => { if (rcPoll) clearInterval(rcPoll); if (rc.testing) rcTest(false); });
 
 // ── Tailscale — join the owner's own tailnet, exposing every port on this
 // appliance (web UI, Lyrion, SMB, ...) from anywhere that tailnet reaches, so
@@ -961,6 +1175,18 @@ async function setPointer(enable) {
   pointerBusy.value = false;
   if (r.ok && r.data.success !== false) { pointer.enabled = r.data.enabled; say(r.data.message || t('settings.display.pointerChanged')); }
   else say(bodyMsg(r, t('settings.display.pointerFailed')), true);
+}
+
+// ── Touchscreen: unplugged and plugged back in, in software ─────────────
+// For a panel that stops answering until its cable is pulled (api_server
+// reset_touchscreen): the same cure, from the phone.
+const touchBusy = ref(false);
+async function resetTouch() {
+  touchBusy.value = true;
+  const r = await api.sysPost('touch/reset', {});
+  touchBusy.value = false;
+  if (r.ok && r.data.success !== false) say(r.data.message || t('settings.display.touchResetDone'));
+  else say(bodyMsg(r, t('settings.display.touchResetFailed')), true);
 }
 
 // ── Now-playing auto-expand ─────────────────────────────────────────
@@ -1579,11 +1805,78 @@ onUnmounted(() => {
     <div class="card" v-if="open === 'audio'">
       <p class="sub">{{ t('settings.audio.hint') }}</p>
       <div v-for="d in devices" :key="d.id" class="net between" @click="pickDevice(d.id)">
-        <span>{{ d.name || d.id }}</span><span class="check" v-if="d.id === currentDevice">✓</span>
+        <span>{{ d.name || d.id }}<span class="muted" v-if="d.dsd === 'native'" style="margin-left: 8px; font-size: 0.85em;">{{ t('settings.audio.dsdNative') }}</span></span><span class="check" v-if="d.id === currentDevice">✓</span>
       </div>
       <label>{{ t('settings.audio.playerName') }}</label>
       <div class="row"><input v-model="playerName" /><button class="secondary fit" @click="saveName">{{ t('common.save') }}</button></div>
       <p class="sub" style="margin-top: 4px;">{{ t('settings.audio.playerNameHint') }}</p>
+
+      <!-- Advanced: the rest of squeezelite's command line, one control per
+           option, applied at once. See setSq() above. -->
+      <div v-if="sq" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.audio.advancedTitle') }}</p>
+        <p class="muted">{{ t('settings.audio.advancedHint') }}</p>
+
+        <label>{{ t('settings.audio.dsdLabel') }}</label>
+        <span class="seg">
+          <button v-for="m in sq.choices.dsd" :key="m" :disabled="sqBusy" :class="{ active: sq.conf.dsd === m }" @click="setSq({ dsd: m })">{{ t('settings.audio.dsd.' + m) }}</button>
+        </span>
+        <p class="muted">{{ t(sq.dsd_detected === 'native' ? 'settings.audio.dsdDetectedNative' : 'settings.audio.dsdDetectedDop') }} {{ t('settings.audio.dsdHelp') }}</p>
+
+        <label>{{ t('settings.audio.dsdDelayLabel') }}</label>
+        <span class="seg">
+          <button v-for="d in sq.choices.dsd_delay_ms" :key="d" :disabled="sqBusy" :class="{ active: sq.conf.dsd_delay_ms === d }" @click="setSq({ dsd_delay_ms: d })">{{ d ? d + ' ms' : t('settings.audio.off') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.audio.dsdDelayHelp') }}</p>
+
+        <label>{{ t('settings.audio.maxRateLabel') }}</label>
+        <span class="seg">
+          <button v-for="r in sq.choices.max_rate" :key="r" :disabled="sqBusy" :class="{ active: sq.conf.max_rate === r }" @click="setSq({ max_rate: r })">{{ r ? (r / 1000) + ' kHz' : t('settings.audio.auto') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.audio.maxRateHelp') }}</p>
+
+        <label>{{ t('settings.audio.volumeLabel') }}</label>
+        <span class="seg">
+          <button :disabled="sqBusy" :class="{ active: sq.conf.volume === 'software' }" @click="setSq({ volume: 'software' })">{{ t('settings.audio.volumeSoftware') }}</button>
+          <button :disabled="sqBusy || !sq.mixers.length" :class="{ active: sq.conf.volume === 'hardware' }" @click="setSq({ volume: 'hardware' })">{{ t('settings.audio.volumeHardware') }}</button>
+        </span>
+        <p class="muted">{{ sq.mixers.length ? t('settings.audio.volumeHelp') : t('settings.audio.volumeNoMixer') }}</p>
+        <template v-if="sq.conf.volume === 'hardware' && sq.mixers.length > 1">
+          <label>{{ t('settings.audio.mixerLabel') }}</label>
+          <select :value="sq.conf.mixer" :disabled="sqBusy" @change="setSq({ mixer: $event.target.value })">
+            <option v-for="m in sq.mixers" :key="m" :value="m">{{ m }}</option>
+          </select>
+        </template>
+
+        <label>{{ t('settings.audio.alsaBufferLabel') }}</label>
+        <span class="seg">
+          <button :disabled="sqBusy" :class="{ active: sq.conf.alsa_buffer === 'auto' }" @click="setSq({ alsa_buffer: 'auto' })">{{ t('settings.audio.auto') }}</button>
+          <button :disabled="sqBusy" :class="{ active: sq.conf.alsa_buffer === 'large' }" @click="setSq({ alsa_buffer: 'large' })">{{ t('settings.audio.large') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.audio.alsaBufferHelp') }}</p>
+
+        <label>{{ t('settings.audio.streamBufferLabel') }}</label>
+        <span class="seg">
+          <button :disabled="sqBusy" :class="{ active: sq.conf.stream_buffer === 'auto' }" @click="setSq({ stream_buffer: 'auto' })">{{ t('settings.audio.auto') }}</button>
+          <button :disabled="sqBusy" :class="{ active: sq.conf.stream_buffer === 'large' }" @click="setSq({ stream_buffer: 'large' })">{{ t('settings.audio.large') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.audio.streamBufferHelp') }}</p>
+
+        <label>{{ t('settings.audio.realtimeLabel') }}</label>
+        <span class="seg">
+          <button :disabled="sqBusy" :class="{ active: !sq.conf.realtime }" @click="setSq({ realtime: false })">{{ t('settings.audio.off') }}</button>
+          <button :disabled="sqBusy" :class="{ active: sq.conf.realtime }" @click="setSq({ realtime: true })">{{ t('settings.audio.on') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.audio.realtimeHelp') }}</p>
+
+        <label>{{ t('settings.audio.extraLabel') }}</label>
+        <div class="row"><input v-model="sqExtra" :placeholder="t('settings.audio.extraPlaceholder')" spellcheck="false" /><button class="secondary fit" :disabled="sqBusy" @click="setSq({ extra: sqExtra })">{{ t('common.save') }}</button></div>
+        <p class="muted">{{ t('settings.audio.extraHint') }}</p>
+
+        <label>{{ t('settings.audio.argsLabel') }}</label>
+        <p class="muted" style="font-family: monospace; word-break: break-all; user-select: all;">squeezelite {{ sq.args }}</p>
+        <button class="secondary" :disabled="sqBusy" @click="resetSq">{{ t('settings.audio.sqResetButton') }}</button>
+      </div>
     </div>
 
     <!-- Bluetooth speakers: pair one and it turns into a player of its own,
@@ -1654,9 +1947,221 @@ onUnmounted(() => {
       </template>
     </div>
 
+    <!-- Telecomando: quello che l'interfaccia sullo schermo legge da /dev/input,
+         visto da qui attraverso api_server (/remote, /bt_remotes) -->
+    <div class="card" v-if="open === 'remote'">
+      <p class="sub">{{ t('settings.remote.help') }}</p>
+
+      <label>{{ t('settings.remote.connected') }}</label>
+      <p class="sub" v-if="!rc.devices.length">{{ t('settings.remote.none') }}</p>
+      <div v-for="d in rc.devices" :key="d.name + d.address" class="net between">
+        <span>
+          <span style="display:block;">{{ d.name }}</span>
+          <span class="muted">
+            {{ rcWhere(d) }} ·
+            {{ (d.kind === 'remote' || d.chosen) ? t('settings.remote.full') : t('settings.remote.mediaOnly') }}
+            <template v-if="d.chosen"> · {{ t('settings.remote.isMine') }}</template>
+          </span>
+        </span>
+        <!-- 🚨 Solo dove cambia qualcosa: chi e' gia' riconosciuto come
+             telecomando ascolta tutti i tasti di suo, e il pulsante li faceva
+             credere il contrario. -->
+        <button v-if="d.kind !== 'remote' || d.chosen" class="secondary fit" :disabled="rc.busy" @click="rcMine(d)">
+          {{ d.chosen ? t('settings.remote.notMine') : t('settings.remote.mine') }}
+        </button>
+        <!-- a remote the appliance knows: its key map, once per remote (a
+             Xiaomi is two input devices, one object in the hand) -->
+        <button v-else-if="d.model && rcFirstOfModel(d)" class="secondary fit" @click="rmIntro && rmIntro.show(d.model)">
+          {{ t('settings.remote.intro.show') }}
+        </button>
+      </div>
+      <p class="sub" v-if="rc.devices.some((d) => d.kind !== 'remote')">{{ t('settings.remote.mineHint') }}</p>
+      <!-- shown by itself the first time a known remote is connected -->
+      <RemoteIntro ref="rmIntro" :devices="rc.devices" />
+
+      <label>{{ t('settings.remote.test') }}</label>
+      <p class="sub">{{ t('settings.remote.testHintWeb') }}</p>
+      <p class="sub" v-if="!rc.interfaceRunning">{{ t('settings.remote.needsInterface') }}</p>
+      <div class="between item">
+        <span>{{ t('settings.remote.testSwitch') }}</span>
+        <Toggle :model-value="rc.testing" :disabled="rc.busy || !rc.interfaceRunning"
+                @update:model-value="rcTest" />
+      </div>
+      <template v-if="rc.testing">
+        <p class="sub" v-if="!rc.lastKey || !rc.lastKey.code">{{ t('settings.remote.pressAKey') }}</p>
+        <div v-else>
+          <p class="sub">
+            {{ t('settings.remote.keyLabel') }}: <span class="silver">{{ rc.lastKey.key }} · {{ rc.lastKey.code }}</span>
+            <template v-if="rc.lastKey.device"> — {{ rc.lastKey.device }}</template>
+          </p>
+          <p class="sub">
+            {{ t('settings.remote.doesLabel') }}:
+            <span class="silver">{{ rcActionLabel(rcActionOf(rc.lastKey.code, rc.lastKey.device)) }}</span>
+            <template v-if="rcIsCustom(rc.lastKey.code, rc.lastKey.device)"> ({{ t('settings.remote.custom') }})</template>
+          </p>
+          <label>{{ t('settings.remote.assign') }}</label>
+          <select :disabled="rc.busy"
+                  :value="rcActionOf(rc.lastKey.code, rc.lastKey.device)"
+                  @change="rcAssign(rc.lastKey.code, $event.target.value, rc.lastKey.device)">
+            <option value="">{{ t('settings.remote.assignNothing') }}</option>
+            <option v-for="a in rc.actions" :key="a" :value="a">{{ t('settings.remote.actions.' + a) }}</option>
+          </select>
+          <button class="secondary" style="margin-top: 8px;"
+                  v-if="rcIsCustom(rc.lastKey.code, rc.lastKey.device)" :disabled="rc.busy"
+                  @click="rcUnassign(rc.lastKey.code, rc.lastKey.device)">
+            {{ t('settings.remote.unassign') }}
+          </button>
+        </div>
+      </template>
+      <p class="sub">{{ t('settings.remote.keysBody') }}</p>
+
+      <label>{{ t('settings.remote.reportTitle') }}</label>
+      <p class="sub">{{ t('settings.remote.reportHint') }}</p>
+      <button class="secondary" :disabled="rc.busy" @click="rcReport">{{ t('settings.remote.report') }}</button>
+
+      <label>{{ t('settings.remote.btTitle') }}</label>
+      <p class="sub" v-if="!rc.bt.available">{{ t('settings.remote.btUnavailable') }}</p>
+      <p class="sub" v-else-if="!rc.bt.supported">{{ t('settings.remote.btNeedsUpdate') }}</p>
+      <template v-else>
+        <p class="sub" v-if="!rc.bt.remotes.length">{{ t('settings.remote.btNone') }}</p>
+        <div v-for="r in rc.bt.remotes" :key="r.mac" class="net between">
+          <span>
+            <span style="display:block;">{{ r.name || r.mac }}</span>
+            <span class="muted">
+              {{ r.connected ? t('settings.remote.btConnected') : t('settings.remote.btNotConnected') }}
+              <template v-if="r.connected && !rcHasKeys(r.name)"> — {{ t('settings.remote.btNoKeys') }}</template>
+            </span>
+          </span>
+          <button class="danger fit" :disabled="rc.busy" @click="rcForget(r.mac)">{{ t('settings.remote.btForget') }}</button>
+        </div>
+        <label>{{ t('settings.remote.pair.title') }}</label>
+        <RemotePairing v-if="!rcOther" @paired="() => { loadRemoteBt(); loadRemote(); }" @other="rcOther = true" />
+        <template v-else>
+          <p class="sub">{{ t('settings.remote.btHelp') }}</p>
+          <button :disabled="rc.busy" @click="rcScan" style="margin-top: 10px;">
+            {{ rc.bt.scanning ? t('settings.remote.btSearching') : t('settings.remote.btSearch') }}
+          </button>
+          <p class="sub" v-if="rc.bt.scanning">{{ t('settings.remote.btSearchingHint') }}</p>
+          <template v-else>
+            <p class="sub" v-if="!rc.bt.found.length">{{ t('settings.remote.btFoundNone') }}</p>
+            <div v-for="d in rc.bt.found" :key="d.mac" class="net between" @click="rcPair(d.mac)">
+              <span>
+                <span style="display:block;">{{ d.name || d.mac }}</span>
+                <span class="muted">{{ d.mac }}</span>
+              </span>
+              <span class="check">+</span>
+            </div>
+          </template>
+          <button class="ghost" style="margin-top: 8px;" @click="rcOther = false">{{ t('settings.remote.pair.change') }}</button>
+        </template>
+      </template>
+    </div>
+
     <!-- Sources (native — talks directly to sources_server.py through
          webui_server's session-gated /api/system/sources|usb|internal|apply
          forwarders, see SourcesPanel.vue) -->
+    <!-- CD ripping: see loadCd() / setCd() above -->
+    <div class="card" v-if="open === 'cdRip'">
+      <p class="sub">{{ t('settings.cdRip.hint') }}</p>
+      <p class="muted" v-if="!cd">{{ t('common.loading') }}</p>
+      <template v-else>
+        <label>{{ t('settings.cdRip.enableLabel') }}</label>
+        <span class="seg">
+          <button :disabled="cdBusy" :class="{ active: cd.settings.enabled }" @click="setCd({ enabled: true })">{{ t('settings.cdRip.on') }}</button>
+          <button :disabled="cdBusy" :class="{ active: !cd.settings.enabled }" @click="setCd({ enabled: false })">{{ t('settings.cdRip.off') }}</button>
+        </span>
+
+        <label>{{ t('settings.cdRip.targetLabel') }}</label>
+        <div class="net between" style="align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div class="muted" style="min-width: 220px; word-break: break-all;">
+            {{ cd.settings.target || t('settings.cdRip.targetUnset') }}
+            <span v-if="cd.settings.target && !cd.target_ok" style="display: block; color: var(--danger, #f87171);">{{ t('settings.cdRip.targetBad') }}</span>
+          </div>
+          <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">
+            <button class="secondary fit" :disabled="cdBusy" @click="cdPickOpen = !cdPickOpen">{{ cdPickOpen ? t('common.close') : t('settings.cdRip.targetPick') }}</button>
+            <button class="secondary fit" :disabled="cdBusy || !cd.settings.target" @click="setCd({ target: '' })">{{ t('settings.cdRip.targetClear') }}</button>
+          </div>
+        </div>
+        <p class="muted">{{ t('settings.cdRip.targetHelp') }}</p>
+        <FolderPicker v-if="cdPickOpen" :start-at="cd.settings.target || ''" :pick-label="t('settings.cdRip.targetUse')" :busy="cdBusy" @pick="cdPickTarget" @error="(m) => say(m, true)" />
+
+        <label>{{ t('settings.cdRip.prefixLabel') }}</label>
+        <div class="net between" style="align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div class="muted" style="min-width: 220px; word-break: break-all;">{{ cd.settings.dir_prefix || t('settings.cdRip.prefixNone') }}</div>
+          <div class="row" style="flex-wrap: wrap; justify-content: flex-end;">
+            <button class="secondary fit" :disabled="cdBusy || !cd.settings.target" @click="cdPrefixOpen = !cdPrefixOpen">{{ cdPrefixOpen ? t('common.close') : t('settings.cdRip.prefixPick') }}</button>
+            <button class="secondary fit" :disabled="cdBusy || !cd.settings.dir_prefix" @click="setCd({ dir_prefix: '' })">{{ t('settings.cdRip.targetClear') }}</button>
+          </div>
+        </div>
+        <p class="muted">{{ cd.settings.target ? t('settings.cdRip.prefixHelp') : t('settings.cdRip.prefixNeedsTarget') }}</p>
+        <FolderPicker v-if="cdPrefixOpen && cd.settings.target" :start-at="cdPrefixStart" :pick-label="t('settings.cdRip.prefixUse')" :busy="cdBusy" @pick="cdPickPrefix" @error="(m) => say(m, true)" />
+
+        <label>{{ t('settings.cdRip.autoStartLabel') }}</label>
+        <span class="seg">
+          <button v-for="m in cd.choices.auto_start" :key="m" :disabled="cdBusy" :class="{ active: cd.settings.auto_start === m }" @click="setCd({ auto_start: m })">{{ t('settings.cdRip.autoStart.' + m) }}</button>
+        </span>
+        <p class="muted">{{ t('settings.cdRip.autoStartHelp') }}</p>
+
+        <label>{{ t('settings.cdRip.formatLabel') }}</label>
+        <span class="seg">
+          <button :disabled="cdBusy" :class="{ active: cd.settings.format === 'wav' }" @click="setCd({ format: 'wav' })">WAV</button>
+          <button :disabled="cdBusy" :class="{ active: cd.settings.format === 'flac' }" @click="setCd({ format: 'flac' })">FLAC</button>
+        </span>
+        <template v-if="cd.settings.format === 'flac'">
+          <label>{{ t('settings.cdRip.compressionLabel') }}</label>
+          <select :value="cd.settings.flac_compression" :disabled="cdBusy" @change="setCd({ flac_compression: parseInt($event.target.value, 10) })">
+            <option v-for="n in [0,1,2,3,4,5,6,7,8]" :key="n" :value="n">{{ n }}{{ n === 5 ? ' (' + t('settings.cdRip.default') + ')' : n === 8 ? ' (' + t('settings.cdRip.best') + ')' : '' }}</option>
+          </select>
+        </template>
+        <p class="muted" v-else>{{ t('settings.cdRip.wavHelp') }}</p>
+
+        <label>{{ t('settings.cdRip.retriesLabel') }}</label>
+        <span class="seg">
+          <button v-for="n in cd.choices.retries" :key="n" :disabled="cdBusy" :class="{ active: cd.settings.retries === n }" @click="setCd({ retries: n })">{{ cdRetriesLabel(n) }}</button>
+        </span>
+        <p class="muted">{{ t('settings.cdRip.retriesHelp') }}</p>
+
+        <label>{{ t('settings.cdRip.preEmphasisLabel') }}</label>
+        <span class="seg">
+          <button v-for="m in cd.choices.pre_emphasis" :key="m" :disabled="cdBusy" :class="{ active: cd.settings.pre_emphasis === m }" @click="setCd({ pre_emphasis: m })">{{ t('settings.cdRip.preEmphasis.' + m) }}</button>
+        </span>
+        <p class="muted">{{ t('settings.cdRip.preEmphasisHelp') }}</p>
+
+        <div v-for="f in ['clean_names', 'replaygain', 'log_file', 'eject']" :key="f" class="net between" style="align-items: center;">
+          <span><span style="display:block;">{{ t('settings.cdRip.flags.' + f + '.label') }}</span><span class="muted" style="display:block;">{{ t('settings.cdRip.flags.' + f + '.text') }}</span></span>
+          <Toggle :model-value="!!cd.settings[f]" :disabled="cdBusy" @update:model-value="(v) => setCd({ [f]: v })" />
+        </div>
+
+        <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ cd.drive.label || t('settings.cdRip.noDrive') }}</p>
+          <label>{{ t('settings.cdRip.speedLabel') }}</label>
+          <span class="seg">
+            <button v-for="v in cd.choices.speed" :key="v" :disabled="cdBusy" :class="{ active: cd.settings.speed === v }" @click="setCd({ speed: v })">{{ cdSpeedLabel(v) }}</button>
+          </span>
+          <p class="muted">{{ t('settings.cdRip.speedHelp') }}</p>
+
+          <label>{{ t('settings.cdRip.offsetLabel') }}</label>
+          <div class="row">
+            <input v-model="cdOffset" inputmode="numeric" placeholder="+6" style="max-width: 120px;" />
+            <button class="secondary fit" :disabled="cdBusy" @click="cdSaveOffset">{{ t('common.save') }}</button>
+            <button class="fit" :disabled="cdBusy || !cd.drive.present" @click="cdCalibrate">{{ t('settings.cdRip.calibrate') }}</button>
+          </div>
+          <p class="muted">{{ t('settings.cdRip.offsetHelp') }}</p>
+
+          <div class="net between" style="align-items: center;">
+            <span><span style="display:block;">{{ t('settings.cdRip.paranoiaLabel') }}</span><span class="muted" style="display:block;">{{ t('settings.cdRip.paranoiaText') }}</span></span>
+            <Toggle :model-value="!!cd.settings.paranoia" :disabled="cdBusy" @update:model-value="(v) => setCd({ paranoia: v })" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 18px; flex-wrap: wrap;">
+          <button class="secondary fit" :disabled="cdBusy || cd.ripping" @click="cdEject">{{ t('settings.cdRip.ejectNow') }}</button>
+          <button class="secondary fit" v-if="cd.ripping" :disabled="cdBusy" @click="cdCancel">{{ t('settings.cdRip.cancelRip') }}</button>
+        </div>
+        <p class="muted">{{ t('settings.cdRip.ejectHelp') }}</p>
+      </template>
+    </div>
+
     <div class="card wide" v-if="open === 'sources'">
       <p class="sub">{{ t('settings.sources.hint') }}</p>
       <SourcesPanel />
@@ -1694,10 +2199,6 @@ onUnmounted(() => {
 
     <!-- Services -->
     <div class="card" v-if="open === 'services'">
-      <div class="between item" v-if="tidal.available">
-        <span>{{ t('settings.services.tidal') }}</span>
-        <Toggle :model-value="tidal.enabled" @update:model-value="setTidal" />
-      </div>
       <div class="between item">
         <span>{{ t('settings.services.ssh') }} <span class="muted">{{ t('settings.services.sshHint') }}</span></span>
         <Toggle :model-value="sshState.enabled" @update:model-value="setSsh" />
@@ -2028,6 +2529,14 @@ onUnmounted(() => {
             <button :disabled="pointerBusy" :class="{ active: !pointer.enabled }" @click="setPointer(false)">{{ t('settings.display.pointerOff') }}</button>
           </span>
         </div>
+
+        <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.display.touchResetLabel') }}</p>
+          <p class="muted">{{ t('settings.display.touchResetHelp') }}</p>
+          <button class="secondary" :disabled="touchBusy" @click="resetTouch">
+            {{ touchBusy ? t('settings.display.touchResetting') : t('settings.display.touchReset') }}
+          </button>
+        </div>
       </template>
 
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
@@ -2279,6 +2788,58 @@ onUnmounted(() => {
     </div>
 
     <!-- Debug: boot / kernel-panic troubleshooting flags -->
+    <!-- Licenses & credits: see loadCredits() above -->
+    <div class="card wide" v-if="open === 'notices'">
+      <p class="sub">{{ t('settings.notices.intro') }}</p>
+      <p class="muted" v-if="!credits">{{ t('common.loading') }}</p>
+      <template v-else>
+        <h3>Osmium Sound <span class="muted">{{ credits.project.version }}</span></h3>
+        <p class="muted">
+          {{ t('settings.notices.projectLicense') }}
+          <a :href="credits.project.license_url" target="_blank" rel="noopener">AGPL-3.0-only</a> ·
+          <a :href="credits.project.source" target="_blank" rel="noopener">{{ t('settings.notices.sourceCode') }}</a>
+        </p>
+        <p class="muted">{{ t('settings.notices.commercial', { email: credits.project.commercial }) }}</p>
+        <p class="muted">{{ t('settings.notices.mitNote', { date: credits.project.mit_until }) }}</p>
+
+        <h3 style="margin-top: 18px;">{{ credits.lyrion.name }} <span class="muted">{{ credits.lyrion.version || '' }}</span></h3>
+        <p class="muted">
+          {{ t('settings.notices.lyrion') }} {{ credits.lyrion.license }} ·
+          <a :href="credits.lyrion.url" target="_blank" rel="noopener">lyrion.org</a> ·
+          <a :href="credits.lyrion.source" target="_blank" rel="noopener">{{ t('settings.notices.sourceCode') }}</a>
+        </p>
+
+        <div v-for="s in credits.notices" :key="s.section" style="margin-top: 18px;">
+          <p class="sub">{{ s.section }}</p>
+          <div v-for="e in s.entries" :key="e.name" class="net between">
+            <span>
+              <span style="display:block;">{{ e.name }} <span class="muted" v-if="e.version">{{ e.version }}</span></span>
+              <span class="muted" style="display:block;" v-if="e.notes">{{ e.notes }}</span>
+              <a class="muted" style="display:block;" v-if="e.url" :href="e.url" target="_blank" rel="noopener">{{ e.url }}</a>
+            </span>
+            <span class="muted" style="margin-left: 12px; max-width: 48%; text-align: right; overflow-wrap: anywhere;">{{ e.license }}</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.notices.packagesTitle', { n: credits.packages.length, suite: credits.suite || 'Debian' }) }}</p>
+          <p class="muted" v-if="!credits.packages_available">{{ t('settings.notices.packagesMissing') }}</p>
+          <template v-else>
+            <p class="muted" v-if="credits.packages_generated">{{ t('settings.notices.generated', { date: credits.packages_generated }) }}</p>
+            <input v-model="pkgFilter" :placeholder="t('settings.notices.filter')" spellcheck="false" />
+            <div v-for="p in filteredPackages" :key="p.name" class="net between">
+              <span>
+                <span style="display:block;">{{ p.name }} <span class="muted">{{ p.version }}</span></span>
+                <a class="muted" style="display:block;" v-if="p.homepage" :href="p.homepage" target="_blank" rel="noopener">{{ p.homepage }}</a>
+              </span>
+              <span class="muted" style="margin-left: 12px; max-width: 48%; text-align: right; overflow-wrap: anywhere;">{{ p.license }}</span>
+            </div>
+          </template>
+        </div>
+        <p class="muted" style="margin-top: 14px;">{{ t('settings.notices.sourceOffer') }}</p>
+      </template>
+    </div>
+
     <div class="card" v-if="open === 'debug'">
       <p class="sub">{{ t('settings.debug.bootHint') }}</p>
       <div class="between item">

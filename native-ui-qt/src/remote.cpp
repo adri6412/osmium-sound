@@ -1,0 +1,883 @@
+#include "remote.h"
+#include "sys.h"
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QRegularExpression>
+#include <QSocketNotifier>
+#include <QtDebug>
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/input.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <iterator>
+
+// Codici che le intestazioni di sistema piu' vecchie potrebbero non avere:
+// meglio dichiararli qui che perdere un tasto a seconda di dove si compila.
+#ifndef KEY_OK
+#define KEY_OK 0x160
+#endif
+#ifndef KEY_SELECT
+#define KEY_SELECT 0x161
+#endif
+#ifndef KEY_INFO
+#define KEY_INFO 0x166
+#endif
+#ifndef KEY_FAVORITES
+#define KEY_FAVORITES 0x16c
+#endif
+#ifndef KEY_LIST
+#define KEY_LIST 0x18b
+#endif
+#ifndef KEY_SHUFFLE
+#define KEY_SHUFFLE 0x1bc
+#endif
+#ifndef KEY_CONTEXT_MENU
+#define KEY_CONTEXT_MENU 0x1b6
+#endif
+#ifndef KEY_VIDEO
+#define KEY_VIDEO 0x189
+#endif
+#ifndef KEY_PROGRAM
+#define KEY_PROGRAM 0x16a
+#endif
+#ifndef KEY_APPSELECT
+#define KEY_APPSELECT 0x244
+#endif
+#ifndef KEY_VOICECOMMAND
+#define KEY_VOICECOMMAND 0x246
+#endif
+#ifndef KEY_ASSISTANT
+#define KEY_ASSISTANT 0x247
+#endif
+
+namespace {
+
+struct KeyDef {
+    int code;
+    const char *name;      // come lo chiama il nucleo
+    const char *action;    // "" = riconosciuto ma non assegnato
+};
+
+// La mappa di serie: i codici HID che manda un telecomando qualsiasi. Chi ne
+// manda di diversi se li assegna dal pannello di prova (remote-keys.json).
+const KeyDef kKeys[] = {
+    // riproduzione
+    { KEY_PLAYPAUSE,    "KEY_PLAYPAUSE",    "playPause" },
+    { KEY_PLAY,         "KEY_PLAY",         "play" },
+    { KEY_PLAYCD,       "KEY_PLAYCD",       "play" },
+    { KEY_PAUSE,        "KEY_PAUSE",        "pause" },
+    { KEY_PAUSECD,      "KEY_PAUSECD",      "pause" },
+    { KEY_STOP,         "KEY_STOP",         "stop" },
+    { KEY_STOPCD,       "KEY_STOPCD",       "stop" },
+    { KEY_NEXTSONG,     "KEY_NEXTSONG",     "next" },
+    { KEY_PREVIOUSSONG, "KEY_PREVIOUSSONG", "prev" },
+    { KEY_NEXT,         "KEY_NEXT",         "next" },
+    { KEY_PREVIOUS,     "KEY_PREVIOUS",     "prev" },
+    { KEY_FASTFORWARD,  "KEY_FASTFORWARD",  "forward" },
+    { KEY_REWIND,       "KEY_REWIND",       "rewind" },
+    // volume
+    { KEY_VOLUMEUP,     "KEY_VOLUMEUP",     "volumeUp" },
+    { KEY_VOLUMEDOWN,   "KEY_VOLUMEDOWN",   "volumeDown" },
+    { KEY_MUTE,         "KEY_MUTE",         "mute" },
+    // navigazione
+    { KEY_UP,           "KEY_UP",           "up" },
+    { KEY_DOWN,         "KEY_DOWN",         "down" },
+    { KEY_LEFT,         "KEY_LEFT",         "left" },
+    { KEY_RIGHT,        "KEY_RIGHT",        "right" },
+    { KEY_ENTER,        "KEY_ENTER",        "ok" },
+    { KEY_KPENTER,      "KEY_KPENTER",      "ok" },
+    { KEY_OK,           "KEY_OK",           "ok" },
+    { KEY_SELECT,       "KEY_SELECT",       "ok" },
+    { KEY_SPACE,        "KEY_SPACE",        "ok" },
+    { KEY_ESC,          "KEY_ESC",          "back" },
+    { KEY_BACK,         "KEY_BACK",         "back" },
+    { KEY_BACKSPACE,    "KEY_BACKSPACE",    "back" },
+    { KEY_EXIT,         "KEY_EXIT",         "back" },
+    { KEY_HOME,         "KEY_HOME",         "home" },
+    { KEY_HOMEPAGE,     "KEY_HOMEPAGE",     "home" },
+    { KEY_MENU,         "KEY_MENU",         "menu" },
+    { KEY_CONTEXT_MENU, "KEY_CONTEXT_MENU", "menu" },
+    { KEY_PAGEUP,       "KEY_PAGEUP",       "pageUp" },
+    { KEY_PAGEDOWN,     "KEY_PAGEDOWN",     "pageDown" },
+    // il resto dell'interfaccia
+    { KEY_INFO,         "KEY_INFO",         "nowPlaying" },
+    { KEY_MEDIA,        "KEY_MEDIA",        "nowPlaying" },
+    { KEY_LIST,         "KEY_LIST",         "queue" },
+    { KEY_SEARCH,       "KEY_SEARCH",       "search" },
+    { KEY_FIND,         "KEY_FIND",         "search" },
+    // the microphone key (Assistant, "voice"): we do not listen to the voice,
+    // but whoever presses it wants to look something up
+    { KEY_VOICECOMMAND, "KEY_VOICECOMMAND", "search" },
+    { KEY_ASSISTANT,    "KEY_ASSISTANT",    "search" },
+    { KEY_FAVORITES,    "KEY_FAVORITES",    "favorite" },
+    { KEY_SHUFFLE,      "KEY_SHUFFLE",      "shuffle" },
+    // 🚨 The power key opens the restart / shut down menu (the owner asked
+    // for it, 2026-09-28) and never acts by itself: the menu wants a choice
+    // and its spotlight starts on Cancel, so a remote in a pocket still
+    // cannot switch off what is playing. The sleep key rests the screen.
+    { KEY_POWER,        "KEY_POWER",        "powerMenu" },
+    { KEY_SLEEP,        "KEY_SLEEP",        "standby" },
+    { KEY_EJECTCD,      "KEY_EJECTCD",      "eject" },
+    { KEY_EJECTCLOSECD, "KEY_EJECTCLOSECD", "eject" },
+    // riconosciuti ma senza azione: cosi' il pannello di prova li sa
+    // chiamare per nome invece di mostrare un numero
+    { KEY_RECORD,       "KEY_RECORD",       "" },
+    { KEY_RED,          "KEY_RED",          "" },
+    { KEY_GREEN,        "KEY_GREEN",        "" },
+    { KEY_YELLOW,       "KEY_YELLOW",       "" },
+    { KEY_BLUE,         "KEY_BLUE",         "" },
+    { KEY_CHANNELUP,    "KEY_CHANNELUP",    "" },
+    { KEY_CHANNELDOWN,  "KEY_CHANNELDOWN",  "" },
+    { KEY_PROGRAM,      "KEY_PROGRAM",      "" },
+    { KEY_VIDEO,        "KEY_VIDEO",        "" },
+    { KEY_APPSELECT,    "KEY_APPSELECT",    "" },
+    { KEY_COMPOSE,      "KEY_COMPOSE",      "" },
+    { KEY_1, "KEY_1", "" }, { KEY_2, "KEY_2", "" }, { KEY_3, "KEY_3", "" },
+    { KEY_4, "KEY_4", "" }, { KEY_5, "KEY_5", "" }, { KEY_6, "KEY_6", "" },
+    { KEY_7, "KEY_7", "" }, { KEY_8, "KEY_8", "" }, { KEY_9, "KEY_9", "" },
+    { KEY_0, "KEY_0", "" },
+    { KEY_NUMERIC_1, "KEY_NUMERIC_1", "" }, { KEY_NUMERIC_2, "KEY_NUMERIC_2", "" },
+    { KEY_NUMERIC_3, "KEY_NUMERIC_3", "" }, { KEY_NUMERIC_4, "KEY_NUMERIC_4", "" },
+    { KEY_NUMERIC_5, "KEY_NUMERIC_5", "" }, { KEY_NUMERIC_6, "KEY_NUMERIC_6", "" },
+    { KEY_NUMERIC_7, "KEY_NUMERIC_7", "" }, { KEY_NUMERIC_8, "KEY_NUMERIC_8", "" },
+    { KEY_NUMERIC_9, "KEY_NUMERIC_9", "" }, { KEY_NUMERIC_0, "KEY_NUMERIC_0", "" },
+};
+
+// Le azioni assegnabili, nell'ordine in cui si mostrano nell'elenco.
+const char *const kActions[] = {
+    "playPause", "play", "pause", "stop", "next", "prev", "forward", "rewind",
+    "volumeUp", "volumeDown", "mute",
+    "up", "down", "left", "right", "ok", "back", "home", "menu", "pageUp", "pageDown",
+    "nowPlaying", "fullScreen", "nextVu", "nextAnimation",
+    "queue", "search", "favorite", "openFavorites", "shuffle", "standby", "powerMenu", "eject", "resetTouch",
+};
+
+// I tasti Qt: la stessa tabella, ma dal lato di chi li riceve gia' tradotti.
+// 🚨 Le frecce e invio ci sono di proposito: da qui passano le tastiere e i
+// telecomandi che non prendiamo in esclusiva, e senza queste righe su quei
+// dispositivi non si navigherebbe.
+struct QtKeyDef { int key; const char *action; };
+const QtKeyDef kQtKeys[] = {
+    { Qt::Key_Up, "up" }, { Qt::Key_Down, "down" }, { Qt::Key_Left, "left" }, { Qt::Key_Right, "right" },
+    { Qt::Key_Return, "ok" }, { Qt::Key_Enter, "ok" }, { Qt::Key_Select, "ok" }, { Qt::Key_Space, "ok" },
+    { Qt::Key_Escape, "back" }, { Qt::Key_Back, "back" }, { Qt::Key_Backspace, "back" },
+    { Qt::Key_HomePage, "home" }, { Qt::Key_Home, "home" },
+    { Qt::Key_Menu, "menu" }, { Qt::Key_Context1, "menu" },
+    { Qt::Key_PageUp, "pageUp" }, { Qt::Key_PageDown, "pageDown" },
+    { Qt::Key_MediaTogglePlayPause, "playPause" }, { Qt::Key_MediaPlay, "play" },
+    { Qt::Key_MediaPause, "pause" }, { Qt::Key_MediaStop, "stop" },
+    { Qt::Key_MediaNext, "next" }, { Qt::Key_MediaPrevious, "prev" },
+    { Qt::Key_AudioForward, "forward" }, { Qt::Key_AudioRewind, "rewind" },
+    { Qt::Key_VolumeUp, "volumeUp" }, { Qt::Key_VolumeDown, "volumeDown" }, { Qt::Key_VolumeMute, "mute" },
+    { Qt::Key_Search, "search" }, { Qt::Key_Favorites, "favorite" },
+    { Qt::Key_LaunchMedia, "nowPlaying" }, { Qt::Key_Eject, "eject" },
+};
+
+// ─── the remotes known out of the box ──────────────────────────────────────
+// Three models the appliance knows by itself: recognised by bus and vendor
+// (not by name: the Fire TV calls itself "AR Keyboard" or "Amazon Remote
+// Keyboard" depending on the connection), remotes even when they present
+// themselves as keyboards, with a key map of their own between what the user
+// assigns by hand and the generic one. Codes measured by pressing the real
+// keys (2026-09-27), not taken from a data sheet.
+//
+// 🚨 "A remote even if it says keyboard" is not just convenience: a device
+// that is not taken exclusively carries its power key all the way to logind,
+// and the Fire TV switched the appliance OFF.
+struct ModelKey { int code; const char *action; };
+// Keys the kernel does not translate (vendor page): read from hidraw. Report
+// `report`, first byte `byte` when pressed, 0 when released. The code is
+// ours, past KEY_MAX, so it can be assigned like any other.
+struct VendorKey { int report; int byte; int code; const char *name; const char *action; };
+struct Model {
+    const char *id;
+    const char *label;
+    int bus, vendor, product;          // product 0 = any
+    const ModelKey *keys; int nkeys;
+    const VendorKey *vkeys; int nvkeys;
+};
+constexpr int kVendorBase = 0x1000;    // > KEY_MAX (0x2ff)
+
+// Fire TV Alexa (3rd gen): no previous/next keys, so ⏪ ⏩ do that (music
+// needs it more than 30-second jumps); the TV guide key opens the player.
+const ModelKey kFireTvKeys[] = {
+    { KEY_REWIND, "prev" }, { KEY_FASTFORWARD, "next" }, { KEY_PROGRAM, "nowPlaying" },
+};
+const VendorKey kFireTvVendor[] = {
+    { 0xef, 0xa1, kVendorBase + 0xa1, "APP_PRIME_VIDEO",   "queue" },
+    { 0xef, 0xa2, kVendorBase + 0xa2, "APP_NETFLIX",       "favorite" },
+    { 0xef, 0xa3, kVendorBase + 0xa3, "APP_DISNEY_PLUS",   "nextVu" },
+    { 0xef, 0xa4, kVendorBase + 0xa4, "APP_AMAZON_MUSIC",  "fullScreen" },
+};
+// G20S PRO: the light-bulb key sends KEY_COMPOSE, the "menu" key of PC
+// keyboards — and the only menu key it has. The digits are shortcuts.
+const ModelKey kG20sKeys[] = {
+    { KEY_COMPOSE, "menu" },
+    { KEY_1, "nowPlaying" }, { KEY_2, "queue" }, { KEY_3, "favorite" }, { KEY_4, "shuffle" },
+    { KEY_5, "fullScreen" }, { KEY_6, "nextVu" }, { KEY_7, "nextAnimation" }, { KEY_8, "search" },
+    { KEY_9, "stop" }, { KEY_0, "home" },
+};
+// Xiaomi (Mi Box S): no playback keys, so play/pause sits on Netflix
+// (KEY_VIDEO); the app grid is the menu, LIVE opens the player.
+const ModelKey kXiaomiKeys[] = {
+    { KEY_APPSELECT, "menu" }, { KEY_VIDEO, "playPause" }, { KEY_GREEN, "nowPlaying" },
+};
+const Model kModels[] = {
+    { "firetv", "Fire TV", BUS_BLUETOOTH, 0x0171, 0,
+      kFireTvKeys, int(std::size(kFireTvKeys)), kFireTvVendor, int(std::size(kFireTvVendor)) },
+    { "g20s", "G20S PRO", BUS_BLUETOOTH, 0x1d5a, 0xc081,
+      kG20sKeys, int(std::size(kG20sKeys)), nullptr, 0 },
+    { "xiaomi", "Xiaomi", BUS_BLUETOOTH, 0x2717, 0,
+      kXiaomiKeys, int(std::size(kXiaomiKeys)), nullptr, 0 },
+};
+
+// 🚨 A DAC with playback keys (the Topping DX1 II: play, next, previous on a
+// HID interface of its own) is a sound card, not a remote: it showed up under
+// "Your remotes". True when the USB device the node belongs to also has an
+// audio interface (bInterfaceClass 01).
+bool usbAudio(const QString &inputDir) {
+    QString p = QFileInfo(inputDir + "/device").canonicalFilePath();
+    for (int i = 0; i < 8 && !p.isEmpty() && p != "/"; i++) {
+        if (QFile::exists(p + "/idVendor")) {
+            const QStringList ifs = QDir(p).entryList(QStringList("*:*"), QDir::Dirs | QDir::NoDotAndDotDot);
+            for (const QString &f : ifs)
+                if (hifiSysfsRead(p + "/" + f + "/bInterfaceClass").trimmed() == "01") return true;
+            return false;
+        }
+        p = QFileInfo(p).path();
+    }
+    return false;
+}
+
+const Model *modelFor(int bus, int vendor, int product) {
+    for (const Model &m : kModels)
+        if (m.bus == bus && m.vendor == vendor && (!m.product || m.product == product)) return &m;
+    return nullptr;
+}
+
+// Quali azioni hanno senso ripetute a tasto premuto.
+bool repeatable(const QString &a) {
+    return a == "up" || a == "down" || a == "left" || a == "right"
+        || a == "volumeUp" || a == "volumeDown"
+        || a == "forward" || a == "rewind" || a == "pageUp" || a == "pageDown";
+}
+
+// I tasti che un dispositivo NON preso (una tastiera con i tasti multimediali,
+// un air mouse) puo' comandare: solo quelli che Qt non porta da solo.
+bool mediaOnly(const QString &a) {
+    return a == "playPause" || a == "play" || a == "pause" || a == "stop"
+        || a == "next" || a == "prev" || a == "forward" || a == "rewind"
+        || a == "volumeUp" || a == "volumeDown" || a == "mute"
+        || a == "nowPlaying" || a == "queue" || a == "favorite" || a == "openFavorites" || a == "resetTouch"
+        || a == "shuffle" || a == "eject" || a == "standby" || a == "powerMenu"
+        || a == "fullScreen" || a == "nextVu" || a == "nextAnimation";
+}
+
+}  // namespace
+
+// Cosa tiene insieme i nodi di UN telecomando: vedi Dev::group in remote.h.
+QString Remote::groupKey(const QString &dir, const QString &fallback) {
+    const QString uniq = hifiSysfsRead(dir + "/uniq").trimmed().toUpper();
+    if (!uniq.isEmpty()) return uniq;
+    const QString phys = hifiSysfsRead(dir + "/phys").trimmed();
+    // "usb-0000:00:14.0-3/input1": dopo la barra c'e' QUALE nodo e', non quale
+    // apparecchio
+    if (!phys.isEmpty()) return phys.section('/', 0, 0);
+    const QString vid = hifiSysfsRead(dir + "/id/vendor").trimmed();
+    const QString pid = hifiSysfsRead(dir + "/id/product").trimmed();
+    if (!vid.isEmpty() || !pid.isEmpty()) return vid + ":" + pid;
+    return fallback;
+}
+
+// "Questo e' il mio telecomando" vale per il nome del dispositivo o per il
+// gruppo: chi sceglie dal web admin sceglie un telecomando, non un nodo.
+bool Remote::isChosen(const Dev &d) const {
+    return !m_chosen.isEmpty() && (d.name == m_chosen || d.group == m_chosen);
+}
+
+Remote::Remote(const QString &configDir, QObject *parent) : QObject(parent), m_configDir(configDir) {
+    m_clock.start();
+    loadChosen();
+    loadCustom();
+    // I due file li cambia anche il web admin (api_server /remote/*): si
+    // rileggono quando cambiano, invece di far ripartire l'interfaccia.
+    m_confRescan.setSingleShot(true);
+    m_confRescan.setInterval(300);
+    connect(&m_confRescan, &QTimer::timeout, this, [this]() {
+        loadChosen();
+        loadCustom();
+        for (auto it = m_open.begin(); it != m_open.end(); ++it)
+            it->chosen = isChosen(*it);
+        readWebLearn();
+        publishDevices();
+    });
+    // 🚨 Anche il file, non solo la cartella: riscrivere un file che c'e' gia'
+    // NON e' un cambiamento di cartella, e la scadenza della prova non
+    // arrivava mai. Il percorso si riaggancia a ogni giro, perche' un file
+    // sostituito con una rinomina porta via la sorveglianza con se'.
+    connect(&m_confWatch, &QFileSystemWatcher::fileChanged, this, [this]() { m_confRescan.start(); });
+    connect(&m_confWatch, &QFileSystemWatcher::directoryChanged, this, [this](const QString &dir) {
+        // la cartella di /run l'abbiamo appena toccata noi scrivendo l'ultimo
+        // tasto: non c'e' niente da rileggere
+        if (dir.startsWith("/run/") && m_clock.elapsed() - m_selfWrote < 500) return;
+        m_confRescan.start();
+    });
+    if (QDir(m_configDir).exists()) m_confWatch.addPath(m_configDir);
+    QDir().mkpath("/run/hifi-remote");
+    if (QDir("/run/hifi-remote").exists()) m_confWatch.addPath("/run/hifi-remote");
+    // la finestra di prova del web admin scade da sola: la si ricontrolla
+    m_learnTick.setInterval(3000);
+    connect(&m_learnTick, &QTimer::timeout, this, [this]() {
+        const bool was = m_webLearnUntil > QDateTime::currentSecsSinceEpoch();
+        if (!was && m_webLearnUntil) { m_webLearnUntil = 0; emit learningChanged(); m_learnTick.stop(); }
+    });
+    readWebLearn();
+    m_repeat.setSingleShot(false);
+    connect(&m_repeat, &QTimer::timeout, this, [this]() {
+        if (m_repeatAction.isEmpty()) { m_repeat.stop(); return; }
+        m_repeat.setInterval(120);
+        dispatch(m_repeatAction, true, QStringLiteral("evdev"));
+    });
+    m_rescan.setSingleShot(true);
+    m_rescan.setInterval(600);       // un dispositivo appena collegato appare in piu' passi
+    connect(&m_rescan, &QTimer::timeout, this, &Remote::rescan);
+    const QString devDir = qEnvironmentVariable("HIFI_INPUT_DEV", QStringLiteral("/dev/input"));
+    if (QDir(devDir).exists()) {
+        m_watch.addPath(devDir);
+        connect(&m_watch, &QFileSystemWatcher::directoryChanged, this, [this]() { m_rescan.start(); });
+    }
+    rescan();
+}
+
+Remote::~Remote() {
+    const QStringList paths = m_open.keys();
+    for (const QString &p : paths) closeDevice(p);
+}
+
+// ─── quali dispositivi sono telecomandi ────────────────────────────────────
+void Remote::rescan() {
+    QString sysRoot = qEnvironmentVariable("HIFI_SYSFS_INPUT");
+    if (sysRoot.isEmpty()) sysRoot = QStringLiteral("/sys/class/input");
+    const QString devDir = qEnvironmentVariable("HIFI_INPUT_DEV", QStringLiteral("/dev/input"));
+
+    QStringList seen;
+    const QStringList entries = QDir(sysRoot).entryList(QStringList("input*"), QDir::Dirs | QDir::NoDotAndDotDot);
+    // 🚨 A touchscreen often brings a keyboard node of its own (the TSTP
+    // MTouch panel: a full keyboard with media keys, same serial and port as
+    // the touch node). That is the screen, not a remote: it was listed among
+    // the remotes, with "This is my remote" next to it. Every node of a device
+    // that has a touchscreen node (INPUT_PROP_DIRECT + absolute axes) is left
+    // alone — api_server._remote_devices() has the same rule.
+    QSet<QString> screens;
+    for (const QString &e : entries) {
+        const QString dir = sysRoot + "/" + e;
+        const QString abs = hifiSysfsRead(dir + "/capabilities/abs");
+        if (hifiSysfsBit(hifiSysfsRead(dir + "/properties"), INPUT_PROP_DIRECT)
+            && (hifiSysfsBit(abs, ABS_X) || hifiSysfsBit(abs, ABS_MT_POSITION_X)))
+            screens.insert(groupKey(dir, QString()));
+    }
+    screens.remove(QString());
+    for (const QString &e : entries) {
+        const QString dir = sysRoot + "/" + e;
+        if (screens.contains(groupKey(dir, QString()))) continue;
+        // il nodo /dev di questo dispositivo: la sottocartella eventN
+        const QStringList evs = QDir(dir).entryList(QStringList("event*"), QDir::Dirs | QDir::NoDotAndDotDot);
+        if (evs.isEmpty()) continue;
+        const QString path = devDir + "/" + evs.first();
+
+        const QString key = hifiSysfsRead(dir + "/capabilities/key");
+        if (key.isEmpty()) continue;
+        const QString rel = hifiSysfsRead(dir + "/capabilities/rel");
+        const QString abs = hifiSysfsRead(dir + "/capabilities/abs");
+        const int bus = hifiSysfsRead(dir + "/id/bustype").toInt(nullptr, 16);
+        const Model *model = modelFor(bus, hifiSysfsRead(dir + "/id/vendor").toInt(nullptr, 16),
+                                      hifiSysfsRead(dir + "/id/product").toInt(nullptr, 16));
+        const bool anyKey = key.contains(QRegularExpression(QStringLiteral("[1-9a-fA-F]")));
+
+        // tastiera completa: tutti i tasti da ESC a D (1..31), la stessa
+        // regola di udev che usa Sys per la tastiera a schermo
+        bool fullKeyboard = true;
+        for (int b = 1; b <= 31 && fullKeyboard; b++) if (!hifiSysfsBit(key, b)) fullKeyboard = false;
+
+        // tasti multimediali: bastano questi per dire "qui c'e' un telecomando"
+        const bool media = hifiSysfsBit(key, KEY_PLAYPAUSE) || hifiSysfsBit(key, KEY_NEXTSONG)
+                        || hifiSysfsBit(key, KEY_PREVIOUSSONG) || hifiSysfsBit(key, KEY_PLAYCD)
+                        || hifiSysfsBit(key, KEY_STOPCD) || hifiSysfsBit(key, KEY_PLAY);
+        // tastierino di navigazione (frecce + un tasto di conferma)
+        const bool nav = hifiSysfsBit(key, KEY_UP) && hifiSysfsBit(key, KEY_DOWN)
+                      && hifiSysfsBit(key, KEY_LEFT) && hifiSysfsBit(key, KEY_RIGHT)
+                      && (hifiSysfsBit(key, KEY_ENTER) || hifiSysfsBit(key, KEY_OK) || hifiSysfsBit(key, KEY_SELECT));
+        if (!media && !(nav && !fullKeyboard) && !(model && anyKey)) continue;
+
+        // 🚨 niente presa esclusiva su chi e' anche puntatore o tastiera: il
+        // puntatore si fermerebbe e non si scriverebbe piu'. A known model is
+        // a remote even when it declares a whole keyboard (the Fire TV and the
+        // G20S do): we know every one of its keys.
+        const bool pointer = hifiSysfsBit(rel, REL_X) && hifiSysfsBit(rel, REL_Y);
+        const bool tablet = hifiSysfsBit(abs, ABS_X) || hifiSysfsBit(abs, ABS_MT_POSITION_X);
+        const bool audio = !model && usbAudio(dir);
+        const bool isRemote = (!fullKeyboard || model) && !pointer && !tablet && !audio;
+
+        seen << path;
+        if (m_open.contains(path)) continue;
+        openDevice(path);
+        if (!m_open.contains(path)) continue;
+        Dev &dev = m_open[path];
+        dev.name = hifiSysfsRead(dir + "/name");
+        if (dev.name.isEmpty()) dev.name = evs.first();
+        dev.bus = bus == BUS_BLUETOOTH ? "bluetooth" : bus == BUS_USB ? "usb" : "other";
+        dev.group = groupKey(dir, dev.name);
+        dev.remote = isRemote;
+        dev.audio = audio;
+        dev.model = model ? int(model - kModels) : -1;
+        dev.chosen = isChosen(dev);
+        if (model) m_modelOf.insert(dev.name, dev.model);
+        if (isRemote && ioctl(dev.fd, EVIOCGRAB, 1) == 0) dev.grabbed = true;
+        qInfo("remote: %s (%s%s%s) on %s", qPrintable(dev.name), qPrintable(dev.bus),
+              dev.grabbed ? ", taken exclusively" : isRemote ? ", not taken exclusively" : audio ? ", keys of a sound card" : ", media keys only",
+              model ? qPrintable(QStringLiteral(", model %1").arg(QLatin1String(model->label))) : "",
+              qPrintable(path));
+        // the keys the kernel does not translate: from the hidraw of the same
+        // HID device (one per remote, even when it has two input nodes)
+        if (model && model->nvkeys && anyKey) openHidraw(dir, path);
+    }
+
+    // quelli spariti
+    const QStringList had = m_open.keys();
+    for (const QString &p : had) if (!seen.contains(p)) { qInfo("remote: %s scollegato", qPrintable(p)); closeDevice(p); }
+    publishDevices();
+}
+
+void Remote::openDevice(const QString &path) {
+    const int fd = ::open(path.toLocal8Bit().constData(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) {
+        // niente permessi (sviluppo da utente normale): non e' un guasto
+        qInfo("remote: %s non si apre (%s)", qPrintable(path), strerror(errno));
+        return;
+    }
+    Dev dev;
+    dev.path = path;
+    dev.fd = fd;
+    dev.notifier = new QSocketNotifier(fd, QSocketNotifier::Read, this);
+    connect(dev.notifier, &QSocketNotifier::activated, this, [this, path]() { readFrom(path); });
+    m_open.insert(path, dev);
+}
+
+// The hidraw of the HID device the input node `dir` belongs to
+// (/sys/class/input/inputN/device/hidraw/hidrawM). Read only: reports reach
+// everyone who opens it, and the exclusive grab on evdev does not stop them.
+void Remote::openHidraw(const QString &dir, const QString &devPath) {
+    const QStringList raws = QDir(dir + "/device/hidraw").entryList(QStringList("hidraw*"), QDir::Dirs | QDir::NoDotAndDotDot);
+    if (raws.isEmpty()) return;
+    const QString path = QStringLiteral("/dev/") + raws.first();
+    if (m_hid.contains(path)) return;
+    const int fd = ::open(path.toLocal8Bit().constData(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) { qInfo("remote: cannot open %s (%s)", qPrintable(path), strerror(errno)); return; }
+    Hid h;
+    h.devPath = devPath;
+    h.fd = fd;
+    h.model = m_open.value(devPath).model;
+    h.notifier = new QSocketNotifier(fd, QSocketNotifier::Read, this);
+    connect(h.notifier, &QSocketNotifier::activated, this, [this, path]() { readHidraw(path); });
+    m_hid.insert(path, h);
+    qInfo("remote: vendor keys from %s", qPrintable(path));
+}
+
+void Remote::closeHidraw(const QString &path) {
+    Hid h = m_hid.take(path);
+    if (h.notifier) { h.notifier->setEnabled(false); h.notifier->deleteLater(); }
+    if (h.fd >= 0) ::close(h.fd);
+}
+
+void Remote::readHidraw(const QString &path) {
+    if (!m_hid.contains(path)) return;
+    unsigned char buf[256];
+    // 🚨 a bounded round per wake-up: a remote streaming audio (the
+    // microphone) would otherwise hog the loop, as with the btghid bridge
+    for (int round = 0; round < 32; round++) {
+        const ssize_t n = ::read(m_hid[path].fd, buf, sizeof(buf));
+        if (n <= 0) {
+            if (n == 0 || (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) closeHidraw(path);
+            return;
+        }
+        Hid &h = m_hid[path];
+        if (h.model < 0 || n < 2 || !m_open.contains(h.devPath)) continue;
+        const Model &m = kModels[h.model];
+        for (int i = 0; i < m.nvkeys; i++) {
+            const VendorKey &vk = m.vkeys[i];
+            if (buf[0] != vk.report) continue;
+            if (buf[1] == 0) {                                  // released
+                if (h.pressed) { const int c = h.pressed; h.pressed = 0; onKey(m_open[h.devPath], c, 0); }
+                break;
+            }
+            if (buf[1] != vk.byte) continue;
+            h.pressed = vk.code;
+            onKey(m_open[h.devPath], vk.code, 1);
+            break;
+        }
+    }
+}
+
+void Remote::closeDevice(const QString &path) {
+    // the hidraw goes with the node that opened it
+    const QStringList raws = m_hid.keys();
+    for (const QString &r : raws) if (m_hid.value(r).devPath == path) closeHidraw(r);
+    if (!m_open.contains(path)) return;
+    Dev dev = m_open.take(path);
+    if (dev.notifier) { dev.notifier->setEnabled(false); dev.notifier->deleteLater(); }
+    if (dev.fd >= 0) {
+        if (dev.grabbed) ioctl(dev.fd, EVIOCGRAB, 0);
+        ::close(dev.fd);
+    }
+    // un tasto tenuto premuto su un telecomando che sparisce non resta premuto
+    stopRepeat();
+}
+
+void Remote::readFrom(const QString &path) {
+    if (!m_open.contains(path)) return;
+    struct input_event ev;
+    for (;;) {
+        const ssize_t n = ::read(m_open[path].fd, &ev, sizeof(ev));
+        if (n != sizeof(ev)) {
+            // il dispositivo se n'e' andato mentre lo leggevamo. 🚨 Anche n == 0
+            // conta: un evdev vero non finisce mai, ma se finisse il notificatore
+            // continuerebbe a svegliarci su una lettura che non da' niente.
+            if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) { closeDevice(path); publishDevices(); }
+            return;
+        }
+        if (ev.type != EV_KEY) continue;
+        if (!m_open.contains(path)) return;
+        onKey(m_open[path], ev.code, ev.value);
+    }
+}
+
+void Remote::onKey(Dev &dev, int code, int value) {
+    const QString act = actionFor(code, dev.name);
+
+    if (value == 0) {                       // rilasciato
+        if (code == m_repeatCode) stopRepeat();
+        if (code == m_heldFromTest) m_heldFromTest = 0;
+        return;
+    }
+
+    // 🚨 learning(), non m_learning: la prova si accende anche dal web admin
+    // (finestra con scadenza in /run/hifi-remote/learn), e guardando solo il
+    // flag del pannello del kiosk i tasti continuavano a comandare lo schermo
+    // mentre la pagina diceva che non lo facevano.
+    if (learning()) {
+        // 🚨 Un dispositivo solo. Con una tastiera accanto al telecomando, un
+        // tasto premuto li' si prendeva il posto di quello del telecomando —
+        // e l'assegnazione finiva sul dispositivo sbagliato.
+        if (m_learnDevice.isEmpty()) {
+            m_learnDevice = dev.name;
+            emit learnDeviceChanged();
+        }
+        if (dev.name != m_learnDevice) return;
+        if (value == 1) m_heldFromTest = code;
+        m_lastKey = QVariantMap{ { "code", code }, { "key", keyName(code) }, { "action", act },
+                                 { "device", dev.name }, { "at", m_clock.elapsed() } };
+        emit lastKeyChanged();
+        publishLastKey();
+        return;                             // in prova non si agisce
+    }
+    // 🚨 The kiosk's test hears ONE key and then stops listening, while that
+    // key is still down: its repeats must not start working the screen (a
+    // held "down" would scroll the page away from the key just heard).
+    // (A new press means the old one was let go, even if that got lost.)
+    if (code == m_heldFromTest) { if (value == 2) return; m_heldFromTest = 0; }
+    m_lastKey = QVariantMap{ { "code", code }, { "key", keyName(code) }, { "action", act },
+                             { "device", dev.name }, { "at", m_clock.elapsed() } };
+    emit lastKeyChanged();
+    publishLastKey();
+
+    if (act.isEmpty()) return;
+    // Da un dispositivo che NON e' un telecomando (una tastiera, un air mouse)
+    // solo i tasti multimediali: frecce e invio li porta gia' Qt, e agire due
+    // volte sullo stesso tasto sarebbe peggio che non agire. Se invece e' un
+    // telecomando — o l'utente ha detto che quello e' il suo telecomando,
+    // anche se si presenta come una tastiera — si ascolta tutto: al doppione
+    // ci pensa il filtro in dispatch().
+    if (!dev.remote && !dev.chosen && !mediaOnly(act)) return;
+
+    if (value == 2) {                       // ripetizione del nucleo
+        if (!repeatable(act)) return;
+        m_kernelRepeats = true;
+        m_repeat.stop();
+        dispatch(act, true, QStringLiteral("evdev"));
+        return;
+    }
+    dispatch(act, false, QStringLiteral("evdev"));
+    if (repeatable(act)) { m_repeatCode = code; startRepeat(act); }
+}
+
+void Remote::startRepeat(const QString &act) {
+    m_repeatAction = act;
+    m_kernelRepeats = false;
+    // 400 ms prima della seconda, poi una ogni 120: la stessa cadenza di una
+    // tastiera. Se intanto arrivano le ripetizioni del nucleo, il timer si
+    // ferma e comandano quelle.
+    m_repeat.setInterval(400);
+    m_repeat.start();
+}
+
+void Remote::stopRepeat() {
+    m_repeat.stop();
+    m_repeatAction.clear();
+    m_repeatCode = 0;
+}
+
+void Remote::dispatch(const QString &act, bool repeat, const QString &source) {
+    if (act.isEmpty()) return;
+    const qint64 now = m_clock.elapsed();
+    // 🚨 stesso tasto da due sorgenti: un dispositivo che leggiamo noi e che
+    // legge anche Qt manderebbe due volte la stessa azione (play/pausa due
+    // volte = niente). Entro un quarto di secondo la seconda si butta — e a
+    // tasto tenuto premuto vale lo stesso, con una finestra piu' corta della
+    // nostra ripetizione, o la lista scorrerebbe a velocita' doppia.
+    if (act == m_lastAction && source != m_lastSource && now - m_lastAt < (repeat ? 100 : 250)) return;
+    m_lastAction = act;
+    m_lastSource = source;
+    m_lastAt = now;
+    emit action(act, repeat);
+}
+
+// ─── nomi, azioni, assegnazioni ────────────────────────────────────────────
+QString Remote::actionFor(int code, const QString &device) const {
+    // prima quello che l'utente ha deciso per QUESTO dispositivo...
+    if (!device.isEmpty()) {
+        const auto d = m_custom.constFind(device);
+        if (d != m_custom.constEnd()) {
+            const auto it = d->constFind(code);
+            if (it != d->constEnd()) return it.value();
+        }
+    }
+    // ...poi quello che vale per tutti...
+    const auto all = m_custom.constFind(QString());
+    if (all != m_custom.constEnd()) {
+        const auto it = all->constFind(code);
+        if (it != all->constEnd()) return it.value();
+    }
+    // ...then the model's, when it is one of the known remotes...
+    const int mi = m_modelOf.value(device, -1);
+    if (mi >= 0) {
+        const Model &m = kModels[mi];
+        for (int i = 0; i < m.nkeys; i++) if (m.keys[i].code == code) return QString::fromLatin1(m.keys[i].action);
+        for (int i = 0; i < m.nvkeys; i++) if (m.vkeys[i].code == code) return QString::fromLatin1(m.vkeys[i].action);
+    }
+    // ...and finally the generic map
+    for (const KeyDef &k : kKeys) if (k.code == code) return QString::fromLatin1(k.action);
+    return QString();
+}
+
+QString Remote::actionForQtKey(int key) const {
+    for (const QtKeyDef &k : kQtKeys) if (k.key == key) return QString::fromLatin1(k.action);
+    return QString();
+}
+
+QString Remote::keyName(int code) const {
+    for (const KeyDef &k : kKeys) if (k.code == code) return QString::fromLatin1(k.name);
+    for (const Model &m : kModels)
+        for (int i = 0; i < m.nvkeys; i++) if (m.vkeys[i].code == code) return QString::fromLatin1(m.vkeys[i].name);
+    return QStringLiteral("#%1").arg(code);
+}
+
+int Remote::codeForName(const QString &name) const {
+    for (const KeyDef &k : kKeys) if (name == QLatin1String(k.name)) return k.code;
+    for (const Model &m : kModels)
+        for (int i = 0; i < m.nvkeys; i++) if (name == QLatin1String(m.vkeys[i].name)) return m.vkeys[i].code;
+    return 0;
+}
+
+QString Remote::deviceOfModel(const QString &model) const {
+    for (auto it = m_open.constBegin(); it != m_open.constEnd(); ++it)
+        if (it->model >= 0 && model == QLatin1String(kModels[it->model].id)) return it->name;
+    return QString();
+}
+
+QStringList Remote::actionNames() const {
+    QStringList out;
+    for (const char *a : kActions) out << QString::fromLatin1(a);
+    return out;
+}
+
+// remote-keys.json:
+//   { "all": { "164": "playPause" },
+//     "devices": { "G20S PRO Keyboard": { "398": "home" } } }
+// 🚨 Un file del primo giorno era una mappa piatta codice -> azione: quello si
+// legge ancora, e vale per tutti i dispositivi.
+void Remote::loadCustom() {
+    m_custom.clear();
+    QFile f(m_configDir + "/remote-keys.json");
+    if (!f.open(QIODevice::ReadOnly)) return;
+    const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    auto readMap = [this](const QJsonObject &src, const QString &device) {
+        QHash<int, QString> m;
+        for (auto it = src.constBegin(); it != src.constEnd(); ++it) {
+            bool ok = false;
+            const int code = it.key().toInt(&ok);
+            if (ok) m.insert(code, it.value().toString());
+        }
+        if (!m.isEmpty()) m_custom.insert(device, m);
+    };
+    if (o.contains("all") || o.contains("devices")) {
+        readMap(o.value("all").toObject(), QString());
+        const QJsonObject devs = o.value("devices").toObject();
+        for (auto it = devs.constBegin(); it != devs.constEnd(); ++it) readMap(it.value().toObject(), it.key());
+    } else {
+        readMap(o, QString());          // il formato piatto di prima
+    }
+    int n = 0;
+    for (const auto &m : std::as_const(m_custom)) n += m.size();
+    if (n) qInfo("remote: %d tasti assegnati a mano su %lld dispositivi", n, (long long)m_custom.size());
+}
+
+bool Remote::assign(int code, const QString &act, const QString &device) {
+    if (code <= 0) return false;
+    if (!act.isEmpty() && !actionNames().contains(act)) return false;
+    m_custom[device].insert(code, act);     // azione vuota = questo tasto non fa niente
+    return saveCustom(code, device);
+}
+
+bool Remote::forget(int code, const QString &device) {
+    const auto d = m_custom.find(device);
+    if (d == m_custom.end() || !d->contains(code)) return true;
+    d->remove(code);
+    if (d->isEmpty()) m_custom.erase(d);
+    return saveCustom(code, device);
+}
+
+bool Remote::isCustom(int code, const QString &device) const {
+    if (!device.isEmpty()) {
+        const auto d = m_custom.constFind(device);
+        if (d != m_custom.constEnd() && d->contains(code)) return true;
+    }
+    const auto all = m_custom.constFind(QString());
+    return all != m_custom.constEnd() && all->contains(code);
+}
+
+bool Remote::saveCustom(int code, const QString &device) {
+    QJsonObject all, devices;
+    for (auto d = m_custom.constBegin(); d != m_custom.constEnd(); ++d) {
+        QJsonObject m;
+        for (auto it = d->constBegin(); it != d->constEnd(); ++it) m.insert(QString::number(it.key()), it.value());
+        if (d.key().isEmpty()) all = m; else devices.insert(d.key(), m);
+    }
+    QJsonObject o;
+    o.insert("all", all);
+    o.insert("devices", devices);
+
+    QDir().mkpath(m_configDir);
+    QFile f(m_configDir + "/remote-keys.json.tmp");
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+    f.write(QJsonDocument(o).toJson(QJsonDocument::Indented));
+    f.close();
+    QFile::remove(m_configDir + "/remote-keys.json");
+    if (!QFile::rename(m_configDir + "/remote-keys.json.tmp", m_configDir + "/remote-keys.json")) return false;
+    // l'ultimo tasto mostrato nel pannello prende subito la nuova azione
+    if (m_lastKey.value("code").toInt() == code && m_lastKey.value("device").toString() == device) {
+        m_lastKey["action"] = actionFor(code, device);
+        emit lastKeyChanged();
+    }
+    return true;
+}
+
+// Per il pannello del web admin: l'ultimo tasto, dove l'api_server lo legge.
+//
+// 🚨 Solo mentre si stanno provando i tasti. Scriverlo a ogni pressione voleva
+// dire un file scritto per ogni tasto — e siccome quella cartella la
+// sorvegliamo noi per la finestra di prova, ogni tasto si svegliava da solo per
+// rileggere la configurazione. Fuori dalla prova il pannello non guarda niente,
+// quindi non serve a nessuno.
+void Remote::publishLastKey() const {
+    if (!learning()) return;
+    QJsonObject o;
+    o.insert("code", m_lastKey.value("code").toInt());
+    o.insert("key", m_lastKey.value("key").toString());
+    o.insert("action", m_lastKey.value("action").toString());
+    o.insert("device", m_lastKey.value("device").toString());
+    o.insert("at", QDateTime::currentSecsSinceEpoch());
+    QDir().mkpath("/run/hifi-remote");
+    QFile f("/run/hifi-remote/last.json");
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return;
+    f.write(QJsonDocument(o).toJson(QJsonDocument::Compact));
+    m_selfWrote = m_clock.elapsed();
+}
+
+void Remote::readWebLearn() {
+    qint64 until = 0;
+    const QString path = QStringLiteral("/run/hifi-remote/learn");
+    if (QFile::exists(path) && !m_confWatch.files().contains(path)) m_confWatch.addPath(path);
+    QFile f(path);
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) until = QString::fromUtf8(f.readAll()).trimmed().toLongLong();
+    if (until == m_webLearnUntil) return;
+    const bool before = learning();
+    m_webLearnUntil = until;
+    if (until > QDateTime::currentSecsSinceEpoch()) { stopRepeat(); m_learnTick.start(); }
+    if (learning() != before) emit learningChanged();
+}
+
+void Remote::loadChosen() {
+    QFile f(m_configDir + "/remote-device");
+    QString name;
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) name = QString::fromUtf8(f.readLine()).trimmed();
+    if (name == m_chosen) return;
+    m_chosen = name;
+    if (m_learning && m_learnDevice != m_chosen) { m_learnDevice = m_chosen; emit learnDeviceChanged(); }
+    emit devicesChanged();
+}
+
+void Remote::setLearning(bool on) {
+    if (m_learning == on) return;
+    m_learning = on;
+    if (on) stopRepeat();
+    // Si riparte dal telecomando dichiarato, se c'e'; altrimenti dal primo che
+    // manda un tasto. Chiudendo la prova si dimentica tutto.
+    const QString want = on ? m_chosen : QString();
+    if (m_learnDevice != want) { m_learnDevice = want; emit learnDeviceChanged(); }
+    if (!on && !m_lastKey.isEmpty()) { m_lastKey.clear(); emit lastKeyChanged(); }
+    emit learningChanged();
+}
+
+void Remote::listenAgain() {
+    if (!m_learnDevice.isEmpty()) { m_learnDevice.clear(); emit learnDeviceChanged(); }
+    if (!m_lastKey.isEmpty()) { m_lastKey.clear(); emit lastKeyChanged(); }
+}
+
+void Remote::listenTo(const QString &device) {
+    if (m_learnDevice != device) { m_learnDevice = device; emit learnDeviceChanged(); }
+}
+
+void Remote::setChosen(const QString &device) {
+    if (m_chosen == device) return;
+    m_chosen = device;
+    QDir().mkpath(m_configDir);
+    QFile f(m_configDir + "/remote-device");
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(device.toUtf8() + "\n");
+    f.close();
+    for (auto it = m_open.begin(); it != m_open.end(); ++it)
+        it->chosen = isChosen(*it);
+    // in prova si passa ad ascoltare lui
+    if (m_learning && m_learnDevice != m_chosen) { m_learnDevice = m_chosen; emit learnDeviceChanged(); }
+    publishDevices();
+}
+
+void Remote::publishDevices() {
+    QVariantList out;
+    QStringList paths = m_open.keys();
+    paths.sort();                    // l'elenco sullo schermo non deve ballare
+    for (const QString &p : paths) {
+        const Dev &d = m_open[p];
+        if (d.audio) continue;       // its keys work, but it is not a remote to list
+        out.append(QVariantMap{ { "name", d.name }, { "path", d.path }, { "bus", d.bus },
+                                { "kind", d.remote ? "remote" : "keyboard" }, { "grabbed", d.grabbed },
+                                { "chosen", d.chosen }, { "group", d.group },
+                                { "model", d.model >= 0 ? QString::fromLatin1(kModels[d.model].id) : QString() } });
+    }
+    m_devices = out;
+    emit devicesChanged();
+}

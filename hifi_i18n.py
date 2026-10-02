@@ -66,6 +66,18 @@ MESSAGES = {
                                      'it': 'Device impostato ({device}); riavvio non riuscito'},
     'audio.outputSet': {'en': 'Audio output set to {device}', 'it': 'Uscita audio impostata su {device}'},
     'audio.defaultDeviceName': {'en': 'System default', 'it': 'Predefinito di sistema'},
+    # Settings → Audio, the squeezelite model (hifi_squeezelite.py)
+    'squeezelite.saved': {'en': 'Saved, player restarted', 'it': 'Salvato, player riavviato'},
+    'squeezelite.reset': {'en': 'Back to defaults, player restarted', 'it': 'Predefiniti ripristinati, player riavviato'},
+    'squeezelite.unknownField': {'en': 'Unknown setting: {field}', 'it': 'Impostazione sconosciuta: {field}'},
+    'squeezelite.invalidValue': {'en': 'Invalid value for {field}: {detail}', 'it': 'Valore non valido per {field}: {detail}'},
+    'squeezelite.extraManaged': {'en': 'These options are set above, not here: {detail}',
+                                 'it': 'Queste opzioni si impostano sopra, non qui: {detail}'},
+    'squeezelite.extraInvalid': {'en': 'Not allowed in the extra arguments: {detail}',
+                                 'it': 'Non ammesso negli argomenti aggiuntivi: {detail}'},
+    'squeezelite.noMixer': {'en': 'This output has no hardware volume control',
+                            'it': 'Questa uscita non ha un controllo di volume hardware'},
+    'squeezelite.restartWarn': {'en': 'Saved; squeezelite restart: {err}', 'it': 'Salvato; riavvio di squeezelite: {err}'},
 
     # ── Multiroom / Lyrion server role ──────────────────────────────
     'lms.invalidHost': {'en': 'Invalid server address: {host}. Use an IP address (192.168.1.50) or a name (nas.local)',
@@ -243,13 +255,6 @@ MESSAGES = {
                          'it': 'Credenziali interfaccia web azzerate'},
     'webui.credsResetFailed': {'en': 'Credential reset failed', 'it': 'Reset credenziali fallito'},
 
-    # ── Tidal Connect ────────────────────────────────────────────────
-    'tidal.notInstalled': {'en': 'Tidal Connect is not installed on this device',
-                           'it': 'Tidal Connect non installato su questo dispositivo'},
-    'tidal.opFailed': {'en': 'Tidal Connect operation failed', 'it': 'Operazione Tidal Connect fallita'},
-    'tidal.enabled': {'en': 'Tidal Connect enabled', 'it': 'Tidal Connect abilitato'},
-    'tidal.disabled': {'en': 'Tidal Connect disabled', 'it': 'Tidal Connect disabilitato'},
-
     # ── DSP engine ───────────────────────────────────────────────────
     'dsp.unavailable': {'en': 'DSP is not available on this device', 'it': 'DSP non disponibile su questo dispositivo'},
     'dsp.opFailed': {'en': 'DSP operation failed', 'it': 'Operazione DSP fallita'},
@@ -299,6 +304,28 @@ MESSAGES = {
     'bluetooth.connected': {'en': 'Speaker connected', 'it': 'Altoparlante collegato'},
     'bluetooth.disconnected': {'en': 'Speaker disconnected', 'it': 'Altoparlante scollegato'},
     'bluetooth.saved': {'en': 'Saved', 'it': 'Salvato'},
+    # telecomandi Bluetooth: gli stessi passi degli altoparlanti, ma i messaggi
+    # parlano di un telecomando (chi accoppia un telecomando non vuole leggere
+    # "altoparlante non trovato")
+    'bluetooth.remoteNeedsUpdate': {
+        'en': 'This device cannot pair a Bluetooth remote yet: install the latest update',
+        'it': 'Questo apparecchio non può ancora accoppiare un telecomando Bluetooth: installa l\'ultimo aggiornamento'},
+    'bluetooth.remoteNotFound': {'en': 'Remote not found', 'it': 'Telecomando non trovato'},
+    'bluetooth.remoteAlreadyAdded': {'en': 'This remote is already in the list',
+                                     'it': 'Questo telecomando è già nell\'elenco'},
+    'bluetooth.remotePairFailed': {
+        'en': 'Could not pair with the remote: put it in pairing mode and try again',
+        'it': 'Non sono riuscito ad accoppiare il telecomando: mettilo in accoppiamento e riprova'},
+    'bluetooth.remoteAdded': {'en': 'Remote added: press a key to use it',
+                              'it': 'Telecomando aggiunto: premi un tasto per usarlo'},
+    'bluetooth.remoteForgotten': {'en': 'Remote forgotten', 'it': 'Telecomando dimenticato'},
+    'remote.saved': {'en': 'Saved', 'it': 'Salvato'},
+    'remote.saveFailed': {'en': 'Could not save the choice', 'it': 'Non sono riuscito a salvare la scelta'},
+    'remote.badKey': {'en': 'That key is not valid', 'it': 'Quel tasto non è valido'},
+    'remote.badAction': {'en': 'That action does not exist', 'it': 'Quell\'azione non esiste'},
+    'touch.reset': {'en': 'Touchscreen restarted', 'it': 'Touch screen riavviato'},
+    'touch.none': {'en': 'No touchscreen found', 'it': 'Nessun touch screen trovato'},
+    'touch.failed': {'en': 'Could not restart the touchscreen', 'it': 'Non sono riuscito a riavviare il touch screen'},
 
     # ── OTA channel ──────────────────────────────────────────────────
     'ota.invalidChannel': {'en': 'Invalid channel', 'it': 'Canale non valido'},
@@ -415,6 +442,7 @@ MESSAGES = {
     'install.systemdRunNoResponse': {'en': 'systemd-run did not respond',
                                      'it': 'systemd-run non ha risposto'},
     'common.starting': {'en': 'Starting…', 'it': 'Avvio…'},
+    'common.cancelled': {'en': 'Cancelled', 'it': 'Annullato'},
     'roomcorr.updateRequired': {'en': 'A system update is required', 'it': 'Aggiornamento di sistema richiesto'},
     'roomcorr.micNotFound': {'en': 'Microphone not found: connect a USB mic',
                              'it': 'Microfono non trovato: collega un mic USB'},
@@ -509,6 +537,8 @@ MESSAGES = {
     'mount.alreadyMounted': {'en': 'Already mounted', 'it': 'Già montato'},
     'mount.smbUnreachable': {'en': "Can't reach {server} on the network (port 445)",
                              'it': 'Impossibile raggiungere {server} sulla rete (porta 445)'},
+    'mount.loginUnreadable': {'en': 'The saved username and password for this folder can no longer be read on this device: add the folder again to enter them',
+                              'it': 'Nome utente e password salvati per questa cartella non si possono più leggere su questo dispositivo: aggiungi di nuovo la cartella per reinserirli'},
     'mount.mountedSmb': {'en': 'Mounted (SMB {vers})', 'it': 'Montato (SMB {vers})'},
     'mount.mountedSmbRo': {'en': 'Mounted read-only (SMB {vers}): the other device does not allow writing into this folder',
                            'it': 'Montato in sola lettura (SMB {vers}): l\'altro dispositivo non consente di scrivere in questa cartella'},
@@ -528,7 +558,6 @@ MESSAGES = {
     'network.scanFailed': {'en': 'Wi-Fi scan failed', 'it': 'Scansione WiFi fallita'},
     'audio.listDevicesFailed': {'en': 'Reading audio devices failed', 'it': 'Lettura dispositivi audio fallita'},
     'tailscale.statusUnavailable': {'en': 'Status unavailable', 'it': 'Stato non disponibile'},
-    'tidal.statusUnavailable': {'en': 'Tidal Connect status unavailable', 'it': 'Stato Tidal Connect non disponibile'},
     'network.hotspotUnsupported': {'en': "This Wi-Fi card doesn't support hotspot mode",
                                    'it': 'La scheda Wi-Fi non supporta la modalità hotspot'},
     'network.hotspotActivateFailed': {'en': 'Hotspot activation failed', 'it': 'Attivazione hotspot fallita'},
@@ -595,8 +624,15 @@ MESSAGES = {
     'library.trackNotWritable': {'en': 'Some tracks cannot be changed: {reason}.',
                                  'it': 'Alcune tracce non si possono modificare: {reason}.'},
     'library.reason.readonly': {'en': 'the folder is read-only', 'it': 'la cartella è in sola lettura'},
-    'library.reason.unsupported_format': {'en': 'this player cannot write this kind of file yet',
-                                          'it': 'questo apparecchio non sa ancora scrivere questo tipo di file'},
+    'library.reason.unsupported_format': {'en': 'tags cannot be written into this kind of file',
+                                          'it': 'in questo tipo di file non si possono scrivere i tag'},
+    'library.reason.cue_track': {'en': 'the track is part of a single file split by a cue sheet',
+                                 'it': 'il brano fa parte di un unico file diviso da un cue sheet'},
+    'library.reason.unreadable': {'en': 'the file could not be read', 'it': 'il file non si riesce a leggere'},
+    'library.reason.not_a_file': {'en': 'the track is not a file on this player',
+                                  'it': 'il brano non è un file di questo lettore'},
+    'library.reason.streamed': {'en': 'the track comes from an online streaming service',
+                                'it': 'il brano arriva da un servizio di streaming online'},
     'library.reason.outside_sources': {'en': 'the file is outside the music folders',
                                        'it': 'il file è fuori dalle cartelle della musica'},
     'library.reason.missing': {'en': 'the file was not found', 'it': 'il file non è stato trovato'},

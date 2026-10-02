@@ -154,7 +154,7 @@ jobs:
           rm -rf "$ROOT"
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
           # Python API + daemons
-          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py hifi_i18n.py hifi_metadata.py hifi_tags.py "$ROOT/usr/local/bin/"
+          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py hifi_i18n.py hifi_metadata.py hifi_tags.py hifi_squeezelite.py hifi_cdrip.py "$ROOT/usr/local/bin/"
           # Web-admin Vue build (served by webui_server.py from /opt/hifi-webui/dist).
           # REQUIRED: a missing/empty dist here means every device that applies
           # this system bundle loses the web-admin UI, silently. Fail instead.
@@ -289,8 +289,14 @@ jobs:
           python3 tests/test_tags.py
           echo "== bluetooth speakers (python) =="
           python3 tests/test_bt_speakers.py
+          echo "== bluetooth remote controls (python) =="
+          python3 tests/test_bt_remotes.py
+          echo "== which input devices are remotes, and which are the same one (python) =="
+          python3 tests/test_remote_devices.py
           echo "== web admin: who gets a CSRF token (python) =="
           python3 tests/test_csrf.py
+          echo "== web admin: every call has a route through (python) =="
+          python3 tests/test_webui_routes.py
 
       - name: Stage LMS skin assets into the OS payload
         # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately

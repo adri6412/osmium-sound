@@ -1,0 +1,11 @@
+[Unit]
+Description=Osmium Sound - memory snapshot every 5 minutes (see hifi-memlog.sh)
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

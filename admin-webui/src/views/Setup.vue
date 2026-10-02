@@ -1,12 +1,15 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api.js';
 import { useI18n } from '../i18n';
 import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
+import RemoteIntro from '../components/RemoteIntro.vue';
+import RemotePairing from '../components/RemotePairing.vue';
 
 const router = useRouter();
+
 const { t } = useI18n();
 const stage = ref('loading');   // loading | account | configure | done
 const provisioning = ref(false);
@@ -33,6 +36,90 @@ const lyrionProgress = ref(0);
 const lyrionMsg = ref('');
 const lyrionError = ref('');
 let lyrionPoll = null;
+
+// ── Telecomando (l'ultimo passo) ─────────────────────────────────
+// Chi ha un telecomando puo' sistemarlo subito invece di andarlo a cercare
+// nelle impostazioni dopo. Qui solo il minimo: cosa e' gia' collegato e
+// l'accoppiamento di uno Bluetooth. Quale tasto fa cosa resta in
+// Impostazioni -> Telecomando, che non e' roba da primo avvio.
+const rcOther = ref(false);        // "another remote": the plain scan and list
+let rcBefore = [];                 // the devices there when a certified model was chosen
+const rc = reactive({ devices: [], pick: '', msg: '', busy: false, scanning: false,
+                      bt: { answered: false, available: false, supported: false, remotes: [], found: [] } });
+async function loadRemote() {
+  // 🚨 An answer has the fields in it. A refusal is not "nothing is
+  // connected" and not "this device has no Bluetooth" — both were shown to
+  // people as facts about their hardware, twice.
+  const r = await api.sys('remote');
+  if (r.ok && r.data && r.data.devices) {
+    rc.devices = r.data.devices || [];
+    const mine = rc.devices.find((d) => d.chosen);
+    rc.pick = mine ? (mine.group || mine.name) : (r.data.chosen || '');
+  }
+  else rc.msg = t('setup.remoteAskFailed');
+  const b = await api.sys('bt_remotes');
+  if (b.ok && b.data && b.data.available !== undefined) { rc.bt.answered = true; Object.assign(rc.bt, b.data); }
+  else { rc.bt.answered = false; rc.msg = t('setup.remoteAskFailed'); }
+}
+async function rcScan() {
+  rc.busy = true; rc.scanning = true;
+  await api.sysPost('bt_remotes/scan', { seconds: 12 });
+  rc.busy = false; rc.scanning = false;
+  await loadRemote();
+}
+async function rcPair(mac) {
+  const before = rc.devices.map((d) => d.group || d.name);
+  rc.busy = true;
+  const r = await api.sysPost('bt_remotes/add', { mac });
+  rc.busy = false;
+  if (!(r.ok && r.data && r.data.success !== false)) {
+    rc.msg = (r.data && r.data.message) || t('setup.remoteFailed');
+    return;
+  }
+  await rcAwait(before);
+}
+// 🚨 Pairing does not make it an input device: BlueZ still has to connect
+// it and the kernel to give it a node, which takes seconds — longer for one
+// whose report map this box rebuilds. Looking once, a beat later, showed an
+// empty picker to someone who had just paired something.
+async function rcAwait(before) {
+  rc.msg = t('setup.remoteWaiting');
+  for (let left = 20; left > 0; left--) {
+    await new Promise((done) => setTimeout(done, 3000));
+    await loadRemote();
+    const fresh = rc.devices.find((d) => !before.includes(d.group || d.name));
+    if (fresh) { rc.pick = fresh.group || fresh.name; rc.msg = t('setup.remoteReady'); return; }
+  }
+  rc.msg = t('setup.remoteNotYet');
+}
+// Which of the connected input devices IS the remote. It matters beyond
+// bookkeeping: one that looks like a keyboard is left alone by the interface
+// until someone says it is theirs.
+async function rcUse() {
+  rc.busy = true;
+  const r = await api.sysPost('remote/device', { device: rc.pick });
+  rc.busy = false;
+  rc.msg = (r.ok && r.data && r.data.success !== false)
+    ? (rc.pick ? t('setup.remoteUsing') : t('setup.remoteUnset'))
+    : ((r.data && r.data.message) || t('setup.remotePickFailed'));
+  await loadRemote();
+}
+const rcWhere = (d) => (d.bus === 'bluetooth' ? t('setup.remoteViaBluetooth')
+                      : d.bus === 'usb' ? t('setup.remoteViaUsb') : t('setup.remoteViaOther'));
+// 🚨 One remote, one row. Several of them are two or three input devices at
+// once (keyboard, consumer control, pointer); they are one object in
+// someone's hand, and asking which of the three is theirs is not a question.
+// The value is the group, and choosing it covers every node of it.
+const rcGroups = computed(() => {
+  const out = [], by = {};
+  for (const d of rc.devices) {
+    const id = d.group || d.name || '';
+    if (!by[id]) { by[id] = { id, label: d.groupName || d.name || id, bus: d.bus, chosen: false }; out.push(by[id]); }
+    if (d.chosen) by[id].chosen = true;
+    if (d.bus === 'bluetooth') by[id].bus = 'bluetooth';
+  }
+  return out;
+});
 
 // Internal vs external, offered up front: someone adding a player to a house
 // that already runs Lyrion should not have to install a second server and then
@@ -184,7 +271,7 @@ async function afterAuth() {
     currentDevice.value = res.data.current || 'default';
   }
   stage.value = provisioning.value ? 'configure' : 'done';
-  if (stage.value === 'configure') checkLyrion();
+  if (stage.value === 'configure') { checkLyrion(); loadRemote(); }
 }
 
 async function pickDevice(id) {
@@ -291,6 +378,44 @@ async function finish() {
       <h3><span class="dot"></span>{{ t('setup.musicTitle') }}</h3>
       <p class="sub">{{ t('setup.musicHint') }}</p>
       <SourcesPanel />
+    </div>
+    <div class="card">
+      <h3><span class="dot"></span>{{ t('setup.remoteTitle') }}</h3>
+      <!-- the key map of a known remote, as soon as the pairing shows it -->
+      <RemoteIntro :devices="rc.devices" />
+      <p class="sub">{{ t('setup.remoteHint') }}</p>
+      <template v-if="!rc.bt.answered || (rc.bt.available && rc.bt.supported)">
+        <!-- the certified remotes first: instructions, then found by itself -->
+        <RemotePairing v-if="!rcOther" @paired="rcAwait(rcBefore)" @other="rcOther = true" @click.capture="rcBefore = rc.devices.map((d) => d.group || d.name)" />
+        <template v-else>
+          <p class="sub">{{ t('setup.remoteBtHint') }}</p>
+          <button class="secondary" :disabled="rc.busy" @click="rcScan">
+            {{ rc.scanning ? t('setup.remoteSearching') : t('setup.remoteScan') }}
+          </button>
+          <div v-for="d in rc.bt.found" :key="d.mac" class="net between" @click="rcPair(d.mac)">
+            <span>
+              <span style="display:block;">{{ d.name || d.mac }}</span>
+              <span class="muted">{{ d.mac }}</span>
+            </span>
+            <span class="check">+</span>
+          </div>
+          <button class="ghost" style="margin-top: 8px;" @click="rcOther = false">{{ t('settings.remote.pair.change') }}</button>
+        </template>
+      </template>
+      <p class="sub" v-else-if="!rc.bt.available">{{ t('setup.remoteNoBt') }}</p>
+      <p class="sub" v-else>{{ t('setup.remoteNeedsUpdate') }}</p>
+      <label>{{ t('setup.remotePick') }}</label>
+      <select v-model="rc.pick" :disabled="rc.busy || !rcGroups.length">
+        <option value="">{{ rcGroups.length ? t('setup.remotePickNone') : t('setup.remotePickEmpty') }}</option>
+        <option v-for="g in rcGroups" :key="g.id" :value="g.id">
+          {{ g.label }} — {{ rcWhere(g) }}
+        </option>
+      </select>
+      <button class="secondary" style="margin-top: 8px;" :disabled="rc.busy || !rcGroups.length" @click="rcUse">
+        {{ t('setup.remoteUse') }}
+      </button>
+      <p class="sub" v-if="rc.msg">{{ rc.msg }}</p>
+      <p class="sub">{{ t('setup.remoteLater') }}</p>
     </div>
     <button :disabled="busy" @click="finish">{{ busy ? t('setup.finishing') : t('setup.finishSetup') }}</button>
   </div>

@@ -1,6 +1,10 @@
 # Third-Party Notices
 
-<!-- Also rendered in-app (Settings → Third-Party Notices) from src/data/thirdPartyNotices.js.
+<!-- Also rendered in-app from src/data/thirdPartyNotices.js: on screen as
+     Settings → Third-Party Notices, and in the web admin as Settings →
+     Licenses & credits, which additionally lists every Debian package of the
+     image with its license (/usr/lib/osmium/credits.json, written by
+     distro/gen-credits.py at image build from the packages' copyright files).
      Keep that file in sync whenever a dependency is added, removed or changed here. -->
 
 Osmium Sound includes and/or redistributes the following third-party components under their respective licenses. **The AGPL-3.0-only license of this project applies ONLY to the project's own code** (Qt/QML on-screen interface, earlier Electron/React kiosk, Vue web admin, Python services, distro packaging scripts, Osmium Flasher, the "Osmium" theme/CSS for Material Skin) — with the exception of the Android companion app, which remains Apache-2.0 (see below), and of code published before 2026-08-23, which was released under MIT (see `LICENSING.md`). All third-party components are subject to their own licenses.

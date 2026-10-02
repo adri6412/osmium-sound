@@ -34,4 +34,15 @@ MouseArea {
     Spring { id: sp; stiffness: 550; damping: 30; rate: Theme.motionRate; to: ma.held ? 1 : 0 }
     // tint between rest and pressed
     function mix(rest, pressedColor) { return Theme.mix(rest, pressedColor, pressAnim) }
+
+    // ─── telecomando ──────────────────────────────────────────────────────
+    // Ogni riquadro che si tocca e' anche un riquadro che il telecomando puo'
+    // scegliere: Nav li trova da qui (`navigable`) senza bisogno di un elenco,
+    // e il riflettore si disegna DENTRO il riquadro — cosi' segue la riga da
+    // solo mentre la lista scorre, invece di doverle correre dietro.
+    // `navigable: false` toglie dal giro chi non e' un comando (uno sfondo che
+    // si tocca per chiudere, una zona di trascinamento).
+    property bool navigable: true
+    property real navRadius: 10               // come gli angoli del riquadro sotto
+    NavRing { target: ma; radius: ma.navRadius }
 }

@@ -290,12 +290,27 @@ write_release() {  # <extension dir> <name>
         sed -n 's/^ID=/ID=/p' "$OS_RELEASE" | head -n 1
         printf 'SYSEXT_LEVEL=%s\n' "$(image_version)"
         printf 'SYSEXT_SCOPE=system\n'
+        # 🚨 /usr AND NOTHING ELSE. systemd-sysext merges /usr and /opt by
+        # default, and merging a hierarchy no extension provides content for
+        # mounts an EMPTY tmpfs over it: /opt disappeared, and with it
+        # /opt/hifi-qt — the on-screen interface. It kept running (its binary
+        # was already open) and died at its next restart, on a device whose
+        # owner had done nothing but install an add-on. Measured on hardware:
+        # with this line, /opt stays as it is and the add-on still works.
+        printf 'EXTENSION_HIERARCHIES=/usr\n'
     } > "$_e/usr/lib/extension-release.d/extension-release.$_n"
 }
 
 apply_now() {
     ldconfig 2>/dev/null || true
-    systemd-sysext refresh >/dev/null 2>&1 || warn "systemd-sysext refresh failed"
+    # 🚨 unmerge with the DEFAULT hierarchies first: a device that merged an
+    # older add-on still has the empty tmpfs over /opt, and a restricted
+    # unmerge would leave it there. Then merge /usr only (see
+    # EXTENSION_HIERARCHIES above — the env var is the same rule, applied to
+    # extensions this build did not write).
+    systemd-sysext unmerge >/dev/null 2>&1 || true
+    SYSEXT_HIERARCHIES=/usr systemd-sysext merge >/dev/null 2>&1 \
+        || warn "systemd-sysext merge failed"
     systemctl daemon-reload >/dev/null 2>&1 || true
     # sysusers/tmpfiles the add-on may ship: the safe half of a postinst
     systemd-sysusers >/dev/null 2>&1 || true

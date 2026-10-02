@@ -10,6 +10,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 import sources_server as ss
 
@@ -180,6 +181,82 @@ class CopyMoveDeleteTests(FileOpsBase):
         _p, _d, err = self.targets({"paths": [album], "dest": album + "/CD1"},
                                           need_dest=True)
         self.assertIsNotNone(err)
+
+
+class OwnershipTests(FileOpsBase):
+    """The service runs as root, Samba writes as hifimusic: whatever the file
+    manager makes has to end up the share account's, or a PC on the network
+    can neither put anything into a new folder nor rename or delete it."""
+
+    def setUp(self):
+        super().setUp()
+        ss._ensure_samba_uid_gid = lambda: (1234, 902)
+        self._owned = (ss._ROOT_UIDS, ss._OWNED_ROOTS)
+        ss._ROOT_UIDS = (os.geteuid(),)     # what the test made plays root's part
+        ss._OWNED_ROOTS = (self.root,)
+        self.calls = []
+        self._chown = mock.patch("os.chown", side_effect=lambda p, u, g: self.calls.append((p, u, g)))
+        self._chown.start()
+
+    def tearDown(self):
+        self._chown.stop()
+        ss._ROOT_UIDS, ss._OWNED_ROOTS = self._owned
+        super().tearDown()
+
+    def owned(self):
+        return {p for p, _, _ in self.calls}
+
+    def test_a_new_folder_is_the_share_users(self):
+        with ss.app.test_client() as c:
+            r = c.post("/api/local/mkdir", json={"path": self.root, "name": "New"})
+        self.assertEqual(r.status_code, 200, r.get_json())
+        new = os.path.join(self.root, "New")
+        self.assertIn((new, 1234, 902), self.calls)
+        self.assertEqual(os.stat(new).st_mode & 0o7777, 0o2775)
+
+    def test_a_copy_hands_over_every_new_entry(self):
+        job = self.run_job("copy", [os.path.join(self.root, "Album")],
+                           os.path.join(self.root, "Dest"))
+        self.assertEqual(job["state"], "done", job.get("detail"))
+        dest = os.path.join(self.root, "Dest", "Album")
+        for p in (dest, os.path.join(dest, "CD1"), os.path.join(dest, "CD1", "01.flac"),
+                  os.path.join(dest, "cover.jpg")):
+            self.assertIn((p, 1234, 902), self.calls)
+        self.assertEqual(os.stat(os.path.join(dest, "CD1", "01.flac")).st_mode & 0o777, 0o664)
+
+    def test_a_rename_and_a_move_hand_over(self):
+        with ss.app.test_client() as c:
+            r = c.post("/api/local/rename", json={"path": os.path.join(self.root, "Album", "cover.jpg"),
+                                                  "name": "front.jpg"})
+        self.assertEqual(r.status_code, 200, r.get_json())
+        self.assertIn((os.path.join(self.root, "Album", "front.jpg"), 1234, 902), self.calls)
+        self.run_job("move", [os.path.join(self.root, "Album")], os.path.join(self.root, "Dest"))
+        self.assertIn((os.path.join(self.root, "Dest", "Album"), 1234, 902), self.calls)
+
+    def test_somebody_elses_entry_keeps_its_owner(self):
+        ss._ROOT_UIDS = (0,)
+        f = os.path.join(self.root, "Album", "cover.jpg")
+        ss._claim_for_share(f)
+        self.assertEqual(self.calls, [(f, os.geteuid(), 902)])   # group only
+
+    def test_listing_repairs_what_root_left_behind(self):
+        with ss.app.test_client() as c:
+            r = c.get("/api/local/list", query_string={"path": self.root})
+        self.assertEqual(r.status_code, 200, r.get_json())
+        self.assertEqual(self.owned(), {os.path.join(self.root, "Album"), os.path.join(self.root, "Dest")})
+        self.assertEqual(os.stat(os.path.join(self.root, "Dest")).st_mode & 0o7777, 0o2775)
+        # not where ownership is ours (a network share): nothing is touched
+        self.calls.clear()
+        ss._OWNED_ROOTS = (os.path.join(self.tmp, "elsewhere"),)
+        with ss.app.test_client() as c:
+            r = c.get("/api/local/list", query_string={"path": self.root})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.calls, [])
+
+    def test_no_share_account_means_no_chown(self):
+        ss._ensure_samba_uid_gid = lambda: (0, 0)
+        ss._claim_for_share(os.path.join(self.root, "Album"))
+        self.assertEqual(self.calls, [])
 
 
 class MessageCatalogTests(unittest.TestCase):

@@ -302,6 +302,11 @@ if ! in_chroot systemctl is-enabled systemd-sysext.service >/dev/null 2>&1 \
    && [ ! -L "$CH/etc/systemd/system/sysinit.target.wants/systemd-sysext.service" ]; then
     die "systemd-sysext.service non abilitata: gli add-on non verrebbero mai montati"
 fi
+# The only clock source besides the RTC. Its `systemctl enable` in
+# 0400-enable-services is `|| true`, and for seven weeks it enabled a unit
+# that was not installed without anyone noticing.
+[ -L "$CH/etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service" ] \
+    || die "systemd-timesyncd.service non abilitata: l'ora verrebbe solo dall'RTC (sbagliata sui PC ex Windows)"
 mkdir -p "$CH/var/lib/extensions" "$CH/usr/share/factory/var/lib/hifi-player/ext"
 
 # ── 5b. peso morto: firmware impossibili e la UI Electron ────────────────
@@ -447,6 +452,12 @@ FSTAB
 rm -f "$CH/var/lib/dbus/machine-id"
 
 # ── 8. pulizia ───────────────────────────────────────────────────────────
+# Every package of the image with its license, for Settings → Licenses &
+# credits (api_server.py /credits). Before the cleanup below, which keeps the
+# copyright files anyway; runs on the host, reads the chroot only.
+log "credits.json (pacchetti e licenze)"
+python3 "$SCRIPT_DIR/gen-credits.py" "$CH" "$CH/usr/lib/osmium/credits.json" || die "gen-credits.py fallito"
+
 log "pulizia (apt, doc/man/info, locale, log)"
 in_chroot apt-get clean >/dev/null
 rm -rf "$CH"/var/lib/apt/lists/* "$CH"/var/cache/apt/*.bin "$CH"/var/cache/debconf/*-old "$CH"/var/lib/dpkg/*-old

@@ -16,6 +16,8 @@ Item {
     readonly property real boxY: box.y
     readonly property real boxH: box.height
     visible: false
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.visible }
     anchors.fill: parent
     function open(list, x, y) {
         items = list || []

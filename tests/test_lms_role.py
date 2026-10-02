@@ -30,6 +30,9 @@ class LmsRoleTestCase(unittest.TestCase):
             f.write(DEFAULT_ARGS)
         self._saved = {}
         self._patch('SQUEEZELITE_DEFAULT', self.sq)
+        # The file is rendered from this model (hifi_squeezelite.py); the
+        # first read imports the line written above into it.
+        self._patch('SQUEEZELITE_CONF', os.path.join(self.tmp, 'squeezelite.json'))
         self.calls = []
         self._patch('_run', self._fake_run)
         # The player-enabled check reads a file of its own; keep the restart

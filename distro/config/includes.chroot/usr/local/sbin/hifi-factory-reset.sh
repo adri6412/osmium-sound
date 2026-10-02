@@ -100,7 +100,7 @@ for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bl
          github-support-pat lyrion-channel lms-skin \
          ui-language ui-refresh nowplaying-view nowplaying-autoexpand-seconds \
          nowplaying-animation ota-autocheck player-enabled vu-meter-enabled \
-         meta-online meta-prefetch; do
+         meta-online meta-prefetch remote-keys.json; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).
@@ -158,7 +158,9 @@ rm -rf /var/lib/hifi-player/metadata-edits 2>/dev/null || true
 # made there too, and never anything else on their disk.
 META_DIR="$(cat /etc/hifi-player/meta-cache-dir 2>/dev/null || true)"
 case "$META_DIR" in
-  /*) mountpoint -q "$META_DIR" && rm -rf "${META_DIR%/}/osmium-metadata" 2>/dev/null || true ;;
+  # 🚨 if-then, non `A && B || C`: shellcheck (SC2015) lo rifiuta perche' con
+  # quella forma il ramo finale scatta anche quando la condizione e' vera.
+  /*) if mountpoint -q "$META_DIR"; then rm -rf "${META_DIR%/}/osmium-metadata" 2>/dev/null || true; fi ;;
 esac
 rm -f /etc/hifi-player/meta-cache-dir 2>/dev/null || true
 rm -f /system-update 2>/dev/null || true

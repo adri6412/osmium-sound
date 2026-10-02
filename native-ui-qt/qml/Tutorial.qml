@@ -16,8 +16,12 @@ Item {
     property int step: 0
     readonly property int count: steps.length
     visible: active || fade > 0
+    // il telecomando resta qui dentro finche' questo strato e' aperto
+    NavScope { active: root.active }
     anchors.fill: parent
     signal ended()
+    // with the remote the spotlight starts on "Next" (see Nav.focusFirst)
+    readonly property Item navFirst: nextTap
 
     // where "already shown" is written: under /data on the appliance (the
     // partition that survives an image update), next to the settings in
@@ -85,6 +89,9 @@ Item {
             if (!wasLit) { hx = r[0]; hy = r[1]; hw = r[2]; hh = r[3] }
         } else lit = false
         cardA = 1
+        // with a remote, OK goes on: the spotlight waits on "Next", not on
+        // "Skip" (the top-left stop the layer would pick by itself)
+        if (Nav.active) Nav.focus(nextTap)
     }
     // the card swaps with a short dip so the eye follows the spotlight
     function go(i) {

@@ -89,32 +89,50 @@ Item {
         if (!(replace && msearchOpen)) msearchOpen = false
         loadTop()
         appear()
+        landNav(null)
     }
+    // Where the remote's spotlight lands when this panel shows a new screen
+    // (Nav.land): the content, never the bars above it. `from` is the entry
+    // one came back from, so the home lights the tile that had been opened.
+    function landing(from) {
+        if (tab === 4) return { box: settingsTab, pick: null }
+        if (tab === 3) return { box: discoverTab, pick: null }
+        if (view === LibraryModel.Home) return { box: tilesBox, pick: function() { return tilesBox.tileFor(from) } }
+        if (isPage) return { box: pageLoader, pick: function() { return pageLoader.item ? pageLoader.item.navFirst : null } }
+        return { box: list, pick: null }
+    }
+    function landNav(from) { var l = landing(from); Nav.land(l.box, l.pick) }
     // 🚨 Se l'apparecchio passa a un altro Lyrion (multiroom "segui", o server
     // esterno), quello che si sta guardando e' l'elenco del server di prima:
     // si riparte dalla home di quello nuovo.
     Connections { target: Api; function onLmsBaseChanged() { root.navHome() } }
 
     function navHome() {
+        var from = nav.length > 1 ? nav[1] : null
         nav = [{ view: LibraryModel.Home, title: Tr.t("player.titles.home"), p1: "", p2: "", input: "" }]
         navDir = -1
         msearchOpen = false; ctx.close(); search.text = ""
         pageLoader.sourceComponent = null
         appear()
+        landNav(from)
     }
     function navBack() {
         if (nav.length <= 1) return
+        var from = nav[nav.length - 1]
         var n = nav.slice(); n.pop(); nav = n
         navDir = -1
         msearchOpen = false; search.text = ""; ctx.close()
         loadTop(); appear()
+        landNav(from)
     }
     function navToCrumb(i) {
         if (i >= nav.length - 1) return
+        var from = nav[i + 1]
         nav = nav.slice(0, i + 1)
         navDir = -1
         msearchOpen = false; search.text = ""; ctx.close()
         loadTop(); appear()
+        landNav(from)
     }
     function openTab(i) {
         navDir = i > tab ? 1 : i < tab ? -1 : 0
@@ -130,16 +148,45 @@ Item {
         } else if (i === 4) settingsTab.enter()
         else if (i === 3) discoverTab.enter()
         appear()
+        landNav(null)
     }
     function showPlaylists() { tab = 0; navHome(); goView(LibraryModel.Playlists, Tr.t("player.titles.playlists")) }
     // the album and artist pages, from anywhere (library, search, Now Playing,
     // credits); a person known only to MusicBrainz opens the artist page by mbid
     function showMusicTab() { if (tab !== 0) { navDir = -1; tab = 0; ctx.close() } }
+    // restart / shut down: the ⏻ button of the tab bar, and a remote's power key
+    function openPower() {
+        Ui.dialogs.power(function(act) {
+            if (!act) return
+            Api.post(Api.apiBase + "/" + act, {}, function() {}, 12000)
+            Ui.toast.say(act === "reboot" ? "rotate-cw" : "power",
+                         Tr.t(act === "reboot" ? "settings.msg.rebooting" : "settings.msg.shuttingDown"))
+        })
+    }
+    // the Favourites list straight away (a remote key): the same list the
+    // tile on the library home opens, with Back leading to that home
+    function openFavorites() {
+        showMusicTab(); navHome()
+        goView(LibraryModel.PluginItems, Tr.t("player.titles.favorites"), "favorites")
+    }
     function openAlbum(id, title) { if (!id) return; showMusicTab(); goView(LibraryModel.AlbumPage, title, String(id)) }
     function openArtist(id, name) { if (!id) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, String(id)) }
     function openPerson(mbid, name) { if (!mbid) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, "", "mbid:" + mbid) }
     function openMenu(items, x, y) { ctx.open(items, x, y) }
     function closeMenu() { ctx.close() }
+    readonly property bool menuOpen: ctx.visible
+    // Il tasto "cerca" del telecomando: il campo di questa schermata se ce
+    // n'e' uno (il filtro di artisti e album), altrimenti quello della
+    // libreria, che sta nella home.
+    function focusSearch() {
+        showMusicTab()
+        if (view === LibraryModel.Home) { homeSearch.takeFocus(); return }
+        if (hasSearch) { search.takeFocus(); return }
+        navHome()
+        // la home compare adesso: il campo puo' prendere il fuoco al giro dopo
+        searchDelay.restart()
+    }
+    Timer { id: searchDelay; interval: 60; onTriggered: homeSearch.takeFocus() }
     // The guided tour: the album list (grid or Cover Flow), and the menu a
     // long press opens, on the first album, so it can be seen. Rectangles
     // in canvas coordinates (this panel starts at x 341, its content at
@@ -422,17 +469,10 @@ Item {
         // tabs need their space; the power button always stays.
         Item {
             id: brandMark
-            width: 16 + brandText.width + 4; height: 40
+            width: 16 + brandText.implicitWidth + 4; height: 40
             x: netIcon.x - width
             visible: tabRow.width <= x
-            Row {
-                id: brandText
-                x: 16; anchors.verticalCenter: parent.verticalCenter
-                spacing: 6
-                // two-tone like the status plate: SOUND in gold
-                Text { text: "OSMIUM"; color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
-                Text { text: "SOUND"; color: Theme.gold; font.family: Theme.font; font.pixelSize: 11; font.bold: true; font.letterSpacing: 2 }
-            }
+            BrandMark { id: brandText; x: 16; anchors.verticalCenter: parent.verticalCenter; cap: 8 }
         }
         // the connection, as an OS's tray shows it: the link's shape (Wi-Fi
         // or cable) when the internet answers, the same with a gold dot when
@@ -472,12 +512,7 @@ Item {
             }
             Tap {
                 id: powerTap; tap: 0.9
-                onClicked: Ui.dialogs.power(function(act) {
-                    if (!act) return
-                    Api.post(Api.apiBase + "/" + act, {}, function() {}, 12000)
-                    Ui.toast.say(act === "reboot" ? "rotate-cw" : "power",
-                                 Tr.t(act === "reboot" ? "settings.msg.rebooting" : "settings.msg.shuttingDown"))
-                })
+                onClicked: root.openPower()
             }
         }
         // the tabs as they are without the badge, measured apart so the
@@ -668,26 +703,44 @@ Item {
                         Icon { anchors.centerIn: parent; name: "search"; size: 16; color: homeSearch.text.trim().length >= 2 ? Theme.gold : Theme.goldA(0.4) }
                         Tap { onClicked: root.submitLibrarySearch(homeSearch.text) }
                     }
-                    Repeater {
-                        model: root.tiles
-                        Rectangle {
-                            required property var modelData
-                            required property int index
-                            readonly property real tw: (root.width - 32 - 24) / 3
-                            // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
-                            // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno).
-                            // A taller canvas (16:10: 640) shares its extra height among the rows.
-                            readonly property real th: 117 + Math.max(0, root.height - 600) / 3
-                            x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (th + 12)
-                            width: tw; height: th; radius: 12
-                            color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
-                            Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
-                            Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
-                            Tap {
-                                id: tileTap
-                                onClicked: {
-                                    if (modelData.view === LibraryModel.PluginItems) root.goView(LibraryModel.PluginItems, Tr.t(modelData.key), "favorites")
-                                    else root.goView(modelData.view, Tr.t(modelData.key))
+                    // the tiles: where the spotlight lands on the home (Nav.land)
+                    Item {
+                        id: tilesBox
+                        anchors.fill: parent
+                        // the tile that opens `e` (a nav entry): coming back,
+                        // the spotlight returns to the one that was opened
+                        function tileFor(e) {
+                            if (!e) return null
+                            for (var i = 0; i < children.length; i++) {
+                                var c = children[i]
+                                if (!c.modelData || c.modelData.view !== e.view) continue
+                                if (e.view === LibraryModel.PluginItems && e.p1 !== "favorites") continue
+                                return c.navTap
+                            }
+                            return null
+                        }
+                        Repeater {
+                            model: root.tiles
+                            Rectangle {
+                                required property var modelData
+                                required property int index
+                                property alias navTap: tileTap
+                                readonly property real tw: (root.width - 32 - 24) / 3
+                                // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
+                                // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno).
+                                // A taller canvas (16:10: 640) shares its extra height among the rows.
+                                readonly property real th: 117 + Math.max(0, root.height - 600) / 3
+                                x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (th + 12)
+                                width: tw; height: th; radius: 12
+                                color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
+                                Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
+                                Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: Tr.t(modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                                Tap {
+                                    id: tileTap
+                                    onClicked: {
+                                        if (modelData.view === LibraryModel.PluginItems) root.goView(LibraryModel.PluginItems, Tr.t(modelData.key), "favorites")
+                                        else root.goView(modelData.view, Tr.t(modelData.key))
+                                    }
                                 }
                             }
                         }
@@ -861,6 +914,9 @@ Item {
                         visible: root.azShown
                         x: root.width - 32; y: parent.listY; width: 32; height: root.height - root.contentTop - y
                         onLetter: (l) => { var r = Library.letterFirst(l); if (r >= 0) list.scrollToRow(r) }
+                        // the letter's first entry sits at the top of the list: the
+                        // row (or card) closest to its top-left corner
+                        onNavLeave: { var p = list.mapToItem(null, 60, 30); Nav.focusIn(list, Qt.rect(p.x, p.y, 0, 0)) }
                     }
                 }
             }

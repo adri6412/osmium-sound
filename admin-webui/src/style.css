@@ -32,8 +32,10 @@ a:hover { filter: brightness(1.15); }
   background: var(--panel);
   position: sticky; top: 0; z-index: 10;
 }
-.brand { font-weight: 700; letter-spacing: 2px; font-size: 14px; }
-.brand .gold { color: var(--gold); }
+/* the mark: seven gold bars, OSMIUM in gold, SOUND in off-white (the logo's) */
+.brand { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; letter-spacing: 2px; font-size: 14px; color: var(--gold); }
+.brand .bars { height: 10px; width: auto; fill: var(--gold); flex: none; }
+.brand .ink { color: #f1f0ea; margin-left: 3px; }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
 .topbar-link {
   padding: 10px 14px; border-radius: 10px; font-size: 14px; font-weight: 500;

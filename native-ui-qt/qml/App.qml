@@ -17,18 +17,33 @@ Item {
     function setAlbumView(v) { albumView = v === "coverflow" ? "coverflow" : "grid"; Sys.setConf("album-view", albumView) }
     // tempo dell'ultimo tocco (per l'auto-apertura e il salvaschermo)
     readonly property real lastInput: Sys.lastInput
-    readonly property bool busyOverlay: dialogs.active || vk.active || ota.active || cdrip.open || tutorial.active
+    readonly property bool busyOverlay: dialogs.active || vk.active || ota.active || cdrip.open || tutorial.active || remoteIntro.active || remoteTour.active || remotePair.active
 
     // ─── principale <-> Now Playing: y:'100%' con molla 200/26 ─────────────
     Spring { id: npSpring; stiffness: 200; damping: 26; rate: Theme.motionRate }
+    // The remote's spotlight: opening the player it goes to Play; closing
+    // it, back to the box it had in the library if that is still there,
+    // else where the library's screen says a spotlight starts.
+    property var librarySpot: null
     function setExpanded(on) {
         if (expanded === on) return
+        if (on) librarySpot = Nav.item && Nav.isInside(mainScreen, Nav.item) ? Nav.item : null
         expanded = on
         npSpring.to = on ? 0 : 1
-        if (on) autoexpand.armed = false
+        if (on) { autoexpand.armed = false; Nav.land(np, function() { return np.navFirst }) }
+        else {
+            var keep = librarySpot, l = mainScreen.browser.landing(null)
+            Nav.land(l.box, function() { return Nav.usable(keep) ? keep : (l.pick ? l.pick() : null) })
+        }
     }
     Component.onCompleted: {
         Ui.app = app; Ui.vk = vk; Ui.dialogs = dialogs; Ui.toast = toast; Ui.overlays = overlays
+        Nav.root = app                                     // il telecomando cerca i riquadri da qui
+        // and where a spotlight with nowhere to start goes (Nav.focusFirst)
+        Nav.rootLanding = function() {
+            return app.expanded ? { box: np, pick: function() { return np.navFirst } } : mainScreen.browser.landing(null)
+        }
+        firstStart = !tutorial.wasShown()                  // before the tour can write its file
         npSpring.set(Sys.startExpanded ? 0 : 1)
         expanded = Sys.startExpanded
         if (tutorialCanStart) tutorialDelay.restart()      // no intro or wizard to wait for
@@ -57,7 +72,13 @@ Item {
     // first time and its "shown" file is missing: after the first wizard on
     // a new appliance, at the first start after the update on an old one.
     readonly property bool tutorialCanStart: !wizard.active && !intro.active && !screensaver.covering && !ota.active && !cdrip.open && !dialogs.active
+                                             && !remoteIntro.active && !remoteTour.active
     property bool tutorialTried: false
+    // 🚨 At the end of the first setup both the touch tour and a remote's key
+    // map want the screen (a remote paired from the web wizard is already
+    // there): the map came first by a few hundred ms and the tour opened on
+    // top of it. One after the other: the tour, then the map and the practice.
+    readonly property bool tutorialPending: !tutorialTried && !tutorial.wasShown()
     onTutorialCanStartChanged: if (tutorialCanStart && !tutorialTried) tutorialDelay.restart()
     Timer {
         id: tutorialDelay
@@ -69,6 +90,15 @@ Item {
         }
     }
     function startTutorial() { tutorialTried = true; tutorial.start() }
+    // The first start after the setup: the touch tour had not been shown yet
+    // when the interface came up (read once — the tour writes its file as it
+    // goes, and the remote's practice comes after it).
+    property bool firstStart: false
+    // 🚨 Trying the remote, one key at a time: ONLY after a known remote's
+    // key map at the end of the first setup. Later (a remote paired months
+    // after, Settings) it was one more thing in the way: the key map and
+    // "Try the keys" are there for that.
+    function startRemoteTour(model) { if (firstStart) remoteTour.start(model || "") }
     // the tour's album steps: the list as a grid or as Cover Flow, whatever
     // the owner chose (put back when the tour ends), and the long-press menu
     function tutorialAlbums(mode) { setExpanded(false); albumView = mode; mainScreen.browser.tutorialAlbums(mode) }
@@ -82,6 +112,126 @@ Item {
     function openAlbum(id, title) { if (!id) return; setExpanded(false); mainScreen.browser.openAlbum(id, title) }
     function openArtist(id, name) { if (!id) return; setExpanded(false); mainScreen.browser.openArtist(id, name) }
 
+    // ─── telecomando ───────────────────────────────────────────────────────
+    // Da qui passano il telecomando (USB o Bluetooth, letto in remote.cpp) e
+    // una tastiera attaccata: Remote traduce i tasti in azioni e questa
+    // funzione decide cosa vuol dire ogni azione ADESSO. "Indietro" con un
+    // dialogo aperto chiude il dialogo; nella libreria torna di un passo.
+    // Le frecce non fanno cose diverse schermata per schermata: muovono il
+    // riflettore (Nav.qml), e OK preme dove il riflettore si trova.
+    Connections {
+        target: Remote
+        function onAction(name, repeat) { app.remote(name, repeat) }
+    }
+    // il dito ha la precedenza: appoggiarlo spegne il riflettore
+    Connections { target: Sys; function onPointerTouched() { Nav.hide() } }
+
+    function remote(a, repeat) {
+        // col salvaschermo davanti, il primo tasto lo manda via e basta: chi
+        // sveglia lo schermo non si aspetta che quel tasto apra anche qualcosa.
+        // I tasti di riproduzione, invece, fanno anche il loro mestiere.
+        if (screensaver.active) {
+            screensaver.hide()
+            if (a === "up" || a === "down" || a === "left" || a === "right" || a === "ok" ||
+                a === "back" || a === "home" || a === "menu" || a === "standby" ||
+                a === "pageUp" || a === "pageDown" || a === "search") return
+        }
+        // trying the remote: every key is the practice run's, none acts
+        if (remoteTour.active) { remoteTour.handle(a); return }
+        switch (a) {
+        case "up": case "down": case "left": case "right": Nav.move(a); return
+        case "pageUp": Nav.page("up"); return
+        case "pageDown": Nav.page("down"); return
+        case "ok": Nav.activate(false); return
+        case "menu": Nav.activate(true); return            // come tenere il dito premuto
+        case "back": remoteBack(); return
+        case "home": remoteHome(); return
+        case "playPause": Player.togglePlay(); return
+        case "play": Player.play(true); return
+        case "pause": Player.play(false); return
+        case "stop": Player.cmd(["stop"]); return
+        case "next": Player.next(); return
+        case "prev": Player.prev(); return
+        case "forward": Player.seek(Player.elapsed + 30); return
+        case "rewind": Player.seek(Math.max(0, Player.elapsed - 30)); return
+        case "volumeUp": remoteVolume(repeat ? 2 : 5); return
+        case "volumeDown": remoteVolume(repeat ? -2 : -5); return
+        case "mute":
+            Player.toggleMute()
+            toast.say(Player.muted ? "volume-2" : "volume-x", Tr.t(Player.muted ? "remote.soundOn" : "remote.muted"))
+            return
+        case "nowPlaying": setExpanded(!expanded); return
+        // Schermo intero: il player si apre da solo se era chiuso. Senza VU e
+        // senza animazione non c'e' niente da mostrare grande, e il tasto tace.
+        case "fullScreen":
+            if (overlays.busy) overlays.close()
+            if (!expanded) setExpanded(true)
+            np.toggleStage()
+            return
+        // il prossimo skin dei VU / la prossima animazione, anche dalla
+        // libreria: il riquadro dice il nome di quello che e' venuto su
+        case "nextVu": if (Player.isOwn) np.cycleLook("vu"); return
+        case "nextAnimation": np.cycleLook("anim"); return
+        case "queue": if (overlays.busy) overlays.close(); else overlays.openQueue(); return
+        case "search": setExpanded(false); mainScreen.browser.focusSearch(); return
+        case "favorite": if (Player.favoritesAvailable) Player.toggleFavorite(); return
+        case "openFavorites": remoteHome(); mainScreen.browser.openFavorites(); return
+        // the power key: the restart / shut down menu, and pressed again it
+        // goes away (the spotlight starts on Cancel: see Dialogs.navFirst)
+        case "powerMenu":
+            if (dialogs.active && dialogs.kind === 7) { dialogs.backdrop(); return }
+            if (vk.active) vk.close(false)
+            if (dialogs.active) dialogs.backdrop()
+            mainScreen.browser.openPower()
+            return
+        // the touchscreen "unplugged and plugged back in" (api_server
+        // reset_touchscreen): for a panel that stops answering the finger
+        case "resetTouch":
+            toast.say("refresh-cw", Tr.t("remote.touchRestarting"))
+            Api.post(Api.apiBase + "/touch/reset", {}, function(ok, d) {
+                if (d && d.message) toast.say(ok && d.success !== false ? "check" : "x", d.message)
+            }, 15000)
+            return
+        case "shuffle": Player.cycleShuffle(); return
+        case "standby": screensaver.show(true); return
+        case "eject": if (cdrip.haveDisc) cdrip.eject(); return
+        }
+    }
+    // Il volume dal telecomando: un passo da 5, piu' corto a tasto tenuto
+    // premuto (le ripetizioni arrivano otto al secondo). Il riquadro che
+    // compare e' l'unico posto dove si vede il volume da qualunque schermata.
+    function remoteVolume(d) {
+        if (Player.volumeFixed) return
+        var v = Math.max(0, Math.min(100, Player.volume + d))
+        Player.setVolume(v)
+        toast.say(v === 0 ? "volume-x" : "volume-2", v + "%")
+    }
+    // "Indietro": chiude quello che c'e' davanti, uno strato per volta
+    function remoteBack() {
+        if (vk.active) { vk.close(false); return }
+        // like Escape and a tap outside: whoever opened the dialog hears it was
+        // cancelled (a bare close() left them waiting, and the spotlight lost)
+        if (dialogs.active) { dialogs.backdrop(); return }
+        if (cdrip.open) { cdrip.close(); return }
+        if (tutorial.active) { tutorial.finish(); return }
+        if (remoteIntro.active) { remoteIntro.close(); return }
+        if (remotePair.active) { remotePair.close(); return }
+        if (overlays.busy) { overlays.close(); return }
+        if (ota.active) { ota.dismissed = true; return }
+        if (mainScreen.browser.menuOpen) { mainScreen.browser.closeMenu(); return }
+        if (expanded) { setExpanded(false); return }
+        mainScreen.browser.navBack()
+    }
+    // "Casa": la libreria, com'e' appena accesa
+    function remoteHome() {
+        if (vk.active) vk.close(false)
+        if (dialogs.active) dialogs.close()
+        if (overlays.busy) overlays.close()
+        setExpanded(false)
+        mainScreen.browser.showMusicTab()
+        mainScreen.browser.navHome()                      // and the spotlight on the first tile
+    }
+
     // per il canale di collaudo (eval): app.settings.openSection(n) ecc.
     readonly property var settings: Ui.settings
     readonly property var main: mainScreen
@@ -93,6 +243,10 @@ Item {
     readonly property var toastItem: toast
     readonly property var otaItem: ota
     readonly property var tour: tutorial
+    readonly property var remoteMap: remoteIntro
+    readonly property var pairWizard: remotePair
+    readonly property var practice: remoteTour
+    readonly property var nav: Nav                    // il riflettore del telecomando
 
     MainScreen {
         id: mainScreen
@@ -173,7 +327,25 @@ Item {
     Dialogs { id: dialogs; anchors.fill: parent }
     OtaOverlay { id: ota; anchors.fill: parent }
     CdRip { id: cdrip; anchors.fill: parent }
-    Tutorial { id: tutorial; anchors.fill: parent }       // the guided tour, over everything but the saver and the intro
+    FolderChooser { id: folderChooser; anchors.fill: parent }
+    Tutorial {                                             // the guided tours, over everything but the saver and the intro
+        id: tutorial; anchors.fill: parent
+        onEnded: remoteIntro.check()                       // another known remote may be waiting for its map
+    }
+    // the key map of a known remote, once, after it is paired
+    RemoteIntro {
+        id: remoteIntro; anchors.fill: parent
+        blocked: wizard.active || intro.active || screensaver.covering || dialogs.active || vk.active || ota.active || cdrip.open
+                 || tutorial.active || remoteTour.active || remotePair.active || app.tutorialPending
+        onTourWanted: (m) => app.startRemoteTour(m)
+    }
+    // "add a remote", from Settings → Remote control
+    RemotePairWizard { id: remotePair; anchors.fill: parent }
+    // the practice run: every remote key comes here first while it is open
+    RemoteTour {
+        id: remoteTour; anchors.fill: parent
+        onEnded: remoteIntro.check()                       // another known remote may be waiting for its map
+    }
     Toast { id: toast; anchors.fill: parent }             // z-[10050]: sopra CD (z-70) e aggiornamento
     VirtualKeyboard { id: vk; anchors.fill: parent }
     Screensaver {

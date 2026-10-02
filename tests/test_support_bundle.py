@@ -76,5 +76,90 @@ class GracefulDegradationTests(unittest.TestCase):
         self.assertNotIn('precheck_run', d)
 
 
+class BundleSecretsTests(unittest.TestCase):
+    """An owner found their NAS password in config/etc/hifi-sources.json."""
+
+    SOURCES = {'sources': [
+        {'id': 'a', 'type': 'smb', 'server': 'nas', 'share': 'music',
+         'username': 'g22', 'password': 'hunter2', 'rw': True},
+        {'id': 'b', 'type': 'smb', 'server': 'nas', 'share': 'pub',
+         'username': '', 'password': ''},
+    ]}
+
+    def build_with(self, text):
+        import os
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix='.json')
+        with os.fdopen(fd, 'w') as f:
+            f.write(text)
+        saved = (a.SUPPORT_CONFIG_FILES, a._SUPPORT_REDACT_JSON)
+        a.SUPPORT_CONFIG_FILES, a._SUPPORT_REDACT_JSON = [path], {path}
+        try:
+            return path, zipfile.ZipFile(io.BytesIO(a._support_bundle_build()))
+        finally:
+            a.SUPPORT_CONFIG_FILES, a._SUPPORT_REDACT_JSON = saved
+            os.unlink(path)
+
+    def test_the_login_of_a_share_is_masked(self):
+        path, z = self.build_with(json.dumps(self.SOURCES))
+        raw = z.read('config' + path).decode()
+        self.assertNotIn('hunter2', raw)
+        self.assertNotIn('g22', raw)
+        d = json.loads(raw)['sources']
+        self.assertEqual(d[0]['password'], '<redacted>')
+        self.assertEqual(d[0]['server'], 'nas')
+        # guest versus login must still be visible
+        self.assertEqual(d[1]['password'], '')
+
+    def test_a_file_that_does_not_parse_is_left_out(self):
+        path, z = self.build_with('{"password": "hunter2",')
+        self.assertNotIn('config' + path, z.namelist())
+        for name in z.namelist():
+            self.assertNotIn(b'hunter2', z.read(name))
+
+
+class LyrionLogTests(unittest.TestCase):
+    """Lyrion's own logs are on /data and survive the power cycle that a
+    frozen box gets, so they go in — tail only, and without the tokens that
+    streaming services put in the URLs Lyrion logs."""
+
+    def setUp(self):
+        import tempfile
+        self.dir = tempfile.mkdtemp()
+        self.saved = (a.SUPPORT_LYRION_LOG_DIR, a.SUPPORT_LYRION_LOG_TAIL)
+        a.SUPPORT_LYRION_LOG_DIR = self.dir
+        self.addCleanup(lambda: (setattr(a, 'SUPPORT_LYRION_LOG_DIR', self.saved[0]),
+                                 setattr(a, 'SUPPORT_LYRION_LOG_TAIL', self.saved[1])))
+
+    def write(self, name, data):
+        import os
+        with open(os.path.join(self.dir, name), 'wb') as f:
+            f.write(data)
+
+    def test_server_and_scanner_logs_are_in_the_bundle(self):
+        self.write('server.log', b'[18:09] Slim::Web::HTTP warning\n')
+        self.write('scanner.log', b'[18:00] scan done\n')
+        self.write('unrelated.txt', b'nope\n')
+        names = zipfile.ZipFile(io.BytesIO(a._support_bundle_build())).namelist()
+        self.assertIn('lyrion/server.log', names)
+        self.assertIn('lyrion/scanner.log', names)
+        self.assertNotIn('lyrion/unrelated.txt', names)
+
+    def test_url_credentials_are_masked(self):
+        self.write('server.log', b'GET http://s/x?track=1&user_auth_token=abc123&sig=f00 ok\n')
+        data = dict(a._support_lyrion_logs())['server.log']
+        self.assertNotIn(b'abc123', data)
+        self.assertNotIn(b'f00', data)
+        self.assertIn(b'track=1', data)
+
+    def test_only_the_tail_of_a_big_log(self):
+        a.SUPPORT_LYRION_LOG_TAIL = 64
+        self.write('server.log', b''.join(b'line %04d\n' % i for i in range(1000)))
+        data = dict(a._support_lyrion_logs())['server.log']
+        self.assertTrue(data.startswith(b'(... first '))
+        self.assertTrue(data.endswith(b'line 0999\n'))
+        self.assertLess(len(data), 200)
+
+
 if __name__ == '__main__':
     unittest.main()

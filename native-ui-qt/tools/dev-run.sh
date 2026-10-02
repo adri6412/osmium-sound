@@ -11,5 +11,6 @@ sudo mkdir -p $R/tmp/hifi-conf; echo it | sudo tee $R/tmp/hifi-conf/ui-language 
 sudo rm -f $R/tmp/hifi-qt.cmd $R/tmp/hifi-qt.png
 sudo chroot $R /bin/bash -c "export LC_ALL=C; Xvfb :99 -screen 0 ${MODE}x24 -nolisten tcp >/tmp/xvfb.log 2>&1 & sleep 0.8;
   cd /build/hifi-qt && DISPLAY=:99 QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 HIFI_DEV=1 HIFI_CONFIG_DIR=/tmp/hifi-conf HIFI_WINDOW=$MODE \
+  ${FAKE_REMOTE:+HIFI_SYSFS_INPUT=$FAKE_REMOTE/sys HIFI_INPUT_DEV=$FAKE_REMOTE/dev} \
   QT_LOGGING_RULES='qt.qml.binding.removal.info=false' nohup ./hifi-qt --assets /build/assets --locales /build/locales $ARGS >/tmp/hifi-qt.log 2>&1 &
   sleep ${WAIT:-3}; cat /tmp/hifi-qt.log"

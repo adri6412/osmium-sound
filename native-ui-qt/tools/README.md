@@ -18,6 +18,14 @@ un finto apparecchio in Python.
   pannello veri: un `QMouseEvent` costruito a mano e mandato alla finestra non tiene la presa fra un
   evento e l'altro, e i trascinamenti non diventavano mai scorrimenti. Il primo evento dopo l'avvio
   puo' andare perso (stato del puntatore su xcb): premettere un `move`.
+- `fake-remote.py` — telecomandi finti, per provare il riconoscimento senza comprare la ferramenta:
+  `fake-remote.py list` mostra i profili (`remote`, `mce`, `flirc`, `androidtv`, `airmouse`, `digits`),
+  `fake-remote.py tree DIR androidtv airmouse flirc digits` li crea tutti insieme, poi `dev-run.sh` con
+  `FAKE_REMOTE=DIR` li fa vedere all'interfaccia e `fake-remote.py send DIR -d "G20S" down` preme un tasto
+  su uno preciso. Ogni profilo dichiara cosa ci si aspetta (telecomando / tastiera / da ignorare): e' la
+  prova della classificazione in remote.cpp, che e' dove si sbaglia coi modelli che non si hanno in mano.
+  🚨 i nodi sono fifo: la presa esclusiva (EVIOCGRAB) non si puo' provare cosi', e vale UNA `send` per
+  avvio (chiusa la scrittura il dispositivo sparisce).
 - `mock-server.py` — scenari via ambiente: `MOCK_LONG_QUEUE=1` (40 brani in coda),
   `MOCK_SHARED_LMS=N` (Lyrion altrui: prima solo un telefono, il nostro "Osmium" compare dopo N s),
   `MOCK_PLAYERS=1` (altri due player sul server, ognuno col suo now playing: per il selettore di player;
@@ -30,6 +38,12 @@ un finto apparecchio in Python.
   Needs Pillow + numpy (`python3 -m venv` in the scratchpad). The Modulometer skin came from
   `VU Nagra.zip` with: `--needle-pivot 13.75,577 --meter 755.22,984.77 --meter 2098.24,994.79
   --angles=-46.5,47.2` (source-artwork pixels).
+- `remote-maps/` — the key maps of the remotes known out of the box (Fire TV, G20S PRO, Xiaomi):
+  the photo of each (the reference the key positions were measured on), a drawing of each in the
+  same coordinates (`remote-draw.py`, flat, no logos: that is what the pictures show), a table of
+  where every key is and what it does (`<model>_keys.py`, kept in step with `kModels` in
+  `src/remote.cpp`), and `make-all.sh`, which renders them into `assets/remotes`
+  and `admin-webui/public/remotes` (shown once after pairing, `qml/RemoteIntro.qml`).
 - `np-anim/*.py` — generate the PNGs of the Now Playing animations (`assets/anim/<cd|vinyl|cassette>/`,
   one script per scene, Pillow + numpy); the scenes are `qml/AnimCd.qml`, `AnimVinyl.qml`, `AnimCassette.qml`,
   picked by `qml/NpAnimation.qml`. `MOCK_VU=0 MOCK_NP_ANIMATION=cd` starts the mock with one on screen.

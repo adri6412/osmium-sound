@@ -10,6 +10,7 @@
     "retry": "Retry",
     "cancel": "Cancel",
     "close": "Close",
+    "save": "Save",
     "search": "Search",
     "confirm": "Confirm",
     "clear": "Clear",
@@ -20,6 +21,17 @@
     "done": "Done",
     "noResults": "No results",
     "networkError": "Connection error"
+  },
+  "fileChooser": {
+    "title": "Choose a folder",
+    "places": "Locations",
+    "root": "All folders",
+    "newFolder": "New folder",
+    "create": "Create",
+    "empty": "No folders here",
+    "freeOf": "{free} free of {total}",
+    "items": "{n} items",
+    "emptyPlace": "Empty"
   },
   "sources": {
     "active": "Active sources",
@@ -52,6 +64,7 @@
     "newFolderCreate": "Create",
     "localSambaHint": "Also share this folder over the network (SMB), so you can copy music onto it from a PC.",
     "useThisFolder": "Use this folder",
+    "browseFolders": "Browse the folders…",
     "playlistdir": {
       "title": "Playlist folder",
       "hint": "Where Lyrion saves the playlists you create from the player. The default works for most setups — pick a folder on your own disk if you'd rather keep the playlists next to your music.",
@@ -279,6 +292,9 @@
     "confirm": "Confirm"
   },
   "player": {
+    "muted": "Muted",
+    "soundOn": "Sound on",
+    "touchRestarting": "Restarting the touchscreen…",
     "connectError": "Unable to connect to the server. Check the URL in Settings.",
     "tabs": {
       "music": "Music",
@@ -377,6 +393,8 @@
     "sleepActive": "Stops in about {min} min",
     "sleepOff": "Turn off timer",
     "cd": {
+      "cancel": "Cancel",
+      "cancelled": "Rip cancelled. You can eject the disc.",
       "detected": "Audio CD detected",
       "rip": "Rip",
       "ripTitle": "Rip CD to library",
@@ -477,6 +495,7 @@
     "apiUnavailable": "⚠️ API server unavailable",
     "sections": {
       "sources": "Music sources",
+      "cdRip": "CD ripping",
       "audio": "Audio Output (DAC)",
       "playback": "Playback",
       "vuMeters": "VU Meters",
@@ -501,7 +520,8 @@
       "language": "Language",
       "thirdPartyNotices": "Third-Party Notices",
       "netCheck": "Network check",
-      "uiMotion": "Interface motion"
+      "uiMotion": "Interface motion",
+      "remote": "Remote control"
     },
     "language": {
       "help": "Choose the interface language."
@@ -694,6 +714,120 @@
         "update": "Install / update"
       }
     },
+    "remote": {
+      "help": "A remote control works the whole interface: the arrows move the highlight, OK presses whatever the highlight is on, and the play, volume and back keys do what they say. A USB remote — the kind with a little receiver you plug in — works the moment you plug it in. A Bluetooth one has to be paired here first.",
+      "keysTitle": "What the keys do",
+      "keysBody": "Arrows move the highlight, OK presses. Back closes what is open, or goes back a step. Home returns to the library. The menu key opens the same menu a long press on a row opens. Play, previous, next, volume and mute do what they say.",
+      "connected": "Remotes connected now",
+      "none": "No remote connected. Plug in the receiver of a USB remote, or pair a Bluetooth one below.",
+      "noneYet": "No remote yet. Add one with the button above, or plug in the receiver of a USB one: it works straight away.",
+      "keysPage": "Try and assign the keys",
+      "keysPageSub": "See what each key sends and give it another job",
+      "viaUsb": "USB",
+      "viaBluetooth": "Bluetooth",
+      "viaOther": "Connected",
+      "full": "every key",
+      "mediaOnly": "play and volume keys only",
+      "mine": "This is my remote",
+      "notMine": "Not my remote",
+      "isMine": "your remote",
+      "mineHint": "Only needed for a remote that introduces itself as a keyboard, an air mouse for instance: those get the play and volume keys only, so typing on a real keyboard keeps working. Say this one is yours and every key of it is listened to — and what you set on it does not touch the keyboard.",
+      "listening": "Listening to",
+      "listenAnother": "Listen to another device",
+      "test": "Try the keys",
+      "testHint": "The next key you press is only shown here and does nothing else: you see what your remote really sends and can give that key another job. Then the remote works the screen again.",
+      "tryAnother": "Try another key",
+      "pressAKey": "Press a key on the remote…",
+      "keyLabel": "Key",
+      "doesLabel": "Does",
+      "doesNothing": "nothing, for now",
+      "custom": "set by you",
+      "assign": "Use this key for…",
+      "assignTitle": "What should this key do?",
+      "assignNothing": "Nothing",
+      "assigned": "Key set",
+      "assignFailed": "That key could not be set",
+      "unassign": "Back to the standard key",
+      "actions": {
+        "playPause": "Play / pause",
+        "play": "Play",
+        "pause": "Pause",
+        "stop": "Stop",
+        "next": "Next track",
+        "prev": "Previous track",
+        "forward": "Forward 30 seconds",
+        "rewind": "Back 30 seconds",
+        "volumeUp": "Volume up",
+        "volumeDown": "Volume down",
+        "mute": "Mute",
+        "up": "Up",
+        "down": "Down",
+        "left": "Left",
+        "right": "Right",
+        "ok": "OK",
+        "back": "Back",
+        "home": "Library home",
+        "menu": "Context menu",
+        "pageUp": "Page up",
+        "pageDown": "Page down",
+        "nowPlaying": "Open / close the player",
+        "fullScreen": "Full screen",
+        "nextVu": "Next VU meter",
+        "nextAnimation": "Next animation",
+        "queue": "Open / close the queue",
+        "search": "Search",
+        "favorite": "Add to favourites",
+        "openFavorites": "Open favourites",
+        "resetTouch": "Restart the touchscreen",
+        "shuffle": "Shuffle",
+        "standby": "Screen off",
+        "powerMenu": "Restart or shut down…",
+        "eject": "Eject the CD"
+      },
+      "btTitle": "Bluetooth remotes",
+      "btHelp": "Put the remote in pairing mode first — usually holding a key until its light blinks — then search.",
+      "pair": {
+        "title": "Add a remote",
+        "pairedOther": "Remote connected!",
+        "which": "Which remote do you have?",
+        "other": "Another remote",
+        "how": {
+          "firetv": "Hold the Home key (⌂) until the light at the top blinks.",
+          "xiaomi": "Hold the ⋮⋮⋮ key and the ○ key together for 7–8 seconds, until the light blinks.",
+          "g20s": "Hold OK and Back together for 5–7 seconds, until the light blinks."
+        },
+        "wait": "Then leave it near the device: it is found and connected by itself.",
+        "looking": "Looking for your {name}…",
+        "paired": "{name} connected!",
+        "notYet": "Not found yet. Check that its light is blinking, then try again.",
+        "retry": "Try again",
+        "change": "Choose another remote"
+      },
+      "btUnavailable": "Bluetooth is not available on this device yet. Install the latest update and look again.",
+      "btNeedsUpdate": "This device's system is not new enough to pair a Bluetooth remote. Install the latest update and look again.",
+      "btNoAdapter": "No Bluetooth was found on this device. A USB Bluetooth adapter is all it takes.",
+      "btYours": "Your remotes",
+      "btNone": "No Bluetooth remote yet. Search below to add the first one.",
+      "btConnected": "Connected",
+      "btNotConnected": "Not connected — press a key on it",
+      "btSearch": "Search for a remote",
+      "btSearching": "Searching…",
+      "btSearchingHint": "Keep the remote in pairing mode while this runs.",
+      "btFound": "Found",
+      "btFoundNone": "Nothing found. Put the remote in pairing mode and search again.",
+      "btPairing": "Pairing…",
+      "btNoKeys": "Connected, but its keys are not reaching the appliance. Forget it and pair it again — that usually sorts it out.",
+      "btForget": "Forget",
+      "btForgetConfirm": "Forget this remote? It stops working until you pair it again.",
+      "intro": {
+        "title": "Your {name} remote is ready",
+        "body": "This is what each key does on Osmium.",
+        "later": "You can see it again any time from Settings → Remote control.",
+        "gotIt": "Got it",
+        "show": "Key map",
+        "showSub": "What each key of your remote does"
+      }
+    },
     "btSpeakers": {
       "help": "Play to a Bluetooth speaker or a pair of headphones. Each one you add becomes a player in its own right, with its own name and its own queue, next to this device's own player — so you can send it a different album, or group the two together.",
       "unavailable": "Bluetooth is not available on this device yet. Install the latest update and look again.",
@@ -819,7 +953,95 @@
       "failed": "Could not change the display mode."
     },
     "thirdPartyNotices": {
-      "intro": "Osmium Sound includes open source components, each under its own license. The full record is also kept in THIRD-PARTY-NOTICES.md in the project repository."
+      "intro": "Osmium Sound includes open source components, each under its own license. The full record is also kept in THIRD-PARTY-NOTICES.md in the project repository.",
+      "projectNote": "The project's own code is released under the GNU AGPL-3.0-only; commercial licenses are available from info@osmiumsound.it. Source: github.com/adri6412/osmium-sound",
+      "lyrionNote": "Independent project, not affiliated with Osmium Sound. Installed from the official LMS-Community server; source: github.com/LMS-Community/slimserver",
+      "debianCount": "Debian packages in this image: {n}. The full list with every license is in the web admin, Settings → Licenses & credits.",
+      "debianMissing": "The package list of this image is not available."
+    },
+    "cdRip": {
+      "help": "How an audio CD is copied into the library. Every row applies at once.",
+      "saved": "Saved.",
+      "saveFailed": "Could not save.",
+      "enableLabel": "CD Ripping",
+      "enableText": "Detect discs and offer to rip them",
+      "targetLabel": "Default target folder",
+      "targetHelp": "A folder inside a writable music source (internal or USB disk, writable network share). Albums land there as Artist/Album.",
+      "targetUnset": "Not set: the only writable source, or asked at rip time",
+      "targetBad": "Not available right now (disk unplugged or share not mounted)",
+      "targetPick": "Browse",
+      "targetUse": "Use this folder",
+      "targetClear": "Clear",
+      "prefixLabel": "Directory prefix",
+      "prefixHelp": "A folder inside the default target folder that every ripped album goes into, chosen from the folder browser; none to rip straight into the target.",
+      "prefixNone": "None",
+      "prefixPick": "Browse",
+      "prefixUse": "Use this folder as prefix",
+      "prefixNeedsTarget": "Set the default target folder first.",
+      "prefixOutside": "The prefix must be a folder inside the default target folder.",
+      "prefixPlaceholder": "e.g. CD rips",
+      "autoStartLabel": "Automatic start",
+      "autoStartHelp": "Start by itself when a disc is inserted, into the default folder.",
+      "autoStart": {
+        "off": "Off",
+        "if_tags": "If tags available",
+        "always": "Always"
+      },
+      "formatLabel": "Output Format",
+      "compressionLabel": "FLAC compression",
+      "default": "default",
+      "best": "best",
+      "wavHelp": "WAV files carry no tags and no ReplayGain; cover and log are still saved next to them.",
+      "retriesLabel": "Inaccurate retries",
+      "retriesHelp": "A track is read again until two reads agree.",
+      "retries": {
+        "0": "Never",
+        "1": "Once",
+        "2": "Twice",
+        "5": "5 times"
+      },
+      "preEmphasisLabel": "Pre-emphasis",
+      "preEmphasisHelp": "Early CDs with pre-emphasis: a tag lets the player correct it, the filter corrects the audio itself.",
+      "preEmphasis": {
+        "ignore": "Ignore completely",
+        "tag": "Tag only",
+        "filter": "Remove with filter"
+      },
+      "flags": {
+        "clean_names": {
+          "label": "File naming",
+          "text": "Clean up all special & non ASCII characters"
+        },
+        "replaygain": {
+          "label": "ReplayGain",
+          "text": "Enable calculation and tagging"
+        },
+        "log_file": {
+          "label": "Log file",
+          "text": "Save ripping log file to the album folder"
+        },
+        "eject": {
+          "label": "Disk eject",
+          "text": "Eject after successful completion"
+        }
+      },
+      "noDrive": "No optical drive found",
+      "speedLabel": "Force speed",
+      "speedMax": "Max",
+      "speedHelp": "Slower reads a worn disc more reliably and keeps the drive quieter.",
+      "offsetLabel": "Drive offset",
+      "offsetHelp": "Read offset in samples, as AccurateRip lists it for this drive. Calibrate looks it up online and sets it.",
+      "offsetInvalid": "The offset must be a whole number.",
+      "calibrate": "Calibrate",
+      "paranoiaLabel": "CDParanoia",
+      "paranoiaText": "Enable (error correction while reading)",
+      "ejectNow": "Eject now",
+      "cancelRip": "Cancel rip",
+      "ejected": "Disc ejected.",
+      "ejectFailed": "Could not eject.",
+      "cancelled": "Rip cancelled.",
+      "cancelFailed": "Could not cancel.",
+      "ejectHelp": "For a drive without its own button: ejects the disc whenever a rip is not running."
     },
     "playerEnabled": {
       "label": "Player",
@@ -891,7 +1113,35 @@
       "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Changes take effect right away."
     },
     "audio": {
-      "help": "Choose the playback device (DAC). The selection is saved and kept across reboots. DSD playback is bit-perfect (DoP).",
+      "help": "Choose the playback device (DAC). The selection is saved and kept across reboots. DSD playback is bit-perfect: native when the DAC accepts it that way, DoP otherwise.",
+      "dsdNative": "native DSD",
+      "saved": "Saved, player restarted.",
+      "advancedTitle": "Advanced",
+      "advancedHint": "Each row applies right away and restarts the player for a moment. Automatic is right for nearly every DAC.",
+      "auto": "Automatic",
+      "off": "Off",
+      "dsdLabel": "DSD files",
+      "dsd": { "auto": "Automatic", "dop": "DoP", "native": "Native", "off": "Convert to PCM" },
+      "dsdDetectedNative": "This DAC declares native DSD. DoP wraps the same bits in PCM frames, usually up to DSD128. Convert to PCM is for outputs with no DSD at all, such as HDMI.",
+      "dsdDetectedDop": "This DAC does not declare native DSD, so Automatic uses DoP. Convert to PCM is for outputs with no DSD at all, such as HDMI.",
+      "dsdDelayLabel": "Pause when switching between PCM and DSD",
+      "maxRateLabel": "Highest sample rate",
+      "maxRateHelp": "Anything above it is resampled by Lyrion before it reaches the player. Automatic lets the DAC say.",
+      "volumeHardware": "Volume from the DAC mixer",
+      "volumeHelp": "The volume in Lyrion moves the DAC's own control and the bits stay untouched. Off: software volume, bit-perfect at 100%.",
+      "volumeNoMixer": "This output has no hardware volume control.",
+      "alsaBufferLarge": "Large ALSA buffer",
+      "alsaBufferHelp": "For DACs that drop out or crackle.",
+      "streamBufferLarge": "Large stream buffer",
+      "streamBufferHelp": "More music kept in memory ahead of playback, for a slow network or disk.",
+      "realtimeLabel": "Real-time priority",
+      "realtimeHelp": "The output thread runs ahead of everything else on the device.",
+      "extraLabel": "Extra arguments",
+      "extraHint": "Anything else squeezelite accepts, on one line, without quotes. The options handled above are refused here.",
+      "extraPlaceholder": "e.g. -R -u vE",
+      "extraApply": "Apply",
+      "argsLabel": "Command line in use",
+      "sqResetButton": "Back to defaults",
       "refreshList": "Refresh list",
       "setOutput": "Set output",
       "unavailable": "Audio device list not available.",
@@ -1305,6 +1555,155 @@
     "lanWifi": "Connected to {ssid}, but the internet is not reachable",
     "lanWired": "Connected by cable, but the internet is not reachable",
     "offline": "No network connection"
+  },
+  "tutorialRemote": {
+    "title": "TRY THE REMOTE",
+    "done": "Done!",
+    "wrong": "You pressed “{got}”. Look for {want}.",
+    "scene": {
+      "home": "Home",
+      "albums": "Albums"
+    },
+    "steps": {
+      "welcome": {
+        "title": "Let’s try the remote",
+        "body": "I will ask for one key at a time: press the right one and we move on. Press {okKey} to start."
+      },
+      "arrows": {
+        "title": "The spotlight",
+        "body": "The gold outline shows what is selected. Move it with the arrows: try up, down, left and right."
+      },
+      "ok": {
+        "title": "Opening",
+        "body": "Press {okKey} to open what is selected, as if you touched it."
+      },
+      "menu": {
+        "title": "The menu",
+        "body": "Press {menuKey}: it opens the actions of the selected item, like the queue and favourites."
+      },
+      "back": {
+        "title": "Going back",
+        "body": "Press {backKey} to go back to the previous screen."
+      },
+      "albums": {
+        "title": "In the album grid",
+        "body": "The spotlight is on an album: press → to move to its play button. OK there plays the album straight away."
+      },
+      "az": {
+        "title": "The A–Z index",
+        "body": "Press → again to reach the index, then ↓ or ↑ to pick a letter: the list jumps there."
+      },
+      "coverflow": {
+        "title": "Cover Flow",
+        "body": "Here ← and → flip through the albums. Try both."
+      },
+      "coverflowPlay": {
+        "title": "Play in Cover Flow",
+        "body": "Press ↓ to move to the play button of the album in front. OK on the cover opens the album instead."
+      },
+      "home": {
+        "title": "Home",
+        "body": "Press {homeKey}: from any screen it takes you back to the library."
+      },
+      "volume": {
+        "title": "The volume",
+        "body": "Press volume + or volume −. It works from every screen."
+      },
+      "play": {
+        "title": "Play and pause",
+        "body": "Press {playKey} to pause the music or start it again."
+      },
+      "player": {
+        "title": "The player",
+        "body": "Press {playerKey} to open and close the full-screen player."
+      },
+      "done": {
+        "title": "Well done, you know it all",
+        "body": "The key map and this practice are in Settings → Remote control. Press {okKey} to finish."
+      }
+    },
+    "keys": {
+      "generic": {
+        "ok": "OK",
+        "back": "Back",
+        "home": "Home",
+        "menu": "the menu key",
+        "play": "the play/pause key",
+        "player": "the player key"
+      }
+    },
+    "keyNames": {
+      "firetv": {
+        "KEY_KPENTER": "the key in the middle of the ring",
+        "KEY_BACK": "the ↩ key",
+        "KEY_HOMEPAGE": "the ⌂ key",
+        "KEY_MENU": "the ≡ key",
+        "KEY_PLAYPAUSE": "the play/pause key",
+        "KEY_PROGRAM": "the TV key",
+        "KEY_REWIND": "the rewind key",
+        "KEY_FASTFORWARD": "the fast-forward key",
+        "KEY_MUTE": "the mute key",
+        "KEY_VOLUMEUP": "the + key",
+        "KEY_VOLUMEDOWN": "the − key",
+        "KEY_SEARCH": "the blue key at the top",
+        "APP_PRIME_VIDEO": "the Prime Video key",
+        "APP_NETFLIX": "the Netflix key",
+        "APP_DISNEY_PLUS": "the Disney+ key",
+        "APP_AMAZON_MUSIC": "the Amazon Music key",
+        "KEY_POWER": "the power key",
+        "KEY_UP": "the up arrow",
+        "KEY_DOWN": "the down arrow",
+        "KEY_LEFT": "the left arrow",
+        "KEY_RIGHT": "the right arrow"
+      },
+      "g20s": {
+        "KEY_SELECT": "OK",
+        "KEY_BACK": "the ↩ key",
+        "KEY_HOMEPAGE": "the ⌂ key",
+        "KEY_COMPOSE": "the light-bulb key",
+        "KEY_PLAYPAUSE": "the play/pause key",
+        "KEY_0": "the 0 key",
+        "KEY_1": "the 1 key",
+        "KEY_2": "the 2 key",
+        "KEY_3": "the 3 key",
+        "KEY_4": "the 4 key",
+        "KEY_5": "the 5 key",
+        "KEY_6": "the 6 key",
+        "KEY_7": "the 7 key",
+        "KEY_8": "the 8 key",
+        "KEY_9": "the 9 key",
+        "KEY_PREVIOUSSONG": "the previous-track key",
+        "KEY_NEXTSONG": "the next-track key",
+        "KEY_VOLUMEUP": "the volume + key",
+        "KEY_VOLUMEDOWN": "the volume − key",
+        "KEY_MUTE": "the mute key",
+        "KEY_PAGEUP": "the Pg+ key",
+        "KEY_PAGEDOWN": "the Pg- key",
+        "KEY_VOICECOMMAND": "the microphone key",
+        "KEY_BACKSPACE": "the DEL key",
+        "KEY_POWER": "the power key",
+        "KEY_UP": "the up arrow",
+        "KEY_DOWN": "the down arrow",
+        "KEY_LEFT": "the left arrow",
+        "KEY_RIGHT": "the right arrow"
+      },
+      "xiaomi": {
+        "KEY_SELECT": "the key in the middle of the ring",
+        "KEY_BACK": "the ← key",
+        "KEY_HOMEPAGE": "the ○ key",
+        "KEY_APPSELECT": "the ⋮⋮⋮ key",
+        "KEY_VIDEO": "the Netflix key",
+        "KEY_GREEN": "the LIVE key",
+        "KEY_VOLUMEUP": "the + key",
+        "KEY_VOLUMEDOWN": "the − key",
+        "KEY_VOICECOMMAND": "the microphone key",
+        "KEY_POWER": "the power key",
+        "KEY_UP": "the up arrow",
+        "KEY_DOWN": "the down arrow",
+        "KEY_LEFT": "the left arrow",
+        "KEY_RIGHT": "the right arrow"
+      }
+    }
   },
   "tutorial": {
     "skip": "Skip",

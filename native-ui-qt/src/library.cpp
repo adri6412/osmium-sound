@@ -94,6 +94,7 @@ void LibraryModel::clear() {
     m_state = 0;
     emit stateChanged();
     emit countChanged();
+    bumpRev();
 }
 
 // Traduce un'azione del protocollo "menu" (cmd + params) nei parametri
@@ -181,7 +182,10 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
     // random, search results); the alphabetical views sort here
     m_serverOrder = view == NewMusic || view == Search || (view == Albums && s2.contains("sort:"));
     switch (view) {
-    case Artists: params = {"artists", "0", "9999", "tags:s"}; break;
+    // artists only: without `role_id` Lyrion follows its own preferences,
+    // whose defaults put every role in the list (composers, conductors,
+    // bands); those keep their own view and their credits on the album page
+    case Artists: params = {"artists", "0", "9999", "tags:s", "role_id:ARTIST,ALBUMARTIST,TRACKARTIST"}; break;
     // p2 = extra filter for the albums query: genre_id:N, year:YYYY, role_id:COMPOSER, sort:new…
     case Albums: params = {"albums", "0", "9999", "tags:alSj"}; if (!s1.isEmpty()) params << "artist_id:" + s1; if (!s2.isEmpty()) params << s2; break;
     case NewMusic: params = {"albums", "0", "100", "tags:alSj", "sort:new"}; break;
@@ -206,7 +210,7 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
         break;
     default:
         beginResetModel(); m_items.clear(); m_order.clear(); endResetModel();
-        m_state = 2; emit stateChanged(); emit countChanged(); emit loaded();
+        m_state = 2; emit stateChanged(); emit countChanged(); bumpRev(); emit loaded();
         return;
     }
     Api::instance()->lmsRequest(m_playerId, params, [this, seq, view, s1](bool ok, const QVariant &data, int) {
@@ -353,7 +357,12 @@ void LibraryModel::applyOrderFilter() {
     beginResetModel();
     m_order = order;
     endResetModel();
+    // 🚨 count FIRST, rev after: whoever reads a row by its number looks at
+    // count to know the number is still there. The other way round it reads
+    // row 5 of a list that has just become two rows long (an empty row, and a
+    // QML warning for every slot of the Cover Flow).
     emit countChanged();
+    bumpRev();
 }
 
 void LibraryModel::setFilter(const QString &f) {

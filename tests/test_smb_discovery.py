@@ -297,5 +297,56 @@ class MountOptionTests(unittest.TestCase):
         self.assertIn("LOGON_FAILURE", detail)
 
 
+@unittest.skipUnless(shutil.which("systemd-creds"), "systemd-creds not installed")
+class SealedLoginMountTests(MountOptionTests):
+    """The login is stored sealed and opened only for the mount itself."""
+
+    def setUp(self):
+        super().setUp()
+        self.saved_key, self.saved_state = ss.hb.LOGIN_KEY_FILE, ss.STATE_FILE
+        ss.hb.LOGIN_KEY_FILE = os.path.join(self.tmp, "credential.secret")
+        ss.STATE_FILE = os.path.join(self.tmp, "hifi-sources.json")
+
+    def tearDown(self):
+        ss.hb.LOGIN_KEY_FILE, ss.STATE_FILE = self.saved_key, self.saved_state
+        super().tearDown()
+
+    def _cred_of(self, call):
+        opts = self._opts(call)
+        path = opts.split("credentials=", 1)[1].split(",", 1)[0]
+        with open(path) as f:
+            return path, f.read()
+
+    def test_a_sealed_login_reaches_mount(self):
+        seen = []
+
+        def answer(_n):
+            seen.append(self._cred_of(self.calls[-1]))
+            return _completed()
+        self._answers(answer)
+        ok, _msg, _detail = ss.mount_smb(self._src(login=ss.hb.seal_login("g22", "hunter2")))
+        self.assertTrue(ok)
+        path, text = seen[0]
+        self.assertEqual(text, "username=g22\npassword=hunter2\n")
+        self.assertFalse(os.path.exists(path))
+
+    def test_a_login_that_no_longer_opens_is_said_so(self):
+        self._answers(lambda n: _completed())
+        ok, msg, _detail = ss.mount_smb(self._src(login="bm90IGEgY3JlZGVudGlhbA=="))
+        self.assertFalse(ok)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(msg, ss._ht('mount.loginUnreadable', ss._hlang()))
+
+    def test_the_state_file_never_holds_the_password(self):
+        ss.save_state({"sources": [dict(self._src(), type="smb",
+                                        username="g22", password="hunter2")]})
+        with open(ss.STATE_FILE) as f:
+            raw = f.read()
+        self.assertNotIn("hunter2", raw)
+        self.assertNotIn("g22", raw)
+        src = ss.load_state()["sources"][0]
+        self.assertEqual(ss._smb_login(src), ("g22", "hunter2"))
+
+
 if __name__ == "__main__":
     unittest.main()

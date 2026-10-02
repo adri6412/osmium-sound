@@ -11,13 +11,11 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 import org.json.JSONObject;
 
 /**
- * The web admin's Settings → Services card (admin-webui Settings.vue): the
- * Tidal Connect receiver and SSH access. The SSH login itself is shown but not
- * editable here — see renderSshLogin().
+ * The web admin's Settings → Services card (admin-webui Settings.vue): SSH
+ * access. The SSH login itself is shown but not editable here — see
+ * renderSshLogin().
  */
 public class ServicesActivity extends ApplianceSettingsActivity {
-    private View tidalRow;
-    private SwitchMaterial tidalSwitch;
     private SwitchMaterial sshSwitch;
     private TextView sshLogin;
 
@@ -26,37 +24,14 @@ public class ServicesActivity extends ApplianceSettingsActivity {
         super.onCreate(savedInstanceState);
         setUpScreen(R.string.appliance_section_services, R.layout.appliance_services);
 
-        tidalRow = findViewById(R.id.services_tidal_row);
-        tidalSwitch = findViewById(R.id.switch_tidal);
         sshSwitch = findViewById(R.id.switch_ssh);
         sshLogin = findViewById(R.id.ssh_login);
 
-        tidalSwitch.setOnCheckedChangeListener((btn, checked) -> {
-            if (!isQuiet()) setTidal(checked);
-        });
         sshSwitch.setOnCheckedChangeListener((btn, checked) -> {
             if (!isQuiet()) setSsh(checked);
         });
 
-        loadTidal();
         loadSsh();
-    }
-
-    // ── Tidal Connect ───────────────────────────────────────────────────
-    // Only offered where the receiver is installed, like the web admin.
-    private void loadTidal() {
-        load("/api/system/tidal", "available", body -> {
-            boolean available = body.optBoolean("available", false);
-            quietly(() -> tidalSwitch.setChecked(body.optBoolean("enabled", false)));
-            tidalRow.setVisibility(available ? View.VISIBLE : View.GONE);
-        }, () -> tidalRow.setVisibility(View.GONE));
-    }
-
-    private void setTidal(boolean enable) {
-        post("/api/system/tidal", json("enable", enable), R.string.settings_system_admin_failed, body -> {
-            quietly(() -> tidalSwitch.setChecked(body.optBoolean("enabled", enable)));
-            showMessage(messageOf(body, getString(R.string.appliance_services_tidal_updated)));
-        }, this::loadTidal);
     }
 
     // ── SSH ─────────────────────────────────────────────────────────────

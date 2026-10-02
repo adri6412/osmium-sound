@@ -17,6 +17,11 @@ Item {
 
     // ─── stato locale della sezione aperta (S.*) ───────────────────────────
     property string audioSel: ""
+    // Audio → Advanced: the extra-arguments field, as typed; `dirty` tells a
+    // cleared field from one not touched yet (which shows the saved value)
+    property string sqExtraEdit: ""; property bool sqExtraDirty: false
+    // CD ripping: the offset field, as typed
+    property string cdOffsetEdit: ""; property bool cdOffsetDirty: false
     property string sshUser: ""; property string sshPass: ""
     property string nameEdit: ""; property string hostEdit: ""
     property string pendAct: ""; property string pendArg: ""
@@ -34,6 +39,57 @@ Item {
     property string btNameEdit: ""
     property bool btBusy: false
     property bool btScanning: false
+    // Telecomando: la prova dei tasti e il Bluetooth della sua sezione.
+    // 🚨 `Remote.learning` non si accende a mano ma segue questa coppia: uscire
+    // dalla sezione con la prova accesa lascerebbe un apparecchio in cui il
+    // telecomando non comanda piu' niente, e nessuno capirebbe perche'.
+    property bool remoteTest: false
+    // 🚨 The test hears ONE key, then the remote works the page again. It
+    // used to keep listening for as long as the switch was on: with a remote
+    // alone, "Use this key for…" could not be reached, the list of actions did
+    // not move (every arrow became the key under test) and even Back could not
+    // leave. `remoteHeard` is our own copy of that key, because the remote's
+    // last key changes with every arrow pressed afterwards.
+    property bool remoteListen: false
+    property var remoteHeard: null
+    property bool remoteBusy: false
+    property bool remoteScanning: false
+    // the list of Bluetooth remotes is read again when the wizard closes
+    Connections {
+        target: Ui.app ? Ui.app.pairWizard : null
+        function onClosed() { if (root.remoteSection) cfg.loadRemotes() }
+    }
+    readonly property bool remoteSection: active >= 0 && active < secs.length && (secs[active].id === "remote" || secs[active].id === "remoteKeys")
+    Binding { target: Remote; property: "learning"; value: root.remoteTest && root.remoteListen && root.remoteSection }
+    Connections {
+        target: Remote
+        function onLastKeyChanged() {
+            if (!root.remoteSection || !root.remoteTest || !root.remoteListen) return
+            var k = Remote.lastKey
+            if (!k || !k.code) return
+            root.remoteHeard = { code: k.code, key: k.key, device: k.device }
+            root.remoteListen = false
+            root.rebuild()
+            root.navTo("rm_assign")
+        }
+        function onLearnDeviceChanged() { if (root.remoteSection && root.remoteListen) root.rebuild() }
+        function onDevicesChanged() { if (root.remoteSection) root.rebuild() }
+    }
+    // Puts the remote's spotlight on the row with that action, once the
+    // rebuilt rows are laid out — only when the remote is in use (the finger
+    // hides the spotlight, and a spotlight turning up by itself is noise).
+    property string navWant: ""
+    function navTo(act) { if (!Nav.active) return; navWant = act; navTimer.restart() }
+    Timer {
+        id: navTimer
+        interval: 80
+        onTriggered: {
+            var list = Nav.candidates()
+            for (var i = 0; i < list.length; i++)
+                for (var p = list[i].it; p && p !== root; p = p.parent)
+                    if (p.row && p.row.act === root.navWant) { Nav.focus(list[i].it); return }
+        }
+    }
     // Procedura guidata "aggiungi una cartella di rete". Sostituisce le quattro
     // caselle vuote (server/share/utente/password), che sono inutilizzabili per
     // chi non sa gia' cos'e' una condivisione SMB: prima si cercano da soli i
@@ -57,6 +113,9 @@ Item {
     property bool fmtWatch: false
     property var timezones: []
     property var thirdParty: null
+    // api /credits: this project's license, the installed Lyrion and how many
+    // Debian packages the image carries (the full list is in the web admin)
+    property var credits: null
     // network check (api_server /network_check): the last result, and the
     // section it was opened from, where the back arrow returns
     property var nc: null
@@ -74,8 +133,10 @@ Item {
     readonly property var secs: [
         { id: "language", icon: "globe", key: "settings.sections.language" },
         { id: "sources", icon: "hard-drive", key: "settings.sections.sources" },
+        { id: "cdRip", icon: "disc", key: "settings.sections.cdRip" },
         { id: "audio", icon: "volume-2", key: "settings.sections.audio" },
         { id: "btSpeakers", icon: "bluetooth", key: "settings.sections.btSpeakers" },
+        { id: "remote", icon: "remote", key: "settings.sections.remote" },
         { id: "playback", icon: "sliders", key: "settings.sections.playback" },
         { id: "vuMeters", icon: "audio-lines", key: "settings.sections.vuMeters" },
         { id: "animations", icon: "disc-3", key: "settings.sections.animations" },
@@ -97,7 +158,8 @@ Item {
         { id: "systemControls", icon: "power", key: "settings.sections.systemControls" },
         { id: "thirdPartyNotices", icon: "scroll-text", key: "settings.sections.thirdPartyNotices" },
         // reached from System info and Updates, not listed on its own
-        { id: "netCheck", icon: "network", key: "settings.sections.netCheck", hidden: true }]
+        { id: "netCheck", icon: "network", key: "settings.sections.netCheck", hidden: true },
+        { id: "remoteKeys", icon: "remote", key: "settings.remote.keysPage", hidden: true }]
     readonly property var listedSecs: secs.filter(function(s) { return !s.hidden })
 
     Component.onCompleted: Ui.settings = root
@@ -134,7 +196,11 @@ Item {
         property int animStoreNew: 0
         property var storeAnims: []                                 // [{id, name:{en,it}, scene}]
         property string otaChannel: "prod"; property var otaChannels: ["prod", "dev"]
-        property string audioCur: ""; property var audio: []          // [{id,name}]
+        property string audioCur: ""; property var audio: []          // [{id,name,dsd}]
+        // the rest of squeezelite's command line (api /squeezelite_conf)
+        property var sq: ({ loaded: false, conf: {}, args: "", dsd_detected: "dop", mixers: [], choices: {} })
+        // Settings → CD ripping (sources_server /api/cd/settings, hifi_cdrip.py)
+        property var cdrip: ({ loaded: false, settings: {}, drive: {}, target_ok: false, targets: [], ripping: false, choices: {} })
         property string lmsMode: "local"; property string lmsHost: ""; property string playerName: ""; property string lyrionChannel: "release"
         property string lmsSkin: "unset"; property string skinState: ""; property string skinMsg: ""
         property string lyrInstalled: ""; property var lyrChVer: ["", "", ""]; property string lyrStatus: ""; property int lyrPct: 0; property bool lyrRunning: false
@@ -183,6 +249,22 @@ Item {
                     btSpeakers = d.speakers || []; btFound = d.found || []
                 }
                 root.btBusy = false; root.btScanning = false; root.rebuild()
+            }, 130000)
+        }
+        // Bluetooth remotes (api_server /bt_remotes), read only while the
+        // remote section is open — same reason as the speakers above.
+        // `rmSupported` is false on a device whose system half is older than
+        // this feature: the pairing would start and be torn down again.
+        property bool rmAvailable: false; property bool rmSupported: false; property bool rmAdapter: false
+        property var rmRemotes: []
+        property var rmFound: []
+        function loadRemotes() {
+            Api.get(api("/bt_remotes"), function(ok, d) {
+                if (ok && d && typeof d === "object") {
+                    rmAvailable = !!d.available; rmSupported = !!d.supported; rmAdapter = !!d.adapter
+                    rmRemotes = d.remotes || []; rmFound = d.found || []
+                }
+                root.remoteBusy = false; root.remoteScanning = false; root.rebuild()
             }, 130000)
         }
         // the store's list, with previews: separate from load(), which runs on
@@ -301,7 +383,11 @@ Item {
             })
             get(api("/audio_devices"), function(d) {
                 audioCur = str(d, "current")
-                audio = (d.devices || []).map(function(x) { return { id: String(x.id || ""), name: String(x.name || "") } })
+                audio = (d.devices || []).map(function(x) { return { id: String(x.id || ""), name: String(x.name || ""), dsd: String(x.dsd || "") } })
+            })
+            get(api("/squeezelite_conf"), function(d) {
+                sq = { loaded: !!d.conf, conf: d.conf || {}, args: String(d.args || ""), dsd_detected: String(d.dsd_detected || "dop"),
+                       mixers: d.mixers || [], choices: d.choices || {} }
             })
             get(api("/lms_role"), function(d) { lmsMode = str(d, "mode", "local"); lmsHost = str(d, "host") })
             get(api("/player_name"), function(d) { playerName = str(d, "name") })
@@ -319,6 +405,10 @@ Item {
             get(src("/api/lms_skin"), function(d) { lmsSkin = str(d, "skin", "unset") })
             get(src("/api/lms_skin_status"), function(d) { skinState = str(d, "state"); skinMsg = str(d, "message") })
             get(src("/api/sources"), function(d) { sources = d.sources || [] })
+            get(src("/api/cd/settings"), function(d) {
+                cdrip = { loaded: !!d.settings, settings: d.settings || {}, drive: d.drive || {}, target_ok: !!d.target_ok,
+                          targets: d.targets || [], ripping: !!d.ripping, choices: d.choices || {} }
+            })
             loadLibrary()
             get(src("/api/meta/settings"), function(d) {
                 if (d.online === undefined) return
@@ -464,6 +554,38 @@ Item {
 
     function enter() { cfg.load(); goRoot() }
     function say(text, err) { msg = text; msgErr = !!err; rebuild() }
+    // Audio → Advanced: one call per row, the server answers with the whole
+    // model and a message; post() reloads cfg afterwards, which rebuilds the
+    // rows from what was actually saved.
+    function sqDone(ok, d) {
+        if (!ok || (d && d.success === false)) { say((d && d.message) || Tr.t("settings.audio.setFailed"), true); return }
+        sqExtraDirty = false
+        say((d && d.message) || Tr.t("settings.audio.saved"))
+    }
+    function sqSet(body) { post(cfg.api("/squeezelite_conf"), body, sqDone) }
+    function sqReset() { post(cfg.api("/squeezelite_conf/reset"), {}, sqDone) }
+    // CD ripping: one call per row, the server answers with the whole
+    // settings and a message; post() reloads cfg afterwards
+    function cdDone(ok, d) {
+        if (!ok || (d && d.success === false)) { say((d && d.message) || Tr.t("settings.cdRip.saveFailed"), true); return }
+        cdOffsetDirty = false
+        say((d && d.message) || Tr.t("settings.cdRip.saved"))
+    }
+    function cdSet(body) { post(cfg.src("/api/cd/settings"), body, cdDone) }
+    // the prefix is a folder picked INSIDE the default target folder
+    function cdPrefixPick(path) {
+        var tgt = String((cfg.cdrip.settings || {}).target || "").replace(/\/+$/, "")
+        if (!tgt) { say(Tr.t("settings.cdRip.prefixNeedsTarget"), true); return }
+        if (path === tgt) { cdSet({ dir_prefix: "" }); return }
+        if (path.indexOf(tgt + "/") !== 0) { say(Tr.t("settings.cdRip.prefixOutside"), true); return }
+        cdSet({ dir_prefix: path.slice(tgt.length + 1) })
+    }
+    function cdSimple(path, okKey, failKey) {
+        post(cfg.src(path), {}, function(ok, d) {
+            var good = ok && !(d && d.success === false)
+            say(good ? Tr.t(okKey) : ((d && d.message) || Tr.t(failKey)), !good)
+        })
+    }
     // Settings → Network → "Connect to Wi-Fi". The answer decides the message:
     // before, the page said "now using Wi-Fi" the moment the request left,
     // whatever NetworkManager made of it. A failed attempt reopens the window
@@ -496,15 +618,18 @@ Item {
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
         btBand = -1; btNameEdit = ""; btBusy = false; btScanning = false
+        remoteTest = false; remoteBusy = false; remoteScanning = false
         wizReset()
         if (id === "timezone" && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
         if (id === "webRemote") cfg.mintToken()
         if (id === "multiroom" && cfg.lmsMode === "follow") cfg.loadDiscover()
         if (id === "multiroom") cfg.loadLibrary()
         if (id === "btSpeakers") { btBusy = true; cfg.loadBt() }
+        if (id === "remote") { remoteBusy = true; cfg.loadRemotes() }
         if (id === "vuMeters") cfg.loadStore(true)
         if (id === "animations") cfg.loadAnimStore(true)
         if (id === "thirdPartyNotices" && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
+        if (id === "thirdPartyNotices" && !credits) Api.get(cfg.api("/credits"), function(ok, d) { if (ok && d && d.project) { credits = d; rebuild() } }, 8000)
         rebuild(); page.contentY = 0; appear()
         if (mark) { pendingMark = mark; markTimer.restart() }
     }
@@ -750,6 +875,7 @@ Item {
             switch (secs[active].id) {
             case "language": secLanguage(); break
             case "sources": secSources(); break
+            case "cdRip": secCdRip(); break
             case "audio": secAudio(); break
             case "playback": secPlayback(); break
             case "vuMeters": secVuMeters(); break
@@ -758,6 +884,8 @@ Item {
             case "library": secLibrary(); break
             case "multiroom": secMultiroom(); break
             case "btSpeakers": secBtSpeakers(); break
+            case "remote": secRemote(); break
+            case "remoteKeys": secRemoteKeys(); break
             case "alarm": secAlarm(); break
             case "network": secNetwork(); break
             case "webRemote": secWebremote(); break
@@ -791,18 +919,27 @@ Item {
         var r = option("English", "", "en", cur === "en", "lang"); r.hh = 52; r.icon = "check"
         r = option("Italiano", "", "it", cur === "it", "lang"); r.hh = 52; r.icon = "check"
     }
-    function folderPicker(pickLabel) {
-        box(function() {
-            var hd = info(cfg.pkPath || "/", ""); hd.style = "seg"; hd.px = 12; hd.hh = 28
-            mini(hd, Tr.t("sources.subpathUp"), "pick_up", "accent", !cfg.pkHasParent)
-            if (pickBusy) helpText(Tr.t("common.loading"), 12)
-            else if (!cfg.pkDirs.length) helpText(Tr.t("sources.subpathNoSubfolders"), 12)
-            else for (var i = 0; i < cfg.pkDirs.length; i++) dir(cfg.pkDirs[i], "pick_into")
-            var inp = { type: "input", label: Tr.t("sources.newFolderPlaceholder"), value: pickNew, act: "pick_new", span: 3 }
-            var cr = acell(Tr.t("sources.newFolderCreate"), "pick_create", "accent", { px: 12, hh: 46, dim: !pickNew || !cfg.pkPath })
-            var g = push({ type: "grid", cols: 4, cells: [inp, cr] })
-            var use = action(pickLabel, "pick_use", "accent"); use.icon = "plus"; use.dim = !cfg.pkPath
-        })
+    // Every folder is picked in FolderChooser.qml (the File page's look): the
+    // row here only opens it, with what to do with the folder decided by
+    // pickOwner (0 add a local folder, 2 playlist folder, 3 share a folder,
+    // 4 CD rip target, 5 CD rip prefix) in pickUse().
+    property string pickLabelCur: ""
+    property string pickStartCur: ""
+    function folderPicker(pickLabel, start) {
+        pickLabelCur = pickLabel || Tr.t("sources.useThisFolder"); pickStartCur = start || ""
+        var b = action(Tr.t("sources.browseFolders"), "pick_chooser", "accent"); b.icon = "folder"
+    }
+    function openChooser(start, label) {
+        if (!Ui.folderChooser) return
+        Ui.folderChooser.openAt(start || "", label || pickLabelCur || Tr.t("sources.useThisFolder"), function(p) { pickUse(p) })
+    }
+    function pickUse(path) {
+        if (!path) return
+        if (pickOwner === 4) { cdSet({ target: path }); pickOwner = 0; return }
+        if (pickOwner === 5) { cdPrefixPick(path); pickOwner = 0; return }
+        if (pickOwner === 2) { post(cfg.src("/api/playlistdir"), { path: path }); say(Tr.t("sources.playlistdir.saved")) }
+        else { post(cfg.src("/api/sources/local"), { path: path, samba: pickOwner === 3 }); say(Tr.t("sources.added")) }
+        pickOwner = 0
     }
     function subpathBrowser() {
         box(function() {
@@ -1021,9 +1158,8 @@ Item {
             begin(b2.children)
             help("sources.playlistdir.hint")
             var r = srcRow(cfg.pldir || Tr.t("sources.playlistdir.unset"), "", "", "", "", true); r.hh = 44; r.px = 12
-            mini(r, pickOwner === 2 ? Tr.t("common.close") : Tr.t("sources.playlistdir.pick"), "pick_open", "accent", false, "")
+            mini(r, Tr.t("sources.playlistdir.pick"), "pick_open", "accent", false, "")
             mini(r, Tr.t("sources.playlistdir.default"), "pldir_default", "accent", !cfg.pldirDef || cfg.pldirDefault, "")
-            if (pickOwner === 2) folderPicker(Tr.t("sources.playlistdir.use"))
             end()
         }
         var sum3 = cfg.smbShares.length ? Tr.tf("sources.shareCount", "count", String(cfg.smbShares.length)) : Tr.t("sources.shareNone")
@@ -1036,10 +1172,101 @@ Item {
         var sel = audioSel || cfg.audioCur
         for (var i = 0; i < cfg.audio.length; i++) {
             var a = cfg.audio[i]
-            var r = option(a.id === "default" ? Tr.t("settings.audio.defaultDevice") : a.name, a.id, a.id, sel === a.id, "audio_pick"); r.hh = 60; r.mono = true
+            // The sub-line is the ALSA id; a DAC that takes native DSD says so
+            // there too (decided by the kernel's format list, not a setting)
+            var subl = a.id + (a.dsd === "native" ? "   ·   " + Tr.t("settings.audio.dsdNative") : "")
+            var r = option(a.id === "default" ? Tr.t("settings.audio.defaultDevice") : a.name, subl, a.id, sel === a.id, "audio_pick"); r.hh = 60; r.mono = true
         }
         grid([acell(Tr.t("settings.audio.refreshList"), "audio_refresh", "accent", { icon: "rotate-cw", hh: 48 }),
               acell(Tr.t("settings.audio.setOutput"), "audio_apply", "gold", { icon: "volume-2", bold: true, hh: 48 })])
+        if (cfg.sq.loaded) secSqueezelite()
+    }
+    // Settings → CD ripping: Daphile's page, field by field (sources_server
+    // /api/cd/settings, hifi_cdrip.py). The destination is picked with the
+    // same folder picker as Music sources (pickOwner 4). Every row applies at once.
+    function secCdRip() {
+        var s = cfg.cdrip, c = s.settings || {}, ch = s.choices || {}, i
+        if (!s.loaded) { note(Tr.t("common.loading"), "dark"); return }
+        help("settings.cdRip.help")
+        toggle(Tr.t("settings.cdRip.enableLabel"), Tr.t("settings.cdRip.enableText"), !!c.enabled, "cd_enabled")
+        label("settings.cdRip.targetLabel", 14); help("settings.cdRip.targetHelp", 12)
+        var tr = srcRow(c.target || Tr.t("settings.cdRip.targetUnset"), "", c.target && !s.target_ok ? Tr.t("settings.cdRip.targetBad") : "", "", "", !c.target || s.target_ok); tr.hh = 44; tr.px = 12
+        mini(tr, Tr.t("settings.cdRip.targetPick"), "cd_pick_open", "accent", false, "")
+        mini(tr, Tr.t("settings.cdRip.targetClear"), "cd_target_clear", "accent", !c.target, "")
+        label("settings.cdRip.prefixLabel", 14); help(c.target ? "settings.cdRip.prefixHelp" : "settings.cdRip.prefixNeedsTarget", 12)
+        var pr = srcRow(c.dir_prefix || Tr.t("settings.cdRip.prefixNone"), "", "", "", "", true); pr.hh = 44; pr.px = 12
+        mini(pr, Tr.t("settings.cdRip.prefixPick"), "cd_prefix_open", "accent", !c.target, "")
+        mini(pr, Tr.t("settings.cdRip.targetClear"), "cd_prefix_clear", "accent", !c.dir_prefix, "")
+        label("settings.cdRip.autoStartLabel", 14); help("settings.cdRip.autoStartHelp", 12)
+        var am = ch.auto_start || ["off", "if_tags", "always"], ac = []
+        for (i = 0; i < am.length; i++) ac.push(cell(Tr.t("settings.cdRip.autoStart." + am[i]), am[i], c.auto_start === am[i], "cd_auto", { hh: 44 }))
+        grid(ac)
+        label("settings.cdRip.formatLabel", 14)
+        grid([cell("WAV", "wav", c.format === "wav", "cd_format", { hh: 44 }), cell("FLAC", "flac", c.format === "flac", "cd_format", { hh: 44 })])
+        if (c.format === "flac") {
+            label("settings.cdRip.compressionLabel", 14)
+            var lv = [0, 3, 5, 8], lc = []
+            for (i = 0; i < lv.length; i++) lc.push(cell(String(lv[i]) + (lv[i] === 5 ? " · " + Tr.t("settings.cdRip.default") : lv[i] === 8 ? " · " + Tr.t("settings.cdRip.best") : ""), String(lv[i]), c.flac_compression === lv[i], "cd_level", { hh: 44 }))
+            grid(lc)
+        } else help("settings.cdRip.wavHelp", 12)
+        label("settings.cdRip.retriesLabel", 14); help("settings.cdRip.retriesHelp", 12)
+        var rv = ch.retries || [0, 1, 2, 5], rc = []
+        for (i = 0; i < rv.length; i++) rc.push(cell(Tr.t("settings.cdRip.retries." + rv[i]), String(rv[i]), c.retries === rv[i], "cd_retries", { hh: 44 }))
+        grid(rc)
+        label("settings.cdRip.preEmphasisLabel", 14); help("settings.cdRip.preEmphasisHelp", 12)
+        var pm = ch.pre_emphasis || ["ignore", "tag", "filter"], pc = []
+        for (i = 0; i < pm.length; i++) pc.push(cell(Tr.t("settings.cdRip.preEmphasis." + pm[i]), pm[i], c.pre_emphasis === pm[i], "cd_pre", { hh: 44 }))
+        grid(pc)
+        var flags = ["clean_names", "replaygain", "log_file", "eject"]
+        for (i = 0; i < flags.length; i++) toggle(Tr.t("settings.cdRip.flags." + flags[i] + ".label"), Tr.t("settings.cdRip.flags." + flags[i] + ".text"), !!c[flags[i]], "cd_flag", flags[i])
+        sep()
+        labelText(String((s.drive && s.drive.label) || Tr.t("settings.cdRip.noDrive")), 14)
+        label("settings.cdRip.speedLabel", 14); help("settings.cdRip.speedHelp", 12)
+        var sv = ch.speed || [0, 4, 8, 16, 24, 32, 48], sc1 = [], sc2 = []
+        for (i = 0; i < sv.length; i++) (i < 4 ? sc1 : sc2).push(cell(sv[i] ? sv[i] + "x" : Tr.t("settings.cdRip.speedMax"), String(sv[i]), c.speed === sv[i], "cd_speed", { hh: 44 }))
+        grid(sc1); if (sc2.length) grid(sc2)
+        label("settings.cdRip.offsetLabel", 14); help("settings.cdRip.offsetHelp", 12)
+        input("+6", cdOffsetDirty ? cdOffsetEdit : String(c.offset === undefined ? 0 : c.offset), "cd_offset", false).hh = 50
+        grid([acell(Tr.t("common.save"), "cd_offset_apply", "gold", { icon: "check", hh: 44 }),
+              acell(Tr.t("settings.cdRip.calibrate"), "cd_calibrate", "accent", { icon: "compass", hh: 44, dim: !(s.drive && s.drive.present) })])
+        toggle(Tr.t("settings.cdRip.paranoiaLabel"), Tr.t("settings.cdRip.paranoiaText"), !!c.paranoia, "cd_paranoia")
+        sep()
+        help("settings.cdRip.ejectHelp", 12)
+        var ej = [acell(Tr.t("settings.cdRip.ejectNow"), "cd_eject", "accent", { icon: "disc", hh: 44, dim: !!s.ripping })]
+        if (s.ripping) ej.push(acell(Tr.t("settings.cdRip.cancelRip"), "cd_cancel", "dark", { icon: "x", hh: 44 }))
+        grid(ej)
+    }
+    // The rest of squeezelite's command line (api /squeezelite_conf, model in
+    // hifi_squeezelite.py; /etc/default/squeezelite is rendered from it): what
+    // used to need SSH and a hand edit. Every row applies at once.
+    function secSqueezelite() {
+        var s = cfg.sq, c = s.conf || {}, ch = s.choices || {}, i
+        sep()
+        label("settings.audio.advancedTitle"); help("settings.audio.advancedHint", 12)
+        label("settings.audio.dsdLabel", 14)
+        help(s.dsd_detected === "native" ? "settings.audio.dsdDetectedNative" : "settings.audio.dsdDetectedDop", 12)
+        var dm = ch.dsd || ["auto", "dop", "native", "off"], dc = []
+        for (i = 0; i < dm.length; i++) dc.push(cell(Tr.t("settings.audio.dsd." + dm[i]), dm[i], c.dsd === dm[i], "sq_dsd", { hh: 44 }))
+        grid(dc)
+        label("settings.audio.dsdDelayLabel", 14)
+        var dd = ch.dsd_delay_ms || [0, 100, 250, 500], ddc = []
+        for (i = 0; i < dd.length; i++) ddc.push(cell(dd[i] ? dd[i] + " ms" : Tr.t("settings.audio.off"), String(dd[i]), c.dsd_delay_ms === dd[i], "sq_delay", { hh: 44 }))
+        grid(ddc)
+        label("settings.audio.maxRateLabel", 14); help("settings.audio.maxRateHelp", 12)
+        var mr = ch.max_rate || [0, 96000, 192000, 384000], mrc = []
+        for (i = 0; i < mr.length; i++) mrc.push(cell(mr[i] ? (mr[i] / 1000) + " kHz" : Tr.t("settings.audio.auto"), String(mr[i]), c.max_rate === mr[i], "sq_rate", { hh: 44 }))
+        grid(mrc)
+        if (s.mixers && s.mixers.length) toggle(Tr.t("settings.audio.volumeHardware"), Tr.t("settings.audio.volumeHelp"), c.volume === "hardware", "sq_hwvol")
+        else note(Tr.t("settings.audio.volumeNoMixer"), "dark")
+        toggle(Tr.t("settings.audio.alsaBufferLarge"), Tr.t("settings.audio.alsaBufferHelp"), c.alsa_buffer === "large", "sq_abuf")
+        toggle(Tr.t("settings.audio.streamBufferLarge"), Tr.t("settings.audio.streamBufferHelp"), c.stream_buffer === "large", "sq_sbuf")
+        toggle(Tr.t("settings.audio.realtimeLabel"), Tr.t("settings.audio.realtimeHelp"), !!c.realtime, "sq_rt")
+        label("settings.audio.extraLabel", 14); help("settings.audio.extraHint", 12)
+        input(Tr.t("settings.audio.extraPlaceholder"), sqExtraDirty ? sqExtraEdit : (c.extra || ""), "sq_extra", false).hh = 50
+        grid([acell(Tr.t("settings.audio.extraApply"), "sq_extra_apply", "gold", { icon: "check", hh: 44 })])
+        label("settings.audio.argsLabel", 14)
+        code("squeezelite " + (s.args || ""))
+        action(Tr.t("settings.audio.sqResetButton"), "sq_reset", "dark")
     }
     // Playback prefs, alarms and the sync group are THIS device's: while
     // another player is being driven they are hidden behind a note (#99),
@@ -1363,6 +1590,125 @@ Item {
             r.icon = dev.audio ? "speaker" : "bluetooth"; r.hh = 60; r.style = "row"; r.dim = btBusy
         }
     }
+    // ── Telecomando ───────────────────────────────────────────────────────
+    // Un telecomando USB o Bluetooth comanda tutta l'interfaccia (remote.cpp
+    // legge i tasti, Nav.qml muove il riflettore). Qui si vede quello che c'e'
+    // attaccato, si prova cosa manda ogni tasto, e si accoppia un telecomando
+    // Bluetooth.
+    // Un telecomando Bluetooth collegato dovrebbe comparire anche fra i
+    // dispositivi di input: il nome che si vede li' e' quello del Bluetooth
+    // piu' il tipo ("G20S PRO" -> "G20S PRO Keyboard").
+    function remoteHasKeys(btName) {
+        if (!btName) return true
+        var devs = Remote.devices
+        for (var i = 0; i < devs.length; i++) {
+            var n = String(devs[i].name || "")
+            if (n.indexOf(btName) === 0 || btName.indexOf(n) === 0) return true
+        }
+        return false
+    }
+    // Remote control, kept short: the button that adds one (a wizard over
+    // everything, RemotePairWizard.qml), the remotes this box has, and three
+    // entries for the rest — the key map, the practice run, and the page that
+    // shows and reassigns what each key sends.
+    function secRemote() {
+        var canBt = cfg.rmAvailable && cfg.rmSupported
+        var add = action(Tr.t("settings.remote.pair.title"), "rm_pair_open", "gold")
+        add.icon = "plus"; add.hh = 52; add.bold = true; add.dim = !canBt
+        if (!cfg.rmAvailable) helpText(Tr.t("settings.remote.btUnavailable"), 12)
+        else if (!cfg.rmSupported) helpText(Tr.t("settings.remote.btNeedsUpdate"), 12)
+
+        label("settings.remote.btYours")
+        var devs = Remote.devices
+        var model = ""
+        var shown = 0
+        // the Bluetooth ones this box is paired with, connected or asleep
+        for (var j = 0; j < cfg.rmRemotes.length; j++) {
+            var rm = cfg.rmRemotes[j]
+            var rr = info(String(rm.name || rm.mac),
+                          rm.connected ? Tr.t("settings.remote.btConnected") : Tr.t("settings.remote.btNotConnected"))
+            rr.style = "row"; rr.icon = rm.connected ? "bluetooth-connected" : "bluetooth"; rr.hh = 60
+            mini(rr, Tr.t("settings.remote.btForget"), "rm_forget", "red", remoteBusy, rm.mac)
+            // 🚨 connected but silent: the kernel refused the HID descriptor
+            // the remote declares; saying so beats a remote that looks fine
+            if (rm.connected && !remoteHasKeys(String(rm.name || "")))
+                note(Tr.t("settings.remote.btNoKeys"), "dark", "alert-triangle", 12)
+            shown++
+        }
+        // everything else that is plugged in (a USB receiver), one row per
+        // remote even when it is made of several input devices
+        var groups = []
+        for (var i = 0; i < devs.length; i++) {
+            var d = devs[i]
+            if (d.model && !model) model = String(d.model)
+            if (d.bus === "bluetooth" && cfg.rmRemotes.some(function(r) {
+                    var n = String(r.name || ""); return n && (String(d.name).indexOf(n) === 0 || n.indexOf(String(d.name)) === 0) }))
+                continue
+            var g = String(d.group || d.name)
+            if (groups.indexOf(g) >= 0) continue
+            groups.push(g)
+            var where = d.bus === "usb" ? Tr.t("settings.remote.viaUsb")
+                      : d.bus === "bluetooth" ? Tr.t("settings.remote.viaBluetooth") : Tr.t("settings.remote.viaOther")
+            var dr = info(String(d.name || ""), d.chosen ? where + " · " + Tr.t("settings.remote.isMine") : where)
+            dr.style = "row"; dr.icon = d.bus === "bluetooth" ? "bluetooth-connected" : "usb"; dr.hh = 60
+            // only where it changes something: a device that presents itself
+            // as a keyboard gets just the playback keys until it is "mine"
+            if (d.kind !== "remote" || d.chosen)
+                mini(dr, Tr.t(d.chosen ? "settings.remote.notMine" : "settings.remote.mine"),
+                     "rm_mine", d.chosen ? "light" : "accent", false, String(d.name || ""))
+            shown++
+        }
+        if (!shown) helpText(Tr.t("settings.remote.noneYet"), 13)
+
+        sep()
+        if (model) {
+            var mp = option(Tr.t("settings.remote.intro.show"), Tr.t("settings.remote.intro.showSub"), model, false, "rm_map")
+            mp.hh = 72; mp.style = "border"; mp.icon = "chevron-right"
+        }
+        // (no "Try the remote" here: the practice run belongs to the first
+        // setup only — afterwards the key map and "Try the keys" cover it)
+        var kp = option(Tr.t("settings.remote.keysPage"), Tr.t("settings.remote.keysPageSub"), "", false, "rm_keys_open")
+        kp.hh = 72; kp.style = "border"; kp.icon = "chevron-right"
+    }
+    // What each key sends, and giving it another job
+    function secRemoteKeys() {
+        help("settings.remote.keysBody", 13)
+        var devs = Remote.devices
+        var t = toggle(Tr.t("settings.remote.test"), Tr.t("settings.remote.testHint"), remoteTest, "rm_test")
+        t.icon = "remote"
+        if (remoteTest && remoteListen) {
+            helpText(Tr.t("settings.remote.pressAKey"), 13)
+            var heard = String(Remote.learnDevice || "")
+            if (heard) {
+                // only this one is listened to, and what is assigned applies
+                // to it alone
+                var li = info(Tr.t("settings.remote.listening"), heard); li.style = "row"; li.icon = "remote"
+                mini(li, Tr.t("settings.remote.listenAnother"), "rm_listen", "light", false, "")
+            }
+        } else if (remoteTest && remoteHeard) {
+            var k = remoteHeard
+            var ki = info(Tr.t("settings.remote.keyLabel"), String(k.key) + "  ·  " + k.code)
+            ki.mono = true; ki.style = "row"
+            // what it does NOW: the assignment may have changed since it was heard
+            var a = Remote.actionFor(k.code, k.device)
+            var custom = Remote.isCustom(k.code, k.device)
+            var does = a ? Tr.t("settings.remote.actions." + a) : Tr.t("settings.remote.doesNothing")
+            if (custom) does += "  (" + Tr.t("settings.remote.custom") + ")"
+            info(Tr.t("settings.remote.doesLabel"), does).style = "row"
+            var asg = action(Tr.t("settings.remote.assign"), "rm_assign", "accent")
+            asg.hh = 44; asg.arg = String(k.code)
+            if (custom) {
+                var un = action(Tr.t("settings.remote.unassign"), "rm_unassign", "light")
+                un.hh = 40; un.arg = String(k.code)
+            }
+            var again = action(Tr.t("settings.remote.tryAnother"), "rm_again", "light")
+            again.hh = 40; again.icon = "remote"
+        }
+        // the choice a keyboard-like remote needs, explained where it matters
+        var anyKeyboard = false
+        for (var h = 0; h < devs.length; h++) if (devs[h].kind !== "remote") anyKeyboard = true
+        if (anyKeyboard) help("settings.remote.mineHint", 12)
+    }
     function secAlarm() {
         help("settings.alarm.help")
         if (remoteNote()) return
@@ -1638,6 +1984,15 @@ Item {
     function secThirdparty() {
         if (!thirdParty) { note(Tr.t("common.loading"), "dark"); return }
         help("settings.thirdPartyNotices.intro")
+        // This project and Lyrion first, from the API when it has answered:
+        // the name Lyrion is never left out of this page
+        var c = credits || {}, p = c.project || {}, ly = c.lyrion || {}
+        var pr = info("Osmium Sound " + String(p.version || cfg.version || ""), String(p.license || "AGPL-3.0-only")); pr.mono = true; pr.hh = 64; pr.tone = "tp"
+        pr.extra = Tr.t("settings.thirdPartyNotices.projectNote")
+        var lr = info(String(ly.name || "Lyrion Music Server"), String(ly.license || "GPL-2.0+")); lr.mono = true; lr.hh = 64; lr.tone = "tp"
+        lr.extra = (ly.version ? String(ly.version) + " — " : "") + Tr.t("settings.thirdPartyNotices.lyrionNote")
+        if (c.packages_available) helpText(Tr.tf("settings.thirdPartyNotices.debianCount", "n", String((c.packages || []).length)), 12)
+        else if (credits) helpText(Tr.t("settings.thirdPartyNotices.debianMissing"), 12)
         for (var i = 0; i < thirdParty.length; i++) {
             var s = thirdParty[i]
             var h = labelText(String(s.section || ""), 12); h.dim = true
@@ -1662,6 +2017,8 @@ Item {
         case "ssh_pass": sshPass = text; break
         case "player_name": nameEdit = text; break
         case "lms_host": hostEdit = text; break
+        case "sq_extra": sqExtraEdit = text; sqExtraDirty = true; break
+        case "cd_offset": cdOffsetEdit = text; cdOffsetDirty = true; break
         case "pick_new": pickNew = text; break
         case "bt_name": btNameEdit = text; break
         }
@@ -1669,6 +2026,22 @@ Item {
         dimRefresh.restart()
     }
     Timer { id: dimRefresh; interval: 150; onTriggered: root.rebuild() }
+
+    // Come per gli altoparlanti: ogni risposta di /bt_remotes/* porta lo stato
+    // intero, e c'e' un solo posto che lo apre e decide il messaggio.
+    function rmApply(ok, d) {
+        remoteBusy = false; remoteScanning = false
+        if (ok && d && typeof d === "object") {
+            if (d.available !== undefined) {
+                cfg.rmAvailable = !!d.available; cfg.rmSupported = !!d.supported; cfg.rmAdapter = !!d.adapter
+                cfg.rmRemotes = d.remotes || []; cfg.rmFound = d.found || []
+            }
+            if (d.message) { say(String(d.message), d.success === false); return }
+        } else {
+            say(Tr.t("settings.btSpeakers.opFailed"), true); return
+        }
+        rebuild()
+    }
 
     // Every /bt_speakers/* reply carries the full state, so there is exactly
     // one place that unpacks it — and exactly one place that decides whether
@@ -1787,6 +2160,52 @@ Item {
                 Api.post(A("/bt_speakers/remove"), { mac: arg }, function(ok2, d) { btApply(ok2, d) }, 60000)
             })
             return
+        case "rm_test": remoteTest = !row.on; remoteListen = remoteTest; remoteHeard = null; break
+        case "rm_mine": Remote.setChosen(Remote.chosen === arg ? "" : arg); break
+        case "rm_listen": Remote.listenAgain(); break
+        case "rm_again":
+            // back to the same remote: a keyboard key pressed by mistake must
+            // not take its place
+            var from = remoteHeard ? String(remoteHeard.device || "") : ""
+            remoteListen = true
+            if (from) Remote.listenTo(from)
+            break
+        case "rm_map": if (Ui.app) Ui.app.remoteMap.open(arg, true); break
+        case "rm_assign":
+            var code = Number(arg), dev = remoteHeard ? String(remoteHeard.device || "") : ""
+            var acts = Remote.actionNames()
+            var labels = [Tr.t("settings.remote.assignNothing")]
+            for (var ai = 0; ai < acts.length; ai++) labels.push(Tr.t("settings.remote.actions." + acts[ai]))
+            Ui.dialogs.pick(Tr.t("settings.remote.assignTitle"), labels, acts.indexOf(Remote.actionFor(code, dev)) + 1, function(i) {
+                if (i < 0) { root.navTo("rm_assign"); return }
+                var done = Remote.assign(code, i === 0 ? "" : acts[i - 1], dev)
+                root.say(Tr.t(done ? "settings.remote.assigned" : "settings.remote.assignFailed"), !done)
+                root.navTo("rm_again")
+            })
+            return
+        case "rm_unassign":
+            Remote.forget(Number(arg), remoteHeard ? String(remoteHeard.device || "") : "")
+            rebuild()
+            navTo("rm_again")
+            return
+        case "rm_pair_open": if (Ui.app && cfg.rmAvailable && cfg.rmSupported) Ui.app.pairWizard.open(); return
+        case "rm_keys_open": openSection("remoteKeys"); backTo = "remote"; return
+        case "rm_scan":
+            remoteScanning = true; remoteBusy = true
+            Api.post(A("/bt_remotes/scan"), { seconds: 12 }, function(ok, d) { root.rmApply(ok, d) }, 60000)
+            break
+        case "rm_add":
+            remoteBusy = true
+            say(Tr.t("settings.remote.btPairing"))
+            Api.post(A("/bt_remotes/add"), { mac: arg }, function(ok, d) { root.rmApply(ok, d) }, 120000)
+            break
+        case "rm_forget":
+            Ui.dialogs.confirm(Tr.t("settings.remote.btForgetConfirm"), Tr.t("settings.remote.btForget"), true, function(ok) {
+                if (!ok) return
+                root.remoteBusy = true
+                Api.post(cfg.api("/bt_remotes/remove"), { mac: arg }, function(ok2, d) { root.rmApply(ok2, d) }, 60000)
+            })
+            return
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break
         case "vu_style": post(A("/vu_style"), { style: arg }); Player.vuStyle = arg; break
         case "open_animations": openSection("animations"); return
@@ -1854,8 +2273,45 @@ Item {
             if (!audioSel) return
             post(A("/set_audio_device"), { device: audioSel }); cfg.audioCur = audioSel; say(Tr.t("settings.audio.updated")); break
         case "audio_refresh": cfg.load(); break
+        // Audio → Advanced (see secSqueezelite); toggles send the opposite of
+        // what the row shows, like the SSH and pointer switches
+        case "sq_dsd": sqSet({ dsd: arg }); break
+        case "sq_delay": sqSet({ dsd_delay_ms: parseInt(arg) }); break
+        case "sq_rate": sqSet({ max_rate: parseInt(arg) }); break
+        case "sq_hwvol": sqSet({ volume: row.on ? "software" : "hardware" }); break
+        case "sq_abuf": sqSet({ alsa_buffer: row.on ? "auto" : "large" }); break
+        case "sq_sbuf": sqSet({ stream_buffer: row.on ? "auto" : "large" }); break
+        case "sq_rt": sqSet({ realtime: !row.on }); break
+        case "sq_extra_apply": sqSet({ extra: sqExtraDirty ? sqExtraEdit : String((cfg.sq.conf || {}).extra || "") }); break
+        case "sq_reset": sqReset(); break
+        // Settings → CD ripping (secCdRip)
+        case "cd_enabled": cdSet({ enabled: !row.on }); break
+        case "cd_pick_open": pickOwner = 4; openChooser(String((cfg.cdrip.settings || {}).target || ""), Tr.t("settings.cdRip.targetUse")); break
+        case "cd_target_clear": cdSet({ target: "" }); break
+        case "cd_prefix_open": {
+            var tgt = String((cfg.cdrip.settings || {}).target || "").replace(/\/+$/, ""), pfx = String((cfg.cdrip.settings || {}).dir_prefix || "")
+            if (!tgt) { say(Tr.t("settings.cdRip.prefixNeedsTarget"), true); break }
+            pickOwner = 5; openChooser(pfx ? tgt + "/" + pfx : tgt, Tr.t("settings.cdRip.prefixUse")); break
+        }
+        case "cd_prefix_clear": cdSet({ dir_prefix: "" }); break
+        case "cd_auto": cdSet({ auto_start: arg }); break
+        case "cd_format": cdSet({ format: arg }); break
+        case "cd_level": cdSet({ flac_compression: parseInt(arg) }); break
+        case "cd_retries": cdSet({ retries: parseInt(arg) }); break
+        case "cd_pre": cdSet({ pre_emphasis: arg }); break
+        case "cd_flag": { var fb = {}; fb[arg] = !row.on; cdSet(fb); break }
+        case "cd_speed": cdSet({ speed: parseInt(arg) }); break
+        case "cd_offset_apply": {
+            var ov = parseInt(cdOffsetDirty ? cdOffsetEdit : String((cfg.cdrip.settings || {}).offset || 0))
+            if (isNaN(ov)) { say(Tr.t("settings.cdRip.offsetInvalid"), true); break }
+            cdSet({ offset: ov }); break
+        }
+        case "cd_calibrate": post(S("/api/cd/settings/offset_lookup"), {}, cdDone); say(Tr.t("common.loading")); break
+        case "cd_paranoia": cdSet({ paranoia: !row.on }); break
+        case "cd_eject": cdSimple("/api/cd/eject", "settings.cdRip.ejected", "settings.cdRip.ejectFailed"); break
+        case "cd_cancel": cdSimple("/api/cd/cancel", "settings.cdRip.cancelled", "settings.cdRip.cancelFailed"); break
         case "lms_skin": post(S("/api/lms_skin"), { skin: arg }); cfg.lmsSkin = arg; say(Tr.t("settings.lyrion.skinApplying")); break
-        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": return
+        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": case "sq_extra": case "cd_offset": return
         case "lms_role":
             if (arg !== "local") { cfg.lmsMode = "follow"; cfg.loadDiscover(); break }
             // Already on this device's own server: only the toggle moves back,
@@ -1965,7 +2421,7 @@ Item {
         // ── procedura guidata "cartella di rete" ────────────────────────
         case "where_net": band = 1; bandAdd = 0; wizOpen(); return
         case "where_disk": band = 1; bandAdd = 1; break
-        case "where_local": band = 1; bandAdd = 2; pickOwner = 1; pickBrowse(""); break
+        case "where_local": band = 1; bandAdd = 2; pickOwner = 1; break
         case "wiz_open": wizOpen(); return
         case "wiz_manual_open": wizReset(); wiz = 0; wizManual = true; break
         case "wiz_close": wizReset(); break
@@ -2012,19 +2468,19 @@ Item {
         case "band": {
             var b = parseInt(arg)
             band = band === b ? -1 : b; brId = ""; pickOwner = 0
-            if (band === 1 && bandAdd === 2) { pickOwner = 1; pickBrowse("") }
-            if (band === 3 && bandShare === 0) { pickOwner = 3; pickBrowse("") }
+            if (band === 1 && bandAdd === 2) pickOwner = 1
+            if (band === 3 && bandShare === 0) pickOwner = 3
             break
         }
         case "band_add": {
             var ba = parseInt(arg)
             bandAdd = bandAdd === ba ? -1 : ba; pickOwner = 0
-            if (bandAdd === 2) { pickOwner = 1; pickBrowse("") }
+            if (bandAdd === 2) pickOwner = 1
             break
         }
         case "band_share":
             bandShare = bandShare === 0 ? -1 : 0; pickOwner = 0
-            if (bandShare === 0) { pickOwner = 3; pickBrowse("") }
+            if (bandShare === 0) pickOwner = 3
             break
         case "src_browse": {
             if (brId === arg) { brId = ""; break }
@@ -2039,20 +2495,9 @@ Item {
         case "br_here": case "br_root":
             post(S("/api/sources/" + brId + "/subpath"), { subpath: act === "br_root" ? "" : cfg.brPath })
             brId = ""; say(Tr.t("sources.subpathSaved")); break
-        case "pick_open":
-            if (pickOwner === 2) { pickOwner = 0; break }
-            pickOwner = 2; pickBrowse(cfg.pldir); break
-        case "pick_up": if (!cfg.pkHasParent) return; pickBrowse(cfg.pkParent); break
-        case "pick_into": pickBrowse(arg); break
-        case "pick_create":
-            if (!pickNew || !cfg.pkPath) return
-            Api.post(S("/api/local/mkdir"), { path: cfg.pkPath, name: pickNew }, function() { pickBrowse(cfg.pkPath) })
-            pickNew = ""; break
-        case "pick_use":
-            if (!cfg.pkPath) return
-            if (pickOwner === 2) { post(S("/api/playlistdir"), { path: cfg.pkPath }); say(Tr.t("sources.playlistdir.saved")) }
-            else { post(S("/api/sources/local"), { path: cfg.pkPath, samba: pickOwner === 3 }); say(Tr.t("sources.added")) }
-            pickOwner = 0; break
+        case "pick_open": pickOwner = 2; openChooser(cfg.pldir, Tr.t("sources.playlistdir.use")); break
+        case "pick_chooser": openChooser(pickStartCur, pickLabelCur); break
+        case "pick_use": pickUse(cfg.pkPath); break
         case "smb_regen": post(S("/api/internal/smb/regenerate"), {}); break
         case "smb_show": smbShowPw = !smbShowPw; break
         case "revoke_pair":
@@ -2088,7 +2533,6 @@ Item {
         }
         rebuild()
     }
-    function pickBrowse(path) { pickBusy = true; cfg.browse(2, "", path) }
     Timer {
         id: countTimer
         interval: 1000; repeat: true; running: root.countdown > 0

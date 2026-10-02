@@ -25,6 +25,7 @@ import glob
 from hifi_logging import get_logger
 from hifi_i18n import t as _t
 from hifi_i18n import MESSAGES as _I18N_MESSAGES
+import hifi_squeezelite as sq
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -1961,6 +1962,21 @@ def set_ipv4_config(cfg):
 # ──────────────────────────────────────────────────────────────────
 
 SQUEEZELITE_DEFAULT = '/etc/default/squeezelite'
+# The settings behind that file. hifi_squeezelite owns the ARGS line: every
+# writer here changes a field of the model and renders the file from it, and
+# squeezelite.service renders it again at every start (ExecStartPre), so the
+# file is never edited in place by anyone — including over SSH.
+SQUEEZELITE_CONF = sq.CONF
+
+def _sq_load():
+    model, _ = sq.load(SQUEEZELITE_CONF, SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
+    return model
+
+def _sq_save(model):
+    """Persist the model and render the defaults file from it. True when the
+    rendered ARGS line changed, i.e. when a player restart is worth it."""
+    model = sq.save(model, SQUEEZELITE_CONF)
+    return sq.write_default(sq.render(model), SQUEEZELITE_DEFAULT)
 
 def list_audio_devices():
     """List ALSA playback devices (cards) usable as squeezelite output.
@@ -1984,11 +2000,19 @@ def list_audio_devices():
                 # DSP engine, not a real output the user should pick directly.
                 if cid == 'Loopback':
                     continue
+                dev_id = f'hw:CARD={cid},DEV={dev}'
+                # 'dsd': how DSD would reach this output — 'native' when the
+                # kernel lists a DSD_U32/U16 format for it, 'dop' otherwise.
+                # Read from /proc/asound by hifi_squeezelite; the DSD mode
+                # itself is a field of the model (Settings → Audio).
+                dsd_fmt = sq.probe(dev_id)
                 devices.append({
-                    'id': f'hw:CARD={cid},DEV={dev}',
+                    'id': dev_id,
                     'name': f'{cname} — {dname}',
                     'card': card,
                     'device': dev,
+                    'dsd': 'native' if sq.is_native(dsd_fmt) else 'dop',
+                    'dsd_format': dsd_fmt,
                 })
     except Exception:
         log.exception("list_audio_devices failed")
@@ -1997,21 +2021,16 @@ def list_audio_devices():
     return {'devices': devices, 'current': _current_real_dac()}
 
 def _current_audio_device():
-    """Return the -o output device currently configured in /etc/default/squeezelite."""
+    """The -o device squeezelite is started with: the Loopback while the DSP
+    engine is on, the chosen DAC otherwise (see _current_real_dac)."""
     try:
-        with open(SQUEEZELITE_DEFAULT) as f:
-            content = f.read()
-        m = re.search(r"ARGS=(['\"])(.*?)\1", content)
-        if m:
-            o = re.search(r'-o\s+(\S+)', m.group(2))
-            if o:
-                return o.group(1)
+        model = _sq_load()
     except Exception:
-        pass
-    return 'default'
+        return 'default'
+    return LOOPBACK_PLAYBACK if model['dsp']['enabled'] else model['output']
 
 def set_audio_device(device):
-    """Rewrite the -o option in /etc/default/squeezelite and restart it."""
+    """Set the DAC (`output` in the squeezelite model) and restart the player."""
     if not device:
         return {'success': False, 'code': 'audio.deviceMissing', 'message': _t('audio.deviceMissing', _lang())}
 
@@ -2035,30 +2054,12 @@ def set_audio_device(device):
                     'message': _t('audio.dspOutputFailed', _lang())}
         return {'success': True, 'message': _t('audio.dspOutputSet', _lang(), device=device)}
 
+    # The DSD mode, the rate limit and the rest stay as the model says; the
+    # render decides `-D`'s format for the new DAC on its own (auto).
     try:
-        with open(SQUEEZELITE_DEFAULT) as f:
-            content = f.read()
-    except Exception:
-        content = "ARGS='-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium'\n"
-
-    m = re.search(r"ARGS=(['\"])(.*?)\1", content)
-    if m:
-        args = m.group(2)
-        if re.search(r'-o\s+\S+', args):
-            args = re.sub(r'-o\s+\S+', f'-o {device}', args)
-        else:
-            args = f'-o {device} ' + args
-        # Ensure DSD-over-PCM (bit-perfect DSD) is enabled. Without -D squeezelite
-        # downconverts DSD to PCM; -D passes DSD verbatim to a DSD-capable DAC (DoP).
-        if not re.search(r'(^|\s)-D(\s|$)', args):
-            args = re.sub(r'(-o\s+\S+)', r'\1 -D', args, count=1)
-        content = content[:m.start()] + f"ARGS='{args}'" + content[m.end():]
-    else:
-        content += f"\nARGS='-o {device} -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium'\n"
-
-    try:
-        with open(SQUEEZELITE_DEFAULT, 'w') as f:
-            f.write(content)
+        model = _sq_load()
+        model['output'] = device
+        _sq_save(model)
     except Exception:
         log.exception("set_audio_device: write config failed")
         return {'success': False, 'code': 'audio.writeConfigFailed',
@@ -2074,6 +2075,61 @@ def set_audio_device(device):
         return {'success': True, 'message': _t('audio.deviceSetRestartFailed', _lang(), device=device)}
     return {'success': True, 'message': _t('audio.outputSet', _lang(), device=device)}
 
+# ── Settings → Audio: the rest of the squeezelite model ────────────
+# The fields in hifi_squeezelite.TUNABLE (DSD mode, switching pause, rate
+# limit, hardware volume, buffers, real-time priority, extra arguments) —
+# what used to need SSH and a hand edit of /etc/default/squeezelite.
+def get_squeezelite_conf():
+    model = _sq_load()
+    fmt = sq.probe(model['output'])
+    return {
+        'conf': model,
+        'args': sq.render(model),
+        'dsd_detected': 'native' if sq.is_native(fmt) else 'dop',
+        'dsd_format': fmt,
+        'mixers': sq.mixer_controls(model['output']),
+        'choices': {'dsd': list(sq.DSD_MODES), 'dsd_delay_ms': list(sq.DSD_DELAYS),
+                    'max_rate': [0, 96000, 192000, 384000]},
+        'defaults': {k: sq.DEFAULTS[k] for k in sq.TUNABLE},
+    }
+
+def set_squeezelite_conf(changes):
+    model = _sq_load()
+    try:
+        model = sq.set_fields(model, changes)
+    except sq.InvalidField as e:
+        return {'success': False, 'code': e.code,
+                'message': _t(e.code, _lang(), field=e.field, detail=e.detail)}
+    if model['volume'] == 'hardware' and not model['mixer']:
+        mixers = sq.mixer_controls(model['output'])
+        if not mixers:
+            return {'success': False, 'code': 'squeezelite.noMixer',
+                    'message': _t('squeezelite.noMixer', _lang())}
+        model['mixer'] = mixers[0]
+    return _apply_squeezelite_conf(model, 'squeezelite.saved')
+
+def reset_squeezelite_conf():
+    return _apply_squeezelite_conf(sq.reset_tunables(_sq_load()), 'squeezelite.reset')
+
+def _apply_squeezelite_conf(model, msg_key):
+    try:
+        changed = _sq_save(model)
+    except Exception:
+        log.exception("squeezelite conf: write failed")
+        return {'success': False, 'code': 'audio.writeConfigFailed',
+                'message': _t('audio.writeConfigFailed', _lang())}
+    result = {'success': True, 'message': _t(msg_key, _lang())}
+    if changed:
+        try:
+            r = _restart_squeezelite_if_enabled()
+            if r.returncode != 0:
+                result['message'] = _t('squeezelite.restartWarn', _lang(), err=(r.stderr or '').strip())
+        except Exception:
+            log.exception("squeezelite conf: restart failed")
+            result['message'] = _t('squeezelite.restartWarn', _lang(), err='restart failed')
+    result.update(get_squeezelite_conf())
+    return result
+
 # ── Multiroom: which Lyrion server this device's squeezelite follows ──
 # Standalone (default) is squeezelite's own local LMS (-s 127.0.0.1). "Follow"
 # points -s at another Osmium device's LMS on the LAN, so this device's player
@@ -2081,12 +2137,10 @@ def set_audio_device(device):
 # lyrionApi.syncPlayer/unsyncPlayer) — LMS instances don't discover each other,
 # so both devices must point at the same one for multiroom to work between them.
 def _current_lms_host():
-    _, args = _read_sq_args()
-    if args:
-        m = re.search(r'-s\s+(\S+)', args)
-        if m:
-            return m.group(1)
-    return '127.0.0.1'
+    try:
+        return _sq_load()['server']
+    except Exception:
+        return '127.0.0.1'
 
 # A DNS name for an external Lyrion server (nas.lan, lms.example.com,
 # osmium.local). Letters, digits and hyphens per label only: the name ends up
@@ -2180,11 +2234,14 @@ def set_lms_role(mode, host):
         return {'success': False, 'code': 'lms.invalidMode',
                 'message': _t('lms.invalidMode', _lang(), mode=mode)}
 
-    _, args = _read_sq_args()
-    if args is None:
+    try:
+        model = _sq_load()
+        model['server'] = target
+        _sq_save(model)
+    except Exception:
+        log.exception("set_lms_role: write config failed")
         return {'success': False, 'code': 'lms.sqConfigMissing',
                 'message': _t('lms.sqConfigMissing', _lang())}
-    _write_sq_args(_sq_set_s(args, target))
     # Before the player restart below, so squeezelite comes back up with the
     # local server already stopped (following) or already running (standalone)
     # and can only land on the one that was just chosen.
@@ -2222,12 +2279,10 @@ def _valid_player_name(name):
     return bool(isinstance(name, str) and _PLAYER_NAME_RE.match(name))
 
 def _current_player_name():
-    _, args = _read_sq_args()
-    if args:
-        m = re.search(r'-n\s+(\S+)', args)
-        if m:
-            return m.group(1)
-    return 'OsmiumSound'
+    try:
+        return _sq_load()['name']
+    except Exception:
+        return 'OsmiumSound'
 
 def get_player_name():
     return {'name': _current_player_name()}
@@ -2236,15 +2291,14 @@ def set_player_name(name):
     if not _valid_player_name(name):
         return {'success': False, 'code': 'player.invalidName',
                 'message': _t('player.invalidName', _lang())}
-    _, args = _read_sq_args()
-    if args is None:
+    try:
+        model = _sq_load()
+        model['name'] = name
+        _sq_save(model)
+    except Exception:
+        log.exception("set_player_name: write config failed")
         return {'success': False, 'code': 'lms.sqConfigMissing',
                 'message': _t('lms.sqConfigMissing', _lang())}
-    if re.search(r'-n\s+\S+', args):
-        args = re.sub(r'-n\s+\S+', f'-n {name}', args)
-    else:
-        args = (args + f' -n {name}').strip()
-    _write_sq_args(args)
 
     try:
         r = _restart_squeezelite_if_enabled()
@@ -2748,6 +2802,9 @@ SUPPORT_JOURNAL_UNITS = [
     # say which player unit was started or why one wasn't).
     'hifi-bt-out',
     'bluetooth', 'NetworkManager',
+    # The on-screen interface, and systemd-oomd: when memory runs out the
+    # latter says which service it killed and why (pressure or swap).
+    'hifi-qt', 'systemd-oomd',
 ]
 # Config worth including — never secrets/keys. Mirrors the allow-list spirit of
 # sources_server.py's BACKUP_FILES, but deliberately excludes everything under
@@ -2762,6 +2819,26 @@ SUPPORT_CONFIG_FILES = [
     '/etc/hifi-player/SYSTEM_VERSION',
     '/etc/hifi-player/OS_VERSION',
 ]
+# 🚨 /etc/hifi-sources.json used to keep the SMB login of every network share
+# in the clear, and it was copied into the zip as-is — an owner reported their
+# NAS password in the bundle. The logins are sealed at rest now (see
+# hifi_backup.seal_login), but a device that could not seal one still has it
+# in the clear, and the sealed blob has no business leaving the device either.
+# Any key that looks like a secret or a login is masked, at any depth, before
+# the file is written. An empty value stays empty on purpose: "guest share"
+# versus "share with a login" is exactly what a mount failure needs to show.
+_SUPPORT_SECRET_KEY_RE = re.compile(r'pass|secret|token|cred|user|key|login', re.I)
+_SUPPORT_REDACT_JSON = {'/etc/hifi-sources.json'}
+
+
+def _support_redact(value):
+    if isinstance(value, dict):
+        return {k: ('<redacted>' if _SUPPORT_SECRET_KEY_RE.search(str(k)) and v not in ('', None)
+                    else _support_redact(v))
+                for k, v in value.items()}
+    if isinstance(value, list):
+        return [_support_redact(v) for v in value]
+    return value
 
 
 def _support_journal_dump(unit, since='7 days ago'):
@@ -2777,6 +2854,85 @@ def _support_journal_dump(unit, since='7 days ago'):
         return r.stdout or ''
     except Exception as e:
         return f'(journalctl fallito: {e})\n'
+
+
+def _support_previous_boot_tail():
+    """The last lines of the boot before this one, every unit together.
+
+    A bundle is usually taken right after the owner pulled the plug on a box
+    that froze, and the per-unit dumps above are dominated by the few minutes
+    of the new boot. What happened just before the freeze is here."""
+    try:
+        r = subprocess.run(['journalctl', '-b', '-1', '-n', '600', '-o', 'short-iso', '--no-pager'],
+                           capture_output=True, text=True, timeout=15)
+        return r.stdout or f'(no previous boot in the journal) {(r.stderr or "").strip()[:200]}\n'
+    except Exception as e:
+        return f'(journalctl failed: {e})\n'
+
+
+SUPPORT_LYRION_LOG_DIR = '/var/log/squeezeboxserver'
+SUPPORT_LYRION_LOG_TAIL = 1024 * 1024   # bytes per file
+# Streaming services put their credentials in the query of the URLs Lyrion
+# logs (signed stream links, session tokens, API keys): the value goes, the
+# name stays, so the line still says what kind of request it was.
+_SUPPORT_URL_SECRET_RE = re.compile(
+    rb'([?&;\s"\'](?:[\w.-]*(?:pass|token|secret|sig|key|auth|session|cred)[\w.-]*))=[^&\s"\';,]+',
+    re.I)
+
+
+def _support_lyrion_logs():
+    """(name, bytes) for the tail of each of Lyrion's own log files.
+
+    They are plain files on /data, so unlike a journal that lived in RAM they
+    are still there after the owner pulled the plug — and they are where a
+    growing server, a rescan or a plugin at work shows up. Only the tail: a
+    scanner.log after a big library can be tens of MB."""
+    out = []
+    try:
+        names = sorted(os.listdir(SUPPORT_LYRION_LOG_DIR))
+    except OSError:
+        return out
+    for name in names:
+        if not (name.startswith(('server.log', 'scanner.log', 'perfmon.log'))):
+            continue
+        path = os.path.join(SUPPORT_LYRION_LOG_DIR, name)
+        try:
+            with open(path, 'rb') as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                f.seek(max(0, size - SUPPORT_LYRION_LOG_TAIL))
+                data = f.read()
+            if size > SUPPORT_LYRION_LOG_TAIL:
+                # start on a whole line, and say that the head was cut
+                data = b'(... first %d bytes left out ...)\n' % (size - SUPPORT_LYRION_LOG_TAIL) \
+                    + data.split(b'\n', 1)[-1]
+            out.append((name, _SUPPORT_URL_SECRET_RE.sub(rb'\1=<redacted>', data)))
+        except OSError:
+            continue
+    return out
+
+
+def _support_memory_snapshot():
+    """Memory right now: totals, pressure, swap and the biggest processes.
+    /var/log/hifi/memory.log (hifi-memlog.timer) has the same every 5 min."""
+    out = []
+    for label, path in (('meminfo', '/proc/meminfo'), ('pressure', '/proc/pressure/memory'),
+                        ('swaps', '/proc/swaps')):
+        out.append(f'== {label} ==')
+        try:
+            with open(path) as f:
+                out.append(f.read().rstrip())
+        except OSError as e:
+            out.append(f'({e})')
+        out.append('')
+    out.append('== ps (by resident memory) ==')
+    try:
+        r = subprocess.run(['ps', '-eo', 'pid,rss,vsz,etime,comm,args', '--sort=-rss'],
+                           capture_output=True, text=True, timeout=10)
+        out.append('\n'.join((r.stdout or '').splitlines()[:25]))
+    except Exception as e:
+        out.append(f'(ps failed: {e})')
+    return '\n'.join(out) + '\n'
 
 
 def _support_services_snapshot():
@@ -2866,6 +3022,17 @@ def _support_bundle_build():
 
         for unit in SUPPORT_JOURNAL_UNITS:
             z.writestr(f'journal/{unit}.log', _support_journal_dump(unit))
+        z.writestr('journal/previous-boot-tail.log', _support_previous_boot_tail())
+        z.writestr('memory.txt', _support_memory_snapshot())
+        try:
+            z.writestr('touch.json', json.dumps(_support_touch_snapshot(), indent=2))
+        except Exception as e:
+            z.writestr('touch.json', json.dumps({'error': str(e)}))
+        try:
+            for name, data in _support_lyrion_logs():
+                z.writestr(f'lyrion/{name}', data)
+        except Exception:
+            log.exception("support bundle: Lyrion logs failed")
 
         z.writestr('system_info.json', json.dumps(get_system_info(), indent=2))
         z.writestr('services.txt', _support_services_snapshot())
@@ -2881,7 +3048,19 @@ def _support_bundle_build():
 
         for fpath in SUPPORT_CONFIG_FILES:
             try:
-                if os.path.isfile(fpath):
+                if not os.path.isfile(fpath):
+                    continue
+                if fpath in _SUPPORT_REDACT_JSON:
+                    # Never fall back to the raw file: one that does not
+                    # parse is left out rather than shipped unmasked.
+                    try:
+                        with open(fpath) as f:
+                            data = _support_redact(json.load(f))
+                        z.writestr('config' + fpath, json.dumps(data, indent=2))
+                    except ValueError:
+                        z.writestr('config' + fpath + '.unreadable',
+                                   '(not valid JSON: left out, it may hold passwords)\n')
+                else:
                     z.write(fpath, arcname='config' + fpath)
             except Exception:
                 log.exception("support bundle: config file %s failed", fpath)
@@ -5279,18 +5458,6 @@ def webui_reset_credentials():
         return {'success': False, 'code': 'webui.credsResetFailed',
                 'message': _t('webui.credsResetFailed', _lang())}
 
-# ──────────────────────────────────────────────────────────────────
-#  Tidal Connect — optional. Lets the appliance appear as a Tidal Connect
-#  target so the Tidal app can stream directly to it (via mDNS/avahi). The
-#  daemon is an unofficial, reverse-engineered binary that is NOT bundled
-#  (no trusted x86 build ships with the image); the OS-OTA migration only
-#  sets up the prerequisites (avahi) and the systemd unit. The toggle is
-#  therefore only "available" once a tidal-connect binary is actually present.
-#  Unit name comes from a fixed constant (never user input) — no injection.
-# ──────────────────────────────────────────────────────────────────
-TIDAL_UNIT = 'tidal-connect.service'
-TIDAL_BINARY = '/usr/local/bin/tidal_connect'
-
 def _unit_exists(unit):
     try:
         r = subprocess.run(['systemctl', 'list-unit-files', unit],
@@ -5298,52 +5465,6 @@ def _unit_exists(unit):
         return r.returncode == 0 and unit in (r.stdout or '')
     except Exception:
         return False
-
-def _tidal_available():
-    # Both the unit AND the (unbundled) binary must be present for the toggle
-    # to do anything useful.
-    return _unit_exists(TIDAL_UNIT) and os.path.exists(TIDAL_BINARY)
-
-def get_tidal_status():
-    try:
-        en = subprocess.run(['systemctl', 'is-enabled', TIDAL_UNIT],
-                           capture_output=True, text=True, timeout=10)
-        ac = subprocess.run(['systemctl', 'is-active', TIDAL_UNIT],
-                           capture_output=True, text=True, timeout=10)
-        return {
-            'available': _tidal_available(),
-            'enabled': en.stdout.strip() == 'enabled',
-            'active': ac.stdout.strip() == 'active',
-        }
-    except Exception:
-        log.exception("get_tidal_status failed")
-        return {'available': False, 'enabled': False, 'active': False,
-                'error': _t('tidal.statusUnavailable', _lang())}
-
-def set_tidal(enable):
-    """Enable+start or disable+stop the Tidal Connect daemon (persists)."""
-    if enable and not _tidal_available():
-        return {'success': False, 'available': False, 'enabled': False,
-                'active': False, 'code': 'tidal.notInstalled',
-                'message': _t('tidal.notInstalled', _lang())}
-    action = 'enable' if enable else 'disable'
-    try:
-        r = subprocess.run(['sudo', 'systemctl', action, '--now', TIDAL_UNIT],
-                          capture_output=True, text=True, timeout=30)
-        if r.returncode != 0:
-            log.error("set_tidal %s failed: %s", action, (r.stderr or '').strip())
-            status = get_tidal_status()
-            status['success'] = False
-            status['code'] = 'tidal.opFailed'
-            status['message'] = _t('tidal.opFailed', _lang())
-            return status
-    except Exception:
-        log.exception("set_tidal failed")
-        return {'success': False, 'code': 'tidal.opFailed', 'message': _t('tidal.opFailed', _lang())}
-    status = get_tidal_status()
-    status['success'] = True
-    status['message'] = _t('tidal.enabled' if enable else 'tidal.disabled', _lang())
-    return status
 
 # ──────────────────────────────────────────────────────────────────
 #  DSP / CamillaDSP engine — OPTIONAL parametric EQ + crossfeed.
@@ -5487,56 +5608,10 @@ def _write_dsp_target(dev):
         f.write((dev or 'default') + '\n')
     os.replace(tmp, DSP_TARGET_FILE)
 
-# ── squeezelite ARGS string editing (shared with set_audio_device) ──
-def _read_sq_args():
-    """Return (full_file_content, args_string) or (content, None) if no ARGS=."""
-    try:
-        with open(SQUEEZELITE_DEFAULT) as f:
-            content = f.read()
-    except Exception:
-        return None, None
-    m = re.search(r"ARGS=(['\"])(.*?)\1", content)
-    return content, (m.group(2) if m else None)
-
-def _write_sq_args(new_args):
-    content, _ = _read_sq_args()
-    if content is None:
-        content = ''
-    m = re.search(r"ARGS=(['\"])(.*?)\1", content)
-    if m:
-        content = content[:m.start()] + f"ARGS='{new_args}'" + content[m.end():]
-    else:
-        content += f"\nARGS='{new_args}'\n"
-    with open(SQUEEZELITE_DEFAULT, 'w') as f:
-        f.write(content)
-
-def _sq_set_o(args, dev):
-    if re.search(r'-o\s+\S+', args):
-        return re.sub(r'-o\s+\S+', f'-o {dev}', args)
-    return f'-o {dev} ' + args
-
-def _sq_set_s(args, host):
-    if re.search(r'-s\s+\S+', args):
-        return re.sub(r'-s\s+\S+', f'-s {host}', args)
-    return (args + f' -s {host}').strip()
-
-def _sq_remove_flag(args, flag):
-    return re.sub(rf'(^|\s){re.escape(flag)}(?=\s|$)', ' ', args).strip()
-
-def _sq_ensure_D(args):
-    if not re.search(r'(^|\s)-D(\s|$)', args):
-        args = re.sub(r'(-o\s+\S+)', r'\1 -D', args, count=1)
-    return args
-
-def _sq_set_rate(args, rate):
-    if re.search(r'-r\s+\S+', args):
-        return re.sub(r'-r\s+\S+', f'-r {rate}', args)
-    return re.sub(r'(-o\s+\S+)', rf'\1 -r {rate}', args, count=1)
-
-def _sq_ensure_R(args):
-    if not re.search(r'(^|\s)-R(\s|$)', args):
-        args = (args + ' -R').strip()
-    return args
+# The squeezelite ARGS line is no longer edited here as a string: the DSP
+# path flips `dsp.enabled` in the hifi_squeezelite model (see _sq_load /
+# _sq_save next to set_audio_device) and the render puts squeezelite on the
+# Loopback at DSP_RATE with soxr, or back on the DAC with `-D`, from that.
 
 def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False, balance=0.0):
     """Build a CamillaDSP config (returned as a dict; JSON is valid YAML)."""
@@ -5607,10 +5682,12 @@ def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False, 
     }
 
 def _current_real_dac():
-    """The DAC squeezelite outputs to when DSP is OFF. When DSP is ON the
-    squeezelite -o is the Loopback, so fall back to the stored target."""
-    o = _current_audio_device()
-    return _read_dsp_target() if 'Loopback' in o else o
+    """The DAC squeezelite outputs to when DSP is OFF — and the one CamillaDSP
+    plays to when it is ON: the model's `output` either way."""
+    try:
+        return _sq_load()['output']
+    except Exception:
+        return _read_dsp_target()
 
 # ── Pause playback around a DSP apply ───────────────────────────────
 # Applying a DSP change restarts squeezelite and/or CamillaDSP, which means
@@ -5838,33 +5915,28 @@ def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balanc
     with open(CAMILLA_CONFIG, 'w') as f:
         json.dump(cfg, f, indent=2)
     _write_dsp_target(playback_dev)
-    _, args = _read_sq_args()
-    if args is not None:
-        new_args = _sq_set_o(args, LOOPBACK_PLAYBACK)
-        new_args = _sq_remove_flag(new_args, '-D')   # no DoP/DSD through the DSP path
-        new_args = _sq_set_rate(new_args, DSP_RATE)  # fixed rate into the loopback
-        new_args = _sq_ensure_R(new_args)            # soxr resample to that rate
-        # Collapse whitespace left behind by flag removal/insertion — belt and
-        # braces against a messy starting string (e.g. an external migration
-        # like 0003-audio-dsd-device.sh touching the same line) leaving runs
-        # of spaces that would otherwise just accumulate on every apply.
-        new_args = re.sub(r'\s+', ' ', new_args).strip()
-        # squeezelite only needs restarting when its own args actually change
-        # (DSP was off, or a preset/balance apply just merged in from an older
-        # client that still sent 'enabled' — see set_dsp). A plain EQ/preset
-        # switch while already on leaves squeezelite's args identical, so
-        # skip the restart: it would otherwise drop squeezelite's connection
-        # to Lyrion and interrupt whatever's currently playing for no reason
-        # — only CamillaDSP needs to reload to pick up the new EQ.
-        if new_args != re.sub(r'\s+', ' ', args).strip():
-            _write_sq_args(new_args)
-            # squeezelite must release the real DAC (by restarting onto the
-            # loopback) BEFORE CamillaDSP tries to open that same hw: device —
-            # otherwise the two processes fight over an exclusive-access
-            # device and CamillaDSP's open can fail or wedge the DAC until a
-            # reboot. Same reasoning as _apply_dsp_off(), just mirrored:
-            # release the old holder before starting the new one.
-            _restart_squeezelite_if_enabled()
+    # squeezelite goes onto the Loopback at DSP_RATE with soxr and no `-D`
+    # (no DoP/DSD through the DSP path): all of that is the render of
+    # dsp.enabled; the DAC itself stays `output`, for CamillaDSP and for the
+    # way back. squeezelite only needs restarting when its own args actually
+    # change (DSP was off, or a preset/balance apply just merged in from an
+    # older client that still sent 'enabled' — see set_dsp). A plain EQ/preset
+    # switch while already on leaves squeezelite's args identical, so skip the
+    # restart: it would otherwise drop squeezelite's connection to Lyrion and
+    # interrupt whatever's currently playing for no reason — only CamillaDSP
+    # needs to reload to pick up the new EQ.
+    model = _sq_load()
+    if playback_dev:
+        model['output'] = playback_dev
+    model['dsp']['enabled'] = True
+    if _sq_save(model):
+        # squeezelite must release the real DAC (by restarting onto the
+        # loopback) BEFORE CamillaDSP tries to open that same hw: device —
+        # otherwise the two processes fight over an exclusive-access
+        # device and CamillaDSP's open can fail or wedge the DAC until a
+        # reboot. Same reasoning as _apply_dsp_off(), just mirrored:
+        # release the old holder before starting the new one.
+        _restart_squeezelite_if_enabled()
     # `enable --now` is a no-op on an already-running unit — it would NOT pick
     # up the config.yml we just wrote (CamillaDSP only reads it at startup, no
     # hot reload). Enable separately for boot persistence, then always
@@ -5883,13 +5955,12 @@ def _apply_dsp_off():
         _lms_pause(playing_player)
     try:
         dac = _read_dsp_target()
-        _, args = _read_sq_args()
-        if args is not None:
-            args = _sq_set_o(args, dac or 'default')
-            args = _sq_ensure_D(args)                 # restore DoP/DSD
-            args = re.sub(r'\s*-r\s+\S+', '', args)    # drop the forced rate
-            args = _sq_remove_flag(args, '-R')         # drop resampling
-            _write_sq_args(re.sub(r'\s+', ' ', args).strip())
+        # Back on the DAC: `-D` as the model's DSD mode says, the forced rate
+        # and the resampling gone — all from the render of dsp.enabled=False.
+        model = _sq_load()
+        model['output'] = dac or model['output'] or 'default'
+        model['dsp']['enabled'] = False
+        _sq_save(model)
         subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
                        capture_output=True, text=True, timeout=30)
         _restart_squeezelite_if_enabled()
@@ -6100,6 +6171,9 @@ def delete_dsp_preset(name):
 BT_STATE_FILE = '/etc/hifi-player/bluetooth.json'
 BT_STATUS_FILE = '/run/hifi-bt/output.json'
 BT_SUPERVISOR = 'hifi-bt-out.service'
+# The supervisor's own code, read when it has not written a snapshot yet
+# (see _bt_remotes_supported); the unit's ExecStart is this file.
+BT_SUPERVISOR_SCRIPT = '/usr/local/sbin/hifi-bt-out.py'
 BT_PLAYER_UNIT = 'hifi-bt-player@{}.service'
 BT_BLUEALSA_UNIT = 'hifi-bluealsa.service'
 # The ALSA plugin squeezelite opens as bluealsa:DEV=<MAC>. The daemon alone is
@@ -6112,6 +6186,10 @@ _BT_MAC_RE = re.compile(r'^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$')
 # without it (a keyboard, a phone, a fitness band) can be paired but will
 # never play, so the UI is told which is which.
 _BT_SINK_UUID = '0000110b'
+# What a remote control advertises: HID over Bluetooth classic (0x1124) or
+# over BLE (0x1812, "HID over GATT"). A remote is the opposite case to a
+# speaker — it is an input device, and it plays nothing.
+_BT_HID_UUIDS = ('00001124', '00001812')
 _bt_apply_lock = threading.Lock()
 
 
@@ -6135,9 +6213,14 @@ def _bt_read_doc():
         doc.setdefault('enabled', False)
         if not isinstance(doc.get('speakers'), list):
             doc['speakers'] = []
+        # Bluetooth remotes live in the same document as the speakers: they
+        # share the radio, the pairing keys and the backup category, and a
+        # restore made before remotes existed must still parse.
+        if not isinstance(doc.get('remotes'), list):
+            doc['remotes'] = []
         return doc
     except Exception:
-        return {'enabled': False, 'speakers': []}
+        return {'enabled': False, 'speakers': [], 'remotes': []}
 
 
 def _bt_write_doc(doc):
@@ -6227,6 +6310,13 @@ def _bt_device_info(mac):
     info['trusted'] = 'Trusted: yes' in text
     info['connected'] = 'Connected: yes' in text
     info['audio'] = _BT_SINK_UUID in text.lower()
+    # an input device: it offers HID, or (a BLE device that has not said which
+    # services it has yet) its appearance makes BlueZ call it "input-…"
+    info['input'] = (any(u in text.lower() for u in _BT_HID_UUIDS)
+                     or re.search(r'^\s*Icon:\s*input-', text, re.M) is not None)
+    # Bluetooth company ids in its advertisement (Amazon is 0x0171): a remote
+    # in pairing mode may not send its name, but it says who made it
+    info['makers'] = [int(m, 16) for m in re.findall(r'ManufacturerData\.?\s*Key:\s*0x([0-9a-fA-F]{4})', text)]
     return info
 
 
@@ -6531,6 +6621,956 @@ def bt_connect(mac, connect=True):
     _bt_kick()
     time.sleep(2)
     return _bt_ok('bluetooth.connected' if connect else 'bluetooth.disconnected')
+
+# ──────────────────────────────────────────────────────────────────
+#  Bluetooth remotes
+#
+#  A remote control is an input device, not an output: once paired and
+#  trusted it talks straight to the kernel's HID layer and shows up as
+#  a /dev/input node, which the on-screen interface reads by itself
+#  (native-ui-qt/src/remote.cpp). Nothing here has to run while it is
+#  being used — this is only the pairing, and forgetting.
+#
+#  🚨 Two things make this different from the speakers:
+#
+#  1. The radio. Bluetooth is off on a device whose owner never asked
+#     for it (the boot is quicker that way), and the supervisor is the
+#     one that turns it on. A remote has to be paired BEFORE there is
+#     a remote to keep the radio on for, so a scan opens a pairing
+#     window in the state file (`remote_pairing_until`) which the
+#     supervisor honours like any other reason to be up. Once one
+#     remote is saved, the radio stays up for it.
+#
+#  2. Never paging them. A speaker that is off gets connection
+#     attempts; a remote does NOT. It reconnects by itself the moment
+#     a key is pressed, and paging one that is asleep would take the
+#     radio away from a speaker that is playing (see hifi-bt-out.py).
+# ──────────────────────────────────────────────────────────────────
+BT_PAIRING_WINDOW = 180          # seconds the radio stays up for pairing
+
+
+def _bt_remotes_available():
+    """Pairing a remote needs BlueZ and the supervisor — and nothing else.
+    The speakers' extra requirements (BlueALSA, the ALSA plugin) are about
+    playing audio, which a remote never does."""
+    return shutil.which('bluetoothctl') is not None and _unit_exists(BT_SUPERVISOR)
+
+
+def _bt_remotes_supported():
+    """True when the supervisor on this device knows about remotes.
+
+    The api_server half of this feature travels in an app update, the
+    supervisor half in the image: on a device where the image is older, a
+    pairing window would be ignored and the radio torn down mid-pairing. The
+    new supervisor always writes a `remotes` key in its snapshot, so its
+    presence is the honest answer to "can this device do it yet".
+
+    🚨 A MISSING snapshot is not a "no". The supervisor writes it on its first
+    pass, and until then there is nothing to read — which is exactly the state
+    a box is in while it walks its setup wizard right after being installed.
+    Answering "no" there told people, in the wizard, that their device has no
+    Bluetooth at all. With no snapshot to go by, ask the supervisor's own
+    script instead, and kick it so the real answer turns up a moment later."""
+    snap = _bt_snapshot()
+    if snap:
+        return 'remotes' in snap
+    try:
+        with open(BT_SUPERVISOR_SCRIPT) as f:
+            known = 'remote_pairing_until' in f.read()
+    except Exception:
+        return False
+    if known:
+        _bt_kick()
+    return known
+
+
+def _bt_open_pairing_window(seconds=BT_PAIRING_WINDOW):
+    """Ask the supervisor for the radio, and wait until it is actually up."""
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        doc['remote_pairing_until'] = int(time.time()) + int(seconds)
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt remotes: could not persist the pairing window")
+            return False
+    _bt_kick()
+    for _ in range(20):
+        if _bt_snapshot().get('adapter'):
+            return True
+        time.sleep(1)
+    return False
+
+
+def get_bt_remotes():
+    """Status for the remote control screen: the remotes this device is
+    paired with, and whatever else the last scan saw."""
+    try:
+        doc = _bt_read_doc()
+        snap = _bt_snapshot()
+        live = {str(r.get('mac', '')).upper(): r for r in (snap.get('remotes') or [])}
+        remotes = []
+        for rm in doc.get('remotes') or []:
+            mac = str(rm.get('mac', '')).upper()
+            if not _BT_MAC_RE.match(mac):
+                continue
+            remotes.append({
+                'mac': mac,
+                'name': rm.get('name') or mac,
+                'connected': bool(live.get(mac, {}).get('connected')),
+            })
+
+        # In range but not paired yet. Speakers are left out: they have a
+        # screen of their own, and pairing one here would set up nothing.
+        known = {r['mac'] for r in remotes}
+        known |= {str(s.get('mac', '')).upper() for s in (doc.get('speakers') or [])}
+        found = []
+        if snap.get('adapter'):
+            for dev in _bt_known_devices():
+                if dev['mac'] not in known and not dev.get('audio'):
+                    found.append(dev)
+
+        return {'available': _bt_remotes_available(),
+                'supported': _bt_remotes_supported(),
+                'adapter': bool(snap.get('adapter')),
+                'remotes': remotes, 'found': found}
+    except Exception:
+        log.exception("get_bt_remotes failed")
+        return {'available': False, 'supported': False, 'adapter': False,
+                'remotes': [], 'found': [],
+                'error': _t('bluetooth.statusUnavailable', _lang())}
+
+
+def _bt_remote_ok(code, **extra):
+    out = {'success': True, 'code': code, 'message': _t(code, _lang())}
+    out.update(extra)
+    out.update(get_bt_remotes())
+    return out
+
+
+def _bt_remote_fail(code, **extra):
+    out = {'success': False, 'code': code, 'message': _t(code, _lang())}
+    out.update(extra)
+    out.update(get_bt_remotes())
+    return out
+
+
+def bt_remotes_scan(seconds=12, model=None):
+    """Look for a remote in pairing mode. Blocking, like the speakers' scan:
+    the screen shows a spinner and the answer is the list.
+
+    With `model` (one of the certified remotes, chosen in the setup wizard)
+    the first remote of that model found is paired straight away, and the
+    answer carries its address in `paired`: the person only has to follow the
+    instructions on the remote, not pick it out of a list."""
+    if not _bt_remotes_available():
+        return _bt_remote_fail('bluetooth.unavailable')
+    if not _bt_remotes_supported():
+        return _bt_remote_fail('bluetooth.remoteNeedsUpdate')
+    try:
+        seconds = max(3, min(int(seconds or 12), 30))
+    except (TypeError, ValueError):
+        seconds = 12
+    if not _bt_open_pairing_window():
+        return _bt_remote_fail('bluetooth.noAdapter')
+    try:
+        subprocess.run(['bluetoothctl', '--timeout', str(seconds), 'scan', 'on'],
+                       capture_output=True, text=True, timeout=seconds + 15)
+    except Exception:
+        log.exception("bt_remotes_scan failed")
+        return _bt_remote_fail('bluetooth.scanFailed')
+    if model:
+        mine = {str(r.get('mac', '')).upper() for r in (_bt_read_doc().get('remotes') or [])}
+        seen = []
+        for dev in _bt_known_devices():
+            if dev.get('audio'):
+                continue
+            if _bt_certified_model(dev, model) != model:
+                seen.append('%s %r input=%s makers=%s' % (dev['mac'], dev.get('name'), dev.get('input'),
+                                                           ['0x%04x' % m for m in dev.get('makers') or []]))
+                continue
+            # 🚨 Already ours: most likely the background round paired it a
+            # moment ago, while the wizard was looking. That IS the success the
+            # wizard is waiting for — skipping it kept saying "not found yet".
+            if dev['mac'] in mine:
+                return _bt_remote_ok('bluetooth.remoteAdded', paired=dev['mac'])
+            res = bt_remote_add(dev['mac'])
+            res['paired'] = dev['mac'] if res.get('success') else ''
+            return res
+        now = time.time()
+        if now - _bt_scan_log_at[0] > 60:          # what was there instead, at most once a minute
+            _bt_scan_log_at[0] = now
+            log.warning("bt remotes: no %s in range; seen: %s", model, '; '.join(seen) or 'nothing')
+    return _bt_remote_ok('bluetooth.scanDone', paired='')
+
+
+_bt_scan_log_at = [0.0]
+
+
+def bt_remote_add(mac):
+    """Pair and trust a remote, and remember it.
+
+    Trusting is what makes it work afterwards: BlueZ lets a trusted device
+    reconnect by itself, without anyone to approve it — which is exactly what
+    a remote does when a key is pressed after a night in a drawer."""
+    if not _bt_remotes_available():
+        return _bt_remote_fail('bluetooth.unavailable')
+    if not _bt_remotes_supported():
+        return _bt_remote_fail('bluetooth.remoteNeedsUpdate')
+    if not mac or not _BT_MAC_RE.match(mac):
+        return _bt_remote_fail('bluetooth.invalidAddress')
+    mac = mac.upper()
+    if not _bt_open_pairing_window():
+        return _bt_remote_fail('bluetooth.noAdapter')
+
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        if any(str(r.get('mac', '')).upper() == mac for r in doc['remotes']):
+            return _bt_remote_fail('bluetooth.remoteAlreadyAdded')
+
+        info = _bt_device_info(mac)
+        if not info['paired']:
+            try:
+                # Discovery has to stop before pairing: BlueZ will not pair
+                # while the adapter is still hopping around looking.
+                subprocess.run(['bluetoothctl', 'scan', 'off'],
+                               capture_output=True, text=True, timeout=10)
+                r = subprocess.run(['bluetoothctl', 'pair', mac],
+                                   capture_output=True, text=True, timeout=60)
+            except Exception:
+                log.exception("bt_remote_add: pair failed")
+                return _bt_remote_fail('bluetooth.remotePairFailed')
+            info = _bt_device_info(mac)
+            if not info['paired']:
+                log.error("bt remote pair %s failed: %s", mac,
+                          (r.stdout or r.stderr or '').strip()[-200:])
+                return _bt_remote_fail('bluetooth.remotePairFailed')
+
+        subprocess.run(['bluetoothctl', 'trust', mac], capture_output=True, timeout=15)
+        # A remote does connect on request the first time: it is awake right
+        # now, and connecting is what makes the kernel create its input node
+        # without waiting for the first key press.
+        try:
+            subprocess.run(['bluetoothctl', 'connect', mac], capture_output=True, timeout=30)
+        except Exception:
+            log.exception("bt_remote_add: first connect failed")
+
+        doc['remotes'].append({'mac': mac, 'name': _bt_clean_name(info['name'] or mac, mac)})
+        _remote_intro_again(_bt_certified_model(info))
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_remote_add: could not persist the remote")
+            return _bt_remote_fail('bluetooth.opFailed')
+    _bt_kick()
+    time.sleep(2)
+    return _bt_remote_ok('bluetooth.remoteAdded')
+
+
+# ── Certified remotes pair themselves ─────────────────────────────────
+#
+# The three remotes the appliance knows out of the box (_REMOTE_MODELS) do not
+# need the Scan button: while this box has no remote at all, it listens for
+# ten seconds every minute, and one of them put in pairing mode nearby is
+# paired, trusted and saved exactly as if it had been tapped in the list. The
+# kiosk then shows its key map and the practice run by itself.
+#
+# What that costs, and when it stops:
+#   * the radio stays up while no remote is paired (the pairing window is
+#     renewed on every round, so the supervisor keeps it on);
+#   * it stops for good as soon as one remote is saved — a second one is
+#     added from Settings;
+#   * never on a box without a screen (a remote drives nothing there), and
+#     never while a Bluetooth speaker is connected: discovery takes the radio
+#     away from the audio link.
+# Over the air a remote has only its name to go by. The Fire TV one calls
+# itself "AR", which is short enough to be something else: it must also
+# offer the HID service before it counts.
+_BT_CERTIFIED = (
+    # model, name over the air, name alone needs to be an input device too,
+    # Bluetooth company id that also identifies it (with an input device)
+    ('firetv', re.compile(r'^(AR|Amazon Remote.*|Amazon Fire TV Remote.*)$'), True, 0x0171),
+    ('g20s', re.compile(r'^G20S'), False, None),
+    ('xiaomi', re.compile(r'^Xiaomi RC'), False, None),
+)
+BT_AUTOPAIR_EVERY = 60           # seconds between two listening rounds
+BT_AUTOPAIR_LISTEN = 10          # seconds of discovery per round
+BT_AUTOPAIR_RETRY = 600          # a remote that failed to pair is left alone this long
+_bt_autopair_failed = {}
+
+
+def _bt_certified_model(dev, chosen=None):
+    """The certified model a discovered device is, or ''.
+
+    `chosen` is the model the person said they are pairing (the wizard): then
+    its name alone is enough — they are holding that remote in pairing mode,
+    and "AR" is not worth a second proof."""
+    name = str(dev.get('name') or '').strip()
+    makers = dev.get('makers') or []
+    for model, pattern, needs_hid, maker in _BT_CERTIFIED:
+        if pattern.match(name) and (dev.get('input') or not needs_hid or chosen == model):
+            return model
+        if maker is not None and maker in makers and (dev.get('input') or chosen == model):
+            return model
+    return ''
+
+
+REMOTE_INTRO_SEEN_FILE = '/etc/hifi-player/remote-intro-seen'
+
+
+def _remote_intro_again(model):
+    """A certified remote was just added (here, from the web or by itself):
+    the kiosk shows its key map and the practice run again, whether or not it
+    had shown them for that model before. The kiosk keeps the models it has
+    introduced in this file (qml/RemoteIntro.qml) and watches its folder, so
+    taking the model out is all it takes."""
+    if not model:
+        return
+    try:
+        with open(REMOTE_INTRO_SEEN_FILE) as f:
+            seen = [m for m in f.read().strip().split(',') if m]
+    except FileNotFoundError:
+        return
+    except Exception:
+        log.exception("remote intro: could not read the seen list")
+        return
+    if model not in seen:
+        return
+    try:
+        tmp = REMOTE_INTRO_SEEN_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(','.join(m for m in seen if m != model) + '\n')
+        os.replace(tmp, REMOTE_INTRO_SEEN_FILE)
+    except Exception:
+        log.exception("remote intro: could not update the seen list")
+
+
+def _bt_autopair_wanted():
+    """Should this round listen at all? See the block comment above."""
+    if not _bt_remotes_available() or not _bt_remotes_supported():
+        return False
+    if get_display_mode().get('mode') != 'gui':
+        return False
+    doc = _bt_read_doc()
+    if doc.get('remotes'):
+        return False
+    snap = _bt_snapshot()
+    if any(sp.get('connected') for sp in (snap.get('speakers') or [])):
+        return False
+    return True
+
+
+def _bt_autopair_round():
+    """One round: keep the radio up, listen, pair the first certified remote
+    found. Returns False when the radio could not be brought up."""
+    if not _bt_open_pairing_window(BT_AUTOPAIR_EVERY + 60):
+        return False
+    try:
+        subprocess.run(['bluetoothctl', '--timeout', str(BT_AUTOPAIR_LISTEN), 'scan', 'on'],
+                       capture_output=True, text=True, timeout=BT_AUTOPAIR_LISTEN + 15)
+    except Exception:
+        log.exception("bt autopair: scan failed")
+        return True
+    now = time.time()
+    for dev in _bt_known_devices():
+        # 🚨 A certified remote already paired in BlueZ but not in our list
+        # (paired by hand with bluetoothctl, or from an older system) is
+        # adopted the same way: bt_remote_add skips the pairing it does not
+        # need. Left out, the box would go on listening for a remote forever
+        # with three of them in the drawer.
+        if dev.get('audio'):
+            continue
+        model = _bt_certified_model(dev)
+        if not model or now - _bt_autopair_failed.get(dev['mac'], 0) < BT_AUTOPAIR_RETRY:
+            continue
+        log.info("bt autopair: certified remote %s (%s) %s", dev["mac"], model, "already paired, adopting it" if dev.get("paired") else "in pairing mode, pairing it")
+        res = bt_remote_add(dev['mac'])
+        if res.get('success'):
+            log.info("bt autopair: %s paired", dev['mac'])
+            return True
+        _bt_autopair_failed[dev['mac']] = now
+        log.warning("bt autopair: %s did not pair (%s)", dev['mac'], res.get('code'))
+    return True
+
+
+def _bt_autopair_background():
+    time.sleep(45)                   # let the boot and the supervisor settle first
+    while True:
+        pause = BT_AUTOPAIR_EVERY
+        try:
+            if _bt_autopair_wanted() and not _bt_autopair_round():
+                pause = BT_AUTOPAIR_RETRY    # no adapter answering: ask again much later
+        except Exception:
+            log.exception("bt autopair round failed")
+        time.sleep(pause)
+
+
+def bt_remote_remove(mac):
+    """Forget a remote: BlueZ drops the pairing and the radio is free to go
+    back down if nothing else needs it."""
+    if not mac or not _BT_MAC_RE.match(mac):
+        return _bt_remote_fail('bluetooth.invalidAddress')
+    mac = mac.upper()
+    with _bt_apply_lock:
+        doc = _bt_read_doc()
+        before = len(doc['remotes'])
+        doc['remotes'] = [r for r in doc['remotes']
+                          if str(r.get('mac', '')).upper() != mac]
+        if len(doc['remotes']) == before:
+            return _bt_remote_fail('bluetooth.remoteNotFound')
+        try:
+            _bt_write_doc(doc)
+        except Exception:
+            log.exception("bt_remote_remove: could not persist")
+            return _bt_remote_fail('bluetooth.opFailed')
+    try:
+        subprocess.run(['bluetoothctl', 'remove', mac], capture_output=True, timeout=20)
+    except Exception:
+        log.exception("bt_remote_remove: unpair failed")
+    _bt_kick()
+    return _bt_remote_ok('bluetooth.remoteForgotten')
+
+
+# ──────────────────────────────────────────────────────────────────
+#  Remote controls, seen from the web admin
+#
+#  I tasti li legge l'interfaccia sullo schermo, che possiede /dev/input
+#  (native-ui-qt/src/remote.cpp): qui non si legge nessun dispositivo. Al web
+#  admin serve la stessa fotografia — quali telecomandi ci sono, cosa fa ogni
+#  tasto, qual e' "il mio telecomando" — e per averla le due parti si passano
+#  quattro file:
+#
+#    /etc/hifi-player/remote-keys.json   cosa fa ogni tasto (per dispositivo)
+#    /etc/hifi-player/remote-device      il telecomando dichiarato dall'utente
+#    /run/hifi-remote/last.json          l'ultimo tasto premuto (lo scrive lei)
+#    /run/hifi-remote/learn              "sto provando i tasti": scadenza epoch
+#
+#  🚨 L'elenco dei dispositivi si ricava da sysfs con le stesse regole di
+#  remote.cpp, non chiedendolo all'interfaccia: cosi' la pagina funziona anche
+#  mentre il kiosk si riavvia per un aggiornamento.
+# ──────────────────────────────────────────────────────────────────
+REMOTE_KEYS_FILE = '/etc/hifi-player/remote-keys.json'
+REMOTE_DEVICE_FILE = '/etc/hifi-player/remote-device'
+REMOTE_RUN_DIR = '/run/hifi-remote'
+REMOTE_LAST_FILE = REMOTE_RUN_DIR + '/last.json'
+REMOTE_LEARN_FILE = REMOTE_RUN_DIR + '/learn'
+REMOTE_LEARN_SECONDS = 180
+# Le azioni assegnabili: 🚨 stesso elenco e stesso ordine di kActions in
+# native-ui-qt/src/remote.cpp. Se cambia li', cambia anche qui.
+REMOTE_ACTIONS = [
+    'playPause', 'play', 'pause', 'stop', 'next', 'prev', 'forward', 'rewind',
+    'volumeUp', 'volumeDown', 'mute',
+    'up', 'down', 'left', 'right', 'ok', 'back', 'home', 'menu', 'pageUp', 'pageDown',
+    'nowPlaying', 'fullScreen', 'nextVu', 'nextAnimation', 'queue', 'search',
+    'favorite', 'openFavorites', 'shuffle', 'standby', 'powerMenu', 'eject', 'resetTouch',
+]
+# i codici evdev che bastano a riconoscere un telecomando (linux/input-event-codes.h)
+_KEY_PLAYPAUSE, _KEY_NEXTSONG, _KEY_PREVIOUSSONG = 164, 163, 165
+_KEY_PLAYCD, _KEY_STOPCD, _KEY_PLAY = 200, 166, 207
+_KEY_UP, _KEY_DOWN, _KEY_LEFT, _KEY_RIGHT = 103, 108, 105, 106
+_KEY_ENTER, _KEY_OK, _KEY_SELECT = 28, 0x160, 0x161
+_REL_X, _REL_Y, _ABS_X, _ABS_MT_X = 0, 1, 0, 53
+_INPUT_PROP_DIRECT = 1                       # a screen you touch where you look
+
+
+# The remotes the appliance knows out of the box: kModels in
+# native-ui-qt/src/remote.cpp (bus, vendor, product, 0 = any product).
+# 🚨 Keep the two lists the same: a model is a remote even when it declares a
+# whole keyboard (Fire TV, G20S PRO), and here that decides what the page says.
+_REMOTE_MODELS = [
+    ('firetv', 'Fire TV', 5, 0x0171, 0),
+    ('g20s', 'G20S PRO', 5, 0x1d5a, 0xc081),
+    ('xiaomi', 'Xiaomi', 5, 0x2717, 0),
+]
+
+
+def _remote_model(bus, vendor, product):
+    for mid, _label, mbus, mvendor, mproduct in _REMOTE_MODELS:
+        if bus == mbus and vendor == mvendor and (not mproduct or product == mproduct):
+            return mid
+    return ''
+
+
+def _sysfs_bit(bitmap, bit):
+    """Un bit di un bitmap di /sys/class/input: parole esadecimali, la piu'
+    significativa per prima."""
+    words = (bitmap or '').split()
+    if not words:
+        return False
+    idx = len(words) - 1 - bit // 64
+    if idx < 0 or idx >= len(words):
+        return False
+    try:
+        return bool((int(words[idx], 16) >> (bit % 64)) & 1)
+    except ValueError:
+        return False
+
+
+def _remote_group_key(rd):
+    """What ties the nodes of ONE physical remote together.
+
+    🚨 A remote is often more than one input device: a Xiaomi one shows up as
+    a keyboard AND a consumer-control node, an air mouse adds a pointer. They
+    are the same thing in someone's hand, and offering them as separate
+    entries to choose between is a question nobody can answer. `uniq` is the
+    Bluetooth address (the same for every node of one remote); USB devices
+    rarely set it, so fall back to the physical port with the endpoint cut
+    off ("…-3/input1" → "…-3"), then to vendor:product."""
+    uniq = (rd('uniq') or '').strip().upper()
+    if uniq:
+        return uniq
+    phys = (rd('phys') or '').strip()
+    if phys:
+        return phys.split('/')[0]
+    vid, pid = (rd('id/vendor') or '').strip(), (rd('id/product') or '').strip()
+    return ('%s:%s' % (vid, pid)) if (vid or pid) else ''
+
+
+def _remote_group_name(names):
+    """One name for a remote that came in several pieces: what its nodes
+    agree on ("Xiaomi RC Keyboard" + "Xiaomi RC Consumer Control" → "Xiaomi
+    RC"), or the shortest of them when they agree on nothing useful."""
+    names = [n for n in names if n]
+    if not names:
+        return ''
+    if len(names) == 1:
+        return names[0]
+    shortest = min(names, key=len)
+    common = ''
+    for i, ch in enumerate(shortest):
+        if all(n[i] == ch for n in names):
+            common += ch
+        else:
+            break
+    common = common.rstrip(' -_/·').strip()
+    # a couple of letters in common is not a name
+    return common if len(common) >= 3 else shortest
+
+
+def _usb_device_dir(input_dir):
+    """The USB device an input node belongs to (…/usb1/1-2): the first parent
+    of its `device` link with both `authorized` and `idVendor`; '' if none."""
+    p = os.path.realpath(os.path.join(input_dir, 'device'))
+    for _ in range(8):
+        if os.path.exists(os.path.join(p, 'authorized')) and os.path.exists(os.path.join(p, 'idVendor')):
+            return p
+        parent = os.path.dirname(p)
+        if parent == p:
+            break
+        p = parent
+    return ''
+
+
+def _usb_is_audio(usb):
+    """🚨 A DAC with playback keys (the Topping DX1 II) is a sound card, not a
+    remote: true when the USB device also has an audio interface
+    (bInterfaceClass 01). Same rule as remote.cpp usbAudio()."""
+    if not usb:
+        return False
+    for iface in glob.glob(os.path.join(usb, '*:*')):
+        try:
+            with open(os.path.join(iface, 'bInterfaceClass')) as f:
+                if f.read().strip() == '01':
+                    return True
+        except Exception:
+            pass
+    return False
+
+
+def _remote_devices():
+    """I telecomandi collegati adesso, con le regole di remote.cpp: tasti
+    multimediali oppure frecce+conferma, e niente tastiere complete fra i
+    "telecomandi veri"."""
+    out = []
+    chosen = _remote_chosen()
+    root = os.environ.get('HIFI_SYSFS_INPUT', '/sys/class/input')
+
+    def reader(d):
+        def rd(name):
+            try:
+                with open(os.path.join(d, name)) as f:
+                    return f.read().strip()
+            except Exception:
+                return ''
+        return rd
+    dirs = sorted(glob.glob(os.path.join(root, 'input*')))
+    # 🚨 A touchscreen often comes with a keyboard node of its own (the TSTP
+    # MTouch panel: a full keyboard with media keys, same serial and port as
+    # the touch node). That one is the screen, not a remote, and it was
+    # listed under "Your remotes" with "This is my remote" next to it. Every
+    # node of a device that has a touchscreen node (INPUT_PROP_DIRECT with
+    # absolute axes) stays out — the same rule as remote.cpp.
+    screens = set()
+    for d in dirs:
+        rd = reader(d)
+        abs_ = rd('capabilities/abs')
+        if _sysfs_bit(rd('properties'), _INPUT_PROP_DIRECT) and (_sysfs_bit(abs_, _ABS_X) or _sysfs_bit(abs_, _ABS_MT_X)):
+            screens.add(_remote_group_key(rd))
+    screens.discard('')
+    for d in dirs:
+        rd = reader(d)
+        key = rd('capabilities/key')
+        if not key:
+            continue
+        if _remote_group_key(rd) in screens:
+            continue
+        full_keyboard = all(_sysfs_bit(key, b) for b in range(1, 32))
+        media = any(_sysfs_bit(key, c) for c in
+                    (_KEY_PLAYPAUSE, _KEY_NEXTSONG, _KEY_PREVIOUSSONG, _KEY_PLAYCD, _KEY_STOPCD, _KEY_PLAY))
+        nav = (all(_sysfs_bit(key, c) for c in (_KEY_UP, _KEY_DOWN, _KEY_LEFT, _KEY_RIGHT))
+               and any(_sysfs_bit(key, c) for c in (_KEY_ENTER, _KEY_OK, _KEY_SELECT)))
+        try:
+            bus = int(rd('id/bustype') or '0', 16)
+            model = _remote_model(bus, int(rd('id/vendor') or '0', 16), int(rd('id/product') or '0', 16))
+        except ValueError:
+            bus, model = 0, ''
+        any_key = any(c not in '0 ' for c in key)
+        if not media and not (nav and not full_keyboard) and not (model and any_key):
+            continue
+        # a sound card's playback keys work (remote.cpp reads them) but it is
+        # not a remote to list, nor to call "mine"
+        if not model and _usb_is_audio(_usb_device_dir(d)):
+            continue
+        rel, abs_ = rd('capabilities/rel'), rd('capabilities/abs')
+        pointer = _sysfs_bit(rel, _REL_X) and _sysfs_bit(rel, _REL_Y)
+        tablet = _sysfs_bit(abs_, _ABS_X) or _sysfs_bit(abs_, _ABS_MT_X)
+        name = rd('name') or os.path.basename(d)
+        group = _remote_group_key(rd) or name
+        out.append({
+            'name': name,
+            'bus': 'bluetooth' if bus == 5 else 'usb' if bus == 3 else 'other',
+            'kind': 'remote' if ((not full_keyboard or model) and not pointer and not tablet) else 'keyboard',
+            'model': model,
+            # chosen by its own name, or by the group: one remote, one choice,
+            # however many input devices it happens to be made of
+            'chosen': bool(chosen) and chosen in (name, group),
+            'address': rd('uniq').upper(),
+            'group': group,
+        })
+    # the name to show when the pieces are offered as one
+    for row in out:
+        row['groupName'] = _remote_group_name([d['name'] for d in out if d['group'] == row['group']])
+    return out
+
+
+def _remote_chosen():
+    try:
+        with open(REMOTE_DEVICE_FILE) as f:
+            return f.readline().strip()
+    except Exception:
+        return ''
+
+
+def _remote_keys_doc():
+    """remote-keys.json, sempre nella forma nuova {all, devices}. Un file del
+    primo giorno era una mappa piatta codice -> azione: vale per tutti."""
+    try:
+        with open(REMOTE_KEYS_FILE) as f:
+            doc = json.load(f)
+        if not isinstance(doc, dict):
+            return {'all': {}, 'devices': {}}
+        if 'all' in doc or 'devices' in doc:
+            return {'all': dict(doc.get('all') or {}), 'devices': dict(doc.get('devices') or {})}
+        return {'all': dict(doc), 'devices': {}}
+    except Exception:
+        return {'all': {}, 'devices': {}}
+
+
+def _remote_last_key():
+    try:
+        with open(REMOTE_LAST_FILE) as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _remote_learning():
+    try:
+        with open(REMOTE_LEARN_FILE) as f:
+            return float(f.read().strip() or 0) > time.time()
+    except Exception:
+        return False
+
+
+def get_remote():
+    """Quello che serve alla pagina Telecomando del web admin."""
+    # 🚨 Non basta chiedere a systemd se l'unita' e' attiva: in collaudo (e su
+    # un apparecchio dove qualcuno l'ha avviata a mano) l'interfaccia gira lo
+    # stesso, e la pagina direbbe il falso. Conta che ci sia il processo.
+    running = False
+    try:
+        running = subprocess.run(['systemctl', 'is-active', 'hifi-qt.service'],
+                                 capture_output=True, text=True, timeout=10).stdout.strip() == 'active'
+        if not running:
+            running = subprocess.run(['pgrep', '-f', 'hifi-qt --assets'],
+                                     capture_output=True, timeout=10).returncode == 0
+    except Exception:
+        pass
+    doc = _remote_keys_doc()
+    return {
+        'devices': _remote_devices(),
+        'chosen': _remote_chosen(),
+        'keys': doc,
+        'actions': REMOTE_ACTIONS,
+        'lastKey': _remote_last_key(),
+        'learning': _remote_learning(),
+        # 🚨 I tasti li legge l'interfaccia sullo schermo: senza quella, la
+        # prova dei tasti non puo' funzionare e la pagina deve dirlo.
+        'interfaceRunning': running,
+    }
+
+
+def set_remote_device(device):
+    """"Questo e' il mio telecomando" (nome vuoto = nessuno)."""
+    device = re.sub(r'[\x00-\x1f\x7f]', '', str(device or '')).strip()[:80]
+    try:
+        os.makedirs(os.path.dirname(REMOTE_DEVICE_FILE), exist_ok=True)
+        tmp = REMOTE_DEVICE_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(device + '\n')
+        os.replace(tmp, REMOTE_DEVICE_FILE)
+    except Exception:
+        log.exception("set_remote_device failed")
+        return {'success': False, 'message': _t('remote.saveFailed', _lang()), **get_remote()}
+    return {'success': True, 'message': _t('remote.saved', _lang()), **get_remote()}
+
+
+def set_remote_key(code, action, device=''):
+    """Cosa fa un tasto, per QUEL dispositivo (vuoto = per tutti). `action`
+    None toglie l'assegnazione, "" vuol dire "questo tasto non fa niente"."""
+    try:
+        code = int(code)
+    except (TypeError, ValueError):
+        return {'success': False, 'message': _t('remote.badKey', _lang()), **get_remote()}
+    if code <= 0:
+        return {'success': False, 'message': _t('remote.badKey', _lang()), **get_remote()}
+    if action is not None:
+        action = str(action)
+        if action and action not in REMOTE_ACTIONS:
+            return {'success': False, 'message': _t('remote.badAction', _lang()), **get_remote()}
+    device = re.sub(r'[\x00-\x1f\x7f]', '', str(device or '')).strip()[:80]
+
+    doc = _remote_keys_doc()
+    where = doc['devices'].setdefault(device, {}) if device else doc['all']
+    if action is None:
+        where.pop(str(code), None)
+        if device and not doc['devices'][device]:
+            doc['devices'].pop(device, None)
+    else:
+        where[str(code)] = action
+    try:
+        os.makedirs(os.path.dirname(REMOTE_KEYS_FILE), exist_ok=True)
+        tmp = REMOTE_KEYS_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            json.dump(doc, f, indent=1)
+        os.replace(tmp, REMOTE_KEYS_FILE)
+    except Exception:
+        log.exception("set_remote_key failed")
+        return {'success': False, 'message': _t('remote.saveFailed', _lang()), **get_remote()}
+    return {'success': True, 'message': _t('remote.saved', _lang()), **get_remote()}
+
+
+def set_remote_learning(enable):
+    """La finestra "sto provando i tasti": l'interfaccia la guarda e smette di
+    agire sui tasti finche' dura. 🚨 Con una scadenza, non un interruttore: un
+    browser chiuso a meta' prova non deve lasciare un apparecchio in cui il
+    telecomando non comanda piu' niente."""
+    try:
+        os.makedirs(REMOTE_RUN_DIR, exist_ok=True)
+        # 🚨 Scritto e poi rinominato: l'interfaccia sorveglia la cartella, e
+        # una riscrittura sul posto non e' un cambiamento di cartella.
+        tmp = REMOTE_LEARN_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(str(int(time.time()) + REMOTE_LEARN_SECONDS) if enable else '0')
+        os.replace(tmp, REMOTE_LEARN_FILE)
+    except Exception:
+        log.exception("set_remote_learning failed")
+        return {'success': False, 'message': _t('remote.saveFailed', _lang()), **get_remote()}
+    return {'success': True, **get_remote()}
+
+
+# ──────────────────────────────────────────────────────────────────
+#  Touchscreen: what it is doing, and "unplug it and plug it back in"
+# ──────────────────────────────────────────────────────────────────
+# 🚨 2026-09-28, a TSTP MTouch panel: now and then the whole screen stops
+# answering and only pulling its USB cable brings it back, with nothing in the
+# kernel log. The kiosk watches the panel (native-ui-qt/src/touchwatch.cpp →
+# /run/hifi-touch.json, in the support bundle) to tell a silent panel from a
+# stuck finger from touches lost on the way; meanwhile the same cure as the
+# cable is one press away: the USB device is de-authorised and authorised
+# again, which the kernel treats as unplugged and plugged back in.
+TOUCH_STATE_FILE = '/run/hifi-touch.json'
+
+
+def _touchscreens():
+    """[(name, usb device dir or '')] of every touchscreen: absolute axes on
+    a device touched where you look (INPUT_PROP_DIRECT), as touchwatch.cpp."""
+    root = os.environ.get('HIFI_SYSFS_INPUT', '/sys/class/input')
+    out = []
+    for d in sorted(glob.glob(os.path.join(root, 'input*'))):
+        def rd(name, d=d):
+            try:
+                with open(os.path.join(d, name)) as f:
+                    return f.read().strip()
+            except Exception:
+                return ''
+        abs_ = rd('capabilities/abs')
+        if not _sysfs_bit(rd('properties'), _INPUT_PROP_DIRECT):
+            continue
+        if not (_sysfs_bit(abs_, _ABS_X) or _sysfs_bit(abs_, _ABS_MT_X)):
+            continue
+        out.append((rd('name') or os.path.basename(d), _usb_device_dir(d)))
+    return out
+
+
+def reset_touchscreen():
+    """Unplug and plug back in, in software, every USB touchscreen."""
+    screens = _touchscreens()
+    usbs = []
+    for _name, usb in screens:
+        if usb and usb not in usbs:
+            usbs.append(usb)
+    if not usbs:
+        return {'success': False, 'message': _t('touch.none', _lang())}
+    done = []
+    try:
+        for usb in usbs:
+            with open(os.path.join(usb, 'authorized'), 'w') as f:
+                f.write('0')
+        time.sleep(1.5)                     # long enough for everyone to see it go
+        for usb in usbs:
+            with open(os.path.join(usb, 'authorized'), 'w') as f:
+                f.write('1')
+            done.append(os.path.basename(usb))
+    except Exception:
+        log.exception("reset_touchscreen failed")
+        # never leave a panel de-authorised: that would be worse than frozen
+        for usb in usbs:
+            try:
+                with open(os.path.join(usb, 'authorized'), 'w') as f:
+                    f.write('1')
+            except Exception:
+                pass
+        return {'success': False, 'message': _t('touch.failed', _lang())}
+    log.info("touchscreen restarted: %s", ', '.join(done))
+    return {'success': True, 'message': _t('touch.reset', _lang()), 'devices': done}
+
+
+def _support_touch_snapshot():
+    """The kiosk's view of the touchscreen plus the USB power state of each."""
+    out = {'watch': None, 'screens': []}
+    try:
+        with open(TOUCH_STATE_FILE) as f:
+            out['watch'] = json.load(f)
+    except Exception as e:
+        out['watch'] = {'error': str(e)}
+    for name, usb in _touchscreens():
+        row = {'name': name, 'usb': os.path.basename(usb) if usb else ''}
+        for k in ('authorized', 'power/control', 'power/runtime_status', 'power/autosuspend_delay_ms'):
+            try:
+                with open(os.path.join(usb, k)) as f:
+                    row[k] = f.read().strip()
+            except Exception:
+                row[k] = None
+        out['screens'].append(row)
+    return out
+
+
+def get_remote_report():
+    """La "scheda del telecomando": tutto quello che serve per capire un
+    telecomando che non si ha in mano.
+
+    🚨 Nasce da una domanda onesta dell'utente: "non posso comprare cinquanta
+    telecomandi per provarli". Con questa, chi segnala un problema manda un
+    file e dall'altra parte si vede cosa dichiara il suo telecomando, come
+    l'abbiamo classificato e cosa ne ha detto il nucleo — che e' esattamente
+    l'insieme di dati con cui si e' risolto il caso del G20S.
+
+    Dentro ci sono nomi dei dispositivi e indirizzi Bluetooth: la pagina lo
+    dice prima di farlo scaricare."""
+    def run(cmd, timeout=10):
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+        except Exception:
+            return ''
+
+    def line(path):
+        try:
+            with open(path) as f:
+                return f.readline().strip()
+        except Exception:
+            return ''
+
+    hid = []
+    for d in sorted(glob.glob('/sys/bus/hid/devices/*')):
+        def rd(name, path=d):
+            try:
+                with open(os.path.join(path, name)) as f:
+                    return f.read().strip()
+            except Exception:
+                return ''
+        desc = b''
+        try:
+            with open(os.path.join(d, 'report_descriptor'), 'rb') as f:
+                desc = f.read()
+        except Exception:
+            pass
+        hid.append({
+            'id': os.path.basename(d),
+            'modalias': rd('modalias'),
+            'uniq': rd('uniq').upper(),
+            'phys': rd('phys'),
+            # il driver legato: se manca, il nucleo ha rifiutato il descrittore
+            'driver': os.path.basename(os.path.realpath(os.path.join(d, 'driver')))
+                      if os.path.exists(os.path.join(d, 'driver')) else '',
+            'descriptor_bytes': len(desc),
+            'descriptor': desc.hex(),
+        })
+
+    # i dispositivi di input come li vede il nucleo, con le capacita' grezze:
+    # e' da queste che decidiamo chi e' un telecomando (remote.cpp)
+    inputs = []
+    root = os.environ.get('HIFI_SYSFS_INPUT', '/sys/class/input')
+    for din in sorted(glob.glob(os.path.join(root, 'input*'))):
+        def rin(name, path=din):
+            try:
+                with open(os.path.join(path, name)) as f:
+                    return f.read().strip()
+            except Exception:
+                return ''
+        if not rin('capabilities/key'):
+            continue
+        inputs.append({
+            'name': rin('name'), 'uniq': rin('uniq').upper(), 'phys': rin('phys'),
+            'bustype': rin('id/bustype'), 'vendor': rin('id/vendor'), 'product': rin('id/product'),
+            'key': rin('capabilities/key'), 'rel': rin('capabilities/rel'),
+            'abs': rin('capabilities/abs'), 'properties': rin('properties'),
+        })
+
+    kernel = [l for l in run(['dmesg']).splitlines()
+              if re.search(r'hid|uhid|bluetooth|input:', l, re.I)][-60:]
+    kiosk = [l for l in run(['journalctl', '-u', 'hifi-qt', '-n', '400', '--no-pager']).splitlines()
+             if re.search(r'btghid|remote:|input:', l)][-60:]
+
+    return {
+        'generated': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+        'device': {
+            'hostname': socket.gethostname(),
+            'image': line('/usr/lib/osmium/IMAGE_VERSION'),
+            'ui': line('/etc/hifi-player/UI_VERSION'),
+            'system': line('/etc/hifi-player/SYSTEM_VERSION'),
+            'os': line('/etc/hifi-player/OS_VERSION'),
+            'kernel': run(['uname', '-r']).strip(),
+        },
+        'remote': get_remote(),
+        'bluetooth': get_bt_remotes(),
+        'hid': hid,
+        'inputs': inputs,
+        'kernelLog': kernel,
+        'interfaceLog': kiosk,
+    }
+
 
 # ──────────────────────────────────────────────────────────────────
 #  OTA update helpers
@@ -8267,6 +9307,60 @@ def api_close_and_restart():
     result = close_all_apps_and_restart()
     return jsonify({"message": result})
 
+# ── Settings → Licenses & credits ───────────────────────────────────
+# What the device is made of and under which licenses: this project (AGPL
+# with a commercial option), Lyrion (named, always — see THIRD-PARTY-NOTICES),
+# the hand-kept third-party notices the kiosk already shows, and every Debian
+# package of the image with its license, written by distro/gen-credits.py at
+# image build. The web admin shows all of it; the on-screen page the summary.
+CREDITS_FILE = '/usr/lib/osmium/credits.json'
+THIRD_PARTY_FILE = '/opt/hifi-qt/locales/third_party.json'   # native-ui-qt/ci/build-payload.sh, from src/data/thirdPartyNotices.js
+PROJECT_SOURCE_URL = 'https://github.com/adri6412/osmium-sound'
+
+def get_credits():
+    def load(path, default):
+        try:
+            with open(path, encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return default
+    pkgs = load(CREDITS_FILE, {})
+    if not isinstance(pkgs, dict):
+        pkgs = {}
+    packages = pkgs.get('packages')
+    notices = load(THIRD_PARTY_FILE, [])
+    try:
+        lyrion_version = _lyrion_installed_version() or None
+    except Exception:
+        lyrion_version = None
+    return {
+        'project': {
+            'name': 'Osmium Sound',
+            'version': _installed_ui_version(),
+            'license': 'AGPL-3.0-only',
+            'license_url': 'https://www.gnu.org/licenses/agpl-3.0.html',
+            'source': PROJECT_SOURCE_URL,
+            'commercial': 'info@osmiumsound.it',
+            'mit_until': '2026-08-23',
+        },
+        'lyrion': {
+            'name': 'Lyrion Music Server',
+            'version': lyrion_version,
+            'license': 'GPL-2.0+',
+            'url': 'https://lyrion.org',
+            'source': 'https://github.com/LMS-Community/slimserver',
+        },
+        'notices': notices if isinstance(notices, list) else [],
+        'packages': packages if isinstance(packages, list) else [],
+        'packages_available': isinstance(packages, list),
+        'packages_generated': pkgs.get('generated'),
+        'suite': pkgs.get('suite'),
+    }
+
+@app.route('/credits', methods=['GET'])
+def api_credits():
+    return jsonify(get_credits())
+
 @app.route('/system_info', methods=['GET'])
 def api_system_info():
     result = get_system_info()
@@ -8628,6 +9722,19 @@ def api_set_audio_device():
     data = request.get_json(silent=True) or {}
     return jsonify(set_audio_device(data.get('device')))
 
+@app.route('/squeezelite_conf', methods=['GET'])
+def api_squeezelite_conf():
+    return jsonify(get_squeezelite_conf())
+
+@app.route('/squeezelite_conf', methods=['POST'])
+def api_set_squeezelite_conf():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_squeezelite_conf(data if isinstance(data, dict) else {}))
+
+@app.route('/squeezelite_conf/reset', methods=['POST'])
+def api_reset_squeezelite_conf():
+    return jsonify(reset_squeezelite_conf())
+
 @app.route('/lms_role', methods=['GET'])
 def api_lms_role():
     return jsonify(get_lms_role())
@@ -8728,15 +9835,6 @@ def api_dsp_preset_delete():
     data = request.get_json(silent=True) or {}
     return jsonify(delete_dsp_preset(data.get('name')))
 
-@app.route('/tidal_status', methods=['GET'])
-def api_tidal_status():
-    return jsonify(get_tidal_status())
-
-@app.route('/tidal_set', methods=['POST'])
-def api_tidal_set():
-    data = request.get_json(silent=True) or {}
-    return jsonify(set_tidal(bool(data.get('enable'))))
-
 # ── Bluetooth speakers (A2DP source) ──────────────────────────────
 # /bluetooth_status keeps its old path: it is the one Bluetooth route that
 # ever had callers outside this file, and answering it with the new shape
@@ -8781,6 +9879,61 @@ def api_bt_connect():
     data = request.get_json(silent=True) or {}
     return jsonify(bt_connect(data.get('mac'), bool(data.get('connect', True))))
 
+# ── telecomandi Bluetooth ────────────────────────────────────────────
+# Solo accoppiare e dimenticare: quando il telecomando e' accoppiato, i
+# tasti li legge da se' l'interfaccia dallo /dev/input che il nucleo
+# crea (native-ui-qt/src/remote.cpp), senza passare da qui.
+@app.route('/bt_remotes', methods=['GET'])
+def api_bt_remotes():
+    return jsonify(get_bt_remotes())
+
+@app.route('/bt_remotes/scan', methods=['POST'])
+def api_bt_remotes_scan():
+    data = request.get_json(silent=True) or {}
+    model = data.get('model')
+    model = model if model in {c[0] for c in _BT_CERTIFIED} else None
+    return jsonify(bt_remotes_scan(data.get('seconds', 12), model))
+
+@app.route('/bt_remotes/add', methods=['POST'])
+def api_bt_remotes_add():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_remote_add(data.get('mac')))
+
+@app.route('/bt_remotes/remove', methods=['POST'])
+def api_bt_remotes_remove():
+    data = request.get_json(silent=True) or {}
+    return jsonify(bt_remote_remove(data.get('mac')))
+
+# ── telecomandi, dal web admin ───────────────────────────────────────
+@app.route('/remote', methods=['GET'])
+def api_remote():
+    return jsonify(get_remote())
+
+@app.route('/remote/device', methods=['POST'])
+def api_remote_device():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_remote_device(data.get('device')))
+
+@app.route('/remote/keys', methods=['POST'])
+def api_remote_keys():
+    data = request.get_json(silent=True) or {}
+    # 'action' assente = togli l'assegnazione; "" = questo tasto non fa niente
+    action = data.get('action', None) if 'action' in data else None
+    return jsonify(set_remote_key(data.get('code'), action, data.get('device', '')))
+
+@app.route('/remote/report', methods=['GET'])
+def api_remote_report():
+    return jsonify(get_remote_report())
+
+@app.route('/touch/reset', methods=['POST'])
+def api_touch_reset():
+    return jsonify(reset_touchscreen())
+
+@app.route('/remote/learn', methods=['POST'])
+def api_remote_learn():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_remote_learning(bool(data.get('enable'))))
+
 @app.route('/show_global_keyboard', methods=['POST'])
 def api_show_global_keyboard():
     result = show_global_keyboard()
@@ -8803,4 +9956,5 @@ if __name__ == '__main__':
     threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
     threading.Thread(target=_vu_store_background, daemon=True, name='vu-store').start()
     threading.Thread(target=_anim_store_background, daemon=True, name='anim-store').start()
+    threading.Thread(target=_bt_autopair_background, daemon=True, name='bt-autopair').start()
     app.run(host='127.0.0.1', port=8000, threaded=True)

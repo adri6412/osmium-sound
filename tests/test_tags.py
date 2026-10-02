@@ -69,7 +69,10 @@ def dsf_bytes():
 
 
 FFMPEG_CODECS = {'mp3': ['-c:a', 'libmp3lame', '-id3v2_version', '0', '-write_xing', '0'],
+                 'mp2': ['-c:a', 'mp2', '-f', 'mp2'],
                  'm4a': ['-c:a', 'aac'], 'ogg': ['-c:a', 'libvorbis'], 'opus': ['-c:a', 'libopus'],
+                 'spx': ['-c:a', 'libspeex', '-f', 'ogg'], 'ogf': ['-c:a', 'flac', '-f', 'ogg'],
+                 'wma': ['-c:a', 'wmav2'], 'tta': ['-c:a', 'tta'],
                  'wv': ['-c:a', 'wavpack'], 'wav': ['-c:a', 'pcm_s16le'], 'aiff': ['-c:a', 'pcm_s16be']}
 
 
@@ -91,6 +94,7 @@ class FakeLyrion:
         self.mediadirs = []
         self.calls = []
         self.fail = False
+        self.tags_down = False      # `tags` alone fails, as Lyrion 9.2 does on WAV
         self.moved_to = None        # the album the files belong to after a rescan
         self.scanning = []          # serverstatus `rescan` answers, in order
 
@@ -111,6 +115,8 @@ class FakeLyrion:
         if cmd == 'pref':
             return {'_p2': list(self.mediadirs)}
         if cmd == 'tags':
+            if self.tags_down:
+                raise hm.LyrionError('stalled')
             return dict(self.raw.get(int(args['track_id']), {}))
         start, count = int(params[1]), int(params[2])
         if cmd == 'albums':
@@ -279,7 +285,13 @@ class PathTests(unittest.TestCase):
         self.assertEqual(svc.access(os.path.join(self.music, 'gone.flac'), 'flac', writer_map=writable),
                          (None, 'missing'))
         self.assertEqual(svc.access(good, 'flac', writer_map={'flac': False})[1], 'unsupported_format')
-        self.assertEqual(svc.access(good, 'flac', cue=True, writer_map=writable)[1], 'unsupported_format')
+        self.assertEqual(svc.access(good, 'flac', cue=True, writer_map=writable)[1], 'cue_track')
+        self.assertEqual(svc.access(None, 'flac', writer_map=writable), (None, 'not_a_file'))
+        # a track of an album imported from a streaming service: its own reason
+        self.assertEqual(svc.access(None, '', writer_map=writable, url='qobuz://1234.flac'), (None, 'streamed'))
+        self.assertTrue(ht.streamed_url('tidal://5678.flac'))
+        self.assertFalse(ht.streamed_url(file_url(good)))
+        self.assertFalse(ht.streamed_url(''))
         with mock.patch.object(ht, 'fs_readonly', return_value=True):
             self.assertEqual(svc.access(good, 'flac', writer_map=writable)[1], 'readonly')
         if os.geteuid() != 0:
@@ -425,8 +437,9 @@ class MutagenTests(unittest.TestCase):
             self.skipTest(f'this ffmpeg cannot make {fmt}')
         return path
 
-    def roundtrip(self, fmt):
-        path = self.make(fmt)
+    def roundtrip(self, ext):
+        path = self.make(ext)
+        fmt = ht.format_of(path)
         before = ht.read_file(path, fmt)
         ht.write_file(path, fmt, self.CHANGES, [])
         after = ht.read_file(path, fmt)
@@ -476,6 +489,43 @@ class MutagenTests(unittest.TestCase):
 
     def test_ogg(self):
         self.roundtrip('ogg')
+
+    def test_speex_and_flac_in_ogg(self):
+        # one "ogg" format for every codec in the container: mutagen tells
+        # them apart, and they all carry Vorbis comments
+        self.roundtrip('spx')
+        self.roundtrip('ogf')
+
+    def test_mp2(self):
+        self.roundtrip('mp2')
+
+    def test_tta(self):
+        path = self.roundtrip('tta')
+        import mutagen
+        self.assertEqual(mutagen.File(path).tags.version[:2], (2, 4))
+
+    def test_wma(self):
+        path = self.roundtrip('wma')
+        import mutagen
+        tags = mutagen.File(path).tags
+        self.assertEqual(str(tags['WM/TrackNumber'][0]), '1/12')
+        self.assertEqual(str(tags['WM/PartOfSet'][0]), '1/2')
+        self.assertEqual(str(tags['WM/AlbumTitle'][0]), 'The Dark Side of the Moon')
+        self.assertEqual(str(tags['Author'][0]), 'Pink Floyd')
+        self.assertIs(tags['WM/IsCompilation'][0].value, False)
+        self.assertEqual([str(v) for v in tags['MusicBrainz/Artist Id']], [MBID2, MBID])
+        # the 0-based WM/Track of old writers reads as the track number and
+        # goes once a real number is written
+        from mutagen.asf import ASFDWordAttribute
+        audio = mutagen.File(path)
+        del audio.tags['WM/TrackNumber']
+        audio.tags['WM/Track'] = [ASFDWordAttribute(4)]
+        audio.save()
+        self.assertEqual(ht.read_file(path, 'wma')['tags']['TRACKNUMBER'], ['5'])
+        ht.write_file(path, 'wma', {'TRACKNUMBER': ['6']}, [])
+        again = mutagen.File(path).tags
+        self.assertNotIn('WM/Track', again)
+        self.assertEqual(str(again['WM/TrackNumber'][0]), '6')
 
     def test_opus(self):
         self.roundtrip('opus')
@@ -580,6 +630,15 @@ class ServiceTests(unittest.TestCase):
         self.assertIn('sort:album', albums_calls[-2])
         self.assertEqual(self.svc.artists('', 0, 100),
                          {'total': 1, 'artists': [{'artist_id': 977, 'name': 'Pink Floyd', 'album_count': 1}]})
+        # only artists: Lyrion's own default puts composers, conductors and
+        # bands in the list, so the roles are always spelled out, on the
+        # artists, on one artist's albums and on the album counts
+        role = 'role_id:ARTIST,ALBUMARTIST,TRACKARTIST'
+        self.assertIn(role, [c for c in self.lyrion.calls if c[0] == 'artists'][-1])
+        self.assertIn(role, albums_calls[-1])
+        self.assertNotIn(role, albums_calls[-2])
+        counts = [c for c in self.lyrion.calls if c[0] == 'albums' and c[2] == '0' and 'artist_id:977' in c]
+        self.assertTrue(counts and all(role in c for c in counts))
         # counts are asked once per scan
         n = sum(1 for c in self.lyrion.calls if c[0] == 'titles')
         self.svc.albums('', 0, 60)
@@ -593,6 +652,7 @@ class ServiceTests(unittest.TestCase):
         self.lyrion.tracks[704].append({'id': 201, 'url': file_url(self.paths[0]) + '#10.0-20.0', 'tracknum': '5'})
         self.lyrion.tracks[704].append({'id': 202, 'url': file_url(os.path.join(self.music, 'gone.mp3')),
                                         'tracknum': '6'})
+        self.lyrion.tracks[704].append({'id': 203, 'url': 'qobuz://987654.flac', 'tracknum': '7', 'type': 'flc'})
         self.lyrion.raw[200] = {'TITLE': 'From Lyrion', 'TRCK': '4/6'}
         out = self.svc.album(704)
         self.assertEqual(out['album'], {'album_id': 704, 'title': 'The Dark Side of the Moon', 'artist': 'Pink Floyd',
@@ -609,9 +669,21 @@ class ServiceTests(unittest.TestCase):
                                       'has_picture', 'duration'})
         self.assertEqual((rows[200]['reason'], rows[200]['tags']),
                          ('outside_sources', {'TITLE': ['From Lyrion'], 'TRACKNUMBER': ['4'], 'TRACKTOTAL': ['6']}))
-        self.assertEqual(rows[201]['reason'], 'unsupported_format')        # cue track: never written
+        self.assertEqual(rows[201]['reason'], 'cue_track')                 # cue track: never written
         self.assertEqual(rows[202]['reason'], 'missing')
-        self.assertEqual([r['track_id'] for r in out['tracks']], [101, 102, 103, 200, 201, 202])
+        self.assertEqual((rows[203]['reason'], rows[203]['writable'], rows[203]['file']), ('streamed', False, ''))
+        self.assertEqual([r['track_id'] for r in out['tracks']], [101, 102, 103, 200, 201, 202, 203])
+        # a file that cannot be parsed here is shown read-only, from Lyrion
+        with mock.patch.object(ht, 'read_file', side_effect=ht.FileTagError('damaged')):
+            rows = {r['track_id']: r for r in self.svc.album(704)['tracks']}
+        self.assertEqual((rows[101]['writable'], rows[101]['reason']), (False, 'unreadable'))
+        # Lyrion's `tags` failing: the row comes from the track list, composer included
+        self.lyrion.tracks[704][3].update(title='Us and Them', composer='Richard Wright, Roger Waters')
+        self.lyrion.tags_down = True
+        rows = {r['track_id']: r for r in self.svc.album(704)['tracks']}
+        self.assertEqual(rows[200]['tags'], {'TITLE': ['Us and Them'], 'COMPOSER': ['Richard Wright, Roger Waters'],
+                                             'TRACKNUMBER': ['4'], 'DISCNUMBER': ['1']})
+        self.lyrion.tags_down = False
         # another server's library: nothing is written, tags come from Lyrion
         self.local['yes'] = False
         remote = self.svc.album(704)

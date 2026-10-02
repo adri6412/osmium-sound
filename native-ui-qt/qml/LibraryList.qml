@@ -188,6 +188,15 @@ Item {
                 onClicked: (m) => root.rowTap(row.index, row.playBtn && m.x >= width - 48)
                 onLongPress: (x, y) => root.rowLongPress(row.index, row.mapToItem(root, x, y).x, row.mapToItem(root, x, y).y)
             }
+            // The play button as a remote stop of its own (right from the
+            // row). It takes no touch: OK presses its centre and the touch goes
+            // to rowTap, which tells from x that it is the play — as a finger.
+            Item {
+                property bool navigable: true
+                visible: row.playBtn
+                x: row.width - 12 - 28 - 4; anchors.verticalCenter: parent.verticalCenter; width: 36; height: 36
+                NavRing { radius: 18 }
+            }
         }
         ScrollBar_ { flick: listView }
     }
@@ -283,6 +292,12 @@ Item {
                 flick: gridView; tap: 0.98; holdRing: true
                 onClicked: (m) => root.rowTap(card.index, Math.abs(m.x - card.playCx) <= 18 && Math.abs(m.y - card.playCx) <= 18)
                 onLongPress: (x, y) => root.rowLongPress(card.index, card.mapToItem(root, x, y).x, card.mapToItem(root, x, y).y)
+            }
+            // the card's play button as a remote stop, like the rows'
+            Item {
+                property bool navigable: true
+                x: card.playCx - 18; y: card.playCx - 18; width: 36; height: 36
+                NavRing { radius: 18 }
             }
         }
         // la vista sborda di 12 a destra: la barra sta sul bordo VISIBILE

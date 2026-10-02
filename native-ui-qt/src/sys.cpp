@@ -19,12 +19,41 @@
 #include <QQuickWindow>
 #include <QTextStream>
 #include <QtDebug>
+#include <QMouseEvent>
+#include <QWindow>
 #include <fcntl.h>
 #include <linux/input.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#if __has_include(<qpa/qwindowsysteminterface.h>)
+#include <qpa/qwindowsysteminterface.h>
+#define HIFI_HAVE_QPA_MOUSE 1
+#endif
 
 static QElapsedTimer g_clock;
+
+// 🚨 Through the QPA layer, like a real mouse: a QMouseEvent built by hand and
+// sent straight to the window does not keep the press position and the grab
+// from one event to the next, so drags never turn into flicks. The header
+// ships with qt6-base-private-dev; without it this falls back to the plain
+// event, which is enough for a press and a release on the same point (what
+// the remote control's OK button does).
+void hifiSendMouse(QWindow *w, QEvent::Type type, const QPointF &p, Qt::MouseButton button) {
+    if (!w) return;
+    const Qt::MouseButtons held = type == QEvent::MouseButtonRelease ? Qt::NoButton : Qt::LeftButton;
+#ifdef HIFI_HAVE_QPA_MOUSE
+    static ulong ts = 5000;
+    ts += 16;
+    // a move carries NO button (like a real mouse): with one, Qt takes every
+    // move for a new press and the drag restarts at each event
+    const Qt::MouseButton btn = type == QEvent::MouseMove ? Qt::NoButton : button;
+    QWindowSystemInterface::handleMouseEvent<QWindowSystemInterface::SynchronousDelivery>(
+        w, ts, p, w->mapToGlobal(p.toPoint()), held, btn, type);
+#else
+    QMouseEvent ev(type, p, p, w->mapToGlobal(p.toPoint()), button, held, Qt::NoModifier);
+    QCoreApplication::sendEvent(w, &ev);
+#endif
+}
 
 Sys::Sys(const QString &assets, QObject *parent) : QObject(parent), m_assets(assets) {
     g_clock.start();
@@ -35,45 +64,22 @@ Sys::Sys(const QString &assets, QObject *parent) : QObject(parent), m_assets(ass
     if (m_configDir.isEmpty()) m_configDir = "/etc/hifi-player";
     m_dev = qEnvironmentVariableIsSet("HIFI_DEV");
     m_pointer = conf("pointer-enabled", "1").trimmed() != "0";
-    rescanInput();
-    if (QDir("/dev/input").exists()) {
-        m_watch.addPath("/dev/input");
-        connect(&m_watch, &QFileSystemWatcher::directoryChanged, this, [this]() { m_rescan.start(); });
-    }
-    m_rescan.setSingleShot(true);
-    m_rescan.setInterval(500);
-    connect(&m_rescan, &QTimer::timeout, this, &Sys::rescanInput);
 }
 
-static bool testBit(const unsigned long *arr, int bit) {
-    return (arr[bit / (8 * sizeof(long))] >> (bit % (8 * sizeof(long)))) & 1;
-}
-
-// Stessa discriminante di input.c / main/inputDevices.js: una tastiera ha le
-// lettere vere, non solo tasti speciali (i controller touch compositi e la
-// PS/2 fantasma non contano).
-// ─── quale dispositivo e' "una tastiera su cui si puo' scrivere" ────────────
-// 🚨 Stessa regola di main/inputDevices.js del kiosk Electron, e per lo stesso
-// motivo: NON basta chiedere "esiste un dispositivo con i tasti", perche'
-//   - quasi tutti i controller dei touchscreen USB (ILITEK, eGalax, Elo,
-//     Weida, i pannelli HDMI stile WaveShare) sono dispositivi HID composti e
-//     accanto al digitalizzatore espongono una "tastiera";
-//   - il vecchio controller PS/2 di quasi tutte le schede x86 registra una
-//     "AT Translated Set 2 keyboard" anche senza niente attaccato.
-// Prendere per buone quelle due cose significa spegnere la tastiera a schermo
-// su un apparecchio che si usa SOLO col dito: nessun modo di scrivere.
-// Quindi: tastiera completa, su un bus a cui si attacca qualcosa (USB o
-// Bluetooth), e il cui pezzo di ferro non sia anche un touchscreen.
-// Le tastiere interne dei portatili (i8042/I2C/SPI) restano fuori di
-// proposito: le copre il tasto lettera premuto davvero (Sys::noteRealKey).
-static QString sysfsRead(const QString &path) {
+// 🚨 Non si decide piu' se "c'e' una tastiera vera": la tastiera a schermo si
+// apre e basta (TextField_.openVk). La regola di prima — tastiera completa su
+// USB/Bluetooth, escludendo i controller touch compositi e la PS/2 fantasma —
+// serviva a non nasconderla a chi usa solo il dito, ma non poteva reggere i
+// telecomandi, che si presentano come tastiere e non fanno scrivere niente.
+QString hifiSysfsRead(const QString &path) {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
     return QString::fromLatin1(f.readAll()).trimmed();
 }
+static inline QString sysfsRead(const QString &path) { return hifiSysfsRead(path); }
 
 // I bitmap di sysfs sono parole esadecimali, la piu' significativa per prima.
-static bool sysfsBit(const QString &text, int bit) {
+bool hifiSysfsBit(const QString &text, int bit) {
     if (text.isEmpty()) return false;
     const QStringList words = text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
     const int wordBits = int(sizeof(unsigned long) * 8);
@@ -83,79 +89,9 @@ static bool sysfsBit(const QString &text, int bit) {
     const qulonglong w = words.at(idx).toULongLong(&ok, 16);
     return ok && ((w >> (bit % wordBits)) & 1ULL);
 }
+static inline bool sysfsBit(const QString &text, int bit) { return hifiSysfsBit(text, bit); }
 
 // Il pezzo di ferro a cui appartiene un dispositivo: un USB composto (touch +
-// "tastiera", oppure tastiera + touchpad, o un ricevitore senza fili) si
-// dirama in piu' dispositivi che pendono tutti dalla stessa cartella del
-// dispositivo USB (quella con idVendor; le interfacce hanno bInterfaceNumber).
-static QString physicalUnit(const QString &inputDir) {
-    QString dev = QFileInfo(inputDir + "/device").canonicalFilePath();
-    if (dev.isEmpty()) return inputDir;
-    static const QRegularExpression hci("^hci\\d+:\\d+$");
-    for (QString d = dev; d.length() > 1 && d != "/sys"; d = QFileInfo(d).path()) {
-        if (QFile::exists(d + "/idVendor")) return d;
-        if (hci.match(QFileInfo(d).fileName()).hasMatch()) return d;
-    }
-    return dev;
-}
-
-void Sys::rescanInput() {
-    // radice sovrascrivibile: serve alle prove con un finto albero sysfs
-    QString root = qEnvironmentVariable("HIFI_SYSFS_INPUT");
-    if (root.isEmpty()) root = "/sys/class/input";
-    bool kb = false, touch = false;
-    struct Dev { bool isKeyboard, isTouch; int bus; QString unit; };
-    QList<Dev> devs;
-    const QStringList entries = QDir(root).entryList(QStringList("input*"), QDir::Dirs | QDir::NoDotAndDotDot);
-    for (const QString &e : entries) {
-        const QString dir = root + "/" + e;
-        const QString key = sysfsRead(dir + "/capabilities/key");
-        const QString abs = sysfsRead(dir + "/capabilities/abs");
-        const QString props = sysfsRead(dir + "/properties");
-        // tastiera completa: tutti i tasti da ESC a D (codici 1..31), come udev
-        bool isKeyboard = true;
-        for (int b = 1; b <= 31 && isKeyboard; b++) if (!sysfsBit(key, b)) isKeyboard = false;
-        // touchscreen: puntamento diretto, oppure X/Y assolute con BTN_TOUCH e
-        // senza cio' che ne farebbe un touchpad, una tavoletta o un mouse assoluto
-        bool isTouch;
-        if (sysfsBit(props, INPUT_PROP_DIRECT)) isTouch = true;
-        else if (sysfsBit(props, INPUT_PROP_POINTER)) isTouch = false;
-        else {
-            const bool xy = (sysfsBit(abs, ABS_X) && sysfsBit(abs, ABS_Y))
-                         || (sysfsBit(abs, ABS_MT_POSITION_X) && sysfsBit(abs, ABS_MT_POSITION_Y));
-            isTouch = xy && sysfsBit(key, BTN_TOUCH)
-                      && !sysfsBit(key, BTN_TOOL_FINGER) && !sysfsBit(key, BTN_TOOL_PEN)
-                      && !sysfsBit(key, BTN_STYLUS) && !sysfsBit(key, BTN_LEFT);
-        }
-        const int bus = sysfsRead(dir + "/id/bustype").toInt(nullptr, 16);
-        devs.append({ isKeyboard, isTouch, bus, physicalUnit(dir) });
-        if (isTouch) touch = true;
-    }
-    QSet<QString> touchUnits;
-    for (const Dev &d : devs) if (d.isTouch) touchUnits.insert(d.unit);
-    for (const Dev &d : devs)
-        if (d.isKeyboard && (d.bus == 0x03 || d.bus == 0x05) && !touchUnits.contains(d.unit)) kb = true;
-    if (m_realKeyPressed) kb = true;                 // qualcuno ha premuto una lettera vera
-    if (qEnvironmentVariableIsSet("HIFI_NO_KEYBOARD")) kb = false;
-    if (kb != m_hasKeyboard || touch != m_hasTouch) { m_hasKeyboard = kb; m_hasTouch = touch; emit hasKeyboardChanged(); }
-    // in chiaro nel giornale: e' la riga che spiega perche' la tastiera a
-    // schermo compare o no su un apparecchio in campo
-    if (!m_inputLogged || kb != m_loggedKb || touch != m_loggedTouch) {
-        m_inputLogged = true; m_loggedKb = kb; m_loggedTouch = touch;
-        qInfo("input: tastiera su cui scrivere=%s, touchscreen=%s (%lld dispositivi)",
-              kb ? "si" : "no", touch ? "si" : "no", (long long)devs.size());
-    }
-}
-
-// Un tasto lettera premuto davvero: copre le tastiere interne dei portatili,
-// che la regola sopra lascia fuori. La tastiera a schermo non passa di qui
-// (scrive nel campo senza generare eventi di tasto).
-void Sys::noteRealKey() {
-    if (m_realKeyPressed) return;
-    m_realKeyPressed = true;
-    if (!m_hasKeyboard) { m_hasKeyboard = true; emit hasKeyboardChanged(); }
-}
-
 void Sys::setPointerEnabled(bool on) {
     if (m_pointer == on) return;
     m_pointer = on;
@@ -193,6 +129,25 @@ bool Sys::shot(const QString &path) const {
     if (ok) qInfo("sys: fotografia in %s", qPrintable(path.isEmpty() ? "/tmp/hifi-qt.png" : path));
     return ok;
 }
+// Il telecomando "tocca" il riquadro che ha il riflettore: una pressione e un
+// rilascio nel punto dato (coordinate della finestra), cosi' passano dallo
+// stesso percorso di un dito vero — animazione della pressione compresa.
+void Sys::tapAt(qreal x, qreal y, int holdMs) {
+    if (!m_win) return;
+    // le pressioni che seguono sono nostre: non devono spegnere il riflettore
+    m_injectUntil = g_clock.elapsed() + holdMs + 400;
+    const QPointF p(x, y);
+    hifiSendMouse(m_win, QEvent::MouseButtonPress, p);
+    if (holdMs > 0) {
+        // the long press that opens a row's menu: the finger stays down past
+        // MouseArea's pressAndHoldInterval (500 ms) without moving
+        QTimer::singleShot(holdMs, this, [this, p]() { hifiSendMouse(m_win, QEvent::MouseButtonRelease, p); });
+    } else {
+        hifiSendMouse(m_win, QEvent::MouseButtonRelease, p);
+    }
+    noteInput();
+}
+
 void Sys::quit() const { QCoreApplication::quit(); }
 qint64 Sys::now() const { return g_clock.elapsed(); }
 void Sys::log(const QString &s) const { qInfo("qml: %s", qPrintable(s)); }
@@ -205,6 +160,12 @@ void Sys::noteInput() {
     m_lastInput = n;
     emit lastInputChanged();
 }
+
+void Sys::notePointer() {
+    if (injecting()) return;
+    emit pointerTouched();
+}
+bool Sys::injecting() const { return g_clock.elapsed() < m_injectUntil; }
 
 // ─── icone tinte ────────────────────────────────────────────────────────────
 // Le icone sono SVG lucide con stroke/fill "#ffffff" (gen-icons.mjs). Qui si

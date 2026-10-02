@@ -136,6 +136,10 @@ Rectangle {
                 // to false. So start without the grab and take it only once the
                 // gesture turns out horizontal (swipe to remove) or starts on
                 // the handle; vertical gestures are the list's to take.
+                // col telecomando: la riga si sceglie e OK fa suonare quel
+                // brano, come il dito che la tocca senza trascinare
+                property bool navigable: true
+                NavRing { radius: 8 }
                 preventStealing: false
                 onPressed: (m) => {
                     x0 = m.x; y0 = m.y; horiz = false; decided = false

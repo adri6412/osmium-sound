@@ -10,6 +10,7 @@
     "retry": "Riprova",
     "cancel": "Annulla",
     "close": "Chiudi",
+    "save": "Salva",
     "search": "Cerca",
     "confirm": "Conferma",
     "clear": "Cancella",
@@ -20,6 +21,17 @@
     "done": "Fatto",
     "noResults": "Nessun risultato",
     "networkError": "Errore di connessione"
+  },
+  "fileChooser": {
+    "title": "Scegli una cartella",
+    "places": "Posizioni",
+    "root": "Tutte le cartelle",
+    "newFolder": "Nuova cartella",
+    "create": "Crea",
+    "empty": "Nessuna cartella qui",
+    "freeOf": "{free} liberi di {total}",
+    "items": "{n} elementi",
+    "emptyPlace": "Vuoto"
   },
   "sources": {
     "active": "Sorgenti attive",
@@ -52,6 +64,7 @@
     "newFolderCreate": "Crea",
     "localSambaHint": "Condividi anche questa cartella in rete (SMB), così puoi caricarci musica da un PC.",
     "useThisFolder": "Usa questa cartella",
+    "browseFolders": "Sfoglia le cartelle…",
     "playlistdir": {
       "title": "Cartella playlist",
       "hint": "Dove Lyrion salva le playlist che crei dal player. Quella predefinita va bene nella maggior parte dei casi — scegli una cartella sul tuo disco se preferisci tenere le playlist vicino alla musica.",
@@ -279,6 +292,9 @@
     "confirm": "Conferma"
   },
   "player": {
+    "muted": "Muto",
+    "soundOn": "Audio attivo",
+    "touchRestarting": "Riavvio il touch screen…",
     "connectError": "Impossibile connettersi al server. Verifica l'URL nelle Impostazioni.",
     "tabs": {
       "music": "Musica",
@@ -377,6 +393,8 @@
     "sleepActive": "Si ferma tra circa {min} min",
     "sleepOff": "Disattiva timer",
     "cd": {
+      "cancel": "Annulla",
+      "cancelled": "Rip annullato. Puoi espellere il disco.",
       "detected": "CD audio rilevato",
       "rip": "Rippa",
       "ripTitle": "Rippa CD in libreria",
@@ -477,6 +495,7 @@
     "apiUnavailable": "⚠️ Server API non disponibile",
     "sections": {
       "sources": "Sorgenti musicali",
+      "cdRip": "Rip dei CD",
       "audio": "Uscita Audio (DAC)",
       "playback": "Riproduzione",
       "vuMeters": "VU meter",
@@ -501,7 +520,8 @@
       "language": "Lingua",
       "thirdPartyNotices": "Componenti di terze parti",
       "netCheck": "Diagnosi rete",
-      "uiMotion": "Movimento dell\u2019interfaccia"
+      "uiMotion": "Movimento dell\u2019interfaccia",
+      "remote": "Telecomando"
     },
     "language": {
       "help": "Scegli la lingua dell'interfaccia."
@@ -694,6 +714,120 @@
         "update": "Installa / aggiorna"
       }
     },
+    "remote": {
+      "help": "Un telecomando comanda tutta l'interfaccia: le frecce spostano il riflettore, OK preme quello che il riflettore illumina, e i tasti di riproduzione, volume e indietro fanno quello che dicono. Un telecomando USB — quelli con la chiavetta da infilare — funziona appena lo colleghi. Uno Bluetooth va prima accoppiato qui.",
+      "keysTitle": "Cosa fanno i tasti",
+      "keysBody": "Le frecce spostano il riflettore, OK preme. Indietro chiude quello che è aperto, o torna di un passo. Casa riporta alla libreria. Il tasto menu apre lo stesso menu che si apre tenendo il dito su una riga. Riproduci, precedente, successivo, volume e muto fanno quello che dicono.",
+      "connected": "Telecomandi collegati adesso",
+      "none": "Nessun telecomando collegato. Infila la chiavetta di un telecomando USB, oppure accoppiane uno Bluetooth qui sotto.",
+      "noneYet": "Ancora nessun telecomando. Aggiungine uno con il pulsante qui sopra, oppure infila la chiavetta di uno USB: funziona subito.",
+      "keysPage": "Prova e assegna i tasti",
+      "keysPageSub": "Guarda cosa manda ogni tasto e dagli un altro compito",
+      "viaUsb": "USB",
+      "viaBluetooth": "Bluetooth",
+      "viaOther": "Collegato",
+      "full": "tutti i tasti",
+      "mediaOnly": "solo i tasti di riproduzione e volume",
+      "mine": "Questo è il mio telecomando",
+      "notMine": "Non è il mio telecomando",
+      "isMine": "il tuo telecomando",
+      "mineHint": "Serve solo per un telecomando che si presenta come una tastiera, per esempio un air mouse: a quelli di serie prendiamo solo i tasti di riproduzione e volume, per non rubare la scrittura a una tastiera vera. Se dici che è il tuo, gli si ascoltano tutti i tasti — e quello che imposti lì non tocca la tastiera.",
+      "listening": "Sto ascoltando",
+      "listenAnother": "Ascolta un altro dispositivo",
+      "test": "Prova i tasti",
+      "testHint": "Il prossimo tasto che premi si vede soltanto qui, senza comandare niente: vedi cosa manda davvero il tuo telecomando e puoi dargli un altro compito. Poi il telecomando torna a comandare lo schermo.",
+      "tryAnother": "Prova un altro tasto",
+      "pressAKey": "Premi un tasto sul telecomando…",
+      "keyLabel": "Tasto",
+      "doesLabel": "Fa",
+      "doesNothing": "niente, per ora",
+      "custom": "scelto da te",
+      "assign": "Usa questo tasto per…",
+      "assignTitle": "Cosa deve fare questo tasto?",
+      "assignNothing": "Niente",
+      "assigned": "Tasto impostato",
+      "assignFailed": "Questo tasto non si può impostare",
+      "unassign": "Torna al tasto di serie",
+      "actions": {
+        "playPause": "Riproduci / pausa",
+        "play": "Riproduci",
+        "pause": "Pausa",
+        "stop": "Ferma",
+        "next": "Brano successivo",
+        "prev": "Brano precedente",
+        "forward": "Avanti di 30 secondi",
+        "rewind": "Indietro di 30 secondi",
+        "volumeUp": "Alza il volume",
+        "volumeDown": "Abbassa il volume",
+        "mute": "Muto",
+        "up": "Su",
+        "down": "Giù",
+        "left": "Sinistra",
+        "right": "Destra",
+        "ok": "OK",
+        "back": "Indietro",
+        "home": "Home della libreria",
+        "menu": "Menu contestuale",
+        "pageUp": "Pagina su",
+        "pageDown": "Pagina giù",
+        "nowPlaying": "Apri / chiudi il player",
+        "fullScreen": "Schermo intero",
+        "nextVu": "VU meter successivo",
+        "nextAnimation": "Animazione successiva",
+        "queue": "Apri / chiudi la coda",
+        "search": "Cerca",
+        "favorite": "Aggiungi ai preferiti",
+        "openFavorites": "Apri i preferiti",
+        "resetTouch": "Riavvia il touch screen",
+        "shuffle": "Riproduzione casuale",
+        "standby": "Spegni lo schermo",
+        "powerMenu": "Spegni o riavvia…",
+        "eject": "Espelli il CD"
+      },
+      "btTitle": "Telecomandi Bluetooth",
+      "btHelp": "Prima metti il telecomando in accoppiamento — di solito si tiene premuto un tasto finché la sua spia lampeggia — poi cerca.",
+      "pair": {
+        "title": "Aggiungi un telecomando",
+        "pairedOther": "Telecomando collegato!",
+        "which": "Quale telecomando hai?",
+        "other": "Un altro telecomando",
+        "how": {
+          "firetv": "Tieni premuto il tasto Home (⌂) finché la luce in alto non lampeggia.",
+          "xiaomi": "Tieni premuti insieme il tasto ⋮⋮⋮ e il tasto ○ per 7–8 secondi, finché la luce non lampeggia.",
+          "g20s": "Tieni premuti insieme OK e Indietro per 5–7 secondi, finché la luce non lampeggia."
+        },
+        "wait": "Poi lascialo vicino all’apparecchio: lo trovo e lo collego da solo.",
+        "looking": "Sto cercando il tuo {name}…",
+        "paired": "{name} collegato!",
+        "notYet": "Non lo trovo ancora. Controlla che la luce lampeggi, poi riprova.",
+        "retry": "Riprova",
+        "change": "Scegli un altro telecomando"
+      },
+      "btUnavailable": "Il Bluetooth non è ancora disponibile su questo apparecchio. Installa l'ultimo aggiornamento e riprova.",
+      "btNeedsUpdate": "Il sistema di questo apparecchio non è abbastanza nuovo per accoppiare un telecomando Bluetooth. Installa l'ultimo aggiornamento e riprova.",
+      "btNoAdapter": "Su questo apparecchio non è stato trovato il Bluetooth. Basta una chiavetta Bluetooth USB.",
+      "btYours": "I tuoi telecomandi",
+      "btNone": "Ancora nessun telecomando Bluetooth. Cerca qui sotto per aggiungere il primo.",
+      "btConnected": "Collegato",
+      "btNotConnected": "Non collegato — premi un tasto",
+      "btSearch": "Cerca un telecomando",
+      "btSearching": "Sto cercando…",
+      "btSearchingHint": "Tieni il telecomando in accoppiamento mentre cerco.",
+      "btFound": "Trovati",
+      "btFoundNone": "Non ho trovato niente. Metti il telecomando in accoppiamento e cerca di nuovo.",
+      "btPairing": "Sto accoppiando…",
+      "btNoKeys": "Collegato, ma i suoi tasti non arrivano all'apparecchio. Dimenticalo e accoppialo di nuovo: di solito basta.",
+      "btForget": "Dimentica",
+      "btForgetConfirm": "Dimentico questo telecomando? Smette di funzionare finché non lo accoppi di nuovo.",
+      "intro": {
+        "title": "Il tuo telecomando {name} è pronto",
+        "body": "Ecco cosa fa ogni tasto su Osmium.",
+        "later": "Puoi rivederla quando vuoi da Impostazioni → Telecomando.",
+        "gotIt": "Ho capito",
+        "show": "Mappa dei tasti",
+        "showSub": "Cosa fa ogni tasto del tuo telecomando"
+      }
+    },
     "btSpeakers": {
       "help": "Suona su un altoparlante Bluetooth o su un paio di cuffie. Ognuno che aggiungi diventa un lettore a sé, con il suo nome e la sua coda, accanto al lettore di questo apparecchio: puoi mandargli un altro disco, oppure unire i due.",
       "unavailable": "Il Bluetooth non è ancora disponibile su questo apparecchio. Installa l'ultimo aggiornamento e riguarda qui.",
@@ -819,7 +953,95 @@
       "failed": "Impossibile cambiare la modalità schermo."
     },
     "thirdPartyNotices": {
-      "intro": "Osmium Sound include componenti open source, ciascuno con la propria licenza. L'elenco completo è mantenuto anche in THIRD-PARTY-NOTICES.md nel repository del progetto."
+      "intro": "Osmium Sound include componenti open source, ciascuno con la propria licenza. L'elenco completo è mantenuto anche in THIRD-PARTY-NOTICES.md nel repository del progetto.",
+      "projectNote": "Il codice del progetto è rilasciato sotto GNU AGPL-3.0-only; licenze commerciali disponibili scrivendo a info@osmiumsound.it. Sorgenti: github.com/adri6412/osmium-sound",
+      "lyrionNote": "Progetto indipendente, non affiliato a Osmium Sound. Installato dal server ufficiale della LMS-Community; sorgenti: github.com/LMS-Community/slimserver",
+      "debianCount": "Pacchetti Debian in questa immagine: {n}. L'elenco completo con tutte le licenze è nell'amministrazione web, Impostazioni → Licenze e crediti.",
+      "debianMissing": "L'elenco dei pacchetti di questa immagine non è disponibile."
+    },
+    "cdRip": {
+      "help": "Come un CD audio viene copiato nella libreria. Ogni riga si applica subito.",
+      "saved": "Salvato.",
+      "saveFailed": "Salvataggio fallito.",
+      "enableLabel": "Rip dei CD",
+      "enableText": "Riconosce i dischi e propone il rip",
+      "targetLabel": "Cartella di destinazione predefinita",
+      "targetHelp": "Una cartella dentro una sorgente musicale scrivibile (disco interno o USB, condivisione di rete scrivibile). Gli album finiscono lì come Artista/Album.",
+      "targetUnset": "Non impostata: l'unica sorgente scrivibile, oppure si sceglie al momento",
+      "targetBad": "Adesso non disponibile (disco scollegato o condivisione non montata)",
+      "targetPick": "Sfoglia",
+      "targetUse": "Usa questa cartella",
+      "targetClear": "Togli",
+      "prefixLabel": "Prefisso cartella",
+      "prefixHelp": "Una cartella dentro la cartella di destinazione predefinita in cui va ogni album rippato, scelta dal navigatore; nessuna per rippare direttamente nella destinazione.",
+      "prefixNone": "Nessuno",
+      "prefixPick": "Sfoglia",
+      "prefixUse": "Usa questa cartella come prefisso",
+      "prefixNeedsTarget": "Imposta prima la cartella di destinazione predefinita.",
+      "prefixOutside": "Il prefisso deve essere una cartella dentro la cartella di destinazione predefinita.",
+      "prefixPlaceholder": "es. Rip CD",
+      "autoStartLabel": "Avvio automatico",
+      "autoStartHelp": "Parte da solo all'inserimento del disco, nella cartella predefinita.",
+      "autoStart": {
+        "off": "Off",
+        "if_tags": "Se ci sono i tag",
+        "always": "Sempre"
+      },
+      "formatLabel": "Formato di uscita",
+      "compressionLabel": "Compressione FLAC",
+      "default": "predefinito",
+      "best": "massima",
+      "wavHelp": "I file WAV non hanno tag né ReplayGain; copertina e log vengono salvati comunque accanto.",
+      "retriesLabel": "Riletture se inesatto",
+      "retriesHelp": "Una traccia viene riletta finché due letture coincidono.",
+      "retries": {
+        "0": "Mai",
+        "1": "Una volta",
+        "2": "Due volte",
+        "5": "5 volte"
+      },
+      "preEmphasisLabel": "Pre-enfasi",
+      "preEmphasisHelp": "CD dei primi anni con pre-enfasi: il tag lascia correggere al player, il filtro corregge l'audio stesso.",
+      "preEmphasis": {
+        "ignore": "Ignora del tutto",
+        "tag": "Solo tag",
+        "filter": "Rimuovi col filtro"
+      },
+      "flags": {
+        "clean_names": {
+          "label": "Nomi dei file",
+          "text": "Pulisci tutti i caratteri speciali e non ASCII"
+        },
+        "replaygain": {
+          "label": "ReplayGain",
+          "text": "Calcola e scrivi nei tag"
+        },
+        "log_file": {
+          "label": "File di log",
+          "text": "Salva il log del rip nella cartella dell'album"
+        },
+        "eject": {
+          "label": "Espulsione",
+          "text": "Espelli a fine rip riuscito"
+        }
+      },
+      "noDrive": "Nessun lettore ottico trovato",
+      "speedLabel": "Velocità forzata",
+      "speedMax": "Max",
+      "speedHelp": "Più lento legge meglio un disco rovinato e tiene il lettore più silenzioso.",
+      "offsetLabel": "Offset del lettore",
+      "offsetHelp": "Offset di lettura in campioni, come indicato da AccurateRip per questo lettore. Calibra lo cerca in rete e lo imposta.",
+      "offsetInvalid": "L'offset deve essere un numero intero.",
+      "calibrate": "Calibra",
+      "paranoiaLabel": "CDParanoia",
+      "paranoiaText": "Attivo (correzione degli errori in lettura)",
+      "ejectNow": "Espelli ora",
+      "cancelRip": "Annulla il rip",
+      "ejected": "Disco espulso.",
+      "ejectFailed": "Espulsione fallita.",
+      "cancelled": "Rip annullato.",
+      "cancelFailed": "Annullamento fallito.",
+      "ejectHelp": "Per un lettore senza tasto: espelle il disco ogni volta che non c'è un rip in corso."
     },
     "playerEnabled": {
       "label": "Player",
@@ -891,7 +1113,35 @@
       "help": "Aggiungi le cartelle musicali: chiavette/dischi USB (montati in automatico), cartelle di rete (SMB) o locali. Le modifiche hanno effetto subito."
     },
     "audio": {
-      "help": "Scegli il dispositivo di riproduzione (DAC). La selezione viene salvata e mantenuta ai riavvii. La riproduzione DSD è bit-perfect (DoP).",
+      "help": "Scegli il dispositivo di riproduzione (DAC). La selezione viene salvata e mantenuta ai riavvii. La riproduzione DSD è bit-perfect: nativa se il DAC la accetta così, altrimenti DoP.",
+      "dsdNative": "DSD nativo",
+      "saved": "Salvato, player riavviato.",
+      "advancedTitle": "Avanzate",
+      "advancedHint": "Ogni riga si applica subito e riavvia il player per un attimo. Automatico va bene per quasi tutti i DAC.",
+      "auto": "Automatico",
+      "off": "Off",
+      "dsdLabel": "File DSD",
+      "dsd": { "auto": "Automatico", "dop": "DoP", "native": "Nativo", "off": "Converti in PCM" },
+      "dsdDetectedNative": "Questo DAC dichiara il DSD nativo. DoP incapsula gli stessi bit in cornici PCM, di solito fino a DSD128. Converti in PCM serve alle uscite senza DSD, come l'HDMI.",
+      "dsdDetectedDop": "Questo DAC non dichiara il DSD nativo, quindi Automatico usa il DoP. Converti in PCM serve alle uscite senza DSD, come l'HDMI.",
+      "dsdDelayLabel": "Pausa al passaggio tra PCM e DSD",
+      "maxRateLabel": "Frequenza massima",
+      "maxRateHelp": "Quello che sta sopra viene ricampionato da Lyrion prima di arrivare al player. Automatico lascia decidere il DAC.",
+      "volumeHardware": "Volume dal mixer del DAC",
+      "volumeHelp": "Il volume in Lyrion muove il controllo del DAC e i bit restano intatti. Off: volume software, bit-perfect al 100%.",
+      "volumeNoMixer": "Questa uscita non ha un controllo di volume hardware.",
+      "alsaBufferLarge": "Buffer ALSA grande",
+      "alsaBufferHelp": "Per i DAC che si interrompono o gracchiano.",
+      "streamBufferLarge": "Buffer di flusso grande",
+      "streamBufferHelp": "Più musica tenuta in memoria prima della riproduzione, per una rete o un disco lenti.",
+      "realtimeLabel": "Priorità in tempo reale",
+      "realtimeHelp": "Il thread di uscita passa davanti a tutto il resto sull'apparecchio.",
+      "extraLabel": "Argomenti aggiuntivi",
+      "extraHint": "Qualunque altra opzione di squeezelite, su una riga, senza virgolette. Le opzioni gestite sopra qui vengono rifiutate.",
+      "extraPlaceholder": "es. -R -u vE",
+      "extraApply": "Applica",
+      "argsLabel": "Riga di comando in uso",
+      "sqResetButton": "Torna ai predefiniti",
       "refreshList": "Aggiorna elenco",
       "setOutput": "Imposta uscita",
       "unavailable": "Elenco dispositivi audio non disponibile.",
@@ -1305,6 +1555,155 @@
     "lanWifi": "Connesso a {ssid}, ma internet non è raggiungibile",
     "lanWired": "Connesso via cavo, ma internet non è raggiungibile",
     "offline": "Nessuna connessione di rete"
+  },
+  "tutorialRemote": {
+    "title": "PROVA IL TELECOMANDO",
+    "done": "Fatto!",
+    "wrong": "Hai premuto «{got}». Cerca {want}.",
+    "scene": {
+      "home": "Home",
+      "albums": "Album"
+    },
+    "steps": {
+      "welcome": {
+        "title": "Proviamo il telecomando",
+        "body": "Ti chiedo un tasto alla volta: quando premi quello giusto si va avanti. Premi {okKey} per cominciare."
+      },
+      "arrows": {
+        "title": "Il riflettore",
+        "body": "Il bordo dorato mostra cosa è scelto. Spostalo con le frecce: prova su, giù, sinistra e destra."
+      },
+      "ok": {
+        "title": "Aprire",
+        "body": "Premi {okKey} per aprire quello che è scelto, come se lo toccassi."
+      },
+      "menu": {
+        "title": "Il menu",
+        "body": "Premi {menuKey}: apre le azioni dell’elemento scelto, come la coda e i preferiti."
+      },
+      "back": {
+        "title": "Tornare indietro",
+        "body": "Premi {backKey} per tornare alla schermata di prima."
+      },
+      "albums": {
+        "title": "Nella griglia degli album",
+        "body": "Il riflettore è su un album: premi → per passare sul suo tasto play. Premendo OK lì, l’album parte subito."
+      },
+      "az": {
+        "title": "L’indice A–Z",
+        "body": "Premi ancora → per arrivare all’indice, poi ↓ o ↑ per scegliere una lettera: la lista salta lì."
+      },
+      "coverflow": {
+        "title": "Il Cover Flow",
+        "body": "Qui ← e → sfogliano gli album. Provali tutti e due."
+      },
+      "coverflowPlay": {
+        "title": "Il play nel Cover Flow",
+        "body": "Premi ↓ per andare sul tasto play dell’album davanti. Con OK sulla copertina, invece, l’album si apre."
+      },
+      "home": {
+        "title": "Home",
+        "body": "Premi {homeKey}: da qualunque schermata torni alla libreria."
+      },
+      "volume": {
+        "title": "Il volume",
+        "body": "Premi volume + o volume −. Funziona da ogni schermata."
+      },
+      "play": {
+        "title": "Play e pausa",
+        "body": "Premi {playKey} per mettere in pausa la musica o farla ripartire."
+      },
+      "player": {
+        "title": "Il player",
+        "body": "Premi {playerKey} per aprire e chiudere il player a tutto schermo."
+      },
+      "done": {
+        "title": "Bravo, sai già tutto",
+        "body": "Mappa dei tasti e questa prova le ritrovi in Impostazioni → Telecomando. Premi {okKey} per finire."
+      }
+    },
+    "keys": {
+      "generic": {
+        "ok": "OK",
+        "back": "Indietro",
+        "home": "Home",
+        "menu": "il tasto menu",
+        "play": "il tasto play/pausa",
+        "player": "il tasto del player"
+      }
+    },
+    "keyNames": {
+      "firetv": {
+        "KEY_KPENTER": "il tasto al centro della ghiera",
+        "KEY_BACK": "il tasto ↩",
+        "KEY_HOMEPAGE": "il tasto ⌂",
+        "KEY_MENU": "il tasto ≡",
+        "KEY_PLAYPAUSE": "il tasto play/pausa",
+        "KEY_PROGRAM": "il tasto TV",
+        "KEY_REWIND": "il tasto indietro veloce",
+        "KEY_FASTFORWARD": "il tasto avanti veloce",
+        "KEY_MUTE": "il tasto muto",
+        "KEY_VOLUMEUP": "il tasto +",
+        "KEY_VOLUMEDOWN": "il tasto −",
+        "KEY_SEARCH": "il tasto azzurro in alto",
+        "APP_PRIME_VIDEO": "il tasto Prime Video",
+        "APP_NETFLIX": "il tasto Netflix",
+        "APP_DISNEY_PLUS": "il tasto Disney+",
+        "APP_AMAZON_MUSIC": "il tasto Amazon Music",
+        "KEY_POWER": "il tasto di accensione",
+        "KEY_UP": "la freccia su",
+        "KEY_DOWN": "la freccia giù",
+        "KEY_LEFT": "la freccia sinistra",
+        "KEY_RIGHT": "la freccia destra"
+      },
+      "g20s": {
+        "KEY_SELECT": "OK",
+        "KEY_BACK": "il tasto ↩",
+        "KEY_HOMEPAGE": "il tasto ⌂",
+        "KEY_COMPOSE": "il tasto con la lampadina",
+        "KEY_PLAYPAUSE": "il tasto play/pausa",
+        "KEY_0": "il tasto 0",
+        "KEY_1": "il tasto 1",
+        "KEY_2": "il tasto 2",
+        "KEY_3": "il tasto 3",
+        "KEY_4": "il tasto 4",
+        "KEY_5": "il tasto 5",
+        "KEY_6": "il tasto 6",
+        "KEY_7": "il tasto 7",
+        "KEY_8": "il tasto 8",
+        "KEY_9": "il tasto 9",
+        "KEY_PREVIOUSSONG": "il tasto brano precedente",
+        "KEY_NEXTSONG": "il tasto brano successivo",
+        "KEY_VOLUMEUP": "il tasto volume +",
+        "KEY_VOLUMEDOWN": "il tasto volume −",
+        "KEY_MUTE": "il tasto muto",
+        "KEY_PAGEUP": "il tasto Pg+",
+        "KEY_PAGEDOWN": "il tasto Pg-",
+        "KEY_VOICECOMMAND": "il tasto del microfono",
+        "KEY_BACKSPACE": "il tasto DEL",
+        "KEY_POWER": "il tasto di accensione",
+        "KEY_UP": "la freccia su",
+        "KEY_DOWN": "la freccia giù",
+        "KEY_LEFT": "la freccia sinistra",
+        "KEY_RIGHT": "la freccia destra"
+      },
+      "xiaomi": {
+        "KEY_SELECT": "il tasto al centro della ghiera",
+        "KEY_BACK": "il tasto ←",
+        "KEY_HOMEPAGE": "il tasto ○",
+        "KEY_APPSELECT": "il tasto ⋮⋮⋮",
+        "KEY_VIDEO": "il tasto Netflix",
+        "KEY_GREEN": "il tasto LIVE",
+        "KEY_VOLUMEUP": "il tasto +",
+        "KEY_VOLUMEDOWN": "il tasto −",
+        "KEY_VOICECOMMAND": "il tasto del microfono",
+        "KEY_POWER": "il tasto di accensione",
+        "KEY_UP": "la freccia su",
+        "KEY_DOWN": "la freccia giù",
+        "KEY_LEFT": "la freccia sinistra",
+        "KEY_RIGHT": "la freccia destra"
+      }
+    }
   },
   "tutorial": {
     "skip": "Salta",

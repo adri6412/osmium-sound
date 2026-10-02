@@ -54,7 +54,7 @@ flowchart TB
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
 | Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, Samba share config, audio-CD ripping, backup/restore (core logic shared via `hifi_backup.py`), and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Binds `0.0.0.0:8080` — LAN-reachable like the web admin, but every route is gated by a pairing token (see [Pairing & security](#pairing--security)), which is what lets the Android companion talk to it directly. |
 | Web admin / provisioning gateway | `webui_server.py` | The primary LAN-facing service (the other one is the pairing-gated sources API above): serves the Vue admin app (`admin-webui/`) behind a session, reverse-proxies a whitelisted subset of `api_server.py`/`sources_server.py` calls, and — while `/etc/hifi-player/provisioning-pending` exists — serves the first-boot setup portal (plus, in installer boot mode, a Wi-Fi hotspot and captive portal). Plain HTTP on `:80`, no TLS: a per-device self-signed cert made every browser show a "connection not private" click-through on first visit, which was worse UX than the plain-HTTP tradeoff. See [Provisioning & first boot](#provisioning--first-boot). |
-| Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL Connect, radio, UPnP/DLNA, AirPlay). Port `9000`. Its web UI is the Material Skin plugin, branded as "Osmium" — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup). |
+| Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL, Qobuz, Deezer, radio, UPnP/DLNA, AirPlay). Port `9000`. Its web UI is the Material Skin plugin, branded as "Osmium" — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup). |
 | squeezelite | systemd service | Lyrion's player client; `-D` flag enables bit-perfect DSD via DoP; `-v` exports a shared-memory buffer the VU meter reads |
 | VU meter daemon | `vu_meter_daemon.py` | Runs as the `hifi` user; reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket (`127.0.0.1:9001`) to the on-screen UI (`native-ui-qt/src/vumeter.cpp`). Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch). |
 | Shared Python helpers | `hifi_backup.py`, `hifi_i18n.py`, `hifi_logging.py` | Backup/restore core (see [Backup & restore](#backup--restore)); bilingual (en/it) message catalogue selected per request by the `X-UI-Lang` header; journald-friendly logging. Installed next to the daemons in `/usr/local/bin`. |
@@ -356,7 +356,6 @@ GET/POST /nowplaying_animation   what Now Playing shows instead of the VU meters
 GET/POST /ui_language         the on-screen UI language, owned by the device rather than by one UI
 GET/POST /nowplaying_autoexpand   seconds before Now Playing auto-expands (0 = off)
 GET/POST /timezone, GET /timezones
-GET/POST /tidal_status, /tidal_set  TIDAL Connect service (only "available" when the binary is present)
 GET/POST /debug_plymouth, /debug_kdump   boot/debug flags for the web admin's Debug card
 GET  /provision_status        setup-wizard state, proxied from webui_server; POST /provision_mode, /provision_wifi_connect, /provision_wifi_rescan
 POST /factory_reset           → hifi-factory-reset.sh (web admin re-validates the password first)
@@ -391,7 +390,7 @@ exist for running it on a laptop). Route families:
   served from `/opt/hifi-webui/dist`.
 - **`/api/system/*`** — session-gated proxy to a whitelisted subset of the
   Flask API above (`_AUTH_ROUTES` in `webui_server.py`: info/stats, network,
-  SSH + shell account, Tailscale, OTA channel, audio, names, multiroom, TIDAL,
+  SSH + shell account, Tailscale, OTA channel, audio, names, multiroom,
   display mode, on-screen UI engine, player on/off, UI resolution/refresh,
   time zone, VU meter with its style, skin previews and store, Now Playing animation,
   pointer, now-playing auto-expand, all `updates/*` incl. `apply_all` /
@@ -616,7 +615,7 @@ Plus `/api/system/*` (🔒): the companion's only path to the system API, a
 fixed forwarding table (`_SYSTEM_PROXY_ROUTES`) onto `api_server.py` over
 loopback. It covers what the companion's Settings → Osmium Sound shows —
 audio, names, Lyrion role and channel, updates, display mode, player on/off,
-pointer, time zone, VU meter style and store, now-playing auto-expand, TIDAL,
+pointer, time zone, VU meter style and store, now-playing auto-expand,
 reboot/shutdown — and deliberately not the SSH login, network or factory
 reset. POSTs that wait on `systemctl` get a 45 s timeout.
 

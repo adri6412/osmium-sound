@@ -58,6 +58,14 @@ for scene in cd cdfront vinyl cassette lcd vfd; do
   png=$(find "$QT/assets/anim/$scene" -maxdepth 1 -type f -name '*.png' -size +0 -print -quit 2>/dev/null || true)
   test -n "$png" || { echo "::error::Now Playing animation \"$scene\" artwork missing"; exit 1; }
 done
+# the key maps of the remotes the appliance knows out of the box (Fire TV,
+# G20S PRO, Xiaomi), shown once after pairing (qml/RemoteIntro.qml)
+cp -r native-ui-qt/assets/remotes "$QT/assets/"
+for m in firetv g20s xiaomi; do
+  for l in it en; do
+    test -s "$QT/assets/remotes/$m-$l.jpg" || { echo "::error::remote key map $m-$l missing"; exit 1; }
+  done
+done
 # the status plate under the cover (V3 bis, without DSP): Qt-only artwork.
 # src/assets/ledbar keeps the old plate for the Electron app the ISO still builds.
 cp native-ui-qt/assets/ledbar/*.png "$QT/assets/"

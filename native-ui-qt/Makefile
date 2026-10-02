@@ -2,7 +2,8 @@
 # chroot trixie di sviluppo. Nessun qmake/cmake: moc e un Makefile bastano.
 CXX      ?= g++
 CXXFLAGS ?= -O2 -Wall -std=c++17 -fPIC
-PKGS      = Qt6Quick Qt6Qml Qt6Gui Qt6Network Qt6Core libdrm
+# Qt6DBus: il ponte per i telecomandi Bluetooth parla con BlueZ (btghid.cpp)
+PKGS      = Qt6Quick Qt6Qml Qt6Gui Qt6Network Qt6DBus Qt6Core libdrm
 CXXFLAGS += $(shell pkg-config --cflags $(PKGS))
 # QtGui private (QPA) headers, for the touch injection of the test channel:
 # used only where qt6-base-private-dev is installed (__has_include in main.cpp)

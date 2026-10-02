@@ -17,6 +17,9 @@
 #include "library.h"
 #include "player.h"
 #include "kmsmode.h"
+#include "remote.h"
+#include "touchwatch.h"
+#include "btghid.h"
 #include "qritem.h"
 #include "spring.h"
 #include "sys.h"
@@ -33,6 +36,7 @@
 #include <QQuickItem>
 #include <QQuickView>
 #include <QScreen>
+#include <QThread>
 #include <QTimer>
 #include <QWheelEvent>
 #include <QWindow>
@@ -50,23 +54,69 @@
 #endif
 
 static QQuickView *g_view = nullptr;
+static Remote *g_remote = nullptr;
 
-// Segnala a Sys ogni evento di input, prima che lo consumi la scena.
+// Segnala a Sys ogni evento di input, prima che lo consumi la scena, e porta
+// al telecomando i tasti che arrivano per la strada di Qt.
 class InputWatch : public QObject {
 public:
-    explicit InputWatch(Sys *s) : m_sys(s) {}
+    InputWatch(Sys *s, Remote *r, QQuickView *v, TouchWatch *t) : m_sys(s), m_remote(r), m_view(v), m_touch(t) {}
+    // The arrow cursor goes while the remote drives. A remote that Qt also
+    // counts as a mouse (an air mouse, the bridge of one) put the arrow on
+    // the screen, standing wherever it last was, while the keys moved the
+    // spotlight. From the first remote action the cursor is parked; a real
+    // mouse movement (not one of our injected presses) brings it back.
+    void park() {
+        if (m_parked || !m_sys->pointerEnabled()) return;
+        m_parked = true;
+        QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
+    }
+    void unpark() {
+        if (!m_parked) return;
+        m_parked = false;
+        QGuiApplication::restoreOverrideCursor();
+    }
+    // Settings switched the pointer: Sys cleared every override, ours too
+    void pointerChanged() { m_parked = false; }
 protected:
     bool eventFilter(QObject *, QEvent *e) override {
         switch (e->type()) {
-        case QEvent::MouseButtonPress: case QEvent::MouseMove: case QEvent::Wheel:
-        case QEvent::TouchBegin: case QEvent::TouchUpdate:
-            m_sys->noteInput(); break;
+        case QEvent::TouchBegin:
+            // the touch reached the interface: TouchWatch compares it with
+            // what the kernel saw (a touch in the kernel and none here = the
+            // screen "not answering" while it works)
+            if (m_touch) m_touch->noteQt();
+            m_sys->noteInput(); m_sys->notePointer(); break;
+        case QEvent::MouseButtonPress:
+            m_sys->noteInput(); m_sys->notePointer(); break;
+        case QEvent::TouchUpdate: case QEvent::TouchEnd:
+            if (m_touch) m_touch->noteQt();
+            if (e->type() == QEvent::TouchUpdate) m_sys->noteInput();
+            break;
+        case QEvent::MouseMove: case QEvent::Wheel:
+            m_sys->noteInput();
+            if (!m_sys->injecting()) unpark();
+            break;
         case QEvent::KeyPress: {
             m_sys->noteInput();
-            // solo le lettere: i tasti di un telecomando a infrarossi (cifre,
-            // frecce, invio) non sono "qualcuno sta scrivendo su una tastiera"
-            const int k = static_cast<QKeyEvent *>(e)->key();
-            if (k >= Qt::Key_A && k <= Qt::Key_Z) m_sys->noteRealKey();
+            QKeyEvent *ke = static_cast<QKeyEvent *>(e);
+            const int k = ke->key();
+            // 🚨 Il telecomando si serve QUI e non da un Keys.onPressed in QML:
+            // un gestore in QML vede solo i tasti che il fuoco gli lascia
+            // passare, e il fuoco in questa interfaccia ce l'ha quasi sempre
+            // nessuno. Mentre si scrive in un campo, pero', i tasti sono di chi
+            // scrive: quelli non si toccano.
+            if (m_remote && m_view) {
+                QQuickItem *f = m_view->activeFocusItem();
+                const bool typing = f && (f->inherits("QQuickTextInput") || f->inherits("QQuickTextEdit"));
+                const QString act = m_remote->actionForQtKey(k);
+                // in collaudo si vede in chiaro cosa arriva dalla via di Qt:
+                // serve a capire se i tasti di un telecomando non preso in
+                // esclusiva passano davvero da li'
+                if (m_sys->devMode())
+                    qInfo("key Qt: 0x%x -> %s%s", k, act.isEmpty() ? "(niente)" : qPrintable(act), typing ? " (si sta scrivendo)" : "");
+                if (!act.isEmpty() && !typing) { m_remote->dispatch(act, ke->isAutoRepeat(), "qt"); return true; }
+            }
             break;
         }
         default: break;
@@ -75,6 +125,10 @@ protected:
     }
 private:
     Sys *m_sys;
+    Remote *m_remote;
+    QQuickView *m_view;
+    TouchWatch *m_touch;
+    bool m_parked = false;
 };
 static volatile sig_atomic_t g_shot = 0;
 static void onUsr1(int) { g_shot = 1; }
@@ -89,22 +143,10 @@ static QPointF canvasToWin(double x, double y) {
     return QPointF(ox + x * s, oy + y * s);
 }
 
+// il mouse del canale di collaudo: passa dal livello QPA come un mouse vero
+// (l'implementazione, col perche', sta in sys.cpp — la usa anche il telecomando)
 static void mouse(QEvent::Type t, QPointF p, Qt::MouseButton b = Qt::LeftButton) {
-    const Qt::MouseButtons held = t == QEvent::MouseButtonRelease ? Qt::NoButton : Qt::LeftButton;
-#ifdef HIFI_HAVE_QPA_TOUCH
-    // Through the QPA layer, like a real mouse: a QMouseEvent built by hand
-    // and sent straight to the window does not keep the press position and
-    // the grab from one event to the next, so drags never turned into flicks.
-    static ulong ts = 5000;
-    ts += 16;
-    // a move carries NO button (like a real mouse): with one, Qt takes every
-    // move for a new press and the drag restarts at each event
-    const Qt::MouseButton btn = t == QEvent::MouseMove ? Qt::NoButton : b;
-    QWindowSystemInterface::handleMouseEvent<QWindowSystemInterface::SynchronousDelivery>(g_view, ts, p, g_view->mapToGlobal(p.toPoint()), held, btn, t);
-#else
-    QMouseEvent ev(t, p, p, g_view->mapToGlobal(p.toPoint()), b, held, Qt::NoModifier);
-    QCoreApplication::sendEvent(g_view, &ev);
-#endif
+    hifiSendMouse(g_view, t, p, b);
 }
 
 static void keyPress(int key, const QString &text = QString()) {
@@ -141,7 +183,8 @@ static void touch(const QString &phase, const QPointF &p) {
 // della tela 1024x600). Il file viene consumato e cancellato.
 //   tap X Y | hold X Y | move X Y | release X Y | scroll X Y DY
 //   touch down|move|up X Y   (finto touchscreen, via QPA)
-//   type testo | key esc|enter|backspace|left|right|up|down
+//   type testo | key esc|enter|backspace|left|right|up|down|play|next|prev|volup...
+//   remote AZIONE   (telecomando finto: playPause, next, down, ok, back...)
 //   shot [file] | eval <javascript nel contesto della radice> | quit
 static void cmdfilePoll() {
     QFile f("/tmp/hifi-qt.cmd");
@@ -174,8 +217,18 @@ static void cmdfilePoll() {
             for (QChar ch : text) keyPress(0, QString(ch));
         } else if (c == "key" && a.size() >= 2) {
             static const QHash<QString, int> keys = {{"esc", Qt::Key_Escape}, {"enter", Qt::Key_Return}, {"backspace", Qt::Key_Backspace},
-                                                     {"left", Qt::Key_Left}, {"right", Qt::Key_Right}, {"up", Qt::Key_Up}, {"down", Qt::Key_Down}, {"tab", Qt::Key_Tab}};
+                                                     {"left", Qt::Key_Left}, {"right", Qt::Key_Right}, {"up", Qt::Key_Up}, {"down", Qt::Key_Down}, {"tab", Qt::Key_Tab},
+                                                     // i tasti di una tastiera multimediale: la strada dei tasti Qt,
+                                                     // quella che NON passa da evdev (vedi remote.h)
+                                                     {"play", Qt::Key_MediaTogglePlayPause}, {"next", Qt::Key_MediaNext}, {"prev", Qt::Key_MediaPrevious},
+                                                     {"stop", Qt::Key_MediaStop}, {"volup", Qt::Key_VolumeUp}, {"voldown", Qt::Key_VolumeDown},
+                                                     {"mute", Qt::Key_VolumeMute}, {"home", Qt::Key_HomePage}, {"menu", Qt::Key_Menu},
+                                                     {"search", Qt::Key_Search}, {"back", Qt::Key_Back}};
             if (keys.contains(a[1])) keyPress(keys[a[1]]);
+        } else if (c == "remote" && a.size() >= 2) {
+            // un telecomando finto: l'azione entra dove entrerebbe quella di
+            // un telecomando vero, dopo la lettura di evdev
+            if (g_remote) g_remote->dispatch(a[1], a.size() >= 3 && a[2] == "repeat", "evdev");
         } else if (c == "shot") {
             QString path = a.size() >= 2 ? a[1] : "/tmp/hifi-qt.png";
             // dopo che gli eventi appena iniettati sono stati disegnati
@@ -255,6 +308,24 @@ int main(int argc, char *argv[]) {
     api.setLang(i18n.lang());
     QObject::connect(&i18n, &I18n::langChanged, &api, [&api, &i18n]() { api.setLang(i18n.lang()); });
     Player player;
+    // I telecomandi: chiavetta USB o Bluetooth gia' accoppiato, letti da evdev
+    // e tradotti in azioni che App.qml smista (remote.h).
+    Remote remote(sys.configDir());
+    TouchWatch touch;
+    g_remote = &remote;
+    // Il ponte per i telecomandi Bluetooth che il nucleo rifiuta (btghid.h):
+    // quando ne rimette in piedi uno, nasce un /dev/input nuovo e Remote deve
+    // andarselo a prendere subito.
+    // 🚨 In un thread suo: le chiamate a BlueZ bloccano, e bloccando il thread
+    // dell'interfaccia lo schermo resta fermo (misurato: 28 secondi con un
+    // telecomando Xiaomi). Il segnale torna al thread dell'interfaccia da solo.
+    BtGattHid btghid;
+    QThread btThread;
+    btghid.moveToThread(&btThread);
+    QObject::connect(&btThread, &QThread::started, &btghid, &BtGattHid::begin);
+    QObject::connect(&btghid, &BtGattHid::bridgedChanged, &remote, &Remote::rescan);
+    btThread.start();
+    QObject::connect(&remote, &Remote::action, &sys, [&sys]() { sys.noteInput(); });
     VuMeter vu;
     LibraryModel library;
     QObject::connect(&player, &Player::connectedChanged, &library, [&]() { library.setProperty("playerId", player.playerId()); });
@@ -266,6 +337,7 @@ int main(int argc, char *argv[]) {
     qmlRegisterSingletonType(QUrl::fromLocalFile(base + "/qml/Theme.qml"), "Hifi.Ui", 1, 0, "Theme");
     qmlRegisterSingletonType(QUrl::fromLocalFile(base + "/qml/Tr.qml"), "Hifi.Ui", 1, 0, "Tr");
     qmlRegisterSingletonType(QUrl::fromLocalFile(base + "/qml/Ui.qml"), "Hifi.Ui", 1, 0, "Ui");
+    qmlRegisterSingletonType(QUrl::fromLocalFile(base + "/qml/Nav.qml"), "Hifi.Ui", 1, 0, "Nav");
     qmlRegisterSingletonType(QUrl::fromLocalFile(base + "/qml/Meta.qml"), "Hifi.Ui", 1, 0, "Meta");
     qmlRegisterUncreatableType<LibraryModel>("Hifi", 1, 0, "LibraryModel", "usare l'istanza Library");
 
@@ -278,13 +350,16 @@ int main(int argc, char *argv[]) {
     ctx->setContextProperty("Sys", &sys);
     ctx->setContextProperty("I18n", &i18n);
     ctx->setContextProperty("Player", &player);
+    ctx->setContextProperty("Remote", &remote);
     ctx->setContextProperty("Vu", &vu);
     ctx->setContextProperty("Library", &library);
     view.engine()->addImportPath(base + "/qml");
     api.setEngine(view.engine());
     sys.setWindow(&view);
-    InputWatch watch(&sys);
+    InputWatch watch(&sys, &remote, &view, &touch);
     view.installEventFilter(&watch);
+    QObject::connect(&remote, &Remote::action, &watch, [&watch]() { watch.park(); });
+    QObject::connect(&sys, &Sys::pointerEnabledChanged, &watch, [&watch]() { watch.pointerChanged(); });
     if (!sys.pointerEnabled()) QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
 
     view.setSource(QUrl::fromLocalFile(base + "/qml/Main.qml"));
@@ -325,5 +400,8 @@ int main(int argc, char *argv[]) {
     bool ok = false;
     int secs = qEnvironmentVariableIntValue("HIFI_QT_SECONDS", &ok);
     if (ok && secs > 0) QTimer::singleShot(secs * 1000, &app, &QGuiApplication::quit);
-    return app.exec();
+    const int rc = app.exec();
+    btThread.quit();
+    btThread.wait(3000);
+    return rc;
 }
