@@ -163,6 +163,41 @@
       border-color: #555;
       background: rgba(255,255,255,0.04);
     }
+    /* The live demo: the one thing in the hero that lets you touch the
+       player before installing anything, so it stands apart from the row
+       of buttons below it. */
+    .try-demo {
+      display: inline-flex; align-items: center; gap: 1.1rem;
+      max-width: 640px; margin: 0 auto 2.25rem; padding: 1.05rem 1.4rem 1.05rem 1.1rem;
+      text-align: left; text-decoration: none; color: var(--text);
+      border-radius: 16px; border: 1px solid rgba(245,184,32,0.55);
+      background: linear-gradient(135deg, rgba(245,184,32,0.16), rgba(245,184,32,0.04) 55%, rgba(255,255,255,0.02));
+      box-shadow: 0 0 0 1px rgba(245,184,32,0.08), 0 12px 40px rgba(245,184,32,0.12);
+      transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+    }
+    .try-demo:hover {
+      transform: translateY(-2px); border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(245,184,32,0.2), 0 16px 48px rgba(245,184,32,0.25);
+    }
+    .try-demo-icon {
+      flex: none; width: 54px; height: 54px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--accent); color: #000;
+      box-shadow: 0 6px 20px rgba(245,184,32,0.4);
+    }
+    .try-demo-icon svg { margin-left: 3px; }
+    .try-demo-text { display: flex; flex-direction: column; gap: 0.2rem; }
+    .try-demo-text strong { font-size: 1.12rem; font-weight: 800; }
+    .try-demo-text small { font-size: 0.88rem; color: var(--muted); line-height: 1.45; }
+    .try-demo-go {
+      flex: none; margin-left: auto; color: var(--accent); font-weight: 700; font-size: 0.92rem;
+      white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+    }
+    @media (max-width: 560px) {
+      .try-demo { gap: 0.85rem; padding: 0.95rem 1rem; }
+      .try-demo-icon { width: 46px; height: 46px; }
+      .try-demo-go span { display: none; }
+    }
     .hero-pills {
       display: flex; gap: 0.65rem;
       justify-content: center; flex-wrap: wrap;
@@ -837,6 +872,14 @@
      data-it="&lt;strong&gt;L&#x27;impianto hi-fi sul mini PC che hai già.&lt;/strong&gt; Osmium Sound trasforma un mini PC x86 in un lettore musicale touch: riproduzione bit-perfect, servizi di streaming e rip dei CD.">
     <strong>Hi-fi on the mini PC you already own.</strong> Osmium Sound turns an x86 mini PC into a touchscreen music player: bit-perfect playback, streaming services and CD ripping.
   </p>
+  <a class="try-demo" href="https://demo.osmiumsound.it" target="_blank" rel="noopener">
+    <span class="try-demo-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span>
+    <span class="try-demo-text">
+      <strong data-en="Try it now, in your browser" data-it="Provalo subito, nel browser">Try it now, in your browser</strong>
+      <small data-en="The player&#x27;s screen and its web admin, with real music. Nothing to install." data-it="Lo schermo del lettore e il web admin, con musica vera. Niente da installare.">The player's screen and its web admin, with real music. Nothing to install.</small>
+    </span>
+    <span class="try-demo-go"><span data-en="Open the demo" data-it="Apri la demo">Open the demo</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg></span>
+  </a>
   <div class="hero-ctas">
     <a class="btn-primary" href="#install">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -848,7 +891,7 @@
     </a>
     <a class="btn-secondary" href="#demo">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
-      <span data-en="Watch the demo" data-it="Guarda la demo">Watch the demo</span>
+      <span data-en="Watch the video" data-it="Guarda il video">Watch the video</span>
     </a>
     <a class="btn-secondary" href="https://www.facebook.com/profile.php?id=61593595246369" target="_blank" rel="noopener">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></svg>
