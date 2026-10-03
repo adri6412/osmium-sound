@@ -45,8 +45,8 @@ only fires on `companion-v*`. Tag names are case-sensitive.
   as root — deliberately not reachable via the network API). Once a fix is
   validated on `alpha`, merge/cherry-pick it into `svil` and cut the next real
   `v2.5.21-dev.119` there for the shared dev channel.
-- **`gh-pages`** is generated (website, `ota/` manifests, `fdroid/` repos) —
-  never edit it by hand.
+- **`gh-pages`** is generated (`ota/` manifests, `fdroid/` repos; the website
+  is deployed from `main` by `deploy-pages.yml`) — never edit it by hand.
 
 Promotion: PR `svil` → `main`, then tag a stable `vX.Y.Z` on `main`.
 

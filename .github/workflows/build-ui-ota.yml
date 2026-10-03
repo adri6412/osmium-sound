@@ -481,11 +481,9 @@ jobs:
           echo "channel=$CH" >> "$GITHUB_OUTPUT"
 
       # Commits the manifest to the gh-pages branch — despite the action's
-      # name this is just a git push, not a GitHub Pages deploy. Cloudflare
-      # Pages (osmium-sound.pages.dev) watches this same branch and
-      # redeploys on its own from here; see OTA_MANIFEST_BASE in
-      # api_server.py for why GitHub Pages itself is no longer in the loop
-      # (its custom-domain cert got permanently stuck).
+      # name this is just a git push, not a GitHub Pages deploy. When this run
+      # ends, deploy-pages.yml puts it on Cloudflare Pages
+      # (osmium-sound.pages.dev, OTA_MANIFEST_BASE in api_server.py).
       # Il manifest è ciò che l'apparecchio legge davvero, quindi non deve
       # nominare una release che ancora non esiste: per i tag che avranno
       # un'immagine lo pubblica il lavoro finale, insieme alla release. Qui
@@ -498,7 +496,7 @@ jobs:
           publish_dir: ./manifest-out
           publish_branch: gh-pages
           destination_dir: ota
-          keep_files: true          # don't wipe the website already on gh-pages
+          keep_files: true          # don't wipe fdroid/ and the other channels
 
       - name: Upload artifact (manual runs)
         if: github.ref_type != 'tag'

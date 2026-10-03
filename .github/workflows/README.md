@@ -11,12 +11,12 @@ storage housekeeping. Tag/branch conventions and the release channels are in
 | [`build-iso.yml`](build-iso.yml) | manual (`workflow_dispatch`, tag as input) | `hifi-player-<tag>.iso` + `.sha256` + `.sha256.sig` + `latest.json` (artifact; optionally attached to the Release) |
 | [`build-companion-apk.yml`](build-companion-apk.yml) | push of a `companion-v*` tag; manual | signed APK, GitHub Release, unit-test/lint reports, self-hosted F-Droid repos on `gh-pages` |
 | [`build-flasher.yml`](build-flasher.yml) | manual | Osmium Flasher binaries (Windows `.exe`, Linux `.run`) as artifacts |
-| [`deploy-pages.yml`](deploy-pages.yml) | push to `main` touching `website/**`; manual | pushes `website/` to the `gh-pages` branch (served by Cloudflare Pages as osmiumsound.it) |
+| [`deploy-pages.yml`](deploy-pages.yml) | push to `main` touching `website/**`; end of every `build-ui-ota.yml` / `build-companion-apk.yml` run; manual | deploys `website/` + `ota/` + `fdroid/` from `gh-pages` to Cloudflare Pages (osmiumsound.it) with wrangler |
 | [`prune-ota-r2.yml`](prune-ota-r2.yml) | called by `build-ui-ota.yml` after `verify-release`; nightly; manual (dry run by default) | deletes from `file.osmiumsound.it/ota/` every release no channel's manifest names (`prune-ota-r2.py`) |
 | [`cleanup-actions-storage.yml`](cleanup-actions-storage.yml), [`Clean.yml`](Clean.yml) | manual | delete Actions caches / artifacts to free storage |
 
 Helper scripts live in [`../scripts/`](../scripts/): `make-ota-manifest.py`
-(OTA manifest for `gh-pages`), `make-iso-manifest.py` (`latest.json` for
+(OTA manifest for `gh-pages`, deployed to Pages by `deploy-pages.yml`), `make-iso-manifest.py` (`latest.json` for
 the flasher) and `prune-ota-r2.py` (what stays on file.osmiumsound.it/ota/). The repo-root [`tools/publish-iso.sh`](../../tools/publish-iso.sh)
 reproduces the ISO signing + manifest step by hand for an ISO already on disk.
 
@@ -180,12 +180,23 @@ file.osmiumsound.it; the binaries are unsigned.
 
 ## `deploy-pages.yml` — website
 
-On push to `main` touching `website/**` (or manual), pushes the contents of
-`website/` to the `gh-pages` branch (`keep_files: true`, so `ota/` and
-`fdroid/` published there by the other workflows survive). The public site
-**osmiumsound.it** is served by Cloudflare Pages watching that branch —
-GitHub Pages itself is not in the loop. Changes on `svil`/`alpha` alone never
-deploy.
+Deploys the public site **osmiumsound.it** (Cloudflare Pages project
+`osmium-sound`) with `wrangler pages deploy`. Each deployment is assembled from
+scratch: `website/` from `main` (its `functions/` become the Pages Functions,
+not files) plus `ota/` and `fdroid/` from the `gh-pages` branch, so a file
+taken out of `website/` really disappears from the site. Runs on a push to
+`main` touching `website/**`, after every run of `build-ui-ota.yml` and
+`build-companion-apk.yml` (`workflow_run`, which always uses `main`'s copy of
+this file, whatever branch the tag came from), and by hand. It ends by
+checking that `osmium-sound.pages.dev/ota/latest-*.json` — where devices look
+for updates — match `gh-pages` byte for byte. Changes on `svil`/`alpha` alone
+never deploy.
+
+`gh-pages` is now only the store of `ota/` and `fdroid/`: Cloudflare no longer
+builds from it (automatic Git deployments are off on the project). The D1
+binding, the secrets (`BETA_USER`, `BETA_PASSWORD`, `KOFI_VERIFICATION_TOKEN`)
+and the custom domains stay in the Cloudflare project. Needs the
+`CLOUDFLARE_API_TOKEN` secret (Account › Cloudflare Pages › Edit).
 
 ---
 
