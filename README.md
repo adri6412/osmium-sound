@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="logo%20osmium.png" alt="Osmium Sound" width="96" />
+<img src="logo%20osmium.png" alt="Osmium Sound" width="360" />
 
 # Osmium Sound
 
@@ -9,12 +9,11 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 
 ![UI](https://img.shields.io/badge/UI-Qt%206%20%2F%20QML-41cd52)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Node](https://img.shields.io/badge/node-20%2B-brightgreen)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://osmiumsound.it/kofi?from=github)
 
-[**🌐 Website**](https://osmiumsound.it) · [**⬇️ Download**](https://github.com/adri6412/osmium-sound/releases) · [**📱 Android companion**](https://github.com/adri6412/osmium-sound/releases?q=companion) · [**📖 Architecture**](ARCHITECTURE.md)
+[**🌐 Website**](https://osmiumsound.it) · [**⬇️ Download**](https://github.com/adri6412/osmium-sound/releases) · [**📱 Android companion**](https://play.google.com/store/apps/details?id=com.osmium.sound.companion) · [**📖 Architecture**](ARCHITECTURE.md)
 
-<img src="website/01.png" alt="Osmium Sound — Now Playing" width="640" />
+<img src="https://osmiumsound.it/screens/02-now-playing-amber.jpg" alt="Osmium Sound — Now Playing" width="640" />
 
 </div>
 
@@ -24,16 +23,18 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 
 - 🎵 **High-resolution audio** — FLAC, DSD (native when the DAC accepts it, DoP otherwise — automatic, with a choice in Settings → Audio), PCM up to 192kHz, bit-perfect (no resampling)
 - 🎧 **Streaming services** — Deezer, Qobuz, TIDAL, Spotify and more, via Lyrion plugins
-- 📁 **Music library** — browse by artist, album, genre, year, composer, new music, folder or playlist; search the whole library from the touchscreen; refresh it on demand with progress
+- 📁 **Music library** — browse by artist, album (as a grid or as Cover Flow), genre, year, composer, new music, folder or playlist; search the whole library from the touchscreen; refresh it on demand with progress
 - 🎼 **Album & artist pages** — tracks, format and the credits in your own tags; online, who played what on which instrument, production and studios, first release, band members and biographies from MusicBrainz and Wikipedia (pick the edition if the match is wrong)
 - ✏️ **Library editor** — a web page next to the web admin (same login) to fix the tags inside the music files (with undo) and correct the online credits, artist matches and editions shown on the album and artist pages
 - ⭐ **Favourites & playlists** — a heart on Now Playing, favourites you can edit, playlists you can rename and trim, all from the touchscreen
 - 💾 **Music sources** — USB drives, internal disks (adopt or format from the UI), NAS/SMB shares found for you on the network; adopted disks can be shared back on the LAN over SMB, and a file manager in the web admin copies, moves and renames what's on them
-- 💿 **CD playback & ripping** — insert a disc, play it or rip it to tagged FLAC (MusicBrainz metadata and IDs + cover art) straight into your library
+- 💿 **CD playback & ripping** — insert a disc, play it or rip it to tagged FLAC (MusicBrainz metadata and IDs + cover art) straight into your library, with the ripping settings, a log, Cancel and Eject at hand
 - 🧭 **Discover** — endless random mixes, "keep playing similar music", similar artists and artist bios on the touchscreen
 - 📻 **Internet radio** — thousands of stations, save favourites from the touchscreen
 - 🎚️ **Analog VU meters** — six built-in looks, more downloadable from a signed online catalogue, plus a status plate showing Hi-Res/PCM/DSD and BitPerfect/ReplayGain
-- 📀 **Now Playing animations** — with the VU meters off, a CD, a vinyl record or a cassette plays in their place on the touchscreen
+- 📀 **Now Playing animations** — with the VU meters off, a top-loading CD, an 80s CD player, a turntable or a cassette deck plays in their place, with working keys; more downloadable, and full screen with one tap
+- 🎮 **Remote control** — a USB or Bluetooth remote drives the whole screen; three known models (Fire TV, Xiaomi Mi Box S, G20S PRO) pair by themselves and come with their key map, any key can be given an action
+- 🔊 **Bluetooth speakers** — speakers and headphones the appliance plays to, each one a Lyrion player of its own that can be grouped with the others
 - 🔀 **Any player, one screen** — drive the other players on the same Lyrion from the touchscreen, then come back to this one
 - 🖥️ **With screen or headless** — touchscreen kiosk, headless (web admin + companion app), or server-only (serves Lyrion to other players, plays nothing itself)
 - 🌐 **Web admin** — manage a unit from any browser on the LAN (network, audio, sources, updates, backups, SSH, Tailscale remote access)
@@ -47,23 +48,23 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 
 | | |
 |---|---|
-| **Hardware** | x86-64 mini-PC (Intel iGPU-class graphics is plenty) |
-| **Display** | 1024×600 touchscreen (optimized for this resolution); headless operation also supported |
+| **Hardware** | x86-64 mini-PC with UEFI or a legacy BIOS (Intel iGPU-class graphics is plenty) |
+| **Display** | Any touchscreen: the interface takes the screen's shape (from 3:2 to 16:9, e.g. 1024×600, 1280×800, 1920×1080); headless operation also supported |
 | **OS** | Custom Debian 13 ("trixie") appliance image built with live-build: a ~850 MiB read-only squashfs in A/B slots, settings and music on a separate data partition |
 | **Interface** | Native Qt 6 / QML app drawing straight to the display over DRM/KMS (no X server, no compositor) — about 3.3 W and 175 MB on Now Playing with the VU meters, against 4.9 W and 650 MB for the previous Electron kiosk; a Vue web admin for any browser on the LAN |
 | **Media server** | Lyrion Music Server (installed by the setup wizard when this device is the server, or an existing one on the LAN), web player on Material Skin with the "Osmium" theme |
-| **Audio formats** | FLAC, DSD (64/128/256), MP3, AAC, WAV, AIFF |
+| **Audio formats** | FLAC, DSD (up to DSD512 on DACs that take it natively), MP3, AAC, WAV, AIFF |
 | **Max resolution** | 32-bit / 192kHz PCM |
-| **Output** | USB DAC, HDMI |
-| **Update system** | Whole-image A/B updates with automatic rollback (RAUC, signed), streamed straight into the spare slot; Prod/Dev channels |
+| **Output** | USB DAC, HDMI, Bluetooth speakers |
+| **Update system** | Whole-image A/B updates with automatic rollback (RAUC, signed), downloaded to the data partition and then written to the spare slot; Prod/Dev channels |
 | **License** | AGPL-3.0 (app code), commercial licenses available — see [Licensing](#-licensing) |
 
 ## 🚀 Get started
 
-1. **Download** the latest install ISO from [Releases](https://github.com/adri6412/osmium-sound/releases) (or use **Osmium Flasher**, see `flasher/`, which downloads and verifies the current image for you).
+1. **Download** the latest install ISO from the [website](https://osmiumsound.it/#install) or [Releases](https://github.com/adri6412/osmium-sound/releases) (or use **Osmium Flasher**, see `flasher/`, which downloads and verifies the current image for you).
 2. **Flash** it to an 8GB+ USB stick with [Osmium Flasher](https://osmiumsound.it), [balenaEtcher](https://etcher.balena.io/), Rufus, or `dd`.
-3. **Boot** your x86 mini-PC from the stick and finish the install from there: pick the disk, confirm, done.
-4. On first boot after install, pick your Wi-Fi on the screen (or just plug in a cable); the screen then shows its own address (`http://<ip>`). Open it on your phone or laptop to finish setup: language, restore-from-backup or fresh start, any required update, device name and mode, audio output, Lyrion (this device, or a server already on your network), web-player look, music services, web-admin account, time zone, music sources.
+3. **Boot** your x86 mini-PC from the stick — UEFI or legacy BIOS, Secure Boot can stay on — and finish the install from there: pick the disk, confirm, done.
+4. On first boot after install, pick your Wi-Fi on the screen (or just plug in a cable); the screen then shows its own address (`http://<ip>`). Open it on your phone or laptop to finish setup: language, restore-from-backup or fresh start, any required update, device name and mode, audio output, Lyrion (this device, or a server already on your network), web-player look, music services, web-admin account, time zone, music sources, remote control.
 
 Every later version — the system image and Lyrion — arrives over the air from the Settings screen (or the web admin, or the companion). It is written to the spare slot while the device keeps playing, and the reboot switches over; if the new version doesn't come up healthy, the device goes back to the previous one by itself. No reflashing required.
 
@@ -71,7 +72,7 @@ Every later version — the system image and Lyrion — arrives over the air fro
 
 ## 📱 Android companion
 
-Control Osmium Sound from your phone — browse the library, drive playback and the queue, adjust volume, and reach the same settings as the web admin (audio output, music sources, Lyrion, playback and VU meters, display, updates, backups, system), or turn the device off from the top bar. The phone can also play music itself, as one more player in the house, and connect to any Lyrion server, not only an Osmium device. Pair in seconds by scanning the QR code on the device's Settings screen. Distributed as a signed APK or via our self-hosted F-Droid repo (not on the Play Store) — see the [website](https://osmiumsound.it/#android) and [COMPANION_APP.md](COMPANION_APP.md).
+Control Osmium Sound from your phone — browse the library, drive playback and the queue, adjust volume, and reach the same settings as the web admin (audio output, music sources, Lyrion, playback and VU meters, display, updates, backups, system), or turn the device off from the top bar. The phone can also play music itself, as one more player in the house, and connect to any Lyrion server, not only an Osmium device. Pair in seconds by scanning the QR code on the device's Settings screen. Free on [Google Play](https://play.google.com/store/apps/details?id=com.osmium.sound.companion), also as a signed APK and from our self-hosted F-Droid repo — see the [website](https://osmiumsound.it/#android) and [COMPANION_APP.md](COMPANION_APP.md).
 
 ## 📖 Documentation
 

@@ -211,11 +211,13 @@
     <a href="#en-daily-use">Daily use</a>
     <a href="#en-vu">VU meters</a>
     <a href="#en-animations">Animations</a>
+    <a href="#en-remote">Remote control</a>
 
     <div class="grp">Advanced configuration</div>
     <a href="#en-sources">Music sources</a>
     <a href="#en-streaming">Streaming & Lyrion plugins</a>
     <a href="#en-multiroom">External Lyrion server</a>
+    <a href="#en-bluetooth">Bluetooth speakers</a>
     <a href="#en-backup">Backup & restore</a>
     <a href="#en-updates">OTA updates</a>
     <a href="#en-ssh">SSH & advanced access</a>
@@ -241,11 +243,13 @@
     <a href="#it-uso-quotidiano">Uso quotidiano</a>
     <a href="#it-vu">VU meter</a>
     <a href="#it-animazioni">Animazioni</a>
+    <a href="#it-telecomando">Telecomando</a>
 
     <div class="grp">Configurazione avanzata</div>
     <a href="#it-sorgenti">Sorgenti musicali</a>
     <a href="#it-streaming">Streaming e plugin Lyrion</a>
     <a href="#it-multiroom">Server Lyrion esterno</a>
+    <a href="#it-bluetooth">Altoparlanti Bluetooth</a>
     <a href="#it-backup">Backup e ripristino</a>
     <a href="#it-aggiornamenti">Aggiornamenti OTA</a>
     <a href="#it-ssh">SSH e accesso avanzato</a>
@@ -281,8 +285,8 @@
           <tr><td>Storage</td><td>Internal disk/SSD to install onto (16&nbsp;GB recommended, 8&nbsp;GB minimum)</td></tr>
           <tr><td>USB stick</td><td>8&nbsp;GB or larger, needed only for the initial install</td></tr>
           <tr><td>Screen (optional)</td><td>Touchscreen recommended for “with screen” mode. Supported resolutions are the ones in Settings: Automatic, 1280×720, 1920×1080 or the screen’s native resolution. Not needed in headless or server-only mode.</td></tr>
-          <tr><td>Audio output</td><td>USB DAC or HDMI output. DSD files reach a USB DAC natively when it accepts them that way, otherwise as DoP; Settings → Audio → Advanced lets you choose, and holds the other player options (sample rate limit, DAC volume control, buffers).</td></tr>
-          <tr><td>Network</td><td>Ethernet or Wi-Fi</td></tr>
+          <tr><td>Audio output</td><td>USB DAC or HDMI output, and Bluetooth speakers or headphones (see <a href="#en-bluetooth">Bluetooth speakers</a>). DSD files reach a USB DAC natively when it accepts them that way, otherwise as DoP; Settings → Audio → Advanced lets you choose, and holds the other player options (sample rate limit, DAC volume control, buffers).</td></tr>
+          <tr><td>Network</td><td>Ethernet or Wi-Fi. Broadcom BCM4360/BCM4352 Wi-Fi cards (2013–2015 Macs, Asus PCE-AC68, TP-Link Archer T8E) work too, but only with Secure Boot turned off: their driver is not signed.</td></tr>
           <tr><td>Setup device</td><td>Any device with a browser — phone, tablet or PC — for installation and first setup</td></tr>
         </table>
         <div class="box tip">
@@ -381,6 +385,8 @@
             Set the correct time zone for the clock, alarms, and scheduling.</li>
           <li><strong>Music sources</strong>
             Optional: add a network drive (NAS) and/or set up an internal disk for your music library — USB drives already mount automatically, so there's nothing to do for those. For a network drive the device looks for the computers and NAS on your network and lists their shared folders: pick one, and if it asks for a username and password a small window appears for them. An internal disk can be used as-is or formatted first (ext4 or exFAT — this erases everything on it and asks you to type the disk's name to confirm). Add as many as you like, then press <strong>Done, continue</strong>. You can always add more later from Settings.</li>
+          <li><strong>Remote control</strong>
+            Optional: "Do you want to set up a remote control?" A USB remote already works once its receiver is plugged in. For a Bluetooth one, say which remote you have: for the three known models (Amazon Fire TV, Xiaomi Mi Box S, G20S PRO) the page shows how to put it in pairing mode and the device finds and connects it by itself; any other remote is paired from a list. You can skip this and do it later from Settings → Remote control.</li>
           <li><strong>Finish setup</strong>
             Press "Complete setup". The device switches to the mode you chose and, if it is the music server, your browser opens its web player, ready to use.</li>
         </ol>
@@ -434,7 +440,7 @@
         <p>Every Osmium Sound device exposes a web administration page reachable from any browser on the same network — especially useful for headless or server-only devices, but always available. The address to use is the device's <strong>IP address</strong>, visible in Settings → System info (on screen or in the companion app), the web admin session itself, or your router's device list:</p>
         <table>
           <tr><th>Address</th><th>What's there</th></tr>
-          <tr><td><code>http://&lt;device-ip&gt;</code></td><td>Web administration: network, audio output, music sources and files, the Library editor, Lyrion Music Server, playback, VU meters, animations, display mode, player on/off, time zone, updates, companion pairing, account, backup, SSH, Tailscale, restart/shut down, factory reset, licenses and credits (every component of the device and its license)</td></tr>
+          <tr><td><code>http://&lt;device-ip&gt;</code></td><td>Web administration: network (with the saved Wi-Fi networks and a network check), audio output, Bluetooth speakers, remote control, music sources and files, the Library editor, Lyrion Music Server, playback, VU meters, animations, display mode, player on/off, time zone, updates, companion pairing, account, backup, SSH, Tailscale, restart/shut down, factory reset, licenses and credits (every component of the device and its license)</td></tr>
           <tr><td><code>http://&lt;device-ip&gt;:9000</code></td><td>Lyrion Music Server's own web interface (library, playlists, server settings)</td></tr>
         </table>
         <p>The home page also has a <strong>Disk space</strong> card: a bar and a small table telling how much the system takes, how much your data uses, and how much is still free.</p>
@@ -478,17 +484,19 @@
       <section id="en-daily-use">
         <h2>Daily use</h2>
         <ul>
-          <li><strong>Now Playing</strong> — the expanded view shows the analog VU meters (see <a href="#en-vu">VU meters</a>) — or, with them off, an animation (see <a href="#en-animations">Animations</a>) — and a status plate: the kind of audio playing (Hi-Res, PCM, DSD) and whether BitPerfect or ReplayGain is on. Tap BitPerfect or ReplayGain to jump straight to the setting behind it.</li>
+          <li><strong>Now Playing</strong> — the expanded view shows the analog VU meters (see <a href="#en-vu">VU meters</a>) — or, with them off, an animation (see <a href="#en-animations">Animations</a>) — and a status plate: the kind of audio playing (Hi-Res, PCM, DSD) and whether BitPerfect or ReplayGain is on. Tap BitPerfect or ReplayGain to jump straight to the setting behind it. Next to the clock, one button shows the VU meters (or the animation) at <strong>full screen</strong> with the title, artist and progress, and two more open a chooser of <strong>VU meter looks</strong> and of <strong>animations</strong>, each with a preview: picking a look turns the meters on, picking an animation turns them off. The gear at the right end of Now Playing's top buttons goes straight to Settings.</li>
           <li><strong>Choosing the player</strong> — tap the player name in the bar at the bottom (or the speaker button in Now Playing) to see the other players on the same music server, and pick one to control it from this screen: what's playing, the queue, the volume. The name turns gold as a reminder. Settings that belong to this device are hidden meanwhile, with a <strong>Back to this device</strong> button; after a restart the screen is always back on its own player.</li>
-          <li><strong>Power button</strong> — the power icon at the right end of the top bar, next to the Osmium Sound mark, restarts or shuts down the device.</li>
-          <li><strong>Music / Radio / Apps</strong> — Lyrion Music Server's interface: local library, internet radio, and streaming services (Deezer, Qobuz, TIDAL, Spotify and others) via Lyrion plugins. The Music tab opens on a search box that looks through the whole library (artists, albums, tracks) and on tiles for artists, albums, genres, years, composers, new music, folders, playlists and favourites.</li>
+          <li><strong>Power button</strong> — the power icon at the right end of the top bar restarts or shuts down the device.</li>
+          <li><strong>Network</strong> — the icon between the Osmium Sound mark and the power button shows the connection: Wi-Fi or cable when the internet answers, a gold dot when only the home network does, a crossed-out shape when nothing answers; tap it for an explanation in words. In Settings → Network Configuration the Wi-Fi networks the device knows are marked <em>Saved</em> and join without a password, a network broadcast on both 2.4 and 5 GHz shows its band, and <strong>Saved Wi-Fi networks</strong> lists them all, the one in use first, each with a <strong>Forget</strong> button (forgetting the one in use disconnects now). <strong>Check the network</strong>, in Settings → System Information and Settings → Updates, tests the connection step by step — cable or Wi-Fi, router, internet, name lookup, clock, update server — and tells you where it stops.</li>
+          <li><strong>Music / Radio / Apps</strong> — Lyrion Music Server's interface: local library, internet radio, and streaming services (Deezer, Qobuz, TIDAL, Spotify and others) via Lyrion plugins. The Music tab opens on a search box that looks through the whole library (artists, albums, tracks) and on tiles for artists, albums, genres, years, composers, new music, folders, playlists and favourites. Albums can be shown as a grid or as <strong>Cover Flow</strong>, a row of covers to leaf through with a finger or the mouse wheel: switch with the button at the top of the album list, or in Settings → Library → Album view.</li>
           <li><strong>Album and artist pages</strong> — tap an album to open its page: cover, year, length and format, buttons to play, shuffle or queue it, the tracks (tap one to start the album from there) and the credits written in your music files. Tap an artist — in the library, on an album page, or under the title in Now Playing — for their page, with their albums grouped by what they did on them: as the artist, with a band or orchestra, as composer, as conductor, appearing on someone else's record. With an internet connection the pages also show who played what and on which instrument, who produced and recorded the album and where, when it first came out, the members of a band and a short biography, taken from MusicBrainz and Wikipedia. If an album page shows a different record from yours, tap <strong>Wrong album? Choose the edition</strong> at the bottom.</li>
-          <li><strong>Favourites and playlists</strong> — the heart in Now Playing adds or removes what is playing from the favourites; press and hold any row (a track, an album, a radio station, a playlist) for more: add to the queue, play next, add to favourites. In Favourites you can rename, reorder and remove; playlists can be renamed, deleted and trimmed of a track.</li>
+          <li><strong>Favourites and playlists</strong> — the heart in Now Playing adds or removes what is playing from the favourites; press and hold any row (a track, an album, a radio station, a playlist — also inside the apps, the radio and Favourites) for more: add to the queue, play next, add to favourites. In Favourites you can rename, reorder and remove; playlists can be renamed, deleted and trimmed of a track.</li>
           <li><strong>Refreshing the library</strong> — Settings → Lyrion Music Server shows how many albums, artists and tracks the server knows, when it last scanned, and a <strong>Refresh the library</strong> button with progress (also on the web administration Dashboard). Sources you add or change are scanned on their own; use this after moving music around by hand. In the same section, <strong>Album and artist information</strong> turns the online look-ups for the album and artist pages on or off, can prepare the whole library slowly in the background so the pages open complete, and clears what has been saved. What has been downloaded stays until you clear it, and <strong>Where to keep it</strong> lets you put it on a disk of yours instead of on the player: what is already there moves with the choice, nothing is downloaded again. If that disk is not connected, the player goes back to using its own storage until you plug it in. To find the information, the device sends the names of your albums and artists to MusicBrainz and Wikipedia.</li>
           <li><strong>CD</strong> — insert a disc and rip it to FLAC (or WAV) with automatic tags and cover art (MusicBrainz), straight into your library, an adopted USB drive, or a writable network share, as Artist/Album with a ripping log next to it. A ripped album is recognised right away on its album page. Settings → CD ripping (on screen and in the web admin) holds the default folder, chosen with the same folder browser as Music sources, the format, how many times a track is re-read until two reads agree, pre-emphasis, ReplayGain, the log, eject after the rip, automatic start, and the drive’s speed and read offset (Calibrate looks it up in AccurateRip’s list). Eject and Cancel are always at hand, also after a failed rip, for drives without a button.</li>
           <li><strong>Discover</strong> — endless mixes by track, album, or artist, with a genre filter and saveable presets, plus "keep playing similar music", related artists, and bios, right on the touchscreen.</li>
           <li><strong>Settings → Playback</strong> — track transition, ReplayGain, the now-playing auto-expand timeout, and a fixed-volume-100% (BitPerfect) toggle that turns off Lyrion's own digital volume control and greys out the volume slider.</li>
-          <li><strong>Settings</strong> — system and network info, audio output, music sources, Lyrion Music Server, VU meters, animations, updates, companion app pairing, backup, factory reset.</li>
+          <li><strong>Settings</strong> — system and network info, audio output, Bluetooth speakers, remote control, music sources, CD ripping, Lyrion Music Server, VU meters, animations, alarm clock, interface motion, updates, companion app pairing, backup, licenses and credits, factory reset.</li>
+          <li><strong>Guided tour and motion</strong> — after setup the screen shows a short guided tour once; <em>Show the guided tour of the screen again</em> in Settings → System Information replays it. Settings → <strong>Interface motion</strong> sets how much the interface moves: <em>Full</em> (buttons give way under a finger, panels slide in), <em>Reduced</em> (the same, twice as quick) or <em>None</em>.</li>
         </ul>
         <div class="box tip">
           <span class="label">Playback survives a restart</span>
@@ -512,25 +520,40 @@
 
       <section id="en-animations">
         <h2>Animations</h2>
-        <p>With the VU meters turned off, Now Playing can show an animation in their place. Choose it in Settings → <strong>Animations</strong> — on the screen or in web administration:</p>
+        <p>With the VU meters turned off, Now Playing can show an animation in their place. Choose it in Settings → <strong>Animations</strong> — on the screen or in web administration, where each one has a still preview — or from the animations button next to the clock:</p>
         <ul>
-          <li><strong>None</strong> — nothing takes the place of the VU meters.</li>
-          <li><strong>CD</strong> — a disc goes into a player, then spins.</li>
-          <li><strong>Vinyl</strong> — the tonearm lowers onto a record, then the record spins.</li>
-          <li><strong>Cassette</strong> — a tape goes into a deck, then runs.</li>
+          <li><strong>None</strong> — the song lyrics take the place of the VU meters.</li>
+          <li><strong>Top-loading CD</strong> — a disc goes into a player from above, then spins.</li>
+          <li><strong>CD player</strong> — a late-80s front loader: the drawer comes out with the disc, the fluorescent display shows the track and the time, and its keys work — OPEN, the track numbers, REPEAT, RANDOM, skip and search, play, pause, stop and POWER.</li>
+          <li><strong>Vinyl</strong> — the tonearm lowers onto a record, then the record spins; START/STOP works.</li>
+          <li><strong>Cassette</strong> — a tape goes into a deck, then runs from one reel to the other; the keys work, REW and FF wind while held, and the fader sets the volume. The label shows the track playing.</li>
         </ul>
-        <p>It moves only while music is playing: pause, and it slows down and stops. When a new album starts, the disc or tape comes out and goes back in. The button in Now Playing that brings up the song lyrics switches between the animation and the lyrics.</p>
+        <p>It moves only while music is playing: pause, and it slows down and stops. When a new album starts, the disc or tape comes out and goes back in. With an internet radio the cassette label and the CD display show the station and the song. The full-screen button next to the clock shows the animation large. The button in Now Playing that brings up the song lyrics switches between the animation and the lyrics.</p>
+        <p><strong>More animations to download</strong> — in the same section you'll find further animations, from Osmium Sound's own signed list, like the VU meter looks: once downloaded, an animation keeps itself up to date and can be removed at any time.</p>
         <div class="box tip">
           <span class="label">VU meters or animation</span>
-          <p>The animations play on the device's screen only, and only while the VU meters are off. To see one, turn off Settings → <strong>VU meters</strong> first.</p>
+          <p>The animations play on the device's screen only, and only while the VU meters are off. Picking an animation from the button next to the clock turns the meters off for you; in Settings, turn off <strong>VU meters</strong> first.</p>
         </div>
+      </section>
+
+      <section id="en-remote">
+        <h2>Remote control</h2>
+        <p>A remote control can drive the whole screen: the arrows move a gold ring from item to item, <strong>OK</strong> presses it, <strong>Back</strong> goes back, and the menu key works like holding a finger on an item. Everything is in Settings → <strong>Remote control</strong>, on the screen and in web administration.</p>
+        <ul>
+          <li><strong>USB remotes</strong> — plug in the receiver: it works straight away.</li>
+          <li><strong>Bluetooth remotes</strong> — press <strong>Add a remote</strong> and say which one you have. Three models are known: <em>Amazon Fire TV</em> (3rd generation — hold Home until the light blinks), <em>Xiaomi Mi Box S</em> (hold ⋮⋮⋮ and ○ together for 7–8 seconds) and <em>G20S PRO</em> (hold OK and Back for 5–7 seconds). Put it in pairing mode and leave it near the device: it is found and connected by itself. While a device with a screen has no remote, it also keeps an ear open for these three and pairs one on its own. Any other remote is paired by searching and tapping it in the list.</li>
+          <li><strong>Key map</strong> — a known model shows a drawing of what each key does the first time it turns up; you can see it again from Settings → Remote control. After the first setup, <em>Try the remote</em> walks you through the main keys once.</li>
+          <li><strong>Try and assign the keys</strong> — press a key to see what it sends, and give it another job: full screen, next VU meter look, next animation, open favourites, search, restart the touchscreen, restart or shut down…</li>
+          <li><strong>Power</strong> — the remote's power key never switches the device off by itself: it opens the Restart / Shut down menu, with the ring on Cancel. The sleep key rests the screen.</li>
+        </ul>
+        <p>A keyboard's or a sound card's own play and volume keys keep working as keys and are not taken for a remote. In web administration you can download a <strong>remote control card</strong> with what the device sees, to send to support.</p>
       </section>
 
       <section id="en-sources">
         <h2>Music sources</h2>
         <p>Osmium Sound reads your music library from one or more sources, configurable from Settings (or during initial setup):</p>
         <ul>
-          <li><strong>Network folder</strong> — a NAS or a shared folder on another computer. You don't need to know its address: the device looks for the computers and NAS on your network, lists their shared folders, and asks for a username and password in a small window only if the folder needs them. If it can't connect, it tells you why in plain words (the technical details stay one tap away). You can still type everything in by hand. Each folder can be toggled between read-only and writable at any time — handy if you also want to rip CDs onto it.</li>
+          <li><strong>Network folder</strong> — a NAS or a shared folder on another computer. You don't need to know its address: the device looks for the computers and NAS on your network, lists their shared folders, and asks for a username and password in a small window only if the folder needs them. If it can't connect, it tells you why in plain words (the technical details stay one tap away). You can still type everything in by hand. A folder is added writable, unless the server only allows reading; each one can be toggled between read-only and writable at any time — handy if you also want to rip CDs onto it.</li>
           <li><strong>USB disk</strong> — a USB disk plugged into the device, "adopted" (shared on the network, read/write). An adopted drive auto-remounts on its own if you unplug and reconnect it, or reconnect it after a reboot.</li>
           <li><strong>Internal disk</strong> — a second disk inside the device, dedicated to music.</li>
           <li><strong>A folder on the device itself</strong> — music copied straight onto the device's own disk. It can be shared on the network so you can copy music into it from a computer.</li>
@@ -564,6 +587,18 @@
         <p>Playing several players in sync (multiroom) is a native Lyrion Music Server feature, managed from Lyrion's own interface — Osmium Sound doesn't provide a separate multiroom feature of its own. Give each device a name so they're easy to tell apart there. From the device's screen you can also control any other player on the same server — see <a href="#en-daily-use">Daily use</a>.</p>
       </section>
 
+      <section id="en-bluetooth">
+        <h2>Bluetooth speakers</h2>
+        <p>Osmium Sound can play to Bluetooth speakers and headphones. Everything is in Settings → <strong>Bluetooth speakers</strong>, on the screen and in web administration:</p>
+        <ul>
+          <li><strong>Bluetooth</strong> — off until you need it: while it is off the Bluetooth radio stays powered down. Without a Bluetooth adapter the section says so; a small USB one is enough.</li>
+          <li><strong>Search</strong> — put the speaker in pairing mode and search: it shows up in about ten seconds, tap it to add it.</li>
+          <li><strong>Each speaker is a player</strong> — a speaker you add appears in the player list, in the companion app and in Lyrion as a player of its own, with its own queue and volume: play something different on it, or group it with the other players. <em>Name of the player</em> changes the name it shows under.</li>
+          <li><strong>Reconnect on its own</strong> — the device connects to the speaker again as soon as it is switched back on. Connect, Disconnect and <strong>Forget</strong> are next to each speaker.</li>
+        </ul>
+        <p>Bluetooth is for sending music out: the device does not receive music from a phone over Bluetooth. The pairings are part of an encrypted backup, and a factory reset forgets them.</p>
+      </section>
+
       <section id="en-backup">
         <h2>Backup & restore</h2>
         <p>From Settings you can create a full backup of the device's configuration: audio output, the music source list, Lyrion preferences and playlists, the album and artist information downloaded from the web and the corrections you made to it, Wi-Fi network profiles, account and pairing tokens. Sensitive data (Wi-Fi networks, account) only enters the backup if you choose to protect it with a passphrase.</p>
@@ -580,7 +615,7 @@
 
       <section id="en-updates">
         <h2>OTA updates</h2>
-        <p>Osmium Sound and Lyrion Music Server update over the internet (OTA, over-the-air) from Settings → Updates — on the screen, in web administration or in the companion app — with no need to ever reflash the USB stick after the initial install. Press <strong>Check for updates</strong>: within a minute it tells you that an update is available, that you're up to date, or that it couldn't check (usually a network problem).</p>
+        <p>Osmium Sound and Lyrion Music Server update over the internet (OTA, over-the-air) from Settings → Updates — on the screen, in web administration or in the companion app — with no need to ever reflash the USB stick after the initial install. Press <strong>Check for updates</strong>: within a minute it tells you that an update is available, that you're up to date, or that it couldn't check (usually a network problem — <strong>Check the network</strong>, highlighted right there, finds where the connection stops).</p>
         <p>The whole system arrives as a single, digitally signed package: the device refuses anything that isn't signed correctly, even if someone managed to tamper with the download. The device keeps <strong>two copies of the system</strong> side by side. An update is written into the copy that isn't in use, while the device carries on working, with the progress shown live; the restart at the end switches over to it. If the new version doesn't start properly, the device goes back to the previous one on its own, within about ten minutes. Your settings, your music and everything you downloaded are kept apart from the system, so an update never touches them.</p>
         <div class="box tip">
           <span class="label">Devices installed before the two-copy system</span>
@@ -607,6 +642,7 @@
         </div>
         <h3>Installing extra programs</h3>
         <p>The system itself can't be modified, but over SSH the usual <code>sudo apt install &lt;package&gt;</code> still works: the extra program is kept apart from the system, and <code>sudo apt remove</code> takes it away again. After a system update the device rebuilds your extra programs for the new version by itself when it starts (it needs the internet for that). A package that would replace part of the system, or needs newer system components than the device has, is refused with an explanation. The system itself is not updated with <code>apt upgrade</code> but from Settings → Updates.</p>
+        <p>To try a VU meter look or an animation before it is published, <code>sudo hifi-pack-install FILE.vupak</code> (or <code>.animpak</code>) installs it with the same checks as the online lists, except the signature; <code>--list</code> shows what is installed, <code>--remove vu|anim ID</code> takes it away. An animation is a small program the screen runs: install only files you trust.</p>
       </section>
 
       <section id="en-remote-access">
@@ -628,7 +664,7 @@
 
       <section id="en-reset">
         <h2>Factory reset</h2>
-        <p>Factory reset erases every setting, the web administration account, configured sources, backups kept on the device and downloaded VU meter looks, then reboots the device straight back into the setup described in <a href="#en-first-boot">First boot and setup</a> — as if it had just been installed. Music copied onto the device itself is kept.</p>
+        <p>Factory reset erases every setting, the web administration account, configured sources, backups kept on the device, downloaded VU meter looks and animations and the Bluetooth pairings, then reboots the device straight back into the setup described in <a href="#en-first-boot">First boot and setup</a> — as if it had just been installed. Music copied onto the device itself is kept.</p>
         <p>Available from:</p>
         <ul>
           <li>On-screen, in Settings → System Controls → Factory reset (if the device is in "with screen" mode).</li>
@@ -649,7 +685,9 @@
           <tr><td>No audio</td><td>Check the selected audio device in Settings and that the DAC is recognized and connected.</td></tr>
           <tr><td>The installer's QR code doesn't lead anywhere</td><td>Confirm your phone is connected to the <code>Osmium-Setup-XXXX</code> network (it has no password) and try opening <a href="http://10.42.0.1">http://10.42.0.1</a> manually.</td></tr>
           <tr><td>The address shown at first boot doesn't open</td><td>The phone or computer must be on the same network as the device. Type the address exactly as shown, including <code>http://</code>.</td></tr>
-          <tr><td>"Couldn't check for updates"</td><td>The device couldn't reach the internet: check the network connection and try again.</td></tr>
+          <tr><td>"Couldn't check for updates"</td><td>The device couldn't reach the internet: press <strong>Check the network</strong> (Settings → Updates or System Information) to see where the connection stops, then try again.</td></tr>
+          <tr><td>The screen stops answering touch</td><td>Some touchscreens freeze until their cable is unplugged. Web administration → Settings → Display mode → Touchscreen → <strong>Restart the touchscreen</strong> does the same without touching the cable; you can also give this job to a remote key.</td></tr>
+          <tr><td>The remote does nothing</td><td>Settings → Remote control shows the remotes the device sees. A USB remote needs its receiver plugged in; a Bluetooth one may need pairing again (Forget it, then Add a remote). Press a key to wake it.</td></tr>
           <tr><td>After an update the device is still on the old version</td><td>The new version didn't start properly and the device went back to the previous one by itself, as designed. Try the update again; if it happens again, write to <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a>.</td></tr>
           <tr><td>A network folder isn't found</td><td>Make sure the computer or NAS is switched on and sharing the folder. If it still doesn't appear, choose to type it in yourself: its name or address, then the folder name.</td></tr>
           <tr><td>Web administration is unreachable at <code>&lt;name&gt;.local</code></td><td>That address only works if the device still has that exact name — a rename, or a second device with the same default name, breaks it. Use the device's IP address instead (see <a href="#en-web-admin">Web administration</a>).</td></tr>
@@ -700,8 +738,8 @@
           <tr><td>Storage</td><td>Disco/SSD interno per l'installazione (16&nbsp;GB consigliati, 8&nbsp;GB minimo)</td></tr>
           <tr><td>Chiavetta USB</td><td>8&nbsp;GB o superiore, solo per l'installazione iniziale</td></tr>
           <tr><td>Schermo (opzionale)</td><td>Touchscreen consigliato per la modalità “con schermo”. Le risoluzioni supportate sono quelle nelle Impostazioni: Automatica, 1280×720, 1920×1080 o la risoluzione nativa dello schermo. Non necessario in modalità headless o solo server.</td></tr>
-          <tr><td>Uscita audio</td><td>DAC USB oppure uscita HDMI. I file DSD arrivano a un DAC USB in modo nativo se lo accetta così, altrimenti come DoP; in Impostazioni → Audio → Avanzate puoi scegliere, e lì ci sono anche le altre opzioni del player (limite di frequenza, volume dal DAC, buffer).</td></tr>
-          <tr><td>Rete</td><td>Ethernet oppure Wi-Fi</td></tr>
+          <tr><td>Uscita audio</td><td>DAC USB oppure uscita HDMI, e altoparlanti o cuffie Bluetooth (vedi <a href="#it-bluetooth">Altoparlanti Bluetooth</a>). I file DSD arrivano a un DAC USB in modo nativo se lo accetta così, altrimenti come DoP; in Impostazioni → Audio → Avanzate puoi scegliere, e lì ci sono anche le altre opzioni del player (limite di frequenza, volume dal DAC, buffer).</td></tr>
+          <tr><td>Rete</td><td>Ethernet oppure Wi-Fi. Funzionano anche le schede Wi-Fi Broadcom BCM4360/BCM4352 (Mac dal 2013 al 2015, Asus PCE-AC68, TP-Link Archer T8E), ma solo con il Secure Boot spento: il loro driver non è firmato.</td></tr>
           <tr><td>Per la configurazione</td><td>Qualunque dispositivo con un browser — telefono, tablet o PC — per l'installazione e la prima configurazione</td></tr>
         </table>
         <div class="box tip">
@@ -800,6 +838,8 @@
             Imposta il fuso orario corretto per orologio, allarmi e programmazioni.</li>
           <li><strong>Sorgenti musicali</strong>
             Facoltativo: aggiungi un disco di rete (NAS) e/o configura un disco interno per la tua libreria musicale — le unità USB si montano già automaticamente, quindi per quelle non serve fare nulla. Per un disco di rete il dispositivo cerca i computer e i NAS della tua rete e ne elenca le cartelle condivise: scegline una, e se chiede nome utente e password compare una piccola finestra dove scriverli. Un disco interno può essere usato così com'è oppure formattato prima (ext4 o exFAT — questo cancella tutto ciò che contiene e chiede di digitare il nome del disco per confermare). Aggiungine quante vuoi, poi premi <strong>Fatto, continua</strong>. Puoi sempre aggiungerne altre in seguito dalle Impostazioni.</li>
+          <li><strong>Telecomando</strong>
+            Facoltativo: «Vuoi configurare un telecomando?». Un telecomando USB funziona già appena infili la sua chiavetta. Per uno Bluetooth, di' quale telecomando hai: per i tre modelli conosciuti (Amazon Fire TV, Xiaomi Mi Box S, G20S PRO) la pagina spiega come metterlo in accoppiamento e l'apparecchio lo trova e lo collega da solo; ogni altro telecomando si accoppia da un elenco. Puoi saltarlo e farlo più avanti da Impostazioni → Telecomando.</li>
           <li><strong>Completa il setup</strong>
             Premi "Completa setup". Il dispositivo passa alla modalità scelta e, se il server musicale è lui, il browser apre il suo player web, pronto all'uso.</li>
         </ol>
@@ -853,7 +893,7 @@
         <p>Ogni dispositivo Osmium Sound espone una pagina di amministrazione web raggiungibile da qualsiasi browser sulla stessa rete, utile in particolare per i dispositivi in modalità headless o solo server, ma disponibile sempre. L'indirizzo da usare è l'<strong>indirizzo IP</strong> del dispositivo, visibile in Impostazioni → Info di sistema (a schermo o nell'app companion), nella sessione di amministrazione web stessa, oppure nell'elenco dispositivi del router:</p>
         <table>
           <tr><th>Indirizzo</th><th>Cosa trovi</th></tr>
-          <tr><td><code>http://&lt;ip-dispositivo&gt;</code></td><td>Amministrazione web: rete, uscita audio, sorgenti musicali e file, la Libreria, Lyrion Music Server, riproduzione, VU meter, animazioni, modalità schermo, player on/off, fuso orario, aggiornamenti, abbinamento app companion, account, backup, SSH, Tailscale, riavvio/spegnimento, reset di fabbrica, licenze e crediti (ogni componente dell'apparecchio e la sua licenza)</td></tr>
+          <tr><td><code>http://&lt;ip-dispositivo&gt;</code></td><td>Amministrazione web: rete (con le reti Wi-Fi salvate e il controllo della rete), uscita audio, altoparlanti Bluetooth, telecomando, sorgenti musicali e file, la Libreria, Lyrion Music Server, riproduzione, VU meter, animazioni, modalità schermo, player on/off, fuso orario, aggiornamenti, abbinamento app companion, account, backup, SSH, Tailscale, riavvio/spegnimento, reset di fabbrica, licenze e crediti (ogni componente dell'apparecchio e la sua licenza)</td></tr>
           <tr><td><code>http://&lt;ip-dispositivo&gt;:9000</code></td><td>Interfaccia web di Lyrion Music Server (libreria, playlist, impostazioni server)</td></tr>
         </table>
         <p>La pagina iniziale ha anche un riquadro <strong>Spazio su disco</strong>: una barra e una piccola tabella che dicono quanto occupa il sistema, quanto i tuoi dati e quanto spazio resta libero.</p>
@@ -897,17 +937,19 @@
       <section id="it-uso-quotidiano">
         <h2>Uso quotidiano</h2>
         <ul>
-          <li><strong>Now Playing</strong> — la vista espansa mostra i VU meter analogici (vedi <a href="#it-vu">VU meter</a>) — oppure, se sono spenti, un'animazione (vedi <a href="#it-animazioni">Animazioni</a>) — e una targa di stato: il tipo di audio in riproduzione (Hi-Res, PCM, DSD) e se BitPerfect o ReplayGain sono attivi. Tocca BitPerfect o ReplayGain per andare dritto all'impostazione corrispondente.</li>
+          <li><strong>Now Playing</strong> — la vista espansa mostra i VU meter analogici (vedi <a href="#it-vu">VU meter</a>) — oppure, se sono spenti, un'animazione (vedi <a href="#it-animazioni">Animazioni</a>) — e una targa di stato: il tipo di audio in riproduzione (Hi-Res, PCM, DSD) e se BitPerfect o ReplayGain sono attivi. Tocca BitPerfect o ReplayGain per andare dritto all'impostazione corrispondente. Accanto all'orologio, un pulsante mostra i VU meter (o l'animazione) a <strong>schermo intero</strong> con titolo, artista e avanzamento, e altri due aprono la scelta degli <strong>aspetti dei VU meter</strong> e delle <strong>animazioni</strong>, ognuno con l'anteprima: scegliere un aspetto accende i VU meter, scegliere un'animazione li spegne. L'ingranaggio all'estremità destra dei pulsanti in alto di Now Playing porta dritto alle Impostazioni.</li>
           <li><strong>Scegliere il player</strong> — tocca il nome del player nella barra in basso (o il pulsante con l'altoparlante in Now Playing) per vedere gli altri player dello stesso server musicale, e scegline uno per comandarlo da questo schermo: cosa suona, la coda, il volume. Il nome diventa dorato come promemoria. Nel frattempo le impostazioni che riguardano questo apparecchio sono nascoste, con un pulsante <strong>Torna a questo apparecchio</strong>; dopo un riavvio lo schermo torna sempre al proprio player.</li>
-          <li><strong>Pulsante di spegnimento</strong> — l'icona di accensione all'estremità destra della barra in alto, accanto al marchio Osmium Sound, riavvia o spegne l'apparecchio.</li>
-          <li><strong>Musica / Radio / App</strong> — l'interfaccia di Lyrion Music Server: libreria locale, radio internet e servizi di streaming (Deezer, Qobuz, TIDAL, Spotify e altri) tramite i plugin di Lyrion. La scheda Musica si apre su una casella di ricerca che cerca in tutta la libreria (artisti, album, brani) e sulle tessere artisti, album, generi, anni, compositori, novità, cartelle, playlist e preferiti.</li>
+          <li><strong>Pulsante di spegnimento</strong> — l'icona di accensione all'estremità destra della barra in alto riavvia o spegne l'apparecchio.</li>
+          <li><strong>Rete</strong> — l'icona fra il marchio Osmium Sound e il pulsante di spegnimento mostra la connessione: Wi-Fi o cavo quando internet risponde, un punto dorato quando risponde solo la rete di casa, una forma barrata quando non risponde niente; toccala per una spiegazione a parole. In Impostazioni → Configurazione Rete le reti Wi-Fi che l'apparecchio conosce sono segnate <em>Salvata</em> e si collegano senza password, una rete trasmessa sia a 2,4 sia a 5 GHz mostra la sua banda, e <strong>Reti Wi-Fi salvate</strong> le elenca tutte, quella in uso per prima, ognuna con un pulsante <strong>Dimentica</strong> (dimenticare quella in uso scollega subito). <strong>Controlla la rete</strong>, in Impostazioni → Informazioni Sistema e Impostazioni → Aggiornamenti, prova la connessione un passo alla volta — cavo o Wi-Fi, router, internet, risoluzione dei nomi, orologio, server degli aggiornamenti — e ti dice dove si ferma.</li>
+          <li><strong>Musica / Radio / App</strong> — l'interfaccia di Lyrion Music Server: libreria locale, radio internet e servizi di streaming (Deezer, Qobuz, TIDAL, Spotify e altri) tramite i plugin di Lyrion. La scheda Musica si apre su una casella di ricerca che cerca in tutta la libreria (artisti, album, brani) e sulle tessere artisti, album, generi, anni, compositori, novità, cartelle, playlist e preferiti. Gli album si possono vedere a griglia o come <strong>Cover Flow</strong>, una fila di copertine da sfogliare col dito o con la rotella del mouse: si cambia col pulsante in alto nell'elenco degli album, o in Impostazioni → Libreria → Vista degli album.</li>
           <li><strong>Pagine di album e artisti</strong> — tocca un album per aprire la sua pagina: copertina, anno, durata e formato, i pulsanti per riprodurlo, in ordine casuale o in coda, i brani (toccane uno per far partire l'album da lì) e i crediti scritti nei tuoi file musicali. Tocca un artista — nella libreria, in una pagina album o sotto il titolo in Now Playing — per la sua pagina, con gli album raggruppati secondo il suo ruolo: come artista, con un gruppo o un'orchestra, come compositore, come direttore, ospite nel disco di qualcun altro. Con la connessione a Internet le pagine mostrano anche chi ha suonato cosa e con quale strumento, chi ha prodotto e registrato l'album e dove, quando è uscito la prima volta, i membri di un gruppo e una breve biografia, presi da MusicBrainz e Wikipedia. Se una pagina album mostra un disco diverso dal tuo, tocca <strong>Non è questo disco? Scegli l'edizione</strong> in fondo.</li>
-          <li><strong>Preferiti e playlist</strong> — il cuore in Now Playing aggiunge o toglie dai preferiti quello che sta suonando; tieni premuta una riga qualsiasi (un brano, un album, una stazione radio, una playlist) per fare di più: aggiungi alla coda, riproduci dopo, aggiungi ai preferiti. Nei Preferiti puoi rinominare, riordinare e togliere; le playlist si possono rinominare, eliminare e alleggerire di un brano.</li>
+          <li><strong>Preferiti e playlist</strong> — il cuore in Now Playing aggiunge o toglie dai preferiti quello che sta suonando; tieni premuta una riga qualsiasi (un brano, un album, una stazione radio, una playlist — anche dentro le app, la radio e i Preferiti) per fare di più: aggiungi alla coda, riproduci dopo, aggiungi ai preferiti. Nei Preferiti puoi rinominare, riordinare e togliere; le playlist si possono rinominare, eliminare e alleggerire di un brano.</li>
           <li><strong>Aggiornare la libreria</strong> — Impostazioni → Lyrion Music Server mostra quanti album, artisti e brani conosce il server, quando ha fatto l'ultima scansione, e un pulsante <strong>Aggiorna la libreria</strong> con l'avanzamento (c'è anche nella Dashboard dell'amministrazione web). Le sorgenti che aggiungi o cambi vengono scansionate da sole; usalo dopo aver spostato musica a mano. Nella stessa sezione, <strong>Informazioni su album e artisti</strong> accende o spegne le ricerche online per le pagine di album e artisti, può preparare con calma tutta la libreria in sottofondo così le pagine si aprono già complete, e cancella quello che è stato salvato. Quello che hai scaricato resta finché non lo cancelli tu, e <strong>Dove tenerle</strong> ti permette di metterlo su un disco tuo invece che sul lettore: quello che c'è già si sposta con la scelta, non si riscarica niente. Se quel disco non è collegato, il lettore torna a usare la propria memoria finché non lo ricolleghi. Per trovare le informazioni, l'apparecchio invia a MusicBrainz e Wikipedia i nomi dei tuoi album e artisti.</li>
           <li><strong>CD</strong> — inserisci un disco e rippalo in FLAC (o WAV) con tag e copertina automatici (MusicBrainz), direttamente nella libreria, su un disco USB adottato o su una condivisione di rete scrivibile, come Artista/Album con accanto il log del rip. Un album rippato viene riconosciuto subito nella sua pagina. Impostazioni → Rip dei CD (a schermo e nell’amministrazione web) tiene la cartella predefinita, scelta con lo stesso navigatore delle Sorgenti musicali, il formato, quante volte una traccia viene riletta finché due letture coincidono, la pre-enfasi, il ReplayGain, il log, l’espulsione a fine rip, l’avvio automatico, e velocità e offset di lettura del lettore (Calibra lo cerca nell’elenco di AccurateRip). Espelli e Annulla sono sempre a portata di mano, anche dopo un rip fallito, per i lettori senza tasto.</li>
           <li><strong>Discover</strong> — mix infiniti per brano, album o artista, con filtro per genere e preset salvabili, oltre a "continua ad ascoltare musica simile", artisti correlati e biografie direttamente a schermo.</li>
           <li><strong>Impostazioni → Riproduzione</strong> — transizione tra i brani, ReplayGain, timeout di espansione automatica del now playing, e un interruttore volume fisso al 100% (BitPerfect) che disattiva il controllo volume digitale di Lyrion e disabilita visivamente lo slider del volume.</li>
-          <li><strong>Impostazioni</strong> — info di sistema e rete, uscita audio, sorgenti musicali, Lyrion Music Server, VU meter, animazioni, aggiornamenti, abbinamento app companion, backup, reset di fabbrica.</li>
+          <li><strong>Impostazioni</strong> — info di sistema e rete, uscita audio, altoparlanti Bluetooth, telecomando, sorgenti musicali, rip dei CD, Lyrion Music Server, VU meter, animazioni, sveglia, movimento dell'interfaccia, aggiornamenti, abbinamento app companion, backup, licenze e crediti, reset di fabbrica.</li>
+          <li><strong>Guida e movimento</strong> — dopo la configurazione lo schermo mostra una volta una breve guida; <em>Rivedi la guida dello schermo</em> in Impostazioni → Informazioni Sistema la ripropone. Impostazioni → <strong>Movimento dell'interfaccia</strong> decide quanto si muove l'interfaccia: <em>Completo</em> (i pulsanti cedono sotto il dito, i pannelli scorrono), <em>Ridotto</em> (gli stessi movimenti, al doppio della velocità) o <em>Nessuno</em>.</li>
         </ul>
         <div class="box tip">
           <span class="label">La riproduzione sopravvive a un riavvio</span>
@@ -931,25 +973,40 @@
 
       <section id="it-animazioni">
         <h2>Animazioni</h2>
-        <p>Con i VU meter spenti, Now Playing può mostrare al loro posto un'animazione. Si sceglie in Impostazioni → <strong>Animazioni</strong> — sullo schermo o nell'amministrazione web:</p>
+        <p>Con i VU meter spenti, Now Playing può mostrare al loro posto un'animazione. Si sceglie in Impostazioni → <strong>Animazioni</strong> — sullo schermo o nell'amministrazione web, dove ognuna ha un'anteprima — oppure dal pulsante delle animazioni accanto all'orologio:</p>
         <ul>
-          <li><strong>Nessuna</strong> — al posto dei VU meter non compare nulla.</li>
-          <li><strong>CD</strong> — un disco entra in un lettore, poi gira.</li>
-          <li><strong>Vinile</strong> — il braccio con la puntina scende sul disco, poi il disco gira.</li>
-          <li><strong>Musicassetta</strong> — una cassetta entra in una piastra, poi scorre.</li>
+          <li><strong>Nessuna</strong> — al posto dei VU meter compare il testo della canzone.</li>
+          <li><strong>CD dall'alto</strong> — un disco entra dall'alto in un lettore, poi gira.</li>
+          <li><strong>Lettore CD</strong> — un lettore con il cassetto della fine degli anni '80: il cassetto esce con il disco, il display fluorescente mostra traccia e tempo, e i tasti funzionano — OPEN, i numeri delle tracce, REPEAT, RANDOM, salto e ricerca, play, pausa, stop e POWER.</li>
+          <li><strong>Vinile</strong> — il braccio con la puntina scende sul disco, poi il disco gira; START/STOP funziona.</li>
+          <li><strong>Musicassetta</strong> — una cassetta entra in una piastra, poi il nastro passa da una bobina all'altra; i tasti funzionano, REW e FF avvolgono finché li tieni premuti e il cursore regola il volume. L'etichetta mostra il brano in riproduzione.</li>
         </ul>
-        <p>Si muove solo mentre la musica suona: metti in pausa e rallenta fino a fermarsi. Quando parte un altro album, il disco o la cassetta esce e rientra. Il pulsante di Now Playing che mostra il testo della canzone passa dall'animazione al testo e viceversa.</p>
+        <p>Si muove solo mentre la musica suona: metti in pausa e rallenta fino a fermarsi. Quando parte un altro album, il disco o la cassetta esce e rientra. Con una radio via internet l'etichetta della cassetta e il display del CD mostrano la stazione e la canzone. Il pulsante dello schermo intero accanto all'orologio mostra l'animazione in grande. Il pulsante di Now Playing che mostra il testo della canzone passa dall'animazione al testo e viceversa.</p>
+        <p><strong>Altre animazioni da scaricare</strong> — nella stessa sezione trovi altre animazioni, dall'elenco firmato di Osmium Sound, come per gli aspetti dei VU meter: una volta scaricata, un'animazione si tiene aggiornata da sola e si può togliere quando vuoi.</p>
         <div class="box tip">
           <span class="label">VU meter o animazione</span>
-          <p>Le animazioni si vedono solo sullo schermo dell'apparecchio, e solo quando i VU meter sono spenti. Per vederne una, spegni prima Impostazioni → <strong>VU meter</strong>.</p>
+          <p>Le animazioni si vedono solo sullo schermo dell'apparecchio, e solo quando i VU meter sono spenti. Scegliendo un'animazione dal pulsante accanto all'orologio i VU meter si spengono da soli; dalle Impostazioni, spegni prima <strong>VU meter</strong>.</p>
         </div>
+      </section>
+
+      <section id="it-telecomando">
+        <h2>Telecomando</h2>
+        <p>Un telecomando può comandare tutto lo schermo: le frecce spostano un anello dorato da un elemento all'altro, <strong>OK</strong> lo preme, <strong>Indietro</strong> torna indietro, e il tasto menu fa come tenere il dito su un elemento. È tutto in Impostazioni → <strong>Telecomando</strong>, sullo schermo e nell'amministrazione web.</p>
+        <ul>
+          <li><strong>Telecomandi USB</strong> — infila la chiavetta: funziona subito.</li>
+          <li><strong>Telecomandi Bluetooth</strong> — premi <strong>Aggiungi un telecomando</strong> e di' quale hai. Tre modelli sono conosciuti: <em>Amazon Fire TV</em> (3ª generazione — tieni premuto Home finché la luce lampeggia), <em>Xiaomi Mi Box S</em> (tieni premuti insieme ⋮⋮⋮ e ○ per 7–8 secondi) e <em>G20S PRO</em> (tieni premuti OK e Indietro per 5–7 secondi). Mettilo in accoppiamento e lascialo vicino all'apparecchio: lo trova e lo collega da solo. Finché un apparecchio con schermo non ha un telecomando, resta anche in ascolto di questi tre e ne accoppia uno da solo. Ogni altro telecomando si accoppia cercandolo e toccandolo nell'elenco.</li>
+          <li><strong>Mappa dei tasti</strong> — un modello conosciuto mostra un disegno di cosa fa ogni tasto la prima volta che compare; puoi rivederlo da Impostazioni → Telecomando. Dopo la prima configurazione, <em>Prova il telecomando</em> ti fa provare una volta i tasti principali.</li>
+          <li><strong>Prova e assegna i tasti</strong> — premi un tasto per vedere cosa manda, e dagli un altro compito: schermo intero, prossimo aspetto dei VU meter, prossima animazione, apri i preferiti, cerca, riavvia il touch screen, spegni o riavvia…</li>
+          <li><strong>Accensione</strong> — il tasto di accensione del telecomando non spegne mai l'apparecchio da solo: apre il menu Spegni / Riavvia, con l'anello su Annulla. Il tasto di sospensione fa riposare lo schermo.</li>
+        </ul>
+        <p>I tasti di riproduzione e volume di una tastiera o di una scheda audio continuano a funzionare come tasti e non vengono presi per un telecomando. Dall'amministrazione web puoi scaricare una <strong>scheda del telecomando</strong> con quello che vede l'apparecchio, da mandare all'assistenza.</p>
       </section>
 
       <section id="it-sorgenti">
         <h2>Sorgenti musicali</h2>
         <p>Osmium Sound legge la libreria musicale da una o più sorgenti, configurabili dalle Impostazioni (o durante il setup iniziale):</p>
         <ul>
-          <li><strong>Cartella di rete</strong> — un NAS o una cartella condivisa su un altro computer. Non serve conoscerne l'indirizzo: il dispositivo cerca i computer e i NAS della tua rete, ne elenca le cartelle condivise e chiede nome utente e password in una piccola finestra solo se la cartella li richiede. Se non riesce a collegarsi, ti spiega il motivo a parole semplici (i dettagli tecnici restano a un tocco di distanza). Puoi comunque scrivere tutto a mano. Ogni cartella può essere resa scrivibile o di sola lettura in qualsiasi momento — comodo se vuoi anche rippare CD al suo interno.</li>
+          <li><strong>Cartella di rete</strong> — un NAS o una cartella condivisa su un altro computer. Non serve conoscerne l'indirizzo: il dispositivo cerca i computer e i NAS della tua rete, ne elenca le cartelle condivise e chiede nome utente e password in una piccola finestra solo se la cartella li richiede. Se non riesce a collegarsi, ti spiega il motivo a parole semplici (i dettagli tecnici restano a un tocco di distanza). Puoi comunque scrivere tutto a mano. Una cartella viene aggiunta scrivibile, a meno che il server permetta solo di leggere; ognuna può essere resa scrivibile o di sola lettura in qualsiasi momento — comodo se vuoi anche rippare CD al suo interno.</li>
           <li><strong>Disco USB</strong> — un disco USB collegato al dispositivo, "adottato" (condiviso in rete, leggibile/scrivibile). Un disco adottato si rimonta da solo se lo scolleghi e ricolleghi, o dopo un riavvio.</li>
           <li><strong>Disco interno</strong> — un secondo disco dentro il dispositivo, dedicato alla musica.</li>
           <li><strong>Una cartella sull'apparecchio stesso</strong> — musica copiata direttamente sul disco del dispositivo. Può essere condivisa in rete, così ci copi la musica da un computer.</li>
@@ -983,6 +1040,18 @@
         <p>Far suonare più player in sincronia (multiroom) è una funzione nativa di Lyrion Music Server, gestita dalla sua stessa interfaccia — Osmium Sound non offre una funzione di multiroom propria. Assegna un nome a ogni dispositivo per distinguerli facilmente lì. Dallo schermo del dispositivo puoi anche comandare qualsiasi altro player dello stesso server — vedi <a href="#it-uso-quotidiano">Uso quotidiano</a>.</p>
       </section>
 
+      <section id="it-bluetooth">
+        <h2>Altoparlanti Bluetooth</h2>
+        <p>Osmium Sound può suonare su altoparlanti e cuffie Bluetooth. È tutto in Impostazioni → <strong>Altoparlanti Bluetooth</strong>, sullo schermo e nell'amministrazione web:</p>
+        <ul>
+          <li><strong>Bluetooth</strong> — spento finché non serve: da spento la radio Bluetooth resta senza corrente. Senza un adattatore Bluetooth la sezione lo dice; ne basta uno piccolo USB.</li>
+          <li><strong>Cerca</strong> — metti l'altoparlante in accoppiamento e cerca: compare in una decina di secondi, toccalo per aggiungerlo.</li>
+          <li><strong>Ogni altoparlante è un lettore</strong> — un altoparlante aggiunto compare nell'elenco dei lettori, nell'app companion e in Lyrion come un lettore a sé, con la sua coda e il suo volume: fagli suonare qualcos'altro, oppure raggruppalo con gli altri lettori. <em>Nome del lettore</em> cambia il nome con cui compare.</li>
+          <li><strong>Si ricollega da solo</strong> — l'apparecchio si ricollega all'altoparlante appena lo riaccendi. Collega, Scollega e <strong>Dimentica</strong> sono accanto a ogni altoparlante.</li>
+        </ul>
+        <p>Il Bluetooth serve a mandare fuori la musica: l'apparecchio non riceve musica da un telefono via Bluetooth. Gli accoppiamenti entrano in un backup cifrato, e il reset di fabbrica li dimentica.</p>
+      </section>
+
       <section id="it-backup">
         <h2>Backup e ripristino</h2>
         <p>Dalle Impostazioni puoi creare un backup completo della configurazione del dispositivo: uscita audio, elenco delle sorgenti musicali, preferenze e playlist di Lyrion, le informazioni su album e artisti scaricate dal web e le correzioni che ci hai fatto, profili di rete Wi-Fi, account e token di abbinamento. I dati sensibili (reti Wi-Fi, account) entrano nel backup solo se scegli di proteggerlo con una passphrase.</p>
@@ -999,7 +1068,7 @@
 
       <section id="it-aggiornamenti">
         <h2>Aggiornamenti OTA</h2>
-        <p>Osmium Sound e Lyrion Music Server si aggiornano via internet (OTA, over-the-air) da Impostazioni → Aggiornamenti — sullo schermo, nell'amministrazione web o nell'app companion — senza mai dover riflashare la chiavetta USB dopo l'installazione iniziale. Premi <strong>Controlla aggiornamenti</strong>: entro un minuto ti dice che c'è un aggiornamento, che sei già aggiornato, oppure che non è riuscito a controllare (di solito un problema di rete).</p>
+        <p>Osmium Sound e Lyrion Music Server si aggiornano via internet (OTA, over-the-air) da Impostazioni → Aggiornamenti — sullo schermo, nell'amministrazione web o nell'app companion — senza mai dover riflashare la chiavetta USB dopo l'installazione iniziale. Premi <strong>Controlla aggiornamenti</strong>: entro un minuto ti dice che c'è un aggiornamento, che sei già aggiornato, oppure che non è riuscito a controllare (di solito un problema di rete — <strong>Controlla la rete</strong>, messo in evidenza proprio lì, trova dove si ferma la connessione).</p>
         <p>L'intero sistema arriva come un unico pacchetto firmato digitalmente: il dispositivo rifiuta qualsiasi cosa non sia firmata correttamente, anche se qualcuno riuscisse a manometterne il download. Il dispositivo tiene <strong>due copie del sistema</strong> una accanto all'altra. L'aggiornamento viene scritto nella copia che non è in uso, mentre il dispositivo continua a funzionare, con l'avanzamento mostrato in tempo reale; il riavvio finale passa alla copia nuova. Se la nuova versione non parte come dovrebbe, il dispositivo torna da solo a quella precedente, entro una decina di minuti. Impostazioni, musica e tutto ciò che hai scaricato sono tenuti separati dal sistema, quindi un aggiornamento non li tocca mai.</p>
         <div class="box tip">
           <span class="label">Apparecchi installati prima delle due copie</span>
@@ -1026,6 +1095,7 @@
         </div>
         <h3>Installare programmi aggiuntivi</h3>
         <p>Il sistema in sé non si può modificare, ma via SSH il solito <code>sudo apt install &lt;pacchetto&gt;</code> funziona ancora: il programma aggiuntivo viene tenuto separato dal sistema, e <code>sudo apt remove</code> lo toglie di nuovo. Dopo un aggiornamento di sistema il dispositivo, all'avvio, ricostruisce da solo i programmi aggiuntivi per la nuova versione (per farlo gli serve internet). Un pacchetto che sostituirebbe una parte del sistema, o che richiede componenti di sistema più recenti di quelli presenti, viene rifiutato con una spiegazione. Il sistema invece non si aggiorna con <code>apt upgrade</code> ma da Impostazioni → Aggiornamenti.</p>
+        <p>Per provare un aspetto dei VU meter o un'animazione prima che sia pubblicato, <code>sudo hifi-pack-install FILE.vupak</code> (o <code>.animpak</code>) lo installa con gli stessi controlli degli elenchi online, tranne la firma; <code>--list</code> mostra cosa è installato, <code>--remove vu|anim ID</code> lo toglie. Un'animazione è un piccolo programma che lo schermo esegue: installa solo file di cui ti fidi.</p>
       </section>
 
       <section id="it-remote-access">
@@ -1047,7 +1117,7 @@
 
       <section id="it-reset">
         <h2>Reset di fabbrica</h2>
-        <p>Il reset di fabbrica cancella tutte le impostazioni, l'account di amministrazione web, le sorgenti configurate, i backup conservati sull'apparecchio e gli aspetti dei VU meter scaricati, poi riavvia il dispositivo direttamente nella configurazione descritta in <a href="#it-primo-avvio">Primo avvio e configurazione</a> — come se fosse appena stato installato. La musica copiata sull'apparecchio stesso resta.</p>
+        <p>Il reset di fabbrica cancella tutte le impostazioni, l'account di amministrazione web, le sorgenti configurate, i backup conservati sull'apparecchio, gli aspetti dei VU meter e le animazioni scaricati e gli accoppiamenti Bluetooth, poi riavvia il dispositivo direttamente nella configurazione descritta in <a href="#it-primo-avvio">Primo avvio e configurazione</a> — come se fosse appena stato installato. La musica copiata sull'apparecchio stesso resta.</p>
         <p>È disponibile:</p>
         <ul>
           <li>A schermo, in Impostazioni → Controlli Sistema → Reset di fabbrica (se il dispositivo è in modalità "con schermo").</li>
@@ -1068,7 +1138,9 @@
           <tr><td>Nessun audio</td><td>Controlla il dispositivo audio selezionato in Impostazioni e che il DAC sia riconosciuto e collegato.</td></tr>
           <tr><td>Il QR code dell'installazione non porta a nulla</td><td>Verifica che il telefono sia connesso alla rete <code>Osmium-Setup-XXXX</code> (non ha password) e prova ad aprire manualmente <a href="http://10.42.0.1">http://10.42.0.1</a>.</td></tr>
           <tr><td>L'indirizzo mostrato al primo avvio non si apre</td><td>Il telefono o il computer devono essere sulla stessa rete del dispositivo. Scrivi l'indirizzo esattamente come appare, <code>http://</code> compreso.</td></tr>
-          <tr><td>"Impossibile controllare gli aggiornamenti"</td><td>Il dispositivo non è riuscito a raggiungere internet: controlla la connessione di rete e riprova.</td></tr>
+          <tr><td>"Impossibile controllare gli aggiornamenti"</td><td>Il dispositivo non è riuscito a raggiungere internet: premi <strong>Controlla la rete</strong> (Impostazioni → Aggiornamenti o Informazioni Sistema) per vedere dove si ferma la connessione, poi riprova.</td></tr>
+          <tr><td>Lo schermo non risponde più al tocco</td><td>Alcuni touch screen si bloccano finché non si stacca il cavo. Amministrazione web → Impostazioni → Modalità schermo → Touch screen → <strong>Riavvia il touch screen</strong> fa lo stesso senza toccare il cavo; puoi anche dare questo compito a un tasto del telecomando.</td></tr>
+          <tr><td>Il telecomando non fa niente</td><td>Impostazioni → Telecomando mostra i telecomandi che l'apparecchio vede. Un telecomando USB ha bisogno della sua chiavetta infilata; uno Bluetooth può dover essere accoppiato di nuovo (Dimenticalo, poi Aggiungi un telecomando). Premi un tasto per svegliarlo.</td></tr>
           <tr><td>Dopo un aggiornamento il dispositivo ha ancora la versione vecchia</td><td>La nuova versione non è partita come doveva e il dispositivo è tornato da solo a quella precedente, come previsto. Riprova l'aggiornamento; se succede di nuovo, scrivi a <a href="mailto:support@osmiumsound.it">support@osmiumsound.it</a>.</td></tr>
           <tr><td>Una cartella di rete non viene trovata</td><td>Verifica che il computer o il NAS sia acceso e condivida la cartella. Se ancora non compare, scegli di scriverla tu: il nome o l'indirizzo, poi il nome della cartella.</td></tr>
           <tr><td>L'amministrazione web non è raggiungibile su <code>&lt;nome&gt;.local</code></td><td>Quell'indirizzo funziona solo se il dispositivo ha ancora esattamente quel nome — una rinomina, o un secondo dispositivo con lo stesso nome predefinito, lo rompe. Usa invece l'indirizzo IP del dispositivo (vedi <a href="#it-amministrazione-web">Amministrazione web</a>).</td></tr>

@@ -8,7 +8,7 @@ overview, features, and specs, see [README.md](README.md).
 
 ```mermaid
 flowchart TB
-    subgraph UI["On-screen UI — hifi-qt (Qt 6 Quick, eglfs on DRM/KMS, 1024x600 canvas)"]
+    subgraph UI["On-screen UI — hifi-qt (Qt 6 Quick, eglfs on DRM/KMS, a canvas shaped like the panel)"]
         QML["QML scenes\n(native-ui-qt/qml/)"]
         Core["C++ core\n(native-ui-qt/src/: Api, Player, VuMeter, LibraryModel, Sys)"]
     end
@@ -48,19 +48,20 @@ flowchart TB
 
 | Component | Path | Role |
 |---|---|---|
-| On-screen UI — C++ core | `native-ui-qt/src/` | `hifi-qt`, the touchscreen UI since v2.5.24: a Qt 6 Quick application that draws straight to the panel through Qt's eglfs platform on DRM/KMS — no X server, no Wayland compositor, no LightDM. `main.cpp` sets the video mode (`kmsmode.cpp`, from `/etc/hifi-player/ui-resolution`) and loads the QML; the objects it exposes are `Api` (async HTTP to the local services via `QNetworkAccessManager`, Lyrion JSON-RPC included), `Player` (Lyrion `status`/playerprefs polling and playback commands), `VuMeter` (WebSocket client of `vu_meter_daemon.py`, needle spring), `LibraryModel` (the browser lists), `I18n` and `Sys` (small files under `/etc/hifi-player`, physical-keyboard detection, pointer), plus the `Spring` and `QrCode` QML types. Only UI-local preferences (language, Now Playing view, update auto-check) are written directly; **system control goes through `api_server.py`**. Installed at `/opt/hifi-qt`, run by `hifi-qt.service`. Chosen over Electron for its footprint: on the reference mini PC, Now Playing with the VU meters at 720p measured about 3.3 W / ~175 MB RSS versus 4.9 W / ~653 MB. |
-| On-screen UI — QML | `native-ui-qt/qml/` | `Main.qml` scales the 1024x600 logical canvas to the real mode, `App.qml` stacks the screens and shared overlays: `MainScreen.qml` (mini player + `Browser.qml` library/radio/apps, `DiscoverTab.qml`), `NowPlaying.qml` (with `VuPanel.qml`, `NpAnimation.qml`, `LedBar.qml`, `Lyrics.qml`), `SettingsTab.qml` + `SettingsRows.qml`, `Wizard.qml` (first-boot setup and installer screens), `Dialogs.qml`, `VirtualKeyboard.qml`, `OtaOverlay.qml`, `BootIntro.qml`, `CdRip.qml`, `Screensaver.qml`, … Strings come from the same `src/i18n/locales/{en,it}.json` (copied to `/opt/hifi-qt/locales`), English default; the third-party notices from `third_party.json`, generated from `src/data/thirdPartyNotices.js`. |
+| On-screen UI — C++ core | `native-ui-qt/src/` | `hifi-qt`, the touchscreen UI since v2.5.24: a Qt 6 Quick application that draws straight to the panel through Qt's eglfs platform on DRM/KMS — no X server, no Wayland compositor, no LightDM. `main.cpp` sets the video mode (`kmsmode.cpp`, from `/etc/hifi-player/ui-resolution`) and loads the QML; the objects it exposes are `Api` (async HTTP to the local services via `QNetworkAccessManager`, Lyrion JSON-RPC included), `Player` (Lyrion `status`/playerprefs polling and playback commands), `VuMeter` (WebSocket client of `vu_meter_daemon.py`, needle spring), `LibraryModel` (the browser lists), `I18n` and `Sys` (small files under `/etc/hifi-player`, pointer), plus the `Spring` and `QrCode` QML types. `remote.cpp` reads remote controls through evdev (an exclusive grab of real remotes only; the media keys of a keyboard or a sound card are passed on as keys, not as a remote), `btghid.cpp` is a HID-over-GATT bridge to `/dev/uhid`, in its own thread, for Bluetooth remotes whose report map the kernel rejects, and `touchwatch.cpp` watches the USB touchscreen for the freezes some panels have and writes its state to `/run/hifi-touch.json`. Only UI-local preferences (language, Now Playing view, update auto-check) are written directly; **system control goes through `api_server.py`**. Installed at `/opt/hifi-qt`, run by `hifi-qt.service`. Chosen over Electron for its footprint: on the reference mini PC, Now Playing with the VU meters at 720p measured about 3.3 W / ~175 MB RSS versus 4.9 W / ~653 MB. |
+| On-screen UI — QML | `native-ui-qt/qml/` | `Main.qml` scales the logical canvas to the real mode (600 points tall and wider on a 16:9 panel — 1067x600 — or 1024 wide and taller on a 16:10 one — 1024x640 — clamped between 3:2 and 16:9, `Theme.canvasW/H`), `App.qml` stacks the screens and shared overlays: `MainScreen.qml` (mini player + `Browser.qml` library/radio/apps, `DiscoverTab.qml`), `NowPlaying.qml` (with `VuPanel.qml`, `NpAnimation.qml` and its scenes `AnimCd.qml`/`AnimCdFront.qml`/`AnimVinyl.qml`/`AnimCassette.qml`, `NpStage.qml` for full screen, `NpChooser.qml` the look/animation chooser, `LedBar.qml`, `Lyrics.qml`), `CoverFlow.qml` (the album list's second view), `SettingsTab.qml` + `SettingsRows.qml`, `Wizard.qml` (first-boot setup and installer screens), `Dialogs.qml`, `VirtualKeyboard.qml`, `OtaOverlay.qml`, `CdRip.qml`, `FolderChooser.qml`, `Screensaver.qml`, `BrandMark.qml` (the Osmium Sound mark, drawn in DejaVu Sans rather than shown as a picture), `Tutorial.qml` (the guided tour, once after setup; `/data/hifi-tutorial-shown`), `Nav.qml`/`NavRing.qml`/`NavScope.qml` (the remote's spatial navigation: a gold ring, OK taps its centre through `Sys.tapAt`), `RemotePairWizard.qml`, `RemoteIntro.qml`, `RemoteTour.qml`, … Strings come from the same `src/i18n/locales/{en,it}.json` (copied to `/opt/hifi-qt/locales`), English default; the third-party notices from `third_party.json`, generated from `src/data/thirdPartyNotices.js`. |
 | Shared interface data | `src/i18n/locales/`, `src/data/thirdPartyNotices.js` | The on-screen strings (en/it) and the third-party notices, read by `native-ui-qt/ci/build-payload.sh`. All that is left of the earlier Electron kiosk, removed on 2026-10-02 |
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
 | Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, Samba share config, audio-CD ripping, backup/restore (core logic shared via `hifi_backup.py`), and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Binds `0.0.0.0:8080` — LAN-reachable like the web admin, but every route is gated by a pairing token (see [Pairing & security](#pairing--security)), which is what lets the Android companion talk to it directly. |
 | Web admin / provisioning gateway | `webui_server.py` | The primary LAN-facing service (the other one is the pairing-gated sources API above): serves the Vue admin app (`admin-webui/`) behind a session, reverse-proxies a whitelisted subset of `api_server.py`/`sources_server.py` calls, and — while `/etc/hifi-player/provisioning-pending` exists — serves the first-boot setup portal (plus, in installer boot mode, a Wi-Fi hotspot and captive portal). Plain HTTP on `:80`, no TLS: a per-device self-signed cert made every browser show a "connection not private" click-through on first visit, which was worse UX than the plain-HTTP tradeoff. See [Provisioning & first boot](#provisioning--first-boot). |
 | Lyrion Music Server | external (Debian package / on-demand download) | Library indexing, playback engine, plugin ecosystem (Spotty, TIDAL, Qobuz, Deezer, radio, UPnP/DLNA, AirPlay). Port `9000`. Its web UI is the Material Skin plugin, branded as "Osmium" — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup). |
-| squeezelite | systemd service | Lyrion's player client; `-D` flag enables bit-perfect DSD via DoP; `-v` exports a shared-memory buffer the VU meter reads |
+| squeezelite | systemd service | Lyrion's player client. Its options are one model, `/etc/hifi-player/squeezelite.json`, edited in Settings → Audio → Advanced; `hifi_squeezelite.py` renders `/etc/default/squeezelite` from it at every start (`ExecStartPre`). DSD goes out native, as DoP or as PCM (auto picks native when the DAC lists DSD_U32/DSD_U16); `-v` exports a shared-memory buffer the VU meter reads |
 | VU meter daemon | `vu_meter_daemon.py` | Runs as the `hifi` user; reads squeezelite's shared-memory visualizer segment (`/dev/shm/squeezelite-*`) via mmap, auto-detecting the header layout, computes 32-bar RMS and streams it over WebSocket (`127.0.0.1:9001`) to the on-screen UI (`native-ui-qt/src/vumeter.cpp`). Re-attaches on shm inode changes (DAC switch, restart, multiroom follow-switch). |
-| Shared Python helpers | `hifi_backup.py`, `hifi_i18n.py`, `hifi_logging.py` | Backup/restore core (see [Backup & restore](#backup--restore)); bilingual (en/it) message catalogue selected per request by the `X-UI-Lang` header; journald-friendly logging. Installed next to the daemons in `/usr/local/bin`. |
+| Shared Python helpers | `hifi_backup.py`, `hifi_i18n.py`, `hifi_logging.py`, `hifi_squeezelite.py`, `hifi_cdrip.py`, `hifi_metadata.py`, `hifi_tags.py` | Backup/restore core (see [Backup & restore](#backup--restore)); bilingual (en/it) message catalogue selected per request by the `X-UI-Lang` header; journald-friendly logging; the squeezelite option model; the CD ripping settings (`/etc/hifi-player/cdrip.json`); album/artist information from MusicBrainz and Wikipedia; reading and writing tags in the music files for the Library editor. Installed next to the daemons in `/usr/local/bin`. |
 | Image & A/B slots | `distro/build-image.sh`, `distro/rauc/`, `distro/rauc-keys/`, `hifi-ab-*.sh`, `hifi-image-update.sh` | Builds the read-only system image (squashfs) and its signed RAUC bundle; boots it from one of two slots with automatic rollback; converts legacy single-root installs over OTA — see [Image layout: A/B slots](#image-layout-ab-slots) |
 | Add-ons | `hifi-ext.sh`, `/usr/local/bin/apt` shim | Extra Debian packages on the read-only image as systemd-sysext extensions, rebuilt after every image update — see [Add-ons on the read-only image](#add-ons-on-the-read-only-image-systemd-sysext) |
 | VU meter skins & store | `native-ui-qt/assets/vu/`, `vu-store/`, `native-ui-qt/tools/vu-skin-build.py` | Built-in meter looks plus a signed online catalogue of downloadable ones (`.vupak`) — see [VU meters: skins and the store](#vu-meters-skins-and-the-store) |
+| Now Playing animations & store | `native-ui-qt/qml/Anim*.qml`, `anim-store/`, `native-ui-qt/tools/anim-store.py` | Four built-in scenes plus a signed online catalogue of downloadable ones (`.animpak`) — see [Now Playing animations](#now-playing-animations) |
 | Android companion | `android-companion/` | Native Android app (Java, fork of android-squeezer); talks to Lyrion (CometD, `:9000`) and to `sources_server.py` (`:8080`, pairing token) after QR-code pairing — the latter's `/api/system/*` proxy is its only path to the system API. Since 1.0.11 its Settings → Osmium Sound mirrors the web admin's sections (audio, sources, services, Lyrion, playback and VU meters with the store, display, time zone, updates, backup, system); network, the SSH login, factory reset, the admin account and debug flags stay out on purpose |
 | Osmium Flasher | `flasher/` | Desktop Electron app (Windows/Linux) that downloads the current install ISO from `file.osmiumsound.it`, verifies its Ed25519 signature and writes the USB stick. Not part of the appliance — see `flasher/README.md` |
 
@@ -78,14 +79,22 @@ flowchart TB
 | `hifi-ab-finish`, `hifi-ab-image`, `hifi-ab-firstboot` | `hifi-ab-convert.sh`, `hifi-ab-image.sh`, `hifi-ab-firstboot.sh` | Legacy → A/B conversion: finish the repartitioned disk, chain into the first image update, merge accounts and renumber owners on the first image boot |
 | `hifi-ext-refresh.timer` → `hifi-ext-refresh` | `hifi-ext.sh refresh` | Three minutes after boot, rebuilds add-ons made for a previous image version. A timer, and `Nice=19`/`IOSchedulingClass=idle`, so the rebuild never holds the boot back nor competes with the UI |
 | `hifi-qt` | `/opt/hifi-qt/hifi-qt` | The on-screen UI (eglfs, `TTYPath=/dev/tty1`, `Conflicts=lightdm.service`). `WantedBy=graphical.target`, so it stays down in headless mode — see [On-screen UI](#on-screen-ui-qt-on-drmkms) |
-| `hifi-kiosk-session` | `hifi-kiosk-session.sh` | Legacy Electron installs only. Oneshot before LightDM: decides Wayland (labwc) vs X11 for the kiosk session and writes LightDM's `user-session` accordingly — see [Legacy Electron kiosk](#legacy-electron-kiosk-pre-ab-installs) |
+| `hifi-bt-out` | `hifi-bt-out.py` | Bluetooth speakers: the supervisor and the only enabled Bluetooth unit. Re-applies `/etc/hifi-player/bluetooth.json` at every boot (enable symlinks do not survive an A/B swap), keeps the adapter powered only when Bluetooth is on, reconnects the speakers and starts their players |
+| `hifi-bluealsa`, `hifi-bt-agent` | BlueALSA (`a2dp-source`), `bt-agent -c NoInputNoOutput` | Started by `hifi-bt-out`: the audio path to the speakers, and the pairing agent (no PIN; it lets go of a shutdown) |
+| `hifi-bt-player@<mac>` | `hifi-bt-player-run.py` | One squeezelite per Bluetooth speaker on `bluealsa:DEV=<MAC>,PROFILE=a2dp`: each speaker is a Lyrion player of its own |
+| `hifi-memlog.timer` → `hifi-memlog` | `hifi-memlog.sh` | Every 5 minutes: memory, swap, pressure and the biggest processes into `/var/log/hifi/memory.log`, for the support bundle |
+| `hifi-kiosk-session` | `hifi-kiosk-session.sh` | Legacy Electron installs only, shipped by OS update (`apply.d/0050`), never in the image. Oneshot before LightDM: decides Wayland (labwc) vs X11 for the kiosk session and writes LightDM's `user-session` accordingly — see [The earlier Electron kiosk](#the-earlier-electron-kiosk) |
 | `hifi-update-stage-resume` / `hifi-update-apply` | `hifi-update-stage-runner.sh` / `hifi-update-apply-runner.sh` | Resume an interrupted staging; apply staged bundles inside `system-update.target` — see [OTA update system](#ota-update-system) |
 | `hifi-backup.timer` + `.service` | `hifi-backup-run.py --scheduled` | Weekly profile backup when enabled in Settings (shipped by `apply.d/0033`) |
 | `hifi-mdns-keepalive.timer` | `hifi-mdns-keepalive.sh` | Periodic mDNS/ARP re-announce so an idle unit stays reachable (`apply.d/0041`) |
 | `hifi-quiesce-audio-shutdown` | `hifi-quiesce-audio-shutdown.sh` | Stops audio before any shutdown/reboot (DesignWare DMA panic workaround, `apply.d/0027`) |
-| `squeezelite` | — | Lyrion's player client (`-D` DoP, `-v` visualizer export, persistent `-m` player MAC) |
+| `squeezelite` | — | Lyrion's player client (options rendered from `squeezelite.json` by `hifi_squeezelite.py apply`, `-v` visualizer export, persistent `-m` player MAC) |
+| `systemd-timesyncd` | — | The clock from the network; the image build refuses an image without it (a mini PC's RTC alone drifts or is not set) |
+| `systemd-oomd` | — | When memory runs out (swap/zram nearly full, or pressure above 50 % for 20 s on `system.slice`) it kills and restarts the service using the most, instead of the box freezing; squeezelite and the Bluetooth players opt out |
 | `lyrionmusicserver` | Lyrion Music Server | Installed on first boot; `:9000` |
 | `smbd`, `wsdd2` | Samba / WS-Discovery | Disabled until at least one source is shared over SMB (`sources_server.py` enables them) |
+
+A udev rule, `71-hifi-remote-power.rules`, takes the `power-switch` tag off USB and Bluetooth input devices: a remote's power key must not switch the box off through logind; the interface turns it into the Restart / Shut down menu.
 
 ## Multiroom
 
@@ -124,6 +133,33 @@ hostname change, skin/plugin jobs, `hifi-lyrion-update.sh` — runs
 `systemctl reset-failed` first, so the unit's start limit (5 in 5 minutes) can
 never refuse a start the owner asked for.
 
+## Bluetooth
+
+Osmium uses Bluetooth in two directions, both out of the box and neither for
+receiving audio: **speakers and headphones it plays to**, and **remote
+controls** (see [On-screen UI](#on-screen-ui-qt-on-drmkms)).
+
+**Speakers are players.** Settings → Bluetooth speakers (kiosk and web admin,
+`/bt_speakers*`) has a Bluetooth switch, off by default, that keeps the radio
+powered down; Search lists what is in pairing mode, and every speaker added
+becomes a **Lyrion player of its own** — its own name, queue and volume, and it
+can be grouped with the others like any player (see [Multiroom](#multiroom)).
+Each one is a `hifi-bt-player@<mac>` instance, a squeezelite on
+`bluealsa:DEV=<MAC>,PROFILE=a2dp`, fed by BlueALSA in `a2dp-source` mode
+(`hifi-bluealsa`); pairing goes through a no-PIN agent (`hifi-bt-agent`).
+Per speaker: "Reconnect on its own", Connect/Disconnect, rename, Forget.
+
+**One supervisor, not enabled units.** On the A/B image the enable symlinks of
+units do not survive an image swap, so the only enabled unit is `hifi-bt-out`
+(`hifi-bt-out.py`): it re-reads `/etc/hifi-player/bluetooth.json` at every
+boot, powers the adapter only when Bluetooth is on, starts the agent and
+BlueALSA, reconnects the speakers that should reconnect and starts or stops
+their players. A question to BlueZ that gets no answer is treated as "could not
+ask", never as "disconnected", so one speaker leaving does not stop the
+others. Pairings live in BlueZ's `/var/lib/bluetooth` and, with
+`bluetooth.json`, travel in the secret `bluetooth` backup category. A factory
+reset forgets them. Tests: `tests/test_bt_speakers.py`.
+
 ## Backup & restore
 
 `hifi_backup.py` is the shared core (imported by both `sources_server.py`,
@@ -138,18 +174,23 @@ reproducible from the install ISO plus the cumulative OS-update migrations
 on both the archiving and the restoring side. Restoring those would only ever
 fight the updater or clone one device's session identity onto another.
 
-**Categories**: `core` (audio output, pointer, OTA/Lyrion channel, display
+**Categories**: `core` (audio output, the squeezelite options
+`squeezelite.json`, the CD ripping settings `cdrip.json`, the remote key map
+`remote-keys.json`, pointer, OTA/Lyrion channel, display
 mode, UI resolution, skin, hostname, time zone, the Library editor's
 corrections and the album/artist archive downloaded from MusicBrainz and
 Wikipedia — read from whichever disk the owner keeps it on, archived as a
 SQLite snapshot streamed from disk rather than held in memory, and put back
 where that device keeps it by `MetadataService.adopt_restored_db`), `sources` (the music
-source list — kept in every backup, but with SMB passwords redacted unless
-encrypted), `lyrion` (prefs + playlists, *not* the scanned library cache,
+source list — kept in every backup; the SMB logins, sealed at rest on the
+device, travel opened only inside an encrypted backup and are sealed again on
+restore, an unencrypted one carries none), `lyrion` (prefs + playlists, *not* the scanned library cache,
 which Lyrion rebuilds on its own), `network` (Wi-Fi profiles only — Ethernet
 carries no secret and recreates itself), `accounts` (web-admin DB via
 SQLite's own backup API for a consistent snapshot, Samba credentials, pairing
-tokens). The last two are flagged *secret* and
+tokens), `bluetooth` (`bluetooth.json` and BlueZ's pairings in
+`/var/lib/bluetooth`, so the speakers and remotes come back paired). `network`,
+`accounts` and `bluetooth` are flagged *secret* and
 only ever enter an archive when a passphrase is supplied — a scheduled
 (unattended) backup therefore always sticks to the non-secret half.
 
@@ -317,8 +358,20 @@ GET  /system_stats           CPU/memory/temperature/GPU load for the Debug card 
                              disk_system_gb is null on a legacy install, where system and music share one filesystem)
 GET  /network_info, /network_status, /wifi_scan
 POST /wifi_connect, /wired_dhcp, /configure_network
+GET  /wifi_saved              the saved Wi-Fi networks (NetworkManager profiles), the one in use first
+POST /wifi_forget             delete the profile named after an SSID (refuses one that is not saved); forgetting the network in use disconnects
+GET  /connectivity            cached gateway + TCP probe for the top-bar icon (online / home network only / offline), polled every 15 s by Player
+GET  /network_check           step-by-step diagnosis: link, router, internet, DNS, clock, update server, a ranged download from it
 GET  /audio_devices           detected DACs/outputs (stable ALSA card names)
 POST /set_audio_device
+GET/POST /squeezelite_conf    every squeezelite option as one model (/etc/hifi-player/squeezelite.json); POST /squeezelite_conf/reset
+GET  /bt_speakers             Bluetooth speakers/headphones the appliance plays TO: adapter state, paired list
+POST /bt_speakers/enable, /scan, /add, /connect, /update, /remove
+GET  /bt_remotes; POST /bt_remotes/scan, /add, /remove   Bluetooth remote controls
+GET  /remote                  remotes seen, the key map in use, the known models; POST /remote/device, /remote/keys, /remote/learn
+GET  /remote/report           the "remote control card" a user can send to support
+POST /touch/reset             de-authorise and re-authorise the USB touchscreen (a panel that stopped answering)
+GET  /credits                 Settings → Licenses & credits: every package of the image (/usr/lib/osmium/credits.json), Lyrion, notices
 POST /reboot | /shutdown | /close_and_restart (restart the kiosk app only)
                              (/reboot and /shutdown are also the kiosk's power button next to the brand mark,
                              and the companion's power icon through /api/system/shutdown)
@@ -340,7 +393,8 @@ GET/POST /ssh_status, /ssh_set
 GET/POST /shell_account       the Linux SSH/console login (sudo group) — mirrored from the web-admin credential
 GET  /tailscale_status        owner's own tailnet: state, IP, DERP relay + latency
 POST /tailscale_install, /tailscale_set
-GET  /support_bundle          diagnostic zip (logs, unit state, config)
+GET  /support_bundle          diagnostic zip (logs, unit state, config, Lyrion log tails, hifi-qt and oomd journals,
+                             a memory snapshot, the touchscreen watcher's state; secrets masked)
 GET/POST /pointer_status, /pointer_set
 GET/POST /display_mode        screen (gui) vs headless
 GET/POST /player_enabled      player on/off — independent of display_mode, makes a unit "server-only"
@@ -352,7 +406,8 @@ GET/POST /vu_style            which meter look is in use (built-in or downloaded
 GET  /vu_skin/<id>/<file>     a skin's layers, for the previews
 GET  /vu_store                signed catalogue state (?summary=1: only the new/update counts)
 POST /vu_store/check, /vu_store/install, /vu_store/remove, /vu_store/seen
-GET/POST /nowplaying_animation   what Now Playing shows instead of the VU meters when they are off: none | cd | vinyl | cassette
+GET/POST /nowplaying_animation   what Now Playing shows instead of the VU meters when they are off: none | cd | cdfront | vinyl | cassette | a downloaded scene's id
+GET  /anim_store              the animations catalogue; POST /anim_store/check, /install, /remove, /seen
 GET/POST /ui_language         the on-screen UI language, owned by the device rather than by one UI
 GET/POST /nowplaying_autoexpand   seconds before Now Playing auto-expands (0 = off)
 GET/POST /timezone, GET /timezones
@@ -385,7 +440,9 @@ exist for running it on a laptop). Route families:
   only while none exists), `login`, `logout`, `change-password`. Account in
   `/etc/hifi-player/webui.db` (Werkzeug password hash), cookie session signed
   with the per-device `/etc/hifi-player/webui-secret.key`, double-submit CSRF
-  (`csrf` cookie ↔ `X-CSRF-Token`, `SameSite=Strict`). The Vue app
+  (`csrf` cookie ↔ `X-CSRF-Token`, `SameSite=Strict`). The token is minted
+  once per page — on a page load or `GET /api/csrf` — not per request, so two
+  calls in flight never invalidate each other. The Vue app
   (`admin-webui/`: Login, Setup, Dashboard, Settings views; en/it locales) is
   served from `/opt/hifi-webui/dist`.
 - **`/api/system/*`** — session-gated proxy to a whitelisted subset of the
@@ -514,7 +571,11 @@ GET    /api/usb                    🔒   list mounted (not-yet-adopted) USB dis
 POST   /api/usb/adopt              🔒   adopt a USB partition read-write (Samba-shared, like an internal disk)
 GET    /api/cd/info                🔒   audio-CD TOC + MusicBrainz metadata (`releases`, `?release=<mbid>` to switch edition)
 POST   /api/cd/rip                 🔒   rip to FLAC (async systemd-run job; tags from `release`, MusicBrainz ids included)
-GET    /api/cd/rip/status          🔒   poll a rip job
+GET    /api/cd/rip/status          🔒   poll a rip job (progress inside the current track, the rip log)
+POST   /api/cd/cancel              🔒   stop a rip; what was already written stays
+GET/POST /api/cd/settings          🔒   the ripping settings (/etc/hifi-player/cdrip.json: format, quality, read offset,
+                                        paranoia, folder and file names, where the rips go)
+POST   /api/cd/settings/offset_lookup 🔒 the drive's read offset from AccurateRip's list
 POST   /api/cd/eject               🔒   open the tray
 GET    /api/meta/album?album_id=   🔒   album credits/release/places/Wikipedia text (`pending` while looking up)
 GET    /api/meta/album/candidates  🔒   MusicBrainz releases this album could be
@@ -654,6 +715,20 @@ setup wizard — instead of an error, and reopens it with the reason when the
 login is refused. Passwords reach `smbclient` through a mode-0600 temporary
 file, never the command line.
 
+**Logins are sealed at rest.** A source in `/etc/hifi-sources.json` keeps no
+user name or password in the clear: `hifi_backup.seal_login()` turns them into
+one `systemd-creds` blob (AES-256-GCM, bound to its name) with the key
+`/etc/hifi-player/credential.secret` — not systemd's own, which would not
+survive an A/B swap — and the TPM2 too when there is one, with no PCRs, so an
+image update does not lock it. The cifs credentials file only exists in `/run`
+for one mount. A clear login written before this, or brought back by an
+encrypted backup, is sealed at the next start (`_seal_stored_logins()`); the
+key file is on the backup deny-list, and the support bundle masks the
+secrets.
+
+A network folder is added **writable** unless the server refuses: then it is
+recorded read-only rather than failing.
+
 #### File manager (web admin only)
 
 `admin-webui/src/views/Files.vue` (`/files`, reached from Sources → Manage
@@ -668,8 +743,11 @@ the folder pickers still offer it. Every path goes through the same `_local_path
 confinement the folder pickers use; on top of that the service refuses to
 rename, move or delete an allowed root, a source's own mountpoint or the
 playlist folder (`_protected_paths()`), and refuses any write on a read-only
-mount. What it writes is handed to `SHARE_GROUP`, so the files stay writable
-from a PC over Samba. There is no file manager on the kiosk on purpose:
+mount. Everything it creates — like everything a CD rip writes — belongs to the
+share user, `hifimusic:hifishare` (folders 2775, files 0664,
+`hifi_cdrip.hand_over()`), not root, so the files stay writable from a PC over
+Samba; at start the shared folders are walked once to give back what older
+versions left owned by root. There is no file manager on the kiosk on purpose:
 copy/cut/rename with no keyboard, on a screen across the room, is not a job
 anyone wants to do from the sofa.
 
@@ -769,7 +847,9 @@ cmd:delete`). The kiosk exposes them through the long-press menu
 heart in Now Playing and the rename window (`Overlays.prompt`, the "save as playlist" window in prompt mode).
 
 **Library browsing and search.** `LibraryModel` (`native-ui-qt/src/library.cpp`)
-adds the `Genres`, `Years`, `Composers` (`artists role_id:COMPOSER`),
+adds the `Genres`, `Years`, `Composers` (`artists role_id:COMPOSER`; the
+`Artists` list itself asks for `role_id:ARTIST,ALBUMARTIST,TRACKARTIST`, because
+Lyrion's default would list composers and conductors among the artists),
 `NewMusic` (`albums sort:new`, server order kept) and `Search` views; `Albums`
 takes a filter in p2 (`genre_id:`, `year:`, `role_id:`). Search is Lyrion's
 server-side `search <i> <n> term:` — artists, albums and tracks in one list,
@@ -847,7 +927,10 @@ A **network-loss recovery hotspot** for an already-configured unit is a
 separate, still-AP-based mechanism (`_raise_net_recovery_ap()`,
 `/api/netrecovery/*`, its own minimal network-only portal at `/`): it comes up
 when the box loses all connectivity post-setup, and goes away when the network
-returns.
+returns. It needs three "no network" answers in a row (`_NET_DOWN_TICKS`,
+about a minute); when `nmcli` itself does not answer — a box short of memory —
+the state counts as unknown and nothing changes, so a busy appliance does not
+drop off its own network.
 
 ### The mechanism behind both flows
 
@@ -892,13 +975,17 @@ The installer screen of `native-ui-qt/qml/Wizard.qml` shows the QR immediately a
 pick a target disk (`GET /api/provision/install_disks` → `api_server.py`'s
 `GET /install/disks`) → confirm the erase warning → start
 (`POST /api/provision/install_start` → `POST /install/start`, which launches
-`hifi-disk-install.sh` via `systemd-run`). On a UEFI machine with an image on
-the medium, `install_ab` lays out the A/B disk with no network at all: a
-five-partition GPT, the image `dd`'d into slot A (sha256-checked when the
-medium carries one), an empty slot B, a `/data` skeleton with the machine-id,
-the player MAC and the provisioning marker, then `grub-install` and the slot
-selector — see [Image layout: A/B slots](#image-layout-ab-slots). On a
-BIOS-only machine, or a medium without an image, the older path remains:
+`hifi-disk-install.sh` via `systemd-run`). With an image on the medium —
+whatever the firmware, UEFI or a legacy BIOS/CSM — `install_ab` lays out the
+A/B disk with no network at all: a five-partition GPT, the image `dd`'d into
+slot A (sha256-checked when the medium carries one), an empty slot B, a
+`/data` skeleton with the machine-id, the player MAC and the provisioning
+marker, then **both** boot chains and the slot selector: the one of the
+firmware the installer is running on must succeed, the other is best effort,
+so the disk still starts if it is later moved or the firmware is switched. On a
+BIOS machine the protective MBR entry is also marked active — see
+[Image layout: A/B slots](#image-layout-ab-slots). Only a medium without an
+image takes the older path:
 `unsquashfs` the live filesystem verbatim onto the target disk (see
 `distro/README.md`'s Compliance Notice for why Lyrion isn't part of that
 image at all), then chroot in to run `hifi-grub-install.sh` +
@@ -972,9 +1059,8 @@ the browser, in order:
    existing server on the network (`/api/provision/lyrion_mode`, discovery via
    `/api/provision/discover_lms`) skips the Lyrion-side steps and the sources
    step entirely (external Lyrion's sources are configured on that other
-   device, not here — see also [Backend API reference](#backend-api-reference)
-   and the legacy Electron kiosk's `Settings.jsx` `settingsSections`, which
-   hides Music Sources the same way post-setup).
+   device, not here — see also [Backend API reference](#backend-api-reference);
+   the on-screen Settings hide Music Sources the same way post-setup).
 10. **Lyrion install** (internal Lyrion only) —
     `/api/provision/lyrion_check`, `/lyrion_install`, `/lyrion_status`.
     This step *is* the installer: Lyrion is absent from the image by design,
@@ -1019,7 +1105,14 @@ the browser, in order:
     [Adding a network folder](#adding-a-network-folder-the-guided-flow)).
     "Done, continue" applies the folders live (`/api/system/apply` with
     `live: true`) and moves on within 20 s.
-16. **Finish** — with an internal Lyrion the phone is sent to `:9000`, which
+16. **Remote control** (optional) — "Do you want to set up a remote
+    control?": the remotes already connected, then "Which remote do you
+    have?" with the three known models (Fire TV, Xiaomi, G20S PRO: how to put
+    each in pairing mode, then the device finds and pairs it by itself) or
+    "Another remote" (scan and tap), over `/api/system/remote` and
+    `/api/system/bt_remotes*`. Skippable; Settings → Remote control does the
+    same later.
+17. **Finish** — with an internal Lyrion the phone is sent to `:9000`, which
     now lands on the **web player itself**: step 12 already wrote Lyrion's
     `wizardDone`, so its own first-run wizard never appears.
 
@@ -1208,13 +1301,44 @@ The image is Debian 13 ("trixie"). In screen mode `hifi-qt.service` starts
 with `QT_QPA_PLATFORM=eglfs`: the program takes the DRM master and renders
 straight to the panel — no X server, no Wayland compositor, no display
 manager. The unit binds it to `/dev/tty1` (`TTYPath=`, brought to the front
-by `ExecStartPre=-/usr/bin/chvt 1` from the `kbd` package), starts after
-`plymouth-quit-wait.service` so Plymouth has released the screen, and retries
-without a start limit. Before eglfs opens the device, `kmsmode.cpp` turns
+by `ExecStartPre=-/usr/bin/chvt 1` from the `kbd` package) and retries
+without a start limit.
+
+**The boot shows no text.** Plymouth's `hifi` theme (140 files in
+`distro/config/includes.chroot/usr/share/plymouth/themes/hifi/`: the Osmium
+Sound mark building up, then a shimmer on a loop, plus the progress bar and
+password prompt of update mode) stays on screen until the interface draws:
+`hifi-qt.service` carries `Conflicts=plymouth-quit.service` and
+`ExecStartPre=-/usr/bin/plymouth quit --retain-splash`, so the last frame is
+kept until eglfs paints over it, and the kernel command line of the image, of
+an installed system and of the live ISO carries `systemd.show_status=0
+rd.systemd.show_status=0`. There is no start clip in the interface any more:
+the screen opens straight on it. Before eglfs opens the device, `kmsmode.cpp` turns
 `/etc/hifi-player/ui-resolution` into a `QT_QPA_EGLFS_KMS_CONFIG`: always a
 real mode of the panel, never a scaling transform; `hifi-ui-resolution.sh`
-restarts the unit when the setting changes. `Main.qml` then fits the 1024x600
-logical canvas into whatever mode was chosen.
+restarts the unit when the setting changes. `Main.qml` then fits the logical
+canvas into whatever mode was chosen; the canvas takes the panel's own shape
+between 3:2 and 16:9 (600 points tall on a wide panel, 1024 wide on a taller
+one), so a 16:9 or 16:10 screen is filled with no bands, and no QML file may
+assume 1024x600 (`Theme.canvasW/H`).
+
+**Remote controls.** `remote.cpp` opens every evdev input device and grabs
+exclusively only the real remotes (a keyboard's or a sound card's media keys
+are left to the system and arrive as keys); their keys become actions through
+`/etc/hifi-player/remote-keys.json`, the key map of the remote in use
+(`remote-device`); three known models (Fire TV, Xiaomi Mi Box S, G20S PRO)
+have their map built in, and its drawing in `native-ui-qt/assets/remotes/` is
+shown once when the remote first turns up. Navigation is spatial (`Nav.qml`): each screen
+says where the gold ring lands, arrows move it along a cone between item
+edges, OK presses the item's centre as a touch would, the menu key acts as a
+long press, and the pointer is parked out of the way. Bluetooth remotes are
+paired through `/bt_remotes*`; a remote whose HID report map the kernel
+rejects goes through `btghid.cpp` instead. While a box with a screen has no
+remote, a background round listens for one of the known models in pairing
+mode and pairs it by itself. A remote's power key never switches the box off
+(udev `71-hifi-remote-power.rules`): it opens the Restart / Shut down menu,
+with the ring on Cancel. The web admin and the kiosk share the same pages;
+`GET /remote/report` is a card of what the device sees, for support.
 
 The binary and its QML, icons, assets and locales are one self-contained
 payload built by `native-ui-qt/ci/build-payload.sh` (compiled in a Debian 13
@@ -1268,6 +1392,9 @@ the companion — shows the switch, a preview per look and the store.
   on their own, new skins are only offered (a gold dot on the section until
   `/vu_store/seen`), built-in ids are never offered, removing the skin in use
   falls back to classic, and a factory reset deletes both folders.
+- To try a skin before it is published, `sudo hifi-pack-install FILE.vupak`
+  puts it through the same checks into the same folder (no signature, hence
+  root only); `--remove vu ID` and `--list` go with it.
 - Publishing: `native-ui-qt/tools/vu-skin-build.py` builds, packs and indexes
   skins from `vu-store/<id>/` (rules in `vu-store/README.md`: bump `version`
   on any change, no ids that clash with built-in ones, no brand names), and
@@ -1283,22 +1410,48 @@ ReplayGain), flashing its frame.
 
 ### Now Playing animations
 
-With the VU meters off, the Now Playing panel under the controls can show one
-of three scenes instead: a CD going into a player and spinning, a record
-played by the tonearm, a cassette running in a deck. The choice is
-`/etc/hifi-player/nowplaying-animation` (`GET/POST /nowplaying_animation`,
-`none` | `cd` | `vinyl` | `cassette`; absent = none), read by `Player`
+With the VU meters off, the Now Playing panel under the controls can show a
+scene instead. Four are built in: a top-loading CD player (`cd`), a late-80s
+front-loading CD player with a drawer and a fluorescent display (`cdfront`), a
+record played by the tonearm (`vinyl`) and a cassette deck (`cassette`); with
+`none` the panel shows the song's lyrics. The scenes' keys work: the CD
+player's OPEN, track numbers, REPEAT, RANDOM, skip and search, the deck's
+transport, REW/FF held to wind and its volume fader, the turntable's
+START/STOP. With an internet radio the cassette label and the CD display show
+the station and the song. The choice is `/etc/hifi-player/nowplaying-animation`
+(`GET/POST /nowplaying_animation`, `none` | `cd` | `cdfront` | `vinyl` |
+`cassette` | a downloaded scene's id; absent = none), read by `Player`
 (`npAnimation`) with the other settings and set from Settings → Animations on
-the kiosk and in the web admin — not in the companion. `NpAnimation.qml`
-picks the scene (`AnimCd.qml`, `AnimVinyl.qml`, `AnimCassette.qml`, layers in
-`native-ui-qt/assets/anim/<scene>/`); the Now Playing view button switches
-between it and the lyrics. The scenes are pure components (QtQuick only, no
+the kiosk and in the web admin — not in the companion — or from the chooser
+(`NpChooser.qml`) that the two buttons next to Now Playing's clock open:
+picking a meter look turns the meters on, picking an animation turns them off.
+`NpAnimation.qml` picks the scene (`AnimCd.qml`, `AnimCdFront.qml`,
+`AnimVinyl.qml`, `AnimCassette.qml`, layers in `native-ui-qt/assets/anim/<scene>/`,
+the LCD and VFD digits in `assets/anim/lcd` and `assets/anim/vfd`), and
+`NpStage.qml` draws the same scene, or the meters, at full screen with the
+title, artist and progress — the button next to the clock. Each scene has one
+look, the same in the panel, at full screen and in the Settings previews. The scenes are pure components (QtQuick only, no
 app singletons, testable with the bare `qml` runtime) and are built for the
 weak iGPU: a bounded insertion, then a single 30 Hz `Timer` advancing the
 angles by elapsed time, running only while playing and on screen — paused,
 stopped or hidden they go fully idle, never an infinite animation. Shadows and
 reflections are baked into the PNGs; with `live: false` they draw a still pose
 for the Settings previews.
+
+**The animation store** (`/anim_store*`, proxied by the web admin as
+`/api/system/anim_store*`) works like the VU store, with one difference that
+matters: a scene is **code** the kiosk runs, not data. It is trusted only
+because the catalogue `https://file.osmiumsound.it/anim/index.json` is signed
+with the OTA key (`/etc/hifi-player/ota-pubkey.pem`) and every `.animpak`
+(`anim.json`, the scene's QML files and images, all flat) matches the sha256
+in it. Downloaded scenes live in `/var/lib/hifi-player/anim-scenes/<id>`, the
+cached catalogue in `/var/lib/hifi-player/anim-store`; the catalogue is
+refreshed every 12 hours, downloaded scenes update by themselves and can be
+removed, a factory reset deletes both. The scene contract (inputs, actions,
+allowed imports, the idle rule) is in `anim-store/README.md`; publishing is
+`native-ui-qt/tools/anim-store.py` and the manual `publish-anim-store.yml`;
+`hifi-pack-install FILE.animpak` installs one locally for testing. Tests:
+`tests/test_anim_store.py`.
 
 ### The earlier Electron kiosk
 
@@ -1321,8 +1474,8 @@ come up. Constants live in `hifi-ab-lib.sh`; the image is built by
 
 | GPT name | Size | Content |
 |---|---|---|
-| `BIOS boot` | 1 MiB | — |
-| `EFI System` | 512 MiB | ESP: Debian's signed `grubx64.efi`, the slot selector, `grubenv` |
+| `BIOS boot` | 1 MiB | GRUB's i386-pc `core.img`, for PCs started in legacy BIOS/CSM mode (empty on a converted device) |
+| `EFI System` | 512 MiB | ESP: Debian's signed `grubx64.efi`, the slot selector, `grubenv`; for BIOS also `grub/i386-pc/` (the modules) and `grub/grub.cfg` |
 | `hifi-root-a` | 1280 MiB (on a converted device: the old root, shrunk) | image slot A |
 | `hifi-root-b` | 1280 MiB | image slot B |
 | `hifi-data` | the rest of the disk (ext4) | `/data`: everything that must last |
@@ -1337,8 +1490,11 @@ come up. Constants live in `hifi-ab-lib.sh`; the image is built by
   starts: `hifi-data` is mounted on `/data` (with fsck retries; a tmpfs
   fallback records `data-mounted=0`), `/etc` becomes an overlay whose upper
   layer is `/data/etc/upper`, `/var` and `/home` are bind mounts of
-  `/data/var` and `/data/home` (on the first boot of each image version the
-  image's own `/var` is added without overwriting: `cp -an`), `/mnt` and
+  `/data/var` and `/data/home` (on the first boot of each image version
+  `merge_missing()` copies in what `/data` lacks of the image's own `/var` and
+  `/home`, descending into folders both have and never overwriting — busybox's
+  `cp -an` used to copy nothing at all, leaving a new install with an empty
+  `/var`), `/mnt` and
   `/media` are tmpfs. Lyrion lives in `/data/lyrion`, music copied onto the
   device in `/data/music`, RAUC's own state in `/data/rauc`.
 
@@ -1349,7 +1505,12 @@ come up. Constants live in `hifi-ab-lib.sh`; the image is built by
 `TRY` flag and loads that slot's own `boot/grub/grub.cfg` (root by PARTUUID,
 `rootfstype=squashfs ro rauc.slot=X panic=10`). Debian's signed GRUB binary is
 never replaced — see the no-bootloader-in-OTA rule in
-[`distro/os-update/README.md`](distro/os-update/README.md).
+[`distro/os-update/README.md`](distro/os-update/README.md). A PC started in
+legacy BIOS mode reaches the same selector: its `core.img` reads
+`ESP/grub/grub.cfg`, which loads the i386-pc modules one `insmod` per line
+(the selector later moves `$prefix` into the slot, where there are none) and
+then runs `configfile` on `EFI/debian/grub.cfg`. Secure Boot only exists on
+the UEFI path.
 
 `hifi-boot-health.service` marks the slot good (`rauc status mark-good`) once
 `/data` is mounted, the API answers and `rauc status` works — playback and
@@ -1485,7 +1646,12 @@ checked, and builds a **systemd-sysext** extension in
 maintainer scripts in `/var/lib/hifi-player/ext/<name>/`. Two rules keep the
 image intact: an add-on may only **add** files (a package that would cover a
 file already shipped in `/usr` or `/opt` is refused, with the paths named),
-and it is bound to the image version (`SYSEXT_LEVEL`). Files a package ships
+and it is bound to the image version (`SYSEXT_LEVEL`). Extensions carry
+`EXTENSION_HIERARCHIES=/usr` and the image pins `SYSEXT_HIERARCHIES=/usr`
+(drop-in `systemd-sysext.service.d/hierarchies.conf`): the default `/usr`+`/opt`
+merge mounted an empty tmpfs over `/opt`, which hid the interface
+(`/opt/hifi-qt`) and the web admin (`/opt/hifi-webui`) the moment an add-on was
+installed. Files a package ships
 under `/etc` and `/var` are copied onto the real system without overwriting
 the owner's edits. Maintainer scripts do run (preinst, postinst `configure`,
 prerm/postrm, a failure is a warning); services a postinst enables are not
@@ -1621,10 +1787,10 @@ can switch back (`GET/POST /ui_engine`).
 The image carries the very same payload — built by
 `native-ui-qt/ci/build-payload.sh`, the single source for both update and
 image — in `/opt/hifi-qt`, and boots with Qt: the `0400-enable-services` hook
-enables `hifi-qt.service` and disables `lightdm` **only if the program is
-really there**, otherwise the live-build system stays on Electron, so a payload
-that wasn't copied can't turn into a black screen. Image slots go further and
-drop Electron altogether (see [On-screen UI](#on-screen-ui-qt-on-drmkms)). In
+enables `hifi-qt.service` and disables `lightdm`, and **aborts the build** if
+the program is not there, so a payload that wasn't copied can't turn into a
+black screen; there is no Electron app to fall back on any more (see
+[On-screen UI](#on-screen-ui-qt-on-drmkms)). In
 CI the payload is built by a separate job (`qt-payload`), because the image
 job runs inside a container and has no docker.
 
@@ -1657,9 +1823,15 @@ re-syncs naturally. The same logic is documented from the release side in
 Release bodies (and the "what's new" shown before updating) are the
 auto-generated `CHANGELOG_RELEASE.md`.
 
-Note that not every stable release ships a new install ISO — most releases
-are OTA-only (OS/System/UI tarballs); a fresh ISO is only cut occasionally.
-Check the release's assets on GitHub to see what shipped with it.
+Not every release ships a new install ISO: the ISO is cut by
+`build-iso.yml`, run by hand with `--ref` on the tag. For a stable tag it then
+calls `publish-iso-r2.yml`, which takes the ISO, its `.sha256` and
+`.sha256.sig` from the GitHub release, checks the hash and the signature
+against the public key the devices ship, writes `latest.json` (the manifest
+the site's download button and Osmium Flasher read), uploads the four files
+to the root of the bucket behind `file.osmiumsound.it` — the manifest never
+cached — and reads them back. It can also be run by hand for a tag. A dev or
+alpha ISO stays on GitHub only.
 
 ### OS channel — why it's signed
 
@@ -1826,64 +1998,70 @@ carries it (`0048-lms-skin-assets.sh` is the worked example — see
 ```
 hifi-media-player/            (GitHub: adri6412/osmium-sound)
 ├── native-ui-qt/             # On-screen UI (Qt 6 Quick, eglfs on DRM/KMS) → /opt/hifi-qt
-│   ├── src/                  # C++: main.cpp, Api, Player, VuMeter, LibraryModel, I18n, Sys, Spring, QrCode (qr.c), kmsmode.cpp
-│   ├── qml/                  # Main, App, MainScreen, NowPlaying, Browser, SettingsTab + SettingsRows, VuPanel, Wizard, Dialogs, VirtualKeyboard, OtaOverlay, BootIntro, CdRip, Screensaver, ...
-│   ├── icons/, assets/       # SVG icons; VU meter skins (assets/vu/<id>), Now Playing animation layers (assets/anim/<scene>) and status-plate artwork (assets/ledbar)
+│   ├── src/                  # C++: main.cpp, Api, Player, VuMeter, LibraryModel, I18n, Sys, Spring, QrCode (qr.c), kmsmode.cpp,
+│   │                         #      remote.cpp (evdev remotes), btghid.cpp (HID-over-GATT bridge), touchwatch.cpp
+│   ├── qml/                  # Main, App, MainScreen, NowPlaying, Browser, CoverFlow, SettingsTab + SettingsRows, VuPanel, NpAnimation +
+│   │                         # Anim* scenes, NpStage, NpChooser, Wizard, Dialogs, VirtualKeyboard, OtaOverlay, CdRip, FolderChooser,
+│   │                         # BrandMark, Tutorial, Nav*, Remote*, Screensaver, ...
+│   ├── icons/, assets/       # SVG icons; VU meter skins (assets/vu/<id>), Now Playing animation layers (assets/anim/<scene>, lcd, vfd),
+│   │                         # status-plate artwork (assets/ledbar), the known remotes' key-map drawings (assets/remotes)
 │   ├── ci/build-payload.sh   # builds the payload (Debian 13 container) shared by the image and the UI OTA bundle
-│   ├── tools/                # dev rig: Debian 13 chroot + Xvfb, mock-server.py (fake Lyrion/api/sources/VU), test command channel; vu-skin-build.py (build/pack/index VU skins)
+│   ├── tools/                # dev rig: Debian 13 chroot + Xvfb, mock-server.py (fake Lyrion/api/sources/VU), test command channel,
+│   │                         # fake-remote.py; vu-skin-build.py and anim-store.py (build/pack/index the two stores)
 │   └── Makefile              # moc + g++ against pkg-config Qt6Quick/Qt6Qml/Qt6Gui/Qt6Network/Qt6Core + libdrm
-├── main/                     # Legacy Electron kiosk — main process
-│   ├── main.js               # kiosk window, fullscreen under labwc/X11, renderer crash recovery, CSP relax for Lyrion, keyboard IPC
-│   ├── inputDevices.js       # which kernel input devices count as a keyboard someone can type on (sysfs scan; drives the on-screen keyboard auto-show)
-│   └── preload.cjs           # window.electronAPI (frame rate, on-screen/physical keyboard)
-├── src/                      # Legacy Electron kiosk — React renderer, Vite + Tailwind; still the source of shared UI data
-│   ├── App.jsx               # boot-mode routing: InstallWizard / SetupWizard / kiosk, screensaver, boot intro
-│   ├── pages/                # LyrionServer (player + library), Settings, SetupWizard (on-screen Wi-Fi + address), InstallWizard (QR)
-│   ├── components/           # AnalogVUMeter, LedBar, Discover, CdRip, SourcesManager, InternalDisks, WifiConfigPanel, UpdatePlanOverlay, VirtualKeyboard, Screensaver, BootIntro, ...
-│   ├── hooks/                # useLyrionPlayer, useKeyboardInput, useLongPress
-│   ├── utils/                # api.js (Flask :8000), lyrionApi.js (Lyrion JSON-RPC :9000), physicalKeyboard.js
-│   ├── assets/               # intro.mp4 (also unrolled into JPEG frames for the Qt boot intro)
-│   ├── data/                 # thirdPartyNotices.js (in-app rendering of THIRD-PARTY-NOTICES.md; exported to third_party.json for the Qt UI)
-│   └── i18n/                 # en/it locale strings (English is the default) — read by both UIs
+├── src/                      # Shared interface data: i18n/locales/{en,it}.json (on-screen strings, English default) and
+│                             # data/thirdPartyNotices.js (exported to third_party.json) — all that is left of the Electron kiosk
 ├── admin-webui/              # Vue 3 web admin, built to dist/, served by webui_server.py from /opt/hifi-webui/dist
+│   ├── index.html, library.html   # the admin app and the Library editor (tags and credits), a page of its own
 │   └── src/
 │       ├── views/            # Login, Setup, Install, Dashboard (with the disk space table), Settings, Files (file manager)
-│       ├── components/       # SourcesPanel, FolderPicker, VuSkinPreview, UpdateProgressOverlay, Toggle, LanguageSelector
+│       ├── components/       # SourcesPanel, FolderPicker, VuSkinPreview, RemotePairing, RemoteIntro, UpdateProgressOverlay, Toggle, ...
 │       └── i18n/             # en/it locale strings (English is the default)
-├── api_server.py             # Flask API (system/network/OTA/multiroom/display-mode/player/installer) — root, loopback :8000
-├── sources_server.py         # Sources, disks, SMB, CD rip, backup/restore, Lyrion skin + first-run setup, companion proxy — :8080
+├── api_server.py             # Flask API (system/network/OTA/multiroom/display/player/remotes/Bluetooth/stores/installer) — root, loopback :8000
+├── sources_server.py         # Sources, disks, SMB, CD rip, file manager, backup/restore, Lyrion skin + first-run setup, companion proxy — :8080
 ├── webui_server.py           # Web admin + provisioning/setup-portal gateway — :80
-├── hifi_backup.py            # Backup/restore core (shared with the sbin worker)
+├── hifi_backup.py            # Backup/restore core (shared with the sbin worker); sealing of the SMB logins
+├── hifi_squeezelite.py       # the squeezelite option model → /etc/default/squeezelite
+├── hifi_cdrip.py             # CD ripping settings, file ownership hand-over
+├── hifi_metadata.py, hifi_tags.py   # album/artist information (MusicBrainz, Wikipedia); tags in the music files
 ├── hifi_i18n.py              # en/it message catalogue for the Python services (X-UI-Lang)
 ├── hifi_logging.py           # logging helpers for the Python services
 ├── vu_meter_daemon.py        # squeezelite shm → WebSocket :9001 (VU meter)
-├── tests/                    # Python unit tests (backup, OTA channel, update plan, timezone, NetworkManager recovery, SMB discovery, file ops, VU store/style, support bundle, …) + shell tests (update runners, A/B image and media move, factory reset, Lyrion ensure, sysext add-ons and apt shim)
+├── tests/                    # Python unit tests (backup, OTA channel, update plan, timezone, NetworkManager recovery, SMB discovery, file ops,
+│                             # VU and animation stores, squeezelite model, tags, support bundle, …) + shell tests (update runners, A/B image
+│                             # and media move, factory reset, Lyrion ensure, sysext add-ons and apt shim)
 ├── vu-store/                 # sources of the downloadable VU meter skins (README: rules), published by publish-vu-store.yml
-├── android-companion/        # Android companion app (Java; fork of android-squeezer)
+├── anim-store/               # sources and contract of the downloadable Now Playing animations, published by publish-anim-store.yml
+├── android-companion/        # Android companion app (Java; fork of android-squeezer) — on Google Play, as an APK and on F-Droid
 ├── fdroid/, fdroid-dev/      # self-hosted F-Droid repo configs (stable / dev), published to gh-pages by CI
 ├── flasher/                  # Osmium Flasher — desktop USB writer (Electron, Windows/Linux)
 ├── distro/                   # Custom Debian 13 appliance build (live-build)
-│   ├── build-distro.sh       # ISO build script (injects the Qt UI and the legacy kiosk, web admin, daemons, session files, versions, OTA pubkey, provisioning marker)
-│   ├── build-image.sh        # live-build chroot → A/B slot image + signed RAUC bundle (section 5b: drops the Electron app, seeds ui-engine=qt)
-│   ├── config/               # live-build package list, hooks, includes.chroot (systemd units, /usr/local/sbin scripts, sudoers, sshd/samba/lightdm conf, Plymouth theme)
+│   ├── build-distro.sh       # ISO build script (the Qt payload is required; web admin, daemons, versions, OTA pubkey, provisioning marker)
+│   ├── build-image.sh        # live-build chroot → A/B slot image + signed RAUC bundle (seeds ui-engine=qt, masks what slows the boot)
+│   ├── config/               # live-build package list, hooks, includes.chroot (systemd units, udev rules, /usr/local/sbin scripts, sudoers,
+│   │                         # sshd/samba conf, the Plymouth theme with the animated mark)
 │   │   └── includes.chroot/usr/local/share/hifi-lms-skin/    # Osmium theme + global CSS + menu entry for Lyrion's Material Skin
+│   ├── gen-credits.py        # every package of the image with its licence → /usr/lib/osmium/credits.json (Settings → Licenses & credits)
 │   ├── rauc/, rauc-keys/     # RAUC bundle manifest + install-check hook; bundle CA and keyring (signing key only in CI secrets)
 │   ├── ab-test/              # offline A/B conversion test package
 │   ├── os-update/            # OS OTA payload: apply.sh runner, lib.sh, apply.d/ migrations (cumulative), files/ (legacy kiosk sessions, logo)
 │   ├── ota-keys/             # Ed25519 OTA public key (+ generator; private key never committed)
 │   └── dev-installer/        # template of the offline dev installer hifi-install-<ver>.sh
-├── tools/                    # publish-iso.sh (sign an ISO + latest.json for file.osmiumsound.it), har-viewer/ (local HAR analysis tool)
+├── tools/                    # publish-iso.sh (sign an ISO + latest.json by hand; CI does it with publish-iso-r2.yml), mem-report.sh
+├── brand/                    # the Osmium Sound mark for Lyrion's web UI (lms-icon)
 ├── .github/
-│   ├── workflows/            # build-ui-ota, build-iso, build-companion-apk, build-flasher, deploy-pages, publish-vu-store, cleanup (see workflows/README.md)
+│   ├── workflows/            # build-ui-ota, build-iso, publish-iso-r2, prune-ota-r2, build-companion-apk, build-flasher, deploy-pages,
+│   │                         # publish-vu-store, publish-anim-store, cla, cleanup (see workflows/README.md)
 │   └── scripts/              # make-ota-manifest.py, make-iso-manifest.py
-├── website/                  # Public site (osmiumsound.it, deployed from main via gh-pages → Cloudflare Pages)
-├── hardware/                 # Hardware designs
-└── package.json              # legacy kiosk app (Electron 43, React 18, Vite 6)
+├── website/                  # Public site (osmiumsound.it, deployed from main via gh-pages → Cloudflare Pages), the user manual
+├── hardware/                 # Hardware designs (3D-printed brackets)
+└── package.json              # the version only, read by the build workflows and build-distro.sh
 ```
 
 ## Local development
 
-Node 20 (what CI uses), Python 3 with `requirements.txt`; for the on-screen
+Node 20 (what CI uses, for the web admin and the payload script), Python 3 with
+`requirements.txt`; for the on-screen
 UI, a Debian 13 environment with `qt6-base-dev`, `qt6-declarative-dev` and
 `libdrm-dev` (or docker, for the payload script).
 
@@ -1902,15 +2080,13 @@ sh tests/test-update-stage-runner.sh && sh tests/test-update-apply-runner.sh   #
 python3 tests/test_update_plan.py && python3 tests/test_timezone.py            # the suites CI gates a release on
 PYTHONPATH=. python3 tests/test_backup.py                                       # hifi_backup.py
 PYTHONPATH=. python3 tests/test_ota_channel.py                                  # release-channel / semver logic
-python3 tests/test_vu_store.py                                                  # VU store: signature, tampering, malicious packages
+python3 tests/test_vu_store.py && python3 tests/test_anim_store.py             # the two stores: signature, tampering, malicious packages
 sh tests/test-ext-guardian.sh && sh tests/test-apt-shim.sh                      # sysext add-ons and the apt shim
 ```
 
 The Python services expect the appliance layout (root, `nmcli`, systemd,
 `/etc/hifi-player`) — for real end-to-end work use a test VM or a device and
 the offline dev installer (`hifi-install-<ver>.sh` on every Release) rather
-than running them on a workstation. The old DietPi scripts
-are old developer conveniences for testing the Electron kiosk on a bare Debian box by
-hand — they are **not** how the appliance ships. The real production path is:
+than running them on a workstation. The production path is:
 flash the install ISO once, then let the OTA system above keep the device
 (UI, System, OS, Lyrion) up to date.
