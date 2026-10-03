@@ -692,12 +692,11 @@
       max-width: 460px; margin: 0;
     }
     .review-inner strong { color: var(--accent); }
-    /* The way out to every channel, picked out like the bold lead-in.
-       Excludes .chat-note, whose link stays muted on purpose. */
-    .review-inner > p:not(.chat-note) a {
+    /* The way out to every channel, picked out like the bold lead-in. */
+    .review-inner > p a {
       color: var(--accent); text-decoration: underline;
     }
-    .review-inner > p:not(.chat-note) a:hover { text-decoration: none; }
+    .review-inner > p a:hover { text-decoration: none; }
     .review-actions {
       display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center;
     }
@@ -705,13 +704,6 @@
       padding: 10px 20px; font-size: 0.9rem; white-space: nowrap;
       border: none; cursor: pointer; font-family: inherit; line-height: 1.6;
     }
-    /* Said next to the button, because that is where the choice is made. */
-    .review-inner .chat-note {
-      flex-basis: 100%; max-width: none;
-      font-size: 0.78rem; line-height: 1.5; color: var(--muted);
-    }
-    .chat-note a { color: var(--muted); text-decoration: underline; }
-    .chat-note a:hover { color: var(--accent); }
     .kofi-btn {
       padding: 10px 20px; font-size: 0.9rem; white-space: nowrap;
       background: var(--bg); border-color: rgba(245,184,32,0.35);
@@ -877,12 +869,8 @@
      does not have to read the whole pitch first -->
 <section id="review">
   <div class="review-inner">
-    <p data-en="&lt;strong&gt;Stuck, or just want to tell us how it is going?&lt;/strong&gt; Open the chat: the assistant answers straight away from the manual, and if that is not enough your question goes to a person and stays there as a ticket. Prefer email or GitHub? &lt;a href=&quot;#support&quot;&gt;Every way to reach us&lt;/a&gt;. If you enjoy Osmium Sound you can also support the work with a voluntary donation, or follow the news on Facebook." data-it="&lt;strong&gt;Sei bloccato, o vuoi solo raccontarci come ti trovi?&lt;/strong&gt; Apri la chat: l&#x27;assistente risponde subito con quello che c&#x27;&egrave; nel manuale, e se non basta la domanda arriva a una persona e resta l&igrave; come ticket. Preferisci l&#x27;email o GitHub? &lt;a href=&quot;#support&quot;&gt;Tutti i modi per contattarci&lt;/a&gt;. Se Osmium Sound ti piace puoi anche sostenere il lavoro con una donazione volontaria, o seguire le novit&agrave; su Facebook."><strong>Stuck, or just want to tell us how it is going?</strong> Open the chat: the assistant answers straight away from the manual, and if that is not enough your question goes to a person and stays there as a ticket. Prefer email or GitHub? <a href="#support">Every way to reach us</a>. If you enjoy Osmium Sound you can also support the work with a voluntary donation, or follow the news on Facebook.</p>
+    <p data-en="&lt;strong&gt;Stuck, or just want to tell us how it is going?&lt;/strong&gt; Write to us by email or on GitHub: &lt;a href=&quot;#support&quot;&gt;every way to reach us&lt;/a&gt;. If you enjoy Osmium Sound you can also support the work with a voluntary donation, or follow the news on Facebook." data-it="&lt;strong&gt;Sei bloccato, o vuoi solo raccontarci come ti trovi?&lt;/strong&gt; Scrivici per email o su GitHub: &lt;a href=&quot;#support&quot;&gt;tutti i modi per contattarci&lt;/a&gt;. Se Osmium Sound ti piace puoi anche sostenere il lavoro con una donazione volontaria, o seguire le novit&agrave; su Facebook."><strong>Stuck, or just want to tell us how it is going?</strong> Write to us by email or on GitHub: <a href="#support">every way to reach us</a>. If you enjoy Osmium Sound you can also support the work with a voluntary donation, or follow the news on Facebook.</p>
     <div class="review-actions">
-      <button type="button" class="btn-primary review-btn" data-chat>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C6.98 3 3 6.36 3 10.5c0 2.3 1.23 4.35 3.17 5.72-.14 1.22-.6 2.4-1.37 3.36-.2.25-.03.62.29.6 1.9-.12 3.6-.79 4.94-1.8.94.21 1.94.32 2.97.32 5.02 0 9-3.36 9-7.5S17.02 3 12 3z"/></svg>
-        <span data-en="Open the chat" data-it="Apri la chat">Open the chat</span>
-      </button>
       <a class="btn-secondary kofi-btn" href="/kofi?from=reviews" target="_blank" rel="noopener">
         <img src="kofi.png" alt="Ko-fi" width="24" height="19">
         <span data-en="Support us on Ko-fi" data-it="Sostienici su Ko-fi">Support us on Ko-fi</span>
@@ -892,7 +880,6 @@
         <span data-en="Follow us on Facebook" data-it="Seguici su Facebook">Follow us on Facebook</span>
       </a>
     </div>
-    <p class="chat-note" data-en="The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then this page stores nothing. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;" data-it="La chat &egrave; di Featurebase e si carica solo quando la apri: da quel momento tiene qualche voce nel tuo browser per ricordare la conversazione. Fino ad allora questa pagina non salva nulla. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;">The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then this page stores nothing. <a href="privacy">Privacy</a></p>
     <div class="supporters" id="supporters" hidden>
       <p class="supporters-title" data-en="Thank you to everyone supporting Osmium Sound" data-it="Grazie a chi sostiene Osmium Sound">Thank you to everyone supporting Osmium Sound</p>
       <div class="supporters-viewport">
@@ -1352,19 +1339,9 @@
 <section id="support">
   <div class="support-grid">
     <div class="manual-card">
-      <div class="manual-icon">💬</div>
-      <h2 data-en="Ask the assistant, or open a ticket" data-it="Chiedi all&#x27;assistente, o apri un ticket">Ask the assistant, or open a ticket</h2>
-      <p data-en="The same window does two things. &lt;strong&gt;Ask the assistant&lt;/strong&gt; and it answers straight away, from the manual and the guides. If that is not enough, &lt;strong&gt;open a ticket&lt;/strong&gt;: the conversation goes to a person, who replies when they are at the desk — Osmium Sound is made by one person in spare time — and it stays there, so you can pick it up later." data-it="La stessa finestra fa due cose. &lt;strong&gt;Chiedi all&#x27;assistente&lt;/strong&gt; e ti risponde subito, con quello che c&#x27;&egrave; nel manuale e nelle guide. Se non basta, &lt;strong&gt;apri un ticket&lt;/strong&gt;: la conversazione arriva a una persona, che risponde quando &egrave; alla scrivania — Osmium Sound &egrave; fatto da una persona sola nel tempo libero — e resta l&igrave;, cos&igrave; puoi riprenderla pi&ugrave; tardi.">The same window does two things. <strong>Ask the assistant</strong> and it answers straight away, from the manual and the guides. If that is not enough, <strong>open a ticket</strong>: the conversation goes to a person, who replies when they are at the desk — Osmium Sound is made by one person in spare time — and it stays there, so you can pick it up later.</p>
-      <button type="button" class="btn-primary" data-chat>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C6.98 3 3 6.36 3 10.5c0 2.3 1.23 4.35 3.17 5.72-.14 1.22-.6 2.4-1.37 3.36-.2.25-.03.62.29.6 1.9-.12 3.6-.79 4.94-1.8.94.21 1.94.32 2.97.32 5.02 0 9-3.36 9-7.5S17.02 3 12 3z"/></svg>
-        <span data-en="Open the chat" data-it="Apri la chat">Open the chat</span>
-      </button>
-      <p class="alt-contact" data-en="The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then nothing is stored. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;" data-it="La chat &egrave; di Featurebase e si carica solo quando la apri: da quel momento tiene qualche voce nel tuo browser per ricordare la conversazione. Fino ad allora non viene salvato nulla. &lt;a href=&quot;privacy&quot;&gt;Privacy&lt;/a&gt;">The chat is by Featurebase and loads only when you open it: from that moment it keeps a few entries in your browser to remember the conversation. Until then nothing is stored. <a href="privacy">Privacy</a></p>
-    </div>
-    <div class="manual-card">
       <div class="manual-icon">✉️</div>
       <h2 data-en="Need help? Email support" data-it="Serve aiuto? Scrivi al supporto">Need help? Email support</h2>
-      <p data-en="Write to &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; and a ticket is opened automatically — the same ticket the chat opens — so your message can be followed and picked up again later. Say what happened, what you expected, and the details that save a round of questions: the version and update channel, whether the device runs with a screen, headless or server-only, and the exact message you saw." data-it="Scrivi a &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt; e viene aperto automaticamente un ticket — lo stesso che apre la chat — così il tuo messaggio si può seguire e riprendere più tardi. Racconta cosa è successo, cosa ti aspettavi e i dettagli che fanno risparmiare un giro di domande: versione e canale di aggiornamento, se l'apparecchio è con schermo, headless o solo server, e il messaggio esatto che hai visto.">Write to <strong>support@osmiumsound.it</strong> and a ticket is opened automatically — the same ticket the chat opens — so your message can be followed and picked up again later. Say what happened, what you expected, and the details that save a round of questions: the version and update channel, whether the device runs with a screen, headless or server-only, and the exact message you saw.</p>
+      <p data-en="Write to &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt;. Say what happened, what you expected, and the details that save a round of questions: the version and update channel, whether the device runs with a screen, headless or server-only, and the exact message you saw." data-it="Scrivi a &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt;. Racconta cosa è successo, cosa ti aspettavi e i dettagli che fanno risparmiare un giro di domande: versione e canale di aggiornamento, se l'apparecchio è con schermo, headless o solo server, e il messaggio esatto che hai visto.">Write to <strong>support@osmiumsound.it</strong>. Say what happened, what you expected, and the details that save a round of questions: the version and update channel, whether the device runs with a screen, headless or server-only, and the exact message you saw.</p>
       <a class="btn-primary" href="mailto:support@osmiumsound.it">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" fill="none"/><path d="M22 6 12 13 2 6"/><path d="M2 6h20v12H2z"/></svg>
         <span data-en="Email support@osmiumsound.it" data-it="Scrivi a support@osmiumsound.it">Email support@osmiumsound.it</span>
@@ -1460,10 +1437,6 @@
 
   let lang = 'en';
   let current = 0;
-  // The support chat, once somebody has asked for it. Declared up here
-  // because applyLang() runs before the chat block and follows the
-  // language switch into the chat window.
-  let chatModule = null;
 
   function applyLang(l) {
     lang = (l === 'it') ? 'it' : 'en';
@@ -1476,8 +1449,6 @@
       b.classList.toggle('active', b.dataset.lang === lang);
     });
     try { localStorage.setItem('lang', lang); } catch (e) {}
-    // If the chat is already open, it changes language with the page.
-    if (chatModule) chatModule.then(fb => fb.setLanguage(lang)).catch(() => {});
     // Refresh the caption shown in the carousel for the new language
     if (typeof current === 'number') {
       const cap = document.getElementById('caption');
@@ -1600,37 +1571,6 @@
       videoFacade.replaceWith(iframe);
     });
   }
-
-  // ── Support chat (Featurebase) ───────────────────────────────
-  // Loaded on the first click and not before, the same rule the video
-  // facade follows: somebody who never asks for the chat downloads none
-  // of it and gets nothing written into their browser. Afterwards the
-  // module is kept, so later clicks only reopen the window.
-  function openChat() {
-    if (!chatModule) {
-      chatModule = import('/featurebase.js').then(fb => {
-        fb.default({
-          appId: '6ab2a5f859cd20cc3e6a646a',
-          theme: 'dark',
-          language: lang,
-          hideDefaultLauncher: true,   // opened from our own buttons only
-        });
-        return fb;
-      });
-    }
-    chatModule
-      .then(fb => fb.whenReady(() => fb.show()))
-      .catch(() => {
-        // The chat could not load. The email address is on the page
-        // anyway, so send them to it rather than to a dead button.
-        chatModule = null;
-        location.hash = '#support';
-      });
-  }
-
-  document.querySelectorAll('[data-chat]').forEach(el => {
-    el.addEventListener('click', openChat);
-  });
 
   let autoTimer;
 
