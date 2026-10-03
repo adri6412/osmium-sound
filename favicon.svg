@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#0c0c0c"/>
-  <!-- the seven bars of the Osmium Sound mark, as measured on the logo -->
-  <g fill="#d4af37" transform="translate(9 21) scale(0.275)">
-    <rect x="0" width="6" height="81"/><rect x="46" width="6" height="81"/><rect x="82" width="6" height="81"/>
-    <rect x="109" width="6" height="81"/><rect x="130" width="6" height="81"/><rect x="147" width="6" height="81"/><rect x="161" width="6" height="81"/>
-  </g>
-</svg>
