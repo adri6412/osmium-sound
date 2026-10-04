@@ -481,11 +481,9 @@ jobs:
           echo "channel=$CH" >> "$GITHUB_OUTPUT"
 
       # Commits the manifest to the gh-pages branch — despite the action's
-      # name this is just a git push, not a GitHub Pages deploy. Cloudflare
-      # Pages (osmium-sound.pages.dev) watches this same branch and
-      # redeploys on its own from here; see OTA_MANIFEST_BASE in
-      # api_server.py for why GitHub Pages itself is no longer in the loop
-      # (its custom-domain cert got permanently stuck).
+      # name this is just a git push, not a GitHub Pages deploy. The deploy-site
+      # job at the end puts it on Cloudflare Pages (osmium-sound.pages.dev,
+      # OTA_MANIFEST_BASE in api_server.py).
       # Il manifest è ciò che l'apparecchio legge davvero, quindi non deve
       # nominare una release che ancora non esiste: per i tag che avranno
       # un'immagine lo pubblica il lavoro finale, insieme alla release. Qui
@@ -498,7 +496,7 @@ jobs:
           publish_dir: ./manifest-out
           publish_branch: gh-pages
           destination_dir: ota
-          keep_files: true          # don't wipe the website already on gh-pages
+          keep_files: true          # don't wipe fdroid/ and the other channels
 
       - name: Upload artifact (manual runs)
         if: github.ref_type != 'tag'
@@ -744,6 +742,26 @@ jobs:
           keep_files: true
           enable_jekyll: false
           commit_message: "ota: manifest ${{ github.ref_name }} (+ immagine RAUC)"
+
+  # The manifest is on gh-pages now, but devices read it from Cloudflare Pages
+  # (OTA_MANIFEST_BASE), which only changes when deploy-pages.yml runs.
+  # 🚨 deploy-pages.yml also listens to workflow_run of this workflow, and that
+  # never fires here: GitHub emits no workflow_run for a run on a tag ref, and
+  # every release is one. v2.5.26-dev.1-alpha4 reached gh-pages and R2 and
+  # stayed invisible to the devices until a hand-run deploy. So this run asks
+  # for the deploy itself; GITHUB_TOKEN may start a workflow_dispatch.
+  deploy-site:
+    runs-on: ubuntu-latest
+    needs: publish-image
+    if: ${{ always() && needs.publish-image.result == 'success' }}
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Put the new manifest on Cloudflare Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-pages.yml --ref main -R "${{ github.repository }}"
 
   # 🚨 A release has to serve BOTH worlds, always. We cannot know when a given
   # owner will update, or whether they will have migrated by then: a device

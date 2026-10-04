@@ -1,34 +1,104 @@
-name: Deploy website to GitHub Pages
+name: Deploy website to Cloudflare Pages
 
+# Every deployment is built from scratch, so a file taken out of website/
+# disappears from the site too. What the site serves:
+#   - website/ from main (functions/ becomes the Pages Functions);
+#   - ota/ and fdroid/ from the gh-pages branch, where build-ui-ota.yml and
+#     build-companion-apk.yml keep writing them. gh-pages is only their
+#     store now: Cloudflare no longer builds from it.
+# 🚨 Devices read their update manifest from
+# osmium-sound.pages.dev/ota/latest-<channel>.json (api_server.py,
+# OTA_MANIFEST_BASE), so the ota/ files must be in every deployment.
 on:
   push:
     branches: [main]
     paths:
       - 'website/**'
+  # After a release or a companion build has written ota/ or fdroid/ to
+  # gh-pages. 🚨 Kept as a fallback only: GitHub emits no workflow_run for a
+  # run on a tag ref, and those builds run on tags. build-ui-ota.yml and
+  # build-companion-apk.yml start this workflow themselves (deploy-site job).
+  workflow_run:
+    workflows:
+      - Build HiFi Player OTA bundles (UI + system)
+      - Build Osmium Sound Companion APK
+    types: [completed]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+# One deployment at a time, and never drop one: the last to finish wins, and
+# it must be the one carrying the newest manifest.
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
-      # Just a git push to the gh-pages branch, despite the action's name —
-      # Cloudflare Pages (osmium-sound.pages.dev) watches this branch and
-      # redeploys on its own from here. GitHub Pages itself is no longer in
-      # the loop: its custom-domain cert (osmiumsound.qd.je) got permanently
-      # stuck, see api_server.py's OTA_MANIFEST_BASE for the same story on
-      # the OTA-manifest side.
-      - name: Push website to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./website
-          publish_branch: gh-pages
-          # keep_files (not force_orphan) so deploying the website preserves the
-          # OTA manifest the release workflow publishes under ota/ on this same
-          # branch. force_orphan would wipe it on every website change.
-          keep_files: true
+          ref: main
+          path: main
+
+      - uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: gh-pages
+          sparse-checkout: |
+            ota
+            fdroid
+          sparse-checkout-cone-mode: true
+
+      - name: Assemble the site
+        run: |
+          set -euo pipefail
+          mkdir site
+          # functions/ is code for Pages Functions, not a page to serve
+          rsync -a --exclude functions/ main/website/ site/
+          for d in ota fdroid; do
+            if [ -e "site/$d" ]; then
+              echo "::error::website/$d would hide the $d/ published on gh-pages"
+              exit 1
+            fi
+            cp -a "gh-pages/$d" "site/$d"
+          done
+          ls site/ota/latest-prod.json site/fdroid/repo/index-v2.json
+          echo "files: $(find site -type f | wc -l)"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      # Run from website/ so wrangler finds functions/ there; the project's
+      # D1 binding, secrets and custom domains stay as set in Cloudflare.
+      - name: Deploy
+        working-directory: main/website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: cef19f52032bee523a44c51d3e9d5777
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse HEAD)
+          npx --yes wrangler@4 pages deploy ../../site \
+            --project-name osmium-sound --branch main \
+            --commit-hash "$SHA" --commit-message "$(git log -1 --format=%s)" --commit-dirty=true
+
+      # The fleet's update check reads these: make sure the deployment serves
+      # exactly what gh-pages holds.
+      - name: Check the update manifests
+        run: |
+          set -euo pipefail
+          for f in gh-pages/ota/latest-*.json; do
+            name=$(basename "$f")
+            for i in 1 2 3 4 5 6; do
+              if curl -fsS "https://osmium-sound.pages.dev/ota/$name?v=$GITHUB_RUN_ID" | cmp -s - "$f"; then
+                echo "$name ok"; continue 2
+              fi
+              sleep 10
+            done
+            echo "::error::osmium-sound.pages.dev/ota/$name differs from gh-pages"
+            exit 1
+          done

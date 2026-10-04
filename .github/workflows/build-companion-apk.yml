@@ -306,8 +306,8 @@ jobs:
           publish_dir: ./fdroid/repo
           destination_dir: fdroid/repo
           publish_branch: gh-pages
-          # keep_files so this doesn't wipe website/ or ota/ published on the
-          # same branch (see deploy-pages.yml).
+          # keep_files so this doesn't wipe ota/ published on the same branch;
+          # the deploy-site job takes it to Cloudflare Pages.
           keep_files: true
           cname: osmiumsound.qd.je
 
@@ -431,3 +431,23 @@ jobs:
       - name: Deploy to GitHub Pages
         id: pages-deployment
         uses: actions/deploy-pages@v5
+
+  # fdroid/ is on gh-pages now, but the site serving it (osmium-sound.pages.dev)
+  # only changes when deploy-pages.yml runs.
+  # 🚨 deploy-pages.yml also listens to workflow_run of this workflow, and that
+  # never fires here: GitHub emits no workflow_run for a run on a tag ref, and
+  # this workflow runs on companion-v* tags (see build-ui-ota.yml's deploy-site,
+  # same story for v2.5.26-dev.1-alpha4). GITHUB_TOKEN may start a
+  # workflow_dispatch. Only one of the two F-Droid jobs runs for a given tag.
+  deploy-site:
+    runs-on: ubuntu-latest
+    needs: [fdroid-repo, fdroid-dev-repo]
+    if: ${{ always() && (needs.fdroid-repo.result == 'success' || needs.fdroid-dev-repo.result == 'success') }}
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Put the new F-Droid repo on Cloudflare Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-pages.yml --ref main -R "${{ github.repository }}"
