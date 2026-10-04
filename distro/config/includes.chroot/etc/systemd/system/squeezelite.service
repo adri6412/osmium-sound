@@ -29,6 +29,14 @@ ExecStart=/usr/bin/squeezelite $ARGS
 Restart=always
 RestartSec=5
 
+# 🚨 A squeezelite stuck on its output (the DAC or the USB stopped answering)
+# ignores SIGTERM: its handler only asks the main loop to stop, and the main
+# loop is waiting on the output thread. With the default 90 s a reboot from
+# the screen sat on "Stopping squeezelite" until the owner pulled the plug
+# (field bundle 2026-10-03). SIGKILL after 10 s ends a user-space hang; one
+# blocked inside the driver is at least bounded instead of open-ended.
+TimeoutStopSec=10
+
 # Highest scheduling priority on the box: squeezelite feeds the DAC directly,
 # so an underrun is audible in a way a dropped UI frame never is. CPU niceness
 # (not realtime/RR) to avoid starving other processes if it ever spins; realtime

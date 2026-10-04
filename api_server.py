@@ -2899,18 +2899,105 @@ def _support_journal_dump(unit, since='7 days ago'):
         return f'(journalctl fallito: {e})\n'
 
 
+# One access-log line of the Flask servers: `127.0.0.1 - - [date] "GET /x HTTP/1.1" 200 -`
+_SUPPORT_ACCESS_LINE_RE = re.compile(r'"(?:GET|POST|PUT|DELETE|HEAD|OPTIONS) \S+ HTTP/[\d.]+" \d{3} ')
+
+
 def _support_previous_boot_tail():
     """The last lines of the boot before this one, every unit together.
 
     A bundle is usually taken right after the owner pulled the plug on a box
     that froze, and the per-unit dumps above are dominated by the few minutes
-    of the new boot. What happened just before the freeze is here."""
+    of the new boot. What happened just before the freeze is here.
+
+    🚨 Without the access log of the Flask servers: the kiosk polls them
+    several times a second, and a field bundle had 600 lines that were all
+    `GET /update/status` — the five minutes before the reboot, nothing of the
+    squeezelite stop that never finished. sources.log already has the polls."""
     try:
-        r = subprocess.run(['journalctl', '-b', '-1', '-n', '600', '-o', 'short-iso', '--no-pager'],
+        r = subprocess.run(['journalctl', '-b', '-1', '-n', '6000', '-o', 'short-iso', '--no-pager'],
+                           capture_output=True, text=True, timeout=15)
+        if not r.stdout:
+            return f'(no previous boot in the journal) {(r.stderr or "").strip()[:200]}\n'
+        lines = [ln for ln in r.stdout.splitlines() if not _SUPPORT_ACCESS_LINE_RE.search(ln)]
+        return '\n'.join(lines[-600:]) + '\n'
+    except Exception as e:
+        return f'(journalctl failed: {e})\n'
+
+
+def _support_previous_boot_kernel():
+    """The kernel's messages from the boot before this one.
+
+    dmesg_tail.txt is this boot only, and the boot a bundle is about is the
+    one the owner had to cut the power on: a USB DAC or disk that stopped
+    answering (xhci resets, URB errors, hung tasks) is only seen here."""
+    try:
+        r = subprocess.run(['journalctl', '-k', '-b', '-1', '-n', '1500', '-o', 'short-iso', '--no-pager'],
                            capture_output=True, text=True, timeout=15)
         return r.stdout or f'(no previous boot in the journal) {(r.stderr or "").strip()[:200]}\n'
     except Exception as e:
         return f'(journalctl failed: {e})\n'
+
+
+def _support_audio_snapshot():
+    """squeezelite and the sound cards, right now.
+
+    A player that stops mid-song while the box stays alive, drops off Lyrion
+    and then will not stop at a reboot is squeezelite blocked on its output:
+    each thread's state and kernel stack say whether it is waiting in the
+    driver (D, the DAC or the USB stopped answering) or on one of its own
+    locks, and the PCM status says what the DAC was doing. Only useful in a
+    bundle taken while it is stuck, which is what the owner is asked for."""
+    out = []
+    try:
+        r = subprocess.run(['systemctl', 'show', '-p', 'MainPID,ActiveState,SubState,NRestarts',
+                            'squeezelite.service'], capture_output=True, text=True, timeout=10)
+        out += ['== squeezelite.service ==', (r.stdout or '').strip(), '']
+        pid = dict(ln.split('=', 1) for ln in (r.stdout or '').splitlines() if '=' in ln).get('MainPID', '0')
+    except Exception as e:
+        out += [f'(systemctl show failed: {e})', '']
+        pid = '0'
+    try:
+        with open('/etc/default/squeezelite') as f:
+            out += ['== ARGS ==', ''.join(ln for ln in f if ln.startswith('ARGS=')).strip(), '']
+    except OSError as e:
+        out += [f'(/etc/default/squeezelite: {e})', '']
+    if pid.isdigit() and pid != '0':
+        out.append('== threads (state, wchan, kernel stack) ==')
+        try:
+            tids = sorted(os.listdir(f'/proc/{pid}/task'), key=int)
+        except OSError as e:
+            tids = []
+            out.append(f'({e})')
+        for tid in tids:
+            base = f'/proc/{pid}/task/{tid}'
+            parts = []
+            for name in ('comm', 'wchan'):
+                try:
+                    with open(f'{base}/{name}') as f:
+                        parts.append(f.read().strip())
+                except OSError:
+                    parts.append('?')
+            try:
+                with open(f'{base}/stat') as f:
+                    parts.insert(1, f.read().rsplit(')', 1)[1].split()[0])
+            except (OSError, IndexError):
+                parts.insert(1, '?')
+            out.append(f'{tid} {parts[0]} state={parts[1]} wchan={parts[2]}')
+            try:
+                with open(f'{base}/stack') as f:
+                    out += ['    ' + ln for ln in f.read().splitlines()[:12]]
+            except OSError:
+                pass
+        out.append('')
+    for path in ['/proc/asound/cards'] + sorted(glob.glob('/proc/asound/card*/pcm*p/sub0/status')) \
+            + sorted(glob.glob('/proc/asound/card*/pcm*p/sub0/hw_params')):
+        try:
+            with open(path) as f:
+                out += [f'== {path} ==', f.read().rstrip(), '']
+        except OSError:
+            continue
+    return '\n'.join(out) + '\n'
 
 
 SUPPORT_LYRION_LOG_DIR = '/var/log/squeezeboxserver'
@@ -3066,7 +3153,12 @@ def _support_bundle_build():
         for unit in SUPPORT_JOURNAL_UNITS:
             z.writestr(f'journal/{unit}.log', _support_journal_dump(unit))
         z.writestr('journal/previous-boot-tail.log', _support_previous_boot_tail())
+        z.writestr('journal/previous-boot-kernel.log', _support_previous_boot_kernel())
         z.writestr('memory.txt', _support_memory_snapshot())
+        try:
+            z.writestr('audio.txt', _support_audio_snapshot())
+        except Exception as e:
+            z.writestr('audio.txt', f'(audio snapshot failed: {e})\n')
         try:
             z.writestr('touch.json', json.dumps(_support_touch_snapshot(), indent=2))
         except Exception as e:

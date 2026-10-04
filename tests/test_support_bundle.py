@@ -161,5 +161,41 @@ class LyrionLogTests(unittest.TestCase):
         self.assertLess(len(data), 200)
 
 
+class PreviousBootTests(unittest.TestCase):
+    """A field bundle's previous-boot tail was 600 lines of kiosk polls, and the
+    kernel side of that boot was not in the zip at all."""
+
+    def run_with(self, stdout):
+        import subprocess
+        saved = a.subprocess.run
+        calls = []
+
+        def fake(cmd, **kw):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr='')
+        a.subprocess.run = fake
+        try:
+            return a._support_previous_boot_tail(), a._support_previous_boot_kernel(), calls
+        finally:
+            a.subprocess.run = saved
+
+    def test_the_access_log_is_left_out(self):
+        poll = ('2026-10-03T18:52:50+02:00 box python3[721]: 127.0.0.1 - - '
+                '[03/Oct/2026 18:52:50] "GET /update/status HTTP/1.1" 200 -')
+        stop = '2026-10-03T18:52:51+02:00 box systemd[1]: Stopping squeezelite.service...'
+        tail, _, _ = self.run_with('\n'.join([poll] * 3000 + [stop, poll]))
+        self.assertNotIn('/update/status', tail)
+        self.assertIn('Stopping squeezelite', tail)
+
+    def test_the_kernel_of_the_previous_boot_is_asked_for(self):
+        _, _, calls = self.run_with('x\n')
+        self.assertTrue(any('-k' in c and '-1' in c for c in calls))
+
+    def test_both_are_in_the_bundle(self):
+        names = zipfile.ZipFile(io.BytesIO(a._support_bundle_build())).namelist()
+        self.assertIn('journal/previous-boot-kernel.log', names)
+        self.assertIn('audio.txt', names)
+
+
 if __name__ == '__main__':
     unittest.main()
