@@ -25,7 +25,11 @@ Item {
     // centre. Touches follow by themselves (Qt Quick maps every event through
     // the rotation); whatever measures on screen must measure against the
     // canvas, not the window (Nav.qml).
-    readonly property int turn: Sys.rotation
+    // ...less what the hardware already turns since this boot: upside down
+    // the kernel turns the display plane itself (and udev the touch screen),
+    // so the canvas only turns by what is left — nothing, or the difference
+    // after a change made since the boot (Sys.hwRotation).
+    readonly property int turn: (Sys.rotation - Sys.hwRotation + 360) % 360
     readonly property bool sideways: turn === 90 || turn === 270
     readonly property real fw: sideways ? height : width
     readonly property real fh: sideways ? width : height

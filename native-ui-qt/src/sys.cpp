@@ -64,6 +64,13 @@ Sys::Sys(const QString &assets, QObject *parent) : QObject(parent), m_assets(ass
     if (m_configDir.isEmpty()) m_configDir = "/etc/hifi-player";
     m_dev = qEnvironmentVariableIsSet("HIFI_DEV");
     m_pointer = conf("pointer-enabled", "1").trimmed() != "0";
+    {
+        // HIFI_CMDLINE: the rig's stand-in for /proc/cmdline
+        QFile cl(qEnvironmentVariable("HIFI_CMDLINE", QStringLiteral("/proc/cmdline")));
+        if (cl.open(QIODevice::ReadOnly | QIODevice::Text)
+            && QString::fromUtf8(cl.readAll()).split(QRegularExpression("\\s+")).contains(QStringLiteral("hifi.rotate=180")))
+            m_hwRotation = 180;
+    }
     readRotation();
     // The directory AND the file. api_server replaces the file (write to a
     // temporary, rename): only the directory sees that, and a watch on the

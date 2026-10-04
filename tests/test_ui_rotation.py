@@ -95,12 +95,15 @@ class ImageTests(RotationTestCase):
         self.assertEqual(self.boot_value(),
                          'video=DP-1:panel_orientation=right_side_up '
                          'video=HDMI-A-1:panel_orientation=right_side_up '
-                         'video=eDP-1:panel_orientation=right_side_up')
+                         'video=eDP-1:panel_orientation=right_side_up '
+                         'hifi.rotate=90')
         self.assertNotIn('Writeback', self.boot_value())
 
     def test_the_other_turns(self):
         a.set_ui_rotation(180)
         self.assertIn('panel_orientation=upside_down', self.boot_value())
+        # what the udev rule turns the touch screen on, and the kiosk reads
+        self.assertTrue(self.boot_value().endswith(' hifi.rotate=180'))
         a.set_ui_rotation(270)
         self.assertIn('panel_orientation=left_side_up', self.boot_value())
 
@@ -183,6 +186,7 @@ class LegacyTests(RotationTestCase):
         line = self.cmdline()
         self.assertFalse(any('right_side_up' in t for t in line))
         self.assertEqual(len([t for t in line if 'panel_orientation' in t]), 3)
+        self.assertEqual([t for t in line if t.startswith('hifi.rotate=')], ['hifi.rotate=270'])
         a.set_ui_rotation(0)
         self.assertEqual(self.cmdline(), ['quiet', 'splash', 'loglevel=0'])
 

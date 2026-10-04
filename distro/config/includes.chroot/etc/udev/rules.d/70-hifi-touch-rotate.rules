@@ -1,0 +1,20 @@
+# Osmium Sound — turn the touch screen with a screen mounted upside down.
+#
+# Settings → Display → Rotation "upside down" puts hifi.rotate=180 on the
+# kernel command line (api_server.py, set_ui_rotation) together with
+# video=<connector>:panel_orientation=upside_down. With that the kernel turns
+# the display plane by 180° in hardware, under the kiosk, which then draws
+# unturned: the picture is right, but the touches would land on the mirrored
+# point, since nothing above the kernel knows. The kiosk reads its touches
+# through libinput (Qt eglfs), and libinput applies this matrix to them.
+#
+# Only 180: for 90° and 270° the kernel does not turn the plane (software
+# only, for its console), the kiosk turns its own canvas and the touches
+# follow it there. After 60-input-id.rules, which sets ID_INPUT_TOUCHSCREEN.
+ACTION=="remove", GOTO="hifi_touch_rotate_end"
+SUBSYSTEM!="input", GOTO="hifi_touch_rotate_end"
+KERNEL!="event*", GOTO="hifi_touch_rotate_end"
+ENV{ID_INPUT_TOUCHSCREEN}!="1", GOTO="hifi_touch_rotate_end"
+IMPORT{cmdline}="hifi.rotate"
+ENV{hifi.rotate}=="180", ENV{LIBINPUT_CALIBRATION_MATRIX}="-1 0 1 0 -1 1"
+LABEL="hifi_touch_rotate_end"

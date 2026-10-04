@@ -44,12 +44,19 @@ class Sys : public QObject {
     // Qt Quick scene by itself, so Main.qml turns the canvas. The file is
     // watched: a change made from the web admin turns the screen right away.
     Q_PROPERTY(int rotation READ rotation WRITE setRotation NOTIFY rotationChanged)
+    // How much the hardware already turns the picture since this boot:
+    // `hifi.rotate=180` on the kernel command line means the kernel turned
+    // the display plane upside down and udev turned the touch screen with it
+    // (api_server.py, 70-hifi-touch-rotate.rules). Main.qml turns only the
+    // rest. 90/270 are never turned in hardware: 0 for those.
+    Q_PROPERTY(int hwRotation READ hwRotation CONSTANT)
 public:
     explicit Sys(const QString &assets, QObject *parent = nullptr);
     void setWindow(QQuickWindow *w) { m_win = w; }
     bool pointerEnabled() const { return m_pointer; }
     void setPointerEnabled(bool on);
     int rotation() const { return m_rotation; }
+    int hwRotation() const { return m_hwRotation; }
     // only the picture: saving the choice is api_server's job (/ui_rotation),
     // which also turns the boot splash
     void setRotation(int deg);
@@ -110,7 +117,7 @@ private:
     QString m_iconDir, m_iconCacheDir;
     QHash<QString, QString> m_tinted;   // chiave nome|colore -> URL del file
     bool m_pointer = true, m_dev = false, m_startExpanded = false;
-    int m_rotation = 0, m_savedRotation = -1;
+    int m_rotation = 0, m_savedRotation = -1, m_hwRotation = 0;
     QFileSystemWatcher m_confWatch;
     void readRotation();
     QString m_forcedWizard;

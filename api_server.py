@@ -3789,17 +3789,23 @@ def set_ui_resolution(mode):
 #  Screen rotation (Settings → Display): degrees clockwise the picture is
 #  turned, for a screen mounted sideways or upside down.
 #
-#  Two readers, two mechanisms:
-#   • the Qt kiosk watches /etc/hifi-player/ui-rotation and turns its canvas
-#     at once (native-ui-qt Main.qml) — eglfs draws straight on the panel and
-#     has no way to turn a Qt Quick scene, and Intel's display planes only
-#     turn a plain buffer by 180°, never 90°;
-#   • the boot splash: Plymouth turns its picture after the DRM "panel
-#     orientation" of the connector, which the kernel takes from
-#     `video=<connector>:panel_orientation=...` on its command line. Right
+#  The kernel command line carries it for the next boot:
+#   • `video=<connector>:panel_orientation=...` for the boot splash: Plymouth
+#     turns its picture after the connector's DRM "panel orientation". Right
 #     side up → Plymouth turns clockwise, left side up → counter-clockwise
 #     (plymouth src/plugins/renderers/drm/plugin.c), so 90° clockwise here is
-#     right_side_up. It applies from the next boot.
+#     right_side_up.
+#   • 🚨 Upside down the kernel goes further: its console client turns the
+#     primary plane by 180° IN HARDWARE (drm_client_rotation: 0 and 180 only,
+#     90/270 stay in software), and the turn outlives the console — the kiosk
+#     draws on a plane that is already turned. That is the turn used for 180:
+#     the kiosk does not turn its canvas on top of it (that came out upright
+#     after a reboot, with touches on the mirrored point), and the touch
+#     screen is turned to match by libinput, from a udev rule
+#     (70-hifi-touch-rotate.rules) keyed on `hifi.rotate=<deg>`, written here
+#     too. The kiosk reads the same token from /proc/cmdline to know what the
+#     hardware already does, and turns its canvas (Main.qml) by the rest: all
+#     of 90/270, and any change made since the boot, live.
 #
 #  On an A/B image the slot's grub.cfg is static, inside the read-only image:
 #  it reads `hifi_cmdline` from a GRUB environment file of its own on the ESP
@@ -3814,7 +3820,7 @@ def set_ui_resolution(mode):
 UI_ROTATION_FILE = '/etc/hifi-player/ui-rotation'
 UI_ROTATIONS = (0, 90, 180, 270)
 _PANEL_ORIENTATION = {90: 'right_side_up', 180: 'upside_down', 270: 'left_side_up'}
-_ROTATION_TOKEN_RE = re.compile(r'^video=[^:=\s]+:panel_orientation=')
+_ROTATION_TOKEN_RE = re.compile(r'^(video=[^:=\s]+:panel_orientation=|hifi\.rotate=)')
 DRM_SYSFS_DIR = '/sys/class/drm'
 BOOT_CMDLINE_ENV = '/boot/efi/EFI/debian/hifi-cmdline.env'
 
@@ -3842,7 +3848,10 @@ def _drm_connectors():
 
 def _rotation_boot_tokens(deg):
     orient = _PANEL_ORIENTATION.get(deg)
-    return [f'video={c}:panel_orientation={orient}' for c in _drm_connectors()] if orient else []
+    if not orient:
+        return []
+    video = [f'video={c}:panel_orientation={orient}' for c in _drm_connectors()]
+    return video + [f'hifi.rotate={deg}'] if video else []
 
 def _boot_rotation_env_value():
     """What the A/B boot reads now, or None when there is no file."""
