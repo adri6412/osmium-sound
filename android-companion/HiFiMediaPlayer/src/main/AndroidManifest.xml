@@ -247,7 +247,7 @@
 
         <activity
             android:name=".download.CancelDownloadsActivity"
-            android:theme="@android:style/Theme.Dialog"/>
+            android:theme="@style/Theme.Material3.Dark.Dialog"/>
 
         <receiver android:exported="true"
             android:name=".download.DownloadStatusReceiver">
