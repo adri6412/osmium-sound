@@ -94,7 +94,9 @@ log "removing user settings"
 # devices that still have one from an older release.
 # NOT in this list on purpose: ui-engine and kiosk-session say which interface
 # stack this machine runs, not what the owner likes, and resetting them can
-# leave a box with a black screen.
+# leave a box with a black screen. Nor ui-rotation: it says how the screen is
+# mounted, which a reset does not change, and the setup wizard that follows
+# would come up sideways (the boot splash keeps its turn too, from the ESP).
 for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bluetooth.json \
          samba-cred.json provisioning-state.json webui.db webui-secret.key \
          github-support-pat lyrion-channel lms-skin \

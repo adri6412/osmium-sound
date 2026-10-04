@@ -916,7 +916,7 @@ Item {
                         onLetter: (l) => { var r = Library.letterFirst(l); if (r >= 0) list.scrollToRow(r) }
                         // the letter's first entry sits at the top of the list: the
                         // row (or card) closest to its top-left corner
-                        onNavLeave: { var p = list.mapToItem(null, 60, 30); Nav.focusIn(list, Qt.rect(p.x, p.y, 0, 0)) }
+                        onNavLeave: { var p = Nav.onCanvas(list, 60, 30, 0, 0); Nav.focusIn(list, Qt.rect(p.x, p.y, 0, 0)) }
                     }
                 }
             }

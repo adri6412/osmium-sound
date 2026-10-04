@@ -977,6 +977,20 @@ async function setUiRes(m) {
   else say(bodyMsg(r, t('settings.display.resolutionFailed')), true);
 }
 
+// ── Screen rotation ───────────────────────────────────────────────
+// Degrees clockwise (0/90/180/270). The device's screen turns at once (the
+// kiosk watches the setting); the boot splash turns from the next restart,
+// through the kernel command line. No trial countdown here, unlike on the
+// device: this page is not the screen being turned.
+const uiRotation = ref(0);
+async function loadUiRotation() { const r = await api.sys('ui_rotation'); if (r.ok) uiRotation.value = Number(r.data.rotation) || 0; }
+async function setUiRotation(deg) {
+  if (deg === uiRotation.value) return;
+  const r = await api.sysPost('ui_rotation', { rotation: deg });
+  if (r.ok && r.data.success !== false) { uiRotation.value = Number(r.data.rotation); say(bodyMsg(r, t('settings.display.rotationChanged'))); }
+  else say(bodyMsg(r, t('settings.display.rotationFailed')), true);
+}
+
 // ── Panel refresh rate ─────────────────────────────────────────────
 // Native <-> low-power CRTC refresh — orthogonal to uiRes above (that shrinks
 // the framebuffer area; this only changes how many times per second it's
@@ -1732,7 +1746,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadNpAnimation(); loadAnimStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
+  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadUiRotation(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadNpAnimation(); loadAnimStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -2564,6 +2578,17 @@ onUnmounted(() => {
           <span class="seg" v-else>
             <button :class="{ active: uiRefresh === 'native' }" @click="setUiRefresh('native')">{{ t('settings.display.refresh.native') }}</button>
             <button :class="{ active: uiRefresh === 'low' }" @click="setUiRefresh('low')">{{ t('settings.display.refresh.low') }}</button>
+          </span>
+        </div>
+
+        <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.display.rotationLabel') }}</p>
+          <p class="muted">{{ t('settings.display.rotationHelp') }}</p>
+          <span class="seg">
+            <button v-for="deg in [0, 90, 180, 270]" :key="deg"
+                    :class="{ active: uiRotation === deg }" @click="setUiRotation(deg)">
+              {{ t('settings.display.rotation.' + deg) }}
+            </button>
           </span>
         </div>
 

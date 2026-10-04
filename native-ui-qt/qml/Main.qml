@@ -18,13 +18,24 @@ Item {
     // tall and wider on a 16:9 panel (1067 x 600), 1024 wide and taller on a
     // 16:10 one (1024 x 640). Outside that range (ultrawide, 4:3) it stops at
     // the nearest end and the rest is black bars, as before.
-    readonly property real aspect: height > 0 ? width / height : 1024 / 600
+    // Settings -> Display -> Rotation (Sys.rotation, degrees clockwise). eglfs
+    // draws straight on the panel and has no way to turn a Qt Quick scene, so
+    // the canvas is turned here: it sits in a frame the size of the screen,
+    // with width and height swapped for a quarter turn, rotated about its
+    // centre. Touches follow by themselves (Qt Quick maps every event through
+    // the rotation); whatever measures on screen must measure against the
+    // canvas, not the window (Nav.qml).
+    readonly property int turn: Sys.rotation
+    readonly property bool sideways: turn === 90 || turn === 270
+    readonly property real fw: sideways ? height : width
+    readonly property real fh: sideways ? width : height
+    readonly property real aspect: fh > 0 ? fw / fh : 1024 / 600
     readonly property real fitAspect: Math.max(1.5, Math.min(16 / 9, aspect))
     Binding { target: Theme; property: "canvasW"; value: root.fitAspect >= 1024 / 600 ? Math.round(600 * root.fitAspect) : 1024 }
     Binding { target: Theme; property: "canvasH"; value: root.fitAspect >= 1024 / 600 ? 600 : Math.round(1024 / root.fitAspect) }
-    readonly property real s: Math.round(Math.min(width / Theme.canvasW, height / Theme.canvasH) * Theme.canvasW) / Theme.canvasW
-    readonly property real ox: Math.floor((width - Theme.canvasW * s) / 2)
-    readonly property real oy: Math.floor((height - Theme.canvasH * s) / 2)
+    readonly property real s: Math.round(Math.min(fw / Theme.canvasW, fh / Theme.canvasH) * Theme.canvasW) / Theme.canvasW
+    readonly property real ox: Math.floor((fw - Theme.canvasW * s) / 2)
+    readonly property real oy: Math.floor((fh - Theme.canvasH * s) / 2)
     property alias app: canvas
 
     // La scala vera dello schermo, a disposizione di chiunque disegni su una
@@ -46,12 +57,18 @@ Item {
     // dello schermo intero buttato via a ogni fotogramma — a 4K sono 8 milioni
     // di pixel per 20-30 volte al secondo.
 
-    App {
-        id: canvas
-        x: root.ox; y: root.oy
-        width: Theme.canvasW; height: Theme.canvasH
-        scale: root.s
-        transformOrigin: Item.TopLeft
-        devicePixelScale: root.s
+    Item {
+        id: frame
+        width: root.fw; height: root.fh
+        anchors.centerIn: parent
+        rotation: root.turn
+        App {
+            id: canvas
+            x: root.ox; y: root.oy
+            width: Theme.canvasW; height: Theme.canvasH
+            scale: root.s
+            transformOrigin: Item.TopLeft
+            devicePixelScale: root.s
+        }
     }
 }

@@ -143,12 +143,14 @@ Rectangle {
                 preventStealing: false
                 onPressed: (m) => {
                     x0 = m.x; y0 = m.y; horiz = false; decided = false
-                    // scene coordinates: row-relative ones move together with the
-                    // row while reordering and skewed the travel
-                    if (m.x < 31) { preventStealing = true; dragRow.start(row.index, mapToItem(null, m.x, m.y).y); m.accepted = true }
+                    // drawer coordinates: row-relative ones move together with the
+                    // row while reordering and skewed the travel; scene ones are
+                    // turned with the screen (Settings -> Display -> Rotation)
+                    // and scaled, while the rows are 58 canvas units tall
+                    if (m.x < 31) { preventStealing = true; dragRow.start(row.index, mapToItem(root, m.x, m.y).y); m.accepted = true }
                 }
                 onPositionChanged: (m) => {
-                    if (dragRow.active) { dragRow.update(mapToItem(null, m.x, m.y).y); return }
+                    if (dragRow.active) { dragRow.update(mapToItem(root, m.x, m.y).y); return }
                     var dx = m.x - x0, dy = m.y - y0
                     if (!decided && (Math.abs(dx) >= 10 || Math.abs(dy) >= 10)) {
                         decided = true; horiz = Math.abs(dx) > Math.abs(dy)

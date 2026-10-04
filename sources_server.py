@@ -3606,6 +3606,19 @@ def _restore_apply_side_effects(restored):
                     print(f"[sources] restore side-effect (timezone) rejected: {body}")
         except Exception as e:
             print(f"[sources] restore side-effect (timezone) failed: {e}")
+    if "/etc/hifi-player/ui-rotation" in restored:
+        # The kiosk turns its picture by itself when the file changes, but the
+        # boot splash reads the rotation from the kernel command line, which
+        # only api_server's /ui_rotation writes.
+        try:
+            with open("/etc/hifi-player/ui-rotation") as f:
+                deg = int(f.read().strip() or 0)
+            body, status = _proxy_to_api_server(
+                "/ui_rotation", method="POST", body={"rotation": deg}, timeout=90)
+            if not (status == 200 and body.get("success")):
+                print(f"[sources] restore side-effect (rotation) rejected: {body}")
+        except Exception as e:
+            print(f"[sources] restore side-effect (rotation) failed: {e}")
     if any(p in restored for p in ("/etc/default/squeezelite", "/var/lib/hifi-player/dsp-target")):
         # /etc/default/squeezelite is rendered from /etc/hifi-player/
         # squeezelite.json at every start of the service. A backup from

@@ -183,6 +183,9 @@ CATEGORIES = {
             ("file", "/etc/hifi-player/ota-channel"),
             ("file", "/etc/hifi-player/display-mode"),
             ("file", "/etc/hifi-player/ui-resolution"),
+            # Settings -> Display -> Rotation. A restore also turns the boot
+            # splash again (sources_server._restore_apply_side_effects).
+            ("file", "/etc/hifi-player/ui-rotation"),
             ("file", "/etc/hifi-player/lyrion-channel"),
             ("file", "/etc/hifi-player/lms-skin"),
             # The standard Debian file, not a custom /etc/hifi-player/ one —

@@ -942,6 +942,16 @@
         "native": "Nativa",
         "low": "Basso consumo"
       },
+      "rotationLabel": "Rotazione dello schermo",
+      "rotationHelp": "Gira l'immagine sullo schermo dell'apparecchio quando è montato di lato o capovolto. Lo schermo si gira subito; la schermata di avvio dal prossimo riavvio.",
+      "rotation": {
+        "0": "Normale",
+        "90": "90° orario",
+        "180": "Capovolto",
+        "270": "90° antiorario"
+      },
+      "rotationChanged": "Rotazione dello schermo cambiata",
+      "rotationFailed": "Impossibile cambiare la rotazione dello schermo",
       "confirmRefresh": "Lo schermo del dispositivo passerà a una frequenza di aggiornamento più bassa. Continuare?",
       "refreshChanged": "Frequenza di aggiornamento cambiata",
       "refreshChangeFailed": "Cambio frequenza di aggiornamento fallito",

@@ -3786,6 +3786,144 @@ def set_ui_resolution(mode):
             'message': _t('uiResolution.updated', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
+#  Screen rotation (Settings → Display): degrees clockwise the picture is
+#  turned, for a screen mounted sideways or upside down.
+#
+#  Two readers, two mechanisms:
+#   • the Qt kiosk watches /etc/hifi-player/ui-rotation and turns its canvas
+#     at once (native-ui-qt Main.qml) — eglfs draws straight on the panel and
+#     has no way to turn a Qt Quick scene, and Intel's display planes only
+#     turn a plain buffer by 180°, never 90°;
+#   • the boot splash: Plymouth turns its picture after the DRM "panel
+#     orientation" of the connector, which the kernel takes from
+#     `video=<connector>:panel_orientation=...` on its command line. Right
+#     side up → Plymouth turns clockwise, left side up → counter-clockwise
+#     (plymouth src/plugins/renderers/drm/plugin.c), so 90° clockwise here is
+#     right_side_up. It applies from the next boot.
+#
+#  On an A/B image the slot's grub.cfg is static, inside the read-only image:
+#  it reads `hifi_cmdline` from a GRUB environment file of its own on the ESP
+#  (slot-grub.cfg.tmpl), written here with grub-editenv — never the grubenv
+#  that holds the A/B boot state, and never the bootloader itself. On a
+#  legacy root the tokens go into GRUB_CMDLINE_LINUX_DEFAULT + update-grub,
+#  the same path as the debug flags.
+#
+#  Absent file = 0. Kept by a factory reset on purpose (the screen is still
+#  mounted the same way; hifi-factory-reset.sh).
+# ──────────────────────────────────────────────────────────────────
+UI_ROTATION_FILE = '/etc/hifi-player/ui-rotation'
+UI_ROTATIONS = (0, 90, 180, 270)
+_PANEL_ORIENTATION = {90: 'right_side_up', 180: 'upside_down', 270: 'left_side_up'}
+_ROTATION_TOKEN_RE = re.compile(r'^video=[^:=\s]+:panel_orientation=')
+DRM_SYSFS_DIR = '/sys/class/drm'
+BOOT_CMDLINE_ENV = '/boot/efi/EFI/debian/hifi-cmdline.env'
+
+def get_ui_rotation():
+    """Return { rotation }: 0, 90, 180 or 270; 0 when the file is absent or
+    holds anything else."""
+    deg = 0
+    try:
+        with open(UI_ROTATION_FILE) as f:
+            deg = int(f.read().strip() or 0)
+    except Exception:
+        pass
+    return {'rotation': deg if deg in UI_ROTATIONS else 0}
+
+def _drm_connectors():
+    """Connector names as the kernel's video= option knows them (eDP-1,
+    HDMI-A-1, DP-2 ...) — every one, plugged or not, so a screen moved to
+    another port still gets its splash turned."""
+    names = []
+    for path in sorted(glob.glob(os.path.join(DRM_SYSFS_DIR, 'card*-*'))):
+        name = os.path.basename(path).split('-', 1)[1]
+        if name and not name.startswith('Writeback') and name not in names:
+            names.append(name)
+    return names
+
+def _rotation_boot_tokens(deg):
+    orient = _PANEL_ORIENTATION.get(deg)
+    return [f'video={c}:panel_orientation={orient}' for c in _drm_connectors()] if orient else []
+
+def _boot_rotation_env_value():
+    """What the A/B boot reads now, or None when there is no file."""
+    if not os.path.exists(BOOT_CMDLINE_ENV):
+        return None
+    r = _run(['grub-editenv', BOOT_CMDLINE_ENV, 'list'])
+    for line in (r.stdout or '').splitlines():
+        if line.startswith('hifi_cmdline='):
+            return line.split('=', 1)[1]
+    return ''
+
+def _apply_rotation_to_boot(deg):
+    """Put the rotation on the kernel command line for the boot splash.
+    True when the next boot will have it."""
+    tokens = _rotation_boot_tokens(deg)
+    if deg and not tokens:
+        return False                       # no display connector at all
+    if _image_mode():
+        if not os.path.isdir(os.path.dirname(BOOT_CMDLINE_ENV)):
+            return False                   # ESP not mounted
+        want = ' '.join(tokens)
+        cur = _boot_rotation_env_value()
+        if cur == want or (cur is None and not want):
+            return True
+        if cur is None and _run(['grub-editenv', BOOT_CMDLINE_ENV, 'create']).returncode != 0:
+            return False
+        cmd = ['set', f'hifi_cmdline={want}'] if want else ['unset', 'hifi_cmdline']
+        ok = _run(['grub-editenv', BOOT_CMDLINE_ENV] + cmd).returncode == 0
+        _run(['sync'])
+        return ok
+    if _is_live_boot():
+        return False                       # nothing on a live session survives the boot
+    before = _grub_cmdline_default().split()
+    after = [t for t in before if not _ROTATION_TOKEN_RE.match(t)] + tokens
+    return after == before or _set_grub_cmdline_default(after)
+
+def set_ui_rotation(deg):
+    """Save the rotation: the kiosk turns as soon as the file changes, the
+    boot splash from the next start."""
+    try:
+        deg = int(deg)
+    except (TypeError, ValueError):
+        deg = -1
+    if deg not in UI_ROTATIONS:
+        return {'success': False, 'rotation': get_ui_rotation()['rotation'],
+                'code': 'uiRotation.invalid', 'message': _t('uiRotation.invalid', _lang())}
+    if _update_in_progress():
+        return {'success': False, 'rotation': get_ui_rotation()['rotation'],
+                'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
+    try:
+        os.makedirs(os.path.dirname(UI_ROTATION_FILE), exist_ok=True)
+        tmp = UI_ROTATION_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(f'{deg}\n')
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, UI_ROTATION_FILE)
+    except Exception:
+        log.exception("set_ui_rotation: persist failed")
+        return {'success': False, 'rotation': get_ui_rotation()['rotation'],
+                'code': 'uiRotation.saveFailed', 'message': _t('uiRotation.saveFailed', _lang())}
+    try:
+        splash = _apply_rotation_to_boot(deg)
+    except Exception:
+        log.exception("set_ui_rotation: boot command line not updated")
+        splash = False
+    code = 'uiRotation.saved' if splash else 'uiRotation.savedScreenOnly'
+    return {'success': True, 'rotation': deg, 'splash': splash, 'code': code,
+            'message': _t(code, _lang())}
+
+def _reconcile_rotation_boot():
+    """At start: a rotation chosen before the device moved to the A/B layout
+    lived in /etc/default/grub, which an image boot never reads. Write it
+    where the image looks, once; a no-op when it is already there."""
+    try:
+        deg = get_ui_rotation()['rotation']
+        if deg and _image_mode():
+            _apply_rotation_to_boot(deg)
+    except Exception:
+        log.exception("rotation: boot command line reconcile failed")
+
+# ──────────────────────────────────────────────────────────────────
 #  Panel refresh rate. Both X's own scale-blit (when ui-resolution is active)
 #  and Chromium's on-screen compositor are vblank-paced, so their GPU cost
 #  scales with refresh: halving it roughly halves both — measured on Gemini
@@ -9680,6 +9818,15 @@ def api_set_player_enabled():
     data = request.get_json(silent=True) or {}
     return jsonify(set_player_enabled(bool(data.get('enabled'))))
 
+@app.route('/ui_rotation', methods=['GET'])
+def api_ui_rotation():
+    return jsonify(get_ui_rotation())
+
+@app.route('/ui_rotation', methods=['POST'])
+def api_set_ui_rotation():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_rotation(data.get('rotation')))
+
 @app.route('/ui_resolution', methods=['GET'])
 def api_ui_resolution():
     return jsonify(get_ui_resolution())
@@ -10120,6 +10267,7 @@ if __name__ == '__main__':
     # 15s OTA fetch) doesn't block the kiosk UI's other requests behind it.
     _startup_network_recovery()
     threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
+    threading.Thread(target=_reconcile_rotation_boot, daemon=True, name='rotation-boot').start()
     threading.Thread(target=_vu_store_background, daemon=True, name='vu-store').start()
     threading.Thread(target=_anim_store_background, daemon=True, name='anim-store').start()
     threading.Thread(target=_bt_autopair_background, daemon=True, name='bt-autopair').start()

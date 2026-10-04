@@ -226,6 +226,15 @@ MESSAGES = {
     'displayMode.headlessEnabled': {'en': 'Headless mode enabled — the screen will turn off',
                                     'it': 'Modalità headless attivata — lo schermo verrà spento'},
 
+    # ── Screen rotation ─────────────────────────────────────────────
+    'uiRotation.invalid': {'en': 'Invalid rotation', 'it': 'Rotazione non valida'},
+    'uiRotation.saveFailed': {'en': 'Could not save the screen rotation',
+                              'it': 'Impossibile salvare la rotazione dello schermo'},
+    'uiRotation.saved': {'en': 'Rotation saved — the startup screen turns too from the next restart',
+                         'it': 'Rotazione salvata — dal prossimo riavvio si gira anche la schermata di avvio'},
+    'uiRotation.savedScreenOnly': {'en': 'Rotation saved for the screen; the startup screen could not be turned',
+                                   'it': 'Rotazione salvata per lo schermo; non è stato possibile girare la schermata di avvio'},
+
     # ── Interfaccia su schermo: quale delle due (Electron / Qt) ─────
     'uiEngine.invalid': {'en': 'Invalid interface', 'it': 'Interfaccia non valida'},
     'uiEngine.notInstalled': {'en': 'That interface is not installed on this device',

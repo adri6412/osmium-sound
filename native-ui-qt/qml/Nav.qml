@@ -199,13 +199,28 @@ QtObject {
     // andava nel pannello accanto invece di scorrere di una riga. Chi sta
     // appena fuori viene scelto e poi ensureVisible lo porta dentro, che e'
     // esattamente come si scorre una lista col telecomando.
+    // 🚨 Measured on the canvas, not the window: with the screen turned
+    // (Settings -> Display -> Rotation) window coordinates are turned too, and
+    // "up" on the remote would have gone left. In canvas units times the
+    // canvas scale, so every distance here (slack, the 6 px floor) means what
+    // it meant on an unturned screen.
+    function onCanvas(it, x, y, w, h) {
+        if (!root) return it.mapToItem(null, x, y, w, h)
+        var r = it.mapToItem(root, x, y, w, h), k = root.scale
+        return Qt.rect(r.x * k, r.y * k, r.width * k, r.height * k)
+    }
+    // ...and back to the window, where Sys.tapAt presses
+    function toWindow(x, y) {
+        if (!root) return Qt.point(x, y)
+        return root.mapToItem(null, x / root.scale, y / root.scale)
+    }
     function rectOf(it, slack) {
         if (!it || !it.visible || it.width <= 1 || it.height <= 1) return null
         var s = slack || 0
-        var r = it.mapToItem(null, 0, 0, it.width, it.height)
+        var r = onCanvas(it, 0, 0, it.width, it.height)
         for (var p = it.parent; p; p = p.parent) {
             if (p.clip !== true) continue
-            var pr = p.mapToItem(null, 0, 0, p.width, p.height)
+            var pr = onCanvas(p, 0, 0, p.width, p.height)
             if (r.x + r.width < pr.x - s || r.x > pr.x + pr.width + s ||
                 r.y + r.height < pr.y - s || r.y > pr.y + pr.height + s) return null
             if (s > 0) continue                       // si tiene il rettangolo intero
@@ -544,7 +559,8 @@ QtObject {
         var r = rectOf(item)
         // nothing under the spotlight any more: OK lights, it presses nothing
         if (!r) { active = true; relight(); return false }
-        Sys.tapAt(r.x + r.width / 2, r.y + r.height / 2, hold ? 620 : 0)
+        var w = toWindow(r.x + r.width / 2, r.y + r.height / 2)
+        Sys.tapAt(w.x, w.y, hold ? 620 : 0)
         // Quello che si e' appena premuto cambia spesso la schermata (una
         // tessera apre una lista, una riga apre una pagina). Se il riquadro
         // sparisce, il riflettore non resta appeso al vuoto: va su quello che

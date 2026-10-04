@@ -26,6 +26,10 @@ Item {
     property string nameEdit: ""; property string hostEdit: ""
     property string pendAct: ""; property string pendArg: ""
     property int countdown: 0
+    // Display -> Rotation: a new rotation turns the screen at once and is only
+    // saved (with the boot splash) once kept; left alone it goes back to the
+    // previous one, like the refresh rate
+    property int rotCountdown: 0; property int rotPrev: 0
     property int alarmH: 7; property int alarmM: 0
     // 🚨 persistente come in Electron (li' e' in localStorage): lo legge anche
     // la barra dei tab per decidere se controllare gli aggiornamenti
@@ -1828,6 +1832,19 @@ Item {
         var st = info(Tr.t(headless ? "settings.displayMode.currentHeadless" : "settings.displayMode.currentGui"), ""); st.icon = headless ? "monitor-off" : "monitor"; st.style = "row"
         if (pendAct === "display_switch") confirmRow(Tr.t("settings.displayMode.headlessWarning"), Tr.t("settings.displayMode.confirmHeadless"), "display_confirm")
         else { var b = action(Tr.t(headless ? "settings.displayMode.switchToGui" : "settings.displayMode.switchToHeadless"), "display_switch", "dark"); b.icon = headless ? "monitor" : "monitor-off" }
+        if (!headless) {
+            sep()
+            label("settings.rotation.label"); help("settings.rotation.help")
+            if (rotCountdown > 0) {
+                var rc = confirmRow(Tr.tf("settings.rotation.confirmPrompt", "seconds", String(rotCountdown)), Tr.t("settings.rotation.keep"), "rot_keep")
+                rc.arg = Tr.t("settings.rotation.revertNow"); rc.act2 = "rot_revert"
+            }
+            var DEG = [0, 90, 180, 270]
+            for (var k = 0; k < DEG.length; k++) {
+                var ro = option(Tr.t("settings.rotation.option." + DEG[k]), "", String(DEG[k]), Sys.rotation === DEG[k], "rot")
+                ro.style = "border"; ro.hh = 50
+            }
+        }
         sep()
         label("settings.playerEnabled.label"); help("settings.playerEnabled.help")
         var ps = info(Tr.t(cfg.playerEnabled ? "settings.playerEnabled.currentOn" : "settings.playerEnabled.currentOff"), ""); ps.style = "row"; ps.icon = "speaker"
@@ -2097,6 +2114,24 @@ Item {
             if (cfg.uiResolution === arg) return
             pendAct = "uires"; pendArg = arg; break
         case "uires_confirm": post(A("/ui_resolution"), { mode: pendArg }); cfg.uiResolution = pendArg; pendAct = ""; break
+        case "rot": {
+            var deg = Number(arg)
+            if (deg === Sys.rotation) return
+            if (rotCountdown <= 0) rotPrev = Sys.rotation
+            Sys.rotation = deg
+            rotCountdown = 15
+            break
+        }
+        case "rot_keep":
+            rotCountdown = 0
+            // a device without A/B regenerates its GRUB menu to turn the
+            // splash (update-grub), which can take a while
+            Api.post(A("/ui_rotation"), { rotation: Sys.rotation }, function(ok, d) {
+                var good = ok && d && d.success !== false
+                root.say(good ? (d.message || Tr.t("settings.rotation.saved")) : Tr.t("settings.rotation.saveFailed"), !good)
+            }, 70000)
+            break
+        case "rot_revert": rotCountdown = 0; Sys.rotation = rotPrev; break
         case "confirm_cancel": pendAct = ""; break
         case "refresh_switch": {
             var low = cfg.uiRefresh === "low"
@@ -2562,6 +2597,20 @@ Item {
         onTriggered: {
             root.countdown--
             if (root.countdown <= 0) { root.post(cfg.api("/ui_refresh"), { mode: "native" }); cfg.uiRefresh = "native"; root.say(Tr.t("settings.uiRefresh.reverted")) }
+            else root.rebuild()
+        }
+    }
+    // a rotation saved from elsewhere (the web admin) while one is on trial
+    // here: the saved one wins, and the trial must not turn the screen back
+    Connections {
+        target: Sys
+        function onSavedRotationChanged() { if (root.rotCountdown > 0) { root.rotCountdown = 0; root.rebuild() } else if (root.active >= 0) root.rebuild() }
+    }
+    Timer {
+        interval: 1000; repeat: true; running: root.rotCountdown > 0
+        onTriggered: {
+            root.rotCountdown--
+            if (root.rotCountdown <= 0) { Sys.rotation = root.rotPrev; root.say(Tr.t("settings.rotation.reverted")) }
             else root.rebuild()
         }
     }

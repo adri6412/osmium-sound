@@ -24,6 +24,17 @@ set slotarg=
 if [ -n "$rauc_slot" ]; then
     set slotarg="rauc.slot=$rauc_slot"
 fi
-linux /boot/vmlinuz-@KVER@ $rootarg ro rootfstype=squashfs $slotarg panic=10 @CMDLINE@
+# Settings written from the running system (api_server.py, today the screen
+# rotation for the boot splash: video=<connector>:panel_orientation=...). They
+# live in a GRUB environment file of their own on the ESP (partition 2 on
+# every A/B disk, hifi-ab-lib.sh), NOT in the grubenv that holds the A/B
+# state. Missing or unreadable file = nothing added, the boot is as before.
+set hifi_cmdline=
+set hifi_disk=
+regexp --set=1:hifi_disk '^\(?(hd[0-9]+),' "$root"
+if [ -n "$hifi_disk" -a -e ($hifi_disk,gpt2)/EFI/debian/hifi-cmdline.env ]; then
+    load_env --file=($hifi_disk,gpt2)/EFI/debian/hifi-cmdline.env hifi_cmdline
+fi
+linux /boot/vmlinuz-@KVER@ $rootarg ro rootfstype=squashfs $slotarg panic=10 @CMDLINE@ $hifi_cmdline
 initrd /boot/initrd.img-@KVER@
 boot

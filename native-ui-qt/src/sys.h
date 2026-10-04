@@ -39,11 +39,20 @@ class Sys : public QObject {
     Q_PROPERTY(bool wizardDry READ wizardDry CONSTANT)
     Q_PROPERTY(bool startExpanded READ startExpanded CONSTANT)
     Q_PROPERTY(qint64 lastInput READ lastInput NOTIFY lastInputChanged)
+    // Settings -> Display -> Rotation: degrees clockwise the picture is turned
+    // (0, 90, 180, 270), from /etc/hifi-player/ui-rotation. eglfs cannot turn a
+    // Qt Quick scene by itself, so Main.qml turns the canvas. The file is
+    // watched: a change made from the web admin turns the screen right away.
+    Q_PROPERTY(int rotation READ rotation WRITE setRotation NOTIFY rotationChanged)
 public:
     explicit Sys(const QString &assets, QObject *parent = nullptr);
     void setWindow(QQuickWindow *w) { m_win = w; }
     bool pointerEnabled() const { return m_pointer; }
     void setPointerEnabled(bool on);
+    int rotation() const { return m_rotation; }
+    // only the picture: saving the choice is api_server's job (/ui_rotation),
+    // which also turns the boot splash
+    void setRotation(int deg);
     QString assets() const { return m_assets; }
     QString vuStore() const { return qEnvironmentVariable("HIFI_VU_STORE_DIR", QStringLiteral("/var/lib/hifi-player/vu-skins")); }
     QString animStore() const { return qEnvironmentVariable("HIFI_ANIM_STORE_DIR", QStringLiteral("/var/lib/hifi-player/anim-scenes")); }
@@ -91,12 +100,19 @@ signals:
     void pointerTouched();
     void pointerEnabledChanged();
     void lastInputChanged();
+    void rotationChanged();
+    // the SAVED rotation changed (the file, e.g. from the web admin): a trial
+    // under way on the screen gives way to it
+    void savedRotationChanged();
 
 private:
     QString m_assets, m_configDir;
     QString m_iconDir, m_iconCacheDir;
     QHash<QString, QString> m_tinted;   // chiave nome|colore -> URL del file
     bool m_pointer = true, m_dev = false, m_startExpanded = false;
+    int m_rotation = 0, m_savedRotation = -1;
+    QFileSystemWatcher m_confWatch;
+    void readRotation();
     QString m_forcedWizard;
     bool m_wizardDry = false;
     QQuickWindow *m_win = nullptr;

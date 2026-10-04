@@ -138,6 +138,10 @@ static void onTerm(int) { QCoreApplication::exit(0); }
 
 static QPointF canvasToWin(double x, double y) {
     QQuickItem *root = g_view->rootObject();
+    // through the canvas item itself, so a turned screen (Sys.rotation) is
+    // taken into account along with the scale and the bars
+    if (QQuickItem *canvas = qvariant_cast<QQuickItem *>(root->property("app")))
+        return canvas->mapToScene(QPointF(x, y));
     double s = root->property("s").toDouble();
     double ox = root->property("ox").toDouble(), oy = root->property("oy").toDouble();
     return QPointF(ox + x * s, oy + y * s);

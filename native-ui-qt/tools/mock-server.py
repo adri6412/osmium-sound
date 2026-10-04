@@ -14,7 +14,7 @@ STATE = {
     "prefs": {"replayGainMode": "0", "transitionType": "0", "transitionDuration": "0", "digitalVolumeControl": "1"},
     "vu": os.environ.get("MOCK_VU", "1") != "0", "vu_style": os.environ.get("MOCK_VU_STYLE", "classic"),
     "np_animation": os.environ.get("MOCK_NP_ANIMATION", "none"), "autoexpand": 0, "ota": {"state": "idle"}, "lang": "it",
-    "display_mode": "gui", "ui_resolution": "auto", "ui_refresh": "native", "pointer": True, "ssh": False, "player_enabled": True,
+    "display_mode": "gui", "ui_resolution": "auto", "ui_rotation": 0, "ui_refresh": "native", "pointer": True, "ssh": False, "player_enabled": True,
     "lms_mode": "local", "lms_host": "", "tz": "Europe/Rome", "device_name": "Osmium", "ota_channel": "dev", "lyrion_channel": "release",
     "audio": "hw:CARD=DAC,DEV=0", "shell_user": "", "pldir": "/srv/music/playlist", "skin": "osmium", "fmt": {"state": "idle"},
     "install": {"state": "idle"}, "cd": {"no_disc": True}, "cdrip": {"state": "idle"},
@@ -432,7 +432,7 @@ class H(BaseHTTPRequestHandler):
                                                                   {"id": "panoramic", "name": {"en": "Panoramic", "it": "Panoramico"}}]},
                 "/update/status": STATE["ota"], "/boot_mode": {"mode": "live"}, "/provision_status": {"pending": False, "completed": True, "networks": [{"ssid": "CasaWiFi", "security": "WPA2", "signal": 78, "band": "2.4"}, {"ssid": "CasaWiFi", "security": "WPA2", "signal": 64, "band": "5"}, {"ssid": "Ospiti", "security": "", "signal": 40, "band": "2.4"}]},
                 "/player_name": {"name": "Osmium"}, "/ui_language": {"lang": STATE["lang"]},
-                "/display_mode": {"mode": STATE["display_mode"]}, "/ui_resolution": {"mode": STATE["ui_resolution"]}, "/ui_refresh": {"supported": True, "mode": STATE["ui_refresh"]},
+                "/display_mode": {"mode": STATE["display_mode"]}, "/ui_resolution": {"mode": STATE["ui_resolution"]}, "/ui_rotation": {"rotation": STATE["ui_rotation"]}, "/ui_refresh": {"supported": True, "mode": STATE["ui_refresh"]},
                 # follows MOCK_NET_TYPE like /connectivity: wireless shows the Wi-Fi rows of Settings (forget the network)
                 "/wifi_saved": {"networks": [{"ssid": s, "in_use": s == "CasaWiFi" and STATE["net_type"] == "wireless"} for s in STATE.setdefault("wifi_saved", ["CasaWiFi", "Ufficio"])]},
                 "/network_status": {"connected": STATE["net_type"] != "none", "type": STATE["net_type"],
@@ -581,6 +581,9 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/ui_language": STATE["lang"] = data.get("lang", "en")
             if u.path == "/display_mode": STATE["display_mode"] = data.get("mode", "gui")
             if u.path == "/ui_resolution": STATE["ui_resolution"] = data.get("mode", "auto")
+            # the real one also writes /etc/hifi-player/ui-rotation, which the
+            # kiosk watches; in the rig write $HIFI_CONFIG_DIR/ui-rotation by hand
+            if u.path == "/ui_rotation": STATE["ui_rotation"] = int(data.get("rotation", 0))
             if u.path == "/ui_refresh": STATE["ui_refresh"] = data.get("mode", "native")
             if u.path == "/pointer_set": STATE["pointer"] = bool(data.get("enable", True))
             if u.path == "/ssh_set": STATE["ssh"] = bool(data.get("enable", False))

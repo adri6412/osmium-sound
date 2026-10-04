@@ -952,6 +952,22 @@
       "cancel": "Cancel",
       "failed": "Could not change the display mode."
     },
+    "rotation": {
+      "label": "Screen rotation",
+      "help": "Turns the picture when the screen is mounted sideways or upside down. The startup screen turns too, from the next restart.",
+      "option": {
+        "0": "Normal",
+        "90": "90° clockwise",
+        "180": "Upside down (180°)",
+        "270": "90° counter-clockwise"
+      },
+      "confirmPrompt": "Keep this rotation? Going back in {seconds}s.",
+      "keep": "Keep it",
+      "revertNow": "Go back",
+      "reverted": "No confirmation — rotation reverted.",
+      "saved": "Rotation saved",
+      "saveFailed": "Could not save the rotation"
+    },
     "thirdPartyNotices": {
       "intro": "Osmium Sound includes open source components, each under its own license. The full record is also kept in THIRD-PARTY-NOTICES.md in the project repository.",
       "projectNote": "The project's own code is released under the GNU AGPL-3.0-only; commercial licenses are available from info@osmiumsound.it. Source: github.com/adri6412/osmium-sound",

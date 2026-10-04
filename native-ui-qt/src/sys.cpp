@@ -64,6 +64,44 @@ Sys::Sys(const QString &assets, QObject *parent) : QObject(parent), m_assets(ass
     if (m_configDir.isEmpty()) m_configDir = "/etc/hifi-player";
     m_dev = qEnvironmentVariableIsSet("HIFI_DEV");
     m_pointer = conf("pointer-enabled", "1").trimmed() != "0";
+    readRotation();
+    // The directory AND the file. api_server replaces the file (write to a
+    // temporary, rename): only the directory sees that, and a watch on the
+    // old file goes deaf after it. Written in place (by hand, over SSH), only
+    // the file watch sees it. Anything else written there costs one short read.
+    m_confWatch.addPath(m_configDir);
+    auto rewatch = [this]() {
+        const QString f = m_configDir + "/ui-rotation";
+        if (QFileInfo::exists(f) && !m_confWatch.files().contains(f)) m_confWatch.addPath(f);
+    };
+    rewatch();
+    connect(&m_confWatch, &QFileSystemWatcher::directoryChanged, this, [this, rewatch]() { rewatch(); readRotation(); });
+    connect(&m_confWatch, &QFileSystemWatcher::fileChanged, this, [this, rewatch]() { rewatch(); readRotation(); });
+}
+
+static int normRotation(int deg) {
+    deg = ((deg % 360) + 360) % 360;
+    return (deg == 90 || deg == 180 || deg == 270) ? deg : 0;
+}
+
+// Only a change of the saved value turns the screen: the watch fires for any
+// file written in the directory, and the kiosk tries a rotation for a few
+// seconds before saving it (SettingsTab.qml) — an unrelated write must not
+// undo the one on trial.
+void Sys::readRotation() {
+    const int saved = normRotation(conf("ui-rotation", "0").trimmed().toInt());
+    if (saved == m_savedRotation) return;
+    const bool first = m_savedRotation < 0;
+    m_savedRotation = saved;
+    setRotation(saved);
+    if (!first) emit savedRotationChanged();
+}
+
+void Sys::setRotation(int deg) {
+    deg = normRotation(deg);
+    if (m_rotation == deg) return;
+    m_rotation = deg;
+    emit rotationChanged();
 }
 
 // 🚨 Non si decide piu' se "c'e' una tastiera vera": la tastiera a schermo si

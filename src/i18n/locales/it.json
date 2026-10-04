@@ -952,6 +952,22 @@
       "cancel": "Annulla",
       "failed": "Impossibile cambiare la modalità schermo."
     },
+    "rotation": {
+      "label": "Rotazione dello schermo",
+      "help": "Gira l'immagine se lo schermo è montato di lato o capovolto. Si gira anche la schermata di avvio, dal prossimo riavvio.",
+      "option": {
+        "0": "Normale",
+        "90": "90° in senso orario",
+        "180": "Capovolto (180°)",
+        "270": "90° in senso antiorario"
+      },
+      "confirmPrompt": "Tenere questa rotazione? Torna com'era tra {seconds} s.",
+      "keep": "Tieni",
+      "revertNow": "Torna indietro",
+      "reverted": "Nessuna conferma: rotazione ripristinata.",
+      "saved": "Rotazione salvata",
+      "saveFailed": "Impossibile salvare la rotazione"
+    },
     "thirdPartyNotices": {
       "intro": "Osmium Sound include componenti open source, ciascuno con la propria licenza. L'elenco completo è mantenuto anche in THIRD-PARTY-NOTICES.md nel repository del progetto.",
       "projectNote": "Il codice del progetto è rilasciato sotto GNU AGPL-3.0-only; licenze commerciali disponibili scrivendo a info@osmiumsound.it. Sorgenti: github.com/adri6412/osmium-sound",
