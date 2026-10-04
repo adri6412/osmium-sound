@@ -306,8 +306,8 @@ jobs:
           publish_dir: ./fdroid/repo
           destination_dir: fdroid/repo
           publish_branch: gh-pages
-          # keep_files so this doesn't wipe website/ or ota/ published on the
-          # same branch (see deploy-pages.yml).
+          # keep_files so this doesn't wipe ota/ published on the same branch;
+          # deploy-pages.yml takes it to Cloudflare Pages when this run ends.
           keep_files: true
           cname: osmiumsound.qd.je
 

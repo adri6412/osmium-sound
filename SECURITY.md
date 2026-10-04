@@ -6,8 +6,8 @@ Osmium Sound (formerly HiFi Media Player) ships as a full appliance image (OS, t
 
 | Version                  | Supported          |
 | ------------------------ | ------------------ |
-| 2.5.24 (latest stable)   | :white_check_mark: |
-| < 2.5.24                 | :x: (please update via OTA or the latest ISO) |
+| 2.5.25 (latest stable)   | :white_check_mark: |
+| < 2.5.25                 | :x: (please update via OTA or the latest ISO) |
 
 Pre-release builds are not covered by this policy — they exist for testing only:
 `vX.Y.Z-dev.N` (the public **dev** channel, cut from the `svil` branch) and
