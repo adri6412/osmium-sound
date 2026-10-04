@@ -16,8 +16,8 @@ on:
       - 'website/**'
   # After a release or a companion build has written ota/ or fdroid/ to
   # gh-pages. 🚨 Kept as a fallback only: GitHub emits no workflow_run for a
-  # run on a tag ref, and those builds run on tags. build-ui-ota.yml starts
-  # this workflow itself (its deploy-site job).
+  # run on a tag ref, and those builds run on tags. build-ui-ota.yml and
+  # build-companion-apk.yml start this workflow themselves (deploy-site job).
   workflow_run:
     workflows:
       - Build HiFi Player OTA bundles (UI + system)
