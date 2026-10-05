@@ -171,6 +171,20 @@ Item {
     // of the previous one. After a track change nothing moves until the new
     // track is really there (Player.elapsed is the old one's until then, and
     // would skip a second track).
+    // The CD changer's DISC -/+ (value -1/+1): the first track of the album
+    // before or after the one playing, in the queue; past the last one it
+    // goes round to the first, like a changer's discs.
+    function changeDisc(dir) {
+        Player.query(["status", "0", "999", "tags:l"], function(ok, r) {
+            var pl = ok && r ? r.playlist_loop || [] : []
+            var starts = []
+            for (var i = 0; i < pl.length; i++) if (i === 0 || pl[i].album !== pl[i - 1].album) starts.push(i)
+            if (starts.length < 2) return
+            var cur = Math.max(0, Math.min(pl.length - 1, Player.index)), k = 0
+            for (var j = 0; j < starts.length; j++) if (starts[j] <= cur) k = j
+            Player.cmd(["playlist", "index", String(starts[((k + dir) % starts.length + starts.length) % starts.length])])
+        })
+    }
     readonly property real windStep: 8
     property string windWait: ""
     property bool windToEnd: false
@@ -208,6 +222,7 @@ Item {
             else if (name === "windStop") { root.windWait = ""; root.windToEnd = false }
             else if (name === "repeat") Player.cycleRepeat()
             else if (name === "random") Player.cycleShuffle()
+            else if (name === "disc") root.changeDisc(value)
         }
     }
 }

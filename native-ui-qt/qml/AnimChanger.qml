@@ -8,8 +8,9 @@
 // left, settles on the spindle over the laser lens, the clamper comes down
 // and it turns while the music plays. The fluorescent display counts the slots going past, then
 // shows disc, track and time. The keys work: standby, play/pause, stop,
-// skip (held: search), open/close and unload (the disc goes back into the
-// file until play), random, repeat, and the level knob is the volume.
+// skip (held: search), disc -/+ (the album before or after in the queue),
+// open/close and unload (the disc goes back into the file until play),
+// random, repeat, and the level knob is the volume.
 //
 // The albums loaded from the albums view "CD changer" (ChangerView.qml) are
 // `discs`: disc 1, 2, 3... in the order they were chosen, each with its
@@ -806,6 +807,7 @@ Item {
             Qt.callLater(step)
         }
         else if (k === "random") root.action("random", true)
+        else if (k === "discm" || k === "discp") root.action("disc", k === "discp" ? 1 : -1)
         else if (k === "repeat") root.action("repeat", true)
     }
 }

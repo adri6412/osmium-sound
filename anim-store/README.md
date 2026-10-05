@@ -38,7 +38,8 @@ to the box it is given) and the still of the Settings card.
 - controls: `power`, `volume`, `volumeFixed`, and a `signal action(name,
   value)` with `play`, `pause`, `stop`, `prev`, `next`, `eject`, `volume`
   (`{level, final}`), `power`, `repeat`, `random`, `wind` (+1/-1), `windStop`,
-  `track` (a queue position, 1-based);
+  `track` (a queue position, 1-based), `disc` (+1/-1: the first track of the
+  next or previous album in the queue);
 - a display: `trackIndex`, `trackTotal`, `elapsed`, `duration` (seconds, 0
   unknown), `trackId`, `repeatMode`, `shuffleMode`;
 - the track playing, as opposed to `title` / `subtitle`, which are the album
