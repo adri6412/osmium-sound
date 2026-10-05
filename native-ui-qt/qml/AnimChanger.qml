@@ -78,15 +78,14 @@ Item {
     readonly property real loaderPhi: Math.asin((loaderX - axisX) / radius) * 180 / Math.PI
     readonly property int places: 37                         // discs drawn: those within sight
     // the drive's window (changer.py DRIVE_*)
-    readonly property var driveGlass: [366, 18, 576, 103]
-    readonly property var driveC: [470, 66]
-    readonly property real driveDisc: 150
-    readonly property real driveSquash: 0.40
+    readonly property var driveGlass: [366, 18, 576, 128]
+    readonly property var driveC: [471, 73]
+    readonly property real driveDisc: 100
 
     readonly property var keys: ({
         power: [31, 120, 81, 142],
-        random: [366, 167, 414, 188], repeat: [418, 167, 466, 188],
-        discm: [470, 167, 521, 188], discp: [525, 167, 576, 188],
+        random: [366, 180, 414, 197], repeat: [418, 180, 466, 197],
+        discm: [470, 180, 521, 197], discp: [525, 180, 576, 197],
         eject: [112, 204, 176, 238], unload: [180, 204, 244, 238],
         play: [256, 204, 322, 238], stop: [326, 204, 372, 238],
         prev: [376, 204, 422, 238], next: [426, 204, 472, 238]
@@ -329,7 +328,7 @@ Item {
         if (ch === "-") return "dash"
         return (ch === ch.toUpperCase() ? "u" : "l") + ch.toLowerCase()
     }
-    readonly property var cellX: [410, 422.2, 434.4, 461.4, 473.6, 500.6, 512.8, 532, 544.2]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 123
+    readonly property var cellX: [410, 422.2, 434.4, 461.4, 473.6, 500.6, 512.8, 532, 544.2]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 145
 
     component Pic: Image {
         smooth: true
@@ -347,6 +346,53 @@ Item {
         layer.enabled: true
         layer.smooth: true
         layer.textureSize: Qt.size(root.px(root.discD), root.px(root.discD))
+    }
+    // the CD scene's printable ring, for the disc in the drive
+    Pic {
+        id: cdMask
+        width: root.driveDisc; height: root.driveDisc
+        visible: false
+        source: root.assetsBase + "../cd/cd-mask.png"
+        layer.enabled: true
+        layer.smooth: true
+        layer.textureSize: Qt.size(root.px(root.driveDisc), root.px(root.driveDisc))
+    }
+    component CdArt: Item {
+        id: ca
+        property string url: ""
+        Image {
+            id: caPrev
+            anchors.fill: parent
+            visible: false
+            asynchronous: false
+            smooth: true
+            fillMode: Image.PreserveAspectCrop
+            sourceSize.width: root.px(root.driveDisc); sourceSize.height: root.px(root.driveDisc)
+            layer.enabled: true
+            layer.smooth: true
+        }
+        Image {
+            id: caImg
+            anchors.fill: parent
+            visible: false
+            asynchronous: true
+            smooth: true
+            fillMode: Image.PreserveAspectCrop
+            source: ca.url
+            sourceSize.width: root.px(root.driveDisc); sourceSize.height: root.px(root.driveDisc)
+            layer.enabled: true
+            layer.smooth: true
+            onStatusChanged: if (status === Image.Ready) caPrev.source = source
+        }
+        MultiEffect {
+            anchors.fill: parent
+            source: caImg.status === Image.Ready ? caImg : caPrev
+            visible: caImg.status === Image.Ready || caPrev.status === Image.Ready
+            maskEnabled: true
+            maskSource: cdMask
+            maskThresholdMin: 0.5
+            maskSpreadAtMin: 1.0
+        }
     }
     // an album's artwork printed on a disc's label, with the clear hub and rim
     // over it. 🚨 Two images (see Cover.qml): a new artwork loads hidden while
@@ -512,6 +558,10 @@ Item {
         }
 
         // ── the drive: the disc brought onto the lens, turning ─────────────
+        // Seen straight from above, the disc as the top-loading CD scene
+        // draws it (its pictures in ../cd/): in from the left, held a little
+        // above the platter (larger, its shadow off to the side), down onto
+        // the spindle over the lens, then the magnetic clamp.
         Item {
             id: drive
             x: root.driveGlass[0]; y: root.driveGlass[1]
@@ -519,46 +569,58 @@ Item {
             clip: true
             readonly property real cx: root.driveC[0] - x
             readonly property real cy: root.driveC[1] - y
-            readonly property real rx: root.driveDisc / 2
-            // in from the left a little above the platter, then down onto it
-            readonly property real dx: -(cx + rx + 6) * (1 - root.carry)
-            readonly property real dy: -9 * (1 - root.seat)
+            readonly property real r: root.driveDisc / 2
+            readonly property real dx: -(cx + r * 1.2 + 6) * (1 - root.carry)
+            readonly property real up: 1 - root.seat                 // above the platter until it sits
             readonly property bool present: root.carry > 0.001 && root.outSlot >= 0
             Pic { anchors.fill: parent; source: root.assetsBase + "drive-bg.png" }
-            // its shadow on the platter, darker as it comes down
             Pic {
-                x: drive.cx + drive.dx - drive.rx - 8; y: drive.cy - drive.rx * root.driveSquash - 6
-                width: drive.rx * 2 + 16; height: drive.rx * 2 * root.driveSquash + 16
+                width: drive.r * 2 + 16; height: width
+                x: drive.cx + drive.dx - drive.r - 8 + 5 * drive.up; y: drive.cy - drive.r - 8 + 7 * drive.up
+                scale: 1 + 0.12 * drive.up
                 visible: drive.present
-                opacity: 0.3 + 0.5 * root.seat
+                opacity: 0.35 + 0.45 * root.seat
                 source: root.assetsBase + "drive-shadow.png"
             }
             Item {
+                id: driveDisc
                 visible: drive.present
-                x: drive.cx + drive.dx - drive.rx; y: drive.cy + drive.dy - drive.rx
-                width: drive.rx * 2; height: width
-                transform: Scale { origin.x: drive.rx; origin.y: drive.rx; yScale: root.driveSquash }
+                width: drive.r * 2; height: width
+                x: drive.cx + drive.dx - drive.r; y: drive.cy - drive.r
+                scale: 1 + 0.12 * drive.up
+                // the print turns as one quad
                 Item {
                     anchors.fill: parent
                     rotation: root.spin
-                    Pic {
-                        anchors.fill: parent
-                        source: root.assetsBase + "disc-lbl-" + (((root.outSlot * 7 + 3) % 10) + 10) % 10 + ".png"
-                    }
+                    layer.enabled: drive.present
+                    layer.smooth: true
+                    layer.textureSize: Qt.size(root.px(width), root.px(height))
+                    Pic { anchors.fill: parent; source: root.assetsBase + "../cd/cd-label.png" }
                     Loader {
                         anchors.fill: parent
                         active: drive.present && root.artFor(root.outSlot) !== ""
-                        sourceComponent: DiscArt { url: root.artFor(root.outSlot) }
+                        sourceComponent: CdArt { url: root.artFor(root.outSlot) }
                     }
                 }
+                // clear hub, mirror band and rim, and the light: they need not turn
+                Pic { anchors.fill: parent; source: root.assetsBase + "../cd/cd-disc.png" }
+                Pic { anchors.fill: parent; source: root.assetsBase + "../cd/cd-sheen.png" }
             }
-            // the clamper comes down on the disc once it sits on the spindle
+            // the magnetic clamp (the CD scene's, in its proportion)
             Pic {
-                x: drive.cx - 16; y: drive.cy - 7 - 3 - 8 * (1 - root.seat)
-                width: 32; height: 16.6                       // changer.py drive_clamp
-                visible: root.seat > 0.01 && drive.present
+                width: drive.r * 0.55; height: width
+                x: drive.cx - width / 2 + 0.3; y: drive.cy - height / 2 + 0.6
+                visible: drive.present && root.seat > 0.01
+                opacity: 0.9 * root.seat
+                source: root.assetsBase + "../cd/cd-puck-shadow.png"
+            }
+            Pic {
+                width: drive.r * 0.38; height: width
+                x: drive.cx - width / 2; y: drive.cy - height / 2 - 4 * (1 - root.seat)
+                scale: 1 + 0.3 * (1 - root.seat)
+                visible: drive.present && root.seat > 0.01
                 opacity: root.seat
-                source: root.assetsBase + "drive-clamp.png"
+                source: root.assetsBase + "../cd/cd-puck.png"
             }
             Pic { anchors.fill: parent; source: root.assetsBase + "drive-glass.png" }
         }
@@ -574,30 +636,30 @@ Item {
         // ── the fluorescent display ────────────────────────────────────────
         Item {
             visible: !root.live || root.power
-            Pic { x: 366; y: 113; width: 210; height: 48; source: root.assetsBase + "vfd-panel.png" }
+            Pic { x: 366; y: 136; width: 210; height: 40; source: root.assetsBase + "vfd-panel.png" }
             Repeater {
                 model: 9
                 Pic {
                     required property int index
                     readonly property string ch: root.cells.length === 9 ? root.cells.charAt(index) : " "
-                    x: root.cellX[index] - 1; y: 122; width: 13; height: 21
+                    x: root.cellX[index] - 1; y: 144; width: 13; height: 21
                     visible: ch !== " "
                     source: ch === " " ? "" : root.assetsBase + "g-" + root.glyph(ch) + ".png"
                 }
             }
-            Pic { x: 524.9; y: 122; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
+            Pic { x: 524.9; y: 144; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
             Pic {
-                x: 409; y: 145.5; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
+                x: 409; y: 165.5; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
                 visible: root.timeShown && (root.playing || !root.live)
             }
             Pic {
-                x: 419; y: 145.5; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
+                x: 419; y: 165.5; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
                 visible: root.timeShown && root.live && !root.playing && root.elapsed > 0
             }
-            Pic { x: 453; y: 147; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
-            Pic { x: 479; y: 147; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
-            Pic { x: 479; y: 146.9; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
-            Pic { x: 497; y: 147; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
+            Pic { x: 453; y: 167; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
+            Pic { x: 479; y: 167; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
+            Pic { x: 479; y: 166.9; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
+            Pic { x: 497; y: 167; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
         }
 
         // ── the level knob: the volume ─────────────────────────────────────
