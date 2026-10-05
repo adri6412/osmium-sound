@@ -49,7 +49,7 @@ flowchart TB
 | Component | Path | Role |
 |---|---|---|
 | On-screen UI — C++ core | `native-ui-qt/src/` | `hifi-qt`, the touchscreen UI since v2.5.24: a Qt 6 Quick application that draws straight to the panel through Qt's eglfs platform on DRM/KMS — no X server, no Wayland compositor, no LightDM. `main.cpp` sets the video mode (`kmsmode.cpp`, from `/etc/hifi-player/ui-resolution`) and loads the QML; the objects it exposes are `Api` (async HTTP to the local services via `QNetworkAccessManager`, Lyrion JSON-RPC included), `Player` (Lyrion `status`/playerprefs polling and playback commands), `VuMeter` (WebSocket client of `vu_meter_daemon.py`, needle spring), `LibraryModel` (the browser lists), `I18n` and `Sys` (small files under `/etc/hifi-player`, pointer), plus the `Spring` and `QrCode` QML types. `remote.cpp` reads remote controls through evdev (an exclusive grab of real remotes only; the media keys of a keyboard or a sound card are passed on as keys, not as a remote), `btghid.cpp` is a HID-over-GATT bridge to `/dev/uhid`, in its own thread, for Bluetooth remotes whose report map the kernel rejects, and `touchwatch.cpp` watches the USB touchscreen for the freezes some panels have and writes its state to `/run/hifi-touch.json`. Only UI-local preferences (language, Now Playing view, update auto-check) are written directly; **system control goes through `api_server.py`**. Installed at `/opt/hifi-qt`, run by `hifi-qt.service`. Chosen over Electron for its footprint: on the reference mini PC, Now Playing with the VU meters at 720p measured about 3.3 W / ~175 MB RSS versus 4.9 W / ~653 MB. |
-| On-screen UI — QML | `native-ui-qt/qml/` | `Main.qml` scales the logical canvas to the real mode (600 points tall and wider on a 16:9 panel — 1067x600 — or 1024 wide and taller on a 16:10 one — 1024x640 — clamped between 3:2 and 16:9, `Theme.canvasW/H`), `App.qml` stacks the screens and shared overlays: `MainScreen.qml` (mini player + `Browser.qml` library/radio/apps, `DiscoverTab.qml`), `NowPlaying.qml` (with `VuPanel.qml`, `NpAnimation.qml` and its scenes `AnimCd.qml`/`AnimCdFront.qml`/`AnimVinyl.qml`/`AnimCassette.qml`, `NpStage.qml` for full screen, `NpChooser.qml` the look/animation chooser, `LedBar.qml`, `Lyrics.qml`), `CoverFlow.qml` (the album list's second view), `SettingsTab.qml` + `SettingsRows.qml`, `Wizard.qml` (first-boot setup and installer screens), `Dialogs.qml`, `VirtualKeyboard.qml`, `OtaOverlay.qml`, `CdRip.qml`, `FolderChooser.qml`, `Screensaver.qml`, `BrandMark.qml` (the Osmium Sound mark, drawn in DejaVu Sans rather than shown as a picture), `Tutorial.qml` (the guided tour, once after setup; `/data/hifi-tutorial-shown`), `Nav.qml`/`NavRing.qml`/`NavScope.qml` (the remote's spatial navigation: a gold ring, OK taps its centre through `Sys.tapAt`), `RemotePairWizard.qml`, `RemoteIntro.qml`, `RemoteTour.qml`, … Strings come from the same `src/i18n/locales/{en,it}.json` (copied to `/opt/hifi-qt/locales`), English default; the third-party notices from `third_party.json`, generated from `src/data/thirdPartyNotices.js`. |
+| On-screen UI — QML | `native-ui-qt/qml/` | `Main.qml` scales the logical canvas to the real mode (600 points tall and wider on a 16:9 panel — 1067x600 — or 1024 wide and taller on a 16:10 one — 1024x640 — clamped between 3:2 and 16:9, `Theme.canvasW/H`), `App.qml` stacks the screens and shared overlays: `MainScreen.qml` (mini player + `Browser.qml` library/radio/apps, `DiscoverTab.qml`), `NowPlaying.qml` (with `VuPanel.qml`, `NpAnimation.qml` and its scenes `AnimCd.qml`/`AnimCdFront.qml`/`AnimChanger.qml`/`AnimVinyl.qml`/`AnimCassette.qml`, `NpStage.qml` for full screen, `NpChooser.qml` the look/animation chooser, `LedBar.qml`, `Lyrics.qml`), `CoverFlow.qml` (the album list's second view), `ChangerView.qml` (its third: the albums as discs put one by one into the CD changer, then played one after the other — `App.changerLoad`, the discs in `changer-discs`, the Now Playing at full screen on the changer whatever animation is chosen), `SettingsTab.qml` + `SettingsRows.qml`, `Wizard.qml` (first-boot setup and installer screens), `Dialogs.qml`, `VirtualKeyboard.qml`, `OtaOverlay.qml`, `CdRip.qml`, `FolderChooser.qml`, `Screensaver.qml`, `BrandMark.qml` (the Osmium Sound mark, drawn in DejaVu Sans rather than shown as a picture), `Tutorial.qml` (the guided tour, once after setup; `/data/hifi-tutorial-shown`), `Nav.qml`/`NavRing.qml`/`NavScope.qml` (the remote's spatial navigation: a gold ring, OK taps its centre through `Sys.tapAt`), `RemotePairWizard.qml`, `RemoteIntro.qml`, `RemoteTour.qml`, … Strings come from the same `src/i18n/locales/{en,it}.json` (copied to `/opt/hifi-qt/locales`), English default; the third-party notices from `third_party.json`, generated from `src/data/thirdPartyNotices.js`. |
 | Shared interface data | `src/i18n/locales/`, `src/data/thirdPartyNotices.js` | The on-screen strings (en/it) and the third-party notices, read by `native-ui-qt/ci/build-payload.sh`. All that is left of the earlier Electron kiosk, removed on 2026-10-02 |
 | Flask API | `api_server.py` | Runs as root on the appliance; system info/control, network/Wi-Fi, OTA channels, multiroom (LMS role), pairing tokens, display mode, player on/off, disk installer. Loopback-only, port `8000`. |
 | Sources service | `sources_server.py` | USB/SMB/local source management, internal-disk adoption/formatting, Samba share config, audio-CD ripping, backup/restore (core logic shared via `hifi_backup.py`), and every piece of Lyrion-side configuration the appliance owns for the user (web-UI skin, first-run setup/plugins, media + playlist folders — see [Lyrion web UI](#lyrion-web-ui--osmium-skin--first-run-setup)). Binds `0.0.0.0:8080` — LAN-reachable like the web admin, but every route is gated by a pairing token (see [Pairing & security](#pairing--security)), which is what lets the Android companion talk to it directly. |
@@ -406,7 +406,7 @@ GET/POST /vu_style            which meter look is in use (built-in or downloaded
 GET  /vu_skin/<id>/<file>     a skin's layers, for the previews
 GET  /vu_store                signed catalogue state (?summary=1: only the new/update counts)
 POST /vu_store/check, /vu_store/install, /vu_store/remove, /vu_store/seen
-GET/POST /nowplaying_animation   what Now Playing shows instead of the VU meters when they are off: none | cd | cdfront | vinyl | cassette | a downloaded scene's id
+GET/POST /nowplaying_animation   what Now Playing shows instead of the VU meters when they are off: none | cd | cdfront | changer | vinyl | cassette | a downloaded scene's id
 GET  /anim_store              the animations catalogue; POST /anim_store/check, /install, /remove, /seen
 GET/POST /ui_language         the on-screen UI language, owned by the device rather than by one UI
 GET/POST /nowplaying_autoexpand   seconds before Now Playing auto-expands (0 = off)
@@ -1411,22 +1411,24 @@ ReplayGain), flashing its frame.
 ### Now Playing animations
 
 With the VU meters off, the Now Playing panel under the controls can show a
-scene instead. Four are built in: a top-loading CD player (`cd`), a late-80s
+scene instead. Five are built in: a top-loading CD player (`cd`), a late-80s
 front-loading CD player with a drawer and a fluorescent display (`cdfront`), a
-record played by the tonearm (`vinyl`) and a cassette deck (`cassette`); with
+late-90s 101-disc file-type changer (`changer`: the file turns, the loader
+lifts the album's disc into the drive), a record played by the tonearm
+(`vinyl`) and a cassette deck (`cassette`); with
 `none` the panel shows the song's lyrics. The scenes' keys work: the CD
 player's OPEN, track numbers, REPEAT, RANDOM, skip and search, the deck's
 transport, REW/FF held to wind and its volume fader, the turntable's
 START/STOP. With an internet radio the cassette label and the CD display show
 the station and the song. The choice is `/etc/hifi-player/nowplaying-animation`
-(`GET/POST /nowplaying_animation`, `none` | `cd` | `cdfront` | `vinyl` |
+(`GET/POST /nowplaying_animation`, `none` | `cd` | `cdfront` | `changer` | `vinyl` |
 `cassette` | a downloaded scene's id; absent = none), read by `Player`
 (`npAnimation`) with the other settings and set from Settings → Animations on
 the kiosk and in the web admin — not in the companion — or from the chooser
 (`NpChooser.qml`) that the two buttons next to Now Playing's clock open:
 picking a meter look turns the meters on, picking an animation turns them off.
 `NpAnimation.qml` picks the scene (`AnimCd.qml`, `AnimCdFront.qml`,
-`AnimVinyl.qml`, `AnimCassette.qml`, layers in `native-ui-qt/assets/anim/<scene>/`,
+`AnimChanger.qml`, `AnimVinyl.qml`, `AnimCassette.qml`, layers in `native-ui-qt/assets/anim/<scene>/`,
 the LCD and VFD digits in `assets/anim/lcd` and `assets/anim/vfd`), and
 `NpStage.qml` draws the same scene, or the meters, at full screen with the
 title, artist and progress — the button next to the clock. Each scene has one

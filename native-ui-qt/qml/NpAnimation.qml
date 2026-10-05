@@ -1,7 +1,7 @@
 // The Now Playing animation shown in place of the VU meters when they are
-// off: a CD, a vinyl record or a cassette (Settings → Animations, read from
-// Player.npAnimation). This file only picks the scene and feeds it; each
-// scene (AnimCd.qml, AnimVinyl.qml, AnimCassette.qml) is a plain QtQuick
+// off: a CD, a CD changer, a vinyl record or a cassette (Settings →
+// Animations, read from Player.npAnimation). This file only picks the scene
+// and feeds it; each scene (AnimCd.qml, AnimVinyl.qml, ...) is a plain QtQuick
 // component with the same inputs, its PNGs in assets/anim/<kind>/.
 //
 // live: false is the still used by the Settings cards: the scene draws its
@@ -17,6 +17,7 @@
 // api_server.py and anim-store/README.md).
 import QtQuick
 import Hifi
+import Hifi.Ui
 
 Item {
     id: root
@@ -25,7 +26,7 @@ Item {
     property bool live: true
     property bool active: false
 
-    readonly property var builtin: ({ cd: "AnimCd.qml", cdfront: "AnimCdFront.qml", vinyl: "AnimVinyl.qml", cassette: "AnimCassette.qml" })
+    readonly property var builtin: ({ cd: "AnimCd.qml", cdfront: "AnimCdFront.qml", changer: "AnimChanger.qml", vinyl: "AnimVinyl.qml", cassette: "AnimCassette.qml" })
     // a store scene: anim.json's `scene`, a flat .qml name inside its folder
     function storeScene(k) {
         if (!/^[a-z0-9][a-z0-9_-]{0,40}$/.test(k)) return ""
@@ -59,9 +60,12 @@ Item {
     // stream without an album is its station URL, so a radio's songs do not
     // swap the disc every few minutes.
     readonly property string mediaKey: !live ? ""
-                                     : Player.album !== "" ? "a" + Player.album
+                                     : Player.album !== "" ? albumKey(Player.album)
                                      : Player.remote ? "u" + Player.trackUrl
                                      : "t" + Player.artist
+    // an album's key (the \u0001 has been part of it from the start: kept, so
+    // nothing that compares keys changes)
+    function albumKey(album) { return "a\u0001" + album }
     // An internet radio has no album: its station takes the album's place
     // (the cassette's label: the station, then "artist - song"), and the
     // song keeps the display. A title that is only the station's name again
@@ -148,6 +152,12 @@ Item {
     // cassette writes it on its label (so any scene declaring it gets it)
     Binding { when: loader.item !== null && loader.item.trackTitle !== undefined; target: loader.item; property: "trackTitle"; value: root.trackTitle }
     Binding { when: loader.item !== null && loader.item.trackArtist !== undefined; target: loader.item; property: "trackArtist"; value: root.trackArtist }
+    // the CD changer: the albums loaded from the albums view, disc 1 first
+    // (App.changerScene), keyed like mediaKey; a still has none
+    Binding {
+        when: loader.item !== null && loader.item.discs !== undefined; target: loader.item; property: "discs"
+        value: root.live && Ui.app ? Ui.app.changerScene.map(function(d) { return { key: root.albumKey(d.album), art: d.art } }) : []
+    }
     // Fast wind on the cassette deck: a jump of windStep seconds per call.
     // Past the end it moves on to the next track, before the start to the end
     // of the previous one. After a track change nothing moves until the new

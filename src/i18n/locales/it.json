@@ -380,7 +380,16 @@
     },
     "view": {
       "grid": "Griglia",
-      "coverflow": "Cover Flow"
+      "coverflow": "Cover Flow",
+      "changer": "Caricatore CD"
+    },
+    "changer": {
+      "hint": "Tocca un disco per metterlo nel caricatore, di nuovo per toglierlo",
+      "chosen": "{count} nel caricatore",
+      "done": "Fatto",
+      "clear": "Svuota",
+      "full": "Il caricatore contiene 101 dischi",
+      "empty": "Nessun album"
     },
     "backToOwn": "Torna a questo apparecchio",
     "addToQueue": "Aggiungi a coda",
@@ -552,12 +561,13 @@
     "library": {
       "help": "Come si vede la libreria musicale su questo schermo.",
       "albumView": "Vista degli album",
-      "albumViewHelp": "Una griglia di schede, oppure le copertine in fila da sfogliare col dito o col mouse (Cover Flow). Si cambia anche dal pulsante nell'elenco degli album.",
+      "albumViewHelp": "Una griglia di schede, le copertine in fila da sfogliare col dito o col mouse (Cover Flow), oppure gli album come dischi da caricare in un caricatore CD e ascoltare uno dopo l'altro. Si cambia anche dal pulsante nell'elenco degli album.",
       "viewGrid": "Griglia",
-      "viewCoverflow": "Cover Flow"
+      "viewCoverflow": "Cover Flow",
+      "viewChanger": "Caricatore CD"
     },
     "animations": {
-      "help": "Al posto dei VU meter, la schermata \"in riproduzione\" può mostrare un CD, un disco in vinile o una musicassetta che girano con la musica. Il tasto accanto all'ora la mostra a tutto schermo.",
+      "help": "Al posto dei VU meter, la schermata \"in riproduzione\" può mostrare un CD, un caricatore CD, un disco in vinile o una musicassetta che girano con la musica. Il tasto accanto all'ora la mostra a tutto schermo.",
       "vuOn": "Le animazioni si vedono solo con i VU meter spenti.",
       "turnOffVu": "Spegni i VU meter",
       "none": "Nessuna",
@@ -566,6 +576,7 @@
       "vinyl": "Vinile",
       "cassette": "Musicassetta",
       "cdfront": "Lettore CD",
+      "changer": "Caricatore CD",
       "storeTitle": "Altre animazioni da scaricare",
       "storeHelp": "Nuove animazioni pubblicate da Osmium Sound. Un'animazione scaricata si aggiorna da sola e compare tra quelle qui sopra.",
       "storeLoading": "Caricamento dell'elenco…",

@@ -15,6 +15,7 @@ import Hifi.Ui
 Item {
     id: root
     property string mode: ""                     // "" closed, "vu", "anim"
+    property string animKind: Player.npAnimation // the scene, for "anim"
     property real devScale: 1
     property bool shown: false                   // on screen (NowPlaying shown and this open)
     signal close()
@@ -107,7 +108,7 @@ Item {
     // above the track line
     NpAnimation {
         x: 12; y: 54; width: parent.width - 24; height: parent.height - 102
-        kind: root.mode === "anim" ? Player.npAnimation : ""
+        kind: root.mode === "anim" ? root.animKind : ""
         active: root.shown && root.mode === "anim"
         devScale: root.devScale
     }

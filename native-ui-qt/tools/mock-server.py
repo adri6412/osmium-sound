@@ -52,14 +52,14 @@ T0 = time.time()
 #                            a test key); without it the store is empty
 #   MOCK_VU=0                start with the VU meters off
 #   MOCK_NP_ANIMATION=cd     the Now Playing animation (none, cd, cdfront,
-#                            vinyl, cassette) shown with the VU meters off
+#                            changer, vinyl, cassette) shown with the VU meters off
 #   MOCK_ANIM_STORE=1        the animation store and the animation choice run
 #                            on the real api_server.py code: configure it with
 #                            HIFI_ANIM_STORE_URL / HIFI_ANIM_STORE_PUBKEY /
 #                            HIFI_ANIM_STORE_DIR / HIFI_ANIM_STORE_STATE_DIR
 #                            (the kiosk in the chroot must see the same
 #                            folder as its /var/lib/hifi-player/anim-scenes)
-NP_ANIMATIONS = ("none", "cd", "cdfront", "vinyl", "cassette")
+NP_ANIMATIONS = ("none", "cd", "cdfront", "changer", "vinyl", "cassette")
 VU_API = None
 if os.environ.get("MOCK_VU_STORE"):
     sys.path.insert(0, os.path.join(HERE, "..", ".."))
@@ -368,7 +368,17 @@ def rpc(player, params):
         loop += [{"text": n, "checkbox": 1 if i % 3 else 0} for i, n in enumerate(names)]
         r = {"count": len(loop), "item_loop": loop}
     elif cmd == "playlistcontrol":
-        pass
+        # an album loaded or added (the CD changer's albums view): three of
+        # its tracks in the queue, so the album changes as the queue goes on
+        args = dict(x.split(":", 1) for x in params[1:] if isinstance(x, str) and ":" in x)
+        al = next((a for a in ALBUMS if str(a[0]) == args.get("album_id")), None)
+        if al and args.get("cmd") in ("load", "add"):
+            tracks = [(f"Track {n} of {al[1]}", al[2], al[1]) for n in (1, 2, 3)]
+            if args["cmd"] == "load":
+                QUEUE[:] = tracks
+                STATE["index"] = 0; STATE["time"] = 0.0; STATE["mode"] = "play"
+            else:
+                QUEUE.extend(tracks)
     elif cmd == "serverstatus":
         scanning = time.time() < SCAN["until"]
         if not scanning and SCAN["until"] > 0: SCAN["last"] = SCAN["until"]; SCAN["until"] = 0.0

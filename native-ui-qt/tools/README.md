@@ -44,9 +44,10 @@ un finto apparecchio in Python.
   where every key is and what it does (`<model>_keys.py`, kept in step with `kModels` in
   `src/remote.cpp`), and `make-all.sh`, which renders them into `assets/remotes`
   and `admin-webui/public/remotes` (shown once after pairing, `qml/RemoteIntro.qml`).
-- `np-anim/*.py` — generate the PNGs of the Now Playing animations (`assets/anim/<cd|vinyl|cassette>/`,
+- `np-anim/*.py` — generate the PNGs of the Now Playing animations (`assets/anim/<cd|cdfront|changer|vinyl|cassette>/`,
   one script per scene, Pillow + numpy); the scenes are `qml/AnimCd.qml`, `AnimVinyl.qml`, `AnimCassette.qml`,
-  picked by `qml/NpAnimation.qml`. `MOCK_VU=0 MOCK_NP_ANIMATION=cd` starts the mock with one on screen.
+  picked by `qml/NpAnimation.qml`. `MOCK_VU=0 MOCK_NP_ANIMATION=cd` starts the mock with one on screen. The mock loads
+  `playlistcontrol album_id:` into its queue (three tracks per album), for the CD changer's albums view.
 - `../sync.sh` — copia sorgenti+icone sul Dell e compila là.
 - `../install.sh` — installa in /opt/hifi-qt e registra l'unità systemd (vedi file).
 

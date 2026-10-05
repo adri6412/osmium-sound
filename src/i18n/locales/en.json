@@ -380,7 +380,16 @@
     },
     "view": {
       "grid": "Grid",
-      "coverflow": "Cover Flow"
+      "coverflow": "Cover Flow",
+      "changer": "CD changer"
+    },
+    "changer": {
+      "hint": "Tap a disc to put it in the changer, again to take it out",
+      "chosen": "{count} in the changer",
+      "done": "Done",
+      "clear": "Clear",
+      "full": "The changer holds 101 discs",
+      "empty": "No albums"
     },
     "backToOwn": "Back to this device",
     "addToQueue": "Add to queue",
@@ -552,12 +561,13 @@
     "library": {
       "help": "How the music library is shown on this screen.",
       "albumView": "Album view",
-      "albumViewHelp": "A grid of cards, or the covers standing in a row to flip through with a finger or the mouse (Cover Flow). The button in the album list switches too.",
+      "albumViewHelp": "A grid of cards, the covers standing in a row to flip through with a finger or the mouse (Cover Flow), or the albums as discs to load into a CD changer and play one after the other. The button in the album list switches too.",
       "viewGrid": "Grid",
-      "viewCoverflow": "Cover Flow"
+      "viewCoverflow": "Cover Flow",
+      "viewChanger": "CD changer"
     },
     "animations": {
-      "help": "Instead of the VU meters, the Now Playing screen can show a CD, a vinyl record or a cassette turning with the music. The button next to the clock shows it full screen.",
+      "help": "Instead of the VU meters, the Now Playing screen can show a CD, a CD changer, a vinyl record or a cassette turning with the music. The button next to the clock shows it full screen.",
       "vuOn": "Animations are shown only when the VU meters are off.",
       "turnOffVu": "Turn off the VU meters",
       "none": "None",
@@ -566,6 +576,7 @@
       "vinyl": "Vinyl",
       "cassette": "Cassette",
       "cdfront": "CD player",
+      "changer": "CD changer",
       "storeTitle": "More animations to download",
       "storeHelp": "New animations published by Osmium Sound. A downloaded animation updates by itself and appears among the ones above.",
       "storeLoading": "Loading the list…",

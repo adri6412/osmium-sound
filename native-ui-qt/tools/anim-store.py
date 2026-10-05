@@ -34,7 +34,7 @@ PACK_MAX = 40 * 1024 * 1024
 UNPACKED_MAX = 80 * 1024 * 1024
 PREVIEW_MAX = 1024 * 1024
 QML_MAX = 512 * 1024
-BUILTIN = ('none', 'cd', 'cdfront', 'vinyl', 'cassette')
+BUILTIN = ('none', 'cd', 'cdfront', 'changer', 'vinyl', 'cassette')
 EPOCH = (1980, 1, 1, 0, 0, 0)
 
 

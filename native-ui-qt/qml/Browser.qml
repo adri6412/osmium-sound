@@ -15,7 +15,7 @@ Item {
     readonly property real contentTop: hasCrumbs ? 83 : 40
     readonly property bool hasSearch: tab === 0 && (view === LibraryModel.Artists || view === LibraryModel.Albums || view === LibraryModel.Composers)
     readonly property bool hasAz: hasSearch
-    readonly property bool azShown: hasAz && !list.coverflow      // Cover Flow has its own slider
+    readonly property bool azShown: hasAz && !list.coverflow && !list.changer   // Cover Flow has its own slider, the changer its file
     readonly property bool browsing: tab === 0 && view !== LibraryModel.Home
     // the album and artist pages load their own data (AlbumPage.qml, ArtistPage.qml)
     readonly property bool isPage: view === LibraryModel.AlbumPage || view === LibraryModel.ArtistPage
@@ -200,7 +200,7 @@ Item {
         return [x + list.x, contentTop + top + list.y, list.width, list.height]
     }
     function tutorialMenuRect() {
-        if (view !== LibraryModel.Albums || Library.state !== 2 || Library.count < 1 || list.coverflow) return null
+        if (view !== LibraryModel.Albums || Library.state !== 2 || Library.count < 1 || list.coverflow || list.changer) return null
         var cw = list.cardW, top = (cdBanner.visible ? 48 : 0)
         ctx.open(ctxItems(0), list.x + cw / 2, list.y + cw / 2 + top)
         if (!ctx.visible) return null
@@ -637,15 +637,18 @@ Item {
             Text { id: backText; anchors.centerIn: parent; text: Tr.t("common.back"); color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
             Tap { id: backTap; onClicked: root.navBack() }
         }
-        // the albums as a grid or as Cover Flow (also in Settings → Library)
+        // the albums as a grid, as Cover Flow or as the CD changer's discs
+        // (also in Settings → Library): the button names the next one
         Rectangle {
             visible: list.grid && !root.isPage
-            readonly property bool flow: list.coverflow
+            readonly property bool flow: list.coverflow || list.changer
+            readonly property string nextView: list.coverflow ? "changer" : list.changer ? "grid" : "coverflow"
+            readonly property var icons: ({ grid: "layout-grid", coverflow: "gallery-horizontal", changer: "disc-3" })
             x: (backBtn.visible ? backBtn.x : parent.width - 12) - 8 - width; y: 21.5 - 11; width: 22 + 8 + viewText.implicitWidth + 12; height: 22; radius: 8
             color: viewTap.mix(flow ? Theme.goldA(0.15) : Theme.wa(0.05), Theme.wa(0.12))
-            Icon { x: 8; anchors.verticalCenter: parent.verticalCenter; name: parent.flow ? "layout-grid" : "gallery-horizontal"; size: 13; color: parent.flow ? Theme.gold : Theme.silverA(0.7) }
-            Text { id: viewText; x: 8 + 13 + 6; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(parent.flow ? "player.view.grid" : "player.view.coverflow"); color: parent.flow ? Theme.gold : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
-            Tap { id: viewTap; onClicked: Ui.app.setAlbumView(parent.flow ? "grid" : "coverflow") }
+            Icon { x: 8; anchors.verticalCenter: parent.verticalCenter; name: parent.icons[parent.nextView]; size: 13; color: parent.flow ? Theme.gold : Theme.silverA(0.7) }
+            Text { id: viewText; x: 8 + 13 + 6; anchors.verticalCenter: parent.verticalCenter; text: Tr.t("player.view." + parent.nextView); color: parent.flow ? Theme.gold : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
+            Tap { id: viewTap; onClicked: Ui.app.setAlbumView(parent.nextView) }
         }
     }
 

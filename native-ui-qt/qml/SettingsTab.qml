@@ -1359,7 +1359,7 @@ Item {
             action(Tr.t("settings.animations.turnOffVu"), "anim_vu_off", "accent")
         } else {
             // the built-in scenes, then the ones downloaded from the store
-            var kinds = ["none", "cd", "cdfront", "vinyl", "cassette"].map(function(k) {
+            var kinds = ["none", "cd", "cdfront", "changer", "vinyl", "cassette"].map(function(k) {
                 return { id: k, label: Tr.t("settings.animations." + k) }
             })
             for (var s = 0; s < cfg.storeAnims.length; s++) {
@@ -1417,14 +1417,16 @@ Item {
         if (as.loaded && !as.checking && !as.busy)
             grid([acell(Tr.t("settings.animations.storeCheck"), "anim_check", "accent", { icon: "rotate-cw", hh: 44 })])
     }
-    // The library: how the albums are shown, a grid of cards or Cover Flow
-    // (the same choice as the button in the crumb bar of the album list)
+    // The library: how the albums are shown, a grid of cards, Cover Flow or
+    // the CD changer (the same choice as the button in the crumb bar of the
+    // album list)
     function secLibrary() {
         help("settings.library.help")
         label("settings.library.albumView", 14); help("settings.library.albumViewHelp", 12)
         var av = Ui.app ? Ui.app.albumView : "grid"
         grid([cell(Tr.t("settings.library.viewGrid"), "grid", av === "grid", "album_view", { hh: 44 }),
-              cell(Tr.t("settings.library.viewCoverflow"), "coverflow", av === "coverflow", "album_view", { hh: 44 })])
+              cell(Tr.t("settings.library.viewCoverflow"), "coverflow", av === "coverflow", "album_view", { hh: 44 }),
+              cell(Tr.t("settings.library.viewChanger"), "changer", av === "changer", "album_view", { hh: 44 })])
     }
     function playerPrefs() {
         if (!havePlayer) note(Tr.t("settings.playback.noPlayer"), "dark")

@@ -233,7 +233,7 @@
       },
       "animations": {
         "label": "Animations",
-        "desc": "A CD, a vinyl record or a cassette instead of the VU meters"
+        "desc": "A CD, a CD changer, a vinyl record or a cassette instead of the VU meters"
       },
       "display": {
         "label": "Display mode",
@@ -894,13 +894,14 @@
       "chooseAnimation": "Choose an animation"
     },
     "animations": {
-      "help": "Instead of the VU meters, the device screen can show a CD, a vinyl record or a cassette that turns with the music.",
+      "help": "Instead of the VU meters, the device screen can show a CD, a CD changer, a vinyl record or a cassette that turns with the music.",
       "vuOnNote": "Animations are shown only when the VU meters are off.",
       "turnOffVu": "Turn off the VU meters",
       "choice": {
         "none": "None",
         "cd": "Top-loading CD",
         "cdfront": "CD player",
+        "changer": "CD changer",
         "vinyl": "Vinyl",
         "cassette": "Cassette"
       },

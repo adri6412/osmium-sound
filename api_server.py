@@ -4388,7 +4388,8 @@ def set_vu_style(style):
 
 # ──────────────────────────────────────────────────────────────────
 #  Now-playing animation: a turning CD (top-loading, or the 90s front-loading
-#  player 'cdfront'), vinyl record or cassette the kiosk draws where the VU
+#  player 'cdfront'), a 101-disc changer ('changer'), vinyl record or cassette
+#  the kiosk draws where the VU
 #  meters would be. The interface shows it only while the
 #  VU meters are switched off; the two settings stay independent here, so
 #  turning the meters back on and off again brings the chosen animation back.
@@ -4397,7 +4398,7 @@ def set_vu_style(style):
 # ──────────────────────────────────────────────────────────────────
 NOWPLAYING_ANIMATION_FILE = '/etc/hifi-player/nowplaying-animation'
 # the scenes the interface ships; the animation store adds more (below)
-NOWPLAYING_ANIMATION_BUILTIN = ('none', 'cd', 'cdfront', 'vinyl', 'cassette')
+NOWPLAYING_ANIMATION_BUILTIN = ('none', 'cd', 'cdfront', 'changer', 'vinyl', 'cassette')
 NOWPLAYING_ANIMATION_CHOICES = NOWPLAYING_ANIMATION_BUILTIN
 NOWPLAYING_ANIMATION_DEFAULT = 'none'
 

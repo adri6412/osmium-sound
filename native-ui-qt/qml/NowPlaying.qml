@@ -20,8 +20,14 @@ Item {
     property bool shown: false                         // a video (VU attivi solo qui)
     // Full screen (NpStage), from the button next to the clock: the meters
     // when they are on, else the chosen animation; nothing when neither.
-    readonly property string stageMode: Player.vuEnabled ? (Player.isOwn ? "vu" : "") : (animChosen ? "anim" : "")
+    // The CD changer's albums view opens it on the changer (openStage), what-
+    // ever the owner chose here: until it closes, that is its animation.
+    property string stageAnim: ""
+    readonly property string stageMode: stageAnim !== "" ? "anim"
+                                      : Player.vuEnabled ? (Player.isOwn ? "vu" : "") : (animChosen ? "anim" : "")
     property bool stageOpen: false
+    onStageOpenChanged: if (!stageOpen) stageAnim = ""
+    function openStage(kind) { stageAnim = kind || ""; stageOpen = true }
     readonly property bool staged: stageOpen && stageMode !== ""
     signal collapse()
     signal openQueue()
@@ -457,6 +463,7 @@ Item {
     NpStage {
         anchors.fill: parent
         mode: root.staged ? root.stageMode : ""
+        animKind: root.stageAnim !== "" ? root.stageAnim : Player.npAnimation
         shown: root.shown && root.staged
         devScale: root.devScale
         onClose: root.stageOpen = false
@@ -473,5 +480,5 @@ Item {
     // the meters run for the VU panels, and for the cassette deck's level
     // meters, here or at full screen (only our own DAC has levels)
     Binding { target: Vu; property: "active"; value: root.shown && Player.isOwn && (root.effVu || (root.staged && root.stageMode === "vu")
-                                                     || ((root.effAnim || root.staged) && Player.npAnimation === "cassette")) }
+                                                     || ((root.effAnim || root.staged) && Player.npAnimation === "cassette" && root.stageAnim === "")) }
 }

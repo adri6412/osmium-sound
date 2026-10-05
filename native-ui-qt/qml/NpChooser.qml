@@ -43,7 +43,7 @@ Item {
             })
         } else {
             // the built-in scenes first, then the ones downloaded from the store
-            var out = ["cd", "cdfront", "vinyl", "cassette"].map(function(k) { return { id: k, label: Tr.t("settings.animations." + k) } })
+            var out = ["cd", "cdfront", "changer", "vinyl", "cassette"].map(function(k) { return { id: k, label: Tr.t("settings.animations." + k) } })
             Api.get(api("/nowplaying_animation"), function(ok, d) {
                 if (gen !== root.gen) return
                 var st = (ok && d && d.store) ? d.store : []

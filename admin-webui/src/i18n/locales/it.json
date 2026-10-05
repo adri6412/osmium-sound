@@ -233,7 +233,7 @@
       },
       "animations": {
         "label": "Animazioni",
-        "desc": "Un CD, un disco in vinile o una musicassetta al posto dei VU meter"
+        "desc": "Un CD, un caricatore CD, un disco in vinile o una musicassetta al posto dei VU meter"
       },
       "display": {
         "label": "Modalità schermo",
@@ -894,13 +894,14 @@
       "chooseAnimation": "Scegli un'animazione"
     },
     "animations": {
-      "help": "Al posto dei VU meter, lo schermo dell'apparecchio può mostrare un CD, un disco in vinile o una musicassetta che gira con la musica.",
+      "help": "Al posto dei VU meter, lo schermo dell'apparecchio può mostrare un CD, un caricatore CD, un disco in vinile o una musicassetta che gira con la musica.",
       "vuOnNote": "Le animazioni si vedono solo con i VU meter spenti.",
       "turnOffVu": "Spegni i VU meter",
       "choice": {
         "none": "Nessuna",
         "cd": "CD dall'alto",
         "cdfront": "Lettore CD",
+        "changer": "Caricatore CD",
         "vinyl": "Vinile",
         "cassette": "Musicassetta"
       },

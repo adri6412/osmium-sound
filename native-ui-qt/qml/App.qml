@@ -12,10 +12,48 @@ Item {
     property real devicePixelScale: 1
     property bool expanded: false
     property bool viewVu: Sys.conf("nowplaying-view", "vu") !== "lyrics"
-    // the albums of the library as a grid or as Cover Flow (a preference of
-    // this screen, kept next to the Now Playing view)
-    property string albumView: Sys.conf("album-view", "grid") === "coverflow" ? "coverflow" : "grid"
-    function setAlbumView(v) { albumView = v === "coverflow" ? "coverflow" : "grid"; Sys.setConf("album-view", albumView) }
+    // the albums of the library as a grid, as Cover Flow or as the discs of
+    // the CD changer (a preference of this screen, kept next to the Now
+    // Playing view)
+    function albumViewOf(v) { return v === "coverflow" || v === "changer" ? v : "grid" }
+    property string albumView: albumViewOf(Sys.conf("album-view", "grid"))
+    function setAlbumView(v) { albumView = albumViewOf(v); Sys.setConf("album-view", albumView) }
+
+    // ─── the CD changer (albums view ChangerView.qml, scene AnimChanger.qml) ─
+    // The albums last loaded from the albums view, disc 1 first: [{ id,
+    // title, art }] (art the cover's id). Kept across restarts, so the
+    // changer still finds them in the same slots.
+    property var changerDiscs: {
+        try { var d = JSON.parse(Sys.conf("changer-discs", "[]")); return Array.isArray(d) ? d : [] } catch (e) { return [] }
+    }
+    // what the scene gets (NpAnimation keys it): the album's name, the cover
+    // as a picture's address
+    readonly property var changerScene: changerDiscs.map(function(d) {
+        return { album: d.title, art: d.art ? Api.lmsBase + "/music/" + d.art + "/cover?size=300" : "" }
+    })
+    // Load the chosen albums (library rows: { id, text, art }) as discs 1, 2,
+    // 3... and play them one after the other, like a changer: the queue is
+    // the albums in that order. The Now Playing opens at full screen on the
+    // changer, whatever animation the owner chose (that stays as it is).
+    function changerLoad(albums) {
+        var discs = []
+        for (var i = 0; i < albums.length && discs.length < 101; i++)
+            if (albums[i] && albums[i].id) discs.push({ id: String(albums[i].id), title: albums[i].text, art: albums[i].art || "" })
+        if (!discs.length) return
+        changerDiscs = discs
+        Sys.setConf("changer-discs", JSON.stringify(discs))
+        // one after the other: separate requests could reach Lyrion out of order
+        var k = 0
+        function next() {
+            if (k >= discs.length) return
+            var c = ["playlistcontrol", "cmd:" + (k === 0 ? "load" : "add"), "album_id:" + discs[k].id]
+            k++
+            Player.query(c, function() { next() })
+        }
+        next()
+        setExpanded(true)
+        np.openStage("changer")
+    }
     // tempo dell'ultimo tocco (per l'auto-apertura e il salvaschermo)
     readonly property real lastInput: Sys.lastInput
     readonly property bool busyOverlay: dialogs.active || vk.active || ota.active || cdrip.open || tutorial.active || remoteIntro.active || remoteTour.active || remotePair.active
@@ -105,7 +143,7 @@ Item {
     function tutorialAlbums(mode) { setExpanded(false); albumView = mode; mainScreen.browser.tutorialAlbums(mode) }
     function tutorialListRect() { return mainScreen.browser.tutorialListRect() }
     function tutorialMenuRect() { return mainScreen.browser.tutorialMenuRect() }
-    function tutorialRestore() { mainScreen.browser.closeMenu(); albumView = Sys.conf("album-view", "grid") === "coverflow" ? "coverflow" : "grid" }
+    function tutorialRestore() { mainScreen.browser.closeMenu(); albumView = albumViewOf(Sys.conf("album-view", "grid")) }
     // the tour's home steps: the main screen, Music tab, at its home
     function tutorialHome() { setExpanded(false); mainScreen.browser.showMusicTab(); if (mainScreen.browser.view !== LibraryModel.Home) mainScreen.browser.navHome() }
 

@@ -23,7 +23,7 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 
 - 🎵 **High-resolution audio** — FLAC, DSD (native when the DAC accepts it, DoP otherwise — automatic, with a choice in Settings → Audio), PCM up to 192kHz, bit-perfect (no resampling)
 - 🎧 **Streaming services** — Deezer, Qobuz, TIDAL, Spotify and more, via Lyrion plugins
-- 📁 **Music library** — browse by artist, album (as a grid or as Cover Flow), genre, year, composer, new music, folder or playlist; search the whole library from the touchscreen; refresh it on demand with progress
+- 📁 **Music library** — browse by artist, album (as a grid, as Cover Flow or as the discs of a CD changer to load and play one after the other), genre, year, composer, new music, folder or playlist; search the whole library from the touchscreen; refresh it on demand with progress
 - 🎼 **Album & artist pages** — tracks, format and the credits in your own tags; online, who played what on which instrument, production and studios, first release, band members and biographies from MusicBrainz and Wikipedia (pick the edition if the match is wrong)
 - ✏️ **Library editor** — a web page next to the web admin (same login) to fix the tags inside the music files (with undo) and correct the online credits, artist matches and editions shown on the album and artist pages
 - ⭐ **Favourites & playlists** — a heart on Now Playing, favourites you can edit, playlists you can rename and trim, all from the touchscreen
@@ -32,7 +32,7 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 - 🧭 **Discover** — endless random mixes, "keep playing similar music", similar artists and artist bios on the touchscreen
 - 📻 **Internet radio** — thousands of stations, save favourites from the touchscreen
 - 🎚️ **Analog VU meters** — six built-in looks, more downloadable from a signed online catalogue, plus a status plate showing Hi-Res/PCM/DSD and BitPerfect/ReplayGain
-- 📀 **Now Playing animations** — with the VU meters off, a top-loading CD, an 80s CD player, a turntable or a cassette deck plays in their place, with working keys; more downloadable, and full screen with one tap
+- 📀 **Now Playing animations** — with the VU meters off, a top-loading CD, an 80s CD player, a 101-disc changer, a turntable or a cassette deck plays in their place, with working keys; more downloadable, and full screen with one tap
 - 🎮 **Remote control** — a USB or Bluetooth remote drives the whole screen; three known models (Fire TV, Xiaomi Mi Box S, G20S PRO) pair by themselves and come with their key map, any key can be given an action
 - 🔊 **Bluetooth speakers** — speakers and headphones the appliance plays to, each one a Lyrion player of its own that can be grouped with the others
 - 🔀 **Any player, one screen** — drive the other players on the same Lyrion from the touchscreen, then come back to this one

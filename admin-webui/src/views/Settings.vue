@@ -13,6 +13,7 @@ import RemoteIntro from '../components/RemoteIntro.vue';
 import RemotePairing from '../components/RemotePairing.vue';
 import animCd from '../assets/anim/cd.jpg';
 import animCdfront from '../assets/anim/cdfront.jpg';
+import animChanger from '../assets/anim/changer.jpg';
 import animVinyl from '../assets/anim/vinyl.jpg';
 import animCassette from '../assets/anim/cassette.jpg';
 
@@ -1084,7 +1085,7 @@ async function setVuStyle(style) {
 // so this just stores the pick. Choices come from the device: the built-in
 // ones this page has a name for, then those downloaded from the animation
 // store, named by their own anim.json.
-const NP_ANIMATION_IDS = ['none', 'cd', 'cdfront', 'vinyl', 'cassette'];
+const NP_ANIMATION_IDS = ['none', 'cd', 'cdfront', 'changer', 'vinyl', 'cassette'];
 const npAnimation = ref('none');
 const npAnimations = ref(NP_ANIMATION_IDS);
 const npStoreAnims = ref([]);
@@ -1099,7 +1100,7 @@ async function loadNpAnimation() {
 // the stills of the built-in scenes, as the kiosk draws them on its own
 // cards (NpAnimation with live: false, captured from the kiosk); a store
 // animation shows the preview its catalogue entry carries
-const NP_ANIMATION_PREVIEWS = { cd: animCd, cdfront: animCdfront, vinyl: animVinyl, cassette: animCassette };
+const NP_ANIMATION_PREVIEWS = { cd: animCd, cdfront: animCdfront, changer: animChanger, vinyl: animVinyl, cassette: animCassette };
 function npAnimPreview(id) {
   if (NP_ANIMATION_PREVIEWS[id]) return NP_ANIMATION_PREVIEWS[id];
   const a = animStore.animations.find((x) => x.id === id);

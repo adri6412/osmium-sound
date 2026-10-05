@@ -2,8 +2,8 @@
 
 The animations offered for download on the devices, from
 `https://file.osmiumsound.it/anim/`. One folder per animation, named after
-its id. The four animations the interface ships (top-loading CD, CD player,
-vinyl, cassette) are not here: they stay built in.
+its id. The five animations the interface ships (top-loading CD, CD player,
+CD changer, vinyl, cassette) are not here: they stay built in.
 
 Publishing is the **Publish the animation store** workflow (manual run). It
 packs every folder into `<id>-<version>.animpak` with its preview

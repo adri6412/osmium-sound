@@ -16,6 +16,8 @@ Item {
     // the albums as Cover Flow instead of the grid (Settings → Library, or
     // the button in the crumb bar)
     readonly property bool coverflow: grid && !!Ui.app && Ui.app.albumView === "coverflow"
+    // ...or as the discs of the CD changer, to load and play (ChangerView)
+    readonly property bool changer: grid && !!Ui.app && Ui.app.albumView === "changer"
     readonly property bool search: view === LibraryModel.Search
     readonly property int pitch: view === LibraryModel.Tracks || view === LibraryModel.PlaylistTracks ? 50
                                : view === LibraryModel.Radios || view === LibraryModel.Apps ? 54 : 58
@@ -38,10 +40,11 @@ Item {
     }
     function scrollToRow(row) {
         if (coverflow) flowView.scrollToRow(row)
+        else if (changer) changerView.scrollToRow(row)
         else if (grid) gridView.positionViewAtIndex(row, GridView.Beginning)
         else listView.positionViewAtIndex(row, ListView.Beginning)
     }
-    function scrollTop() { listView.contentY = 0; gridView.contentY = 0; flowView.scrollTop() }
+    function scrollTop() { listView.contentY = 0; gridView.contentY = 0; flowView.scrollTop(); changerView.scrollTop() }
 
     // ─── Cover Flow of the albums ──────────────────────────────────────────
     CoverFlow {
@@ -52,6 +55,14 @@ Item {
         onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
         onRowLongPress: (row, x, y) => root.rowLongPress(row, x, y)
         onExpand: (row, x, y, size, src) => root.expandAlbum(row, x, y, size, src)
+    }
+    // ─── the CD changer: the albums as discs, the changer behind them ──────
+    ChangerView {
+        id: changerView
+        anchors.fill: parent
+        visible: root.changer
+        devScale: root.devScale
+        onRowLongPress: (row, x, y) => root.rowLongPress(row, x, y)
     }
 
     // URL di un'icona di menu/radio: percorso sul server oppure http locale
@@ -213,8 +224,8 @@ Item {
         // griglia di Electron (grid-cols-3 gap-3).
         anchors.fill: parent
         anchors.rightMargin: -12
-        visible: root.grid && !root.coverflow
-        model: root.grid && !root.coverflow ? Library : null
+        visible: root.grid && !root.coverflow && !root.changer
+        model: root.grid && !root.coverflow && !root.changer ? Library : null
         cellWidth: root.cardW + 12; cellHeight: root.cardH + 12
         clip: true
         flickDeceleration: 1500; maximumFlickVelocity: 4000
