@@ -80,8 +80,32 @@ async function countCheck(db, { day, file, now, ip, userAgent }) {
   await db.batch(await dailyStatements(db, DOWNLOADS_DAILY, { day, key: [file, CHECK], hash }));
 }
 
+// The same client asking for the same file again within this window is one
+// download, not many. On 2026-10-05 a single F-Droid client fetched
+// fdroid/repo/entry.jar every second and a half — 24,000 times by mid-morning —
+// and at five rows written per download that alone used up D1's 100,000 daily
+// writes. Kept in the isolate's memory only: the key is the hash already
+// computed for the sketch, never the IP, and it is gone when the isolate is.
+const REPEAT_WINDOW_MS = 60 * 60 * 1000;
+const REPEAT_MAX_KEYS = 5000;
+const recentDownloads = new Map();
+
+function isRepeat(key, now) {
+  const last = recentDownloads.get(key);
+  if (last !== undefined && now - last < REPEAT_WINDOW_MS) return true;
+  if (recentDownloads.size >= REPEAT_MAX_KEYS) {
+    for (const [k, t] of recentDownloads) {
+      if (now - t >= REPEAT_WINDOW_MS) recentDownloads.delete(k);
+    }
+    if (recentDownloads.size >= REPEAT_MAX_KEYS) recentDownloads.clear();
+  }
+  recentDownloads.set(key, now);
+  return false;
+}
+
 async function countDownload(db, { day, file, now, ip, userAgent, country, asn, asOrg }) {
   const hash = await visitorHash(db, now, ip, userAgent);
+  if (isRepeat(`${hash}|${file}`, now)) return;
   const daily = await dailyStatements(db, DOWNLOADS_DAILY, { day, key: [file, SERVED], hash });
   const { browser, os } = parseUA(userAgent);
   // dl_ dimensions are counted per download, and kept apart from the ones
