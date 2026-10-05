@@ -103,6 +103,38 @@
         "installUrl": "https://play.google.com/store/apps/details?id=com.osmium.sound.companion",
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
         "author": { "@id": "https://osmiumsound.it/#organization" }
+      },
+      {
+        "@type": "Event",
+        "@id": "https://osmiumsound.it/#live-it",
+        "name": "Osmium Sound Launch Event — Edizione italiana",
+        "description": "Webinar di lancio di Osmium Sound in diretta su YouTube, in italiano: demo dal vivo e domande e risposte. Gratuito, con iscrizione su Eventbrite.",
+        "startDate": "2026-10-16T21:00:00+02:00",
+        "endDate": "2026-10-16T22:00:00+02:00",
+        "eventStatus": "https://schema.org/EventScheduled",
+        "eventAttendanceMode": "https://schema.org/OnlineEventAttendanceMode",
+        "location": { "@type": "VirtualLocation", "url": "https://www.eventbrite.it/e/osmium-sound-launch-event-edizione-italiana-tickets-2002962233960" },
+        "inLanguage": "it",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR", "availability": "https://schema.org/InStock", "url": "https://www.eventbrite.it/e/osmium-sound-launch-event-edizione-italiana-tickets-2002962233960" },
+        "image": "https://osmiumsound.it/screens/02-now-playing-amber.jpg",
+        "organizer": { "@id": "https://osmiumsound.it/#organization" }
+      },
+      {
+        "@type": "Event",
+        "@id": "https://osmiumsound.it/#live-en",
+        "name": "Discover Osmium Sound — Launch Event",
+        "description": "The Osmium Sound launch webinar, live on YouTube in English: a live demo and questions and answers. Free, sign up on Eventbrite.",
+        "startDate": "2026-10-17T18:00:00+02:00",
+        "endDate": "2026-10-17T19:00:00+02:00",
+        "eventStatus": "https://schema.org/EventScheduled",
+        "eventAttendanceMode": "https://schema.org/OnlineEventAttendanceMode",
+        "location": { "@type": "VirtualLocation", "url": "https://www.eventbrite.it/e/discover-osmium-sound-launch-event-tickets-2002961184822" },
+        "inLanguage": "en",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR", "availability": "https://schema.org/InStock", "url": "https://www.eventbrite.it/e/discover-osmium-sound-launch-event-tickets-2002961184822" },
+        "image": "https://osmiumsound.it/screens/02-now-playing-amber.jpg",
+        "organizer": { "@id": "https://osmiumsound.it/#organization" }
       }
     ]
   }
@@ -878,6 +910,62 @@
     footer a:hover { color: var(--text); }
     .footer-links { display: flex; gap: 1.75rem; }
 
+    /* ── LIVE LAUNCH EVENTS ──────────────────────────── */
+    /* A strip above the nav and a section under the hero. Both go away on
+       their own once the events are over (script at the bottom). */
+    .live-bar {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; flex-wrap: wrap; text-align: center;
+      padding: 9px clamp(1rem, 5vw, 4rem);
+      background: var(--accent); color: #000;
+      font-size: 0.86rem; line-height: 1.45; text-decoration: none;
+    }
+    .live-bar:hover .live-bar-cta { text-decoration: underline; }
+    .live-bar-cta { font-weight: 700; white-space: nowrap; }
+    .live-dot {
+      width: 9px; height: 9px; border-radius: 50%; flex: none;
+      background: #e0261b; box-shadow: 0 0 0 3px rgba(224,38,27,0.25);
+    }
+    #live {
+      position: relative;
+      border-top: 1px solid rgba(245,184,32,0.35);
+      background:
+        radial-gradient(ellipse 80% 70% at 50% 0%, rgba(245,184,32,0.10) 0%, transparent 70%),
+        var(--bg);
+    }
+    #live .section-label { display: inline-flex; align-items: center; gap: 8px; }
+    #live .section-desc { max-width: 620px; }
+    .live-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+      gap: 1.25rem;
+      max-width: 860px; margin: 2.5rem auto 0;
+    }
+    .live-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(245,184,32,0.45);
+      border-radius: var(--radius); padding: 1.75rem;
+      display: flex; flex-direction: column; gap: 0.5rem;
+      text-align: left;
+    }
+    .live-lang {
+      align-self: flex-start;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--accent);
+      background: var(--accent-dim); border: 1px solid rgba(245,184,32,0.35);
+      padding: 3px 10px; border-radius: 100px;
+    }
+    .live-card h3 { font-size: 1.25rem; font-weight: 700; line-height: 1.3; margin-top: 0.35rem; }
+    .live-when { font-size: 1.05rem; font-weight: 600; color: var(--text); }
+    .live-when small { display: block; font-size: 0.86rem; font-weight: 400; color: var(--muted); }
+    .live-local { font-size: 0.86rem; color: var(--muted); }
+    .live-cta { margin-top: auto; padding-top: 1rem; }
+    .live-cta .btn-primary { width: 100%; justify-content: center; }
+    @media (max-width: 600px) {
+      .live-bar { font-size: 0.8rem; gap: 4px 10px; }
+      .live-bar > .live-dot { display: none; }
+    }
+
     /* ── RESPONSIVE ──────────────────────────────────── */
     @media (max-width: 700px) {
       .nav-links { display: none; }
@@ -891,6 +979,13 @@
   <script defer src="/o.js"></script>
 </head>
 <body>
+
+<!-- LIVE LAUNCH EVENTS: strip above everything else, hidden once both are over -->
+<a class="live-bar" href="#live" data-live-any>
+  <span class="live-dot" aria-hidden="true"></span>
+  <span data-en="&lt;strong&gt;Live on YouTube:&lt;/strong&gt; the Osmium Sound launch, in Italian on Friday 16 October and in English on Saturday 17 October." data-it="&lt;strong&gt;In diretta su YouTube:&lt;/strong&gt; il lancio di Osmium Sound, in italiano venerdì 16 ottobre e in inglese sabato 17 ottobre."><strong>Live on YouTube:</strong> the Osmium Sound launch, in Italian on Friday 16 October and in English on Saturday 17 October.</span>
+  <span class="live-bar-cta" data-en="Sign up free &rarr;" data-it="Iscriviti gratis &rarr;">Sign up free &rarr;</span>
+</a>
 
 <!-- NAV -->
 <nav>
@@ -946,12 +1041,52 @@
     </a>
   </div>
   <div class="hero-pills">
+    <a class="pill pill-new" href="#live" data-live-any data-en="&lt;strong&gt;Live on YouTube:&lt;/strong&gt; 16 and 17 October" data-it="&lt;strong&gt;In diretta su YouTube:&lt;/strong&gt; 16 e 17 ottobre"><strong>Live on YouTube:</strong> 16 and 17 October</a>
     <a class="pill pill-new" href="#hardware" data-en="&lt;strong&gt;New:&lt;/strong&gt; older PCs with BIOS work too" data-it="&lt;strong&gt;Novità:&lt;/strong&gt; funziona anche sui PC con BIOS"><strong>New:</strong> older PCs with BIOS work too</a>
     <span class="pill"><strong>x86</strong> · Debian</span>
     <span class="pill"><strong>FLAC · DSD · 192kHz</strong></span>
     <span class="pill"><strong>Deezer · Qobuz · TIDAL · Spotify</strong></span>
     <span class="pill"><strong>AGPL-3.0</strong> Open Source</span>
     <a class="pill" href="#android" data-en="&lt;strong&gt;Android app&lt;/strong&gt; on Google Play" data-it="&lt;strong&gt;App Android&lt;/strong&gt; su Google Play"><strong>Android app</strong> on Google Play</a>
+  </div>
+</section>
+
+<!-- LIVE LAUNCH EVENTS on YouTube, sign-up on Eventbrite. Each card hides
+     itself when its event is over, the section when both are. Times are
+     Italian time; the script adds the visitor's own when it differs. -->
+<section id="live" data-live-any>
+  <div class="centered">
+    <div class="section-label"><span class="live-dot" aria-hidden="true"></span><span data-en="Live on YouTube" data-it="In diretta su YouTube">Live on YouTube</span></div>
+    <h2 class="section-title" data-en="The Osmium Sound launch event" data-it="L&#x27;evento di lancio di Osmium Sound">The Osmium Sound launch event</h2>
+    <p class="section-desc" data-en="One hour live: we show Osmium Sound at work and answer your questions. It is free: sign up on Eventbrite and the YouTube link reaches you by email before it starts." data-it="Un&#x27;ora in diretta: ti mostriamo Osmium Sound all&#x27;opera e rispondiamo alle tue domande. È gratis: iscriviti su Eventbrite e il link di YouTube ti arriva per email prima dell&#x27;inizio.">One hour live: we show Osmium Sound at work and answer your questions. It is free: sign up on Eventbrite and the YouTube link reaches you by email before it starts.</p>
+  </div>
+  <div class="live-grid">
+    <div class="live-card" data-live-start="2026-10-16T21:00:00+02:00" data-live-end="2026-10-16T22:00:00+02:00">
+      <span class="live-lang" data-en="In Italian" data-it="In italiano">In Italian</span>
+      <h3 data-en="Launch event — Italian edition" data-it="Evento di lancio — Edizione italiana">Launch event — Italian edition</h3>
+      <p class="live-when"><span data-en="Friday 16 October 2026" data-it="Venerdì 16 ottobre 2026">Friday 16 October 2026</span>
+        <small data-en="9:00 to 10:00 PM, Italian time" data-it="Dalle 21:00 alle 22:00, ora italiana">9:00 to 10:00 PM, Italian time</small></p>
+      <p class="live-local" hidden></p>
+      <div class="live-cta">
+        <a class="btn-primary" href="https://www.eventbrite.it/e/osmium-sound-launch-event-edizione-italiana-tickets-2002962233960" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span data-en="Sign up free" data-it="Iscriviti gratis">Sign up free</span>
+        </a>
+      </div>
+    </div>
+    <div class="live-card" data-live-start="2026-10-17T18:00:00+02:00" data-live-end="2026-10-17T19:00:00+02:00">
+      <span class="live-lang" data-en="In English" data-it="In inglese">In English</span>
+      <h3>Discover Osmium Sound — Launch Event</h3>
+      <p class="live-when"><span data-en="Saturday 17 October 2026" data-it="Sabato 17 ottobre 2026">Saturday 17 October 2026</span>
+        <small data-en="6:00 to 7:00 PM, Italian time" data-it="Dalle 18:00 alle 19:00, ora italiana">6:00 to 7:00 PM, Italian time</small></p>
+      <p class="live-local" hidden></p>
+      <div class="live-cta">
+        <a class="btn-primary" href="https://www.eventbrite.it/e/discover-osmium-sound-launch-event-tickets-2002961184822" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span data-en="Sign up free" data-it="Iscriviti gratis">Sign up free</span>
+        </a>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1549,6 +1684,37 @@
   document.querySelectorAll('.lang-switch button').forEach(b => {
     b.addEventListener('click', () => applyLang(b.dataset.lang));
   });
+
+  // Live launch events: a card goes away once its event has ended, and the
+  // strip, the hero pill and the section once both have. While a card is up,
+  // it also gives the time where the visitor is, when that is not Italy's.
+  (function () {
+    const now = Date.now();
+    const cards = Array.from(document.querySelectorAll('[data-live-end]'));
+    cards.forEach(card => {
+      const start = new Date(card.dataset.liveStart);
+      const end = new Date(card.dataset.liveEnd);
+      if (now > end.getTime()) { card.hidden = true; return; }
+      const local = card.querySelector('.live-local');
+      try {
+        const opts = { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' };
+        const here = new Intl.DateTimeFormat('en-GB', opts).format(start);
+        const rome = new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: 'Europe/Rome' }).format(start);
+        if (here === rome || !local) return;
+        const fmt = (l, d, o) => new Intl.DateTimeFormat(l, o).format(d);
+        const t = { hour: '2-digit', minute: '2-digit' };
+        const day = { weekday: 'long', day: 'numeric', month: 'long' };
+        local.dataset.en = 'Where you are: ' + fmt('en-GB', start, day) + ', ' +
+          fmt('en-GB', start, t) + ' to ' + fmt('en-GB', end, t);
+        local.dataset.it = 'Dove sei tu: ' + fmt('it-IT', start, day) + ', dalle ' +
+          fmt('it-IT', start, t) + ' alle ' + fmt('it-IT', end, t);
+        local.hidden = false;
+      } catch (e) { /* no Intl time zones: Italian time alone is still right */ }
+    });
+    if (cards.length && cards.every(c => c.hidden)) {
+      document.querySelectorAll('[data-live-any]').forEach(el => { el.hidden = true; });
+    }
+  })();
 
   // Initial language: saved preference → browser language → English
   (function () {
