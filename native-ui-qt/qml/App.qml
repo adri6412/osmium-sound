@@ -67,6 +67,18 @@ Item {
         changerDiscs = discs
         Sys.setConf("changer-discs", JSON.stringify(discs))
     }
+    // Discs put in from an app while the changer was not the one playing:
+    // in it, not yet in Lyrion's queue. The next Play plays the changer from
+    // disc 1, as Done does in its view (an app has no such button).
+    property bool changerPending: Sys.conf("changer-pending", "0") === "1"
+    function setChangerPending(on) { changerPending = on; Sys.setConf("changer-pending", on ? "1" : "0") }
+    // Every Play goes through here first (mini player, Now Playing, the
+    // remote, the scenes' keys): true when it was the changer's to take.
+    function changerTakesPlay() {
+        if (!changerPending || changerDiscs.length === 0 || Player.playing) return false
+        changerLoad(changerDiscs)
+        return true
+    }
     // whether the queue playing is the changer's: the album on air is one of its discs
     function changerPlaying() {
         for (var i = 0; i < changerDiscs.length; i++) if (changerDiscs[i].title === Player.album) return true
@@ -87,6 +99,7 @@ Item {
         var before = changerDiscs, kept = changerPlaying() && before.length <= discs.length
         for (var j = 0; kept && j < before.length; j++) kept = changerUid(before[j]) === changerUid(discs[j])
         changerSave(discs)
+        setChangerPending(false)
         var cmds = []
         for (var k = kept ? before.length : 0; k < discs.length; k++) cmds = cmds.concat(changerCmds(discs[k], k === 0))
         changerRun(cmds, function() { changerLearn.restart() })
@@ -116,8 +129,13 @@ Item {
         var playing = changerPlaying()
         discs.push(d)
         changerSave(discs)
-        if (playing) changerRun(changerCmds(d, false), function() { changerLearn.restart() })
-        toast.say("disc-3", Tr.tf("player.changer.putDone", "n", String(discs.length)))
+        if (playing) {
+            changerRun(changerCmds(d, false), function() { changerLearn.restart() })
+            toast.say("disc-3", Tr.tf("player.changer.putDone", "n", String(discs.length)))
+        } else {
+            setChangerPending(true)
+            toast.say("disc-3", Tr.tf("player.changer.putWait", "n", String(discs.length)))
+        }
     }
     // An app's album may be named in its menu otherwise than its tracks name
     // it ("Artist - Album (2019)"): once loaded, the albums of the queue, in
@@ -144,6 +162,7 @@ Item {
     function changerClear() {
         if (changerPlaying()) Player.cmd(["playlist", "clear"])
         changerSave([])
+        setChangerPending(false)
     }
     // tempo dell'ultimo tocco (per l'auto-apertura e il salvaschermo)
     readonly property real lastInput: Sys.lastInput
@@ -276,8 +295,8 @@ Item {
         case "menu": Nav.activate(true); return            // come tenere il dito premuto
         case "back": remoteBack(); return
         case "home": remoteHome(); return
-        case "playPause": Player.togglePlay(); return
-        case "play": Player.play(true); return
+        case "playPause": if (!changerTakesPlay()) Player.togglePlay(); return
+        case "play": if (!changerTakesPlay()) Player.play(true); return
         case "pause": Player.play(false); return
         case "stop": Player.cmd(["stop"]); return
         case "next": Player.next(); return

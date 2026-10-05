@@ -389,6 +389,7 @@
       "done": "Fatto",
       "clear": "Svuota",
       "putIn": "Metti nel caricatore CD",
+      "putWait": "Disco {n} nel caricatore CD: premi Play per ascoltarlo",
       "putDone": "Nel caricatore CD come disco {n}",
       "full": "Il caricatore contiene 101 dischi",
       "empty": "Nessun album"

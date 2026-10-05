@@ -162,7 +162,7 @@ Item {
                 name: "pause"; filled: true; size: 20; color: Theme.black; scale: playTap.tapScale
                 opacity: miniPlayBtn.pf; visible: opacity > 0.01
             }
-            Tap { id: playTap; tap: 0.94; grow: 4; onClicked: Player.togglePlay() }
+            Tap { id: playTap; tap: 0.94; grow: 4; onClicked: if (!(Ui.app && Ui.app.changerTakesPlay())) Player.togglePlay() }
         }
         Item {
             x: 208; y: 6; width: 40; height: 40

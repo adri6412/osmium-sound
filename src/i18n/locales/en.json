@@ -389,6 +389,7 @@
       "done": "Done",
       "clear": "Clear",
       "putIn": "Put in the CD changer",
+      "putWait": "Disc {n} in the CD changer: press Play to listen",
       "putDone": "In the CD changer as disc {n}",
       "full": "The changer holds 101 discs",
       "empty": "No albums"

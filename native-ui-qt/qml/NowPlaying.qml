@@ -370,7 +370,7 @@ Item {
                     name: "pause"; filled: true; size: 26; color: Theme.black
                     opacity: playBtn.pf; visible: opacity > 0.01; scale: playTap.tapScale
                 }
-                Tap { id: playTap; tap: 0.95; grow: 4; onClicked: Player.togglePlay() }
+                Tap { id: playTap; tap: 0.95; grow: 4; onClicked: if (!(Ui.app && Ui.app.changerTakesPlay())) Player.togglePlay() }
             }
             Item {                                 // successivo
                 x: 134 + 12 - 22 + 3 * controls.g; y: controls.cy - 22; width: 44; height: 44

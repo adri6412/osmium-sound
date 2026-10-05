@@ -211,7 +211,8 @@ Item {
             else if (name === "next") Player.next()
             else if (name === "play") {
                 if (!Player.power) Player.cmd(["power", "1"])
-                Player.play(true)
+                // discs waiting in the CD changer: its Play is Done
+                if (!(Ui.app && Ui.app.changerTakesPlay())) Player.play(true)
             }
             else if (name === "pause") Player.play(false)
             else if (name === "stop" || name === "eject") Player.cmd(["stop"])
