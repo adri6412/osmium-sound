@@ -245,6 +245,16 @@ def rpc(player, params):
         elif sub == "move": QUEUE.insert(int(params[3]), QUEUE.pop(int(params[2])))
         elif sub == "clear": QUEUE.clear()
         elif sub == "save": r = {"__playlist_id": 9}
+        elif sub in ("play", "add") and len(params) > 2 and "://track/" in str(params[2]):
+            # one track of an app's album by its address: its album is named
+            # after the app's item, otherwise than the app's menu names it
+            item = str(params[2]).split("://track/")[1].rsplit("/", 1)
+            name = "Album %s (2019)" % item[0]
+            track = (f"Track {item[1].split('.')[0]} of {name}", "App Artist", name)
+            if sub == "play":
+                QUEUE[:] = [track]; STATE["index"] = 0; STATE["time"] = 0.0; STATE["mode"] = "play"
+            else:
+                QUEUE.append(track)
         elif sub in ("play", "add") and len(params) > 2 and "://album/" in str(params[2]):
             # an app's album by its URL (the CD changer): three tracks whose
             # album is named otherwise than the app's menu names it
@@ -393,6 +403,11 @@ def rpc(player, params):
                     QUEUE[:] = tracks; STATE["index"] = 0; STATE["time"] = 0.0; STATE["mode"] = "play"
                 else:
                     QUEUE.extend(tracks)
+        elif "want_url:1" in params:
+            # an album's tracks with their addresses (the CD changer reads them)
+            item = next((p[8:] for p in params if isinstance(p, str) and p.startswith("item_id:")), "")
+            r = {"count": 3, "loop_loop": [{"id": f"{item}.{n}", "name": f"Track {n + 1}", "isaudio": 1,
+                                             "url": f"{cmd}://track/{item}/{n + 1}.flac"} for n in range(3)]}
         else:
             r = {"loop_loop": [plugin_item(cmd, i) for i in range(9)],
                  "item_loop": [menu_item(cmd, i) for i in range(9)]}

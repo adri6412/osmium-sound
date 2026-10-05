@@ -23,9 +23,10 @@ Item {
     // The discs in the changer, disc 1 first, kept across restarts so the
     // changer still finds them in the same slots. A disc is an album of the
     // library { id, title, art (the cover's id) } or one from an app (Qobuz,
-    // Spotify...) put in from its long-press menu { title, artUrl, url (what
-    // Favourites would keep: stable), cmd + item (the app's own item), or
-    // from a Jive menu its playCmd / addCmd }.
+    // Spotify...) put in from its long-press menu { title, artUrl, urls (its
+    // tracks' addresses, read when it goes in: stable, unlike the app's item
+    // ids, which follow its menus and searches), or failing those url (what
+    // Favourites would keep) or cmd + item (the app's own item) }.
     property var changerDiscs: {
         try { var d = JSON.parse(Sys.conf("changer-discs", "[]")); return Array.isArray(d) ? d : [] } catch (e) { return [] }
     }
@@ -42,14 +43,25 @@ Item {
     }
     // what tells two discs apart
     function changerUid(d) {
-        return d.id ? "a:" + d.id : "u:" + (d.url || (d.playCmd ? JSON.stringify(d.playCmd) : d.cmd + ":" + d.item))
+        return d.id ? "a:" + d.id : "u:" + (d.urls && d.urls.length ? d.urls[0] : d.url || d.cmd + ":" + d.item)
     }
-    // the Lyrion command that loads a disc (the queue replaced) or adds it
-    function changerCmd(d, load) {
-        if (d.id) return ["playlistcontrol", "cmd:" + (load ? "load" : "add"), "album_id:" + d.id]
-        if (d.url) return ["playlist", load ? "play" : "add", d.url, d.title]
-        if (d.playCmd) return load || !(d.addCmd && d.addCmd.length) ? d.playCmd : d.addCmd
-        return [d.cmd, "playlist", load ? "play" : "add", "item_id:" + d.item]
+    // the Lyrion commands that load a disc (the queue replaced) or add it
+    function changerCmds(d, load) {
+        if (d.id) return [["playlistcontrol", "cmd:" + (load ? "load" : "add"), "album_id:" + d.id]]
+        if (d.urls && d.urls.length)
+            return d.urls.map(function(u, i) { return ["playlist", load && i === 0 ? "play" : "add", u] })
+        if (d.url) return [["playlist", load ? "play" : "add", d.url, d.title]]
+        return [[d.cmd, "playlist", load ? "play" : "add", "item_id:" + d.item]]
+    }
+    // commands one after the other (separate requests could reach Lyrion
+    // out of order), then `done`
+    function changerRun(cmds, done) {
+        var k = 0
+        function next() {
+            if (k >= cmds.length) { if (done) done(); return }
+            Player.query(cmds[k++], function() { next() })
+        }
+        next()
     }
     function changerSave(discs) {
         changerDiscs = discs
@@ -69,29 +81,33 @@ Item {
         var discs = []
         for (var i = 0; i < albums.length && discs.length < 101; i++) {
             var d = changerDiscOf(albums[i])
-            if (d && (d.id || d.url || d.item || d.playCmd)) discs.push(d)
+            if (d && (d.id || (d.urls && d.urls.length) || d.url || d.item)) discs.push(d)
         }
         if (!discs.length) return
         var before = changerDiscs, kept = changerPlaying() && before.length <= discs.length
         for (var j = 0; kept && j < before.length; j++) kept = changerUid(before[j]) === changerUid(discs[j])
         changerSave(discs)
-        // one after the other: separate requests could reach Lyrion out of order
-        var k = kept ? before.length : 0
-        function next() {
-            if (k >= discs.length) { changerLearn.restart(); return }
-            var c = changerCmd(discs[k], k === 0)
-            k++
-            Player.query(c, function() { next() })
-        }
-        next()
+        var cmds = []
+        for (var k = kept ? before.length : 0; k < discs.length; k++) cmds = cmds.concat(changerCmds(discs[k], k === 0))
+        changerRun(cmds, function() { changerLearn.restart() })
         setExpanded(true)
         np.openStage("changer")
     }
     // An album from an app, put in from its long-press menu: the next disc.
     // When the changer is the one playing it joins its queue at once;
     // otherwise Done in the CD changer view plays them all.
+    // Its tracks' addresses are read first (the app's item, `want_url`).
     function changerPut(d) {
         if (changerDiscs.length >= 101) { toast.show(Tr.t("player.changer.full")); return }
+        if (d.cmd && d.item && !d.urls) {
+            Player.query([d.cmd, "items", "0", "500", "item_id:" + d.item, "want_url:1"], function(ok, r) {
+                var loop = ok && r ? r.loop_loop || r.item_loop || [] : [], urls = []
+                for (var i = 0; i < loop.length; i++)
+                    if (loop[i].url && (loop[i].isaudio === 1 || loop[i].isaudio === "1" || loop[i].type === "audio")) urls.push(String(loop[i].url))
+                app.changerPut(Object.assign({}, d, { urls: urls }))
+            })
+            return
+        }
         var discs = changerDiscs.slice()
         for (var i = 0; i < discs.length; i++) if (changerUid(discs[i]) === changerUid(d)) {
             toast.say("disc-3", Tr.tf("player.changer.putDone", "n", String(i + 1)))
@@ -100,7 +116,7 @@ Item {
         var playing = changerPlaying()
         discs.push(d)
         changerSave(discs)
-        if (playing) Player.query(changerCmd(d, false), function() { changerLearn.restart() })
+        if (playing) changerRun(changerCmds(d, false), function() { changerLearn.restart() })
         toast.say("disc-3", Tr.tf("player.changer.putDone", "n", String(discs.length)))
     }
     // An app's album may be named in its menu otherwise than its tracks name
