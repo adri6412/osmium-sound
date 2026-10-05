@@ -27,6 +27,10 @@ Item {
                                       : Player.vuEnabled ? (Player.isOwn ? "vu" : "") : (animChosen ? "anim" : "")
     property bool stageOpen: false
     onStageOpenChanged: if (!stageOpen) stageAnim = ""
+    // an animation or a meter look chosen meanwhile (the remote's keys, the
+    // chooser) wins over it at once
+    readonly property string chosenLook: Player.vuEnabled + "/" + Player.vuStyle + "/" + Player.npAnimation
+    onChosenLookChanged: stageAnim = ""
     function openStage(kind) { stageAnim = kind || ""; stageOpen = true }
     readonly property bool staged: stageOpen && stageMode !== ""
     signal collapse()
