@@ -3,11 +3,14 @@
 // one in front facing us with its album printed on the label, the others
 // turned edge-on; the changer itself (the Now Playing scene, AnimChanger.qml)
 // stands below, live. Flip through with a finger, the wheel, the arrows or
-// the remote. A tap on the front disc (OK on the remote) puts it in the
-// changer: it flies into the changer's window and becomes the next disc,
-// numbered; a tap on a loaded one takes it out again. "Done" plays them one
-// after the other (App.changerLoad), the Now Playing at full screen on the
-// changer. A long press opens the album's menu, as in the grid.
+// the remote. The discs already in the changer wear a gold ring and their
+// number. A tap on the front disc (OK on the remote) puts it in the changer:
+// it flies into the changer's window and becomes the next disc; a tap on a
+// loaded one takes it out again. "Done" plays them one after the other
+// (App.changerLoad: discs added to those playing join the queue), the Now
+// Playing at full screen on the changer; "Clear" empties the changer and its
+// queue (App.changerClear). A long press opens the album's menu, as in the
+// grid.
 //
 // Like Cover Flow, only the discs in sight exist and each keeps its album
 // while it is in view: a step reloads one picture. Nothing repaints while
@@ -44,8 +47,14 @@ Item {
     // where its window is, for the discs flying in (AnimChanger: a 600 x 260
     // stage fitted and centred in its box, the window centred at 235.5, 106)
     readonly property real stageS: Math.min(box.width / 600, box.height / 260)
+    // the drive's opening at the top of the window, at the loader: where a
+    // disc put in reaches the scene, which takes it down into its slot
+    // (AnimChanger: loader x 255.5; the disc's centre at dropStart 0.55 of
+    // the way up is 94 - 0.55 * 150 into the window, which starts at 25.5)
     readonly property point slotIn: Qt.point(box.x + (box.width - 600 * stageS) / 2 + 255.5 * stageS,
-                                             box.y + (box.height - 260 * stageS) / 2 + 100 * stageS)
+                                             box.y + (box.height - 260 * stageS) / 2 + (25.5 + 94 - 0.55 * 150) * stageS)
+    // there it stands nearly edge-on, as the discs at the loader do
+    readonly property real slotTurn: 84
 
     // ─── position (as in Cover Flow: pos in albums, a spring between) ──────
     property real pos: 0
@@ -70,9 +79,26 @@ Item {
     readonly property var curItem: (root.rev, root.count > 0 ? Library.get(root.cur) : null)
 
     // ─── the discs put in the changer, in order ────────────────────────────
-    // [{ id, text, art }]: disc 1 is the first one put in. A disc on its way
-    // (flying into the window) is in `flights` until it lands.
+    // [{ id, text, art }]: disc 1 is the first one put in. It starts as what
+    // the changer holds (App.changerDiscs) and follows it when that changes;
+    // a disc on its way (flying into the window) is in `flights` until it
+    // lands.
     property var chosen: []
+    function fromChanger() {
+        chosen = Ui.app ? Ui.app.changerDiscs.map(function(d) { return { id: d.id, text: d.title, art: d.art || "" } }) : []
+    }
+    Component.onCompleted: fromChanger()
+    Connections {
+        target: Ui.app
+        function onChangerDiscsChanged() { root.fromChanger() }
+    }
+    // what Done would change: discs added or taken out since the last load
+    readonly property bool changed: {
+        var held = Ui.app ? Ui.app.changerDiscs : []
+        if (flights.count > 0 || held.length !== chosen.length) return true
+        for (var i = 0; i < held.length; i++) if (held[i].id !== chosen[i].id) return true
+        return false
+    }
     function chosenAt(id) {
         for (var i = 0; i < chosen.length; i++) if (chosen[i].id === id) return i
         return -1
@@ -89,6 +115,8 @@ Item {
         var i = chosenAt(id)
         if (i >= 0) { var c = chosen.slice(); c.splice(i, 1); chosen = c; return }
         if (chosen.length + flights.count >= 101) { Ui.toast.show(Tr.t("player.changer.full")); return }
+        // the changer turns its file to the next empty slot while the disc flies
+        if (changer.scene && changer.scene.prepare) changer.scene.prepare(chosen.length + flights.count)
         flights.append({ albumId: id, text: it.text, art: it.art || "", sub: it.sub || "" })
     }
     // a disc reached the window: it is in the changer now
@@ -96,6 +124,9 @@ Item {
         var f = flightOf(id)
         if (f < 0) return
         var it = flights.get(f)
+        // first the scene (the slot stays empty until the disc comes down),
+        // then the list that puts the album on the disc in that slot
+        if (changer.scene && changer.scene.insert) changer.scene.insert(chosen.length)
         var c = chosen.slice()
         c.push({ id: it.albumId, text: it.text, art: it.art, sub: it.sub })
         chosen = c
@@ -107,18 +138,28 @@ Item {
     function done() {
         if (flights.count > 0) { doneWanted = true; return }
         doneWanted = false
-        var c = chosen
-        if (!c.length) return
+        if (!chosen.length) return
+        if (Ui.app) Ui.app.changerLoad(chosen)
+    }
+    // Clear: the changer empty, nothing on its way, its queue cleared
+    function clearAll() {
+        flights.clear()
+        doneWanted = false
         chosen = []
-        if (Ui.app) Ui.app.changerLoad(c)
+        if (Ui.app) Ui.app.changerClear()
     }
 
     Rectangle { anchors.fill: parent; color: Theme.dark }
 
     // ─── the changer, live, below the discs ────────────────────────────────
     NpAnimation {
+        id: changer
         x: root.box.x; y: root.box.y; width: root.box.width; height: root.box.height
         kind: "changer"
+        // the discs as they are put in, not those of the last load; the file
+        // holds only real discs, so their empty slots show
+        changerDiscs: root.chosen.map(function(d) { return { album: d.text, art: d.art ? Api.lmsBase + "/music/" + d.art + "/cover?size=300" : "" } })
+        changerSparse: true
         active: root.visible && !!Ui.app && !Ui.app.expanded
         devScale: root.devScale
     }
@@ -386,7 +427,7 @@ Item {
                 color: clearTap.mix(Theme.wa(0.06), Theme.wa(0.14))
                 scale: clearTap.tapScale
                 Text { id: clearText; anchors.centerIn: parent; text: Tr.t("player.changer.clear"); color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 12 }
-                Tap { id: clearTap; tap: 0.94; onClicked: { root.chosen = []; root.doneWanted = false } }
+                Tap { id: clearTap; tap: 0.94; onClicked: root.clearAll() }
             }
             Rectangle {
                 width: loadRow.implicitWidth + 28; height: 32; radius: 16
@@ -407,6 +448,7 @@ Item {
     // A ListModel, not an array: a new flight must not restart the others.
     ListModel { id: flights }
     onVisibleChanged: if (!visible) { while (flights.count > 0) landed(flights.get(0).albumId) }
+                      else fromChanger()
     Repeater {
         model: flights
         Item {
@@ -423,22 +465,20 @@ Item {
                 angle: fly.turn
             }
             Disc { src: fly.art ? Api.lmsBase + "/music/" + fly.art + "/cover?size=" + root.px : ""; label: (root.chosen.length + 3) % 10 }
-            // up a little out of the row, then down into the window, shrinking
-            // and turning edge-on as it joins the file
+            // up a little out of the row, then to the drive's opening in the
+            // window, shrinking to the size of the discs in the file and
+            // turning edge-on like them; there the changer takes it down into
+            // its slot (the copy goes the moment the scene's disc appears)
             SequentialAnimation {
                 running: true
                 NumberAnimation { target: fly; property: "y"; to: root.discY - root.cs * 0.12; duration: Theme.dur(160); easing.type: Easing.OutQuad }
                 ParallelAnimation {
-                    NumberAnimation { target: fly; property: "x"; to: root.slotIn.x - root.cs / 2; duration: Theme.dur(600); easing.type: Easing.InOutCubic }
-                    NumberAnimation { target: fly; property: "y"; to: root.slotIn.y - root.cs / 2; duration: Theme.dur(600); easing.type: Easing.InCubic }
-                    NumberAnimation { target: fly; property: "scale"; to: Math.max(0.2, 116 * root.stageS / root.cs); duration: Theme.dur(600); easing.type: Easing.InQuad }
-                    NumberAnimation { target: fly; property: "turn"; to: 80; duration: Theme.dur(600); easing.type: Easing.InQuad }
-                    SequentialAnimation {
-                        PauseAnimation { duration: Theme.dur(460) }
-                        NumberAnimation { target: fly; property: "opacity"; to: 0; duration: Theme.dur(140) }
-                    }
+                    NumberAnimation { target: fly; property: "x"; to: root.slotIn.x - root.cs / 2; duration: Theme.dur(640); easing.type: Easing.InOutCubic }
+                    NumberAnimation { target: fly; property: "y"; to: root.slotIn.y - root.cs / 2; duration: Theme.dur(640); easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: fly; property: "scale"; to: Math.max(0.1, 128 * root.stageS / root.cs); duration: Theme.dur(640); easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: fly; property: "turn"; to: root.slotTurn; duration: Theme.dur(640); easing.type: Easing.InQuad }
                 }
-                ScriptAction { script: Qt.callLater(root.landed, fly.albumId) }
+                ScriptAction { script: { fly.opacity = 0; Qt.callLater(root.landed, fly.albumId) } }
             }
         }
     }

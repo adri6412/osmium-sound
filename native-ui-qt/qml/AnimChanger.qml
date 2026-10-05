@@ -48,6 +48,10 @@ Item {
     // the albums loaded in the changer, disc 1 first: [{ key, art }], key as
     // mediaKey (NpAnimation.albumKey)
     property var discs: []
+    // Empty slots after the loaded discs, where the next ones go: shown when
+    // discs are loaded, or always with `sparse` (the albums view, where discs
+    // are put in). Otherwise the file is full.
+    property bool sparse: false
     signal action(string name, var value)
 
     // ── design: 600 x 260 points, scaled uniformly and centred ─────────────
@@ -102,7 +106,25 @@ Item {
     property bool ejected: false             // open/close or unload: back in the file until play
     property string word: ""                 // the display's word during the moves
 
-    readonly property bool busy: turning || moving
+    readonly property bool busy: turning || moving || dropping
+    readonly property bool gapShown: sparse || discs.length > 0
+    readonly property int gapSlots: 6
+    // the slot of the album playing, which has a disc even when not loaded
+    readonly property int curSlot: live && hasTrack && mediaKey !== "" ? slotFor(mediaKey) : -1
+
+    // ── a disc put in from the albums view (ChangerView) ───────────────────
+    // prepare(slot) turns the file to that empty slot while the disc flies
+    // to the window; insert(slot) brings it down from the drive's opening
+    // into the slot (from `dropStart` of the way up: where the flying disc
+    // left off). Several can queue; until then the slot stays empty.
+    property int prepSlot: -1
+    property var drops: []                   // slots whose disc is on its way down, in order
+    property int dropSlot: -1
+    property real drop: 0                    // 1 up in the drive .. 0 in its slot
+    property bool dropping: false
+    readonly property real dropStart: 0.55
+    function prepare(slot) { if (live && active) { prepSlot = slot; Qt.callLater(step) } }
+    function insert(slot) { if (live && active) { drops = drops.concat([slot]); Qt.callLater(step) } }
 
     // each album its own slot: the loaded discs in order, then any other
     // album always in the same place among the slots left
@@ -115,8 +137,11 @@ Item {
         if (d >= 0) return d
         var h = 7
         for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 1000003
-        var free = slots - Math.min(discs.length, slots - 1)
-        return slots - free + h % free
+        // its own slot whatever is loaded, so putting discs in does not move
+        // the album playing; only when a loaded disc sits there it takes the
+        // next free one
+        var n = Math.min(discs.length, slots - 1), at = h % slots
+        return at >= n ? at : n + h % (slots - n)
     }
     // the artwork printed on a slot's disc: a loaded album's, or the album
     // playing when it is none of those
@@ -125,8 +150,8 @@ Item {
         return no === artSlot ? artUrl : ""
     }
     function stopAll() {
-        turnAnim.stop(); liftAnim.stop()
-        turning = false; moving = false
+        turnAnim.stop(); liftAnim.stop(); dropAnim.stop()
+        turning = false; moving = false; dropping = false; dropSlot = -1
     }
     function pose() {
         stopAll()
@@ -140,16 +165,47 @@ Item {
             // off screen: the disc goes back, the file stays where it is
             stopAll()
             lift = 0; outSlot = -1; outKey = ""; word = ""
+            prepSlot = -1; drops = []
             return
         }
         Qt.callLater(step)
     }
+    function turnTo(tgt) {
+        var fwd = ((tgt - atSlot) % slots + slots) % slots
+        var n = fwd <= 60 ? fwd : fwd - slots            // the target comes in from the right, mostly
+        word = ""
+        turning = true
+        turnAnim.from = drumAngle
+        turnAnim.to = drumAngle + n * pitch
+        turnAnim.duration = Math.min(3800, 700 + 42 * Math.abs(n))
+        turnAnim.target_ = tgt
+        turnAnim.start()
+    }
     // one move at a time; each one's end comes back here
     function step() {
         if (!live || !active || busy) return
+        // discs being put in come first: the file turns to the slot, waits
+        // there for the disc and lets it down
+        if (prepSlot >= 0 || drops.length > 0) {
+            var s = drops.length > 0 ? drops[0] : prepSlot
+            if (atSlot !== s) { turnTo(s); return }
+            if (drops.length === 0) return                  // still flying: wait at its slot
+            drops = drops.slice(1)
+            if (prepSlot === s) prepSlot = -1
+            dropSlot = s
+            word = "LOAd"
+            dropping = true
+            drop = dropStart
+            dropAnim.duration = Math.round(1700 * dropStart)
+            dropAnim.start()
+            return
+        }
         var want = power && hasTrack && !ejected && mediaKey !== ""
         var tgt = want ? slotFor(mediaKey) : -1
         if (lift > 0.0001 && (!want || outKey !== mediaKey || outSlot !== tgt)) {
+            // its slot back under the loader first: the file may have turned
+            // while the disc was in the drive
+            if (atSlot !== outSlot && outSlot >= 0) { turnTo(outSlot); return }
             word = "UnLd"
             moving = true
             liftAnim.to = 0
@@ -159,19 +215,10 @@ Item {
         }
         if (lift <= 0.0001) { outSlot = -1; outKey = "" }
         if (tgt < 0) { word = ""; return }
+        // in the drive: the file may stand anywhere
+        if (lift >= 0.9999 && outSlot === tgt) { word = ""; return }
         if (artSlot !== tgt) { artSlot = tgt; artUrl = artwork }
-        if (atSlot !== tgt) {
-            var fwd = ((tgt - atSlot) % slots + slots) % slots
-            var n = fwd <= 60 ? fwd : fwd - slots            // the target comes in from the right, mostly
-            word = ""
-            turning = true
-            turnAnim.from = drumAngle
-            turnAnim.to = drumAngle + n * pitch
-            turnAnim.duration = Math.min(3800, 700 + 42 * Math.abs(n))
-            turnAnim.target_ = tgt
-            turnAnim.start()
-            return
-        }
+        if (atSlot !== tgt) { turnTo(tgt); return }
         if (lift < 0.9999) {
             outSlot = tgt; outKey = mediaKey
             word = "LOAd"
@@ -206,6 +253,17 @@ Item {
         }
     }
     NumberAnimation {
+        id: dropAnim
+        target: root; property: "drop"; to: 0
+        easing.type: Easing.InOutSine
+        onFinished: {
+            root.dropping = false
+            root.dropSlot = -1
+            root.word = ""
+            Qt.callLater(root.step)
+        }
+    }
+    NumberAnimation {
         id: liftAnim
         target: root; property: "lift"
         easing.type: Easing.InOutSine
@@ -226,7 +284,7 @@ Item {
         onTriggered: root.blink = !root.blink
         onRunningChanged: root.blink = true
     }
-    readonly property bool ledsOn: !live || (power && (lift > 0.0001 || (turning && blink) || moving))
+    readonly property bool ledsOn: !live || (power && (lift > 0.0001 || (turning && blink) || moving || dropping))
 
     // ── the display ────────────────────────────────────────────────────────
     readonly property int passing: ((Math.round(drumAngle / pitch) % slots) + slots) % slots
@@ -237,7 +295,7 @@ Item {
     readonly property string cells: {
         if (!live) return " 37" + "03" + "0247"
         if (!power) return ""
-        var disc = turning ? passing : outSlot >= 0 ? outSlot : atSlot
+        var disc = turning ? passing : dropping ? dropSlot : outSlot >= 0 ? outSlot : atSlot
         var d = pad(disc + 1, 3, " ")
         if (turning) return d + "--" + "    "
         if (word !== "") return d + "--" + word
@@ -368,12 +426,19 @@ Item {
                         readonly property real sc: root.focal / (root.focal + root.radius * (1 - Math.cos(rad)))
                         readonly property real side: Math.abs(Math.sin(rad))
                         readonly property bool out: no === root.outSlot
-                        readonly property real up: out ? root.lift * root.liftTravel : 0
+                        readonly property real up: (out ? root.lift * root.liftTravel : 0)
+                                                 + (no === root.dropSlot ? root.drop * root.liftTravel : 0)
+                        // a disc in this slot: not in the empty ones after the
+                        // loaded discs (unless the album playing sits there), not
+                        // one still on its way down
+                        readonly property bool filled: !(root.gapShown && no >= root.discs.length && no < root.discs.length + root.gapSlots
+                                                         && no !== root.curSlot && !out)
+                                                       && root.drops.indexOf(no) < 0
                         readonly property real cx: root.axisX + root.radius * Math.sin(rad) * sc
                         readonly property real cy: root.eyeY + (root.discY - root.eyeY) * sc - up * sc
                         // the album printed on this disc's label, if it is one we know
                         readonly property string art: root.artFor(no)
-                        visible: Math.abs(phi) < 62
+                        visible: Math.abs(phi) < 62 && filled
                         z: 100 - Math.abs(phi)
                         // the face: the labels look right, the shiny sides left
                         Item {

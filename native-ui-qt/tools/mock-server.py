@@ -175,6 +175,11 @@ def rpc(player, params):
                                     "remote_title": rd.get("station", ""), "coverid": "-94761577295040", "type": "mp3",
                                     "url": rd.get("url", "https://ella.stream46.radiohost.de/ella-piano-trios_mp3-192"),
                                     "duration": "0", "remote": 1, "bitrate": "192kbps"}]}
+        elif len(params) > 1 and params[1] == "-" and not QUEUE:
+            # an empty queue (cleared): stopped, nothing on air
+            r = {"player_name": "Osmium", "mode": "stop", "time": 0, "mixer volume": STATE["volume"], "power": STATE["power"],
+                 "playlist_tracks": 0, "playlist repeat": STATE["repeat"], "playlist shuffle": STATE["shuffle"],
+                 "will_sleep_in": STATE["sleep"], "playlist_loop": []}
         elif len(params) > 1 and params[1] == "-":
             t = QUEUE[STATE["index"] % len(QUEUE)]
             owner = next((p["name"] for p in players_now() if p["playerid"] == player), "Osmium")
@@ -217,7 +222,7 @@ def rpc(player, params):
         sub = params[1]
         if sub == "index":
             v = params[2]
-            STATE["index"] = (STATE["index"] + int(v)) % len(QUEUE) if v[0] in "+-" else int(v)
+            STATE["index"] = (STATE["index"] + int(v)) % max(1, len(QUEUE)) if v[0] in "+-" else int(v)
             STATE["time"] = 0.0                    # another track starts from the beginning
         elif sub == "shuffle": STATE["shuffle"] = int(params[2])
         elif sub == "repeat": STATE["repeat"] = int(params[2])

@@ -31,19 +31,28 @@ Item {
     readonly property var changerScene: changerDiscs.map(function(d) {
         return { album: d.title, art: d.art ? Api.lmsBase + "/music/" + d.art + "/cover?size=300" : "" }
     })
+    // whether the queue playing is the changer's: the album on air is one of its discs
+    function changerPlaying() {
+        for (var i = 0; i < changerDiscs.length; i++) if (changerDiscs[i].title === Player.album) return true
+        return false
+    }
     // Load the chosen albums (library rows: { id, text, art }) as discs 1, 2,
     // 3... and play them one after the other, like a changer: the queue is
-    // the albums in that order. The Now Playing opens at full screen on the
-    // changer, whatever animation the owner chose (that stays as it is).
+    // the albums in that order. Discs only added after those the changer is
+    // already playing join the end of the queue, the music goes on. The Now
+    // Playing opens at full screen on the changer, whatever animation the
+    // owner chose (that stays as it is).
     function changerLoad(albums) {
         var discs = []
         for (var i = 0; i < albums.length && discs.length < 101; i++)
             if (albums[i] && albums[i].id) discs.push({ id: String(albums[i].id), title: albums[i].text, art: albums[i].art || "" })
         if (!discs.length) return
+        var before = changerDiscs, kept = changerPlaying() && before.length <= discs.length
+        for (var j = 0; kept && j < before.length; j++) kept = before[j].id === discs[j].id
         changerDiscs = discs
         Sys.setConf("changer-discs", JSON.stringify(discs))
         // one after the other: separate requests could reach Lyrion out of order
-        var k = 0
+        var k = kept ? before.length : 0
         function next() {
             if (k >= discs.length) return
             var c = ["playlistcontrol", "cmd:" + (k === 0 ? "load" : "add"), "album_id:" + discs[k].id]
@@ -53,6 +62,13 @@ Item {
         next()
         setExpanded(true)
         np.openStage("changer")
+    }
+    // Empty the changer: no discs in it any more, and its queue cleared when
+    // it is the one playing (an unrelated queue is left alone).
+    function changerClear() {
+        if (changerPlaying()) Player.cmd(["playlist", "clear"])
+        changerDiscs = []
+        Sys.setConf("changer-discs", "[]")
     }
     // tempo dell'ultimo tocco (per l'auto-apertura e il salvaschermo)
     readonly property real lastInput: Sys.lastInput

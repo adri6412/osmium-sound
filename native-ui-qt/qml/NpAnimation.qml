@@ -25,6 +25,12 @@ Item {
     property real devScale: 1
     property bool live: true
     property bool active: false
+    // the CD changer in the albums view (ChangerView): its own list of discs
+    // in place of App.changerScene ([{ album, art }]), the file holding only
+    // those, and the scene itself to put discs in (prepare / insert)
+    property var changerDiscs: null
+    property bool changerSparse: false
+    readonly property Item scene: loader.item
 
     readonly property var builtin: ({ cd: "AnimCd.qml", cdfront: "AnimCdFront.qml", changer: "AnimChanger.qml", vinyl: "AnimVinyl.qml", cassette: "AnimCassette.qml" })
     // a store scene: anim.json's `scene`, a flat .qml name inside its folder
@@ -156,8 +162,10 @@ Item {
     // (App.changerScene), keyed like mediaKey; a still has none
     Binding {
         when: loader.item !== null && loader.item.discs !== undefined; target: loader.item; property: "discs"
-        value: root.live && Ui.app ? Ui.app.changerScene.map(function(d) { return { key: root.albumKey(d.album), art: d.art } }) : []
+        value: !root.live ? [] : (root.changerDiscs !== null ? root.changerDiscs : Ui.app ? Ui.app.changerScene : [])
+                                    .map(function(d) { return { key: root.albumKey(d.album), art: d.art } })
     }
+    Binding { when: loader.item !== null && loader.item.sparse !== undefined; target: loader.item; property: "sparse"; value: root.live && root.changerSparse }
     // Fast wind on the cassette deck: a jump of windStep seconds per call.
     // Past the end it moves on to the next track, before the start to the end
     // of the previous one. After a track change nothing moves until the new
