@@ -349,8 +349,11 @@ Item {
             if (!it.hasInput && (it.isAudio || it.ptype === "playlist" || it.favUrl)) pluginQueueItems(L, cur.p1, it.id)
             fav(it.favUrl, it.isAudio ? "audio" : "playlist")
             // an album of an app (Qobuz, Spotify...): it can go into the CD
-            // changer like one of the library (App.changerPut)
-            if (!it.hasInput && !it.isAudio && it.ptype === "playlist" && it.hasItems)
+            // changer like one of the library (App.changerPut). Lyrion marks
+            // one a "playlist" with items, often playable as a whole too
+            // (isaudio): Qobuz's have no favourites URL, so the disc keeps the
+            // app's item.
+            if (!it.hasInput && it.ptype === "playlist" && it.hasItems)
                 L.push({ icon: "disc-3", label: Tr.t("player.changer.putIn"), cb: function() {
                     Ui.app.changerPut({ title: it.text, artUrl: list.iconUrl(it.icon), url: it.favUrl, cmd: cur.p1, item: it.id })
                 } })

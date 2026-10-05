@@ -127,10 +127,14 @@ def plugin_item(cmd, i):
         o["url"] = f"http://mock/{cmd}/{i}.mp3"
         o["presetParams"] = {"favorites_url": o["url"], "favorites_title": o["name"]}
     elif kind == 1:
-        # an album, the way Qobuz and Spotty mark one: a "playlist" with items
+        # an album, the way Qobuz marks one: a "playlist" with items, playable
+        # as a whole (isaudio)
         o["type"] = "playlist"
+        o["isaudio"] = 1
         o["icon"] = "/music/1001/cover"
-        o["presetParams"] = {"favorites_url": f"{cmd}://album/{i}", "favorites_title": o["name"]}
+        # Qobuz's carry no favourites URL: those load by the app's item
+        if i % 2:
+            o["presetParams"] = {"favorites_url": f"{cmd}://album/{i}", "favorites_title": o["name"]}
     return o
 
 
@@ -372,6 +376,15 @@ def rpc(player, params):
         # a pressione lunga dentro un'app
         if params[1:2] == ["playlist"]:
             print("mock:", cmd, params[1:], flush=True)
+            item = next((p[8:] for p in params if isinstance(p, str) and p.startswith("item_id:")), "")
+            if params[2:3] in (["play"], ["add"]) and item:
+                # an app's album by its item (the CD changer): three tracks
+                name = "Album %s (2019)" % item
+                tracks = [(f"Track {n} of {name}", "App Artist", name) for n in (1, 2, 3)]
+                if params[2] == "play":
+                    QUEUE[:] = tracks; STATE["index"] = 0; STATE["time"] = 0.0; STATE["mode"] = "play"
+                else:
+                    QUEUE.extend(tracks)
         else:
             r = {"loop_loop": [plugin_item(cmd, i) for i in range(9)],
                  "item_loop": [menu_item(cmd, i) for i in range(9)]}
