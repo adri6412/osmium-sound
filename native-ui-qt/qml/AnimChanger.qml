@@ -77,19 +77,15 @@ Item {
     readonly property int places: 37                         // discs drawn: those within sight
 
     readonly property var keys: ({
-        power: [34, 119.5, 64, 134.5], access: [37.5, 167, 66.5, 181], slplay: [69.5, 167, 98.5, 181],
-        random: [447.5, 112, 483.5, 121], repeat: [447.5, 131, 483.5, 140],
-        best: [495, 112, 531, 121], previous: [533, 112, 569.5, 121],
-        discm: [495, 131, 530, 140], discp: [532.5, 131, 568.5, 140],
-        eject: [371, 169.5, 401, 184.5], unload: [404, 169.5, 434, 184.5],
-        play: [445, 165.5, 489, 185.5], stop: [491.5, 165.5, 514.5, 185.5],
-        prev: [517, 165.5, 539.5, 185.5], next: [542, 165.5, 564.5, 185.5],
-        mode: [383.3, 110.3, 391.7, 118.7], hilite: [410.8, 110.3, 419.2, 118.7],
-        clear: [383.3, 129.8, 391.7, 138.2], program: [410.8, 129.8, 419.2, 138.2]
+        power: [31, 120, 81, 142],
+        random: [372, 105, 420, 125], repeat: [424, 105, 472, 125],
+        discm: [480, 105, 522, 125], discp: [526, 105, 568, 125],
+        eject: [372, 131, 434, 154], unload: [438, 131, 500, 154],
+        play: [372, 161, 434, 192], stop: [438, 161, 480, 192],
+        prev: [484, 161, 526, 192], next: [530, 161, 572, 192]
     })
-    readonly property var keyNames: ["power", "access", "slplay", "random", "repeat", "best", "previous", "discm", "discp",
-                                     "eject", "unload", "play", "stop", "prev", "next", "mode", "hilite", "clear", "program"]
-    readonly property var knob: [548, 227.5]
+    readonly property var keyNames: ["power", "random", "repeat", "discm", "discp", "eject", "unload", "play", "stop", "prev", "next"]
+    readonly property var knob: [550, 219]
 
     // ── the mechanism ──────────────────────────────────────────────────────
     // drumAngle: the file's turn, in degrees; slot n is at the loader when
@@ -311,7 +307,7 @@ Item {
         if (ch === "-") return "dash"
         return (ch === ch.toUpperCase() ? "u" : "l") + ch.toLowerCase()
     }
-    readonly property var cellX: [446, 453, 460, 476, 483, 501, 508, 519, 526]
+    readonly property var cellX: [412, 424.2, 436.4, 463.4, 475.6, 502.6, 514.8, 534, 546.2]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 51
 
     component Pic: Image {
         smooth: true
@@ -496,7 +492,7 @@ Item {
         Pic { id: base; width: 600; height: 260; source: root.assetsBase + "base.png" }
 
         Pic {
-            x: 30; y: 99.5; width: 36; height: 10
+            x: 31; y: 100.5; width: 50; height: 12
             source: root.assetsBase + "led-standby.png"
             visible: root.live && !root.power
         }
@@ -504,36 +500,36 @@ Item {
         // ── the fluorescent display ────────────────────────────────────────
         Item {
             visible: !root.live || root.power
-            Pic { x: 375; y: 41; width: 197; height: 57.5; source: root.assetsBase + "vfd-panel.png" }
+            Pic { x: 375; y: 38; width: 197; height: 62; source: root.assetsBase + "vfd-panel.png" }
             Repeater {
                 model: 9
                 Pic {
                     required property int index
                     readonly property string ch: root.cells.length === 9 ? root.cells.charAt(index) : " "
-                    x: root.cellX[index] - 1; y: 59; width: 8; height: 12
+                    x: root.cellX[index] - 1; y: 50; width: 13; height: 21
                     visible: ch !== " "
                     source: ch === " " ? "" : root.assetsBase + "g-" + root.glyph(ch) + ".png"
                 }
             }
-            Pic { x: 514.5; y: 59; width: 3; height: 12; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
+            Pic { x: 527; y: 50; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
             Pic {
-                x: 444.5; y: 72.4; width: 6.5; height: 6.5; source: root.assetsBase + "ind-play.png"
+                x: 411; y: 74; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
                 visible: root.timeShown && (root.playing || !root.live)
             }
             Pic {
-                x: 451.5; y: 72.4; width: 6.5; height: 6.5; source: root.assetsBase + "ind-pause.png"
+                x: 421; y: 74; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
                 visible: root.timeShown && root.live && !root.playing && root.elapsed > 0
             }
-            Pic { x: 499; y: 73.6; width: 12.83; height: 4.17; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
-            Pic { x: 512; y: 73.6; width: 7.33; height: 4.17; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
-            Pic { x: 512; y: 73.5; width: 3.67; height: 4.33; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
-            Pic { x: 521; y: 73.6; width: 14.17; height: 4.17; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
+            Pic { x: 455; y: 75.5; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
+            Pic { x: 481; y: 75.5; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
+            Pic { x: 481; y: 75.4; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
+            Pic { x: 499; y: 75.5; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
         }
 
         // ── the level knob: the volume ─────────────────────────────────────
         Pic {
             id: knobPic
-            x: root.knob[0] - 7.4; y: root.knob[1] - 7.4; width: 14.8; height: 14.8
+            x: root.knob[0] - 9.4; y: root.knob[1] - 9.4; width: 18.8; height: 18.8
             source: root.assetsBase + "knob.png"
             rotation: -135 + 270 * (knobArea.level >= 0 ? knobArea.level : root.volume >= 0 ? root.volume : 40) / 100
             opacity: root.live && root.volumeFixed ? 0.6 : 1
@@ -567,19 +563,18 @@ Item {
                 id: key
                 required property string modelData
                 readonly property var r: root.keys[modelData]
-                readonly property bool round: ["mode", "hilite", "clear", "program"].indexOf(modelData) >= 0
                 readonly property bool skip: modelData === "prev" || modelData === "next"
                 x: r[0]; y: r[1]; width: r[2] - r[0]; height: r[3] - r[1]
                 Rectangle {
                     anchors.fill: parent
-                    radius: key.round ? width / 2 : 0.9
+                    radius: 1.4
                     color: "black"
                     opacity: kArea.pressed ? 0.28 : 0
                 }
                 MouseArea {
                     id: kArea
                     anchors.fill: parent
-                    anchors.margins: key.round ? -2 : -1.5
+                    anchors.margins: -1.5
                     enabled: root.live
                     onPressed: if (key.skip) root.skipStart(key.modelData === "next" ? 1 : -1, kArea)
                     onReleased: if (key.skip) root.skipEnd(true)
@@ -628,7 +623,7 @@ Item {
     function press(k) {
         if (k === "power") { root.action("power", !power); return }
         if (!power) return
-        if (k === "play" || k === "slplay") {
+        if (k === "play") {
             if (ejected || !playing) { ejected = false; Qt.callLater(step); root.action("play", true) }
             else root.action("pause", true)
         }

@@ -34,25 +34,24 @@ SPLIT_Y = 198.5                      # the lower strip of the face
 RECESS = (112, 20.5, 354, 195.5)     # the window's sunken frame
 GLASS = (127, 25.5, 344, 187.5)      # the hole: the mechanism shows here
 GLASS_R = 5
-VFD = (375, 41, 572, 98.5)
+VFD = (375, 38, 572, 100)
 FEET = [(73.5, 131), (471, 523.5)]
 FOOT_Y = (238, 249.5)
 
+# 🚨 Drawn for a screen, not to the real thing's scale: in the Now Playing
+# panel the whole front is ~560 px wide, so the keys are few and large and
+# the lettering is 3.5-6 units tall (the real one's would be 2-3 px).
 KEYS = {
-    'power': (34, 119.5, 64, 134.5),
-    'access': (37.5, 167, 66.5, 181), 'slplay': (69.5, 167, 98.5, 181),
-    'random': (447.5, 112, 483.5, 121), 'repeat': (447.5, 131, 483.5, 140),
-    'best': (495, 112, 531, 121), 'previous': (533, 112, 569.5, 121),
-    'discm': (495, 131, 530, 140), 'discp': (532.5, 131, 568.5, 140),
-    'eject': (371, 169.5, 401, 184.5), 'unload': (404, 169.5, 434, 184.5),
-    'play': (445, 165.5, 489, 185.5), 'stop': (491.5, 165.5, 514.5, 185.5),
-    'prev': (517, 165.5, 539.5, 185.5), 'next': (542, 165.5, 564.5, 185.5),
+    'power': (31, 120, 81, 142),
+    'random': (372, 105, 420, 125), 'repeat': (424, 105, 472, 125),
+    'discm': (480, 105, 522, 125), 'discp': (526, 105, 568, 125),
+    'eject': (372, 131, 434, 154), 'unload': (438, 131, 500, 154),
+    'play': (372, 161, 434, 192), 'stop': (438, 161, 480, 192),
+    'prev': (484, 161, 526, 192), 'next': (530, 161, 572, 192),
 }
-ROUND = {'mode': (387.5, 114.5), 'hilite': (415, 114.5), 'clear': (387.5, 134), 'program': (415, 134)}
-ROUND_R = 4.2
-KNOB = (548, 227.5)
-KNOB_R = 7
-JACK = (511, 227.5)
+KNOB = (550, 219)
+KNOB_R = 9
+JACK = (512, 219)
 
 # the window's insides
 LOADER_X = 255.5                     # the loader's column (the LEDs)
@@ -60,8 +59,8 @@ LEDS = [(LOADER_X, 116), (LOADER_X, 123.5), (LOADER_X, 131.5)]
 DISC_D = 128                         # disc diameter in units
 VFD_COL = (196, 236, 255)
 
-# the display cells (cell 6 x 10, glyph pictures 8 x 12 with the glow)
-CELL_W, CELL_H, CELL_Y = 6, 10, 60
+# the display cells (glyph pictures one unit larger all round, for the glow)
+CELL_W, CELL_H, CELL_Y = 11, 19, 51
 
 
 def font(path, size):
@@ -167,7 +166,7 @@ INK_SOFT = (88, 84, 78, 255)
 
 
 # ── the front ─────────────────────────────────────────────────────────────
-def keycap(img, b, r=0.9, label=None, lsize=2.15, sym=None):
+def keycap(img, b, r=1.4, label=None, lsize=2.15, sym=None, symk=1.0):
     blur_shadow(img, b, r, 0.7, 150, dy=0.7)
     blur_shadow(img, b, r, 0.25, 160, dy=0.25)
     w, h = img.size
@@ -187,16 +186,17 @@ def keycap(img, b, r=0.9, label=None, lsize=2.15, sym=None):
     if label:
         lines = label.split('\n')
         for i, ln in enumerate(lines):
-            text(img, ln, cx, cy + (i - (len(lines) - 1) / 2) * lsize * 1.05, lsize, INK)
+            text(img, ln, cx, cy + (i - (len(lines) - 1) / 2) * lsize * 1.05, lsize, INK, path=SANSB, spacing=0.1)
     if sym:
-        draw_symbol(img, sym, cx, cy)
+        draw_symbol(img, sym, cx, cy, symk)
 
 
-def draw_symbol(img, sym, cx, cy):
+def draw_symbol(img, sym, cx, cy, k=1.0):
     d = ImageDraw.Draw(img)
     c = (48, 46, 43, 255)
 
     def tri(x, y, s, right=True):
+        x, y, s = cx + (x - cx) * k, cy + (y - cy) * k, s * k
         if right:
             pts = [(x - s * 0.45, y - s * 0.55), (x - s * 0.45, y + s * 0.55), (x + s * 0.55, y)]
         else:
@@ -204,11 +204,12 @@ def draw_symbol(img, sym, cx, cy):
         d.polygon([(px(a), px(b)) for a, b in pts], fill=c)
 
     def bar(x, y, wd, ht):
+        x, y, wd, ht = cx + (x - cx) * k, cy + (y - cy) * k, wd * k, ht * k
         d.rectangle([px(x - wd / 2), px(y - ht / 2), px(x + wd / 2), px(y + ht / 2)], fill=c)
 
     if sym == 'playpause':
         tri(cx - 3.2, cy, 3.6)
-        d.line([px(cx - 0.6), px(cy + 2.0), px(cx + 0.6), px(cy - 2.0)], fill=c, width=px(0.35))
+        d.line([px(cx - 0.6 * k), px(cy + 2.0 * k), px(cx + 0.6 * k), px(cy - 2.0 * k)], fill=c, width=px(0.35 * k))
         bar(cx + 2.1, cy, 0.8, 3.4)
         bar(cx + 3.6, cy, 0.8, 3.4)
     elif sym == 'stop':
@@ -221,25 +222,6 @@ def draw_symbol(img, sym, cx, cy):
         tri(cx - 1.3, cy, 2.8)
         tri(cx + 1.4, cy, 2.8)
         bar(cx + 3.3, cy, 0.6, 3.0)
-
-
-def round_button(img, cx, cy):
-    r = ROUND_R
-    b = (cx - r, cy - r, cx + r, cy + r)
-    d = ImageDraw.Draw(img)
-    # the hole in the panel
-    d.ellipse(box((cx - r - 0.6, cy - r - 0.6, cx + r + 0.6, cy + r + 0.6)), fill=(120, 115, 106, 255))
-    blur_shadow(img, b, r, 0.5, 170, dy=0.5)
-    m = Image.new('L', img.size, 0)
-    ImageDraw.Draw(m).ellipse(box(b), fill=255)
-    w, h = img.size
-    arr = np.zeros((h, w, 3), np.float32)
-    y0, y1 = px(b[1]), px(b[3])
-    arr[y0:y1] = vgrad(w, y1 - y0, (120, 117, 112), (58, 56, 53))
-    paste_rgb(img, arr, m)
-    d = ImageDraw.Draw(img)
-    d.ellipse(box((cx - r * 0.72, cy - r * 0.8, cx + r * 0.5, cy - r * 0.1)), fill=(255, 255, 255, 34))
-    d.ellipse(box(b), outline=(40, 38, 36, 255), width=px(0.2))
 
 
 def recess(img, b, r, depth_top=4.0):
@@ -333,46 +315,36 @@ def base():
     img.alpha_composite(lay)
 
     # the name and the printing
-    text(img, 'OSMIUM', 31, 26.5, 6.4, (40, 38, 36, 255), anchor='lm', path=SANSB, spacing=0.25, italic=0.22)
-    text(img, 'FILE-TYPE', 31, 38.8, 2.4, INK, anchor='lm', spacing=0.15)
-    text(img, 'COMPACT DISC PLAYER', 31, 43.2, 2.4, INK, anchor='lm', spacing=0.15)
-    text(img, 'OS-F101', 31, 50.5, 4.0, INK, anchor='lm', path=SERIF, spacing=0.2)
-    text(img, 'STANDBY', 49, 98.3, 2.3, INK, spacing=0.12)
+    text(img, 'OSMIUM', 31, 31, 12, (40, 38, 36, 255), anchor='lm', path=SANSB, spacing=0.3, italic=0.22)
+    text(img, 'FILE-TYPE', 31, 48, 5.0, INK, anchor='lm', path=SANSB, spacing=0.2)
+    text(img, 'COMPACT DISC PLAYER', 31, 55.5, 5.0, INK, anchor='lm', path=SANSB, spacing=0.1)
+    text(img, 'OS-F101', 31, 67, 7.0, INK, anchor='lm', path=SERIF, spacing=0.3)
+    text(img, 'STANDBY', 56, 97.5, 5.6, INK, path=SANSB, spacing=0.2)
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle(box((34, 102.5, 63, 106)), px(0.6), fill=(70, 66, 60, 255))
-    d.rounded_rectangle(box((34.6, 103.1, 62.4, 105.4)), px(0.4), fill=(32, 20, 18, 255))
+    d.rounded_rectangle(box((35.5, 104, 76.5, 109)), px(0.8), fill=(70, 66, 60, 255))
+    d.rounded_rectangle(box((36.3, 104.7, 75.7, 108.3)), px(0.5), fill=(32, 20, 18, 255))
     # power symbol + STANDBY/ON
-    cx, cy, rr = 36.2, 113.5, 1.15
-    d.arc(box((cx - rr, cy - rr, cx + rr, cy + rr)), -60, 240, fill=INK, width=px(0.28))
-    d.line([px(cx), px(cy - rr - 0.3), px(cx), px(cy)], fill=INK, width=px(0.28))
-    text(img, 'STANDBY/ON', 38.4, 113.5, 2.3, INK, anchor='lm', spacing=0.12)
-    text(img, 'SINGLE LOADER', 68, 162.5, 2.3, INK, spacing=0.12)
-    for k, (cx, cy) in ROUND.items():
-        lab = {'mode': 'MODE', 'hilite': 'HI-LITE', 'clear': 'CLEAR', 'program': 'PROGRAM'}[k]
-        text(img, lab, cx, cy - 6.4, 2.1, INK, spacing=0.08)
-        round_button(img, cx, cy)
-    text(img, 'DISC', 531.75, 127.0, 2.2, INK, spacing=0.12)
-    labels = {'power': None, 'access': 'ACCESS', 'slplay': 'PLAY', 'random': 'RANDOM', 'repeat': 'REPEAT',
-              'best': 'BEST', 'previous': 'PREVIOUS', 'discm': '−', 'discp': '+',
-              'eject': 'OPEN/\nCLOSE', 'unload': 'UNLOAD'}
+    cx, cy, rr = 34, 114.5, 2.6
+    d.arc(box((cx - rr, cy - rr, cx + rr, cy + rr)), -60, 240, fill=INK, width=px(0.7))
+    d.line([px(cx), px(cy - rr - 0.6), px(cx), px(cy)], fill=INK, width=px(0.7))
+    text(img, 'ON', 39, 114.5, 5.6, INK, anchor='lm', path=SANSB, spacing=0.2)
+    labels = {'power': None, 'random': 'RANDOM', 'repeat': 'REPEAT', 'discm': 'DISC \u2212', 'discp': 'DISC +',
+              'eject': 'OPEN/CLOSE', 'unload': 'UNLOAD'}
     syms = {'play': 'playpause', 'stop': 'stop', 'prev': 'prev', 'next': 'next'}
     for k, b in KEYS.items():
-        size = 3.4 if k in ('discm', 'discp') else 2.3 if k == 'eject' else 2.6
-        keycap(img, b, label=labels.get(k), lsize=size, sym=syms.get(k))
+        size = 6.3 if k in ('random', 'repeat', 'discm', 'discp') else 6.5
+        keycap(img, b, label=labels.get(k), lsize=size, sym=syms.get(k), symk=2.2)
 
     # the headphone box
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle(box((453.5, 216.5, 562, 238.5)), px(1.2), outline=(118, 113, 104, 255), width=px(0.3))
-    d.rounded_rectangle(box((453.8, 216.8, 562.3, 238.8)), px(1.2), outline=(226, 222, 213, 140), width=px(0.2))
-    text(img, '1-BIT', 458.5, 222.6, 3.0, (44, 42, 39, 255), anchor='lm', path=SANSB, italic=0.22)
-    text(img, 'DAC', 470.2, 222.6, 3.0, (44, 42, 39, 255), anchor='lm', path=SANSB, italic=0.22)
-    text(img, 'DIRECT LINEAR CONVERSION', 458.5, 232.4, 1.75, INK, anchor='lm', spacing=0.08)
+    d.rounded_rectangle(box((436, 204.5, 572, 240.5)), px(1.6), outline=(118, 113, 104, 255), width=px(0.35))
+    d.rounded_rectangle(box((436.3, 204.8, 572.3, 240.8)), px(1.6), outline=(226, 222, 213, 140), width=px(0.25))
+    text(img, '1-BIT', 442, 215.5, 7, (44, 42, 39, 255), anchor='lm', path=SANSB, italic=0.22)
+    text(img, 'DAC', 442, 229.5, 7, (44, 42, 39, 255), anchor='lm', path=SANSB, italic=0.22)
     d = ImageDraw.Draw(img)
-    d.line([px(518), px(KNOB[1]), px(540), px(KNOB[1])], fill=(110, 105, 96, 255), width=px(0.3))
-    text(img, 'PHONES', JACK[0], 212.2, 2.2, INK, spacing=0.12)
-    text(img, 'LEVEL', KNOB[0], 212.2, 2.2, INK, spacing=0.12)
-    text(img, 'MIN', KNOB[0] - 7, 240.6, 1.8, INK)
-    text(img, 'MAX', KNOB[0] + 7, 240.6, 1.8, INK)
+    d.line([px(JACK[0] + 8), px(KNOB[1]), px(KNOB[0] - 13), px(KNOB[1])], fill=(110, 105, 96, 255), width=px(0.4))
+    text(img, 'PHONES', JACK[0], 234.8, 4.6, INK, path=SANSB, spacing=0.1)
+    text(img, 'LEVEL', KNOB[0], 234.8, 4.6, INK, path=SANSB, spacing=0.1)
     # the jack
     jx, jy = JACK
     d.ellipse(box((jx - 5.4, jy - 5.4, jx + 5.4, jy + 5.4)), fill=(96, 92, 86, 255))
@@ -391,9 +363,9 @@ def base():
     # scale ticks around the knob
     for i in range(11):
         ang = math.radians(-135 + 27 * i - 90)
-        r0, r1 = KNOB_R + 1.6, KNOB_R + (2.6 if i in (0, 10) else 2.1)
+        r0, r1 = KNOB_R + 1.4, KNOB_R + (2.6 if i in (0, 10) else 2.0)
         d.line([px(kx + r0 * math.cos(ang)), px(ky + r0 * math.sin(ang)),
-                px(kx + r1 * math.cos(ang)), px(ky + r1 * math.sin(ang))], fill=INK_SOFT, width=px(0.22))
+                px(kx + r1 * math.cos(ang)), px(ky + r1 * math.sin(ang))], fill=INK_SOFT, width=px(0.3))
     save(finish(img), 'base.png')
 
 
@@ -422,9 +394,9 @@ def knob():
 
 
 def standby_led():
-    b = (34.6, 103.1, 62.4, 105.4)
-    img = canvas(36, 10)
-    ox, oy = 30, 99.5
+    b = (36.3, 104.7, 75.7, 108.3)
+    img = canvas(50, 12)
+    ox, oy = 31, 100.5
     g = Image.new('L', img.size, 0)
     ImageDraw.Draw(g).rounded_rectangle(box((b[0] - ox, b[1] - oy, b[2] - ox, b[3] - oy)), px(0.4), fill=255)
     glow = g.filter(ImageFilter.GaussianBlur(px(1.4)))
@@ -561,7 +533,7 @@ def glass():
     m = np.array(shape_mask((w, h), (0, 0, gw, gh), GLASS_R), np.float32) / 255
     arr = np.dstack([np.clip(rgb, 0, 255), a * m * 255]).astype(np.uint8)
     img = Image.fromarray(arr, 'RGBA')
-    text(img, 'FILE-TYPE CD MECHANISM', LOADER_X - GLASS[0] - 22, 132.5, 1.9, (150, 150, 150, 190), spacing=0.22)
+    text(img, 'FILE-TYPE CD MECHANISM', LOADER_X - GLASS[0] - 26, 133, 4.6, (150, 150, 150, 170), spacing=0.3)
     save(finish(img), 'glass.png')
 
 
@@ -737,7 +709,7 @@ def lit(img_l, colour=VFD_COL, glow=0.55, glow_r=0.9):
 
 
 def glyphs():
-    w, h, t, gap = CELL_W, CELL_H, 0.85, 0.25
+    w, h, t, gap = CELL_W, CELL_H, 1.6, 0.4
     for ch, segs in [(c, SEGS[c]) for c in USED]:
         m = Image.new('L', (px(w + 2), px(h + 2)), 0)
         d = ImageDraw.Draw(m)
@@ -765,10 +737,10 @@ def glyphs():
             if s == 'c': vseg(right, mid, bot)
         save(finish(lit(m), k=8), f'g-{glyph_name(ch)}.png')
     # the colon
-    m = Image.new('L', (px(3), px(h + 2)), 0)
+    m = Image.new('L', (px(6), px(h + 2)), 0)
     d = ImageDraw.Draw(m)
     for y in (1 + h * 0.32, 1 + h * 0.70):
-        d.ellipse(box((1.5 - 0.55, y - 0.55, 1.5 + 0.55, y + 0.55)), fill=255)
+        d.ellipse(box((3 - 1.0, y - 1.0, 3 + 1.0, y + 1.0)), fill=255)
     save(finish(lit(m), k=8), 'g-colon.png')
 
 
@@ -783,18 +755,18 @@ def vfd_words():
         return (m.width / SS, m.height / SS)
 
     sizes = {}
-    sizes['ind-all'] = word('ind-all.png', 'ALL', 2.5)
-    sizes['ind-one'] = word('ind-one.png', '1', 2.7)
-    sizes['ind-repeat'] = word('ind-repeat.png', 'REPEAT', 2.5)
-    sizes['ind-random'] = word('ind-random.png', 'RANDOM', 2.5)
+    sizes['ind-all'] = word('ind-all.png', 'ALL', 5, True)
+    sizes['ind-one'] = word('ind-one.png', '1', 5.2, True)
+    sizes['ind-repeat'] = word('ind-repeat.png', 'REPEAT', 5, True)
+    sizes['ind-random'] = word('ind-random.png', 'RANDOM', 5, True)
     # play and pause
-    m = Image.new('L', (px(5), px(5)), 0)
-    ImageDraw.Draw(m).polygon([(px(1.2), px(1)), (px(1.2), px(4)), (px(3.9), px(2.5))], fill=255)
+    m = Image.new('L', (px(8), px(8)), 0)
+    ImageDraw.Draw(m).polygon([(px(1.8), px(1.4)), (px(1.8), px(6.6)), (px(6.4), px(4))], fill=255)
     save(finish(lit(m, glow=0.5, glow_r=0.6), k=8), 'ind-play.png')
-    m = Image.new('L', (px(5), px(5)), 0)
+    m = Image.new('L', (px(8), px(8)), 0)
     d = ImageDraw.Draw(m)
-    d.rectangle(box((1.3, 1, 2.1, 4)), fill=255)
-    d.rectangle(box((2.9, 1, 3.7, 4)), fill=255)
+    d.rectangle(box((2.0, 1.4, 3.4, 6.6)), fill=255)
+    d.rectangle(box((4.6, 1.4, 6.0, 6.6)), fill=255)
     save(finish(lit(m, glow=0.5, glow_r=0.6), k=8), 'ind-pause.png')
     return sizes
 
@@ -808,24 +780,24 @@ def vfd_panel():
     ox, oy = VFD[0], VFD[1]
     dim = Image.new('L', m.size, 0)
 
-    def cap(s, x, y, size=2.3):
+    def cap(s, x, y, size=4.6):
         lay = text_layer(s, size, (255, 255, 255, 255), spacing=0.2)
         a = lay.getchannel('A')
         dim.paste(Image.new('L', a.size, 185), (int(px(x - ox) - a.width / 2), int(px(y - oy) - a.height / 2)), a)
 
-    cap('DISC', 456, 54.5)
-    cap('TRACK', 482.5, 54.5)
-    cap('MIN', 507.5, 54.5)
-    cap('SEC', 525.5, 54.5)
+    cap('DISC', 429.7, 45)
+    cap('TRACK', 475, 45)
+    cap('MIN', 514.2, 45)
+    cap('SEC', 545.6, 45)
     # the logo: a disc with a swoosh, "101-DISC" under it
-    cx, cy = 393.5 - ox, 64.5 - oy
-    d.ellipse(box((cx - 5, cy - 5, cx + 5, cy + 5)), outline=255, width=px(0.7))
-    d.ellipse(box((cx - 1.2, cy - 1.2, cx + 1.2, cy + 1.2)), fill=255)
-    d.arc(box((cx - 3.3, cy - 3.3, cx + 3.3, cy + 3.3)), 200, 320, fill=255, width=px(0.6))
-    lay = text_layer('FILE', 4.0, (255, 255, 255, 255), path=SANSB, spacing=0.1, italic=0.18)
-    m.paste(Image.new('L', lay.size, 255), (int(px(cx + 7)), int(px(cy) - lay.height / 2)), lay.getchannel('A'))
-    lay = text_layer('101-DISC', 1.9, (255, 255, 255, 255), spacing=0.2)
-    m.paste(Image.new('L', lay.size, 230), (int(px(cx + 7.5)), int(px(cy + 5.5) - lay.height / 2)), lay.getchannel('A'))
+    cx, cy = 387 - ox, 60 - oy
+    d.ellipse(box((cx - 6, cy - 6, cx + 6, cy + 6)), outline=255, width=px(1.0))
+    d.ellipse(box((cx - 1.5, cy - 1.5, cx + 1.5, cy + 1.5)), fill=255)
+    d.arc(box((cx - 4, cy - 4, cx + 4, cy + 4)), 200, 320, fill=255, width=px(0.9))
+    lay = text_layer('FILE', 6.4, (255, 255, 255, 255), path=SANSB, spacing=0.15, italic=0.18)
+    m.paste(Image.new('L', lay.size, 255), (int(px(cx + 8)), int(px(cy - 1) - lay.height / 2)), lay.getchannel('A'))
+    lay = text_layer('101-DISC', 4.0, (255, 255, 255, 255), path=SANSB, spacing=0.15)
+    m.paste(Image.new('L', lay.size, 230), (int(px(cx - 6)), int(px(cy + 13) - lay.height / 2)), lay.getchannel('A'))
     out = lit(m)
     out.alpha_composite(lit(dim, colour=(150, 190, 215), glow=0.25, glow_r=0.5))
     save(finish(out), 'vfd-panel.png')
