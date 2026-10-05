@@ -127,6 +127,9 @@ def plugin_item(cmd, i):
         o["url"] = f"http://mock/{cmd}/{i}.mp3"
         o["presetParams"] = {"favorites_url": o["url"], "favorites_title": o["name"]}
     elif kind == 1:
+        # an album, the way Qobuz and Spotty mark one: a "playlist" with items
+        o["type"] = "playlist"
+        o["icon"] = "/music/1001/cover"
         o["presetParams"] = {"favorites_url": f"{cmd}://album/{i}", "favorites_title": o["name"]}
     return o
 
@@ -230,6 +233,15 @@ def rpc(player, params):
         elif sub == "move": QUEUE.insert(int(params[3]), QUEUE.pop(int(params[2])))
         elif sub == "clear": QUEUE.clear()
         elif sub == "save": r = {"__playlist_id": 9}
+        elif sub in ("play", "add") and len(params) > 2 and "://album/" in str(params[2]):
+            # an app's album by its URL (the CD changer): three tracks whose
+            # album is named otherwise than the app's menu names it
+            name = "Album %s (2019)" % params[2]
+            tracks = [(f"Track {n} of {name}", "App Artist", name) for n in (1, 2, 3)]
+            if sub == "play":
+                QUEUE[:] = tracks; STATE["index"] = 0; STATE["time"] = 0.0; STATE["mode"] = "play"
+            else:
+                QUEUE.extend(tracks)
         elif sub == "play":
             STATE["mode"] = "play"
             print("mock: playlist play", params[2:], flush=True)

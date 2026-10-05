@@ -83,10 +83,13 @@ Item {
     // the changer holds (App.changerDiscs) and follows it when that changes;
     // a disc on its way (flying into the window) is in `flights` until it
     // lands.
+    // (each held disc keeps its own record in `disc`: an app's album, put in
+    // from its menu, is not a row of this list)
     property var chosen: []
     function fromChanger() {
-        chosen = Ui.app ? Ui.app.changerDiscs.map(function(d) { return { id: d.id, text: d.title, art: d.art || "" } }) : []
+        chosen = Ui.app ? Ui.app.changerDiscs.map(function(d) { return { id: d.id || "", text: d.title, art: d.art || "", disc: d } }) : []
     }
+    function uidOf(c) { return c.disc ? Ui.app.changerUid(c.disc) : "a:" + c.id }
     Component.onCompleted: fromChanger()
     Connections {
         target: Ui.app
@@ -96,7 +99,7 @@ Item {
     readonly property bool changed: {
         var held = Ui.app ? Ui.app.changerDiscs : []
         if (flights.count > 0 || held.length !== chosen.length) return true
-        for (var i = 0; i < held.length; i++) if (held[i].id !== chosen[i].id) return true
+        for (var i = 0; i < held.length; i++) if (Ui.app.changerUid(held[i]) !== root.uidOf(chosen[i])) return true
         return false
     }
     function chosenAt(id) {
@@ -139,7 +142,7 @@ Item {
         if (flights.count > 0) { doneWanted = true; return }
         doneWanted = false
         if (!chosen.length) return
-        if (Ui.app) Ui.app.changerLoad(chosen)
+        if (Ui.app) Ui.app.changerLoad(chosen.map(function(c) { return c.disc || c }))
     }
     // Clear: the changer empty, nothing on its way, its queue cleared
     function clearAll() {
@@ -158,7 +161,9 @@ Item {
         kind: "changer"
         // the discs as they are put in, not those of the last load; the file
         // holds only real discs, so their empty slots show
-        changerDiscs: root.chosen.map(function(d) { return { album: d.text, art: d.art ? Api.lmsBase + "/music/" + d.art + "/cover?size=300" : "" } })
+        changerDiscs: root.chosen.map(function(d) {
+            return { album: d.text, art: d.disc && d.disc.artUrl ? d.disc.artUrl : d.art ? Api.lmsBase + "/music/" + d.art + "/cover?size=300" : "" }
+        })
         changerSparse: true
         active: root.visible && !!Ui.app && !Ui.app.expanded
         devScale: root.devScale

@@ -388,6 +388,8 @@
       "chosen": "{count} nel caricatore",
       "done": "Fatto",
       "clear": "Svuota",
+      "putIn": "Metti nel caricatore CD",
+      "putDone": "Nel caricatore CD come disco {n}",
       "full": "Il caricatore contiene 101 dischi",
       "empty": "Nessun album"
     },

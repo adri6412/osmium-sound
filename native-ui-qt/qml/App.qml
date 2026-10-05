@@ -20,42 +20,62 @@ Item {
     function setAlbumView(v) { albumView = albumViewOf(v); Sys.setConf("album-view", albumView) }
 
     // ─── the CD changer (albums view ChangerView.qml, scene AnimChanger.qml) ─
-    // The albums last loaded from the albums view, disc 1 first: [{ id,
-    // title, art }] (art the cover's id). Kept across restarts, so the
-    // changer still finds them in the same slots.
+    // The discs in the changer, disc 1 first, kept across restarts so the
+    // changer still finds them in the same slots. A disc is an album of the
+    // library { id, title, art (the cover's id) } or one from an app (Qobuz,
+    // Spotify...) put in from its long-press menu { title, artUrl, url (what
+    // Favourites would keep: stable), cmd + item (the app's own item) }.
     property var changerDiscs: {
         try { var d = JSON.parse(Sys.conf("changer-discs", "[]")); return Array.isArray(d) ? d : [] } catch (e) { return [] }
     }
     // what the scene gets (NpAnimation keys it): the album's name, the cover
     // as a picture's address
     readonly property var changerScene: changerDiscs.map(function(d) {
-        return { album: d.title, art: d.art ? Api.lmsBase + "/music/" + d.art + "/cover?size=300" : "" }
+        return { album: d.title, art: d.artUrl ? d.artUrl : d.art ? Api.lmsBase + "/music/" + d.art + "/cover?size=300" : "" }
     })
+    // a disc from a library row { id, text, art } or a disc already
+    function changerDiscOf(a) {
+        if (!a) return null
+        if (a.title !== undefined) return a
+        return { id: String(a.id || ""), title: a.text || "", art: a.art || "" }
+    }
+    // what tells two discs apart
+    function changerUid(d) { return d.id ? "a:" + d.id : "u:" + (d.url || d.cmd + ":" + d.item) }
+    // the Lyrion command that loads a disc (the queue replaced) or adds it
+    function changerCmd(d, load) {
+        if (d.id) return ["playlistcontrol", "cmd:" + (load ? "load" : "add"), "album_id:" + d.id]
+        if (d.url) return ["playlist", load ? "play" : "add", d.url, d.title]
+        return [d.cmd, "playlist", load ? "play" : "add", "item_id:" + d.item]
+    }
+    function changerSave(discs) {
+        changerDiscs = discs
+        Sys.setConf("changer-discs", JSON.stringify(discs))
+    }
     // whether the queue playing is the changer's: the album on air is one of its discs
     function changerPlaying() {
         for (var i = 0; i < changerDiscs.length; i++) if (changerDiscs[i].title === Player.album) return true
         return false
     }
-    // Load the chosen albums (library rows: { id, text, art }) as discs 1, 2,
-    // 3... and play them one after the other, like a changer: the queue is
-    // the albums in that order. Discs only added after those the changer is
-    // already playing join the end of the queue, the music goes on. The Now
-    // Playing opens at full screen on the changer, whatever animation the
-    // owner chose (that stays as it is).
+    // Load the chosen discs as discs 1, 2, 3... and play them one after the
+    // other, like a changer: the queue is the albums in that order. Discs
+    // only added after those the changer is already playing join the end of
+    // the queue, the music goes on. The Now Playing opens at full screen on
+    // the changer, whatever animation the owner chose (that stays as it is).
     function changerLoad(albums) {
         var discs = []
-        for (var i = 0; i < albums.length && discs.length < 101; i++)
-            if (albums[i] && albums[i].id) discs.push({ id: String(albums[i].id), title: albums[i].text, art: albums[i].art || "" })
+        for (var i = 0; i < albums.length && discs.length < 101; i++) {
+            var d = changerDiscOf(albums[i])
+            if (d && (d.id || d.url || d.item)) discs.push(d)
+        }
         if (!discs.length) return
         var before = changerDiscs, kept = changerPlaying() && before.length <= discs.length
-        for (var j = 0; kept && j < before.length; j++) kept = before[j].id === discs[j].id
-        changerDiscs = discs
-        Sys.setConf("changer-discs", JSON.stringify(discs))
+        for (var j = 0; kept && j < before.length; j++) kept = changerUid(before[j]) === changerUid(discs[j])
+        changerSave(discs)
         // one after the other: separate requests could reach Lyrion out of order
         var k = kept ? before.length : 0
         function next() {
-            if (k >= discs.length) return
-            var c = ["playlistcontrol", "cmd:" + (k === 0 ? "load" : "add"), "album_id:" + discs[k].id]
+            if (k >= discs.length) { changerLearn.restart(); return }
+            var c = changerCmd(discs[k], k === 0)
             k++
             Player.query(c, function() { next() })
         }
@@ -63,12 +83,47 @@ Item {
         setExpanded(true)
         np.openStage("changer")
     }
+    // An album from an app, put in from its long-press menu: the next disc.
+    // When the changer is the one playing it joins its queue at once;
+    // otherwise Done in the CD changer view plays them all.
+    function changerPut(d) {
+        if (changerDiscs.length >= 101) { toast.show(Tr.t("player.changer.full")); return }
+        var discs = changerDiscs.slice()
+        for (var i = 0; i < discs.length; i++) if (changerUid(discs[i]) === changerUid(d)) {
+            toast.say("disc-3", Tr.tf("player.changer.putDone", "n", String(i + 1)))
+            return
+        }
+        var playing = changerPlaying()
+        discs.push(d)
+        changerSave(discs)
+        if (playing) Player.query(changerCmd(d, false), function() { changerLearn.restart() })
+        toast.say("disc-3", Tr.tf("player.changer.putDone", "n", String(discs.length)))
+    }
+    // An app's album may be named in its menu otherwise than its tracks name
+    // it ("Artist - Album (2019)"): once loaded, the albums of the queue, in
+    // order, give each disc the name the player will show, so the changer
+    // knows it as that disc. (A moment after: an app's album expands into
+    // its tracks behind the command's answer.)
+    Timer {
+        id: changerLearn
+        interval: 2500
+        onTriggered: Player.query(["status", "0", "999", "tags:l"], function(ok, r) {
+            var pl = ok && r ? r.playlist_loop || [] : [], seq = []
+            for (var i = 0; i < pl.length; i++) if (i === 0 || pl[i].album !== pl[i - 1].album) seq.push(String(pl[i].album || ""))
+            if (seq.length !== app.changerDiscs.length) return
+            var discs = app.changerDiscs.slice(), changed = false
+            for (var j = 0; j < discs.length; j++) if (seq[j] && discs[j].title !== seq[j]) {
+                discs[j] = Object.assign({}, discs[j], { title: seq[j] })
+                changed = true
+            }
+            if (changed) app.changerSave(discs)
+        })
+    }
     // Empty the changer: no discs in it any more, and its queue cleared when
     // it is the one playing (an unrelated queue is left alone).
     function changerClear() {
         if (changerPlaying()) Player.cmd(["playlist", "clear"])
-        changerDiscs = []
-        Sys.setConf("changer-discs", "[]")
+        changerSave([])
     }
     // tempo dell'ultimo tocco (per l'auto-apertura e il salvaschermo)
     readonly property real lastInput: Sys.lastInput

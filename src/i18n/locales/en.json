@@ -388,6 +388,8 @@
       "chosen": "{count} in the changer",
       "done": "Done",
       "clear": "Clear",
+      "putIn": "Put in the CD changer",
+      "putDone": "In the CD changer as disc {n}",
       "full": "The changer holds 101 discs",
       "empty": "No albums"
     },
