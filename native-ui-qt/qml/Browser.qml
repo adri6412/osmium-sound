@@ -637,18 +637,27 @@ Item {
             Text { id: backText; anchors.centerIn: parent; text: Tr.t("common.back"); color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
             Tap { id: backTap; onClicked: root.navBack() }
         }
-        // the albums as a grid, as Cover Flow or as the CD changer's discs
-        // (also in Settings → Library): the button names the next one
-        Rectangle {
+        // the albums as Cover Flow or as the CD changer's discs, a button
+        // each (also in Settings → Library): lit gold while it is the view,
+        // a tap on the lit one goes back to the grid
+        Row {
             visible: list.grid && !root.isPage
-            readonly property bool flow: list.coverflow || list.changer
-            readonly property string nextView: list.coverflow ? "changer" : list.changer ? "grid" : "coverflow"
-            readonly property var icons: ({ grid: "layout-grid", coverflow: "gallery-horizontal", changer: "disc-3" })
-            x: (backBtn.visible ? backBtn.x : parent.width - 12) - 8 - width; y: 21.5 - 11; width: 22 + 8 + viewText.implicitWidth + 12; height: 22; radius: 8
-            color: viewTap.mix(flow ? Theme.goldA(0.15) : Theme.wa(0.05), Theme.wa(0.12))
-            Icon { x: 8; anchors.verticalCenter: parent.verticalCenter; name: parent.icons[parent.nextView]; size: 13; color: parent.flow ? Theme.gold : Theme.silverA(0.7) }
-            Text { id: viewText; x: 8 + 13 + 6; anchors.verticalCenter: parent.verticalCenter; text: Tr.t("player.view." + parent.nextView); color: parent.flow ? Theme.gold : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
-            Tap { id: viewTap; onClicked: Ui.app.setAlbumView(parent.nextView) }
+            x: (backBtn.visible ? backBtn.x : parent.width - 12) - 8 - width; y: 21.5 - 11
+            height: 22; spacing: 6
+            Repeater {
+                model: [{ view: "coverflow", icon: "gallery-horizontal", label: "player.view.coverflow" },
+                        { view: "changer", icon: "disc-3", label: "player.view.changer" }]
+                Rectangle {
+                    id: viewBtn
+                    required property var modelData
+                    readonly property bool on: Ui.app && Ui.app.albumView === modelData.view
+                    width: 22 + 8 + viewText.implicitWidth + 12; height: 22; radius: 8
+                    color: viewTap.mix(on ? Theme.goldA(0.15) : Theme.wa(0.05), Theme.wa(0.12))
+                    Icon { x: 8; anchors.verticalCenter: parent.verticalCenter; name: viewBtn.modelData.icon; size: 13; color: viewBtn.on ? Theme.gold : Theme.silverA(0.7) }
+                    Text { id: viewText; x: 8 + 13 + 6; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(viewBtn.modelData.label); color: viewBtn.on ? Theme.gold : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
+                    Tap { id: viewTap; onClicked: Ui.app.setAlbumView(viewBtn.on ? "grid" : viewBtn.modelData.view) }
+                }
+            }
         }
     }
 
