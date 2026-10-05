@@ -17,6 +17,96 @@
   <meta name="twitter:title" content="Osmium Sound — Hi-Fi Media Appliance for x86">
   <meta name="twitter:description" content="Touchscreen hi-fi music player for x86 mini PCs, built on Debian. Bit-perfect FLAC, DSD and PCM up to 192kHz, Deezer, Qobuz, TIDAL &amp; Spotify via Lyrion, CD ripping and updates that roll back on their own.">
   <meta name="twitter:image" content="https://osmiumsound.it/screens/02-now-playing-amber.jpg">
+  <link rel="alternate" type="text/plain" title="Summary for language models" href="https://osmiumsound.it/llms.txt">
+  <!-- What search engines and AI assistants read to tell what this is. No
+       version number on purpose: it is updated by hand, and the install
+       section is where the current one lives. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://osmiumsound.it/#organization",
+        "name": "Osmium Sound",
+        "url": "https://osmiumsound.it/",
+        "logo": "https://osmiumsound.it/favicon.svg",
+        "email": "info@osmiumsound.it",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "contactType": "customer support",
+          "email": "support@osmiumsound.it",
+          "availableLanguage": ["English", "Italian"]
+        },
+        "sameAs": [
+          "https://github.com/adri6412/osmium-sound",
+          "https://www.facebook.com/profile.php?id=61593595246369",
+          "https://ko-fi.com/osmiumsound"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://osmiumsound.it/#website",
+        "url": "https://osmiumsound.it/",
+        "name": "Osmium Sound",
+        "inLanguage": ["en", "it"],
+        "publisher": { "@id": "https://osmiumsound.it/#organization" }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://osmiumsound.it/#software",
+        "name": "Osmium Sound",
+        "alternateName": "Osmium Sound hi-fi media player",
+        "url": "https://osmiumsound.it/",
+        "description": "Free, open-source operating system that turns an x86 mini PC or an old PC into a touchscreen hi-fi music player and network streamer: bit-perfect FLAC, DSD and PCM up to 192 kHz to a USB DAC, Qobuz, TIDAL, Deezer and Spotify through Lyrion Music Server, music from USB disks or a NAS, CD ripping to FLAC, analog VU meters and safe over-the-air updates. A free alternative to Roon and to commercial network streamers.",
+        "applicationCategory": "MultimediaApplication",
+        "applicationSubCategory": "Hi-fi music player and network streamer",
+        "operatingSystem": "Debian 13 (x86-64 PC, UEFI or BIOS)",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+        "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+        "installUrl": "https://osmiumsound.it/#install",
+        "softwareHelp": { "@type": "CreativeWork", "url": "https://osmiumsound.it/manual" },
+        "screenshot": [
+          "https://osmiumsound.it/screens/01-home.jpg",
+          "https://osmiumsound.it/screens/02-now-playing-amber.jpg"
+        ],
+        "featureList": [
+          "Bit-perfect playback of FLAC, DSD64/128/256 (DoP) and PCM up to 32-bit/192 kHz",
+          "USB DAC auto-detection, HDMI output, Bluetooth speakers",
+          "Qobuz, TIDAL, Deezer and Spotify through Lyrion Music Server plugins",
+          "Internet radio with thousands of stations",
+          "Music library from USB disks, internal disks and NAS / SMB shares",
+          "CD playback and ripping to FLAC with MusicBrainz metadata",
+          "Touchscreen interface with analog VU meters",
+          "With screen, headless or server-only",
+          "Multi-room sync through Lyrion Music Server",
+          "Free Android companion app; LyrPlay on iPhone and iPad",
+          "Web administration and remote access through Tailscale",
+          "USB and Bluetooth remote controls",
+          "A/B over-the-air updates with automatic rollback",
+          "Scheduled and encrypted backups"
+        ],
+        "inLanguage": ["en", "it"],
+        "author": { "@id": "https://osmiumsound.it/#organization" },
+        "publisher": { "@id": "https://osmiumsound.it/#organization" }
+      },
+      {
+        "@type": "MobileApplication",
+        "@id": "https://osmiumsound.it/#companion",
+        "name": "Osmium Sound Companion",
+        "description": "Free Android app to browse the library, control playback, the queue and the volume of an Osmium Sound player, reach its settings, and use the phone as a player.",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Android 8.0 or newer",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+        "installUrl": "https://play.google.com/store/apps/details?id=com.osmium.sound.companion",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "author": { "@id": "https://osmiumsound.it/#organization" }
+      }
+    ]
+  }
+  </script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1280,11 +1370,11 @@
     <div class="other-ways">
       <p class="other-ways-label" data-en="Prefer not to use Google Play?" data-it="Preferisci non usare Google Play?">Prefer not to use Google Play?</p>
       <div class="other-ways-btns">
-      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/download/companion-v1.0.13/HiFiMediaPlayer-companion-v1.0.13-release.apk">
+      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/download/companion-v1.0.14/HiFiMediaPlayer-companion-v1.0.14-release.apk">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span class="iso-badge"><span data-en="Download APK" data-it="Scarica l'APK">Download APK</span><small>v1.0.13</small></span>
+        <span class="iso-badge"><span data-en="Download APK" data-it="Scarica l'APK">Download APK</span><small>v1.0.14</small></span>
       </a>
-      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/tag/companion-v1.0.13" target="_blank">
+      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/tag/companion-v1.0.14" target="_blank">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
         <span data-en="Release notes" data-it="Note di rilascio">Release notes</span>
       </a>
