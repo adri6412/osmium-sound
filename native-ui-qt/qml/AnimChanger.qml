@@ -3,8 +3,10 @@
 // in a rotating file of 101 slots; each album has its own slot. A new album
 // sends the disc in the drive back down into its slot, turns the file until
 // the new album's disc (its artwork printed on the label) reaches the
-// loader, and the loader lifts it up into the drive, the LEDs lighting the
-// empty slot. The fluorescent display counts the slots going past, then
+// loader, and the loader lifts it out of the file, the LEDs lighting the
+// empty slot; in the drive's window, top right, the disc arrives from the
+// left, settles on the spindle over the laser lens, the clamper comes down
+// and it turns while the music plays. The fluorescent display counts the slots going past, then
 // shows disc, track and time. The keys work: standby, play/pause, stop,
 // skip (held: search), open/close and unload (the disc goes back into the
 // file until play), random, repeat, and the level knob is the volume.
@@ -75,24 +77,36 @@ Item {
     readonly property real pitch: 360 / slots
     readonly property real loaderPhi: Math.asin((loaderX - axisX) / radius) * 180 / Math.PI
     readonly property int places: 37                         // discs drawn: those within sight
+    // the drive's window (changer.py DRIVE_*)
+    readonly property var driveGlass: [366, 18, 576, 103]
+    readonly property var driveC: [470, 66]
+    readonly property real driveDisc: 150
+    readonly property real driveSquash: 0.40
 
     readonly property var keys: ({
         power: [31, 120, 81, 142],
-        random: [372, 105, 420, 125], repeat: [424, 105, 472, 125],
-        discm: [480, 105, 522, 125], discp: [526, 105, 568, 125],
-        eject: [372, 131, 434, 154], unload: [438, 131, 500, 154],
-        play: [372, 161, 434, 192], stop: [438, 161, 480, 192],
-        prev: [484, 161, 526, 192], next: [530, 161, 572, 192]
+        random: [366, 167, 414, 188], repeat: [418, 167, 466, 188],
+        discm: [470, 167, 521, 188], discp: [525, 167, 576, 188],
+        eject: [112, 204, 176, 238], unload: [180, 204, 244, 238],
+        play: [256, 204, 322, 238], stop: [326, 204, 372, 238],
+        prev: [376, 204, 422, 238], next: [426, 204, 472, 238]
     })
     readonly property var keyNames: ["power", "random", "repeat", "discm", "discp", "eject", "unload", "play", "stop", "prev", "next"]
-    readonly property var knob: [550, 219]
+    readonly property var knob: [563, 218]
 
     // ── the mechanism ──────────────────────────────────────────────────────
     // drumAngle: the file's turn, in degrees; slot n is at the loader when
     // drumAngle is n * pitch (plus whole turns)
     property real drumAngle: 0
     property int atSlot: 0                   // the slot at the loader (file at rest)
-    property real lift: 0                    // the loader: 0 the disc in its slot .. 1 in the drive
+    // The loader's whole way, 0..3: 0..1 the disc up out of the file, 1..2
+    // carried into the drive's window, 2..3 down onto the spindle. One
+    // animation runs it (linear); each stretch eases on its own.
+    property real travel: 0
+    function seg(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t) }
+    readonly property real lift: seg(travel)
+    readonly property real carry: seg(travel - 1)
+    readonly property real seat: seg(travel - 2)
     property int outSlot: -1                 // the disc the loader holds
     property string outKey: ""               // ... and the album it is
     property int artSlot: -1                 // the disc printed with the artwork
@@ -153,14 +167,14 @@ Item {
         stopAll()
         atSlot = 36; drumAngle = 36 * pitch
         outSlot = 36; outKey = ""; artSlot = -1; artUrl = ""
-        lift = 0.42; word = ""
+        travel = 3; word = ""
     }
     function sync() {
         if (!live) { pose(); return }
         if (!active) {
             // off screen: the disc goes back, the file stays where it is
             stopAll()
-            lift = 0; outSlot = -1; outKey = ""; word = ""
+            travel = 0; outSlot = -1; outKey = ""; word = ""
             prepSlot = -1; drops = []
             return
         }
@@ -198,29 +212,29 @@ Item {
         }
         var want = power && hasTrack && !ejected && mediaKey !== ""
         var tgt = want ? slotFor(mediaKey) : -1
-        if (lift > 0.0001 && (!want || outKey !== mediaKey || outSlot !== tgt)) {
+        if (travel > 0.0001 && (!want || outKey !== mediaKey || outSlot !== tgt)) {
             // its slot back under the loader first: the file may have turned
             // while the disc was in the drive
             if (atSlot !== outSlot && outSlot >= 0) { turnTo(outSlot); return }
             word = "UnLd"
             moving = true
             liftAnim.to = 0
-            liftAnim.duration = Math.round(1400 * lift)
+            liftAnim.duration = Math.round(2900 * travel / 3)
             liftAnim.start()
             return
         }
-        if (lift <= 0.0001) { outSlot = -1; outKey = "" }
+        if (travel <= 0.0001) { outSlot = -1; outKey = "" }
         if (tgt < 0) { word = ""; return }
         // in the drive: the file may stand anywhere
-        if (lift >= 0.9999 && outSlot === tgt) { word = ""; return }
+        if (travel >= 2.9999 && outSlot === tgt) { word = ""; return }
         if (artSlot !== tgt) { artSlot = tgt; artUrl = artwork }
         if (atSlot !== tgt) { turnTo(tgt); return }
-        if (lift < 0.9999) {
+        if (travel < 2.9999) {
             outSlot = tgt; outKey = mediaKey
             word = "LOAd"
             moving = true
-            liftAnim.to = 1
-            liftAnim.duration = Math.round(1700 * (1 - lift))
+            liftAnim.to = 3
+            liftAnim.duration = Math.round(3400 * (3 - travel) / 3)
             liftAnim.start()
             return
         }
@@ -233,7 +247,7 @@ Item {
     onActiveChanged: sync()
     onLiveChanged: sync()
     onPlayingChanged: if (live && playing && ejected) { ejected = false; Qt.callLater(step) }
-    onArtworkChanged: if (live && artSlot >= 0 && artSlot === slotFor(mediaKey) && (lift <= 0.0001 || outKey === mediaKey)) artUrl = artwork
+    onArtworkChanged: if (live && artSlot >= 0 && artSlot === slotFor(mediaKey) && (travel <= 0.0001 || outKey === mediaKey)) artUrl = artwork
     Component.onCompleted: sync()
 
     NumberAnimation {
@@ -261,11 +275,11 @@ Item {
     }
     NumberAnimation {
         id: liftAnim
-        target: root; property: "lift"
-        easing.type: Easing.InOutSine
+        target: root; property: "travel"
+        easing.type: Easing.Linear
         onFinished: {
             root.moving = false
-            if (root.lift <= 0.0001) { root.outSlot = -1; root.outKey = "" }
+            if (root.travel <= 0.0001) { root.outSlot = -1; root.outKey = "" }
             root.word = ""
             Qt.callLater(root.step)
         }
@@ -280,12 +294,20 @@ Item {
         onTriggered: root.blink = !root.blink
         onRunningChanged: root.blink = true
     }
-    readonly property bool ledsOn: !live || (power && (lift > 0.0001 || (turning && blink) || moving || dropping))
+    // the disc in the drive turns while it plays: one 30 Hz step, nothing
+    // else, and only then
+    property real spin: 0
+    Timer {
+        interval: 33; repeat: true
+        running: root.live && root.active && root.power && root.playing && root.loaded && root.word === ""
+        onTriggered: root.spin = (root.spin + 7.5) % 360
+    }
+    readonly property bool ledsOn: !live || (power && (travel > 0.0001 || (turning && blink) || moving || dropping))
 
     // ── the display ────────────────────────────────────────────────────────
     readonly property int passing: ((Math.round(drumAngle / pitch) % slots) + slots) % slots
     function pad(n, w, c) { var t = String(n); while (t.length < w) t = c + t; return t }
-    readonly property bool loaded: lift >= 0.9999 && !moving && outKey !== "" && outKey === mediaKey
+    readonly property bool loaded: travel >= 2.9999 && !moving && outKey !== "" && outKey === mediaKey
     readonly property bool timeShown: !live || (loaded && hasTrack && word === "")
     // nine cells: disc (3), track (2), minutes, seconds
     readonly property string cells: {
@@ -307,7 +329,7 @@ Item {
         if (ch === "-") return "dash"
         return (ch === ch.toUpperCase() ? "u" : "l") + ch.toLowerCase()
     }
-    readonly property var cellX: [412, 424.2, 436.4, 463.4, 475.6, 502.6, 514.8, 534, 546.2]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 51
+    readonly property var cellX: [410, 422.2, 434.4, 461.4, 473.6, 500.6, 512.8, 532, 544.2]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 123
 
     component Pic: Image {
         smooth: true
@@ -489,6 +511,58 @@ Item {
             Pic { anchors.fill: parent; source: root.assetsBase + "glass.png" }
         }
 
+        // ── the drive: the disc brought onto the lens, turning ─────────────
+        Item {
+            id: drive
+            x: root.driveGlass[0]; y: root.driveGlass[1]
+            width: root.driveGlass[2] - root.driveGlass[0]; height: root.driveGlass[3] - root.driveGlass[1]
+            clip: true
+            readonly property real cx: root.driveC[0] - x
+            readonly property real cy: root.driveC[1] - y
+            readonly property real rx: root.driveDisc / 2
+            // in from the left a little above the platter, then down onto it
+            readonly property real dx: -(cx + rx + 6) * (1 - root.carry)
+            readonly property real dy: -9 * (1 - root.seat)
+            readonly property bool present: root.carry > 0.001 && root.outSlot >= 0
+            Pic { anchors.fill: parent; source: root.assetsBase + "drive-bg.png" }
+            // its shadow on the platter, darker as it comes down
+            Pic {
+                x: drive.cx + drive.dx - drive.rx - 8; y: drive.cy - drive.rx * root.driveSquash - 6
+                width: drive.rx * 2 + 16; height: drive.rx * 2 * root.driveSquash + 16
+                visible: drive.present
+                opacity: 0.3 + 0.5 * root.seat
+                source: root.assetsBase + "drive-shadow.png"
+            }
+            Item {
+                visible: drive.present
+                x: drive.cx + drive.dx - drive.rx; y: drive.cy + drive.dy - drive.rx
+                width: drive.rx * 2; height: width
+                transform: Scale { origin.x: drive.rx; origin.y: drive.rx; yScale: root.driveSquash }
+                Item {
+                    anchors.fill: parent
+                    rotation: root.spin
+                    Pic {
+                        anchors.fill: parent
+                        source: root.assetsBase + "disc-lbl-" + (((root.outSlot * 7 + 3) % 10) + 10) % 10 + ".png"
+                    }
+                    Loader {
+                        anchors.fill: parent
+                        active: drive.present && root.artFor(root.outSlot) !== ""
+                        sourceComponent: DiscArt { url: root.artFor(root.outSlot) }
+                    }
+                }
+            }
+            // the clamper comes down on the disc once it sits on the spindle
+            Pic {
+                x: drive.cx - 16; y: drive.cy - 7 - 3 - 8 * (1 - root.seat)
+                width: 32; height: 16.6                       // changer.py drive_clamp
+                visible: root.seat > 0.01 && drive.present
+                opacity: root.seat
+                source: root.assetsBase + "drive-clamp.png"
+            }
+            Pic { anchors.fill: parent; source: root.assetsBase + "drive-glass.png" }
+        }
+
         Pic { id: base; width: 600; height: 260; source: root.assetsBase + "base.png" }
 
         Pic {
@@ -500,30 +574,30 @@ Item {
         // ── the fluorescent display ────────────────────────────────────────
         Item {
             visible: !root.live || root.power
-            Pic { x: 375; y: 38; width: 197; height: 62; source: root.assetsBase + "vfd-panel.png" }
+            Pic { x: 366; y: 113; width: 210; height: 48; source: root.assetsBase + "vfd-panel.png" }
             Repeater {
                 model: 9
                 Pic {
                     required property int index
                     readonly property string ch: root.cells.length === 9 ? root.cells.charAt(index) : " "
-                    x: root.cellX[index] - 1; y: 50; width: 13; height: 21
+                    x: root.cellX[index] - 1; y: 122; width: 13; height: 21
                     visible: ch !== " "
                     source: ch === " " ? "" : root.assetsBase + "g-" + root.glyph(ch) + ".png"
                 }
             }
-            Pic { x: 527; y: 50; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
+            Pic { x: 524.9; y: 122; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
             Pic {
-                x: 411; y: 74; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
+                x: 409; y: 145.5; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
                 visible: root.timeShown && (root.playing || !root.live)
             }
             Pic {
-                x: 421; y: 74; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
+                x: 419; y: 145.5; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
                 visible: root.timeShown && root.live && !root.playing && root.elapsed > 0
             }
-            Pic { x: 455; y: 75.5; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
-            Pic { x: 481; y: 75.5; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
-            Pic { x: 481; y: 75.4; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
-            Pic { x: 499; y: 75.5; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
+            Pic { x: 453; y: 147; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
+            Pic { x: 479; y: 147; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
+            Pic { x: 479; y: 146.9; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
+            Pic { x: 497; y: 147; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
         }
 
         // ── the level knob: the volume ─────────────────────────────────────

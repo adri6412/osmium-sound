@@ -34,7 +34,15 @@ SPLIT_Y = 198.5                      # the lower strip of the face
 RECESS = (112, 20.5, 354, 195.5)     # the window's sunken frame
 GLASS = (127, 25.5, 344, 187.5)      # the hole: the mechanism shows here
 GLASS_R = 5
-VFD = (375, 38, 572, 100)
+# the drive's window, top right: the disc brought from the file onto the
+# laser lens and turning, seen from above at a slant
+DRIVE_RECESS = (360, 13, 582, 108)
+DRIVE_GLASS = (366, 18, 576, 103)
+DRIVE_R = 4
+DRIVE_C = (470, 66)                  # the spindle
+DRIVE_DISC = 150                     # the disc's diameter there
+DRIVE_SQUASH = 0.40                  # its height on screen / its width
+VFD = (366, 113, 576, 161)
 FEET = [(73.5, 131), (471, 523.5)]
 FOOT_Y = (238, 249.5)
 
@@ -43,15 +51,16 @@ FOOT_Y = (238, 249.5)
 # the lettering is 3.5-6 units tall (the real one's would be 2-3 px).
 KEYS = {
     'power': (31, 120, 81, 142),
-    'random': (372, 105, 420, 125), 'repeat': (424, 105, 472, 125),
-    'discm': (480, 105, 522, 125), 'discp': (526, 105, 568, 125),
-    'eject': (372, 131, 434, 154), 'unload': (438, 131, 500, 154),
-    'play': (372, 161, 434, 192), 'stop': (438, 161, 480, 192),
-    'prev': (484, 161, 526, 192), 'next': (530, 161, 572, 192),
+    'random': (366, 167, 414, 188), 'repeat': (418, 167, 466, 188),
+    'discm': (470, 167, 521, 188), 'discp': (525, 167, 576, 188),
+    'eject': (112, 204, 176, 238), 'unload': (180, 204, 244, 238),
+    'play': (256, 204, 322, 238), 'stop': (326, 204, 372, 238),
+    'prev': (376, 204, 422, 238), 'next': (426, 204, 472, 238),
 }
-KNOB = (550, 219)
+KNOB = (563, 218)
 KNOB_R = 9
-JACK = (512, 219)
+JACK = (535, 218)
+PHONES_BOX = (482, 204.5, 584, 240.5)
 
 # the window's insides
 LOADER_X = 255.5                     # the loader's column (the LEDs)
@@ -60,7 +69,7 @@ DISC_D = 128                         # disc diameter in units
 VFD_COL = (196, 236, 255)
 
 # the display cells (glyph pictures one unit larger all round, for the glow)
-CELL_W, CELL_H, CELL_Y = 11, 19, 51
+CELL_W, CELL_H, CELL_Y = 11, 19, 123
 
 
 def font(path, size):
@@ -288,11 +297,17 @@ def base():
     blur_shadow(img, GLASS, GLASS_R + 1, 1.2, 180, dy=0.4)
     d = ImageDraw.Draw(img)
     d.rounded_rectangle(box((GLASS[0] - 1.1, GLASS[1] - 1.1, GLASS[2] + 1.1, GLASS[3] + 1.1)), px(GLASS_R + 1), fill=(22, 21, 20, 255))
-    hole = shape_mask(img.size, GLASS, GLASS_R)
-    a = np.array(img.getchannel('A'))
-    a[np.array(hole) > 0] = 0
-    # soften the hole's edge: the glass's own picture draws over it
-    img.putalpha(Image.fromarray(np.minimum(a, 255 - np.array(hole)).astype(np.uint8)))
+    # the drive's window, the same kind of frame
+    recess(img, DRIVE_RECESS, 3.5, depth_top=3.0)
+    blur_shadow(img, DRIVE_GLASS, DRIVE_R + 1, 1.2, 180, dy=0.4)
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle(box((DRIVE_GLASS[0] - 1.1, DRIVE_GLASS[1] - 1.1, DRIVE_GLASS[2] + 1.1, DRIVE_GLASS[3] + 1.1)),
+                        px(DRIVE_R + 1), fill=(22, 21, 20, 255))
+    for g, r in ((GLASS, GLASS_R), (DRIVE_GLASS, DRIVE_R)):
+        hole = shape_mask(img.size, g, r)
+        a = np.array(img.getchannel('A'))
+        # the holes: the windows' own pictures draw there
+        img.putalpha(Image.fromarray(np.minimum(a, 255 - np.array(hole)).astype(np.uint8)))
 
     # the display window
     blur_shadow(img, VFD, 1.5, 0.8, 150, dy=-0.3)
@@ -337,10 +352,11 @@ def base():
 
     # the headphone box
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle(box((436, 204.5, 572, 240.5)), px(1.6), outline=(118, 113, 104, 255), width=px(0.35))
-    d.rounded_rectangle(box((436.3, 204.8, 572.3, 240.8)), px(1.6), outline=(226, 222, 213, 140), width=px(0.25))
-    text(img, '1-BIT', 442, 215.5, 7, (44, 42, 39, 255), anchor='lm', path=SANSB, italic=0.22)
-    text(img, 'DAC', 442, 229.5, 7, (44, 42, 39, 255), anchor='lm', path=SANSB, italic=0.22)
+    pb = PHONES_BOX
+    d.rounded_rectangle(box(pb), px(1.6), outline=(118, 113, 104, 255), width=px(0.35))
+    d.rounded_rectangle(box((pb[0] + 0.3, pb[1] + 0.3, pb[2] + 0.3, pb[3] + 0.3)), px(1.6), outline=(226, 222, 213, 140), width=px(0.25))
+    text(img, '1-BIT', pb[0] + 5, 215.5, 7, (44, 42, 39, 255), anchor='lm', path=SANSB, italic=0.22)
+    text(img, 'DAC', pb[0] + 5, 229.5, 7, (44, 42, 39, 255), anchor='lm', path=SANSB, italic=0.22)
     d = ImageDraw.Draw(img)
     d.line([px(JACK[0] + 8), px(KNOB[1]), px(KNOB[0] - 13), px(KNOB[1])], fill=(110, 105, 96, 255), width=px(0.4))
     text(img, 'PHONES', JACK[0], 234.8, 4.6, INK, path=SANSB, spacing=0.1)
@@ -535,6 +551,109 @@ def glass():
     img = Image.fromarray(arr, 'RGBA')
     text(img, 'FILE-TYPE CD MECHANISM', LOADER_X - GLASS[0] - 26, 133, 4.6, (150, 150, 150, 170), spacing=0.3)
     save(finish(img), 'glass.png')
+
+
+# ── the drive's window ────────────────────────────────────────────────────
+def drive_bg():
+    """The drive seen from above at a slant: the chassis, the platter's
+    well, the spindle and, on its rails, the laser sled with its lens."""
+    gx, gy = DRIVE_GLASS[0], DRIVE_GLASS[1]
+    gw, gh = DRIVE_GLASS[2] - gx, DRIVE_GLASS[3] - gy
+    img = canvas(gw, gh)
+    w, h = img.size
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    u, v = xx / SS, yy / SS
+    cx, cy = DRIVE_C[0] - gx, DRIVE_C[1] - gy
+    q = DRIVE_SQUASH
+    lum = 20 - 8 * (v / gh) + 6 * np.exp(-((u - cx) ** 2 + ((v - cy) / q) ** 2) / (2 * 95 ** 2))
+    # the platter's well, a shade darker, its near rim catching the light
+    rr = np.hypot(u - cx, (v - cy) / q)
+    lum = np.where(rr < 84, lum * 0.55, lum)
+    rim = np.exp(-((rr - 84) ** 2) / (2 * 0.9 ** 2)) * np.clip((v - cy) / (84 * q), 0, 1)
+    lum = lum + 45 * rim
+    rgb = np.stack([lum * 1.02, lum, lum * 1.04], -1)
+    img = Image.fromarray(np.dstack([np.clip(rgb, 0, 255), np.full((h, w), 255, np.float32)]).astype(np.uint8), 'RGBA')
+    d = ImageDraw.Draw(img)
+    # the sled's two rails, out to the right of the spindle
+    for dy, ln in ((-7.5, 96), (8.5, 98)):
+        d.line([px(cx + 8), px(cy + dy), px(cx + ln), px(cy + dy * 1.05)], fill=(112, 114, 118, 255), width=px(1.3))
+        d.line([px(cx + 8), px(cy + dy - 0.45), px(cx + ln), px(cy + dy * 1.05 - 0.45)], fill=(190, 192, 196, 255), width=px(0.4))
+    # the sled, and the lens on it
+    sx, sy = cx + 44, cy + 0.5
+    blur_shadow(img, (sx - 14, sy - 5, sx + 14, sy + 8), 2, 1.0, 160)
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle(box((sx - 14, sy - 7, sx + 14, sy + 6)), px(1.6), fill=(46, 46, 49, 255))
+    d.rounded_rectangle(box((sx - 14, sy - 7, sx + 14, sy - 4.8)), px(1.2), fill=(78, 78, 82, 255))
+    d.ellipse(box((sx - 7, sy - 4, sx + 7, sy + 2.2)), fill=(16, 16, 20, 255))
+    lens = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    ln = np.zeros((h, w, 4), np.float32)
+    lr = np.hypot((u - sx) / 5.2, (v - (sy - 0.9)) / 2.5)
+    inside = lr < 1
+    ln[..., 0] = 70 + 90 * np.exp(-((u - sx + 1.6) ** 2 + ((v - sy + 1.8) / 0.6) ** 2) / 2.2)
+    ln[..., 1] = 60 + 80 * np.exp(-((u - sx + 1.6) ** 2 + ((v - sy + 1.8) / 0.6) ** 2) / 2.2)
+    ln[..., 2] = 150 + 100 * np.exp(-((u - sx + 1.6) ** 2 + ((v - sy + 1.8) / 0.6) ** 2) / 2.2)
+    ln[..., 3] = np.clip((1 - lr) * SS * 0.5, 0, 1) * 255 * inside
+    img.alpha_composite(Image.fromarray(np.clip(ln, 0, 255).astype(np.uint8), 'RGBA'))
+    # the spindle: a turntable hub and its centring cone
+    d = ImageDraw.Draw(img)
+    d.ellipse(box((cx - 11, cy - 4.4 + 1.2, cx + 11, cy + 4.4 + 1.2)), fill=(36, 36, 38, 255))
+    d.ellipse(box((cx - 11, cy - 4.4, cx + 11, cy + 4.4)), fill=(132, 134, 138, 255))
+    d.ellipse(box((cx - 9.5, cy - 3.8, cx + 9.5, cy + 3.8)), fill=(96, 98, 102, 255))
+    d.ellipse(box((cx - 4, cy - 1.6 - 1.2, cx + 4, cy + 1.6 - 1.2)), fill=(176, 178, 182, 255))
+    for a in (40, 160, 280):
+        x, y = cx + 72 * math.cos(math.radians(a)) * 1.12, cy + 72 * math.sin(math.radians(a)) * q * 1.15
+        if 4 < x < gw - 4 and 4 < y < gh - 4:
+            d.ellipse(box((x - 1.6, y - 0.8, x + 1.6, y + 0.8)), fill=(70, 70, 74, 255))
+    save(finish(img), 'drive-bg.png')
+
+
+def drive_glass():
+    gw, gh = DRIVE_GLASS[2] - DRIVE_GLASS[0], DRIVE_GLASS[3] - DRIVE_GLASS[1]
+    img = canvas(gw, gh)
+    w, h = img.size
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    u, v = xx / SS, yy / SS
+    t = (u - gw / 2) / (gw / 2)
+    a = 0.16 + 0.22 * np.abs(t) ** 2.4 + 0.35 * np.exp(-v / 6)
+    refl = 0.06 * np.exp(-((u + 0.6 * v - 60) ** 2) / (2 * 10 ** 2)) + 0.04 * np.exp(-((u + 0.6 * v - 150) ** 2) / (2 * 1.8 ** 2))
+    refl += 0.10 * np.exp(-v / 1.4)
+    tot = np.clip(a + refl, 0, 1)
+    rgb = (np.array([6, 6, 7], np.float32) * (a / np.maximum(tot, 1e-3))[..., None]
+           + 235 * (refl / np.maximum(tot, 1e-3))[..., None])
+    m = np.array(shape_mask((w, h), (0, 0, gw, gh), DRIVE_R), np.float32) / 255
+    save(finish(Image.fromarray(np.dstack([np.clip(rgb, 0, 255), tot * m * 255]).astype(np.uint8), 'RGBA')), 'drive-glass.png')
+
+
+def drive_clamp():
+    """The clamper that holds the disc on the spindle: a metal puck."""
+    rx, ry, th = 15, 15 * DRIVE_SQUASH, 2.6
+    img = canvas(2 * rx + 2, 2 * ry + th + 2)
+    d = ImageDraw.Draw(img)
+    cx, cy = rx + 1, ry + 1
+    d.ellipse(box((cx - rx, cy - ry + th, cx + rx, cy + ry + th)), fill=(54, 55, 58, 255))
+    d.rectangle(box((cx - rx, cy, cx + rx, cy + th)), fill=(54, 55, 58, 255))
+    w, h = img.size
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    u, v = xx / SS - cx, (yy / SS - cy) / DRIVE_SQUASH
+    r = np.hypot(u, v)
+    top = r < rx
+    lum = 150 + 40 * np.cos(np.arctan2(v, u) * 2 + 0.8) - 25 * (r / rx)
+    lay = np.dstack([lum, lum * 1.01, lum * 1.03, np.clip((rx - r) * SS * 0.4, 0, 1) * 255 * top])
+    img.alpha_composite(Image.fromarray(np.clip(lay, 0, 255).astype(np.uint8), 'RGBA'))
+    d = ImageDraw.Draw(img)
+    d.ellipse(box((cx - 4, cy - 4 * DRIVE_SQUASH, cx + 4, cy + 4 * DRIVE_SQUASH)), fill=(90, 92, 96, 255))
+    save(finish(img), 'drive-clamp.png')
+
+
+def drive_shadow():
+    rx, ry = DRIVE_DISC / 2, DRIVE_DISC / 2 * DRIVE_SQUASH
+    img = canvas(2 * rx + 16, 2 * ry + 16)
+    m = Image.new('L', img.size, 0)
+    ImageDraw.Draw(m).ellipse(box((8, 8, 8 + 2 * rx, 8 + 2 * ry)), fill=200)
+    m = m.filter(ImageFilter.GaussianBlur(px(3)))
+    lay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    lay.putalpha(m)
+    save(finish(lay), 'drive-shadow.png')
 
 
 # ── the discs ─────────────────────────────────────────────────────────────
@@ -785,19 +904,19 @@ def vfd_panel():
         a = lay.getchannel('A')
         dim.paste(Image.new('L', a.size, 185), (int(px(x - ox) - a.width / 2), int(px(y - oy) - a.height / 2)), a)
 
-    cap('DISC', 429.7, 45)
-    cap('TRACK', 475, 45)
-    cap('MIN', 514.2, 45)
-    cap('SEC', 545.6, 45)
+    cap('DISC', 427.7, 118.5)
+    cap('TRACK', 473, 118.5)
+    cap('MIN', 512.2, 118.5)
+    cap('SEC', 543.6, 118.5)
     # the logo: a disc with a swoosh, "101-DISC" under it
-    cx, cy = 387 - ox, 60 - oy
+    cx, cy = 378 - ox, 129 - oy
     d.ellipse(box((cx - 6, cy - 6, cx + 6, cy + 6)), outline=255, width=px(1.0))
     d.ellipse(box((cx - 1.5, cy - 1.5, cx + 1.5, cy + 1.5)), fill=255)
     d.arc(box((cx - 4, cy - 4, cx + 4, cy + 4)), 200, 320, fill=255, width=px(0.9))
     lay = text_layer('FILE', 6.4, (255, 255, 255, 255), path=SANSB, spacing=0.15, italic=0.18)
     m.paste(Image.new('L', lay.size, 255), (int(px(cx + 8)), int(px(cy - 1) - lay.height / 2)), lay.getchannel('A'))
     lay = text_layer('101-DISC', 4.0, (255, 255, 255, 255), path=SANSB, spacing=0.15)
-    m.paste(Image.new('L', lay.size, 230), (int(px(cx - 6)), int(px(cy + 13) - lay.height / 2)), lay.getchannel('A'))
+    m.paste(Image.new('L', lay.size, 230), (int(px(cx - 6)), int(px(cy + 13.5) - lay.height / 2)), lay.getchannel('A'))
     out = lit(m)
     out.alpha_composite(lit(dim, colour=(150, 190, 215), glow=0.25, glow_r=0.5))
     save(finish(out), 'vfd-panel.png')
@@ -817,6 +936,10 @@ def main():
     led_dots()
     lip()
     glass()
+    drive_bg()
+    drive_glass()
+    drive_clamp()
+    drive_shadow()
     disc_data()
     for i, (b, a, k) in enumerate(LABELS):
         disc_label(i, b, a, k)
