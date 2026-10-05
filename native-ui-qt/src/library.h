@@ -13,7 +13,7 @@
 struct LibItem {
     QString id, text, sub, art, icon;
     QString url, favUrl;        // the item's URL (tracks, playlists, plugin audio) and what `favorites add` wants for it
-    QString ptype;              // plugin items: the type Lyrion gives them (audio, playlist, link, search)
+    QString ptype;              // plugin and Jive menu items: the type Lyrion gives them (audio, playlist, link, search)
     QString albumId, artistId;  // tracks and albums: where "go to album / artist" leads
     int kind = -1;              // search results only: 0 artist, 1 album, 2 track
     // Jive menus carry their own actions: `add` puts the item at the end of

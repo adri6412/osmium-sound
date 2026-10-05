@@ -363,6 +363,13 @@ Item {
             // fa suonare dopo
             if (it.addact && it.addact.length) L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { Player.cmd(it.addact) } })
             if (it.addhold && it.addhold.length) L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: function() { Player.cmd(it.addhold) } })
+            // an app's album in a Jive menu (Apps -> Qobuz...): a "playlist"
+            // that plays as a whole; it goes into the CD changer with its own
+            // play and add commands (its text is "Album\nArtist")
+            if (!it.hasInput && it.ptype === "playlist" && it.play && it.play.length)
+                L.push({ icon: "disc-3", label: Tr.t("player.changer.putIn"), cb: function() {
+                    Ui.app.changerPut({ title: String(it.text).split("\n")[0], artUrl: list.iconUrl(it.icon), playCmd: it.play, addCmd: it.addact })
+                } })
             // una voce che si suona e non si apre e' un brano o una stazione
             fav(it.favUrl, (it.play && it.play.length && !(it.go && it.go.length)) ? "audio" : "playlist")
             break

@@ -24,7 +24,8 @@ Item {
     // changer still finds them in the same slots. A disc is an album of the
     // library { id, title, art (the cover's id) } or one from an app (Qobuz,
     // Spotify...) put in from its long-press menu { title, artUrl, url (what
-    // Favourites would keep: stable), cmd + item (the app's own item) }.
+    // Favourites would keep: stable), cmd + item (the app's own item), or
+    // from a Jive menu its playCmd / addCmd }.
     property var changerDiscs: {
         try { var d = JSON.parse(Sys.conf("changer-discs", "[]")); return Array.isArray(d) ? d : [] } catch (e) { return [] }
     }
@@ -40,11 +41,14 @@ Item {
         return { id: String(a.id || ""), title: a.text || "", art: a.art || "" }
     }
     // what tells two discs apart
-    function changerUid(d) { return d.id ? "a:" + d.id : "u:" + (d.url || d.cmd + ":" + d.item) }
+    function changerUid(d) {
+        return d.id ? "a:" + d.id : "u:" + (d.url || (d.playCmd ? JSON.stringify(d.playCmd) : d.cmd + ":" + d.item))
+    }
     // the Lyrion command that loads a disc (the queue replaced) or adds it
     function changerCmd(d, load) {
         if (d.id) return ["playlistcontrol", "cmd:" + (load ? "load" : "add"), "album_id:" + d.id]
         if (d.url) return ["playlist", load ? "play" : "add", d.url, d.title]
+        if (d.playCmd) return load || !(d.addCmd && d.addCmd.length) ? d.playCmd : d.addCmd
         return [d.cmd, "playlist", load ? "play" : "add", "item_id:" + d.item]
     }
     function changerSave(discs) {
@@ -65,7 +69,7 @@ Item {
         var discs = []
         for (var i = 0; i < albums.length && discs.length < 101; i++) {
             var d = changerDiscOf(albums[i])
-            if (d && (d.id || d.url || d.item)) discs.push(d)
+            if (d && (d.id || d.url || d.item || d.playCmd)) discs.push(d)
         }
         if (!discs.length) return
         var before = changerDiscs, kept = changerPlaying() && before.length <= discs.length

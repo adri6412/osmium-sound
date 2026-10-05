@@ -147,6 +147,14 @@ def menu_item(cmd, i):
         it["actions"]["add"] = {"cmd": [cmd, "playlist", "add"], "params": {"item_id": f"{cmd}.{i}"}}
         it["actions"]["add-hold"] = {"cmd": [cmd, "playlist", "insert"], "params": {"item_id": f"{cmd}.{i}"}}
         it["presetParams"] = {"favorites_url": f"{cmd}://item/{i}", "favorites_title": it["text"]}
+    if i % 3 == 1:
+        # an album, as Qobuz sends one in a Jive menu: "Album\nArtist", a
+        # "playlist" that plays as a whole, no favourites URL
+        it["text"] = f"{cmd} album {i}\nApp Artist"
+        it["type"] = "playlist"
+        it["icon"] = "/music/1001/cover"
+        it["actions"]["play"] = {"cmd": [cmd, "playlist", "play"], "params": {"item_id": f"{cmd}.{i}"}}
+        it.pop("presetParams", None)
     return it
 
 

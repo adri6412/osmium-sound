@@ -305,6 +305,7 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
         }
         case Menu:
             o.id = str(it, "id"); o.text = str(it, "text"); if (o.text.isEmpty()) o.text = str(it, "name");
+            o.ptype = str(it, "type");      // an app's album is a "playlist" (the CD changer's menu entry)
             o.icon = menuIcon(it);
             o.go = resolveAction(base, it, "go"); o.play = resolveAction(base, it, "play");
             if (o.play.isEmpty()) o.play = resolveAction(base, it, "playall");
