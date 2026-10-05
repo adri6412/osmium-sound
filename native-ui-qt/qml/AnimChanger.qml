@@ -159,6 +159,7 @@ Item {
         return no === artSlot ? artUrl : ""
     }
     function stopAll() {
+        speed = 0
         turnAnim.stop(); liftAnim.stop(); dropAnim.stop()
         turning = false; moving = false; dropping = false; dropSlot = -1
     }
@@ -293,13 +294,47 @@ Item {
         onTriggered: root.blink = !root.blink
         onRunningChanged: root.blink = true
     }
-    // the disc in the drive turns while it plays: one 30 Hz step, nothing
-    // else, and only then
+    // The disc in the drive turns while it plays, at the top-loading CD
+    // scene's pace (AnimCd): constant linear velocity scaled to about a
+    // third, ~150 rpm where the music starts down to ~65 at the edge, the
+    // place on the disc following the position in the queue; about three
+    // seconds to get up to speed, under one to stop. One 30 Hz step, by real
+    // elapsed time, only while it turns.
     property real spin: 0
+    property real speed: 0                   // degrees per second
+    readonly property bool wantSpin: live && active && power && playing && loaded && word === ""
+    property real spinFrom: 0
+    property bool spinUp: false
+    property real spinDur: 3000
+    property double spinT0: 0
+    property double lastT: 0
+    readonly property real paceScale: 0.3
+    function clvRate() {
+        var f = trackTotal > 0 && trackIndex >= 0 ? Math.max(0, Math.min(1, (trackIndex + progress) / trackTotal)) : 0
+        var r = Math.sqrt(25 * 25 + f * (58 * 58 - 25 * 25))
+        return 1300 / (2 * Math.PI * r) * 360 * paceScale
+    }
+    onWantSpinChanged: {
+        spinFrom = speed
+        spinUp = wantSpin
+        spinDur = wantSpin ? 3000 : 900
+        spinT0 = Date.now()
+    }
     Timer {
         interval: 33; repeat: true
-        running: root.live && root.active && root.power && root.playing && root.loaded && root.word === ""
-        onTriggered: root.spin = (root.spin + 7.5) % 360
+        running: root.live && root.active && (root.wantSpin || root.speed > 0)
+        onRunningChanged: if (running) root.lastT = Date.now()
+        onTriggered: {
+            var now = Date.now()
+            var dt = Math.min(0.1, Math.max(0, (now - root.lastT) / 1000))
+            root.lastT = now
+            var u = Math.min(1, Math.max(0, (now - root.spinT0) / root.spinDur))
+            var e = u * u * (3 - 2 * u)
+            var v = root.spinFrom + ((root.spinUp ? root.clvRate() : 0) - root.spinFrom) * e
+            var a = root.spin + (root.speed + v) * 0.5 * dt
+            root.spin = a - 360 * Math.floor(a / 360)
+            root.speed = (u >= 1 && !root.spinUp) ? 0 : v
+        }
     }
     readonly property bool ledsOn: !live || (power && (travel > 0.0001 || (turning && blink) || moving || dropping))
 
