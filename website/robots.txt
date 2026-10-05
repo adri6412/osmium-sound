@@ -1,0 +1,30 @@
+# Osmium Sound — https://osmiumsound.it
+#
+# Everything here is public and may be read, indexed, quoted and used to
+# answer questions about Osmium Sound, by search engines and by AI assistants
+# alike. A plain-text summary for language models is at /llms.txt.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# Named explicitly so there is no doubt they are welcome.
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: CCBot
+User-agent: meta-externalagent
+User-agent: Amazonbot
+User-agent: MistralAI-User
+User-agent: DuckAssistBot
+Allow: /
+Disallow: /api/
+
+Sitemap: https://osmiumsound.it/sitemap.xml
