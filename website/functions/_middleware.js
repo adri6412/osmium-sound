@@ -12,7 +12,7 @@
 // way Umami and Plausible count. This function only records the two things the
 // beacon cannot see, because they never run JavaScript:
 //
-//   - files the site serves itself (the F-Droid repository: .apk and .jar),
+//   - files the site serves itself (the APKs in the F-Droid repository),
 //     into downloads_daily;
 //   - requests that do not count as a person, into site_drops, so a network
 //     filtered out by mistake is visible in the numbers.
@@ -35,10 +35,12 @@ import {
 } from "./_lib/counters.js";
 import { applianceHash, utcDay, visitorHash } from "./_lib/visitor.js";
 
-// Files served from the site itself and worth counting: the F-Droid repository
-// index and the APKs. Everything else on file.osmiumsound.it is counted by the
+// Files served from the site itself and worth counting: the APKs. The F-Droid
+// repository index (entry.jar, index-v1.jar) is what every client polls to
+// look for updates, not something anybody downloads, and is ignored like any
+// other static file. Everything else on file.osmiumsound.it is counted by the
 // worker that serves it.
-const DOWNLOAD_EXTENSIONS = /\.(apk|jar)$/i;
+const DOWNLOAD_EXTENSIONS = /\.apk$/i;
 
 // The update manifest an appliance reads (api_server.py: OTA_MANIFEST_BASE).
 // Every powered-on box asks for it every fifteen minutes, so counting how many
@@ -48,7 +50,7 @@ const OTA_MANIFEST = /^\/ota\/latest-[a-z0-9]+\.json$/i;
 const APPLIANCE_UA = /^hifi-player-ota\b/i;
 
 // Static files that are neither a page nor a download
-const ASSET_EXTENSIONS = /\.(png|jpe?g|gif|svg|webp|avif|ico|css|js|mjs|map|json|woff2?|ttf|eot|otf|mp4|webm|pdf|xml|txt|zip)$/i;
+const ASSET_EXTENSIONS = /\.(png|jpe?g|gif|svg|webp|avif|ico|css|js|mjs|map|json|woff2?|ttf|eot|otf|mp4|webm|pdf|xml|txt|zip|jar)$/i;
 
 function getIP(request) {
   return (
