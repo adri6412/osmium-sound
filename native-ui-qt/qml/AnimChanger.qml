@@ -79,20 +79,20 @@ Item {
     readonly property real loaderPhi: Math.asin((loaderX - axisX) / radius) * 180 / Math.PI
     readonly property int places: 37                         // discs drawn: those within sight
     // the drive's window (changer.py DRIVE_*)
-    readonly property var driveGlass: [366, 18, 576, 128]
-    readonly property var driveC: [471, 73]
-    readonly property real driveDisc: 100
+    readonly property var driveGlass: [366, 18, 576, 147]
+    readonly property var driveC: [471, 82.5]
+    readonly property real driveDisc: 120
 
     readonly property var keys: ({
         power: [31, 120, 81, 142],
-        random: [366, 180, 414, 197], repeat: [418, 180, 466, 197],
-        discm: [470, 180, 521, 197], discp: [525, 180, 576, 197],
-        eject: [112, 204, 176, 238], unload: [180, 204, 244, 238],
-        play: [256, 204, 322, 238], stop: [326, 204, 372, 238],
-        prev: [376, 204, 422, 238], next: [426, 204, 472, 238]
+        eject: [31, 204, 81, 238], unload: [85, 204, 135, 238],
+        random: [143, 204, 191, 238], repeat: [195, 204, 243, 238],
+        discm: [247, 204, 289, 238], discp: [293, 204, 335, 238],
+        play: [343, 204, 399, 238], stop: [403, 204, 443, 238],
+        prev: [447, 204, 487, 238], next: [491, 204, 531, 238]
     })
     readonly property var keyNames: ["power", "random", "repeat", "discm", "discp", "eject", "unload", "play", "stop", "prev", "next"]
-    readonly property var knob: [563, 218]
+    readonly property var knob: [553, 218]
 
     // ── the mechanism ──────────────────────────────────────────────────────
     // drumAngle: the file's turn, in degrees; slot n is at the loader when
@@ -204,7 +204,9 @@ Item {
             drops = drops.slice(1)
             if (prepSlot === s) prepSlot = -1
             dropSlot = s
-            word = "LOAd"
+            // with a disc in the drive the display stays on it (and it keeps
+            // turning): the file works behind it
+            word = loaded ? "" : "LOAd"
             dropping = true
             drop = dropStart
             dropAnim.duration = Math.round(1700 * dropStart)
@@ -303,7 +305,9 @@ Item {
     // elapsed time, only while it turns.
     property real spin: 0
     property real speed: 0                   // degrees per second
-    readonly property bool wantSpin: live && active && power && playing && loaded && word === ""
+    // (the drive's own moves are not `loaded`: putting a disc into the file
+    // meanwhile does not stop it)
+    readonly property bool wantSpin: live && active && power && playing && loaded
     property real spinFrom: 0
     property bool spinUp: false
     property real spinDur: 3000
@@ -348,9 +352,9 @@ Item {
     readonly property string cells: {
         if (!live) return " 37" + "03" + "0247"
         if (!power) return ""
-        var disc = turning ? passing : dropping ? dropSlot : outSlot >= 0 ? outSlot : atSlot
+        var disc = loaded ? outSlot : turning ? passing : dropping ? dropSlot : outSlot >= 0 ? outSlot : atSlot
         var d = pad(disc + 1, 3, " ")
-        if (turning) return d + "--" + "    "
+        if (turning && !loaded) return d + "--" + "    "
         if (word !== "") return d + "--" + word
         if (timeShown) {
             var t = Math.max(0, Math.floor(elapsed))
@@ -364,7 +368,7 @@ Item {
         if (ch === "-") return "dash"
         return (ch === ch.toUpperCase() ? "u" : "l") + ch.toLowerCase()
     }
-    readonly property var cellX: [410, 422.2, 434.4, 461.4, 473.6, 500.6, 512.8, 532, 544.2]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 145
+    readonly property var cellX: [410, 422.2, 434.4, 461.4, 473.6, 500.6, 512.8, 532, 544.2]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 163
 
     component Pic: Image {
         smooth: true
@@ -672,30 +676,30 @@ Item {
         // ── the fluorescent display ────────────────────────────────────────
         Item {
             visible: !root.live || root.power
-            Pic { x: 366; y: 136; width: 210; height: 40; source: root.assetsBase + "vfd-panel.png" }
+            Pic { x: 366; y: 155; width: 210; height: 39; source: root.assetsBase + "vfd-panel.png" }
             Repeater {
                 model: 9
                 Pic {
                     required property int index
                     readonly property string ch: root.cells.length === 9 ? root.cells.charAt(index) : " "
-                    x: root.cellX[index] - 1; y: 144; width: 13; height: 21
+                    x: root.cellX[index] - 1; y: 162; width: 13; height: 21
                     visible: ch !== " "
                     source: ch === " " ? "" : root.assetsBase + "g-" + root.glyph(ch) + ".png"
                 }
             }
-            Pic { x: 524.9; y: 144; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
+            Pic { x: 524.9; y: 162; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
             Pic {
-                x: 409; y: 165.5; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
+                x: 409; y: 184; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
                 visible: root.timeShown && (root.playing || !root.live)
             }
             Pic {
-                x: 419; y: 165.5; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
+                x: 419; y: 184; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
                 visible: root.timeShown && root.live && !root.playing && root.elapsed > 0
             }
-            Pic { x: 453; y: 167; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
-            Pic { x: 479; y: 167; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
-            Pic { x: 479; y: 166.9; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
-            Pic { x: 497; y: 167; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
+            Pic { x: 453; y: 186; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
+            Pic { x: 479; y: 186; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
+            Pic { x: 479; y: 185.9; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
+            Pic { x: 497; y: 186; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
         }
 
         // ── the level knob: the volume ─────────────────────────────────────

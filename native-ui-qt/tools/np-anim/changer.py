@@ -37,30 +37,29 @@ GLASS_R = 5
 # the drive's window, top right: the disc brought from the file onto the
 # laser lens and turning, seen straight from above like the top-loading CD
 # scene (whose disc pictures, assets/anim/cd/, it uses)
-DRIVE_RECESS = (360, 13, 582, 133)
-DRIVE_GLASS = (366, 18, 576, 128)
+DRIVE_RECESS = (360, 13, 582, 152)
+DRIVE_GLASS = (366, 18, 576, 147)
 DRIVE_R = 4
-DRIVE_C = (471, 73)                  # the spindle
-DRIVE_DISC = 100                     # the disc's diameter there
-VFD = (366, 136, 576, 176)
+DRIVE_C = (471, 82.5)                # the spindle
+DRIVE_DISC = 120                     # the disc's diameter there
+VFD = (366, 155, 576, 194)
 FEET = [(73.5, 131), (471, 523.5)]
 FOOT_Y = (238, 249.5)
 
 # 🚨 Drawn for a screen, not to the real thing's scale: in the Now Playing
 # panel the whole front is ~560 px wide, so the keys are few and large and
 # the lettering is 3.5-6 units tall (the real one's would be 2-3 px).
+# every key but standby along the bottom strip, in three groups
 KEYS = {
     'power': (31, 120, 81, 142),
-    'random': (366, 180, 414, 197), 'repeat': (418, 180, 466, 197),
-    'discm': (470, 180, 521, 197), 'discp': (525, 180, 576, 197),
-    'eject': (112, 204, 176, 238), 'unload': (180, 204, 244, 238),
-    'play': (256, 204, 322, 238), 'stop': (326, 204, 372, 238),
-    'prev': (376, 204, 422, 238), 'next': (426, 204, 472, 238),
+    'eject': (31, 204, 81, 238), 'unload': (85, 204, 135, 238),
+    'random': (143, 204, 191, 238), 'repeat': (195, 204, 243, 238),
+    'discm': (247, 204, 289, 238), 'discp': (293, 204, 335, 238),
+    'play': (343, 204, 399, 238), 'stop': (403, 204, 443, 238),
+    'prev': (447, 204, 487, 238), 'next': (491, 204, 531, 238),
 }
-KNOB = (563, 218)
+KNOB = (553, 218)
 KNOB_R = 9
-JACK = (535, 218)
-PHONES_BOX = (482, 204.5, 584, 240.5)
 
 # the window's insides
 LOADER_X = 255.5                     # the loader's column (the LEDs)
@@ -69,7 +68,7 @@ DISC_D = 128                         # disc diameter in units
 VFD_COL = (196, 236, 255)
 
 # the display cells (glyph pictures one unit larger all round, for the glow)
-CELL_W, CELL_H, CELL_Y = 11, 19, 145
+CELL_W, CELL_H, CELL_Y = 11, 19, 163
 
 
 def font(path, size):
@@ -323,7 +322,7 @@ def base():
     # the reflection across the display glass
     refl = Image.new('L', img.size, 0)
     ImageDraw.Draw(refl).polygon([(px(VFD[0] + 30), px(VFD[1])), (px(VFD[0] + 62), px(VFD[1])),
-                                  (px(VFD[0] + 40), px(VFD[3])), (px(VFD[0] + 8), px(VFD[3]))], fill=16)
+                                  (px(VFD[0] + 40), px(VFD[3])), (px(VFD[0] + 8), px(VFD[3]))], fill=30)
     refl = Image.fromarray((np.array(refl, np.float32) * np.array(m, np.float32) / 255).astype(np.uint8))
     lay = Image.new('RGBA', img.size, (255, 255, 255, 0))
     lay.putalpha(refl.filter(ImageFilter.GaussianBlur(px(3))))
@@ -344,34 +343,14 @@ def base():
     d.line([px(cx), px(cy - rr - 0.6), px(cx), px(cy)], fill=INK, width=px(0.7))
     text(img, 'ON', 39, 114.5, 5.6, INK, anchor='lm', path=SANSB, spacing=0.2)
     labels = {'power': None, 'random': 'RANDOM', 'repeat': 'REPEAT', 'discm': 'DISC \u2212', 'discp': 'DISC +',
-              'eject': 'OPEN/CLOSE', 'unload': 'UNLOAD'}
+              'eject': 'OPEN\nCLOSE', 'unload': 'UNLOAD'}
     syms = {'play': 'playpause', 'stop': 'stop', 'prev': 'prev', 'next': 'next'}
     for k, b in KEYS.items():
-        size = 6.3 if k in ('random', 'repeat', 'discm', 'discp') else 6.5
+        size = 5.6 if k == 'eject' else 6.0
         keycap(img, b, label=labels.get(k), lsize=size, sym=syms.get(k), symk=2.2)
 
-    # the headphone box
+    text(img, 'LEVEL', KNOB[0], 236.5, 4.2, INK, path=SANSB, spacing=0.1)
     d = ImageDraw.Draw(img)
-    pb = PHONES_BOX
-    d.rounded_rectangle(box(pb), px(1.6), outline=(118, 113, 104, 255), width=px(0.35))
-    d.rounded_rectangle(box((pb[0] + 0.3, pb[1] + 0.3, pb[2] + 0.3, pb[3] + 0.3)), px(1.6), outline=(226, 222, 213, 140), width=px(0.25))
-    text(img, '1-BIT', pb[0] + 5, 215.5, 7, (44, 42, 39, 255), anchor='lm', path=SANSB, italic=0.22)
-    text(img, 'DAC', pb[0] + 5, 229.5, 7, (44, 42, 39, 255), anchor='lm', path=SANSB, italic=0.22)
-    d = ImageDraw.Draw(img)
-    d.line([px(JACK[0] + 8), px(KNOB[1]), px(KNOB[0] - 13), px(KNOB[1])], fill=(110, 105, 96, 255), width=px(0.4))
-    text(img, 'PHONES', JACK[0], 234.8, 4.6, INK, path=SANSB, spacing=0.1)
-    text(img, 'LEVEL', KNOB[0], 234.8, 4.6, INK, path=SANSB, spacing=0.1)
-    # the jack
-    jx, jy = JACK
-    d.ellipse(box((jx - 5.4, jy - 5.4, jx + 5.4, jy + 5.4)), fill=(96, 92, 86, 255))
-    m = Image.new('L', img.size, 0)
-    ImageDraw.Draw(m).ellipse(box((jx - 4.8, jy - 4.8, jx + 4.8, jy + 4.8)), fill=255)
-    arr = np.zeros((h, w, 3), np.float32)
-    arr[px(jy - 4.8):px(jy + 4.8)] = vgrad(w, px(jy + 4.8) - px(jy - 4.8), (236, 233, 226), (130, 126, 118))
-    paste_rgb(img, arr, m)
-    d = ImageDraw.Draw(img)
-    d.ellipse(box((jx - 2.6, jy - 2.6, jx + 2.6, jy + 2.6)), fill=(60, 58, 54, 255))
-    d.ellipse(box((jx - 1.9, jy - 1.9, jx + 1.9, jy + 1.9)), fill=(8, 8, 8, 255))
     # the knob's collar and shadow (the knob itself turns: knob.png)
     kx, ky = KNOB
     blur_shadow(img, (kx - KNOB_R, ky - KNOB_R + 1.2, kx + KNOB_R, ky + KNOB_R + 1.2), KNOB_R, 1.0, 170)
@@ -527,6 +506,20 @@ def lip():
     save(finish(img), 'lip.png')
 
 
+def sheen(u, v, gw, gh):
+    """A glass's light: a broad diagonal band of reflection and two thin
+    streaks, the rim catching the light (most at the top), and a faint sheen
+    from above. Alpha, 0..1."""
+    d = u + 0.55 * v
+    a = 0.17 * np.exp(-((d - gw * 0.30) ** 2) / (2 * (gw * 0.07) ** 2))
+    a += 0.13 * np.exp(-((d - gw * 0.47) ** 2) / (2 * (gw * 0.012) ** 2))
+    a += 0.08 * np.exp(-((d - gw * 0.88) ** 2) / (2 * (gw * 0.025) ** 2))
+    a += 0.18 * np.exp(-v / 1.3) + 0.06 * np.exp(-(gh - v) / 1.8)
+    a += 0.07 * np.exp(-u / 1.5) + 0.05 * np.exp(-(gw - u) / 1.5)
+    a += 0.05 * np.clip(1 - v / gh, 0, 1) ** 2
+    return a
+
+
 def glass():
     gw, gh = GLASS[2] - GLASS[0], GLASS[3] - GLASS[1]
     img = canvas(gw, gh)
@@ -538,12 +531,8 @@ def glass():
     a = 0.52 + 0.40 * np.abs(t) ** 2.0 + 0.35 * np.exp(-v / 9) + 0.20 * np.clip((v - 120) / 40, 0, 1)
     a = np.clip(a, 0, 0.94)
     rgb = np.zeros((h, w, 3), np.float32) + np.array([6, 6, 7], np.float32)
-    # reflections of the room: a broad soft band and two thin streaks
-    refl = 0.07 * np.exp(-((u + 0.55 * v - 70) ** 2) / (2 * 14 ** 2))
-    refl += 0.05 * np.exp(-((u + 0.55 * v - 120) ** 2) / (2 * 2.2 ** 2))
-    refl += 0.035 * np.exp(-((u + 0.55 * v - 196) ** 2) / (2 * 1.4 ** 2))
-    refl += 0.10 * np.exp(-v / 1.6)                               # the lit top edge of the glass
-    refl += 0.05 * np.exp(-(gh - v) / 2.5)
+    # reflections of the room on the glass
+    refl = sheen(u, v, gw, gh)
     rgb = rgb * (1 - refl[..., None] / np.maximum(a + refl, 1e-3)[..., None]) + 235 * (refl / np.maximum(a + refl, 1e-3))[..., None]
     a = np.clip(a + refl, 0, 1)
     m = np.array(shape_mask((w, h), (0, 0, gw, gh), GLASS_R), np.float32) / 255
@@ -612,8 +601,7 @@ def drive_glass():
     u, v = xx / SS, yy / SS
     t = (u - gw / 2) / (gw / 2)
     a = 0.16 + 0.22 * np.abs(t) ** 2.4 + 0.35 * np.exp(-v / 6)
-    refl = 0.06 * np.exp(-((u + 0.6 * v - 60) ** 2) / (2 * 10 ** 2)) + 0.04 * np.exp(-((u + 0.6 * v - 150) ** 2) / (2 * 1.8 ** 2))
-    refl += 0.10 * np.exp(-v / 1.4)
+    refl = sheen(u, v, gw, gh)
     tot = np.clip(a + refl, 0, 1)
     rgb = (np.array([6, 6, 7], np.float32) * (a / np.maximum(tot, 1e-3))[..., None]
            + 235 * (refl / np.maximum(tot, 1e-3))[..., None])
@@ -880,19 +868,19 @@ def vfd_panel():
         a = lay.getchannel('A')
         dim.paste(Image.new('L', a.size, 185), (int(px(x - ox) - a.width / 2), int(px(y - oy) - a.height / 2)), a)
 
-    cap('DISC', 427.7, 140.5)
-    cap('TRACK', 473, 140.5)
-    cap('MIN', 512.2, 140.5)
-    cap('SEC', 543.6, 140.5)
+    cap('DISC', 427.7, 159)
+    cap('TRACK', 473, 159)
+    cap('MIN', 512.2, 159)
+    cap('SEC', 543.6, 159)
     # the logo: a disc with a swoosh, "101-DISC" under it
-    cx, cy = 378 - ox, 151 - oy
+    cx, cy = 378 - ox, 168 - oy
     d.ellipse(box((cx - 6, cy - 6, cx + 6, cy + 6)), outline=255, width=px(1.0))
     d.ellipse(box((cx - 1.5, cy - 1.5, cx + 1.5, cy + 1.5)), fill=255)
     d.arc(box((cx - 4, cy - 4, cx + 4, cy + 4)), 200, 320, fill=255, width=px(0.9))
     lay = text_layer('FILE', 6.4, (255, 255, 255, 255), path=SANSB, spacing=0.15, italic=0.18)
     m.paste(Image.new('L', lay.size, 255), (int(px(cx + 8)), int(px(cy - 1) - lay.height / 2)), lay.getchannel('A'))
     lay = text_layer('101-DISC', 4.0, (255, 255, 255, 255), path=SANSB, spacing=0.15)
-    m.paste(Image.new('L', lay.size, 230), (int(px(cx - 6)), int(px(cy + 12.5) - lay.height / 2)), lay.getchannel('A'))
+    m.paste(Image.new('L', lay.size, 230), (int(px(cx - 6)), int(px(cy + 11.5) - lay.height / 2)), lay.getchannel('A'))
     out = lit(m)
     out.alpha_composite(lit(dim, colour=(150, 190, 215), glow=0.25, glow_r=0.5))
     save(finish(out), 'vfd-panel.png')
