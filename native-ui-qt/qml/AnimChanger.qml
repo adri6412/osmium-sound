@@ -3,7 +3,7 @@
 // in a rotating file of 101 slots; each album has its own slot. A new album
 // sends the disc in the drive back down into its slot, turns the file until
 // the new album's disc (its artwork printed on the label) reaches the
-// loader, and the loader lifts it out of the file, the LEDs lighting the
+// loader, and the loader lifts it out of the file, a hidden lamp lighting the
 // empty slot; in the drive's window, top right, the disc arrives from the
 // left, settles on the spindle over the laser lens, the clamper comes down
 // and it turns while the music plays. The fluorescent display counts the slots going past, then
@@ -324,15 +324,6 @@ Item {
         }
     }
 
-    // the LEDs at the loader: lit while it holds a disc, blinking while the
-    // file turns
-    property bool blink: true
-    Timer {
-        interval: 280; repeat: true
-        running: root.live && root.active && root.turning
-        onTriggered: root.blink = !root.blink
-        onRunningChanged: root.blink = true
-    }
     // The disc in the drive turns while it plays, at the top-loading CD
     // scene's pace (AnimCd): constant linear velocity scaled to about a
     // third, ~150 rpm where the music starts down to ~65 at the edge, the
@@ -377,7 +368,9 @@ Item {
             root.speed = (u >= 1 && !root.spinUp) ? 0 : v
         }
     }
-    readonly property bool ledsOn: !live || (power && (travel > 0.0001 || (turning && blink) || moving || dropping))
+    // the cabinet's lamp: on with the power, fading in and out
+    property real lamp: !live || power ? 1 : 0
+    Behavior on lamp { NumberAnimation { duration: 600 } }
 
     // ── the display ────────────────────────────────────────────────────────
     readonly property int passing: ((Math.round(drumAngle / pitch) % slots) + slots) % slots
@@ -534,16 +527,11 @@ Item {
             clip: true
 
             Pic { anchors.fill: parent; source: root.assetsBase + "interior.png" }
-            // the LEDs light the back of the cabinet and the empty slot
+            // the lamp behind the loader lights the back of the cabinet
             Pic {
-                x: root.loaderX - 32; y: 123.5 - root.glass[1] - 32; width: 64; height: 64
-                source: root.assetsBase + "led-glow.png"
-                visible: root.ledsOn
-            }
-            Pic {
-                x: root.loaderX - 4; y: 111 - root.glass[1]; width: 8; height: 26
-                source: root.assetsBase + "led-dots.png"
-                visible: root.ledsOn
+                anchors.fill: parent
+                source: root.assetsBase + "lamp-back.png"
+                opacity: root.lamp
             }
 
             // the file: the discs within sight of the window, nearest on top.
@@ -623,12 +611,11 @@ Item {
             }
             // the turntable's rim across the bottom: the discs stand in it
             Pic { x: 0; y: 140; width: root.winW; height: root.winH - 140; source: root.assetsBase + "lip.png" }
-            // a little of the LEDs' light on the discs' edges
+            // and a little of it falls on the discs' edges
             Pic {
-                x: root.loaderX - 32; y: 123.5 - root.glass[1] - 32; width: 64; height: 64
-                source: root.assetsBase + "led-glow.png"
-                visible: root.ledsOn
-                opacity: 0.35
+                anchors.fill: parent
+                source: root.assetsBase + "lamp-front.png"
+                opacity: root.lamp
             }
             Pic { anchors.fill: parent; source: root.assetsBase + "glass.png" }
         }

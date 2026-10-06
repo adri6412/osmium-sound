@@ -65,8 +65,7 @@ KNOB = (104, 225)
 KNOB_R = 8
 
 # the window's insides
-LOADER_X = (GLASS[0] + GLASS[2]) / 2 + 20   # the loader's column (the LEDs)
-LEDS = [(LOADER_X, 116), (LOADER_X, 123.5), (LOADER_X, 131.5)]
+LOADER_X = (GLASS[0] + GLASS[2]) / 2 + 20   # the loader's column (the lamp behind it)
 DISC_D = 128                         # disc diameter in units
 VFD_COL = (196, 236, 255)
 
@@ -441,43 +440,27 @@ def interior():
     save(finish(img), 'interior.png')
 
 
-def led_glow():
-    s = 64
-    img = canvas(s, s)
-    w, h = img.size
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    u, v = xx / SS - s / 2, yy / SS - s / 2
-    a = np.zeros((h, w), np.float32)
-    for (lx, ly) in LEDS:
-        dx, dy = u - (lx - LOADER_X), v - (ly - LEDS[1][1])
-        r = np.hypot(dx, dy)
-        a += 0.55 * np.exp(-r ** 2 / (2 * 6.5 ** 2)) + 0.25 * np.exp(-r ** 2 / (2 * 16 ** 2))
-        # the starburst the photographs of the real thing show
-        ang = np.arctan2(dy, dx)
-        a += 0.22 * np.exp(-r / 9) * np.abs(np.cos(ang * 4)) ** 24
-    a = np.clip(a, 0, 1)
-    rgb = np.stack([np.full_like(a, 238), np.full_like(a, 226), np.full_like(a, 96)], -1)
-    arr = np.dstack([rgb, a * 255])
-    save(finish(Image.fromarray(arr.astype(np.uint8), 'RGBA')), 'led-glow.png')
-
-
-def led_dots():
-    s = 8
-    gh = 26
-    img = canvas(s, gh)
-    w, h = img.size
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    u, v = xx / SS - s / 2, yy / SS
-    a = np.zeros((h, w), np.float32)
-    core = np.zeros((h, w), np.float32)
-    for (lx, ly) in LEDS:
-        r = np.hypot(u, v - (ly - LEDS[0][1] + 5))
-        a += np.exp(-r ** 2 / (2 * 1.3 ** 2))
-        core += np.clip((0.8 - r) * SS * 0.5, 0, 1)
-    a = np.clip(a, 0, 1)
-    rgb = np.stack([235 + 20 * core, 228 + 27 * core, 70 + 150 * core], -1)
-    arr = np.dstack([np.clip(rgb, 0, 255), np.clip(a + core, 0, 1) * 255])
-    save(finish(Image.fromarray(arr.astype(np.uint8), 'RGBA')), 'led-dots.png')
+def lamp():
+    """The light inside the cabinet, from a lamp hidden behind the loader's
+    column: no point of it shows, only what it lights. Behind the discs it
+    warms the back wall; over them it catches their edges a little."""
+    gw, gh = GLASS[2] - GLASS[0], GLASS[3] - GLASS[1]
+    lx, ly = LOADER_X - GLASS[0], 112 - GLASS[1]
+    rng = np.random.default_rng(7)
+    for name, sx, sy, peak, tail in (('lamp-back.png', 58, 50, 0.34, 0.10),
+                                     ('lamp-front.png', 46, 40, 0.17, 0.05)):
+        img = canvas(gw, gh)
+        w, h = img.size
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        du, dv = xx / SS - lx, yy / SS - ly
+        q = (du / sx) ** 2 + (dv / sy) ** 2
+        # a soft pool and a long tail, the light reaching into the corners
+        a = peak * np.exp(-q / 2) + tail * np.exp(-q / 9)
+        # dithered, or the faint falloff bands into steps
+        a = a * 255 + rng.uniform(-0.5, 0.5, a.shape)
+        rgb = np.stack([np.full_like(a, 255), np.full_like(a, 238), np.full_like(a, 208)], -1)
+        arr = np.dstack([rgb, np.clip(a, 0, 255)])
+        save(finish(Image.fromarray(arr.astype(np.uint8), 'RGBA')), name)
 
 
 def lip():
@@ -538,7 +521,6 @@ def glass():
     m = np.array(shape_mask((w, h), (0, 0, gw, gh), GLASS_R), np.float32) / 255
     arr = np.dstack([np.clip(rgb, 0, 255), a * m * 255]).astype(np.uint8)
     img = Image.fromarray(arr, 'RGBA')
-    text(img, 'FILE-TYPE CD MECHANISM', LOADER_X - GLASS[0] - 26, 133, 4.6, (150, 150, 150, 170), spacing=0.3)
     save(finish(img), 'glass.png')
 
 
@@ -897,8 +879,7 @@ def main():
     standby_led('led-standby.png', (255, 40, 30), (255, 70, 55), (255, 190, 170))
     standby_led('led-on.png', (40, 230, 90), (70, 240, 110), (200, 255, 210))
     interior()
-    led_glow()
-    led_dots()
+    lamp()
     lip()
     glass()
     drive_bg()
