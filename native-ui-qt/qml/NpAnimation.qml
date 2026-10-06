@@ -90,11 +90,28 @@ Item {
                                                                         : Player.artist
 
     function inputs() {
-        return {
+        var o = {
             assetsBase: root.assetsBase, devScale: root.devScale, live: root.live, active: root.active,
             playing: root.playing, hasTrack: root.hasTrack, progress: root.progress, artwork: root.artwork,
             mediaKey: root.mediaKey, title: root.title, subtitle: root.subtitle
         }
+        // The CD changer places the disc playing in its drive as it is
+        // created: it must know its discs (which slot holds the album) and
+        // the power from the start. Given only by the bindings below, a
+        // moment later, the disc went into the wrong slot first -- coming
+        // back to the changer it was taken out and loaded again, or sat in
+        // the drive with another slot's empty label (a plain white disc).
+        if (root.loadedKind === "changer") {
+            o.discs = root.sceneDiscs()
+            o.sparse = root.live && root.changerSparse
+            o.power = !root.live || Player.power
+        }
+        return o
+    }
+    // the changer's discs as the scene keys them
+    function sceneDiscs() {
+        return !root.live ? [] : (root.changerDiscs !== null ? root.changerDiscs : Ui.app ? Ui.app.changerScene : [])
+                                   .map(function(d) { return { key: root.albumKey(d.album), art: d.art } })
     }
     // 🚨 initial properties, not bindings set afterwards: the scenes read
     // `live` when they complete, and a still must never start as a live scene
@@ -162,8 +179,7 @@ Item {
     // (App.changerScene), keyed like mediaKey; a still has none
     Binding {
         when: loader.item !== null && loader.item.discs !== undefined; target: loader.item; property: "discs"
-        value: !root.live ? [] : (root.changerDiscs !== null ? root.changerDiscs : Ui.app ? Ui.app.changerScene : [])
-                                    .map(function(d) { return { key: root.albumKey(d.album), art: d.art } })
+        value: root.sceneDiscs()
     }
     Binding { when: loader.item !== null && loader.item.sparse !== undefined; target: loader.item; property: "sparse"; value: root.live && root.changerSparse }
     // Fast wind on the cassette deck: a jump of windStep seconds per call.
@@ -193,6 +209,17 @@ Item {
         Ui.app.changerAwaitPlay = false
         Player.play(true)
     }
+    // The changer playing in Now Playing (not the albums view's, which has
+    // discs of its own): App.changerTakesPlay() sends every Play through it,
+    // so the music waits for the disc to go in, as with the changer's own key.
+    readonly property bool changerOnScreen: live && active && loadedKind === "changer" && changerDiscs === null
+                                            && loader.item !== null
+    onChangerOnScreenChanged: {
+        if (!Ui.app) return
+        if (changerOnScreen) Ui.app.changerScreen = root
+        else if (Ui.app.changerScreen === root) Ui.app.changerScreen = null
+    }
+    Component.onDestruction: if (Ui.app && Ui.app.changerScreen === root) Ui.app.changerScreen = null
     Connections {
         target: root.live && root.active && Ui.app ? Ui.app : null
         function onChangerAwaitPlayChanged() {

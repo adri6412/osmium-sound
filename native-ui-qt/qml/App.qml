@@ -84,10 +84,30 @@ Item {
         interval: 20000
         onTriggered: if (app.changerAwaitPlay) { app.changerAwaitPlay = false; Player.play(true) }
     }
+    // the changer on screen in Now Playing (NpAnimation.changerOnScreen)
+    property Item changerScreen: null
     function changerTakesPlay() {
-        if (!changerPending || changerDiscs.length === 0 || Player.playing) return false
-        changerLoad(changerDiscs)
-        return true
+        if (Player.playing) return false
+        if (changerPending && changerDiscs.length > 0) {
+            changerLoad(changerDiscs)
+            return true
+        }
+        // On screen with its disc not in the drive (in the file, or taken
+        // out): Play is its own Play key -- the disc goes in, settles and
+        // turns, and only then the music (a plain Play started it at once
+        // and the changer could only pause it afterwards).
+        var sc = changerScreen ? changerScreen.scene : null
+        if (sc && sc.loaded === false && sc.hasTrack) {
+            if (sc.power && typeof sc.press === "function") sc.press("play")
+            else {
+                // in standby its keys do nothing: switch on, and the disc
+                // goes in as soon as it is on
+                if (!Player.power) Player.cmd(["power", "1"])
+                changerAwaitPlay = true
+            }
+            return true
+        }
+        return false
     }
     // whether the queue playing is the changer's: the album on air is one of its discs
     function changerPlaying() {

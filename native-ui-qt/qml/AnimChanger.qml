@@ -180,10 +180,12 @@ Item {
             holding = false
             return
         }
-        // Shown while the music plays: its disc is already in the drive. The
-        // loading is not played again (the music would wait for it each time
-        // Now Playing opens).
-        if (playing && hasTrack && power && mediaKey !== "") {
+        // Shown while the music plays, or paused partway into a track: its
+        // disc is already in the drive, as in a real changer. The loading is
+        // not played again (the music would wait for it each time Now
+        // Playing opens, and coming back from another animation the disc went
+        // in again). Stopped, or after Done, it loads as it should.
+        if ((playing || progress > 0) && hasTrack && power && mediaKey !== "") {
             stopAll()
             var t = slotFor(mediaKey)
             atSlot = t; drumAngle = t * pitch
