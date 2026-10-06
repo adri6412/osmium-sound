@@ -74,6 +74,16 @@ Item {
     function setChangerPending(on) { changerPending = on; Sys.setConf("changer-pending", on ? "1" : "0") }
     // Every Play goes through here first (mini player, Now Playing, the
     // remote, the scenes' keys): true when it was the changer's to take.
+    // Done / Play on the changer: the music starts once the disc sits in the
+    // drive (NpAnimation.changerSeated); never stuck waiting if no changer is
+    // on screen to say so.
+    property bool changerAwaitPlay: false
+    onChangerAwaitPlayChanged: if (changerAwaitPlay) changerAwaitLimit.restart(); else changerAwaitLimit.stop()
+    Timer {
+        id: changerAwaitLimit
+        interval: 20000
+        onTriggered: if (app.changerAwaitPlay) { app.changerAwaitPlay = false; Player.play(true) }
+    }
     function changerTakesPlay() {
         if (!changerPending || changerDiscs.length === 0 || Player.playing) return false
         changerLoad(changerDiscs)
@@ -100,9 +110,14 @@ Item {
         for (var j = 0; kept && j < before.length; j++) kept = changerUid(before[j]) === changerUid(discs[j])
         changerSave(discs)
         setChangerPending(false)
-        var cmds = []
-        for (var k = kept ? before.length : 0; k < discs.length; k++) cmds = cmds.concat(changerCmds(discs[k], k === 0))
-        changerRun(cmds, function() { changerLearn.restart() })
+        // A new load goes into the queue without playing: the music starts
+        // when the changer has put disc 1 in its drive (changerAwaitPlay).
+        var cmds = kept ? [] : [["playlist", "clear"]]
+        for (var k = kept ? before.length : 0; k < discs.length; k++) cmds = cmds.concat(changerCmds(discs[k], false))
+        changerRun(cmds, function() {
+            changerLearn.restart()
+            if (!kept) changerAwaitPlay = true
+        })
         setExpanded(true)
         np.openStage("changer")
     }
@@ -163,6 +178,7 @@ Item {
         if (changerPlaying()) Player.cmd(["playlist", "clear"])
         changerSave([])
         setChangerPending(false)
+        changerAwaitPlay = false
     }
     // tempo dell'ultimo tocco (per l'auto-apertura e il salvaschermo)
     readonly property real lastInput: Sys.lastInput

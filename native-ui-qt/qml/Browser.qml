@@ -658,25 +658,30 @@ Item {
             Text { id: backText; anchors.centerIn: parent; text: Tr.t("common.back"); color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
             Tap { id: backTap; onClicked: root.navBack() }
         }
-        // the albums as Cover Flow or as the CD changer's discs, a button
-        // each (also in Settings → Library): lit gold while it is the view,
-        // a tap on the lit one goes back to the grid
-        Row {
+        // the albums as a grid, Cover Flow or the CD changer (also in
+        // Settings → Library): the view on screen, a tap drops the list down
+        Rectangle {
+            id: viewPick
             visible: list.grid && !root.isPage
+            readonly property string view: Ui.app ? Ui.app.albumView : "grid"
+            readonly property var views: [{ id: "grid", icon: "layout-grid", label: "player.view.grid" },
+                                          { id: "coverflow", icon: "gallery-horizontal", label: "player.view.coverflow" },
+                                          { id: "changer", icon: "disc-3", label: "player.view.changer" }]
+            readonly property var cur: views[Math.max(0, ["grid", "coverflow", "changer"].indexOf(view))]
             x: (backBtn.visible ? backBtn.x : parent.width - 12) - 8 - width; y: 21.5 - 11
-            height: 22; spacing: 6
-            Repeater {
-                model: [{ view: "coverflow", icon: "gallery-horizontal", label: "player.view.coverflow" },
-                        { view: "changer", icon: "disc-3", label: "player.view.changer" }]
-                Rectangle {
-                    id: viewBtn
-                    required property var modelData
-                    readonly property bool on: Ui.app && Ui.app.albumView === modelData.view
-                    width: 22 + 8 + viewText.implicitWidth + 12; height: 22; radius: 8
-                    color: viewTap.mix(on ? Theme.goldA(0.15) : Theme.wa(0.05), Theme.wa(0.12))
-                    Icon { x: 8; anchors.verticalCenter: parent.verticalCenter; name: viewBtn.modelData.icon; size: 13; color: viewBtn.on ? Theme.gold : Theme.silverA(0.7) }
-                    Text { id: viewText; x: 8 + 13 + 6; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(viewBtn.modelData.label); color: viewBtn.on ? Theme.gold : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
-                    Tap { id: viewTap; onClicked: Ui.app.setAlbumView(viewBtn.on ? "grid" : viewBtn.modelData.view) }
+            width: 8 + 13 + 6 + viewText.implicitWidth + 6 + 12 + 8; height: 22; radius: 8
+            color: viewTap.mix(view !== "grid" ? Theme.goldA(0.15) : Theme.wa(0.05), Theme.wa(0.12))
+            Icon { x: 8; anchors.verticalCenter: parent.verticalCenter; name: viewPick.cur.icon; size: 13; color: viewPick.view !== "grid" ? Theme.gold : Theme.silverA(0.7) }
+            Text { id: viewText; x: 8 + 13 + 6; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(viewPick.cur.label); color: viewPick.view !== "grid" ? Theme.gold : Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
+            Icon { x: parent.width - 8 - 12; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 12; color: Theme.silverA(0.7) }
+            Tap {
+                id: viewTap
+                onClicked: {
+                    var L = viewPick.views.map(function(v) {
+                        return { icon: v.id === viewPick.view ? "check" : v.icon, label: Tr.t(v.label), cb: function() { Ui.app.setAlbumView(v.id) } }
+                    })
+                    var p = viewPick.mapToItem(ctx.parent, viewPick.width / 2, viewPick.height)
+                    ctx.open(L, Math.max(p.x, ctx.parent.width - 8 - 136), p.y)
                 }
             }
         }

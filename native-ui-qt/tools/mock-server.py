@@ -243,7 +243,7 @@ def rpc(player, params):
         elif sub == "repeat": STATE["repeat"] = int(params[2])
         elif sub == "delete": QUEUE.pop(int(params[2]))
         elif sub == "move": QUEUE.insert(int(params[3]), QUEUE.pop(int(params[2])))
-        elif sub == "clear": QUEUE.clear()
+        elif sub == "clear": QUEUE.clear(); STATE["index"] = 0; STATE["time"] = 0.0; STATE["mode"] = "stop"
         elif sub == "save": r = {"__playlist_id": 9}
         elif sub in ("play", "add") and len(params) > 2 and "://track/" in str(params[2]):
             # one track of an app's album by its address: its album is named

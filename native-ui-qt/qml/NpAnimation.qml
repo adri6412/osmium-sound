@@ -185,6 +185,20 @@ Item {
             Player.cmd(["playlist", "index", String(starts[((k + dir) % starts.length + starts.length) % starts.length])])
         })
     }
+    // A disc of the CD changer sits in the drive: the music the owner is
+    // waiting for starts now (App.changerAwaitPlay: Done, Play on the
+    // changer). Also when the wait begins with the disc already there.
+    function changerSeated() {
+        if (!Ui.app || !Ui.app.changerAwaitPlay) return
+        Ui.app.changerAwaitPlay = false
+        Player.play(true)
+    }
+    Connections {
+        target: root.live && root.active && Ui.app ? Ui.app : null
+        function onChangerAwaitPlayChanged() {
+            if (Ui.app.changerAwaitPlay && loader.item && loader.item.loaded === true) root.changerSeated()
+        }
+    }
     readonly property real windStep: 8
     property string windWait: ""
     property bool windToEnd: false
@@ -224,6 +238,21 @@ Item {
             else if (name === "repeat") Player.cycleRepeat()
             else if (name === "random") Player.cycleShuffle()
             else if (name === "disc") root.changeDisc(value)
+            // the CD changer: the music waits for its disc to be in the drive
+            else if (name === "hold") {
+                if (value.hold) Player.play(false)
+                else {
+                    // the pause kept the place; a track just begun (the queue
+                    // moved on to the next disc) starts over from its top
+                    if (Player.elapsed < 3) Player.seek(0)
+                    Player.play(true)
+                }
+            }
+            else if (name === "playSeated") {
+                if (!Player.power) Player.cmd(["power", "1"])
+                if (Ui.app) Ui.app.changerAwaitPlay = true
+            }
+            else if (name === "seated") root.changerSeated()
         }
     }
 }

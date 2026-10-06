@@ -63,10 +63,10 @@ Item {
     function px(v) { return Math.max(1, Math.round(v * root.texScale)) }
 
     // changer.py: GLASS, LOADER_X, DISC_D, KEYS, ROUND, KNOB
-    readonly property var glass: [152, 25.5, 369, 187.5]
+    readonly property var glass: [146, 25.5, 350, 187.5]
     readonly property real winW: glass[2] - glass[0]
     readonly property real winH: glass[3] - glass[1]
-    readonly property real loaderX: 128.5                     // in the window
+    readonly property real loaderX: winW / 2 + 20             // in the window
     readonly property real axisX: winW / 2                    // the file's axis
     readonly property real radius: 190                       // to the discs' centres
     readonly property real discD: 128
@@ -79,17 +79,17 @@ Item {
     readonly property real loaderPhi: Math.asin((loaderX - axisX) / radius) * 180 / Math.PI
     readonly property int places: 37                         // discs drawn: those within sight
     // the drive's window (changer.py DRIVE_*)
-    readonly property var driveGlass: [391, 18, 581, 187]
-    readonly property var driveC: [486, 102.5]
-    readonly property real driveDisc: 154
+    readonly property var driveGlass: [374, 25.5, 578, 187.5]
+    readonly property var driveC: [476, 106.5]
+    readonly property real driveDisc: 150
 
     readonly property var keys: ({
         power: [31, 101, 81, 123],
         eject: [26, 133, 77, 154], unload: [81, 133, 131, 154],
         random: [26, 159, 77, 180], repeat: [81, 159, 131, 180],
         discm: [26, 185, 77, 206], discp: [81, 185, 131, 206],
-        play: [137, 201, 197, 237], stop: [202, 201, 258, 237],
-        prev: [263, 201, 319, 237], next: [324, 201, 379, 237]
+        play: [137, 201, 191, 237], stop: [196, 201, 247, 237],
+        prev: [252, 201, 303, 237], next: [308, 201, 359, 237]
     })
     readonly property var keyNames: ["power", "random", "repeat", "discm", "discp", "eject", "unload", "play", "stop", "prev", "next"]
     readonly property var knob: [104, 225]
@@ -177,9 +177,42 @@ Item {
             stopAll()
             travel = 0; outSlot = -1; outKey = ""; word = ""
             prepSlot = -1; drops = []
+            holding = false
             return
         }
+        // Shown while the music plays: its disc is already in the drive. The
+        // loading is not played again (the music would wait for it each time
+        // Now Playing opens).
+        if (playing && hasTrack && power && mediaKey !== "") {
+            stopAll()
+            var t = slotFor(mediaKey)
+            atSlot = t; drumAngle = t * pitch
+            outSlot = t; outKey = mediaKey
+            artSlot = t; artUrl = artwork
+            travel = 3; word = ""
+        }
         Qt.callLater(step)
+    }
+    // ── the music waits for the disc ───────────────────────────────────────
+    // Playing with no disc seated in the drive (the queue moved on to the next
+    // album, or Play came while the disc was still in the file): the music
+    // is held (paused) and given back once the disc
+    // sits on the spindle. And each time a disc comes to sit there, the
+    // owner may be waiting for it to start (App.changerAwaitPlay): `seated`.
+    property bool holding: false
+    function checkHold() {
+        if (!live || !active) return
+        if (playing && !loaded && power && hasTrack && !ejected && !holding) {
+            holding = true
+            root.action("hold", { hold: true })
+        } else if (holding && loaded) {
+            holding = false
+            root.action("hold", { hold: false })
+        }
+    }
+    onLoadedChanged: {
+        if (live && active && loaded) root.action("seated", true)
+        checkHold()
     }
     function turnTo(tgt) {
         var fwd = ((tgt - atSlot) % slots + slots) % slots
@@ -249,7 +282,10 @@ Item {
     onPowerChanged: if (live) Qt.callLater(step)
     onActiveChanged: sync()
     onLiveChanged: sync()
-    onPlayingChanged: if (live && playing && ejected) { ejected = false; Qt.callLater(step) }
+    onPlayingChanged: {
+        if (live && playing && ejected) { ejected = false; Qt.callLater(step) }
+        checkHold()
+    }
     onArtworkChanged: if (live && artSlot >= 0 && artSlot === slotFor(mediaKey) && (travel <= 0.0001 || outKey === mediaKey)) artUrl = artwork
     Component.onCompleted: sync()
 
@@ -368,7 +404,7 @@ Item {
         if (ch === "-") return "dash"
         return (ch === ch.toUpperCase() ? "u" : "l") + ch.toLowerCase()
     }
-    readonly property var cellX: [426, 438.2, 450.4, 478, 490.2, 515, 527.2, 546.6, 558.8]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 206
+    readonly property var cellX: [414, 426.2, 438.4, 466, 478.2, 503, 515.2, 534.6, 546.8]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 208
 
     component Pic: Image {
         smooth: true
@@ -677,30 +713,30 @@ Item {
         // ── the fluorescent display ────────────────────────────────────────
         Item {
             visible: !root.live || root.power
-            Pic { x: 391; y: 198; width: 190; height: 40; source: root.assetsBase + "vfd-panel.png" }
+            Pic { x: 374; y: 200; width: 204; height: 38; source: root.assetsBase + "vfd-panel.png" }
             Repeater {
                 model: 9
                 Pic {
                     required property int index
                     readonly property string ch: root.cells.length === 9 ? root.cells.charAt(index) : " "
-                    x: root.cellX[index] - 1; y: 205; width: 13; height: 21
+                    x: root.cellX[index] - 1; y: 207; width: 13; height: 21
                     visible: ch !== " "
                     source: ch === " " ? "" : root.assetsBase + "g-" + root.glyph(ch) + ".png"
                 }
             }
-            Pic { x: 539.4; y: 205; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
+            Pic { x: 527.4; y: 207; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
             Pic {
-                x: 425; y: 227; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
+                x: 413; y: 228.5; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
                 visible: root.timeShown && (root.playing || !root.live)
             }
             Pic {
-                x: 435; y: 227; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
+                x: 423; y: 228.5; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
                 visible: root.timeShown && root.live && !root.playing && root.elapsed > 0
             }
-            Pic { x: 472; y: 229; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
-            Pic { x: 498; y: 229; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
-            Pic { x: 498; y: 228.9; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
-            Pic { x: 515; y: 229; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
+            Pic { x: 458; y: 230.5; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
+            Pic { x: 484; y: 230.5; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
+            Pic { x: 484; y: 230.4; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
+            Pic { x: 501; y: 230.5; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
         }
 
         // ── the level knob: the volume ─────────────────────────────────────
@@ -801,7 +837,12 @@ Item {
         if (k === "power") { root.action("power", !power); return }
         if (!power) return
         if (k === "play") {
-            if (ejected || !playing) { ejected = false; Qt.callLater(step); root.action("play", true) }
+            // the disc not in the drive yet: it goes in, then the music
+            if (ejected || !playing) {
+                ejected = false
+                Qt.callLater(step)
+                root.action(loaded ? "play" : "playSeated", true)
+            }
             else root.action("pause", true)
         }
         else if (k === "stop") root.action("stop", true)

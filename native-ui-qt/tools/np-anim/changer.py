@@ -33,18 +33,19 @@ BODY = (10, 8, 591, 243.5)
 # one face, no lower strip: left the name, standby and six keys; in the
 # middle the file's window with the transport keys under it; right the
 # drive's window nearly full height and the display under it
-RECESS = (137, 20.5, 379, 195.5)     # the window's sunken frame
-GLASS = (152, 25.5, 369, 187.5)      # the hole: the mechanism shows here
+# the two windows the same size, side by side
+RECESS = (137, 20.5, 359, 195.5)     # the window's sunken frame
+GLASS = (146, 25.5, 350, 187.5)      # the hole: the mechanism shows here
 GLASS_R = 5
 # the drive's window, top right: the disc brought from the file onto the
 # laser lens and turning, seen straight from above like the top-loading CD
 # scene (whose disc pictures, assets/anim/cd/, it uses)
-DRIVE_RECESS = (385, 13, 587, 192)
-DRIVE_GLASS = (391, 18, 581, 187)
-DRIVE_R = 4
-DRIVE_C = (486, 102.5)               # the spindle
-DRIVE_DISC = 154                     # the disc's diameter there
-VFD = (391, 198, 581, 238)
+DRIVE_RECESS = (365, 20.5, 587, 195.5)
+DRIVE_GLASS = (374, 25.5, 578, 187.5)
+DRIVE_R = 5
+DRIVE_C = (476, 106.5)               # the spindle
+DRIVE_DISC = 150                     # the disc's diameter there
+VFD = (374, 200, 578, 238)
 FEET = [(73.5, 131), (471, 523.5)]
 FOOT_Y = (238, 249.5)
 
@@ -57,20 +58,20 @@ KEYS = {
     'eject': (26, 133, 77, 154), 'unload': (81, 133, 131, 154),
     'random': (26, 159, 77, 180), 'repeat': (81, 159, 131, 180),
     'discm': (26, 185, 77, 206), 'discp': (81, 185, 131, 206),
-    'play': (137, 201, 197, 237), 'stop': (202, 201, 258, 237),
-    'prev': (263, 201, 319, 237), 'next': (324, 201, 379, 237),
+    'play': (137, 201, 191, 237), 'stop': (196, 201, 247, 237),
+    'prev': (252, 201, 303, 237), 'next': (308, 201, 359, 237),
 }
 KNOB = (104, 225)
 KNOB_R = 8
 
 # the window's insides
-LOADER_X = GLASS[0] + 128.5          # the loader's column (the LEDs)
+LOADER_X = (GLASS[0] + GLASS[2]) / 2 + 20   # the loader's column (the LEDs)
 LEDS = [(LOADER_X, 116), (LOADER_X, 123.5), (LOADER_X, 131.5)]
 DISC_D = 128                         # disc diameter in units
 VFD_COL = (196, 236, 255)
 
 # the display cells (glyph pictures one unit larger all round, for the glow)
-CELL_W, CELL_H, CELL_Y = 11, 19, 206
+CELL_W, CELL_H, CELL_Y = 11, 19, 208
 
 
 def font(path, size):
@@ -867,12 +868,12 @@ def vfd_panel():
         a = lay.getchannel('A')
         dim.paste(Image.new('L', a.size, 185), (int(px(x - ox) - a.width / 2), int(px(y - oy) - a.height / 2)), a)
 
-    cap('DISC', 443.7, 202.5)
-    cap('TRACK', 489.6, 202.5)
-    cap('MIN', 526.6, 202.5)
-    cap('SEC', 558.2, 202.5)
+    cap('DISC', 431.7, 204.3)
+    cap('TRACK', 477.6, 204.3)
+    cap('MIN', 514.6, 204.3)
+    cap('SEC', 546.2, 204.3)
     # the logo: a disc with a swoosh, "101-DISC" under it
-    cx, cy = 401 - ox, 212 - oy
+    cx, cy = 386 - ox, 214 - oy
     d.ellipse(box((cx - 6, cy - 6, cx + 6, cy + 6)), outline=255, width=px(1.0))
     d.ellipse(box((cx - 1.5, cy - 1.5, cx + 1.5, cy + 1.5)), fill=255)
     d.arc(box((cx - 4, cy - 4, cx + 4, cy + 4)), 200, 320, fill=255, width=px(0.9))
