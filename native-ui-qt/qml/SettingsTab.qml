@@ -64,7 +64,13 @@ Item {
         function onClosed() { if (root.remoteSection) cfg.loadRemotes() }
     }
     readonly property bool remoteSection: active >= 0 && active < secs.length && (secs[active].id === "remote" || secs[active].id === "remoteKeys")
-    Binding { target: Remote; property: "learning"; value: root.remoteTest && root.remoteListen && root.remoteSection }
+    Binding { target: Remote; property: "learning"; value: root.remoteTest && root.remoteListen && root.remoteSection && root.visible }
+    // 🚨 The test also ends when Settings is left (another tab by touch, Now
+    // Playing, the screensaver) or the list of sections comes back: before,
+    // `remoteSection` stayed true outside the tab and, with a remote chosen,
+    // the keys of every other device were ignored without a word.
+    function remoteTestOff() { remoteTest = false; remoteListen = false; remoteHeard = null }
+    onVisibleChanged: if (!visible && remoteTest) { remoteTestOff(); if (remoteSection) rebuild() }
     Connections {
         target: Remote
         function onLastKeyChanged() {
@@ -614,7 +620,7 @@ Item {
             }, 60000)
         }, pre)
     }
-    function goRoot() { active = -1; msg = ""; pendAct = ""; backTo = ""; rows = []; page.contentY = 0; appear() }
+    function goRoot() { active = -1; msg = ""; pendAct = ""; backTo = ""; rows = []; remoteTestOff(); page.contentY = 0; appear() }
     function goBack() { if (backTo) openSection(backTo); else goRoot() }
     function openSection(i, mark) {
         if (typeof i === "string") i = secIndex(i)

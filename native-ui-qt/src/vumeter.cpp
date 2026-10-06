@@ -83,11 +83,27 @@ static double maxArray(const QVariant &v) {
     return mx;
 }
 
+// 🚨 The daemon's frames are a few hundred bytes. A length past this is not
+// a VU frame: the 64-bit length used to be added to the header size before
+// any check (a huge value wrapped round, passed the "is it all here" test and
+// went into mid() as a negative int). Anything that large, or a buffer that
+// would have to grow past it, drops the connection; the reconnect timer
+// opens a clean one 3 s later. Clearing the buffer instead, as before, left
+// the next bytes to be read as a header in the middle of a frame.
+static const qint64 WS_MAX_FRAME = 1 << 20;
+
+void VuMeter::dropConnection(const char *why) {
+    qWarning("vu: %s, connection dropped", why);
+    m_buf.clear();
+    m_upgraded = false;
+    m_sock.abort();
+}
+
 void VuMeter::onRead() {
     m_buf += m_sock.readAll();
     if (!m_upgraded) {
         int e = m_buf.indexOf("\r\n\r\n");
-        if (e < 0) return;
+        if (e < 0) { if (m_buf.size() > 65536) dropConnection("handshake reply too long"); return; }
         QByteArray hdr = m_buf.left(e);
         if (!hdr.contains(" 101")) { m_sock.abort(); return; }
         m_buf.remove(0, e + 4);
@@ -103,9 +119,13 @@ void VuMeter::onRead() {
         int hdr = 2;
         if (len == 126) { if (m_buf.size() - off < 4) break; len = ((quint8)m_buf[off + 2] << 8) | (quint8)m_buf[off + 3]; hdr = 4; }
         else if (len == 127) { if (m_buf.size() - off < 10) break; len = 0; for (int i = 0; i < 8; i++) len = (len << 8) | (quint8)m_buf[off + 2 + i]; hdr = 10; }
+        if (len > (quint64)WS_MAX_FRAME) { dropConnection("frame too large"); return; }
         if (masked) hdr += 4;
-        if ((quint64)(m_buf.size() - off) < (quint64)hdr + len) break;
+        const int need = hdr + (int)len;                   // both bounded: no overflow
+        if (m_buf.size() - off < need) break;
         QByteArray payload = m_buf.mid(off + hdr, (int)len);
+        // a server must not mask, but if one does the key is right before the data
+        if (masked) for (int i = 0; i < payload.size(); i++) payload[i] = (char)(payload[i] ^ m_buf[off + hdr - 4 + (i & 3)]);
         if (opcode == 0x1) {
             QJsonDocument d = QJsonDocument::fromJson(payload);
             QVariantMap m = d.toVariant().toMap();
@@ -114,10 +134,12 @@ void VuMeter::onRead() {
             if (r >= 0) m_peak[1] = r;
         } else if (opcode == 0x9) pong(payload);
         else if (opcode == 0x8) { m_sock.abort(); m_buf.clear(); return; }
-        off += hdr + (int)len;
+        off += need;
     }
     if (off) m_buf.remove(0, off);
-    if (m_buf.size() > 65536) m_buf.clear();
+    // what is left is the start of one frame of at most WS_MAX_FRAME (+ its
+    // header): more than that cannot be a frame we would accept
+    if (m_buf.size() > WS_MAX_FRAME + 14) dropConnection("receive buffer overflow");
 }
 
 void VuMeter::step() {

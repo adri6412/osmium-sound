@@ -32,6 +32,9 @@ AB_GRUBD=${HIFI_AB_GRUBD:-/etc/grub.d/45_hifi_abconvert}
 MARK_IMAGE="$LOCAL/image-kicked"
 MARK_KICKOFF="$LOCAL/kickoff-done"
 MARK_REBOOT="$LOCAL/armed-reboot-done"
+# Written by `hifi-ab-convert.sh finish`: see arm_conversion.
+AB_FAILS="$LOCAL/convert-failures"
+AB_MAX_FAILS=${HIFI_AB_MAX_FAILS:-3}
 # Dove si vede se sta uscendo audio davvero (sovrascrivibile dalla prova).
 PCM_GLOB=${HIFI_AB_PCM_GLOB:-/proc/asound/card*/pcm*p/sub*/status}
 UPDATE_DIR=${HIFI_UPDATE_DIR:-/var/lib/hifi-player/update}
@@ -69,7 +72,20 @@ arm_conversion() {
     [ -f "$RAUC_CONF" ] && return 0
     # Già armata: si converte al prossimo riavvio, non c'è niente da rifare
     # (e rifare `prepare` vorrebbe dire ricostruire l'initrd a ogni avvio).
+    # The entry of a conversion boot that already happened without
+    # converting does not count as armed: `hifi-ab-convert.sh finish`
+    # (ordered before this unit) removes it, so whatever is left is pending.
     [ -f "$AB_GRUBD" ] && return 0
+    # Conversion boots that did not convert, counted by `finish`. Each retry
+    # costs an initrd rebuild here and a forced check of the root at the next
+    # boot, and what failed that many times is unlikely to mend itself: stop
+    # re-arming at boot. The apply runner still arms it with the next release.
+    _fails=$(cat "$AB_FAILS" 2>/dev/null || echo 0)
+    case "$_fails" in ''|*[!0-9]*) _fails=0 ;; esac
+    if [ "$_fails" -ge "$AB_MAX_FAILS" ]; then
+        log "conversione A/B: $_fails avvii di conversione falliti, non si riarma più all'avvio (ci riprova la prossima release)"
+        return 0
+    fi
     if "$AB_PRECHECK" >/dev/null 2>&1; then
         if "$AB_CONVERT" prepare >/dev/null 2>&1; then
             log "conversione A/B armata: verrà eseguita al prossimo riavvio"

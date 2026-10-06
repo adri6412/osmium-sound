@@ -12,6 +12,7 @@ Item {
     readonly property bool active: busy && !dismissed
     readonly property bool done: Player.otaState === "done" || Player.otaState === "success"
     readonly property bool error: Player.otaState === "error" || Player.otaState === "failed"
+    readonly property bool stuck: Player.otaStale && !done && !error
     visible: active
     // il telecomando resta qui dentro finche' questo strato e' aperto
     NavScope { active: root.active }
@@ -55,5 +56,20 @@ Item {
             Tap { id: dTap; onClicked: root.dismissed = true }
         }
         Text { visible: !root.done && !root.error; width: parent.width; y: parent.cy + 116; height: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Tr.t("settings.updates.overlay.keepPowered"); color: Theme.wa(0.5); font.family: Theme.font; font.pixelSize: 14 }
+        // 🚨 /update/status silent for minutes (Player.otaStale): the last state
+        // stays on screen, so a way out by touch too, not only the remote's
+        // Back. A new state from the service brings the overlay back.
+        Text {
+            visible: root.stuck; x: parent.cx - 300; y: parent.cy + 148; width: 600; height: 40
+            wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+            text: Tr.t("settings.updates.overlay.stale"); color: Theme.wa(0.7); font.family: Theme.font; font.pixelSize: 14
+        }
+        Rectangle {
+            visible: root.stuck
+            x: parent.cx - width / 2; y: parent.cy + 196; width: staleText.implicitWidth + 64; height: 46; radius: 8; color: sTap.mix(Theme.gray, Theme.light)
+            Text { id: staleText; anchors.centerIn: parent; text: Tr.t("settings.updates.overlay.dismiss"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16 }
+            Tap { id: sTap; enabled: root.stuck; onClicked: root.dismissed = true }
+        }
     }
 }

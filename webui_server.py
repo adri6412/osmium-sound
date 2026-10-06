@@ -1114,6 +1114,16 @@ def _set_display_mode(mode, live):
         print(f'[webui] display-mode set failed: {e}')
 
 
+def _persisted_display_mode():
+    """The display mode on disk, read as hifi-display-mode.sh's `get` does:
+    'headless' only when the file says so, 'gui' otherwise (absent included)."""
+    try:
+        with open(DISPLAY_MODE_FILE) as f:
+            return 'headless' if f.read().strip() == 'headless' else 'gui'
+    except OSError:
+        return 'gui'
+
+
 # ── proxy to api_server (loopback, session-gated) ────────────────────
 def _proxy(base, path, method='GET', body=None, timeout=15):
     req = urllib.request.Request(f'{base}{path}', method=method)
@@ -1613,7 +1623,7 @@ def provision_use_wired():
     ok = bool(body.get('success') and body.get('ip')) or _wired_connected()
     if not ok:
         return jsonify({'success': False,
-                        'message': body.get('message') or 'Nessuna connessione via cavo rilevata'}), 409
+                        'message': body.get('message') or _wt('provision.noWiredConnection', _lang())}), 409
     with _prov_lock:
         state = _load_prov_state()
         state['stage'] = 'network-ok'
@@ -1723,7 +1733,14 @@ def provision_finalize():
     want_reboot = bool(data.get('reboot'))
     with _prov_lock:
         state = _load_prov_state()
-        mode = state.get('mode', 'gui')
+        # The restore path (reboot=True) never picks a mode: what decides is
+        # the display-mode the backup just put back on disk, which a 'gui'
+        # default here used to overwrite on every headless box restored. The
+        # claimed mode otherwise, 'off' being a headless screen (claim_mode).
+        if want_reboot or not state.get('mode'):
+            mode = _persisted_display_mode()
+        else:
+            mode = 'gui' if state.get('mode') == 'gui' else 'headless'
         # live=True: this is the deferred half of the screen+headless path (see
         # provision_claim_mode) — the on-screen kiosk was left running the
         # 'headless-wait' step on purpose so it could show the hotspot/URL, but
@@ -2131,7 +2148,8 @@ def netrecovery_status():
 @app.route('/api/netrecovery/wifi_connect', methods=['POST'])
 def netrecovery_wifi_connect():
     if not _net_recovery['active']:
-        return jsonify({'success': False, 'message': 'Nessun recupero rete in corso'}), 409
+        return jsonify({'success': False, 'code': 'netrecovery.notActive',
+                        'message': _wt('netrecovery.notActive', _lang())}), 409
     data = request.get_json(silent=True) or {}
     ssid = (data.get('ssid') or '').strip()
     password = data.get('password') or ''
@@ -2364,11 +2382,14 @@ def sources_app():
     denied = _require_session()
     if denied:
         return denied
-    body, status = _proxy(SOURCES_BASE, '/api/pair/token', method='POST', body={})
+    # A browser token: reused while fresh and expiring after a month unused,
+    # unlike the companion's pairing (/api/system/pair_token), which stays.
+    body, status = _proxy(SOURCES_BASE, '/api/pair/token', method='POST',
+                          body={'purpose': 'browser'})
     token = (body or {}).get('token')
     if not token:
         return jsonify({'success': False, 'code': 'sources.pairUnavailable',
-                        'message': 'Pairing is unavailable.'}), 502
+                        'message': _wt('sources.pairUnavailable', _lang())}), 502
     # Keep the caller's other params (lang= picks the page language, back= gives
     # it a way home) — dropping them here would send the user to an Italian
     # dead-end page. Only the params the page actually reads (QS.get() in
@@ -3243,7 +3264,7 @@ var deviceHost='hifiplayer';
 // The finish/connecting strings hardcode http://hifiplayer.local as the
 // address to reconnect to — once the user picks a different name in
 // step-name, that address changes, so route those strings through this.
-function hostMsg(s){return s.replace(/hifiplayer\.local/g,deviceHost+'.local')}
+function hostMsg(s){return s.replace(/hifiplayer\\.local/g,deviceHost+'.local')}
 function h(){return {'X-CSRF-Token':(document.cookie.match(/csrf=([^;]+)/)||[])[1]||'','X-UI-Lang':LANG}}
 function show(id){
   STEPS.forEach(function(s){

@@ -63,10 +63,19 @@ void Api::request(const QString &method, const QString &url, const QByteArray &b
     connect(rep, &QNetworkReply::finished, this, [rep, h]() {
         rep->deleteLater();
         int status = rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        bool ok = rep->error() == QNetworkReply::NoError || (status >= 200 && status < 600 && rep->error() == QNetworkReply::ContentNotFoundError) ||
-                  (status > 0 && rep->error() != QNetworkReply::OperationCanceledError && rep->error() != QNetworkReply::ConnectionRefusedError &&
-                   rep->error() != QNetworkReply::TimeoutError && rep->error() != QNetworkReply::HostNotFoundError &&
-                   rep->error() != QNetworkReply::RemoteHostClosedError);
+        // 🚨 ok = the service answered 2xx/3xx. A 4xx/5xx used to count as ok
+        // too (a 404 explicitly so), and a caller that only looked at `ok`
+        // said "Saved" over Flask's HTML error page or over a refusal such as
+        // the meta cache move's 400. The body still reaches the callback in
+        // either case, so the JSON errors ({success:false, message, code})
+        // are still shown, and `status` (3rd argument) is there for any
+        // caller that must tell a 404 from the rest.
+        const QNetworkReply::NetworkError err = rep->error();
+        const bool transportFailed = err == QNetworkReply::OperationCanceledError || err == QNetworkReply::ConnectionRefusedError ||
+                                     err == QNetworkReply::TimeoutError || err == QNetworkReply::HostNotFoundError ||
+                                     err == QNetworkReply::RemoteHostClosedError;
+        const bool httpOk = status >= 200 && status < 400;
+        bool ok = err == QNetworkReply::NoError ? (status == 0 || httpOk) : (httpOk && !transportFailed);
         QByteArray raw = rep->readAll();
         QVariant data;
         QJsonParseError pe;

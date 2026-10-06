@@ -10,6 +10,7 @@
 #include <QFile>
 #include <QRegularExpression>
 #include <QSocketNotifier>
+#include <QThread>
 #include <QtDebug>
 #include <errno.h>
 #include <fcntl.h>
@@ -43,6 +44,11 @@ const qint64 RETRY_MS = 30000;
 // telecomandi Android) teneva il ciclo dentro `read` e l'interfaccia si
 // fermava: lo schermo restava fermo col processo vivo.
 const int MAX_REPORTS_PER_WAKE = 32;
+
+// 🚨 L'interfaccia sta uscendo (main.cpp chiede l'interruzione del thread):
+// le chiamate a BlueZ bloccano fino a 25 s l'una, quindi fra l'una e l'altra
+// si guarda qui e si lascia perdere, cosi' il thread finisce in tempo.
+bool quitting() { return QThread::currentThread()->isInterruptionRequested(); }
 
 // Le collection della mappa si chiudono tutte? E' esattamente il controllo che
 // fa il nucleo prima di rifiutare un descrittore.
@@ -94,6 +100,9 @@ void BtGattHid::begin() {
     // guarda solo l'elenco degli oggetti, nessuna radio, nessuna paginazione.
     // Senza Bluetooth in funzione la chiamata fallisce e non si fa nulla.
     m_poll->start();
+    // il timer si ferma nel suo thread, prima che finisca (fermarlo dopo,
+    // dal distruttore nel thread principale, non si puo')
+    connect(QThread::currentThread(), &QThread::finished, m_poll, &QTimer::stop, Qt::DirectConnection);
     poll();
 }
 
@@ -140,6 +149,7 @@ bool BtGattHid::kernelHandles(const QString &mac) const {
 }
 
 void BtGattHid::poll() {
+    if (quitting()) return;
     QDBusInterface om(BLUEZ, "/", "org.freedesktop.DBus.ObjectManager", QDBusConnection::systemBus());
     QDBusReply<ManagedObjects> reply = om.call("GetManagedObjects");
     if (!reply.isValid()) return;                 // Bluetooth spento: niente da fare
@@ -169,6 +179,7 @@ void BtGattHid::poll() {
         }
         if (QDateTime::currentMSecsSinceEpoch() - m_failed.value(path, -RETRY_MS) < RETRY_MS) continue;
         if (kernelHandles(mac)) continue;         // funziona da se': non si tocca
+        if (quitting()) return;
         // gli si lascia il tempo di farcela da solo
         if (QDateTime::currentMSecsSinceEpoch() - m_seen.value(path) < GRACE_MS) continue;
 
@@ -200,6 +211,7 @@ QByteArray BtGattHid::readCharacteristic(const QString &path) const {
     QByteArray out;
     int first = -1;
     for (int guard = 0; guard < 64; guard++) {
+        if (quitting()) return QByteArray();
         QDBusInterface ch(BLUEZ, path, "org.bluez.GattCharacteristic1", QDBusConnection::systemBus());
         QVariantMap opts;
         if (!out.isEmpty()) opts.insert("offset", QVariant::fromValue<quint16>(quint16(out.size())));
@@ -230,6 +242,7 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
     if (mapPath.isEmpty() || reportChars.isEmpty()) { m_failed.insert(devPath, now); return; }
 
     const QByteArray rd = readCharacteristic(mapPath);
+    if (quitting()) return;
     if (rd.size() > int(HID_MAX_DESCRIPTOR_SIZE)) {
         qWarning("btghid: %s: mappa dei tasti troppo lunga (%lld byte)", qPrintable(name), (long long)rd.size());
         m_failed.insert(devPath, now);
@@ -259,6 +272,7 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
         for (auto d = objs.constBegin(); d != objs.constEnd(); ++d) {
             if (!d.key().startsWith(rc.first + "/")) continue;
             if (d.value().toMap().value("UUID").toString().toLower() != UUID_REPORT_REF) continue;
+            if (quitting()) return;
             QDBusInterface desc(BLUEZ, d.key(), "org.bluez.GattDescriptor1", QDBusConnection::systemBus());
             QDBusReply<QByteArray> r = desc.call("ReadValue", QVariantMap());
             if (r.isValid() && r.value().size() >= 2) { id = quint8(r.value().at(0)); type = quint8(r.value().at(1)); }
@@ -281,6 +295,7 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
         qInfo("btghid: %s: ci ha pensato il nucleo mentre leggevo, lascio stare", qPrintable(name));
         return;
     }
+    if (quitting()) return;
     b.uhid = ::open("/dev/uhid", O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (b.uhid < 0) {
         qWarning("btghid: /dev/uhid non si apre (%s)", strerror(errno));
@@ -318,6 +333,7 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
     m_bridges.insert(devPath, b);
     Bridge &bb = m_bridges[devPath];
     for (int i = 0; i < bb.reports.size(); i++) {
+        if (quitting()) break;
         QDBusInterface ch(BLUEZ, bb.reports[i].path, "org.bluez.GattCharacteristic1", QDBusConnection::systemBus());
         QDBusMessage msg = ch.call("AcquireNotify", QVariantMap());
         if (msg.type() != QDBusMessage::ReplyMessage || msg.arguments().isEmpty()) {

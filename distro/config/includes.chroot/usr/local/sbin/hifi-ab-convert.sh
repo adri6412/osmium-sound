@@ -20,15 +20,84 @@ set -u
 # shellcheck disable=SC1091  # percorso assoluto, esiste solo sull'apparecchio
 . "${HIFI_AB_LIB:-/usr/local/sbin/hifi-ab-lib.sh}"   # HIFI_AB_LIB: tests only
 
-LOCAL=/var/lib/hifi-player/ab
-CONV_INITRD=/boot/initrd.img-abconvert
-GRUBD=/etc/grub.d/45_hifi_abconvert
+# The HIFI_AB_* overrides are for the tests only (tests/test-ab-convert-cleanup.sh).
+LOCAL=${HIFI_AB_LOCAL:-/var/lib/hifi-player/ab}
+CONV_INITRD=${HIFI_AB_CONV_INITRD:-/boot/initrd.img-abconvert}
+GRUBD=${HIFI_AB_GRUBD:-/etc/grub.d/45_hifi_abconvert}
+# The legacy root's own GRUB environment, where grub-reboot leaves next_entry.
+LEGACY_GRUBENV=${HIFI_AB_LEGACY_GRUBENV:-/boot/grub/grubenv}
 APT_HOOK=/etc/apt/apt.conf.d/98-hifi-ab-selector
 HOLD_PKGS="linux-image-amd64 grub-efi-amd64-signed grub-efi-amd64 grub-efi-amd64-bin grub-common grub2-common shim-signed shim-signed-common"
+# Conversion boots that came and went without converting; hifi-ab-image.sh
+# stops re-arming at boot after a few of them.
+FAILS="$LOCAL/convert-failures"
 CMD="${1:-status}"
 [ $# -gt 0 ] && shift
 
 die() { ab_warn "$*"; exit 1; }
+
+# The one-shot conversion boot is still to come: prepare's entry is in place
+# and GRUB has not used next_entry yet. 00_header clears next_entry on the very
+# boot that uses it, whatever that boot then does, so once that boot has
+# happened this is false — converted or not.
+conversion_pending() {
+    [ -f "$GRUBD" ] || return 1
+    grep -q '^next_entry=hifi-ab-convert$' "$LEGACY_GRUBENV" 2>/dev/null
+}
+
+# Undo prepare's lock on updates: the boot packages back under apt, the apt
+# timers back on. It acts only while one of THESE packages is on hold, and
+# nothing else on the appliance holds them, so it is idempotent, a no-op on a
+# device that was never prepared, and it never turns back on timers an owner
+# switched off on a device that never tried the conversion. dpkg-query, not
+# `apt-mark showhold`: it runs at every legacy boot (from `finish`) and must
+# not load the apt cache to find out there is nothing to do.
+release_update_hold() {
+    # shellcheck disable=SC2086  # list of packages
+    _rel=$(dpkg-query -W -f='${db:Status-Want} ${Package}\n' $HOLD_PKGS 2>/dev/null \
+        | awk '$1 == "hold" { printf " %s", $2 }')
+    [ -n "$_rel" ] || return 0
+    # shellcheck disable=SC2086  # list of packages
+    if ! apt-mark unhold $_rel >/dev/null 2>&1; then
+        ab_warn "apt-mark unhold failed:$_rel"
+        return 0
+    fi
+    for _t in apt-daily.timer apt-daily-upgrade.timer; do
+        [ "$(systemctl is-enabled "$_t" 2>/dev/null)" = disabled ] || continue
+        # --no-block: this may run at boot, from a unit ordered before hifi-api
+        systemctl enable --now --no-block "$_t" >/dev/null 2>&1 || ab_warn "could not re-enable $_t"
+    done
+    ab_log "kernel and bootloader updates unblocked again:$_rel"
+}
+
+# A conversion boot that came and went without converting (the initrd bailed
+# out, or could not even record why): its one-shot entry and initrd are
+# leftovers. Left in place they made hifi-ab-image.sh take the device as
+# "already armed" for ever — no re-arm at boot, only at the next release.
+disarm_conversion() {
+    rm -f "$GRUBD" "$CONV_INITRD"
+    update-grub >/dev/null 2>&1 || ab_warn "update-grub failed"
+    # the initrd writes "failed" itself; "prepared" here means it could not
+    if [ "$(ab_state_get 2>/dev/null)" = prepared ]; then ab_state_set failed; fi
+    mkdir -p "$LOCAL"
+    _n=$(cat "$FAILS" 2>/dev/null || echo 0)
+    case "$_n" in ''|*[!0-9]*) _n=0 ;; esac
+    printf '%s\n' "$((_n + 1))" > "$FAILS"
+}
+
+# `prepare` died after putting the hold on: nothing would ever lift it (the
+# conversion boot `finish` waits for is not coming), so undo what it did.
+prepare_abort() {
+    if [ -f "$GRUBD" ]; then
+        rm -f "$GRUBD"
+        if grep -q '^next_entry=hifi-ab-convert$' "$LEGACY_GRUBENV" 2>/dev/null; then
+            grub-editenv "$LEGACY_GRUBENV" unset next_entry 2>/dev/null || true
+        fi
+        update-grub >/dev/null 2>&1 || true
+    fi
+    rm -f "$CONV_INITRD"
+    release_update_hold
+}
 need_root() { [ "$(id -u)" -eq 0 ] || die "serve root"; }
 have_layout() {
     ab_part_by_name hifi-root-a >/dev/null 2>&1 && ab_part_by_name hifi-root-b >/dev/null 2>&1 \
@@ -183,6 +252,10 @@ cmd_prepare() {
     printf '%s\n' "$uuid" > "$LOCAL/legacy-uuid"
 
     ab_log "blocco degli aggiornamenti di kernel e bootloader durante la conversione"
+    # Any `die` from here on lifts the hold again (prepare_abort); the trap is
+    # cleared once the conversion is armed. When the conversion boot then does
+    # not convert, `finish` lifts it.
+    trap prepare_abort EXIT
     # shellcheck disable=SC2086  # elenco di pacchetti
     apt-mark hold $HOLD_PKGS >/dev/null 2>&1 || true
     systemctl disable --now apt-daily.timer apt-daily-upgrade.timer >/dev/null 2>&1 || true
@@ -232,6 +305,7 @@ GRUBEOF
 
     ab_mount_esp || die "ESP non montabile"
     ab_state_set prepared
+    trap - EXIT
     sync
     ab_log "pronto: al prossimo avvio la root viene ristretta a ${slot_a} MiB e nascono gli slot B (${AB_SLOT_B_MIB} MiB) e dati (1-5 min, NON spegnere)"
     if [ "$reboot" = 1 ]; then
@@ -244,8 +318,19 @@ cmd_finish() {
     need_root
     ab_is_image && exit 0
     if ! have_layout; then
-        st=$(ab_state_get 2>/dev/null || echo none)
-        [ "$st" = prepared ] && ab_warn "layout A/B assente dopo l'avvio di conversione: vedi $AB_ESP_DIR/abconvert.log"
+        # Armed, and its boot is still to come: nothing to undo yet.
+        conversion_pending && exit 0
+        # The device stays legacy. A conversion boot that did not convert
+        # leaves its entry and initrd behind (see disarm_conversion), and
+        # prepare's hold on kernel/bootloader updates would last for ever:
+        # both are undone here. hifi-ab-image.sh re-arms later in this boot
+        # when the pre-checks pass.
+        if [ -f "$GRUBD" ] || [ -f "$CONV_INITRD" ]; then
+            st=$(ab_state_get 2>/dev/null || echo none)
+            ab_warn "layout A/B assente dopo l'avvio di conversione (stato $st): vedi $AB_ESP_DIR/abconvert.log"
+            disarm_conversion
+        fi
+        release_update_hold
         exit 0
     fi
     # hifi-data senza filesystem (mke2fs fallito nell'initrd): si formatta qui,
@@ -320,7 +405,11 @@ cmd_restore_selector() {
     need_root
     ab_mount_esp 2>/dev/null || exit 0
     [ -f "$AB_ENABLED" ] && [ -f "$LOCAL/selector.cfg" ] || exit 0
-    if ! grep -q 'selettore di avvio A/B' "$AB_STUB" 2>/dev/null; then
+    # The template's own first line says "A/B boot selector"; the older
+    # Italian wording is still accepted for selectors written before it
+    # changed. Matching only that one made every apt run on a converted
+    # legacy root rewrite a perfectly good selector and log a warning.
+    if ! grep -qE 'A/B boot selector|selettore di avvio A/B' "$AB_STUB" 2>/dev/null; then
         ab_warn "lo stub sulla ESP era stato riscritto: ripristino il selettore"
         ab_write_atomic "$AB_STUB" 0644 < "$LOCAL/selector.cfg" || true
     fi

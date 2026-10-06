@@ -40,6 +40,8 @@ public:
     Q_INVOKABLE void refreshLmsHost();
 
     // cb(ok, data, status): `data` e' il JSON analizzato oppure il testo grezzo.
+    // ok e' falso anche per un HTTP 4xx/5xx; `data` porta comunque il corpo
+    // (es. {success:false, message}) e `status` il codice.
     Q_INVOKABLE void get(const QString &url, const QJSValue &cb = QJSValue(), int timeoutMs = 8000);
     Q_INVOKABLE void post(const QString &url, const QVariant &body, const QJSValue &cb = QJSValue(), int timeoutMs = 15000);
     Q_INVOKABLE void send(const QString &method, const QString &url, const QVariant &body,

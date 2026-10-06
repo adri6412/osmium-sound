@@ -121,11 +121,15 @@ MESSAGES = {
 
     # ── Device name (hostname + player name, set together) ────────────
     'device.invalidName': {'en': 'Invalid name: letters, numbers and dashes only, no spaces '
-                                  '(max 32 characters, cannot start or end with a dash)',
+                                  '(max 24 characters, cannot start or end with a dash)',
                            'it': 'Nome non valido: solo lettere, numeri e trattini, senza spazi '
-                                 '(max 32 caratteri, non può iniziare o finire con un trattino)'},
+                                 '(max 24 caratteri, non può iniziare o finire con un trattino)'},
     'device.hostnameSetFailed': {'en': 'Could not set the device name.',
                                  'it': 'Impossibile impostare il nome del dispositivo.'},
+    'device.playerNameFailed': {'en': 'The device is now called {name} on the network, but the player '
+                                      'name could not be changed: try again.',
+                                'it': 'Ora in rete l\'apparecchio si chiama {name}, ma non è stato '
+                                      'possibile cambiare il nome del player: riprova.'},
     'device.nameSet': {'en': 'Device name set to {name}', 'it': 'Nome dispositivo impostato su {name}'},
 
     # ── SSH ──────────────────────────────────────────────────────────
@@ -501,6 +505,36 @@ MESSAGES = {
                        'it': 'Spazio su disco insufficiente: servono circa {mb} MB'},
     'backup.scheduleFailed': {'en': 'Could not turn on the weekly backup: {detail}',
                               'it': 'Impossibile attivare il backup settimanale: {detail}'},
+    # hifi_backup.BackupError codes (encryption)
+    'backup.opensslMissing': {'en': 'openssl is not available: encrypted backup refused',
+                              'it': 'openssl non disponibile: backup cifrato rifiutato'},
+    'backup.cryptoTimeout': {'en': 'Encryption timed out', 'it': 'Timeout durante la cifratura'},
+    'backup.cryptoFailed': {'en': 'Encryption/decryption failed (wrong passphrase?)',
+                            'it': 'Cifratura/decifratura fallita (passphrase errata?)'},
+    # hifi-backup-run.py: progress and failures of a backup job. The worker
+    # writes the code into the status file and /api/backup/status translates
+    # it for whoever is asking (a scheduled run has nobody to ask a language of).
+    'backup.moduleMissing': {'en': 'The backup module is not available: {err}',
+                             'it': 'Modulo di backup non disponibile: {err}'},
+    'backup.jobUnreadable': {'en': 'The backup request could not be read: {err}',
+                             'it': 'Richiesta di backup illeggibile: {err}'},
+    'backup.badInvocation': {'en': 'Invalid backup request', 'it': 'Richiesta di backup non valida'},
+    'backup.preparing': {'en': 'Preparing…', 'it': 'Preparazione…'},
+    'backup.checkingSpace': {'en': 'Checking free disk space…', 'it': 'Verifica spazio disponibile…'},
+    'backup.archiving': {'en': 'Creating the archive…', 'it': 'Creazione archivio…'},
+    'backup.encrypting': {'en': 'Encrypting…', 'it': 'Cifratura…'},
+    'backup.finishing': {'en': 'Finishing…', 'it': 'Finalizzazione…'},
+    'backup.completed': {'en': 'Backup completed: {count} file(s).', 'it': 'Backup completato: {count} file.'},
+    'backup.storeFailed': {'en': 'Could not create the backup folder: {err}',
+                           'it': 'Impossibile creare la cartella dei backup: {err}'},
+    'backup.generationFailed': {'en': 'Could not create the backup: {err}',
+                                'it': 'Impossibile creare il backup: {err}'},
+    'backup.archiveFailed': {'en': 'Creating the archive failed: {err}',
+                             'it': 'Creazione archivio fallita: {err}'},
+    'backup.noFiles': {'en': 'Nothing to back up', 'it': 'Nessun file da salvare'},
+    'backup.encryptFailed': {'en': 'Encryption failed: {err}', 'it': 'Cifratura fallita: {err}'},
+    'backup.manifestFailed': {'en': 'Writing the manifest failed: {err}',
+                              'it': 'Scrittura manifest fallita: {err}'},
 
     # ── sources_server.py: restore ───────────────────────────────────
     'restore.openingArchive': {'en': 'Opening archive…', 'it': 'Apertura archivio…'},
@@ -521,10 +555,20 @@ MESSAGES = {
     'restore.preparing': {'en': 'Preparing…', 'it': 'Preparazione…'},
     'restore.snapshotting': {'en': 'Pre-restore safety backup…', 'it': 'Backup di sicurezza pre-ripristino…'},
     'restore.completed': {'en': 'Restore completed.', 'it': 'Ripristino completato.'},
+    'restore.rebootingLoginReplaced': {'en': 'The web admin login now comes from the backup: the device restarts '
+                                             'by itself, then sign in with the username and password of the backup.',
+                                       'it': "L'accesso all'amministrazione web ora è quello del backup: il dispositivo "
+                                             'si riavvia da solo, poi accedi con nome utente e password del backup.'},
     'restore.failed': {'en': 'Restore failed', 'it': 'Ripristino fallito'},
     'restore.failedDetail': {'en': 'Restore failed: {err}', 'it': 'Ripristino fallito: {err}'},
     'restore.prepareFailed': {'en': 'Preparing the restore failed: {err}',
                               'it': 'Preparazione ripristino fallita: {err}'},
+    'restore.archiveInvalid': {'en': 'Invalid or corrupt archive', 'it': 'Archivio non valido o corrotto'},
+    'restore.encryptedInvalid': {'en': 'Invalid encrypted archive', 'it': 'Archivio cifrato non valido'},
+    'restore.passphraseRequired': {'en': 'This backup is encrypted: the passphrase is needed',
+                                   'it': 'Questo backup è cifrato: serve la passphrase'},
+    'restore.wrongPassphrase': {'en': 'Wrong passphrase or tampered archive',
+                                'it': 'Passphrase errata o archivio manomesso'},
     'restore.archiveInvalidTooManyFiles': {'en': 'Invalid archive (too many files)',
                                            'it': 'Archivio non valido (troppi file)'},
     'restore.memberTooLarge': {'en': '{name}: too large, skipped', 'it': '{name}: troppo grande, saltato'},
@@ -583,6 +627,10 @@ MESSAGES = {
     'auth.invalidCredentials': {'en': 'Invalid credentials', 'it': 'Credenziali non valide'},
     'provision.notInProgress': {'en': 'Not in provisioning', 'it': 'Non in provisioning'},
     'provision.notInstaller': {'en': 'Not booted from the installer', 'it': "Non avviato dall'installer"},
+    'provision.noWiredConnection': {'en': 'No wired connection detected',
+                                    'it': 'Nessuna connessione via cavo rilevata'},
+    'netrecovery.notActive': {'en': 'No network recovery in progress', 'it': 'Nessun recupero rete in corso'},
+    'sources.pairUnavailable': {'en': 'Pairing is unavailable.', 'it': 'Abbinamento non disponibile.'},
     'proxy.endpointNotAllowed': {'en': 'Endpoint not allowed', 'it': 'Endpoint non consentito'},
     'proxy.unknownEndpoint': {'en': 'Unknown endpoint', 'it': 'Endpoint sconosciuto'},
     'pairing.tokenInvalid': {'en': 'Missing or invalid pairing token', 'it': 'Token di pairing mancante o non valido'},

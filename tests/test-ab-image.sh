@@ -103,6 +103,16 @@ expect "pre-verifica negativa: nessun riavvio"        "$(run 1)" "precheck"
 expect "già armata: non fa niente"                    "$(run 0)" ""
 rm -f "$T/etc/45_hifi_abconvert"
 
+# ── conversion boots that did not convert (counted by `finish`, which also
+#    removes their leftover entry): re-armed at boot, but not for ever ─────
+: > "$T/local/armed-reboot-done"
+echo 2 > "$T/local/convert-failures"
+expect "two failed conversion boots: re-armed"        "$(run 0)" "precheck convert prepare"
+rm -f "$T/etc/45_hifi_abconvert"
+echo 3 > "$T/local/convert-failures"
+expect "three: no longer re-armed at boot"            "$(run 0)" ""
+rm -f "$T/local/convert-failures" "$T/local/armed-reboot-done"
+
 # ── già convertito (RAUC configurato): non è più affar suo ────────────
 : > "$T/etc/rauc-system.conf"
 expect "già convertito: non fa niente"                "$(run 0)" ""

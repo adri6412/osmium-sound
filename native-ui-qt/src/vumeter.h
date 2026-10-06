@@ -56,6 +56,7 @@ private:
     void onRead();
     void step();
     void pong(const QByteArray &payload);
+    void dropConnection(const char *why);
     QTcpSocket m_sock;
     QByteArray m_buf;
     bool m_active = false, m_upgraded = false;

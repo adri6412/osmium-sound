@@ -269,6 +269,8 @@ jobs:
           bash tests/test-ota-ui-apply.sh
           echo "== legacy cleanup, --deep included (shell) =="
           bash tests/test-ab-convert-cleanup.sh
+          echo "== Lyrion versions kept after an update (shell) =="
+          bash tests/test-lyrion-prune.sh
           echo "== boot health and watchdog (shell) =="
           bash tests/test-boot-health.sh
           echo "== A/B boot selector under grub-emu (shell; skips without grub-emu) =="
@@ -376,7 +378,7 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-boot-health.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-boot-watchdog.sh \
             tests/test-ota-ui-apply.sh tests/test-ab-convert-cleanup.sh \
-            tests/test-boot-health.sh tests/test-grub-selector.sh
+            tests/test-boot-health.sh tests/test-grub-selector.sh tests/test-lyrion-prune.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
           export HIFI_PAYLOAD_DIR="$PWD/distro/os-update"

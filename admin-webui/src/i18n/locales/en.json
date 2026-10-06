@@ -1071,6 +1071,7 @@
       "downloadFailed": "Download failed",
       "restoring": "Restoring…",
       "restored": "Restore completed",
+      "restoredLoginReplaced": "Restore completed: the web admin login now comes from the backup. The device restarts by itself; then sign in with the username and password of the backup.",
       "restoreFailed": "Restore failed",
       "restoreConfirm": "Restore this backup? A safety copy of the current configuration is taken first.",
       "restoreThis": "Restore",

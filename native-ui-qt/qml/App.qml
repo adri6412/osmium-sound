@@ -237,8 +237,17 @@ Item {
     // first time and its "shown" file is missing: after the first wizard on
     // a new appliance, at the first start after the update on an old one.
     readonly property bool tutorialCanStart: !wizard.active && !screensaver.covering && !ota.active && !cdrip.open && !dialogs.active
-                                             && !remoteIntro.active && !remoteTour.active
+                                             && !remoteIntro.active && !remoteTour.active && app.lastInput > tutorialGaveUpAt
     property bool tutorialTried: false
+    // A tour nobody looked at closes by itself (Tutorial.timedOut) without
+    // being marked as shown: it is offered again at the next touch or key,
+    // not straight away (that would only reopen it over the empty room and
+    // keep the screensaver off again).
+    property real tutorialGaveUpAt: -1
+    Connections {
+        target: tutorial
+        function onTimedOut() { app.tutorialGaveUpAt = Sys.now(); app.tutorialTried = false }
+    }
     // 🚨 At the end of the first setup both the touch tour and a remote's key
     // map want the screen (a remote paired from the web wizard is already
     // there): the map came first by a few hundred ms and the tour opened on

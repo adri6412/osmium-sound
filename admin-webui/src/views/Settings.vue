@@ -1312,7 +1312,7 @@ function ncSkew(sec) {
   const a = Math.abs(sec);
   if (a < 3600) return `${Math.round(a / 60)} min`;
   if (a < 86400) return `${Math.round(a / 3600)} h`;
-  return `${Math.round(a / 86400)} ${t('settings.lyrion.days')}`;
+  return `${Math.round(a / 86400)} ${t('dashboard.library.days')}`;
 }
 function ncReason(s) {
   const e = s.error;
@@ -1509,15 +1509,19 @@ watch(open, (v) => { if (v === 'companionIos') makeLyrplayQr(); }, { immediate: 
 // factory reset intentionally invalidates) until the box answers again,
 // then reloads so the page reconnects on its own instead of leaving the
 // owner staring at a dead tab.
-const rebootWait = reactive({ active: false, phase: 'going-down' });
-async function waitForReboot() {
+const rebootWait = reactive({ active: false, phase: 'going-down', note: '' });
+// `downPolls`: how long (x 1.5 s) to wait for the box to go down — longer when
+// the device decides on its own when to reboot. `note`: one more line on the
+// overlay, for what the owner must know once it is back.
+async function waitForReboot({ downPolls = 10, note = '' } = {}) {
   rebootWait.active = true;
   rebootWait.phase = 'going-down';
+  rebootWait.note = note;
   const deadline = Date.now() + 6 * 60 * 1000;
   // Phase 1: wait for the box to actually drop off so a fast reboot can't be
   // misread as "already back up" on the very first poll.
   let sawDown = false;
-  for (let i = 0; i < 10 && Date.now() < deadline; i++) {
+  for (let i = 0; i < downPolls && Date.now() < deadline; i++) {
     await sleep(1500);
     const r = await api.authStatus();
     if (!r.ok) { sawDown = true; break; }
@@ -1656,6 +1660,17 @@ async function pollRestoreStatus() {
   for (let i = 0; i < 600; i++) {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     const r = await api.restoreStatus();
+    if (r.status === 401) {
+      // The backup's webui.db replaced the admin login and, with it, this
+      // session: from here this page can read neither the status nor ask for
+      // the reboot, so the device reboots by itself at the end of the restore
+      // (sources_server.py's _run_restore_async). Wait for it like any other
+      // reboot, and say which password opens the admin afterwards.
+      const note = t('settings.backup.restoredLoginReplaced');
+      say(note);
+      waitForReboot({ downPolls: 80, note });
+      return;
+    }
     if (!r.ok) continue;
     const s = r.data;
     if (s.state === 'done') {
@@ -1664,7 +1679,12 @@ async function pollRestoreStatus() {
       // config and Lyrion prefs written straight to disk — reboot so every
       // affected service picks all of that up cleanly (same reasoning as the
       // setup wizard's own restore step), instead of leaving some of it
-      // pending until whenever the box next restarts on its own.
+      // pending until whenever the box next restarts on its own. `reboot`:
+      // the device is already doing it (the restore replaced the login).
+      if (s.reboot) {
+        waitForReboot({ downPolls: 30, note: t('settings.backup.restoredLoginReplaced') });
+        return;
+      }
       await api.sysPost('reboot', {});
       waitForReboot();
       return;
@@ -2775,6 +2795,7 @@ onUnmounted(() => {
         <div class="spinner"></div>
         <h3 style="justify-content: center;">{{ t('settings.system.rebootWaitTitle') }}</h3>
         <p class="sub">{{ rebootWait.phase === 'going-down' ? t('settings.system.rebootGoingDown') : t('settings.system.rebootComingBack') }}</p>
+        <p v-if="rebootWait.note" class="sub">{{ rebootWait.note }}</p>
         <p class="muted">{{ t('settings.system.rebootAutoReconnect') }}</p>
       </div>
     </div>

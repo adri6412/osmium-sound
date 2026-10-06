@@ -526,14 +526,26 @@ void Player::pollUsb() {
     }, 4000);
 }
 
+// 🚨 With no answer the last state is kept (the service restarts during an
+// update, for one), so a status that stopped coming left the full-screen
+// overlay up for good, with no way out by touch. Past this, the overlay
+// offers "Close"; a fresh answer takes the offer back.
+static const qint64 kOtaStaleMs = 2 * 60 * 1000;
+
 void Player::pollOta() {
+    const bool busy = !m_otaState.isEmpty() && m_otaState != "idle";
+    const bool stale = busy && m_clock.elapsed() - m_otaFreshAt >= kOtaStaleMs;
+    if (stale != m_otaStale) { m_otaStale = stale; emit otaChanged(); }
     Api *a = Api::instance();
     a->request("GET", a->apiBase() + "/update/status", {}, [this](bool ok, const QVariant &d, int) {
         if (!ok || d.typeId() != QMetaType::QVariantMap) return;
+        m_otaFreshAt = m_clock.elapsed();
+        const bool wasStale = m_otaStale;
+        m_otaStale = false;
         QVariantMap m = d.toMap();
         QString st = m.value("state", "idle").toString(), msg = m.value("message").toString(), kind = m.value("kind").toString();
         int pct = m.value("percent").toInt();
-        if (st == m_otaState && msg == m_otaMsg && kind == m_otaKind && pct == m_otaPct) return;
+        if (!wasStale && st == m_otaState && msg == m_otaMsg && kind == m_otaKind && pct == m_otaPct) return;
         m_otaState = st; m_otaMsg = msg; m_otaKind = kind; m_otaPct = pct;
         emit otaChanged();
     }, 4000);

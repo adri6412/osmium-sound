@@ -1286,7 +1286,8 @@
         "done": "Completato",
         "keepPowered": "Non spegnere il dispositivo durante l'aggiornamento.",
         "restarting": "Riavvio dell'interfaccia…",
-        "dismiss": "Chiudi"
+        "dismiss": "Chiudi",
+        "stale": "Da qualche minuto l'aggiornamento non dà notizie. Potrebbe essere ancora in corso: puoi chiudere questa schermata."
       }
     },
     "controls": {

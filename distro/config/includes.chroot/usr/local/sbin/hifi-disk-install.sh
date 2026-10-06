@@ -452,8 +452,11 @@ while kill -0 "$US_PID" 2>/dev/null; do
     fi
     sleep 1
 done
-wait "$US_PID"
-US_STATUS=$?
+# A bare `wait` would end the script under `set -e` the moment unsquashfs
+# fails — before the error status is written, and the installer would sit at
+# "Copying the system…" for ever. Take the exit code through an `||` instead.
+US_STATUS=0
+wait "$US_PID" || US_STATUS=$?
 [ "$US_STATUS" -eq 0 ] \
     || fail_log "copying the system failed (unsquashfs exit $US_STATUS)" "$UNSQUASHFS_LOG"
 

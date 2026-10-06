@@ -73,6 +73,25 @@ async function req(path, { method = 'GET', body, retried = false } = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
+// Multipart uploads (a room-correction filter, a backup to restore): the same
+// single retry on a refused CSRF token as req(). fetch serialises the same
+// FormData afresh on each call, so it can simply be sent again.
+async function upload(path, body, retried = false) {
+  await primeCsrf();
+  const headers = { 'X-CSRF-Token': csrfToken(), 'X-UI-Lang': lang.value };
+  let res, data;
+  try {
+    res = await fetch(path, { method: 'POST', body, headers, credentials: 'same-origin' });
+  } catch (e) {
+    return { ok: false, status: 0, data: { message: t('common.networkError') } };
+  }
+  try { data = await res.json(); } catch (_) { data = {}; }
+  if (res.status === 403 && data && data.code === 'auth.csrfInvalid' && !retried) {
+    return upload(path, body, true);
+  }
+  return { ok: res.ok, status: res.status, data };
+}
+
 // Lyrion JSON-RPC (per-player prefs: transitions, ReplayGain, fixed volume).
 // Proxied through webui_server's /api/lyrion to avoid CORS — see that route's
 // comment in webui_server.py. Same request shape as the kiosk's own
@@ -133,19 +152,10 @@ export const api = {
   // DSP room-correction filter (FIR) — file lives on sources_server, forwarded
   // raw through webui_server; upload takes multipart/form-data.
   dspFirStatus: () => req('/api/system/dsp_fir'),
-  dspFirUpload: async (file) => {
+  dspFirUpload: (file) => {
     const body = new FormData();
     body.append('file', file);
-    await primeCsrf();
-    const headers = { 'X-CSRF-Token': csrfToken() };
-    let res, data;
-    try {
-      res = await fetch('/api/system/dsp_fir', { method: 'POST', body, headers, credentials: 'same-origin' });
-    } catch (e) {
-      return { ok: false, status: 0, data: { message: t('common.networkError') } };
-    }
-    try { data = await res.json(); } catch (_) { data = {}; }
-    return { ok: res.ok, status: res.status, data };
+    return upload('/api/system/dsp_fir', body);
   },
   dspFirRemove: () => req('/api/system/dsp_fir', { method: 'DELETE' }),
 
@@ -162,21 +172,12 @@ export const api = {
     req('/api/system/backup/' + id + '/restore', { method: 'POST', body: { passphrase, categories } }),
   backupDownloadUrl: (id) => (id ? '/api/system/backup/' + id : '/api/system/backup'),
   restoreStatus: () => req('/api/system/restore/status'),
-  restoreUpload: async (file, passphrase, categories) => {
+  restoreUpload: (file, passphrase, categories) => {
     const body = new FormData();
     body.append('file', file);
     if (passphrase) body.append('passphrase', passphrase);
     if (categories) body.append('categories', categories.join(','));
-    await primeCsrf();
-    const headers = { 'X-CSRF-Token': csrfToken() };
-    let res, data;
-    try {
-      res = await fetch('/api/system/restore', { method: 'POST', body, headers, credentials: 'same-origin' });
-    } catch (e) {
-      return { ok: false, status: 0, data: { message: t('common.networkError') } };
-    }
-    try { data = await res.json(); } catch (_) { data = {}; }
-    return { ok: res.ok, status: res.status, data };
+    return upload('/api/system/restore', body);
   },
 
   // Music sources — live on sources_server.py, forwarded raw through

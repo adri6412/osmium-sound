@@ -13,6 +13,10 @@ After=network.target squeezelite.service
 Type=simple
 User=hifi
 WorkingDirectory=/usr/local/bin
+# The journal is this daemon's only log (it runs as hifi and cannot write into
+# the root-only /var/log/hifi): unbuffered, so a line reaches journald when it
+# is printed rather than whenever an 8 KiB stdout buffer happens to fill.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 /usr/local/bin/vu_meter_daemon.py
 Restart=always
 RestartSec=3

@@ -19,11 +19,14 @@ try:
 except Exception:
     np = None
 
-from hifi_logging import tee_stdio_to_file
-# Every print() below keeps reaching the console/journald unchanged AND now also
-# lands in a size-rotated file at /var/log/hifi/vumeter.log (journald alone is
-# volatile on this image) — picked up by the support-bundle endpoint.
-tee_stdio_to_file('vumeter')
+# Logs go to journald only (hifi-vumeter.service sets PYTHONUNBUFFERED so each
+# print() lands there at once). 🚨 No hifi_logging.tee_stdio_to_file() here:
+# this daemon runs as `hifi`, and /var/log/hifi is 0750 root:root on purpose
+# (SSID/hostname can show up in those logs), so the rotated file could never
+# be opened — the tee silently fell back to a NullHandler and vumeter.log never
+# existed. The journal is persistent on the image (/var/log/journal) and the
+# support bundle already dumps it (api_server.SUPPORT_JOURNAL_UNITS has
+# 'hifi-vumeter' → journal/hifi-vumeter.log in the zip).
 
 # DoP (DSD-over-PCM) marker bytes, alternated by squeezelite every output
 # frame. Squeezelite's _vis_export always copies the *top* 16 bits of each
@@ -42,6 +45,39 @@ _DSD_FS_GAIN = 2.0
 # Moving-average window (in PDM bits) used to low-pass the DSD bitstream back
 # into a coarse PCM-like envelope.
 _DSD_DECIMATE_BLOCK = 16
+
+# Native DSD (-D :u32be and friends) has no marker at all: dsd.c packs the raw
+# bitstream straight into each 32-bit output word (DSD_U32: b0<<24|b1<<16|b2<<8|b3,
+# DSD_U16: b0<<24|b1<<16, DSD_U8: b0<<24, oldest bit in the MSB), and
+# _vis_export keeps the top 16 bits — so every vis entry is 16 (8 for DSD_U8)
+# consecutive PDM bits of that channel. Read as PCM that is near full-scale
+# noise (squeezelite's own DSD silence, 0x69 bytes, is a constant 0x6969 =
+# -1.7 dBFS), which pinned both needles to the stop. What gives it away:
+#   * vis_t.rate is the output word rate, DSD rate / 32, /16 or /8 — never
+#     below 88200 (DSD64 as DSD_U32), so 44.1/48 kHz PCM is never examined;
+#   * as numbers, the words are white: neighbours are 8-32 PDM bits apart and
+#     a 1-bit stream is dominated by its shaped HF noise, so their lag-1
+#     correlation sits near 0 at a level around -4 dBFS. Hi-res PCM music is
+#     heavily oversampled, so its lag-1 correlation is well above 0.9, and a
+#     quiet PCM noise floor is far below the level threshold.
+_NATIVE_DSD_MIN_RATE = 88200
+# RMS (on the +/-32767 scale) a buffer must exceed to be taken for raw DSD;
+# raw DSD words measure ~13000-21000, -12 dBFS of PCM is ~8200.
+_NATIVE_DSD_MIN_RMS = 8000.0
+# Lag-1 correlation below which a loud buffer is taken for raw DSD; once a
+# rate has been recognised the bar is raised (hysteresis), so the periodic
+# idle patterns some modulators settle into in near-silence do not flip the
+# meter back to reading the bits as PCM for a frame.
+_NATIVE_DSD_MAX_RHO1 = 0.5
+_NATIVE_DSD_KEEP_RHO1 = 0.9
+# Native DSD is decoded by bit density like DoP, over a longer window: the
+# 1-bit quantisation noise is huge, and DSD_U32 only exposes the first 16
+# bits of every 32, which folds the shaped HF noise back into the audio band.
+# Simulated with a 5th-order modulator, 16-bit blocks left a -50 dB signal
+# reading ~60% on the meter; 128-bit blocks bring that to ~35%, with loud
+# passages still at the top. 512 words per channel still give 32-64 envelope
+# samples, 2-4 per bar.
+_NATIVE_DSD_DECIMATE_BLOCK = 128
 
 
 class SqueezeliteVisualizer:
@@ -65,6 +101,9 @@ class SqueezeliteVisualizer:
         # layouts (as opposed to falling back to a guessed default) — see
         # the reuse-on-reconnect comment in connect() for why this matters.
         self._layout_confirmed = False
+        # vis_t.rate at which the buffer was last recognised as raw native
+        # DSD, None otherwise (see _NATIVE_DSD_KEEP_RHO1).
+        self._native_dsd_rate = None
 
     def find_shm_file(self):
         """Find the squeezelite shared memory file in /dev/shm"""
@@ -117,10 +156,14 @@ class SqueezeliteVisualizer:
 
             # Autodetect the actual layout. Different Squeezelite forks (like R2)
             # or platforms have different headers.
-            # For example, standard Linux 64-bit has a 32-byte header.
-            # A specific DietPi x86 version has an 80-byte header with a 52-byte prefix.
-            # The actual struct vis_t contains:
-            # [sync: 4] [buf_size: 4] [buf_index: 4] [running: 4/1] [rate: 4] [updated: 8/4] [buffer: buf_size*2]
+            # The 24- and 32-byte cases below are older guesses; the 80-byte
+            # one is what squeezelite really lays out on x86-64.
+            # The actual struct vis_t (squeezelite output_vis.c) contains:
+            # [pthread_rwlock_t] [buf_size: u32] [buf_index: u32] [running: bool, padded to 4]
+            # [rate: u32] [updated: time_t] [buffer: s16_t[buf_size]]
+            # On x86-64 glibc the rwlock is 56 bytes, so that is the 80-byte
+            # header below (buf_index at 60, rate at 68), buf_size 16384.
+            # buf_size and buf_index count s16 samples, not bytes.
 
             # To reliably find the buffer and index, let's scan for a matching buf_size.
             # Usually buf_size is 4096, 8192, 16384.
@@ -198,6 +241,42 @@ class SqueezeliteVisualizer:
             os.close(self.fd)
             self.fd = None
 
+    def _read_latest(self, buf_index, count):
+        """Raw little-endian bytes of the `count` interleaved samples
+        squeezelite wrote last, oldest first; None if the header doesn't fit.
+
+        🚨 buf_index is a *sample* index into vis_t.buffer, not a byte
+        offset: _vis_export does `vis_mmap->buffer[i++] = ...` per s16,
+        wraps i at VIS_BUF_SIZE and stores `buf_index = i`, the slot the
+        next sample goes in. Treating it as bytes put the window at sample
+        buf_index/2 — 0-93 ms behind the audio in a sawtooth over the ring —
+        and, half of the time, half a frame off, which swapped L and R.
+        squeezelite writes L,R pairs into an even-sized ring, so an even
+        buf_index and an even count keep the window on L."""
+        ring = self.buf_size
+        if count > ring or buf_index >= ring:
+            return None
+        buf_index -= buf_index % 2
+        start = buf_index - count
+        base = self.buffer_offset
+        if start >= 0:
+            self.mmap_obj.seek(base + start * 2)
+            return self.mmap_obj.read(count * 2)
+        # The window straddles the end of the ring: its tail, then its head.
+        self.mmap_obj.seek(base + (ring + start) * 2)
+        older = self.mmap_obj.read(-start * 2)
+        self.mmap_obj.seek(base)
+        return older + self.mmap_obj.read(buf_index * 2)
+
+    def _read_rate(self):
+        """vis_t.rate (output->current_sample_rate): the u32 after buf_index
+        and the bool `running`, which is padded to 4 bytes. 0 if unreadable."""
+        try:
+            self.mmap_obj.seek(self.index_offset + 8)
+            return struct.unpack('<I', self.mmap_obj.read(4))[0]
+        except (struct.error, ValueError):
+            return 0
+
     def read_audio_data(self):
         """Read current PCM data and calculate visualizer levels"""
         if not self.mmap_obj:
@@ -225,53 +304,36 @@ class SqueezeliteVisualizer:
             if self.same_index_count > 10:
                 return self._zero_levels()
 
-            # If buf_index is very small, we might not have enough data to read a frame
             samples_to_read = 1024  # Read last 1024 interleaved samples (512 pairs)
-
-            if buf_index < samples_to_read * 2: # 2 bytes per s16_t sample
-                start_offset = self.buffer_offset
-            else:
-                start_offset = self.buffer_offset + (buf_index - (samples_to_read * 2))
-
-            # Snap the window to a stereo-frame boundary. self.buffer_offset
-            # is sample index 0 in the ring buffer, which is always L by
-            # construction (squeezelite writes strictly L,R,L,R... and
-            # buf_size is always even, so that phase is preserved across
-            # wraps) — but start_offset above is derived from buf_index at
-            # whatever instant we happened to poll it, which can land on
-            # either the L or the R half of a pair essentially at random
-            # from one read to the next. Without this, roughly half our
-            # reads deinterleave correctly (values[0::2]=L) and half get L
-            # and R fully swapped. That's invisible on real stereo material
-            # (both needles keep moving either way), but on a hard-panned
-            # mono signal it makes the one active channel appear to hop
-            # between the two needles at random every other frame.
-            if ((start_offset - self.buffer_offset) // 2) % 2 != 0:
-                start_offset -= 2
-
-            # Ensure we don't read past the file limit
-            file_size = self.mmap_obj.size()
-            if start_offset + (samples_to_read * 2) > file_size:
-                # Re-connect or reset if size is weird
+            raw_samples = self._read_latest(buf_index, samples_to_read)
+            if raw_samples is None:
+                # Header doesn't fit the segment (e.g. caught mid-recreate)
                 return self._zero_levels()
-
-            self.mmap_obj.seek(start_offset)
-            raw_samples = self.mmap_obj.read(samples_to_read * 2)
 
             num_samples = len(raw_samples) // 2
             if num_samples == 0:
                 return self._zero_levels()
 
+            bars_per_channel = max(1, self.num_bars // 2)
+            # Only hi-res rates can carry native DSD, see _NATIVE_DSD_MIN_RATE.
+            rate = self._read_rate()
+            if rate < _NATIVE_DSD_MIN_RATE:
+                self._native_dsd_rate = None
+
             if np is not None:
                 dop_stereo = self._decode_dop(raw_samples, num_samples)
                 if dop_stereo is not None:
                     left_env, right_env = dop_stereo
-                    bars_per_channel = max(1, self.num_bars // 2)
                     return (self._bucket_rms(left_env, bars_per_channel),
                             self._bucket_rms(right_env, bars_per_channel))
 
                 # Vectorised RMS — ~10x cheaper than the Python loop at 30 fps.
                 buf = np.frombuffer(raw_samples, dtype='<i2', count=num_samples)
+                if rate >= _NATIVE_DSD_MIN_RATE:
+                    native = self._decode_native_dsd(buf, rate)
+                    if native is not None:
+                        return (self._bucket_rms(native[0], bars_per_channel),
+                                self._bucket_rms(native[1], bars_per_channel))
                 return self._stereo_levels_from_values(buf.astype(np.float64))
 
             # Pure-Python fallback (numpy not installed).
@@ -279,9 +341,13 @@ class SqueezeliteVisualizer:
             dop_stereo = self._decode_dop_py(samples)
             if dop_stereo is not None:
                 left_env, right_env = dop_stereo
-                bars_per_channel = max(1, self.num_bars // 2)
                 return (self._bucket_rms_py(left_env, bars_per_channel),
                         self._bucket_rms_py(right_env, bars_per_channel))
+            if rate >= _NATIVE_DSD_MIN_RATE:
+                native = self._decode_native_dsd_py(samples, rate)
+                if native is not None:
+                    return (self._bucket_rms_py(native[0], bars_per_channel),
+                            self._bucket_rms_py(native[1], bars_per_channel))
             return self._stereo_levels_from_values_py(samples)
 
         except Exception as e:
@@ -390,15 +456,15 @@ class SqueezeliteVisualizer:
             return None
         return left_env, right_env
 
-    def _decimate_dop_bytes(self, data_bytes):
+    def _decimate_dop_bytes(self, data_bytes, block=_DSD_DECIMATE_BLOCK):
         """Unpack a single channel's DSD PDM bytes and decimate them into a
-        coarse PCM-like envelope. Returns None if there aren't enough bits
-        for even one decimated sample."""
+        coarse PCM-like envelope, `block` bits per sample. Returns None if
+        there aren't enough bits for even one decimated sample."""
         bits = np.unpackbits(data_bytes).astype(np.float64) * 2.0 - 1.0
-        usable_bits = (bits.size // _DSD_DECIMATE_BLOCK) * _DSD_DECIMATE_BLOCK
+        usable_bits = (bits.size // block) * block
         if usable_bits == 0:
             return None
-        decimated = bits[:usable_bits].reshape(-1, _DSD_DECIMATE_BLOCK).mean(axis=1)
+        decimated = bits[:usable_bits].reshape(-1, block).mean(axis=1)
         return np.clip(decimated * _DSD_FS_GAIN * 32767.0, -32767.0, 32767.0)
 
     def _decode_dop_py(self, samples):
@@ -422,16 +488,104 @@ class SqueezeliteVisualizer:
             byte = s & 0xFF
             for shift in range(7, -1, -1):
                 bits.append(1.0 if (byte >> shift) & 1 else -1.0)
+        return self._decimate_bits_py(bits)
 
-        usable = (len(bits) // _DSD_DECIMATE_BLOCK) * _DSD_DECIMATE_BLOCK
+    def _decimate_bits_py(self, bits, block=_DSD_DECIMATE_BLOCK):
+        """Pure-Python decimation of a +/-1.0 PDM bit list (see
+        _decimate_dop_bytes); None if there aren't enough bits."""
+        usable = (len(bits) // block) * block
         if usable == 0:
             return None
         decimated = []
-        for i in range(0, usable, _DSD_DECIMATE_BLOCK):
-            chunk = bits[i:i + _DSD_DECIMATE_BLOCK]
-            avg = sum(chunk) / _DSD_DECIMATE_BLOCK
+        for i in range(0, usable, block):
+            chunk = bits[i:i + block]
+            avg = sum(chunk) / block
             decimated.append(max(-32767.0, min(32767.0, avg * _DSD_FS_GAIN * 32767.0)))
         return decimated
+
+    def _native_dsd_max_rho1(self, rate):
+        """Lag-1 correlation bar for raw DSD at `rate`, with hysteresis."""
+        return _NATIVE_DSD_KEEP_RHO1 if self._native_dsd_rate == rate else _NATIVE_DSD_MAX_RHO1
+
+    def _decode_native_dsd(self, buf, rate):
+        """Recognise raw native DSD in the vis buffer (see
+        _NATIVE_DSD_MIN_RATE) and decode it into (left_env, right_env) by
+        bit density, exactly like DoP; None when the buffer reads as PCM.
+        buf: 1-D int16 numpy array of interleaved vis entries."""
+        max_rho1 = self._native_dsd_max_rho1(rate)
+        if not all(self._looks_like_raw_dsd(buf[ch::2].astype(np.float64), max_rho1)
+                   for ch in (0, 1)):
+            self._native_dsd_rate = None
+            return None
+        self._native_dsd_rate = rate
+
+        words = buf.view(np.uint16)
+        high = (words >> 8).astype(np.uint8)
+        low = (words & 0xFF).astype(np.uint8)
+        # DSD_U8 leaves the low byte empty; otherwise both bytes are
+        # bitstream, the high one first in time.
+        u8 = not low.any()
+        envs = []
+        for ch in (0, 1):
+            data = high[ch::2] if u8 else np.column_stack((high[ch::2], low[ch::2])).ravel()
+            env = self._decimate_dop_bytes(data, _NATIVE_DSD_DECIMATE_BLOCK)
+            if env is None:
+                return None
+            envs.append(env)
+        return envs[0], envs[1]
+
+    def _looks_like_raw_dsd(self, values, max_rho1):
+        """values: one channel's vis entries (numpy float64), read as PCM."""
+        if values.size < 2:
+            return False
+        lo, hi = values.min(), values.max()
+        if lo == hi:
+            # A modulator's idle pattern (squeezelite pads with 0x69 bytes)
+            # repeats one word; PCM doesn't hold a non-zero value still.
+            return lo != 0
+        c = values - values.mean()
+        var = float(np.mean(c * c))
+        if var < _NATIVE_DSD_MIN_RMS ** 2:
+            return False
+        return float(np.mean(c[:-1] * c[1:])) / var < max_rho1
+
+    def _decode_native_dsd_py(self, samples, rate):
+        """Pure-Python equivalent of _decode_native_dsd."""
+        max_rho1 = self._native_dsd_max_rho1(rate)
+        if not all(self._looks_like_raw_dsd_py(samples[ch::2], max_rho1) for ch in (0, 1)):
+            self._native_dsd_rate = None
+            return None
+        self._native_dsd_rate = rate
+
+        # DSD_U8 leaves the low byte empty: only bits 15..8 are bitstream.
+        lowest_bit = 8 if not any(s & 0xFF for s in samples) else 0
+        envs = []
+        for ch in (0, 1):
+            bits = []
+            for s in samples[ch::2]:
+                for shift in range(15, lowest_bit - 1, -1):
+                    bits.append(1.0 if (s >> shift) & 1 else -1.0)
+            env = self._decimate_bits_py(bits, _NATIVE_DSD_DECIMATE_BLOCK)
+            if env is None:
+                return None
+            envs.append(env)
+        return envs[0], envs[1]
+
+    def _looks_like_raw_dsd_py(self, values, max_rho1):
+        """Pure-Python equivalent of _looks_like_raw_dsd."""
+        n = len(values)
+        if n < 2:
+            return False
+        lo, hi = min(values), max(values)
+        if lo == hi:
+            return lo != 0
+        mean = sum(values) / n
+        c = [v - mean for v in values]
+        var = sum(x * x for x in c) / n
+        if var < _NATIVE_DSD_MIN_RMS ** 2:
+            return False
+        cov = sum(c[i] * c[i + 1] for i in range(n - 1)) / (n - 1)
+        return cov / var < max_rho1
 
 
 class BluetoothTapReader:

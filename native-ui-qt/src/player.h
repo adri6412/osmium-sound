@@ -87,6 +87,9 @@ class Player : public QObject {
     Q_PROPERTY(QString otaMessage READ otaMessage NOTIFY otaChanged)
     Q_PROPERTY(QString otaKind READ otaKind NOTIFY otaChanged)
     Q_PROPERTY(int otaPercent READ otaPercent NOTIFY otaChanged)
+    // an update under way, and /update/status silent for kOtaStaleMs: the
+    // overlay offers a way out (it would otherwise stay on the last state)
+    Q_PROPERTY(bool otaStale READ otaStale NOTIFY otaChanged)
     // connectivity for the top-bar icon (api_server /connectivity):
     // "unknown" until the first answer, then "internet", "lan" or "offline";
     // the type is the link's ("wired"/"wireless"), or the last one seen once
@@ -156,6 +159,7 @@ public:
     QString otaMessage() const { return m_otaMsg; }
     QString otaKind() const { return m_otaKind; }
     int otaPercent() const { return m_otaPct; }
+    bool otaStale() const { return m_otaStale; }
     QString netState() const { return m_netState; }
     QString netType() const { return m_netType; }
     QString netSsid() const { return m_netSsid; }
@@ -279,6 +283,8 @@ private:
     int m_autoexpand = 0;
     QString m_otaState = "idle", m_otaMsg, m_otaKind;
     int m_otaPct = 0;
+    qint64 m_otaFreshAt = 0;            // m_clock time of the last answer from /update/status
+    bool m_otaStale = false;
     // volume: throttle
     qint64 m_volSentMs = 0;
     int m_volPending = -1;

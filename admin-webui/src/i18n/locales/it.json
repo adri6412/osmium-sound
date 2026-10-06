@@ -1071,6 +1071,7 @@
       "downloadFailed": "Download fallito",
       "restoring": "Ripristino…",
       "restored": "Ripristino completato",
+      "restoredLoginReplaced": "Ripristino completato: l'accesso all'amministrazione web ora è quello del backup. Il dispositivo si riavvia da solo; poi accedi con nome utente e password del backup.",
       "restoreFailed": "Ripristino fallito",
       "restoreConfirm": "Ripristinare questo backup? Verrà creata prima una copia di sicurezza della configurazione attuale.",
       "restoreThis": "Ripristina",

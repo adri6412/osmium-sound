@@ -66,8 +66,24 @@ Item {
     property real cardA: 0
     Behavior on cardA { NumberAnimation { duration: Theme.dur(200) } }
 
+    // 🚨 Nobody at the screen: the tour opens by itself (after the setup, after
+    // the update that brings it) and only writes its file at the end, and
+    // while it is open the screensaver stays off. Left alone it sat dimmed
+    // on its card for good, and came back after every reboot. After idleMs
+    // without a touch or a key it now closes WITHOUT writing the file, and
+    // timedOut() lets App offer it again when somebody next touches the box.
+    readonly property int idleMs: 10 * 60 * 1000
+    property real startedAt: 0
+    signal timedOut()
+    Timer {
+        interval: 30000; repeat: true
+        running: root.active
+        onTriggered: if (Sys.now() - Math.max(Sys.lastInput, root.startedAt) >= root.idleMs) root.giveUp()
+    }
+
     function start() {
         step = -1
+        startedAt = Sys.now()
         active = true
         fade = 1
         lit = false
@@ -104,9 +120,18 @@ Item {
     function next() { go(step + 1) }
     function finish() {
         markShown()
+        closeTour()
+        ended()
+    }
+    function closeTour() {
+        swap.stop()
         if (Ui.app) { Ui.app.tutorialRestore(); Ui.app.setExpanded(false) }
         active = false; lit = false; fade = 0; cardA = 0
-        ended()
+    }
+    function giveUp() {
+        Sys.log("tutorial: closed after " + Math.round(idleMs / 60000) + " min without input, not marked as shown")
+        closeTour()
+        timedOut()
     }
 
     // the dim: four sheets round the lit rectangle (nothing to shade when none)

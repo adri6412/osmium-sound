@@ -1699,10 +1699,16 @@ def wifi_connect(ssid, password, band=''):
     # ssid/password are passed as argv to nmcli (no shell), but a value that
     # starts with '-' or carries control characters could still be parsed as a
     # flag or break the command line. Validate with an anchored regexp (no
-    # control chars, no leading dash) before building argv.
+    # control chars, no leading dash) before building argv. The password is
+    # exempt from the dash rule: it only ever goes in as the value that
+    # follows a property name (802-11-wireless-security.psk / wep-key0, see
+    # _wifi_security_args), never in a place nmcli reads options from, and a
+    # passphrase like "-Summer2024" is a perfectly good one that used to be
+    # refused.
     safe_arg = re.compile(r'(?!-)[^\x00-\x1f]+')
-    for label, value in (('SSID', ssid), ('password', password or '')):
-        if value and not safe_arg.fullmatch(value):
+    safe_secret = re.compile(r'[^\x00-\x1f\x7f]+')
+    for label, value, rule in (('SSID', ssid, safe_arg), ('password', password or '', safe_secret)):
+        if value and not rule.fullmatch(value):
             return {'success': False, 'code': 'network.invalidField',
                     'message': _t('network.invalidField', _lang(), label=label)}
     if band not in ('', '2.4', '5', '6'):
@@ -2487,13 +2493,55 @@ _HOSTNAME_RE = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9-]{0,30}[A-Za-z0-9])?$')
 def _valid_device_name(name):
     return bool(isinstance(name, str) and _HOSTNAME_RE.match(name))
 
+ETC_HOSTS = '/etc/hosts'
+
+def _write_file_atomic(path, data, mode=0o644):
+    """Replace `path` with `data` (str or bytes) so that a power cut leaves
+    either the old file or the new one, never an empty or half-written one:
+    a temp file beside it, fsync, rename(2), fsync of the folder. A symlink
+    is followed (the file it points to is replaced, the link stays), and an
+    existing file keeps its permission bits; `mode` is for a new one.
+    Raises OSError; the temp file never stays behind."""
+    import tempfile
+    path = os.path.realpath(path)
+    try:
+        mode = os.stat(path).st_mode & 0o7777
+    except OSError:
+        pass
+    folder = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(dir=folder, prefix='.' + os.path.basename(path) + '.')
+    try:
+        with os.fdopen(fd, 'wb') as f:
+            f.write(data.encode('utf-8') if isinstance(data, str) else data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+        tmp = None
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+    try:
+        dfd = os.open(folder, os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    except OSError:
+        pass
+
 def _set_etc_hosts_hostname(name):
     """Replace (or insert) the 127.0.1.1 line in /etc/hosts to match `name`.
     Best-effort: a failure here only means `sudo` prints a cosmetic "unable
-    to resolve host" warning, not worth failing the whole rename over."""
+    to resolve host" warning, not worth failing the whole rename over.
+    Written atomically: every name lookup on the box reads this file, and a
+    power cut halfway through a plain rewrite left it empty."""
     try:
         try:
-            with open('/etc/hosts') as f:
+            with open(ETC_HOSTS) as f:
                 lines = f.readlines()
         except FileNotFoundError:
             lines = []
@@ -2506,8 +2554,7 @@ def _set_etc_hosts_hostname(name):
                 out.append(line)
         if not seen:
             out.append(f'127.0.1.1\t{name}\n')
-        with open('/etc/hosts', 'w') as f:
-            f.writelines(out)
+        _write_file_atomic(ETC_HOSTS, ''.join(out))
     except Exception:
         log.exception("_set_etc_hosts_hostname failed")
 
@@ -2555,15 +2602,21 @@ def _apply_hostname(name):
 
 
 def set_device_name(name):
-    if not _valid_device_name(name):
+    # Both rules up front: the name becomes the player name too, and
+    # _PLAYER_NAME_RE stops at 24 characters where a host name may have 32.
+    # Checked only afterwards, a 25-32 character name renamed the host and
+    # left the player on its old name while reporting success.
+    if not _valid_device_name(name) or not _valid_player_name(name):
         return {'success': False, 'code': 'device.invalidName',
                 'message': _t('device.invalidName', _lang())}
     result = _apply_hostname(name)
     if not result.get('success'):
         return result
-    # Keep the LMS/Bluetooth-facing name in sync too. _HOSTNAME_RE's charset
-    # is a subset of _PLAYER_NAME_RE's, so this always validates.
-    set_player_name(name)
+    # Keep the LMS/Bluetooth-facing name in sync too.
+    player = set_player_name(name)
+    if not player.get('success'):
+        return {'success': False, 'name': name, 'code': 'device.playerNameFailed',
+                'message': _t('device.playerNameFailed', _lang(), name=name)}
     return {'success': True, 'name': name, 'message': _t('device.nameSet', _lang(), name=name)}
 
 # ── LAN discovery of other Lyrion/LMS servers ──────────────────────
@@ -4285,6 +4338,32 @@ def get_timezone():
         pass
     return {'timezone': 'UTC'}
 
+# Files in the zoneinfo tree that are not a place to live in. On trixie
+# "localtime" is a link to /etc/localtime itself: picking it made
+# /etc/localtime point at itself (a loop, read as UTC) and still reported
+# success. posixrules is America/New_York under a rules name, Factory is the
+# "-00" placeholder zone.
+_NOT_ZONES = frozenset(('localtime', 'posixrules', 'Factory', 'leapseconds', 'SECURITY'))
+
+def _is_zone_file(real, rel, name):
+    """Is `real` (`rel` inside the zoneinfo tree) a zone someone can pick?"""
+    # The tables beside the zones (zone.tab, zone1970.tab, iso3166.tab,
+    # tzdata.zi, leap-seconds.list…) all have a dot in their name; no
+    # zone does.
+    if rel.startswith('.') or '.' in name or rel in _NOT_ZONES:
+        return False
+    # A link that leaves the tree is not one of tzdata's own.
+    root = os.path.realpath(ZONEINFO_DIR)
+    target = os.path.realpath(real)
+    if not target.startswith(root + os.sep):
+        return False
+    # And a zone is a compiled TZif file, never a text one.
+    try:
+        with open(target, 'rb') as f:
+            return f.read(4) == b'TZif'
+    except OSError:
+        return False
+
 def list_timezones():
     """All IANA zone names the installed tzdata knows about, e.g. 'Europe/Rome'."""
     names = []
@@ -4299,13 +4378,8 @@ def list_timezones():
         for name in filenames:
             real = os.path.join(dirpath, name)
             rel = os.path.relpath(real, ZONEINFO_DIR)
-            # tzdata ships a few non-zone files (posixrules, localtime itself if
-            # present, leap seconds tables, the iso3166 country table, etc.) —
-            # this is the same "does it look like Area/Location" heuristic
-            # `timedatectl list-timezones` effectively applies.
-            if rel.startswith('.') or rel in ('posixrules',) or '.' in name:
-                continue
-            names.append(rel.replace(os.sep, '/'))
+            if _is_zone_file(real, rel, name):
+                names.append(rel.replace(os.sep, '/'))
     return sorted(names)
 
 def _link_localtime(tz):
@@ -4370,6 +4444,12 @@ def set_timezone(tz):
     # not the request's own string: it is what the /etc/localtime link below
     # gets built from.
     tz = os.path.relpath(real, ZONEINFO_DIR)
+    # Only what /timezones offers: a file that merely exists in the tree can
+    # be "localtime" (a link to /etc/localtime, so the link below would point
+    # at itself), leapseconds or a right/ zone.
+    if tz.replace(os.sep, '/') not in set(list_timezones()):
+        return {'success': False, 'timezone': get_timezone()['timezone'],
+                'code': 'timezone.invalid', 'message': _t('timezone.invalid', _lang())}
     try:
         r = subprocess.run(['timedatectl', 'set-timezone', tz],
                            capture_output=True, text=True, timeout=15)
@@ -6330,8 +6410,9 @@ def _apply_dsp_on(playback_dev, bands, crossfeed, room_correction=False, balance
 
 def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balance, cfg):
     os.makedirs(os.path.dirname(CAMILLA_CONFIG), exist_ok=True)
-    with open(CAMILLA_CONFIG, 'w') as f:
-        json.dump(cfg, f, indent=2)
+    # Atomic: CamillaDSP reads this on every (re)start, and a half-written
+    # file after a power cut would leave the player silent behind it.
+    _write_file_atomic(CAMILLA_CONFIG, json.dumps(cfg, indent=2))
     _write_dsp_target(playback_dev)
     # squeezelite goes onto the Loopback at DSP_RATE with soxr and no `-D`
     # (no DoP/DSD through the DSP path): all of that is the render of

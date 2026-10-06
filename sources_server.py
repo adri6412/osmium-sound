@@ -241,6 +241,19 @@ def _field_ok(value):
     return bool(re.fullmatch(r"[^\x00-\x1f,]*", v)) and not v.startswith("-")
 
 
+def _password_ok(value):
+    """True if `value` can be an SMB password.
+
+    Unlike the other SMB fields, the password never reaches an `-o` option or
+    argv: it only ever goes into the credentials file (_smb_cred_file()), one
+    "password=..." line read up to its end, so a comma or a leading '-' is just
+    part of the password — and refusing them locked out every NAS account that
+    happened to have one. Only a line break (or another control character)
+    would end the line early and break that file."""
+    v = "" if value is None else str(value)
+    return not re.search(r"[\x00-\x1f\x7f]", v)
+
+
 def _label_ok(value):
     """Safe volume label: alphanumerics, space, underscore, dot, hyphen."""
     v = "" if value is None else str(value)
@@ -533,9 +546,11 @@ def _mount_smb_locked(src):
     except hb.LoginUnreadable as e:
         print(f"[sources] login of {server}/{share} cannot be opened: {e}")
         return False, _ht('mount.loginUnreadable', _hlang()), ""
-    for value in (server, share, username, password):
+    for value in (server, share, username):
         if not _field_ok(value):
             return False, _ht('mount.invalidFields', _hlang()), ""
+    if not _password_ok(password):
+        return False, _ht('mount.invalidFields', _hlang()), ""
 
     # The mountpoint is derived from user-supplied server/share; resolve it and
     # make sure it can never escape MOUNT_ROOT before we create or mount onto it.
@@ -2193,11 +2208,52 @@ NORMALIZE_MAX_BYTES = 8 * 1024 * 1024
 # A file still being written over SMB must not be rewritten mid-copy.
 NORMALIZE_SETTLE_S = 15
 NORMALIZE_INTERVAL_S = 60
+# The playlist folder is meant to hold playlists, but nothing stops an owner
+# from pointing it at the top of a music library — on a NAS, even. Walking all
+# of that once a minute kept the NAS from ever going to sleep, so a pass is
+# bounded: this many levels below the folder, this many folders and playlist
+# files at most, never into another filesystem mounted inside it, and a
+# folder whose mtime has not moved is not listed again (its playlists are
+# still stat-ed, for one rewritten in place).
+NORMALIZE_MAX_DEPTH = 4
+NORMALIZE_MAX_DIRS = 500
+NORMALIZE_MAX_FILES = 2000
+# A playlist folder that is itself on a network share is looked at this
+# often instead: even a stat() reaches the server.
+NORMALIZE_NET_INTERVAL_S = 15 * 60
 _URL_LINE_RE = re.compile(rb"^[A-Za-z][A-Za-z0-9+.\-]*://")
 _PLS_ENTRY_RE = re.compile(rb"^\s*[Ff]ile\d+\s*=")
+# A 0x5C right after a byte >= 0x80: in Shift-JIS, Big5 and GBK that is the
+# second half of a two-byte character, not a backslash.
+_MBCS_TRAIL_5C_RE = re.compile(rb"[\x80-\xff]\\")
 # path -> (mtime_ns, size) of the last content this loop looked at, so an
 # unchanged folder costs one stat() per file per pass and nothing else.
 _playlist_seen = {}
+# dirpath -> (mtime_ns, [subfolder names], [playlist names], settled) from
+# the last pass: a folder whose mtime is the same is not listed again.
+_playlist_dirs = {}
+_playlist_last_net_pass = 0.0
+
+
+def _playlist_separators_safe(raw):
+    """May the 0x5C bytes of this playlist be read as backslashes?
+
+    UTF-8 (and so plain ASCII): yes, 0x5C is never part of a multi-byte
+    sequence there. Anything else is a legacy code page the file does not
+    name. In the single-byte ones (cp1252, latin-1…) 0x5C is still the
+    backslash, but in Shift-JIS, Big5 and GBK it is also the second byte of
+    many characters (表, 能, 許…), and turning it into "/" broke the very
+    title it was part of. Those files are left alone whenever a 0x5C follows
+    a byte >= 0x80 — the only place such a trail byte can be — at the price
+    of not fixing a cp1252 playlist with a separator right after an accented
+    letter. NUL bytes mean UTF-16 or not text at all: left alone too."""
+    if b"\x00" in raw:
+        return False
+    try:
+        raw.decode("utf-8")
+        return True
+    except UnicodeDecodeError:
+        return not _MBCS_TRAIL_5C_RE.search(raw)
 
 
 def _normalize_playlist_bytes(raw, is_pls):
@@ -2205,10 +2261,13 @@ def _normalize_playlist_bytes(raw, is_pls):
     Returns (new_bytes, changed).
 
     Byte-level on purpose: a .m3u carries no encoding declaration and is as
-    likely to be cp1252 as UTF-8, but 0x5C is the backslash in every one of
-    them and can never be a continuation byte of a UTF-8 sequence. So this
-    cannot corrupt an encoding it does not understand.
+    likely to be cp1252 as UTF-8. 0x5C is the backslash in both, and can never
+    be a continuation byte of a UTF-8 sequence; a file where it may be half of
+    a double-byte character instead is returned untouched (see
+    _playlist_separators_safe()).
     """
+    if b"\\" not in raw or not _playlist_separators_safe(raw):
+        return raw, False
     out = []
     changed = False
     for line in raw.split(b"\n"):
@@ -2277,14 +2336,82 @@ def _normalize_playlist_file(path):
     return True
 
 
+def _playlist_folders(root):
+    """(dirpath, [playlist names]) for the folders one pass looks at, within
+    the bounds above (NORMALIZE_MAX_*), shallowest first. A folder whose
+    mtime is what it was last pass is not listed again — adding, removing or
+    renaming an entry is what moves it — and folders that are mountpoints
+    (a NAS share or a disk mounted inside the playlist folder) are never
+    entered: they are not the playlist folder, and on a NAS every look
+    inside wakes it up."""
+    try:
+        root = os.path.realpath(root)
+        root_dev = os.stat(root).st_dev
+    except OSError:
+        return []
+    table = _mount_table()
+    # Paths as the mount table spells them, below the root only: checked
+    # by name, so a dead share is never stat-ed just to be skipped.
+    inner_mounts = {mp for mp in (table or {}) if mp.startswith(root.rstrip("/") + "/")}
+    out = []
+    dirs = {}
+    queue = [(root, 0)]
+    i = 0
+    while i < len(queue) and i < NORMALIZE_MAX_DIRS:
+        dirpath, depth = queue[i]
+        i += 1
+        try:
+            st = os.stat(dirpath)
+        except OSError:
+            continue
+        if st.st_dev != root_dev:
+            continue        # a mount the table did not show (table unreadable)
+        cached = _playlist_dirs.get(dirpath)
+        # A listing taken while the mtime was still fresh is not trusted:
+        # FAT keeps it to 2 s, so a file landing in the same tick right after
+        # the listing would leave it unchanged (the "racy clean" case).
+        if cached and cached[0] == st.st_mtime_ns and cached[3]:
+            subdirs, names = cached[1], cached[2]
+        else:
+            subdirs, names = [], []
+            try:
+                with os.scandir(dirpath) as it:
+                    for entry in it:
+                        try:
+                            if entry.is_dir(follow_symlinks=False):
+                                subdirs.append(entry.name)
+                            elif entry.name.lower().endswith(NORMALIZE_EXTS):
+                                names.append(entry.name)
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+            subdirs.sort()
+            names.sort()
+        settled = time.time() - st.st_mtime > NORMALIZE_SETTLE_S
+        dirs[dirpath] = (st.st_mtime_ns, subdirs, names, settled)
+        out.append((dirpath, names))
+        if depth < NORMALIZE_MAX_DEPTH:
+            for d in subdirs:
+                sub = os.path.join(dirpath, d)
+                if sub not in inner_mounts:
+                    queue.append((sub, depth + 1))
+    # Rebuilt, like _playlist_seen: folders that went away drop out.
+    _playlist_dirs.clear()
+    _playlist_dirs.update(dirs)
+    return out
+
+
 def _normalize_playlists(root):
     """One pass over the playlist folder."""
     now = time.time()
     seen = {}
-    for dirpath, _dirnames, filenames in os.walk(root):
+    budget = NORMALIZE_MAX_FILES
+    for dirpath, filenames in _playlist_folders(root):
         for name in filenames:
-            if not name.lower().endswith(NORMALIZE_EXTS):
-                continue
+            if budget <= 0:
+                break
+            budget -= 1
             path = os.path.join(dirpath, name)
             try:
                 st = os.stat(path)
@@ -2311,11 +2438,25 @@ def _normalize_playlists(root):
     _playlist_seen.update(seen)
 
 
+def _playlist_pass_due(root, now):
+    """False while a playlist folder on a network share was looked at less
+    than NORMALIZE_NET_INTERVAL_S ago. Judged from the mount table, before
+    anything stats the folder: a share whose server is off answers a stat()
+    only minutes later."""
+    global _playlist_last_net_pass
+    if not _on_network_fs(root):
+        return True
+    if now - _playlist_last_net_pass < NORMALIZE_NET_INTERVAL_S:
+        return False
+    _playlist_last_net_pass = now
+    return True
+
+
 def playlist_normalizer_loop():
     while True:
         try:
             root = (_get_lms_pref("playlistdir") or "").strip()
-            if root and os.path.isdir(root):
+            if root and _playlist_pass_due(root, time.time()) and os.path.isdir(root):
                 _normalize_playlists(root)
         except Exception as e:
             print(f"[sources] playlist normaliser: {e}")
@@ -3523,12 +3664,19 @@ def _hlang():
     _req_lang()/_m() below, which serve the self-contained Sources web page via
     ?lang=/Accept-Language. Wrapped in try/except because apply_to_lyrion() (the
     only caller today) also runs from the format-watcher background thread,
-    outside any request context."""
+    outside any request context. A background job started by a request (the
+    restore worker) carries that request's language in _job_lang instead."""
     try:
         v = request.headers.get('X-UI-Lang')
     except RuntimeError:
-        return 'en'
+        return getattr(_job_lang, 'lang', 'en')
     return v if v in ('en', 'it') else 'en'
+
+
+# Language of the request that started the background job running in this
+# thread (see _run_restore_async): its progress and result messages are
+# written long after that request has returned.
+_job_lang = threading.local()
 
 
 def apply_to_lyrion(state):
@@ -3749,6 +3897,16 @@ WORLD_READABLE_RESTORES = frozenset((
 # separate means each polling loop only ever sees its own job's progress.
 RESTORE_STATUS_FILE = "/run/hifi-restore-status.json"
 _RESTORE_LOCK = threading.Lock()
+# First-boot setup in progress (webui_server.py's MARKER; never restored —
+# hb.DENY_FILES). See the reboot in _run_restore_async.
+PROVISIONING_MARKER = "/etc/hifi-player/provisioning-pending"
+RESTORE_REBOOT_DELAY = 8
+
+
+def _reboot_after_restore():
+    body, status = _proxy_to_api_server("/reboot", method="POST", body={}, timeout=15)
+    if status != 200:
+        print(f"[sources] reboot after restore failed: {status} {body}")
 
 
 def _restore_status():
@@ -4100,9 +4258,10 @@ def _restore_apply_side_effects(restored):
     if "/etc/hifi-player/webui.db" in restored:
         # The admin account changed underneath the running daemon; restart so
         # it reopens the database. No note here — restarting hifi-webui.service
-        # is not "the appliance restarted" (it doesn't reboot anything), and
-        # admin-webui reloads itself on a successful restore anyway, which
-        # lands the operator back on the login page on its own.
+        # is not "the appliance restarted". The restored database also brings
+        # its own sessions, so the web admin that started this is usually
+        # logged out from here on: _run_restore_async reboots the box itself
+        # and the page, which can no longer read the status, says so.
         _run(["systemctl", "restart", "hifi-webui"], timeout=30)
     if SAMBA_CRED_FILE in restored:
         # The restored file's `synced` flag describes whichever machine's
@@ -4210,7 +4369,8 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
                           f"restore\tcompleted\t{len(restored)} file\t"
                           f"{','.join(categories)}")
         return {"success": True, "message": msg, "restored": len(restored),
-                "categories": categories}, 200
+                "categories": categories,
+                "login_replaced": "/etc/hifi-player/webui.db" in restored}, 200
     finally:
         if tar is not None:
             try:
@@ -4274,7 +4434,8 @@ def _snapshot_before_restore(protect=()):
         return None
 
 
-def _run_restore_async(path, passphrase, categories, workdir_to_clean=None, gen_id=None):
+def _run_restore_async(path, passphrase, categories, workdir_to_clean=None, gen_id=None,
+                       lang="en"):
     """Background-thread body for a restore job. Runs in-process (unlike the
     backup job, restore never needs to survive sources_server itself dying —
     nothing it does restarts this process — so a plain daemon thread is enough,
@@ -4284,7 +4445,9 @@ def _run_restore_async(path, passphrase, categories, workdir_to_clean=None, gen_
 
     gen_id is the stored generation being restored, if any: it was pinned by
     _start_restore (so no rotation can remove it while it is being read) and
-    is unpinned here once the restore is over."""
+    is unpinned here once the restore is over. `lang` is the language of the
+    request that started it, for every message written from here."""
+    _job_lang.lang = lang
     try:
         _write_restore_status("preparing", 5, _ht('restore.preparing', _hlang()))
         _write_restore_status("snapshotting", 10, _ht('restore.snapshotting', _hlang()))
@@ -4298,8 +4461,20 @@ def _run_restore_async(path, passphrase, categories, workdir_to_clean=None, gen_
             message = payload.get("message", _ht('restore.completed', _hlang()))
             if snapshot is None:
                 message += " " + _ht('restore.noSnapshot', _hlang())
-            _write_restore_status("done", 100, message,
+            # A restored webui.db replaced the admin login, and with it every
+            # open web-admin session: the page that started this can no longer
+            # read this status nor ask for the reboot a restore ends with, so
+            # the box reboots by itself. Not during first-boot setup, where the
+            # wizard finalizes and reboots on its own (provision_finalize).
+            reboot = bool(payload.get("login_replaced")) and not os.path.exists(PROVISIONING_MARKER)
+            if reboot:
+                message += " " + _ht('restore.rebootingLoginReplaced', _hlang())
+            _write_restore_status("done", 100, message, reboot=reboot,
                                   restored=payload.get("restored"), categories=payload.get("categories"))
+            if reboot:
+                # A few seconds first, so a page whose session did survive
+                # (a backup taken during that same login) still reads "done".
+                threading.Timer(RESTORE_REBOOT_DELAY, _reboot_after_restore).start()
         else:
             _write_restore_status("error", 0, payload.get("message", _ht('restore.failed', _hlang())))
     except Exception as e:
@@ -4329,6 +4504,7 @@ def _start_restore(path, passphrase, categories, workdir_to_clean=None, gen_id=N
     _write_restore_status("preparing", 0, _ht('common.starting', _hlang()))
     threading.Thread(target=_run_restore_async,
                      args=(path, passphrase, categories, workdir_to_clean, gen_id),
+                     kwargs={"lang": _hlang()},
                      daemon=True, name="restore-worker").start()
     return None
 
@@ -4459,7 +4635,12 @@ def api_backup_status():
     denied = _require_pair_token()
     if denied:
         return denied
-    return jsonify(_backup_status())
+    status = _backup_status()
+    # The worker (hifi-backup-run.py) writes an i18n code, not text in a
+    # language nobody asked for: translate it for this caller.
+    if status.get("code"):
+        status["message"] = _ht(status["code"], _hlang(), **(status.get("fields") or {}))
+    return jsonify(status)
 
 
 @app.route("/api/backup/list", methods=["GET"])
@@ -4833,10 +5014,25 @@ def api_dsp_fir_delete():
 # each time the pairing QR is (re)generated and embeds it in the QR
 # alongside the LMS/API host:port; the app stores it and sends it back as
 # `Authorization: Bearer <token>` on every DSP call. Tokens are persisted
-# (survive a service restart) and never expire/rotate out on their own —
-# re-scanning the QR just adds another valid token, so multiple paired
-# phones can coexist.
+# (survive a service restart) and a phone's token does not expire while it
+# is kept — re-scanning the QR after a phone has used its token gives the
+# next phone a token of its own, so multiple paired phones can coexist.
+#
+# The QR (and the web admin's embedded sources page) asked for a new token
+# every time it was opened, though, and the list only ever grew. So:
+#   - a token nobody has used yet is handed out again instead of a new one;
+#   - "last_used" is recorded (at most once an hour) when a token opens a
+#     request here, and the list is capped at PAIR_TOKENS_MAX, the ones idle
+#     the longest going first;
+#   - a token minted with {"purpose": "browser"} (a browser session, not a
+#     phone) is reused for a week and expires PAIR_BROWSER_TTL_S after it
+#     was last used, and goes before any phone's when the cap is reached.
 PAIR_TOKENS_FILE = "/etc/hifi-pairing-tokens.json"
+PAIR_TOKENS_MAX = 20
+PAIR_BROWSER_TTL_S = 30 * 86400
+PAIR_BROWSER_REUSE_S = 7 * 86400
+PAIR_USE_WRITE_EVERY_S = 3600
+_pair_lock = threading.Lock()
 
 
 def _load_pair_tokens():
@@ -4853,25 +5049,87 @@ def _save_pair_tokens(tokens):
     tmp = PAIR_TOKENS_FILE + ".tmp"
     with open(tmp, "w") as f:
         json.dump(tokens, f)
+        f.flush()
+        os.fsync(f.fileno())
     os.chmod(tmp, 0o600)
     os.replace(tmp, PAIR_TOKENS_FILE)
 
 
+def _pair_ts(value):
+    """Epoch seconds of an ISO timestamp in the token file; 0 if absent."""
+    try:
+        return datetime.fromisoformat(str(value)).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _pair_last_active(t):
+    return max(_pair_ts(t.get("created")), _pair_ts(t.get("last_used")))
+
+
+def _pair_is_browser(t):
+    return t.get("purpose") == "browser"
+
+
+def _prune_pair_tokens(tokens, now):
+    """`tokens` without the expired browser ones and cut to PAIR_TOKENS_MAX,
+    in their original order. Entries that are not tokens at all go too."""
+    live = [t for t in tokens
+            if isinstance(t, dict) and isinstance(t.get("token"), str) and t["token"]
+            and not (_pair_is_browser(t) and now - _pair_last_active(t) > PAIR_BROWSER_TTL_S)]
+    if len(live) > PAIR_TOKENS_MAX:
+        # Phones before browser sessions, then the most recently active.
+        ranked = sorted(live, key=lambda t: (not _pair_is_browser(t), _pair_last_active(t)),
+                        reverse=True)
+        keep = {id(t) for t in ranked[:PAIR_TOKENS_MAX]}
+        live = [t for t in live if id(t) in keep]
+    return live
+
+
+def _reusable_pair_token(tokens, purpose, now):
+    """The newest token a new mint for `purpose` can hand out again, or None.
+    A phone's token only while nobody has used it yet: once a phone has, the
+    next one gets its own. A browser session's for PAIR_BROWSER_REUSE_S after
+    it was minted, so it still has most of its life ahead of it."""
+    for t in reversed(tokens):
+        if _pair_is_browser(t) != (purpose == "browser"):
+            continue
+        if purpose == "browser":
+            return t if now - _pair_ts(t.get("created")) < PAIR_BROWSER_REUSE_S else None
+        return None if t.get("last_used") else t
+    return None
+
+
 @app.route("/api/pair/token", methods=["POST"])
 def api_pair_token():
-    """Mint a new pairing token, shown to the user only via the appliance's
+    """Mint a pairing token, shown to the user only via the appliance's
     own QR code (Settings → Phone control). Restricted to localhost: the
     Electron kiosk UI is the only caller (it runs on the appliance itself),
     so a token can only ever be minted by someone with physical access to
     the appliance's screen. Without this check, any device on the LAN could
     just POST here directly and self-mint a valid token, defeating the whole
-    point of gating DSP control behind pairing."""
+    point of gating DSP control behind pairing.
+
+    A token still unused (or, for {"purpose": "browser"}, a recent browser
+    one) is returned again rather than a new one — see above."""
     if request.remote_addr not in ("127.0.0.1", "::1"):
         return _err("msg.notAllowedRemotely", 403)
-    token = secrets.token_urlsafe(24)
-    tokens = _load_pair_tokens()
-    tokens.append({"token": token, "created": datetime.now(timezone.utc).isoformat()})
-    _save_pair_tokens(tokens)
+    data = request.get_json(silent=True) or {}
+    purpose = "browser" if isinstance(data, dict) and data.get("purpose") == "browser" else "app"
+    now = time.time()
+    with _pair_lock:
+        tokens = _load_pair_tokens()
+        pruned = _prune_pair_tokens(tokens, now)
+        reuse = _reusable_pair_token(pruned, purpose, now)
+        if reuse is not None:
+            if len(pruned) != len(tokens):
+                _save_pair_tokens(pruned)
+            return jsonify({"token": reuse["token"]})
+        token = secrets.token_urlsafe(24)
+        entry = {"token": token, "created": datetime.now(timezone.utc).isoformat()}
+        if purpose == "browser":
+            entry["purpose"] = "browser"
+        _save_pair_tokens(_prune_pair_tokens(pruned + [entry], now))
     return jsonify({"token": token})
 
 
@@ -4885,7 +5143,8 @@ def api_pair_tokens_revoke_all():
     just to bound a theft that may never have happened)."""
     if request.remote_addr not in ("127.0.0.1", "::1"):
         return _err("msg.notAllowedRemotely", 403)
-    _save_pair_tokens([])
+    with _pair_lock:
+        _save_pair_tokens([])
     return jsonify({"success": True})
 
 
@@ -4933,13 +5192,41 @@ def _require_pair_token():
         # secret, just a different transport, since a plain <a href> click
         # can't set headers.
         token = request.args.get("token") or None
-    valid = bool(token) and any(
-        secrets.compare_digest(t.get("token", ""), token) for t in _load_pair_tokens()
-    )
-    if not valid:
+    if not token or not _pair_token_valid(token, time.time()):
         _auth_record_failure(ip)
         return _err("msg.badPairToken", 401)
     return None
+
+
+def _pair_token_valid(token, now):
+    """Is `token` a live pairing token? Records its use as "last_used" (at
+    most once every PAIR_USE_WRITE_EVERY_S, so a phone polling a page does
+    not rewrite /etc on every request) and drops expired browser tokens
+    from the file as it goes."""
+    want = token.encode("utf-8", "surrogatepass")
+    tokens = _load_pair_tokens()
+    match = next((t for t in tokens if isinstance(t, dict) and secrets.compare_digest(
+        str(t.get("token", "")).encode("utf-8", "surrogatepass"), want)), None)
+    if match is None:
+        return False
+    expired = _pair_is_browser(match) and now - _pair_last_active(match) > PAIR_BROWSER_TTL_S
+    if expired or now - _pair_ts(match.get("last_used")) >= PAIR_USE_WRITE_EVERY_S:
+        with _pair_lock:
+            # Again under the lock: a mint or a revoke may have landed since.
+            tokens = _load_pair_tokens()
+            still = False
+            for t in tokens:
+                if isinstance(t, dict) and t.get("token") == match.get("token"):
+                    still = True
+                    if not expired:
+                        t["last_used"] = datetime.fromtimestamp(now, timezone.utc).isoformat()
+            if not still:
+                return False
+            try:
+                _save_pair_tokens(_prune_pair_tokens(tokens, now))
+            except OSError as e:
+                print(f"[sources] pairing tokens not updated: {e}")
+    return not expired
 
 
 # ─────────────────────────── Album and artist information ────────────
@@ -6364,7 +6651,7 @@ def api_smb_shares():
     password = data.get("password") or ""
     if not _host_ok(server):
         return _err("msg.smbFieldsRequired", 400)
-    if not _field_ok(username) or not _field_ok(password):
+    if not _field_ok(username) or not _password_ok(password):
         return _err("msg.smbFieldsRequired", 400)
     if not _smb_reachable(server):
         return _err("msg.smbUnreachable", 400, server=server)
@@ -6391,9 +6678,11 @@ def api_smb_test():
     password = data.get("password") or ""
     if not _host_ok(server) or not share:
         return _err("msg.smbFieldsRequired", 400)
-    for value in (share, username, password):
+    for value in (share, username):
         if not _field_ok(value):
             return _err("msg.smbFieldsRequired", 400)
+    if not _password_ok(password):
+        return _err("msg.smbFieldsRequired", 400)
     if not _smb_reachable(server):
         return _err("msg.smbUnreachable", 400, server=server)
     if not _have("smbclient"):

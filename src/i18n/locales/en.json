@@ -1286,7 +1286,8 @@
         "done": "Complete",
         "keepPowered": "Do not power off the device during the update.",
         "restarting": "Restarting the interface…",
-        "dismiss": "Close"
+        "dismiss": "Close",
+        "stale": "No news from the update for a few minutes. It may still be running: you can close this screen."
       }
     },
     "controls": {

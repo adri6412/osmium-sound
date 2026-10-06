@@ -24,8 +24,10 @@ Everything is organised into CATEGORIES, and each category is flagged secret or
 not. Secret categories (Wi-Fi PSKs, SMB passwords, the web-admin account, the
 Bluetooth link keys) are only ever written into an archive when the user has
 supplied a passphrase — a plaintext `.tar.gz` sitting in a Downloads folder must
-not be a copy of the household's credentials. The one exception is handled by
-redaction rather than exclusion: see `_transform_sources`.
+not be a copy of the household's credentials. Two exceptions are handled file
+by file inside a non-secret category instead: the SMB logins in the source
+list (`_transform_sources`) and the streaming-service logins Lyrion plugins
+keep in their prefs (`_transform_lyrion_prefs`).
 
 INTEGRITY MODEL
 ---------------
@@ -569,6 +571,40 @@ def _transform_nm_connection(src, _ctx):
     return None
 
 
+# Lyrion plugins that sign in to a streaming service keep that login — a
+# password hash, an OAuth or session token, an API key — in their own prefs
+# file, next to settings that are no secret at all. Like the SMB logins in the
+# source list (_transform_sources), those files only travel in an encrypted
+# archive: an unencrypted one leaves them out, and since a restore never
+# deletes what an archive does not carry, restoring it onto the same device
+# keeps the logins that are already there. The names below always count as
+# holding a login; any other plugin file does when one of its keys looks like
+# one (_holds_credentials) — plugins come and go, and new ones are not listed.
+_CREDENTIAL_PLUGIN_PREFS = frozenset((
+    "tidal.prefs", "qobuz.prefs", "spotty.prefs", "deezer.prefs", "youtube.prefs",
+    "squeezecloud.prefs", "mixcloud.prefs", "audioscrobbler.prefs",
+))
+_CREDENTIAL_KEY_HINTS = ("password", "passwd", "token", "secret", "apikey", "api_key",
+                         "credential", "cookie")
+_CREDENTIAL_KEYS = frozenset(("arl",))   # Deezer's login cookie
+
+
+def _holds_credentials(data):
+    """True if a parsed prefs file has a non-empty value under a key that
+    names a login, at any depth (TIDAL nests its tokens per account)."""
+    if isinstance(data, dict):
+        for key, value in data.items():
+            k = str(key).lower()
+            if (k in _CREDENTIAL_KEYS or any(h in k for h in _CREDENTIAL_KEY_HINTS)) \
+                    and value not in (None, "", [], {}):
+                return True
+            if _holds_credentials(value):
+                return True
+    elif isinstance(data, list):
+        return any(_holds_credentials(v) for v in data)
+    return False
+
+
 def _transform_lyrion_prefs(src, ctx):
     """Lyrion rewrites its YAML prefs while running, so a copy can catch a
     half-written file. Rather than stopping the music to avoid that (which is
@@ -582,7 +618,14 @@ def _transform_lyrion_prefs(src, ctx):
     this same backup, e.g. a spare box — a duplicate UUID and confuse
     discovery for both. Lyrion just mints a fresh one on next start if the
     key is missing, so dropping it costs nothing on a normal same-device
-    restore either."""
+    restore either.
+
+    A plugin's prefs holding a streaming-service login are left out of an
+    unencrypted archive (see _CREDENTIAL_PLUGIN_PREFS)."""
+    plugin = "/prefs/plugin/" in src.replace(os.sep, "/")
+    if plugin and not ctx.get("encrypted") and os.path.basename(src).lower() in _CREDENTIAL_PLUGIN_PREFS:
+        ctx.setdefault("notes", []).append(f"lyrion-login-left-out:{src}")
+        return None
     for attempt in (1, 2):
         with open(src, "rb") as f:
             raw = f.read()
@@ -595,6 +638,9 @@ def _transform_lyrion_prefs(src, ctx):
                 ctx.setdefault("notes", []).append(f"skipped-unparsable:{src}")
                 return None
             continue
+        if plugin and not ctx.get("encrypted") and _holds_credentials(data):
+            ctx.setdefault("notes", []).append(f"lyrion-login-left-out:{src}")
+            return None
         if os.path.basename(src) == "server.prefs" and isinstance(data, dict) and "server_uuid" in data:
             del data["server_uuid"]
             ctx.setdefault("notes", []).append(f"stripped-server-uuid:{src}")
@@ -847,11 +893,13 @@ def _openssl(args, passphrase):
     except FileNotFoundError:
         # Never fall back to writing the plaintext: the whole reason a
         # passphrase was given is that this archive contains credentials.
-        raise BackupError("openssl non disponibile: backup cifrato rifiutato")
+        raise BackupError("openssl non disponibile: backup cifrato rifiutato",
+                          code="backup.opensslMissing")
     except subprocess.TimeoutExpired:
-        raise BackupError("Timeout durante la cifratura")
+        raise BackupError("Timeout durante la cifratura", code="backup.cryptoTimeout")
     if proc.returncode != 0:
-        raise BackupError("Cifratura/decifratura fallita (passphrase errata?)")
+        raise BackupError("Cifratura/decifratura fallita (passphrase errata?)",
+                          code="backup.cryptoFailed")
 
 
 def encrypt_archive(plain_path, enc_path, passphrase):
@@ -871,7 +919,7 @@ def decrypt_archive(enc_path, plain_path, passphrase, enc_meta):
     expected = enc_meta.get("hmac") or ""
     actual = _file_hmac(enc_path, _hmac_key(passphrase, salt))
     if not hmac.compare_digest(actual, expected):
-        raise BackupError("Passphrase errata o archivio manomesso")
+        raise BackupError("Passphrase errata o archivio manomesso", code="restore.wrongPassphrase")
     _openssl(["enc", "-d", "-aes-256-ctr", "-pbkdf2", "-iter", str(_KDF_ITER),
               "-md", "sha512", "-pass", "stdin",
               "-in", enc_path, "-out", plain_path], passphrase)
@@ -919,7 +967,7 @@ def payload_size(path, limit):
     except BackupError:
         raise
     except Exception:
-        raise BackupError("Archivio non valido o corrotto")
+        raise BackupError("Archivio non valido o corrotto", code="restore.archiveInvalid")
     return total
 
 
@@ -945,7 +993,7 @@ def open_backup(path, workdir, passphrase="", max_payload=None):
     try:
         outer = tarfile.open(path, "r:gz")
     except Exception:
-        raise BackupError("Archivio non valido o corrotto")
+        raise BackupError("Archivio non valido o corrotto", code="restore.archiveInvalid")
 
     names = set(outer.getnames())
     if ENC_NAME not in names:
@@ -967,10 +1015,11 @@ def open_backup(path, workdir, passphrase="", max_payload=None):
     except BackupError:
         raise
     except Exception:
-        raise BackupError("Archivio cifrato non valido")
+        raise BackupError("Archivio cifrato non valido", code="restore.encryptedInvalid")
 
     if not passphrase:
-        raise BackupError("Questo backup è cifrato: serve la passphrase")
+        raise BackupError("Questo backup è cifrato: serve la passphrase",
+                          code="restore.passphraseRequired")
 
     plain_path = os.path.join(workdir, ARCHIVE_NAME)
     decrypt_archive(enc_path, plain_path, passphrase, enc_meta)
@@ -984,7 +1033,7 @@ def open_backup(path, workdir, passphrase="", max_payload=None):
     try:
         inner = tarfile.open(plain_path, "r:gz")
     except Exception:
-        raise BackupError("Archivio cifrato non valido")
+        raise BackupError("Archivio cifrato non valido", code="restore.encryptedInvalid")
     return inner, (read_embedded_manifest(inner) or manifest)
 
 

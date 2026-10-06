@@ -41,8 +41,13 @@
 #include <QWheelEvent>
 #include <QWindow>
 #include <QtDebug>
+#include <QSocketNotifier>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <signal.h>
+#include <sys/socket.h>
+#include <unistd.h>
 // Touch injection for the test channel: goes through the QPA layer, the same
 // path a real touchscreen (libinput/evdev) takes, so touch-vs-mouse delivery
 // differences show up in the rig. The header ships with qt6-base-private-dev;
@@ -133,8 +138,20 @@ private:
 static volatile sig_atomic_t g_shot = 0;
 static void onUsr1(int) { g_shot = 1; }
 // systemctl stop manda SIGTERM: uscita pulita dal ciclo degli eventi, non un
-// processo "ucciso" (che systemd segna come fallito)
-static void onTerm(int) { QCoreApplication::exit(0); }
+// processo "ucciso" (che systemd segna come fallito).
+// 🚨 Dal gestore del segnale si scrive UN byte su una coppia di socket e
+// basta (write() e' sicura in un gestore, QCoreApplication::exit() no: prende
+// lock e tocca il ciclo degli eventi, e se il segnale arriva mentre il thread
+// principale li tiene si resta appesi). Il byte lo legge un QSocketNotifier
+// nel ciclo degli eventi, che chiude da li'.
+static int g_termFd[2] = {-1, -1};
+static void onTerm(int) {
+    const int saved = errno;
+    const char c = 1;
+    ssize_t n = ::write(g_termFd[1], &c, 1);
+    (void)n;
+    errno = saved;
+}
 
 static QPointF canvasToWin(double x, double y) {
     QQuickItem *root = g_view->rootObject();
@@ -329,6 +346,23 @@ int main(int argc, char *argv[]) {
     QObject::connect(&btThread, &QThread::started, &btghid, &BtGattHid::begin);
     QObject::connect(&btghid, &BtGattHid::bridgedChanged, &remote, &Remote::rescan);
     btThread.start();
+    // 🚨 Il ponte puo' essere dentro una chiamata a BlueZ che blocca (fino a
+    // 25 s l'una, il timeout di D-Bus): gli si chiede di fermarsi fra una
+    // chiamata e l'altra, e se non ce la fa in tempo NON si distrugge un
+    // QThread ancora in corsa (qFatal: abort, core dump, unita' "failed") —
+    // si esce subito con _exit(), senza distruttori: quello che resterebbe da
+    // chiudere (socket, /dev/uhid) lo chiude il nucleo insieme al processo.
+    auto stopBridge = [&btThread](int rc) -> int {
+        btThread.requestInterruption();
+        btThread.quit();
+        if (!btThread.wait(5000)) {
+            qWarning("hifi-qt: il ponte Bluetooth non si ferma (chiamata a BlueZ in corso), uscita immediata");
+            fflush(stdout);
+            fflush(stderr);
+            _exit(rc);
+        }
+        return rc;
+    };
     QObject::connect(&remote, &Remote::action, &sys, [&sys]() { sys.noteInput(); });
     VuMeter vu;
     LibraryModel library;
@@ -369,7 +403,7 @@ int main(int argc, char *argv[]) {
     view.setSource(QUrl::fromLocalFile(base + "/qml/Main.qml"));
     if (view.status() == QQuickView::Error) {
         for (const QQmlError &e : view.errors()) fprintf(stderr, "qml: %s\n", qPrintable(e.toString()));
-        return 1;
+        return stopBridge(1);
     }
     if (qEnvironmentVariableIsSet("HIFI_WINDOW")) {           // sviluppo: finestra normale
         QStringList wh = qEnvironmentVariable("HIFI_WINDOW").split('x');
@@ -380,8 +414,26 @@ int main(int argc, char *argv[]) {
     player.start();
 
     signal(SIGUSR1, onUsr1);
-    signal(SIGTERM, onTerm);
-    signal(SIGINT, onTerm);
+    // senza la coppia di socket il gestore non avrebbe dove scrivere: si
+    // lascia a SIGTERM il suo effetto di serie (il processo termina)
+    if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0, g_termFd) == 0) {
+        auto *termNote = new QSocketNotifier(g_termFd[0], QSocketNotifier::Read, &app);
+        QObject::connect(termNote, &QSocketNotifier::activated, &app, []() {
+            char b[16];
+            while (::read(g_termFd[0], b, sizeof(b)) > 0) {}
+            qInfo("hifi-qt: SIGTERM/SIGINT, si esce");
+            QCoreApplication::exit(0);
+        });
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = onTerm;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = SA_RESTART;
+        sigaction(SIGTERM, &sa, nullptr);
+        sigaction(SIGINT, &sa, nullptr);
+    } else {
+        qWarning("hifi-qt: socketpair per SIGTERM non riuscita (%s)", strerror(errno));
+    }
     // collaudo: quanti fotogrammi al secondo disegna la scena (a riposo deve essere ~0)
     static int frames = 0;
     QObject::connect(&view, &QQuickWindow::frameSwapped, [&]() { frames++; });
@@ -405,7 +457,5 @@ int main(int argc, char *argv[]) {
     int secs = qEnvironmentVariableIntValue("HIFI_QT_SECONDS", &ok);
     if (ok && secs > 0) QTimer::singleShot(secs * 1000, &app, &QGuiApplication::quit);
     const int rc = app.exec();
-    btThread.quit();
-    btThread.wait(3000);
-    return rc;
+    return stopBridge(rc);
 }

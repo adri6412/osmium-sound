@@ -34,6 +34,33 @@ fail() {
 
 [ -n "$URL" ] || fail "URL di download mancante"
 
+# The package is installed as root (apt-get on a legacy root, extracted into
+# the server's own paths on an image), and the download server publishes no
+# checksum to hold it against: lyrion.org/downloads, which api_server.py
+# parses, lists bare .deb links and nothing else. What vouches for the file
+# is TLS to that server, so https only — redirects included (the curl flags
+# below) — and then the package must be a well-formed .deb that says it is
+# lyrionmusicserver (check_deb).
+case "$URL" in
+    https://*) ;;
+    *) fail "URL di download non https: $URL" ;;
+esac
+
+download_deb() {
+    hifi_curl_progress "$URL" "$DEB" 20 55 "Scaricamento Lyrion $VERSION…" \
+        --proto '=https' --proto-redir '=https' \
+        || fail "Download fallito da $URL"
+}
+
+check_deb() {
+    # download errors often yield HTML: a .deb is an ar archive
+    head -c2 "$DEB" | grep -q '!<' || fail "Il file scaricato non è un .deb valido"
+    dpkg-deb --info "$DEB" >/dev/null 2>&1 || fail "Il file scaricato non è un .deb valido"
+    _pkg=$(dpkg-deb -f "$DEB" Package 2>/dev/null || true)
+    [ "$_pkg" = lyrionmusicserver ] \
+        || fail "Il pacchetto scaricato non è Lyrion (Package: ${_pkg:-?})"
+}
+
 # ── slot immagine (root in sola lettura): niente apt, Lyrion vive su /data ──
 # Il .deb viene solo scompattato (dpkg-deb -x) in /data/lyrion/<ver>; i percorsi
 # canonici nell'immagine sono symlink verso /data/lyrion/current. Prima di
@@ -56,9 +83,8 @@ if [ -f /usr/lib/osmium/IMAGE_VERSION ]; then
     }
     mountpoint -q /data || fail "/data non montata"
     rm -rf "$WORKDIR"; mkdir -p "$WORKDIR"
-    hifi_curl_progress "$URL" "$DEB" 20 55 "Scaricamento Lyrion $VERSION…" \
-        || fail "Download fallito da $URL"
-    head -c2 "$DEB" | grep -q '!<' || fail "Il file scaricato non è un .deb valido"
+    download_deb
+    check_deb
     ver=$(dpkg-deb -f "$DEB" Version 2>/dev/null || true)
     [ -n "$ver" ] || fail "Impossibile leggere la versione dal .deb"
     write_status verifying 58 "Verifica compatibilità con l'immagine…"
@@ -103,6 +129,8 @@ if [ -f /usr/lib/osmium/IMAGE_VERSION ]; then
     printf '%s\n' "$ver" > "$dest.new/VERSION"
     rm -rf "$dest"; mv "$dest.new" "$dest"
     systemctl stop lyrionmusicserver 2>/dev/null || true
+    # the version this one replaces: the one kept below as a way back
+    prev=$(basename "$(readlink "$LYR_ROOT/current" 2>/dev/null || true)")
     ln -sfn "$ver" "$LYR_ROOT/current.new" && mv -T "$LYR_ROOT/current.new" "$LYR_ROOT/current"
     sync
     # ciò che faceva il postinst: cartelle di stato del server e loro proprietario
@@ -111,13 +139,20 @@ if [ -f /usr/lib/osmium/IMAGE_VERSION ]; then
         mkdir -p "$d"; chown squeezeboxserver:nogroup "$d" 2>/dev/null || true
     done
     # versioni vecchie: si tiene solo la precedente
-    keep=$(readlink "$LYR_ROOT/current")
-    for old in "$LYR_ROOT"/*/; do
-        old=${old%/}; b=$(basename "$old")
-        [ "$b" = "$keep" ] && continue
-        [ "$b" = current ] && continue
-        n=$(find "$LYR_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name "$keep" | wc -l)
-        [ "$n" -gt 1 ] && rm -rf "$old"
+    # "The previous one" is the version that was current until a moment ago.
+    # When there is none to go by (first install, or a reinstall of the same
+    # version) it is the highest of the others BY VERSION: the old loop kept
+    # whichever sorted last alphabetically, and 9.0.9 sorts after 9.0.10.
+    keep=$(basename "$(readlink "$LYR_ROOT/current")")
+    # (a leftover <ver>.new of an interrupted install is never the one kept)
+    others=$(find "$LYR_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name "$keep" \
+                  ! -name current -printf '%f\n' | sort -V)
+    if [ -z "$prev" ] || [ "$prev" = "$keep" ] \
+       || ! printf '%s\n' "$others" | grep -qxF "$prev"; then
+        prev=$(printf '%s\n' "$others" | grep -v '\.new$' | tail -n 1)
+    fi
+    for b in $others; do
+        if [ "$b" != "$prev" ]; then rm -rf "${LYR_ROOT:?}/$b"; fi
     done
     write_status restarting 90 "Riavvio Lyrion…"
     systemctl daemon-reload 2>/dev/null || true
@@ -132,11 +167,8 @@ if [ -f /usr/lib/osmium/IMAGE_VERSION ]; then
 fi
 
 rm -rf "$WORKDIR"; mkdir -p "$WORKDIR"
-hifi_curl_progress "$URL" "$DEB" 20 55 "Scaricamento Lyrion $VERSION…" \
-    || fail "Download fallito da $URL"
-
-# sanity-check it is really a .deb (download errors often yield HTML)
-head -c2 "$DEB" | grep -q '!<' || fail "Il file scaricato non è un .deb valido"
+download_deb
+check_deb
 
 write_status applying 60 "Installazione…"
 export DEBIAN_FRONTEND=noninteractive
