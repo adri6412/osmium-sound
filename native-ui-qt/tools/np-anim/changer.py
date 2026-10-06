@@ -65,7 +65,7 @@ KNOB = (104, 225)
 KNOB_R = 8
 
 # the window's insides
-LOADER_X = (GLASS[0] + GLASS[2]) / 2 + 20   # the loader's column (the lamp behind it)
+LOADER_X = (GLASS[0] + GLASS[2]) / 2 + 20   # the loader's column
 DISC_D = 128                         # disc diameter in units
 VFD_COL = (196, 236, 255)
 
@@ -410,57 +410,101 @@ def standby_led(name, glow_rgb, core_rgb, hot_rgb):
 
 # ── the window: insides, lip, glass ───────────────────────────────────────
 def interior():
+    """What the glass shows behind the discs: the cabinet's back plate,
+    punched, between two uprights; the single drive up top with its flat
+    cable; the loader's column (two polished rods, a toothed rack, the motor's
+    gear); beyond the discs, the far side of the file. Lit evenly from above,
+    as the inside of the real one, so the mechanism reads."""
     gw, gh = GLASS[2] - GLASS[0], GLASS[3] - GLASS[1]
     img = canvas(gw, gh)
     w, h = img.size
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     u, v = xx / SS, yy / SS
     lx = LOADER_X - GLASS[0]
-    # the back of the cabinet, a little light from the loader
-    base = 9 + 10 * np.exp(-((u - lx) ** 2) / (2 * 40 ** 2)) * np.exp(-((v - 95) ** 2) / (2 * 50 ** 2))
-    rgb = np.stack([base * 1.05, base, base * 0.95], -1)
+    t = (u - gw / 2) / (gw / 2)
+    # the back plate: dark steel, brighter under the light from above
+    lum = 30 + 16 * np.exp(-v / 70) - 8 * t ** 2
+    lum = lum + brushed(w, h, 31, 0.9, streak=300)
+    # punched with rows of holes, staggered
+    band = (v > 22) * (v < 138)
+    hx = np.mod(u + np.where(np.mod(np.floor(v / 4.2), 2) == 0, 0, 2.1), 4.2) - 2.1
+    hy = np.mod(v, 4.2) - 2.1
+    hole = np.clip((1.05 - np.hypot(hx, hy)) * SS * 0.5, 0, 1) * band
+    lip_ = np.clip((1.3 - np.hypot(hx, hy + 0.5)) * SS * 0.5, 0, 1) * (1 - hole) * band
+    lum = lum * (1 - 0.55 * hole) + 6 * lip_
+    rgb = np.stack([lum * 0.98, lum, lum * 1.04], -1)
     arr = np.dstack([rgb, np.full((h, w), 255, np.float32)])
     img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), 'RGBA')
     d = ImageDraw.Draw(img)
-    # the drive up top: a dark housing with a slot the disc goes into
-    d.rectangle(box((lx - 72, 0, lx + 58, 15)), fill=(24, 24, 25, 255))
-    d.rectangle(box((lx - 72, 15, lx + 58, 16.2)), fill=(44, 44, 46, 255))
-    d.rectangle(box((lx - 3.2, 12, lx + 3.2, 16.2)), fill=(4, 4, 4, 255))
-    for x in (lx - 60, lx + 46):
-        d.ellipse(box((x - 1.6, 6, x + 1.6, 9.2)), fill=(58, 58, 60, 255))
-    # the loader's column: two rails behind the discs
-    for x in (lx - 5.0, lx + 5.0):
-        d.rectangle(box((x - 0.8, 16, x + 0.8, gh)), fill=(30, 30, 32, 255))
-        d.rectangle(box((x - 0.8, 16, x - 0.4, gh)), fill=(52, 52, 55, 255))
-    # the far side of the file: the discs' tops beyond the turntable hub
+
+    def screw(x, y, r=1.5):
+        d.ellipse(box((x - r, y - r, x + r, y + r)), fill=(78, 79, 82, 255))
+        d.ellipse(box((x - r + 0.35, y - r + 0.35, x + r - 0.5, y + r - 0.5)), fill=(112, 113, 116, 255))
+        d.line([px(x - r * 0.7), px(y), px(x + r * 0.7), px(y)], fill=(48, 48, 50, 255), width=px(0.45))
+
+    # the cabinet's uprights, left and right, bolted to the back
+    for x0 in (3, gw - 13):
+        d.rectangle(box((x0, 16, x0 + 10, gh)), fill=(40, 41, 43, 255))
+        d.rectangle(box((x0, 16, x0 + 0.8, gh)), fill=(62, 63, 66, 255))
+        d.rectangle(box((x0 + 9.2, 16, x0 + 10, gh)), fill=(22, 22, 23, 255))
+        for y in (30, 70, 110):
+            screw(x0 + 5, y)
+    # the drive up top: a brushed housing, its lower edge catching the light,
+    # a slot the disc goes into, four screws
+    hh = px(16)
+    hl = 58 + 10 * np.linspace(0, 1, hh, dtype=np.float32)[:, None] + brushed(w, hh, 5, 2.2)
+    house = Image.fromarray(np.clip(np.stack([hl, hl, hl * 1.03], -1), 0, 255).astype(np.uint8), 'RGB')
+    img.paste(house.crop((px(lx - 74), 0, px(lx + 60), hh)), (px(lx - 74), 0))
+    d.rectangle(box((lx - 74, 15, lx + 60, 16.4)), fill=(118, 119, 122, 255))
+    d.rectangle(box((lx - 74, 16.4, lx + 60, 17.4)), fill=(10, 10, 11, 255))
+    d.rectangle(box((lx - 4, 12.5, lx + 4, 16.4)), fill=(5, 5, 5, 255))
+    d.rectangle(box((lx - 4, 12.5, lx + 4, 13.1)), fill=(36, 36, 37, 255))
+    for x in (lx - 66, lx - 30, lx + 30, lx + 52):
+        screw(x, 7.5, 1.4)
+    # its flat cable, folded down the back to the left
+    for i in range(6):
+        c = (128 - i * 3, 96 - i * 2, 52, 255)
+        x1, x2 = lx - 50 + i * 1.1, lx - 62 + i * 1.1
+        d.line([px(x1), px(17), px(x1), px(30), px(x2), px(42), px(x2), px(120)], fill=c, width=px(1.0))
+    # the loader's column: a toothed rack and two polished rods
+    rx = lx + 11
+    d.rectangle(box((rx - 1.6, 17, rx + 1.6, gh)), fill=(34, 34, 36, 255))
+    for y in np.arange(18, gh, 1.6):
+        d.rectangle(box((rx - 1.6, y, rx - 0.2, y + 0.7)), fill=(70, 70, 73, 255))
+    for x in (lx - 7.0, lx + 7.0):
+        d.rectangle(box((x - 1.1, 17, x + 1.1, gh)), fill=(64, 65, 68, 255))
+        d.rectangle(box((x - 0.5, 17, x + 0.1, gh)), fill=(176, 178, 182, 255))
+        d.rectangle(box((x + 0.6, 17, x + 1.1, gh)), fill=(30, 30, 32, 255))
+    # the lift motor and its gear, low beside the rack
+    gx, gy, gr = rx + 9, 128, 6.5
+    for k in range(18):
+        an = k * math.pi * 2 / 18
+        tx, ty = gx + math.cos(an) * gr, gy + math.sin(an) * gr
+        d.ellipse(box((tx - 1.0, ty - 1.0, tx + 1.0, ty + 1.0)), fill=(84, 85, 88, 255))
+    d.ellipse(box((gx - gr, gy - gr, gx + gr, gy + gr)), fill=(84, 85, 88, 255))
+    d.ellipse(box((gx - gr + 1.2, gy - gr + 1.2, gx + gr - 1.2, gy + gr - 1.2)), fill=(60, 61, 64, 255))
+    d.ellipse(box((gx - 1.8, gy - 1.8, gx + 1.8, gy + 1.8)), fill=(140, 141, 144, 255))
+    d.rectangle(box((gx - 7, gy + 7, gx + 9, gy + 20)), fill=(26, 26, 28, 255))
+    d.rectangle(box((gx - 7, gy + 7, gx + 9, gy + 8)), fill=(54, 54, 57, 255))
+    # the far side of the file: the discs' tops beyond the hub, its far rim
     for i in range(-22, 23):
         x = gw / 2 + i * 5.6 + 1.3
-        d.line([px(x), px(36), px(x), px(42)], fill=(20, 20, 22, 255), width=px(0.9))
-    d.rectangle(box((0, 41, gw, 44.5)), fill=(14, 14, 15, 255))
+        d.line([px(x), px(34), px(x), px(42)], fill=(92, 96, 102, 255), width=px(0.7))
+    d.rectangle(box((0, 41, gw, 44.5)), fill=(22, 22, 24, 255))
+    d.rectangle(box((0, 41, gw, 41.6)), fill=(70, 71, 74, 255))
     save(finish(img), 'interior.png')
 
 
-def lamp():
-    """The light inside the cabinet, from a lamp hidden behind the loader's
-    column: no point of it shows, only what it lights. Behind the discs it
-    warms the back wall; over them it catches their edges a little."""
-    gw, gh = GLASS[2] - GLASS[0], GLASS[3] - GLASS[1]
-    lx, ly = LOADER_X - GLASS[0], 112 - GLASS[1]
-    rng = np.random.default_rng(7)
-    for name, sx, sy, peak, tail in (('lamp-back.png', 58, 50, 0.34, 0.10),
-                                     ('lamp-front.png', 46, 40, 0.17, 0.05)):
-        img = canvas(gw, gh)
-        w, h = img.size
-        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-        du, dv = xx / SS - lx, yy / SS - ly
-        q = (du / sx) ** 2 + (dv / sy) ** 2
-        # a soft pool and a long tail, the light reaching into the corners
-        a = peak * np.exp(-q / 2) + tail * np.exp(-q / 9)
-        # dithered, or the faint falloff bands into steps
-        a = a * 255 + rng.uniform(-0.5, 0.5, a.shape)
-        rgb = np.stack([np.full_like(a, 255), np.full_like(a, 238), np.full_like(a, 208)], -1)
-        arr = np.dstack([rgb, np.clip(a, 0, 255)])
-        save(finish(Image.fromarray(arr.astype(np.uint8), 'RGBA')), name)
+def fork():
+    """The loader's fork: the cradle that lifts a disc by its edge."""
+    fw, fh = 16, 10
+    img = canvas(fw, fh)
+    d = ImageDraw.Draw(img)
+    d.rectangle(box((fw / 2 - 2.2, 0, fw / 2 + 2.2, fh)), fill=(70, 71, 74, 255))
+    d.polygon([(px(0), px(3)), (px(fw), px(3)), (px(fw - 3), px(7.5)), (px(3), px(7.5))], fill=(88, 89, 92, 255))
+    d.rectangle(box((1, 3, fw - 1, 3.8)), fill=(160, 161, 165, 255))
+    d.rectangle(box((fw / 2 - 1.2, 2.2, fw / 2 + 1.2, 4.2)), fill=(14, 14, 15, 255))
+    save(finish(img), 'fork.png')
 
 
 def lip():
@@ -494,7 +538,7 @@ def sheen(u, v, gw, gh):
     streaks, the rim catching the light (most at the top), and a faint sheen
     from above. Alpha, 0..1."""
     d = u + 0.55 * v
-    a = 0.17 * np.exp(-((d - gw * 0.30) ** 2) / (2 * (gw * 0.07) ** 2))
+    a = 0.09 * np.exp(-((d - gw * 0.30) ** 2) / (2 * (gw * 0.07) ** 2))
     a += 0.13 * np.exp(-((d - gw * 0.47) ** 2) / (2 * (gw * 0.012) ** 2))
     a += 0.08 * np.exp(-((d - gw * 0.88) ** 2) / (2 * (gw * 0.025) ** 2))
     a += 0.18 * np.exp(-v / 1.3) + 0.06 * np.exp(-(gh - v) / 1.8)
@@ -511,7 +555,7 @@ def glass():
     u, v = xx / SS, yy / SS
     t = (u - gw / 2) / (gw / 2)
     # smoked tint, darker to the sides and under the top edge
-    a = 0.52 + 0.40 * np.abs(t) ** 2.0 + 0.35 * np.exp(-v / 9) + 0.20 * np.clip((v - 120) / 40, 0, 1)
+    a = 0.20 + 0.42 * np.abs(t) ** 2.6 + 0.32 * np.exp(-v / 8) + 0.16 * np.clip((v - 125) / 37, 0, 1)
     a = np.clip(a, 0, 0.94)
     rgb = np.zeros((h, w, 3), np.float32) + np.array([6, 6, 7], np.float32)
     # reflections of the room on the glass
@@ -879,7 +923,7 @@ def main():
     standby_led('led-standby.png', (255, 40, 30), (255, 70, 55), (255, 190, 170))
     standby_led('led-on.png', (40, 230, 90), (70, 240, 110), (200, 255, 210))
     interior()
-    lamp()
+    fork()
     lip()
     glass()
     drive_bg()

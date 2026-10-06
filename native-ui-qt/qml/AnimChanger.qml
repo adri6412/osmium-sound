@@ -3,8 +3,8 @@
 // in a rotating file of 101 slots; each album has its own slot. A new album
 // sends the disc in the drive back down into its slot, turns the file until
 // the new album's disc (its artwork printed on the label) reaches the
-// loader, and the loader lifts it out of the file, a hidden lamp lighting the
-// empty slot; in the drive's window, top right, the disc arrives from the
+// loader, and the loader's fork lifts it out of the file;
+// in the drive's window, top right, the disc arrives from the
 // left, settles on the spindle over the laser lens, the clamper comes down
 // and it turns while the music plays. The fluorescent display counts the slots going past, then
 // shows disc, track and time. The keys work: standby, play/pause, stop,
@@ -368,7 +368,7 @@ Item {
             root.speed = (u >= 1 && !root.spinUp) ? 0 : v
         }
     }
-    // the cabinet's lamp: on with the power, fading in and out
+    // the light inside the cabinet: on with the power, fading in and out
     property real lamp: !live || power ? 1 : 0
     Behavior on lamp { NumberAnimation { duration: 600 } }
 
@@ -527,12 +527,6 @@ Item {
             clip: true
 
             Pic { anchors.fill: parent; source: root.assetsBase + "interior.png" }
-            // the lamp behind the loader lights the back of the cabinet
-            Pic {
-                anchors.fill: parent
-                source: root.assetsBase + "lamp-back.png"
-                opacity: root.lamp
-            }
 
             // the file: the discs within sight of the window, nearest on top.
             // Each of the 37 places keeps the same disc while it is in view (the
@@ -602,6 +596,32 @@ Item {
                     }
                 }
             }
+            // the file's slots along its rim: a tooth between each two discs,
+            // turning with them (empty slots show theirs too)
+            Repeater {
+                model: root.places
+                Rectangle {
+                    required property int index
+                    readonly property int base: Math.round(root.drumAngle / root.pitch) - (root.places - 1) / 2
+                    readonly property int n: base + (((index - base) % root.places) + root.places) % root.places
+                    readonly property real rad: ((n + 0.5) * root.pitch - root.drumAngle + root.loaderPhi) * Math.PI / 180
+                    readonly property real sc: root.focal / (root.focal + root.radius * (1 - Math.cos(rad)))
+                    x: root.axisX + root.radius * Math.sin(rad) * sc - width / 2
+                    y: root.eyeY + (root.discY + root.discD / 2 - 14 - root.eyeY) * sc
+                    width: 2.2 * sc; height: 14 * sc
+                    radius: 0.6 * sc
+                    color: "#2c2d30"
+                    border.width: 0.4 * sc; border.color: "#55575b"
+                    visible: Math.abs(rad) < 1.08
+                }
+            }
+            // the loader's fork, under the disc it lifts or lowers
+            Pic {
+                readonly property real up: Math.max(root.lift, root.drop) * root.liftTravel
+                x: root.loaderX - 8; y: root.discY + root.discD / 2 - 5 - up
+                width: 16; height: 10
+                source: root.assetsBase + "fork.png"
+            }
 
             // the drive's housing up top: the lifted disc goes in behind it
             Item {
@@ -611,12 +631,8 @@ Item {
             }
             // the turntable's rim across the bottom: the discs stand in it
             Pic { x: 0; y: 140; width: root.winW; height: root.winH - 140; source: root.assetsBase + "lip.png" }
-            // and a little of it falls on the discs' edges
-            Pic {
-                anchors.fill: parent
-                source: root.assetsBase + "lamp-front.png"
-                opacity: root.lamp
-            }
+            // in standby the cabinet's light is off
+            Rectangle { anchors.fill: parent; color: "#000000"; opacity: 0.5 * (1 - root.lamp) }
             Pic { anchors.fill: parent; source: root.assetsBase + "glass.png" }
         }
 
