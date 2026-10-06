@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.26-dev.1-alpha7",
-  "name": "v2.5.26-dev.1-alpha7",
-  "body": "## What's new in v2.5.26-dev.1-alpha7\n\n- changer: DISC -/+ move to the album before or after in the queue\n- changer: the disc in the drive turns at the CD scene's pace\n- albums: Cover Flow and the CD changer, a button each in the crumb bar\n- now playing: a look chosen from the remote wins over the changer's full screen\n- changer: the drive seen straight from above, its disc as the CD scene's\n- changer: a drive window where the disc is put on the lens and turns\n- changer: keys and lettering large enough to read on the screen\n- changer: discs really go into their slots, a Clear that empties it\n- kiosk: a CD changer, as a Now Playing animation and as a view of the albums\n- website: IndexNow key, so Bing and the others can be told when pages change\n- website: robots.txt, sitemap, llms.txt and structured data for search and AI\n- website: the F-Droid index is not a download, only the APKs are counted\n- website: the F-Droid index is not a download, only the APKs are counted\n- website: the same client fetching the same file within an hour counts once\n- website: the same client fetching the same file within an hour counts once\n- website: the APK button points at companion 1.0.14\n- companion: 1.0.14\n- companion: three crashes from the Play console fixed\n",
+  "tag_name": "v2.5.26-dev.1-alpha8",
+  "name": "v2.5.26-dev.1-alpha8",
+  "body": "## What's new in v2.5.26-dev.1-alpha8\n\n- changer: discs put in from an app wait for Play, which plays them\n- changer: an app's album goes in as its tracks' addresses\n- changer: \"Put in the CD changer\" in the apps' Jive menus too\n- changer: \"Put in the CD changer\" on Qobuz's albums too\n- changer: an app's albums (Qobuz, Spotify...) go into it too\n- website: the two live launch events on YouTube, up top\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.26-dev.1-alpha7.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha7/hifi-qtui-v2.5.26-dev.1-alpha7.tar.gz",
-      "size": 22812000
+      "name": "hifi-qtui-v2.5.26-dev.1-alpha8.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha8/hifi-qtui-v2.5.26-dev.1-alpha8.tar.gz",
+      "size": 22814361
     },
     {
-      "name": "hifi-qtui-v2.5.26-dev.1-alpha7.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha7/hifi-qtui-v2.5.26-dev.1-alpha7.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.26-dev.1-alpha8.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha8/hifi-qtui-v2.5.26-dev.1-alpha8.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.26-dev.1-alpha7.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha7/hifi-system-v2.5.26-dev.1-alpha7.tar.gz",
-      "size": 1995055
+      "name": "hifi-system-v2.5.26-dev.1-alpha8.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha8/hifi-system-v2.5.26-dev.1-alpha8.tar.gz",
+      "size": 1995043
     },
     {
-      "name": "hifi-system-v2.5.26-dev.1-alpha7.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha7/hifi-system-v2.5.26-dev.1-alpha7.tar.gz.sha256",
+      "name": "hifi-system-v2.5.26-dev.1-alpha8.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha8/hifi-system-v2.5.26-dev.1-alpha8.tar.gz.sha256",
       "size": 106
     },
     {
-      "name": "hifi-os-v2.5.26-dev.1-alpha7.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha7/hifi-os-v2.5.26-dev.1-alpha7.tar.gz",
-      "size": 131037
+      "name": "hifi-os-v2.5.26-dev.1-alpha8.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha8/hifi-os-v2.5.26-dev.1-alpha8.tar.gz",
+      "size": 131040
     },
     {
-      "name": "hifi-os-v2.5.26-dev.1-alpha7.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha7/hifi-os-v2.5.26-dev.1-alpha7.tar.gz.sha256",
+      "name": "hifi-os-v2.5.26-dev.1-alpha8.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha8/hifi-os-v2.5.26-dev.1-alpha8.tar.gz.sha256",
       "size": 102
     },
     {
-      "name": "hifi-os-v2.5.26-dev.1-alpha7.tar.gz.sha256.sig",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha7/hifi-os-v2.5.26-dev.1-alpha7.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.26-dev.1-alpha8.tar.gz.sha256.sig",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha8/hifi-os-v2.5.26-dev.1-alpha8.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.26-dev.1-alpha7.raucb",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha7/hifi-image-v2.5.26-dev.1-alpha7.raucb",
-      "size": 1024952995
+      "name": "hifi-image-v2.5.26-dev.1-alpha8.raucb",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha8/hifi-image-v2.5.26-dev.1-alpha8.raucb",
+      "size": 1024957091
     },
     {
-      "name": "hifi-image-v2.5.26-dev.1-alpha7.raucb.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha7/hifi-image-v2.5.26-dev.1-alpha7.raucb.sha256",
+      "name": "hifi-image-v2.5.26-dev.1-alpha8.raucb.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha8/hifi-image-v2.5.26-dev.1-alpha8.raucb.sha256",
       "size": 104
     }
   ]
