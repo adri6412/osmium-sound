@@ -218,6 +218,16 @@ Item {
         if (live && active && loaded) root.action("seated", true)
         checkHold()
     }
+    // Lyrion ignores a pause that reaches it before the new album's first
+    // track has really started (seen: the album loaded at 1.15 s, the
+    // changer's pauses at 1.19 and 1.25, its first track started at 1.30 and
+    // played through the whole change). So while the music waits for the
+    // disc, the pause is said again; a pause to a paused player does nothing.
+    Timer {
+        interval: 400; repeat: true
+        running: root.live && root.active && root.holding && !root.loaded
+        onTriggered: root.action("hold", { hold: true })
+    }
     function turnTo(tgt) {
         var fwd = ((tgt - atSlot) % slots + slots) % slots
         var n = fwd <= 60 ? fwd : fwd - slots            // the target comes in from the right, mostly
@@ -852,7 +862,10 @@ Item {
             }
             else root.action("pause", true)
         }
-        else if (k === "stop") root.action("stop", true)
+        else if (k === "stop") {
+            holding = false                 // stopped: nothing to give back once the disc is in
+            root.action("stop", true)
+        }
         else if (k === "eject" || k === "unload") {
             if (k === "eject" && ejected) { ejected = false; Qt.callLater(step); return }
             ejected = true
