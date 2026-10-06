@@ -30,45 +30,47 @@ SERIF = '/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf'
 
 # ── geometry (units) ──────────────────────────────────────────────────────
 BODY = (10, 8, 591, 243.5)
-SPLIT_Y = 198.5                      # the lower strip of the face
-RECESS = (112, 20.5, 354, 195.5)     # the window's sunken frame
-GLASS = (127, 25.5, 344, 187.5)      # the hole: the mechanism shows here
+# one face, no lower strip: left the name, standby and six keys; in the
+# middle the file's window with the transport keys under it; right the
+# drive's window nearly full height and the display under it
+RECESS = (137, 20.5, 379, 195.5)     # the window's sunken frame
+GLASS = (152, 25.5, 369, 187.5)      # the hole: the mechanism shows here
 GLASS_R = 5
 # the drive's window, top right: the disc brought from the file onto the
 # laser lens and turning, seen straight from above like the top-loading CD
 # scene (whose disc pictures, assets/anim/cd/, it uses)
-DRIVE_RECESS = (360, 13, 582, 152)
-DRIVE_GLASS = (366, 18, 576, 147)
+DRIVE_RECESS = (385, 13, 587, 192)
+DRIVE_GLASS = (391, 18, 581, 187)
 DRIVE_R = 4
-DRIVE_C = (471, 82.5)                # the spindle
-DRIVE_DISC = 120                     # the disc's diameter there
-VFD = (366, 155, 576, 194)
+DRIVE_C = (486, 102.5)               # the spindle
+DRIVE_DISC = 154                     # the disc's diameter there
+VFD = (391, 198, 581, 238)
 FEET = [(73.5, 131), (471, 523.5)]
 FOOT_Y = (238, 249.5)
 
 # 🚨 Drawn for a screen, not to the real thing's scale: in the Now Playing
 # panel the whole front is ~560 px wide, so the keys are few and large and
 # the lettering is 3.5-6 units tall (the real one's would be 2-3 px).
-# every key but standby along the bottom strip, in three groups
+# standby, then six keys in a grid under it; the transport under the file
 KEYS = {
-    'power': (31, 120, 81, 142),
-    'eject': (31, 204, 81, 238), 'unload': (85, 204, 135, 238),
-    'random': (143, 204, 191, 238), 'repeat': (195, 204, 243, 238),
-    'discm': (247, 204, 289, 238), 'discp': (293, 204, 335, 238),
-    'play': (343, 204, 399, 238), 'stop': (403, 204, 443, 238),
-    'prev': (447, 204, 487, 238), 'next': (491, 204, 531, 238),
+    'power': (31, 101, 81, 123),
+    'eject': (26, 133, 77, 154), 'unload': (81, 133, 131, 154),
+    'random': (26, 159, 77, 180), 'repeat': (81, 159, 131, 180),
+    'discm': (26, 185, 77, 206), 'discp': (81, 185, 131, 206),
+    'play': (137, 201, 197, 237), 'stop': (202, 201, 258, 237),
+    'prev': (263, 201, 319, 237), 'next': (324, 201, 379, 237),
 }
-KNOB = (553, 218)
-KNOB_R = 9
+KNOB = (104, 225)
+KNOB_R = 8
 
 # the window's insides
-LOADER_X = 255.5                     # the loader's column (the LEDs)
+LOADER_X = GLASS[0] + 128.5          # the loader's column (the LEDs)
 LEDS = [(LOADER_X, 116), (LOADER_X, 123.5), (LOADER_X, 131.5)]
 DISC_D = 128                         # disc diameter in units
 VFD_COL = (196, 236, 255)
 
 # the display cells (glyph pictures one unit larger all round, for the glow)
-CELL_W, CELL_H, CELL_Y = 11, 19, 163
+CELL_W, CELL_H, CELL_Y = 11, 19, 206
 
 
 def font(path, size):
@@ -273,9 +275,8 @@ def base():
     # the body
     m = shape_mask(img.size, BODY, 2.5)
     arr = np.zeros((h, w, 3), np.float32)
-    top, split, bot = px(BODY[1]), px(SPLIT_Y), px(BODY[3])
-    arr[top:split] = vgrad(w, split - top, (208, 202, 189), (190, 184, 171), mid=(201, 195, 182))
-    arr[split:bot] = vgrad(w, bot - split, (194, 188, 175), (172, 166, 154))
+    top, bot = px(BODY[1]), px(BODY[3])
+    arr[top:bot] = vgrad(w, bot - top, (208, 202, 189), (176, 170, 158), mid=(198, 192, 179))
     arr += brushed(w, h, 11, 2.4)[..., None]
     # light falling off to the left and right ends
     xs = np.linspace(-1, 1, w, dtype=np.float32)
@@ -287,9 +288,6 @@ def base():
     d.rectangle(box((BODY[0] + 1.5, BODY[1] + 2.2, BODY[2] - 1.5, BODY[1] + 2.6)), fill=(168, 162, 151, 160))
     d.rectangle(box((BODY[0] + 1.5, BODY[3] - 0.8, BODY[2] - 1.5, BODY[3])), fill=(120, 114, 104, 255))
     d.rounded_rectangle(box(BODY), px(2.5), outline=(130, 124, 114, 255), width=px(0.3))
-    # the groove between the face and the lower strip
-    d.line([px(BODY[0] + 0.6), px(SPLIT_Y), px(BODY[2] - 0.6), px(SPLIT_Y)], fill=(122, 117, 107, 255), width=px(0.45))
-    d.line([px(BODY[0] + 0.6), px(SPLIT_Y + 0.55), px(BODY[2] - 0.6), px(SPLIT_Y + 0.55)], fill=(226, 222, 213, 255), width=px(0.3))
 
     # the window
     recess(img, RECESS, 3.5)
@@ -330,26 +328,26 @@ def base():
 
     # the name and the printing
     text(img, 'OSMIUM', 31, 31, 12, (40, 38, 36, 255), anchor='lm', path=SANSB, spacing=0.3, italic=0.22)
-    text(img, 'FILE-TYPE', 31, 48, 5.0, INK, anchor='lm', path=SANSB, spacing=0.2)
-    text(img, 'COMPACT DISC PLAYER', 31, 55.5, 5.0, INK, anchor='lm', path=SANSB, spacing=0.1)
-    text(img, 'OS-F101', 31, 67, 7.0, INK, anchor='lm', path=SERIF, spacing=0.3)
-    text(img, 'STANDBY', 56, 97.5, 5.6, INK, path=SANSB, spacing=0.2)
+    text(img, 'FILE-TYPE', 31, 46, 5.0, INK, anchor='lm', path=SANSB, spacing=0.2)
+    text(img, 'COMPACT DISC PLAYER', 31, 53, 5.0, INK, anchor='lm', path=SANSB, spacing=0.1)
+    text(img, 'OS-F101', 31, 64, 7.0, INK, anchor='lm', path=SERIF, spacing=0.3)
+    text(img, 'STANDBY', 56, 78.5, 5.6, INK, path=SANSB, spacing=0.2)
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle(box((35.5, 104, 76.5, 109)), px(0.8), fill=(70, 66, 60, 255))
-    d.rounded_rectangle(box((36.3, 104.7, 75.7, 108.3)), px(0.5), fill=(32, 20, 18, 255))
+    d.rounded_rectangle(box((35.5, 83, 76.5, 88)), px(0.8), fill=(70, 66, 60, 255))
+    d.rounded_rectangle(box((36.3, 83.7, 75.7, 87.3)), px(0.5), fill=(32, 20, 18, 255))
     # power symbol + STANDBY/ON
-    cx, cy, rr = 34, 114.5, 2.6
+    cx, cy, rr = 34, 95, 2.6
     d.arc(box((cx - rr, cy - rr, cx + rr, cy + rr)), -60, 240, fill=INK, width=px(0.7))
     d.line([px(cx), px(cy - rr - 0.6), px(cx), px(cy)], fill=INK, width=px(0.7))
-    text(img, 'ON', 39, 114.5, 5.6, INK, anchor='lm', path=SANSB, spacing=0.2)
+    text(img, 'ON', 39, 95, 5.6, INK, anchor='lm', path=SANSB, spacing=0.2)
     labels = {'power': None, 'random': 'RANDOM', 'repeat': 'REPEAT', 'discm': 'DISC \u2212', 'discp': 'DISC +',
               'eject': 'OPEN\nCLOSE', 'unload': 'UNLOAD'}
     syms = {'play': 'playpause', 'stop': 'stop', 'prev': 'prev', 'next': 'next'}
     for k, b in KEYS.items():
-        size = 5.6 if k == 'eject' else 6.0
+        size = 5.2 if k == 'eject' else 5.8
         keycap(img, b, label=labels.get(k), lsize=size, sym=syms.get(k), symk=2.2)
 
-    text(img, 'LEVEL', KNOB[0], 236.5, 4.2, INK, path=SANSB, spacing=0.1)
+    text(img, 'LEVEL', 60, KNOB[1], 5.2, INK, path=SANSB, spacing=0.15)
     d = ImageDraw.Draw(img)
     # the knob's collar and shadow (the knob itself turns: knob.png)
     kx, ky = KNOB
@@ -388,25 +386,26 @@ def knob():
     save(finish(img, k=8), 'knob.png')
 
 
-def standby_led():
-    b = (36.3, 104.7, 75.7, 108.3)
+def standby_led(name, glow_rgb, core_rgb, hot_rgb):
+    """The light over the standby key: red in standby, green when on."""
+    b = (36.3, 83.7, 75.7, 87.3)
     img = canvas(50, 12)
-    ox, oy = 31, 100.5
+    ox, oy = 31, 79.5
     g = Image.new('L', img.size, 0)
     ImageDraw.Draw(g).rounded_rectangle(box((b[0] - ox, b[1] - oy, b[2] - ox, b[3] - oy)), px(0.4), fill=255)
     glow = g.filter(ImageFilter.GaussianBlur(px(1.4)))
-    lay = Image.new('RGBA', img.size, (255, 40, 30, 0))
+    lay = Image.new('RGBA', img.size, glow_rgb + (0,))
     lay.putalpha(glow.point(lambda v: int(v * 0.55)))
     img.alpha_composite(lay)
-    core = Image.new('RGBA', img.size, (255, 70, 55, 0))
+    core = Image.new('RGBA', img.size, core_rgb + (0,))
     core.putalpha(g)
     img.alpha_composite(core)
     hot = Image.new('L', img.size, 0)
     ImageDraw.Draw(hot).rounded_rectangle(box((b[0] - ox + 1, b[1] - oy + 0.6, b[2] - ox - 1, b[3] - oy - 0.6)), px(0.3), fill=150)
-    lay = Image.new('RGBA', img.size, (255, 190, 170, 0))
+    lay = Image.new('RGBA', img.size, hot_rgb + (0,))
     lay.putalpha(hot.filter(ImageFilter.GaussianBlur(px(0.4))))
     img.alpha_composite(lay)
-    save(finish(img), 'led-standby.png')
+    save(finish(img), name)
 
 
 # ── the window: insides, lip, glass ───────────────────────────────────────
@@ -868,16 +867,16 @@ def vfd_panel():
         a = lay.getchannel('A')
         dim.paste(Image.new('L', a.size, 185), (int(px(x - ox) - a.width / 2), int(px(y - oy) - a.height / 2)), a)
 
-    cap('DISC', 427.7, 159)
-    cap('TRACK', 473, 159)
-    cap('MIN', 512.2, 159)
-    cap('SEC', 543.6, 159)
+    cap('DISC', 443.7, 202.5)
+    cap('TRACK', 489.6, 202.5)
+    cap('MIN', 526.6, 202.5)
+    cap('SEC', 558.2, 202.5)
     # the logo: a disc with a swoosh, "101-DISC" under it
-    cx, cy = 378 - ox, 168 - oy
+    cx, cy = 401 - ox, 212 - oy
     d.ellipse(box((cx - 6, cy - 6, cx + 6, cy + 6)), outline=255, width=px(1.0))
     d.ellipse(box((cx - 1.5, cy - 1.5, cx + 1.5, cy + 1.5)), fill=255)
     d.arc(box((cx - 4, cy - 4, cx + 4, cy + 4)), 200, 320, fill=255, width=px(0.9))
-    lay = text_layer('FILE', 6.4, (255, 255, 255, 255), path=SANSB, spacing=0.15, italic=0.18)
+    lay = text_layer('FILE', 5.2, (255, 255, 255, 255), path=SANSB, spacing=0.12, italic=0.18)
     m.paste(Image.new('L', lay.size, 255), (int(px(cx + 8)), int(px(cy - 1) - lay.height / 2)), lay.getchannel('A'))
     lay = text_layer('101-DISC', 4.0, (255, 255, 255, 255), path=SANSB, spacing=0.15)
     m.paste(Image.new('L', lay.size, 230), (int(px(cx - 6)), int(px(cy + 11.5) - lay.height / 2)), lay.getchannel('A'))
@@ -894,7 +893,8 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     base()
     knob()
-    standby_led()
+    standby_led('led-standby.png', (255, 40, 30), (255, 70, 55), (255, 190, 170))
+    standby_led('led-on.png', (40, 230, 90), (70, 240, 110), (200, 255, 210))
     interior()
     led_glow()
     led_dots()

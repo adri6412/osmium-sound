@@ -63,10 +63,10 @@ Item {
     function px(v) { return Math.max(1, Math.round(v * root.texScale)) }
 
     // changer.py: GLASS, LOADER_X, DISC_D, KEYS, ROUND, KNOB
-    readonly property var glass: [127, 25.5, 344, 187.5]
+    readonly property var glass: [152, 25.5, 369, 187.5]
     readonly property real winW: glass[2] - glass[0]
     readonly property real winH: glass[3] - glass[1]
-    readonly property real loaderX: 255.5 - glass[0]          // in the window
+    readonly property real loaderX: 128.5                     // in the window
     readonly property real axisX: winW / 2                    // the file's axis
     readonly property real radius: 190                       // to the discs' centres
     readonly property real discD: 128
@@ -79,20 +79,20 @@ Item {
     readonly property real loaderPhi: Math.asin((loaderX - axisX) / radius) * 180 / Math.PI
     readonly property int places: 37                         // discs drawn: those within sight
     // the drive's window (changer.py DRIVE_*)
-    readonly property var driveGlass: [366, 18, 576, 147]
-    readonly property var driveC: [471, 82.5]
-    readonly property real driveDisc: 120
+    readonly property var driveGlass: [391, 18, 581, 187]
+    readonly property var driveC: [486, 102.5]
+    readonly property real driveDisc: 154
 
     readonly property var keys: ({
-        power: [31, 120, 81, 142],
-        eject: [31, 204, 81, 238], unload: [85, 204, 135, 238],
-        random: [143, 204, 191, 238], repeat: [195, 204, 243, 238],
-        discm: [247, 204, 289, 238], discp: [293, 204, 335, 238],
-        play: [343, 204, 399, 238], stop: [403, 204, 443, 238],
-        prev: [447, 204, 487, 238], next: [491, 204, 531, 238]
+        power: [31, 101, 81, 123],
+        eject: [26, 133, 77, 154], unload: [81, 133, 131, 154],
+        random: [26, 159, 77, 180], repeat: [81, 159, 131, 180],
+        discm: [26, 185, 77, 206], discp: [81, 185, 131, 206],
+        play: [137, 201, 197, 237], stop: [202, 201, 258, 237],
+        prev: [263, 201, 319, 237], next: [324, 201, 379, 237]
     })
     readonly property var keyNames: ["power", "random", "repeat", "discm", "discp", "eject", "unload", "play", "stop", "prev", "next"]
-    readonly property var knob: [553, 218]
+    readonly property var knob: [104, 225]
 
     // ── the mechanism ──────────────────────────────────────────────────────
     // drumAngle: the file's turn, in degrees; slot n is at the loader when
@@ -368,7 +368,7 @@ Item {
         if (ch === "-") return "dash"
         return (ch === ch.toUpperCase() ? "u" : "l") + ch.toLowerCase()
     }
-    readonly property var cellX: [410, 422.2, 434.4, 461.4, 473.6, 500.6, 512.8, 532, 544.2]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 163
+    readonly property var cellX: [426, 438.2, 450.4, 478, 490.2, 515, 527.2, 546.6, 558.8]   // changer.py CELL_W 11, CELL_H 19, CELL_Y 206
 
     component Pic: Image {
         smooth: true
@@ -667,45 +667,46 @@ Item {
 
         Pic { id: base; width: 600; height: 260; source: root.assetsBase + "base.png" }
 
+
         Pic {
-            x: 31; y: 100.5; width: 50; height: 12
-            source: root.assetsBase + "led-standby.png"
-            visible: root.live && !root.power
+            x: 31; y: 79.5; width: 50; height: 12
+            // the standby key's light: green when on, red in standby
+            source: root.assetsBase + (root.live && !root.power ? "led-standby.png" : "led-on.png")
         }
 
         // ── the fluorescent display ────────────────────────────────────────
         Item {
             visible: !root.live || root.power
-            Pic { x: 366; y: 155; width: 210; height: 39; source: root.assetsBase + "vfd-panel.png" }
+            Pic { x: 391; y: 198; width: 190; height: 40; source: root.assetsBase + "vfd-panel.png" }
             Repeater {
                 model: 9
                 Pic {
                     required property int index
                     readonly property string ch: root.cells.length === 9 ? root.cells.charAt(index) : " "
-                    x: root.cellX[index] - 1; y: 162; width: 13; height: 21
+                    x: root.cellX[index] - 1; y: 205; width: 13; height: 21
                     visible: ch !== " "
                     source: ch === " " ? "" : root.assetsBase + "g-" + root.glyph(ch) + ".png"
                 }
             }
-            Pic { x: 524.9; y: 162; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
+            Pic { x: 539.4; y: 205; width: 6; height: 21; source: root.assetsBase + "g-colon.png"; visible: root.timeShown }
             Pic {
-                x: 409; y: 184; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
+                x: 425; y: 227; width: 9; height: 9; source: root.assetsBase + "ind-play.png"
                 visible: root.timeShown && (root.playing || !root.live)
             }
             Pic {
-                x: 419; y: 184; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
+                x: 435; y: 227; width: 9; height: 9; source: root.assetsBase + "ind-pause.png"
                 visible: root.timeShown && root.live && !root.playing && root.elapsed > 0
             }
-            Pic { x: 453; y: 186; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
-            Pic { x: 479; y: 186; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
-            Pic { x: 479; y: 185.9; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
-            Pic { x: 497; y: 186; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
+            Pic { x: 472; y: 229; width: 24.5; height: 6; source: root.assetsBase + "ind-repeat.png"; visible: root.repeatMode > 0 || !root.live }
+            Pic { x: 498; y: 229; width: 12.83; height: 6; source: root.assetsBase + "ind-all.png"; visible: root.repeatMode === 2 || !root.live }
+            Pic { x: 498; y: 228.9; width: 5.17; height: 6.17; source: root.assetsBase + "ind-one.png"; visible: root.live && root.repeatMode === 1 }
+            Pic { x: 515; y: 229; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
         }
 
         // ── the level knob: the volume ─────────────────────────────────────
         Pic {
             id: knobPic
-            x: root.knob[0] - 9.4; y: root.knob[1] - 9.4; width: 18.8; height: 18.8
+            x: root.knob[0] - 8.4; y: root.knob[1] - 8.4; width: 16.8; height: 16.8
             source: root.assetsBase + "knob.png"
             rotation: -135 + 270 * (knobArea.level >= 0 ? knobArea.level : root.volume >= 0 ? root.volume : 40) / 100
             opacity: root.live && root.volumeFixed ? 0.6 : 1
