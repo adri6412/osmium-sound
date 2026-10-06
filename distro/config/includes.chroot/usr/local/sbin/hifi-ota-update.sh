@@ -62,8 +62,14 @@ DISPLAY_MODE_SCRIPT=/usr/local/sbin/hifi-display-mode.sh
 # Sostituisce una cartella in blocco tenendo da parte la precedente.
 # $1 = nuova (gia' pronta), $2 = destinazione, $3 = copia di riserva
 swap_dir() {
-    rm -rf "$3"
-    if [ -d "$2" ]; then mv "$2" "$3" || return 1; fi
+    # 🚨 Only when there is something to put aside: after a power cut between
+    # the two renames below the destination is gone and the backup IS the
+    # interface that was running — deleting it on the retry would leave
+    # nothing to fall back to if the second rename fails again.
+    if [ -d "$2" ]; then
+        rm -rf "$3"
+        mv "$2" "$3" || return 1
+    fi
     if ! mv "$1" "$2"; then
         [ -d "$3" ] && mv "$3" "$2"
         return 1
@@ -74,8 +80,11 @@ swap_dir() {
 # La versione dell'interfaccia sta FUORI dalle cartelle dei due contenuti, cosi'
 # vale per entrambi e sopravvive al passaggio dall'uno all'altro.
 write_ui_version() {
-    mkdir -p "$(dirname "$UI_VERSION_FILE")"
-    printf '%s\n' "$1" > "$UI_VERSION_FILE"
+    mkdir -p "$(dirname "$UI_VERSION_FILE")" || return 1
+    # Written aside and renamed in: a power cut must leave the old version or
+    # the new one, never an empty file.
+    printf '%s\n' "$1" > "$UI_VERSION_FILE.tmp" || return 1
+    mv -f "$UI_VERSION_FILE.tmp" "$UI_VERSION_FILE" || return 1
     # 🚨 Copia nel posto vecchio: hifi-update-apply-runner.sh gia' installato
     # sugli apparecchi rilegge DA LI' la versione per confermare che il passo
     # sia andato a buon fine, e quello che gira durante l'aggiornamento e'
@@ -85,12 +94,39 @@ write_ui_version() {
     printf '%s\n' "$1" > "$LEGACY_UI_VERSION_DIR/UI_VERSION" 2>/dev/null || true
 }
 
+# The version a payload carries inside its own tree. Stamped into the payload
+# BEFORE it is moved into place, so it travels with the rename: whatever a
+# power cut interrupts, the installed tree says which version it is.
+PAYLOAD_STAMP=.hifi-ui-version
+
 # Installa il contenuto gia' scompattato in $1, con versione $2.
 # Ritorna 0 se fatto, 1 se la sostituzione e' fallita, 2 se dentro non c'e'
 # nessuna interfaccia riconoscibile.
+#
+# 🚨 Resumable. The payload is CONSUMED by the swap (renamed into /opt) and
+# UI_VERSION is written only afterwards: a power cut in between used to leave
+# no payload and the old version on file, so every retry failed with "no
+# interface inside" and the update could never complete. A retry now finds
+# the payload gone, sees its stamp on the installed tree, and just finishes.
 install_payload() {
     _new="$1"
     _ver="$2"
+    if [ ! -e "$_new" ]; then
+        for _dir in "$QTDIR" "$APPDIR"; do
+            if [ "$(cat "$_dir/$PAYLOAD_STAMP" 2>/dev/null)" = "$_ver" ]; then
+                echo "I: [hifi-ota] $_ver already in $_dir (interrupted apply); finishing" >&2
+                write_ui_version "$_ver" || return 1
+                sync
+                return 0
+            fi
+        done
+        return 2
+    fi
+    if [ -x "$_new/hifi-qt" ] || [ -x "$_new/hifi-media-player" ]; then
+        printf '%s\n' "$_ver" > "$_new/$PAYLOAD_STAMP" || return 1
+        # the stamp and every extracted file on disk before anything moves
+        sync
+    fi
     if [ -x "$_new/hifi-qt" ]; then
         swap_dir "$_new" "$QTDIR" "$QTOLD" || return 1
         chmod 755 "$QTDIR/hifi-qt" 2>/dev/null || true
@@ -111,12 +147,28 @@ install_payload() {
     else
         return 2
     fi
-    write_ui_version "$_ver"
+    write_ui_version "$_ver" || return 1
+    sync
     return 0
 }
 STATUS=/run/hifi-ota-status.json
 STAGE_ROOT=/var/lib/hifi-player/update/staged/ui
 VERSION=unknown
+
+# Test hook (tests/test-ota-ui-apply.sh): every path under one fake root.
+if [ -n "${HIFI_OTA_TEST_ROOT:-}" ]; then
+    _R=$HIFI_OTA_TEST_ROOT
+    APPDIR="$_R/opt/hifi-media-player"
+    OLDDIR="$_R/opt/hifi-media-player.old"
+    QTDIR="$_R/opt/hifi-qt"
+    QTOLD="$_R/opt/hifi-qt.old"
+    UI_VERSION_FILE="$_R/etc/hifi-player/UI_VERSION"
+    LEGACY_UI_VERSION_DIR="$_R/opt/hifi-media-player"
+    ENGINE_FILE="$_R/etc/hifi-player/ui-engine"
+    DISPLAY_MODE_SCRIPT="$_R/sbin/hifi-display-mode.sh"
+    STATUS="$_R/run/hifi-ota-status.json"
+    STAGE_ROOT="$_R/update/staged/ui"
+fi
 
 # ── status helper ────────────────────────────────────────────────────
 # write_status <state> <progress> <message>
@@ -230,10 +282,15 @@ apply)
     write_status applying 70 "Applicazione…"
     # 🚨 Il pacchetto puo' contenere l'interfaccia Qt (da 2.5.24) oppure la
     # vecchia app Electron: install_payload guarda che cosa c'e' dentro.
-    install_payload "$NEWDIR" "$VERSION"
-    case $? in
-        1) fail "Sostituzione dell'interfaccia fallita" ;;
+    # 🚨 The return code is caught with ||: called bare under `set -eu`, a
+    # non-zero return ended the script on the spot, `fail` never ran and the
+    # status file stayed on "applying" forever.
+    rc=0
+    install_payload "$NEWDIR" "$VERSION" || rc=$?
+    case $rc in
+        0) ;;
         2) fail "Bundle non valido: nessuna interfaccia dentro $NEWDIR" ;;
+        *) fail "Sostituzione dell'interfaccia fallita" ;;
     esac
 
     write_status 'done' 100 "Aggiornamento a $VERSION completato"
@@ -294,10 +351,15 @@ full)
     write_status applying 80 "Applicazione…"
     # 🚨 Il pacchetto puo' contenere l'interfaccia Qt (da 2.5.24) oppure la
     # vecchia app Electron: install_payload guarda che cosa c'e' dentro.
-    install_payload "$NEWDIR" "$VERSION"
-    case $? in
-        1) fail "Sostituzione dell'interfaccia fallita" ;;
+    # 🚨 The return code is caught with ||: called bare under `set -eu`, a
+    # non-zero return ended the script on the spot, `fail` never ran and the
+    # status file stayed on "applying" forever.
+    rc=0
+    install_payload "$NEWDIR" "$VERSION" || rc=$?
+    case $rc in
+        0) ;;
         2) fail "Bundle non valido: nessuna interfaccia dentro $NEWDIR" ;;
+        *) fail "Sostituzione dell'interfaccia fallita" ;;
     esac
 
     write_status restarting 95 "Riavvio interfaccia…"

@@ -85,9 +85,9 @@ flowchart TB
 | `hifi-memlog.timer` → `hifi-memlog` | `hifi-memlog.sh` | Every 5 minutes: memory, swap, pressure and the biggest processes into `/var/log/hifi/memory.log`, for the support bundle |
 | `hifi-kiosk-session` | `hifi-kiosk-session.sh` | Legacy Electron installs only, shipped by OS update (`apply.d/0050`), never in the image. Oneshot before LightDM: decides Wayland (labwc) vs X11 for the kiosk session and writes LightDM's `user-session` accordingly — see [The earlier Electron kiosk](#the-earlier-electron-kiosk) |
 | `hifi-update-stage-resume` / `hifi-update-apply` | `hifi-update-stage-runner.sh` / `hifi-update-apply-runner.sh` | Resume an interrupted staging; apply staged bundles inside `system-update.target` — see [OTA update system](#ota-update-system) |
-| `hifi-backup.timer` + `.service` | `hifi-backup-run.py --scheduled` | Weekly profile backup when enabled in Settings (shipped by `apply.d/0033`) |
+| `hifi-backup.timer` + `.service` | `hifi-backup-run.py --scheduled` | Weekly profile backup when enabled in Settings (shipped in the image; `apply.d/0033` for older installs) |
 | `hifi-mdns-keepalive.timer` | `hifi-mdns-keepalive.sh` | Periodic mDNS/ARP re-announce so an idle unit stays reachable (`apply.d/0041`) |
-| `hifi-quiesce-audio-shutdown` | `hifi-quiesce-audio-shutdown.sh` | Stops audio before any shutdown/reboot (DesignWare DMA panic workaround, `apply.d/0027`) |
+| `hifi-playback-quiesce` | `hifi-quiesce-audio-shutdown.sh` (ExecStop) | Stops audio before any shutdown/reboot (DesignWare DMA panic workaround, `apply.d/0027`) |
 | `squeezelite` | — | Lyrion's player client (options rendered from `squeezelite.json` by `hifi_squeezelite.py apply`, `-v` visualizer export, persistent `-m` player MAC) |
 | `systemd-timesyncd` | — | The clock from the network; the image build refuses an image without it (a mini PC's RTC alone drifts or is not set) |
 | `systemd-oomd` | — | When memory runs out (swap/zram nearly full, or pressure above 50 % for 20 s on `system.slice`) it kills and restarts the service using the most, instead of the box freezing; squeezelite and the Bluetooth players opt out |
@@ -213,7 +213,9 @@ overwrite (an explicit, rare action, unlike backup), takes an automatic
 "pre-restore" safety generation first, and restarts only the services whose
 files actually changed.
 
-Scheduling (`hifi-backup.timer`, weekly, `Persistent=false`) ships via
+Scheduling (`hifi-backup.timer`, weekly, `Persistent=false`) ships in the
+image (enabled; the worker exits at once unless backup.json says scheduled)
+and, for older installs, via
 `distro/os-update/apply.d/0033-backup-scheduler.sh`: the unit is installed
 disabled and reconciled against the user's choice in
 `/etc/hifi-player/backup.json` on every OS update. A factory reset
@@ -411,7 +413,6 @@ GET  /anim_store              the animations catalogue; POST /anim_store/check, 
 GET/POST /ui_language         the on-screen UI language, owned by the device rather than by one UI
 GET/POST /nowplaying_autoexpand   seconds before Now Playing auto-expands (0 = off)
 GET/POST /timezone, GET /timezones
-GET/POST /debug_plymouth, /debug_kdump   boot/debug flags for the web admin's Debug card
 GET  /provision_status        setup-wizard state, proxied from webui_server; POST /provision_mode, /provision_wifi_connect, /provision_wifi_rescan
 POST /factory_reset           → hifi-factory-reset.sh (web admin re-validates the password first)
 POST /webui_reset_credentials clear the web-admin account (kiosk "reset web interface password")

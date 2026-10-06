@@ -90,6 +90,8 @@ MESSAGES = {
                          'it': 'Nessun dispositivo chiamato {host} trovato sulla rete. Controlla il nome, oppure usa il suo indirizzo IP'},
     'lms.useLocalMode': {'en': 'Use "This device" mode for the local server',
                          'it': 'Usa la modalità "Questo dispositivo" per il server locale'},
+    'lms.ownAddress': {'en': '{host} is this device itself. To use its own music server, choose the internal server instead of an external one',
+                       'it': '{host} è questo stesso dispositivo. Per usare il suo server musicale scegli il server interno invece di uno esterno'},
     'lms.invalidMode': {'en': 'Invalid mode: {mode}', 'it': 'Modalità non valida: {mode}'},
     'lms.sqConfigMissing': {'en': 'squeezelite configuration not found', 'it': 'Configurazione squeezelite non trovata'},
     'lms.serverSetRestartWarn': {'en': 'Server set ({target}); squeezelite restart: {err}',
@@ -164,16 +166,6 @@ MESSAGES = {
     'tailscale.enabled': {'en': 'Tailscale enabled', 'it': 'Tailscale attivato'},
     'tailscale.enabling': {'en': 'Enabling Tailscale…', 'it': 'Attivazione Tailscale in corso…'},
     'tailscale.disabled': {'en': 'Tailscale disabled', 'it': 'Tailscale disattivato'},
-
-    # ── Boot debug flags (Settings → Debug) ──────────────────────────
-    'debug.rebootRequired': {'en': 'Saved — reboot the device for this to take effect.',
-                             'it': 'Salvato — riavvia il dispositivo perché la modifica abbia effetto.'},
-    'debug.updateGrubFailed': {'en': 'Could not update the boot configuration',
-                               'it': 'Impossibile aggiornare la configurazione di avvio'},
-    'debug.kdumpInstallFailed': {'en': 'Could not install the crash-dump tools — check your Internet '
-                                        'connection and try again',
-                                 'it': "Impossibile installare gli strumenti per il memory dump — controlla "
-                                       'la connessione a Internet e riprova'},
 
     # ── Mouse pointer / misc preferences ────────────────────────────
     'prefs.saveFailed': {'en': 'Could not save the preference', 'it': 'Impossibile salvare la preferenza'},
@@ -446,6 +438,8 @@ MESSAGES = {
                                    'it': 'Pacchetto staged mancante per {kind} {version}'},
     'update.apply.failed': {'en': 'Applying {kind} {version} failed after {attempts} attempts (rc={rc})',
                             'it': 'Applicazione di {kind} {version} fallita dopo {attempts} tentativi (rc={rc})'},
+    'update.apply.gaveUp': {'en': 'The update did not complete after {attempts} attempts — try "Update now" again',
+                            'it': 'L\'aggiornamento non si è completato dopo {attempts} tentativi — riprova con "Aggiorna ora"'},
 
     # ── Disk install (bare-metal installer) + guided room correction ──
     'install.enumFailed': {'en': 'Disk enumeration failed', 'it': 'Enumerazione dischi fallita'},
@@ -503,6 +497,10 @@ MESSAGES = {
     'backup.unreadable': {'en': 'Backup is not readable', 'it': 'Backup non leggibile'},
     'backup.deleted': {'en': 'Backup deleted', 'it': 'Backup eliminato'},
     'backup.saveFailed': {'en': 'Saving failed: {err}', 'it': 'Salvataggio fallito: {err}'},
+    'backup.noSpace': {'en': 'Not enough free disk space: about {mb} MB needed',
+                       'it': 'Spazio su disco insufficiente: servono circa {mb} MB'},
+    'backup.scheduleFailed': {'en': 'Could not turn on the weekly backup: {detail}',
+                              'it': 'Impossibile attivare il backup settimanale: {detail}'},
 
     # ── sources_server.py: restore ───────────────────────────────────
     'restore.openingArchive': {'en': 'Opening archive…', 'it': 'Apertura archivio…'},
@@ -530,6 +528,12 @@ MESSAGES = {
     'restore.archiveInvalidTooManyFiles': {'en': 'Invalid archive (too many files)',
                                            'it': 'Archivio non valido (troppi file)'},
     'restore.memberTooLarge': {'en': '{name}: too large, skipped', 'it': '{name}: troppo grande, saltato'},
+    'restore.archiveTooLarge': {'en': 'The backup is too large to restore (over {mb} MB once unpacked)',
+                                'it': 'Il backup è troppo grande da ripristinare (oltre {mb} MB una volta estratto)'},
+    'restore.memberNoSpace': {'en': '{name}: not enough free disk space, skipped',
+                              'it': '{name}: spazio su disco insufficiente, saltato'},
+    'restore.noSnapshot': {'en': 'The safety backup of the current settings could not be made first.',
+                           'it': 'Non è stato possibile salvare prima le impostazioni attuali (backup di sicurezza).'},
     'restore.checksumInvalid': {'en': '{name}: invalid checksum', 'it': '{name}: checksum non valido'},
     'restore.memberFailed': {'en': '{name}: restore failed', 'it': '{name}: ripristino fallito'},
     'restore.sourcesFailed': {'en': 'Sources: {msg}', 'it': 'Sorgenti: {msg}'},
@@ -563,6 +567,7 @@ MESSAGES = {
     # ── webui_server.py: api_server proxy unreachable ───────────────
     'proxy.serviceUnavailable': {'en': 'Service unavailable', 'it': 'Servizio non disponibile'},
     'proxy.serviceUnreachable': {'en': 'Service unreachable', 'it': 'Servizio non raggiungibile'},
+    'request.tooLarge': {'en': 'The request is too large', 'it': 'La richiesta è troppo grande'},
     'auth.required': {'en': 'Authentication required', 'it': 'Autenticazione richiesta'},
     'auth.accountExists': {'en': 'Account already exists', 'it': 'Account già esistente'},
     'provision.invalidMode': {'en': 'Invalid mode', 'it': 'Modalità non valida'},

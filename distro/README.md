@@ -67,9 +67,9 @@ refuses `--suite bookworm`).
 | Lyrion Music Server | Music server / library / streaming (**installed on first boot**, not in the image) | `lyrionmusicserver.service` (`:9000`) |
 | `hifi-firstboot.sh` | One-shot: downloads + installs Lyrion on the installed system, then removes itself | `hifi-firstboot.service` (`ConditionKernelCommandLine=!boot=live`) |
 | `hifi-update-stage-runner.sh` / `hifi-update-apply-runner.sh` | The two-phase "Update now" (stage live → reboot into `system-update.target` → apply in isolation) | transient `hifi-update-stage`, `hifi-update-stage-resume.service`, `hifi-update-apply.service` |
-| `hifi-backup-run.py` | Backup generations (on demand / weekly timer) | `hifi-backup.service` + `hifi-backup.timer` (shipped by `apply.d/0033-backup-scheduler.sh`) |
+| `hifi-backup-run.py` | Backup generations (on demand / weekly timer) | `hifi-backup.service` + `hifi-backup.timer` (in the image; `apply.d/0033-backup-scheduler.sh` for older installs) |
 | `hifi-mdns-keepalive.sh` | Periodic mDNS/ARP re-announce so idle units stay reachable | `hifi-mdns-keepalive.timer` |
-| `hifi-quiesce-audio-shutdown.sh` | Stops audio cleanly before any shutdown/reboot (DesignWare DMA panic workaround) | `hifi-quiesce-audio-shutdown.service` |
+| `hifi-quiesce-audio-shutdown.sh` | Saves the playback position and stops audio cleanly before any shutdown/reboot (DesignWare DMA panic workaround) | `hifi-playback-quiesce.service` (ExecStop) |
 | Samba (`smbd`), `wsdd2`, Avahi | SMB shares of adopted disks (units start only when a share exists), Windows network discovery, mDNS | disabled until needed / enabled at build |
 | Plymouth theme `hifi` | Boot splash; also shows OTA apply progress | — |
 

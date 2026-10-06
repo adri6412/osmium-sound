@@ -287,7 +287,7 @@ if [ "$overall" = finished ] && [ "$already_finished" -eq 0 ]; then
             log "could not create $SYSTEM_UPDATE_LINK — update-mode boot will NOT trigger"
         fi
         sync
-        # hifi-quiesce-audio-shutdown.service (Before=/Conflicts=shutdown.target,
+        # hifi-playback-quiesce.service (stopped first at every shutdown,
         # unconditional for every halt/reboot however triggered) already stops
         # any active DMA audio path first, so no extra mitigation is needed here.
         systemctl reboot || log "systemctl reboot failed"

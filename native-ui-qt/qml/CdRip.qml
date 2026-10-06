@@ -92,7 +92,23 @@ Item {
             root.ripping = root.state !== "done" && root.state !== "error" && root.state !== "idle" && root.state !== "cancelled"
         }, 5000)
     }
-    Timer { interval: 7000; repeat: true; running: true; triggeredOnStart: true; onTriggered: root.loadInfo() }
+    // 🚨 Ogni /api/cd/info fa girare cd-discid: senza lettore (quasi tutti gli
+    // apparecchi) non si chiede nulla. Il lettore si guarda da qui, con una
+    // stat di /dev/cdrom (il link della regola udev 99-hifi-cdrom, lo stesso
+    // che usa sources_server) a ogni giro: uno USB attaccato dopo si vede da
+    // solo. La partenza automatica la fa sources_server (cd_monitor): qui
+    // arriva come `ripping` alla prima interrogazione.
+    property bool hasDrive: false
+    function checkDrive() {
+        hasDrive = Sys.exists("/dev/cdrom") || Sys.exists("/dev/sr0")
+        // lettore staccato: il disco non c'e' piu'
+        if (!hasDrive && haveDisc) {
+            haveDisc = false
+            if (!ripping) { discid = ""; state = ""; msg = "" }
+        }
+        return hasDrive
+    }
+    Timer { interval: 7000; repeat: true; running: true; triggeredOnStart: true; onTriggered: if (root.checkDrive() || root.ripping) root.loadInfo() }
     Timer { interval: 2000; repeat: true; running: root.ripping; onTriggered: root.loadStatus() }
 
     function openDialog() { open = true; closing = false; sc.set(0.94); sc.to = 1; closeScale = 1; fade = 1 }

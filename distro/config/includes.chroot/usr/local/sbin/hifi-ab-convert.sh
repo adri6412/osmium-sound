@@ -18,7 +18,7 @@
 set -u
 # shellcheck source=distro/config/includes.chroot/usr/local/sbin/hifi-ab-lib.sh
 # shellcheck disable=SC1091  # percorso assoluto, esiste solo sull'apparecchio
-. /usr/local/sbin/hifi-ab-lib.sh
+. "${HIFI_AB_LIB:-/usr/local/sbin/hifi-ab-lib.sh}"   # HIFI_AB_LIB: tests only
 
 LOCAL=/var/lib/hifi-player/ab
 CONV_INITRD=/boot/initrd.img-abconvert
@@ -401,7 +401,10 @@ cmd_install() {
 
 case "$CMD" in
     status)           cmd_status ;;
-    cleanup)          shift; cmd_cleanup "$@" ;;
+    # 🚨 No shift here: the command word is already gone (see CMD above). A
+    # second one ate --deep, so the apply runner's `cleanup --deep` never did
+    # the deep part — and a bare `cleanup` died on "can't shift" under dash.
+    cleanup)          cmd_cleanup "$@" ;;
     prepare)          cmd_prepare "$@" ;;
     finish)           cmd_finish ;;
     install)          cmd_install "$@" ;;

@@ -275,10 +275,6 @@
         "label": "Licenses & credits",
         "desc": "What the device is made of, and under which licenses"
       },
-      "debug": {
-        "label": "Debug",
-        "desc": "Boot/crash diagnostics, HAR network captures"
-      },
       "netCheck": {
         "label": "Network check",
         "desc": "Finds where the connection stops: cable or Wi-Fi, router, internet or the update server."
@@ -342,6 +338,7 @@
       "dsd": { "auto": "Automatic", "dop": "DoP", "native": "Native", "off": "Convert to PCM" },
       "dsdDetectedNative": "This DAC declares native DSD.",
       "dsdDetectedDop": "This DAC does not declare native DSD, so Automatic uses DoP.",
+      "dsdDetectedPcm": "This output is not a USB DAC (HDMI or the built-in audio), so Automatic converts DSD to PCM.",
       "dsdHelp": "Native sends the DSD stream as it is. DoP wraps it in PCM frames: same bits, twice the bandwidth, usually up to DSD128. Convert to PCM is for outputs with no DSD at all, such as HDMI.",
       "dsdDelayLabel": "Pause when switching between PCM and DSD",
       "dsdDelayHelp": "Some DACs click or stay silent for a moment at the switch; a short pause avoids it.",
@@ -787,7 +784,9 @@
       "sshLoginCreate": "Create SSH login",
       "sshLoginUpdate": "Change SSH password",
       "sshLoginSaved": "SSH login updated",
-      "sshLoginFailed": "Could not update the SSH login"
+      "sshLoginFailed": "Could not update the SSH login",
+      "adminPassword": "Your admin password (needed to turn SSH on or change the SSH login)",
+      "adminPasswordNeeded": "Enter your admin password first"
     },
     "tailscale": {
       "hint": "Join this appliance to your own Tailscale network (tailnet) so you can reach it — web UI, Lyrion Music Server, network shares, everything — from anywhere your tailnet reaches, e.g. to get at your music library away from home. This is not a public link: only devices on your own tailnet can reach it.",
@@ -1109,18 +1108,6 @@
       "factoryConfirm": "This erases ALL settings and this account, then restarts into setup. Continue?",
       "factoryStarted": "Factory reset started — the device will restart",
       "factoryFailed": "Reset failed"
-    },
-    "debug": {
-      "bootHint": "For a device that hangs at boot or shutdown behind the splash screen instead of failing cleanly — possibly a hidden kernel panic. Both settings need a reboot to take effect.",
-      "plymouth": "Disable boot splash (Plymouth)",
-      "plymouthHelp": "Shows real boot/shutdown text instead of the graphical splash, so a hang or kernel panic is actually visible on the screen.",
-      "kdump": "Save a memory dump on kernel panic",
-      "kdumpHelp": "Reserves a small amount of RAM to capture the crash to disk (/var/crash) so it can be inspected after a kernel panic.",
-      "kdumpNotInstalled": "Installs the crash-dump tools the first time this is turned on (needs Internet access).",
-      "kdumpInstalling": "Installing crash-dump tools…",
-      "rebootRequired": "Saved — reboot the device for this to take effect.",
-      "rebootPrompt": "Reboot the device now to apply this?",
-      "saveFailed": "Could not save this setting"
     },
     "netCheck": {
       "open": "Check the network",

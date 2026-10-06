@@ -23,11 +23,15 @@ Fields (the UI exposes the starred ones, the rest are set elsewhere):
   output         `-o`, the real DAC. With DSP on the file gets the Loopback
                  instead and this stays the DAC CamillaDSP plays to.
   name, server   `-n`, `-s` (player name; Lyrion host, 127.0.0.1 = own)
-  mac, model     `-m` (persistent player MAC), `-M` (model name, fixed)
+  mac, model     `-m` (persistent player MAC, derived from /etc/machine-id
+                 the first time it is missing), `-M` (model name, fixed)
   dsd *          auto | dop | native | off. `auto` = native when the DAC
-                 declares a DSD_U32/U16 format in /proc/asound, DoP otherwise;
-                 `off` = no `-D`, squeezelite converts DSD to PCM (for HDMI
-                 and other outputs with no DSD at all).
+                 declares a DSD_U32/U16 format in /proc/asound, DoP when the
+                 output is a USB audio device that does not, and no `-D` at
+                 all (PCM) for everything else: `default`, HDMI/DisplayPort,
+                 the onboard codec — those take 176.4 kHz PCM, so DoP would
+                 reach the speakers as loud noise. `off` = no `-D`,
+                 squeezelite converts DSD to PCM; `dop`/`native` are forced.
   dsd_delay_ms * `-D <ms>`, pause when switching between PCM and DSD
   max_rate *     `-r <max>`, 0 = let the DAC say
   volume *       software | hardware (`-V <mixer>`, the DAC's own control)
@@ -38,19 +42,36 @@ Fields (the UI exposes the starred ones, the rest are set elsewhere):
   extra *        anything else, one line, validated: no quotes, no `$`, and
                  none of the options handled above
   dsp.enabled    squeezelite plays into the CamillaDSP Loopback at 48 kHz
+
+Writers: api_server.py (several request threads) and the ExecStartPre
+`apply` (every 5 s while squeezelite crash-loops) all load, change and save
+the same two files. They go through update() / apply(), which hold an
+flock on `<json>.lock` for the whole load → save → render, and every file
+is replaced from a temp file of its own, so no writer loses another's
+change or renames someone else's half-written file.
 """
+import contextlib
+import fcntl
+import glob
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
+import time
 
 CONF = '/etc/hifi-player/squeezelite.json'
 DEFAULT = '/etc/default/squeezelite'
 PROC_ASOUND = '/proc/asound'
 DSP_TARGET_FILE = '/var/lib/hifi-player/dsp-target'
+MACHINE_ID = '/etc/machine-id'
 LOOPBACK = 'hw:CARD=Loopback,DEV=0'
 DSP_RATE = 48000
+# How long a writer waits for another one to finish. A Settings → Audio save
+# may run amixer under the lock; anything longer than this is a stuck writer.
+LOCK_TIMEOUT = 15.0
 
 DEFAULTS = {
     'output': 'default',
@@ -106,10 +127,11 @@ NATIVE_FORMAT_NAMES = tuple(f for _, f in _NATIVE_FORMATS)
 
 
 def parse_device(device):
-    """'hw:CARD=D50s,DEV=0' → ('D50s', 0). Anything else → (None, None)."""
+    """'hw:CARD=D50s,DEV=0' → ('D50s', 0); the numbered form a hand edit may
+    have left, 'hw:1,0', → ('1', 0). Anything else → (None, None)."""
     if not device:
         return None, None
-    m = re.match(r'^(?:plug)?hw:CARD=([A-Za-z0-9_-]+)(?:,DEV=(\d+))?$', device.strip())
+    m = re.match(r'^(?:plug)?hw:(?:CARD=)?([A-Za-z0-9_-]+)(?:,(?:DEV=)?(\d+))?$', device.strip())
     if not m:
         return None, None
     return m.group(1), int(m.group(2) or 0)
@@ -137,19 +159,47 @@ def native_format_from_stream(text):
     return None
 
 
+# What probe() answers for an output that is not a USB audio device.
+PCM_ONLY = 'pcm'
+
+
+def _card_dir(root, card):
+    """/proc/asound/<card> (a symlink to cardN) or cardN for a numbered card,
+    resolved; None when it is not a card directory under `root`."""
+    name = f'card{card}' if card.isdigit() else card
+    # the card comes from the device string the owner chose: stay under the tree
+    path = os.path.realpath(os.path.join(root, name))
+    if not path.startswith(root + os.sep) or not os.path.isdir(path):
+        return None
+    return path
+
+
+def is_usb_card(card_dir):
+    """True when the ALSA card is a USB audio device: snd-usb-audio, and only
+    it, gives a card a `usbid` and its `streamN` files. The onboard HDA codec,
+    its HDMI/DisplayPort outputs, the Loopback have neither."""
+    return (os.path.exists(os.path.join(card_dir, 'usbid'))
+            or bool(glob.glob(os.path.join(card_dir, 'stream[0-9]*'))))
+
+
 def probe(device, proc_asound=None):
-    """squeezelite format name ('u32be', …) when `device` declares native DSD,
-    'dop' otherwise. Never raises: a DAC we know nothing about gets DoP."""
+    """How DSD can reach `device` in `auto` mode: the squeezelite format name
+    ('u32be', …) when it declares native DSD, 'dop' when it is a USB audio
+    device that does not (an external DAC, where DoP is the usual way in),
+    PCM_ONLY for anything else. `default`, HDMI/DisplayPort and the onboard
+    codec accept 176.4/192 kHz PCM and would play DoP as full-scale noise
+    instead of decoding it (a device in the field had `-o hw:CARD=PCH,DEV=3
+    -D`, Intel HDMI): only a USB DAC is a plausible DoP decoder. Never
+    raises: an output we cannot read gets PCM, the safe answer."""
     card, dev = parse_device(device)
     if card is None:
-        return 'dop'
+        return PCM_ONLY
     root = os.path.realpath(proc_asound or PROC_ASOUND)     # looked up at call time: tests point it elsewhere
-    # the card comes from the device string the owner chose: stay under the tree
-    stream = os.path.realpath(os.path.join(root, card, f'stream{dev}'))
-    if not stream.startswith(root + os.sep):
-        return 'dop'
+    card_dir = _card_dir(root, card)
+    if card_dir is None or not is_usb_card(card_dir):
+        return PCM_ONLY
     try:
-        with open(stream, encoding='utf-8', errors='replace') as f:
+        with open(os.path.join(card_dir, f'stream{dev}'), encoding='utf-8', errors='replace') as f:
             text = f.read()
     except OSError:
         return 'dop'
@@ -410,10 +460,14 @@ def parse_args(args, dsp_target=None):
 
 
 def dsd_token(model, fmt):
-    """The `-D …` token for the model, given the DAC's declared format
-    ('dop' or a native name). None when DSD is converted to PCM."""
+    """The `-D …` token for the model, given what probe() says of the output
+    ('dop', PCM_ONLY or a native name). None when DSD is converted to PCM."""
     mode = model['dsd']
-    if mode == 'off':
+    # `native` asks for the DAC's own DSD; an output that is no DAC at all
+    # (HDMI, the onboard codec) has none, and falling back to DoP there plays
+    # the stream as loud noise. Only an explicit `dop` still goes out as DoP:
+    # that is the owner saying a DoP DAC sits behind this output.
+    if mode == 'off' or (mode in ('auto', 'native') and fmt == PCM_ONLY):
         return None
     delay = str(model['dsd_delay_ms']) if model['dsd_delay_ms'] else ''
     native = None
@@ -496,14 +550,29 @@ def load(conf_path=CONF, default_path=DEFAULT, dsp_target_path=DSP_TARGET_FILE):
     return parse_args(args, read_dsp_target(dsp_target_path)), True
 
 
+def _write_atomic(path, text):
+    """Replace `path` with `text` through a temp file of this writer's own
+    (a fixed `<path>.tmp` let two writers rename each other's file, or find
+    it already gone: FileNotFoundError)."""
+    d = os.path.dirname(path)
+    os.makedirs(d, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix='.' + os.path.basename(path) + '.', suffix='.tmp', dir=d)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp, 0o644)        # mkstemp's 0600 is not what these files always had
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
 def save(model, conf_path=CONF):
     m = normalize(model)
-    os.makedirs(os.path.dirname(conf_path), exist_ok=True)
-    tmp = conf_path + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(m, f, indent=2, sort_keys=True)
-        f.write('\n')
-    os.replace(tmp, conf_path)
+    _write_atomic(conf_path, json.dumps(m, indent=2, sort_keys=True) + '\n')
     return m
 
 
@@ -516,23 +585,122 @@ def write_default(args, default_path=DEFAULT):
                 return False
     except OSError:
         pass
-    os.makedirs(os.path.dirname(default_path), exist_ok=True)
-    tmp = default_path + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        f.write(content)
-    os.replace(tmp, default_path)
+    _write_atomic(default_path, content)
     return True
 
 
+# ── One writer at a time ────────────────────────────────────────────
+class LockTimeout(TimeoutError):
+    """Another writer held the model's lock for longer than the timeout."""
+
+
+def _lock(conf_path, timeout):
+    """An fd holding an exclusive flock on `<conf_path>.lock`; closing it
+    releases the lock. flock belongs to the open file, so two threads of one
+    process exclude each other as two processes do."""
+    lock_path = conf_path + '.lock'
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o644)
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return fd
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise LockTimeout(f'{lock_path}: still held after {timeout:g} s') from None
+                time.sleep(0.02)
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+@contextlib.contextmanager
+def locked(conf_path=CONF, timeout=LOCK_TIMEOUT):
+    """Hold the model's lock. Not re-entrant: a nested `locked()` of the same
+    model waits for itself until the timeout."""
+    fd = _lock(conf_path, timeout)
+    try:
+        yield
+    finally:
+        os.close(fd)
+
+
+def update(fn, conf_path=CONF, default_path=DEFAULT, dsp_target_path=DSP_TARGET_FILE,
+           probe_fn=None, timeout=LOCK_TIMEOUT):
+    """Load → `fn(model)` → save → render, as one step no other writer can
+    interleave with. `fn` changes the model in place or returns a new one; an
+    exception from it (InvalidField, say) leaves both files as they were.
+    Returns (model, changed): changed = the rendered ARGS line is different,
+    i.e. a player restart is worth it."""
+    with locked(conf_path, timeout):
+        model, _ = load(conf_path, default_path, dsp_target_path)
+        new = fn(model)
+        if new is not None:
+            model = new
+        model = save(model, conf_path)
+        changed = write_default(render(model, probe_fn), default_path)
+    return model, changed
+
+
+def derived_mac(machine_id_path=MACHINE_ID):
+    """The player MAC this install keeps for life, '' when there is no
+    machine-id to derive it from. Without `-m` squeezelite takes the MAC of
+    the first interface that has an address -- and at boot, before DHCP, there
+    is none, so the player comes up as 00:00:00:00:00:00: the same player as
+    every other Osmium on that Lyrion, and a different one from itself after
+    a restart with the network up. Same derivation as migration 0042, which
+    only ever reached devices updated through apply.d, never an image install:
+    md5 of the machine-id (unique per install, kept across a factory reset),
+    first octet forced to 02 (locally administered, unicast) so it can never
+    clash with a real burned-in MAC."""
+    try:
+        with open(machine_id_path, encoding='ascii') as f:
+            seed = f.read().strip()
+    except (OSError, ValueError):
+        return ''
+    if not seed:
+        return ''
+    raw = '02' + hashlib.md5(seed.encode('ascii')).hexdigest()[2:12]
+    return ':'.join(raw[i:i + 2] for i in range(0, 12, 2))
+
+
 def apply(conf_path=CONF, default_path=DEFAULT, dsp_target_path=DSP_TARGET_FILE,
-          probe_fn=None, out=None):
+          probe_fn=None, out=None, machine_id_path=MACHINE_ID, lock_timeout=LOCK_TIMEOUT):
     """Load (importing the file once if needed), render, write. Returns
-    (model, args, changed)."""
+    (model, args, changed). Under the model's lock like update(); a lock that
+    cannot be had (a stuck writer, a read-only /etc) does not stop it: the
+    player must still get its ARGS line."""
+    try:
+        fd = _lock(conf_path, lock_timeout)
+    except OSError as e:
+        fd = None
+        if out is not None:
+            print(f'hifi_squeezelite: going on without the lock: {e}', file=out)
+    try:
+        return _apply(conf_path, default_path, dsp_target_path, probe_fn, out, machine_id_path)
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+def _apply(conf_path, default_path, dsp_target_path, probe_fn, out, machine_id_path):
     model, imported = load(conf_path, default_path, dsp_target_path)
-    if imported:
+    new_mac = False
+    if not model['mac']:
+        # Once set it is never changed again: Lyrion keys the player's
+        # settings, queue and history off it.
+        mac = derived_mac(machine_id_path)
+        if mac:
+            model['mac'] = mac
+            new_mac = True
+            if out is not None:
+                print(f'hifi_squeezelite: player MAC set to {mac}', file=out)
+    if imported or new_mac:
         try:
             save(model, conf_path)
-            if out is not None:
+            if out is not None and imported:
                 print(f'hifi_squeezelite: imported {default_path} into {conf_path}', file=out)
         except OSError as e:
             if out is not None:

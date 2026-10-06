@@ -52,6 +52,11 @@ AB_RAUC_CONF=/etc/rauc/system.conf
 AB_RAUC_KEYRING=/etc/rauc/keyring.pem
 AB_DATA_MNT=/data
 AB_IMAGE_MARKER=/usr/lib/osmium/IMAGE_VERSION
+# The image's identity as a GRUB environment block (build-image.sh). The ESP
+# selector (version 2) compares it with <S>_GOOD in the grubenv; see there.
+AB_IMAGE_ID_FILE=/boot/grub/osmium-id.env
+# Extra boots a proven image gets after a bad one before the fallback.
+AB_PROVEN_ATTEMPTS=2
 
 ab_log() { printf 'I: [hifi-ab] %s\n' "$*" >&2; }
 
@@ -130,6 +135,17 @@ ab_part_num() {
 
 # Vero sugli slot immagine (root read-only costruita da build-image.sh).
 ab_is_image() { [ -f "$AB_IMAGE_MARKER" ]; }
+
+# ab_image_id [root]: the OSMIUM_ID of the image mounted at root (default /);
+# empty for a converted legacy root or an image built before the id existed.
+ab_image_id() {
+    sed -n 's/^OSMIUM_ID=//p' "${1:-}$AB_IMAGE_ID_FILE" 2>/dev/null | head -n 1
+}
+
+# ab_env_get <NAME>: a variable of the A/B grubenv on the ESP (empty if unset).
+ab_env_get() {
+    grub-editenv "$AB_GRUBENV" list 2>/dev/null | sed -n "s/^$1=//p" | head -n 1
+}
 
 # Slot avviato (A|B) secondo la riga di comando del kernel; vuoto sui legacy.
 ab_booted_slot() {

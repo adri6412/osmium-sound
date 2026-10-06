@@ -1,4 +1,4 @@
-# Osmium Sound — A/B boot selector (version 1).
+# Osmium Sound — A/B boot selector (version 2).
 #
 # This text file sits on the ESP as /EFI/debian/grub.cfg, in place of the
 # three-line stub grub-install writes, and is read by Debian's signed
@@ -8,6 +8,24 @@
 # variables kept in /EFI/debian/grubenv, then hands over to the chosen slot's
 # grub.cfg — either the static script of a RAUC image or the Debian grub.cfg
 # of a converted legacy root.
+#
+# 🚨 Version 2: a PROVEN image is not abandoned over one bad boot. RAUC's
+# scheme makes every boot a trial (TRY=1 until hifi-boot-health.sh marks it
+# good), so one boot that did not get that far — a power cut half-way, a
+# slow disk check — used to send the device back to the other, older image
+# for good. Now a slot whose image has already been marked good once
+# (<S>_GOOD, written by hifi-boot-health.sh, equal to the OSMIUM_ID the image
+# itself carries in /boot/grub/osmium-id.env) gets <S>_LEFT more attempts
+# (2, restored at every good boot) before the fallback. The id is the
+# image's own: a newly installed image does not carry the id that was marked
+# good, so its first boot is still a one-shot trial, exactly as before — a
+# broken new image still falls back after one failed boot. Images and roots
+# without the file (a converted legacy root, images built before it) never
+# match, and behave as in version 1.
+#
+# Only reaches a device when the selector is rendered: a conversion
+# (hifi-ab-convert.sh select) or a fresh install (hifi-disk-install.sh). An
+# image update does not rewrite it.
 #
 # The LAST branch is, byte for byte, today's stub: if anything above does not
 # add up (grubenv missing or unreadable, partitions gone, both slots refusing
@@ -27,7 +45,11 @@ if [ -n "$disk" -a -e ($root)/EFI/debian/ab-enabled -a -e ($root)/EFI/debian/gru
     set A_TRY=0
     set B_OK=0
     set B_TRY=0
-    if load_env --file=$envfile ORDER A_OK A_TRY B_OK B_TRY; then
+    set A_GOOD=
+    set A_LEFT=0
+    set B_GOOD=
+    set B_LEFT=0
+    if load_env --file=$envfile ORDER A_OK A_TRY B_OK B_TRY A_GOOD A_LEFT B_GOOD B_LEFT; then
         set ab=1
     fi
 fi
@@ -37,12 +59,33 @@ if [ "$ab" = 1 ]; then
             set ok=0
             set try=1
             set part=
-            if [ "$S" = "A" ]; then set ok="$A_OK"; set try="$A_TRY"; set part=gpt3; fi
-            if [ "$S" = "B" ]; then set ok="$B_OK"; set try="$B_TRY"; set part=gpt4; fi
+            set good=
+            set left=0
+            if [ "$S" = "A" ]; then set ok="$A_OK"; set try="$A_TRY"; set part=gpt3; set good="$A_GOOD"; set left="$A_LEFT"; fi
+            if [ "$S" = "B" ]; then set ok="$B_OK"; set try="$B_TRY"; set part=gpt4; set good="$B_GOOD"; set left="$B_LEFT"; fi
+            set go=0
             if [ -n "$part" -a "$ok" = 1 -a "$try" = 0 ]; then
+                set go=1
                 if [ "$S" = "A" ]; then set A_TRY=1; fi
                 if [ "$S" = "B" ]; then set B_TRY=1; fi
                 save_env --file=$envfile A_TRY B_TRY
+            elif [ -n "$part" -a "$ok" = 1 -a -n "$good" ]; then
+                # A boot of this slot did not reach "good". Another attempt
+                # only for the very image that was proven good, and only
+                # while there are attempts left.
+                if [ "$left" = 1 -o "$left" = 2 -o "$left" = 3 ]; then
+                    set OSMIUM_ID=
+                    load_env --file=($disk,$part)/boot/grub/osmium-id.env OSMIUM_ID
+                    if [ "$OSMIUM_ID" = "$good" ]; then
+                        set go=1
+                        if [ "$left" = 3 ]; then set left=2; elif [ "$left" = 2 ]; then set left=1; else set left=0; fi
+                        if [ "$S" = "A" ]; then set A_LEFT="$left"; fi
+                        if [ "$S" = "B" ]; then set B_LEFT="$left"; fi
+                        save_env --file=$envfile A_LEFT B_LEFT
+                    fi
+                fi
+            fi
+            if [ "$go" = 1 ]; then
                 set slot_partuuid=
                 set slot_fsuuid=
                 probe --set=slot_partuuid --part-uuid ($disk,$part)

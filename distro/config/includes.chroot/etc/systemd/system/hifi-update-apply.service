@@ -17,6 +17,11 @@ Type=oneshot
 ExecStart=/bin/sh /usr/local/sbin/hifi-update-apply-runner.sh
 TimeoutStartSec=1800
 StandardOutput=journal+console
+# A runner that dies before it can leave update mode by itself (a crash, the
+# timeout above) must not leave the box parked on the splash with no API, web
+# admin or interface: reboot, and the runner's own boot counter gives up after
+# a few rounds.
+FailureAction=reboot
 
 [Install]
 WantedBy=system-update.target

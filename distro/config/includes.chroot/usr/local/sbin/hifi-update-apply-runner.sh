@@ -29,11 +29,23 @@
 # download case the stage phase still needs hifi-update-stage-resume.service
 # for.
 #
+# What it never does is stay here. Under system-update.target there is no
+# API, no web admin and no interface, only the splash, and /system-update
+# brings every power cycle straight back to the same failure. So a step that
+# fails ends the session like a successful one — error recorded for the API to
+# show, /system-update removed, normal reboot — and a session that dies
+# without getting that far (the unit's FailureAction=reboot) is counted: after
+# MAX_BOOTS update-mode boots the next one gives up the same way.
+#
 # Usage (no arguments):
 #     hifi-update-apply-runner.sh
 set -eu
 
 MAX_ATTEMPTS=2
+MAX_BOOTS=3
+# How long the red splash stays up before a failed session reboots into the
+# normal system: long enough to be noticed by someone looking at the screen.
+FAIL_HOLD_SECS=${HIFI_APPLY_FAIL_HOLD_SECS:-30}
 
 # HIFI_APPLY_TEST_ROOT is the test hook (tests/test-update-apply-runner.sh): it
 # relocates every path this script touches into a sandbox, including the
@@ -45,6 +57,7 @@ if [ -n "${HIFI_APPLY_TEST_ROOT:-}" ]; then
     PLAN="$UPDATE_DIR/plan"
     STATE_FILE="$UPDATE_DIR/state"
     ERROR_FILE="$UPDATE_DIR/error.json"
+    BOOTS_FILE="$UPDATE_DIR/apply-boots"
     STAGE_ROOT="$UPDATE_DIR/staged"
     SYSTEM_UPDATE_LINK="$_R/system-update"
     SYS_SCRIPT="$_R/sbin/hifi-system-update.sh"
@@ -66,6 +79,7 @@ else
     PLAN="$UPDATE_DIR/plan"
     STATE_FILE="$UPDATE_DIR/state"
     ERROR_FILE="$UPDATE_DIR/error.json"
+    BOOTS_FILE="$UPDATE_DIR/apply-boots"
     STAGE_ROOT="$UPDATE_DIR/staged"
     SYSTEM_UPDATE_LINK=/system-update
     SYS_SCRIPT=/usr/local/sbin/hifi-system-update.sh
@@ -94,6 +108,39 @@ else
 fi
 
 log() { printf '%s [hifi-update-apply-runner] %s\n' "$(date -Is 2>/dev/null || date)" "$*"; }
+
+# ── run from a private copy ──────────────────────────────────────────
+# The system step installs /usr/local/sbin/*.sh with `cp -af`, which rewrites
+# each file IN PLACE — this one included. /bin/sh reads a script incrementally,
+# by offset, so after the system step it would go on reading the NEW file from
+# the old offset: seen in a sandbox, that ran the "session complete" cleanup
+# (plan and staged payloads deleted) and then died on a syntax error, leaving
+# /system-update behind and no plan to apply on any later boot. A copy taken
+# before anything runs is immune.
+if [ "${HIFI_RUNNER_PRIVATE:-}" != "1" ]; then
+    _self=$(readlink -f "$0" 2>/dev/null || echo "$0")
+    _dir=$(mktemp -d /var/tmp/hifi-update-apply-runner.XXXXXX) || {
+        log "mktemp failed; running in place"
+        _dir=""
+    }
+    if [ -n "$_dir" ] && cp -f "$_self" "$_dir/runner.sh"; then
+        chmod +x "$_dir/runner.sh"
+        HIFI_RUNNER_PRIVATE=1
+        HIFI_RUNNER_TMPDIR="$_dir"
+        export HIFI_RUNNER_PRIVATE HIFI_RUNNER_TMPDIR
+        exec /bin/sh "$_dir/runner.sh" "$@"
+    fi
+    [ -n "$_dir" ] && rm -rf "$_dir"
+fi
+# Must end on a success: an EXIT trap whose last command fails can replace this
+# script's exit status, and the exit status is what the unit (and the tests)
+# go by.
+# shellcheck disable=SC2317,SC2329  # invoked indirectly, by the trap below
+cleanup() {
+    [ -n "${HIFI_RUNNER_TMPDIR:-}" ] && rm -rf "$HIFI_RUNNER_TMPDIR"
+    return 0
+}
+trap cleanup EXIT
 
 # ── splash progress (best-effort; never fatal) ─────────────────────────
 splash_progress() {  # <0-100>
@@ -139,13 +186,47 @@ write_error() {  # <kind> <message-en> [key] [params-json]
     mv -f "$_tmp" "$ERROR_FILE"
 }
 
+# Back to the normal system, whatever happened here: the plan and the staged
+# payloads go (a new attempt stages afresh), then /system-update, then reboot.
+leave_update_mode() {
+    rm -rf "$STAGE_ROOT"
+    rm -f "$PLAN" "$BOOTS_FILE"
+    if ! rm -f "$SYSTEM_UPDATE_LINK"; then
+        log "could not remove $SYSTEM_UPDATE_LINK — next boot would re-enter update mode"
+        write_state error "Could not leave update mode ($SYSTEM_UPDATE_LINK)" update.apply.stuckUpdateMode
+        write_error '' "Could not remove $SYSTEM_UPDATE_LINK" update.apply.stuckUpdateMode
+        splash_error
+        return 1
+    fi
+    sync
+    # hifi-playback-quiesce.service already stops any active DMA audio
+    # path before any halt/reboot however triggered — no extra mitigation
+    # needed here (nothing plays audio under system-update.target anyway).
+    "$SYSTEMCTL" reboot || log "systemctl reboot failed"
+}
+
 fail_step() {  # <kind> <message-en> [key] [params-json]
     log "step $1 failed: $2"
     write_state error "$2" "${3:-}" "${4:-}"
     write_error "$1" "$2" "${3:-}" "${4:-}"
     splash_error
+    sleep "$FAIL_HOLD_SECS" 2>/dev/null || true
+    leave_update_mode || true
     exit 1
 }
+
+# One more update-mode boot. Written before anything else can go wrong, so a
+# session that keeps dying (a crash, the unit's timeout, a power cut at the
+# same point) is still counted and eventually let go.
+mkdir -p "$UPDATE_DIR"
+boots=$(tr -cd '0-9' < "$BOOTS_FILE" 2>/dev/null || true)
+boots=$(( ${boots:-0} + 1 ))
+printf '%s\n' "$boots" > "$BOOTS_FILE.tmp" && mv -f "$BOOTS_FILE.tmp" "$BOOTS_FILE"
+sync
+if [ "$boots" -gt "$MAX_BOOTS" ]; then
+    fail_step '' "The update did not complete after $MAX_BOOTS attempts" \
+        update.apply.gaveUp "{\"attempts\":$MAX_BOOTS}"
+fi
 
 [ -f "$PLAN" ] || fail_step '' "No update plan found in update mode — unexpected state" update.apply.noPlan
 
@@ -346,8 +427,6 @@ fi
 
 # ── every component landed — clear the flag and go back to normal ──────
 log "update-mode session complete — returning to normal boot"
-rm -rf "$STAGE_ROOT"
-rm -f "$PLAN"
 if [ -n "${ab_fail_key:-}" ]; then
     # The components landed, but the device could not move to the A/B layout.
     # That is reported as a failed update, not as "complete" with a footnote:
@@ -368,17 +447,5 @@ else
 fi
 splash_progress 100
 
-if ! rm -f "$SYSTEM_UPDATE_LINK"; then
-    log "could not remove $SYSTEM_UPDATE_LINK — next boot would re-enter update mode"
-    write_state error "Could not leave update mode ($SYSTEM_UPDATE_LINK)" update.apply.stuckUpdateMode
-    write_error '' "Could not remove $SYSTEM_UPDATE_LINK after a successful update" update.apply.stuckUpdateMode
-    splash_error
-    exit 1
-fi
-
-sync
-# hifi-quiesce-audio-shutdown.service already stops any active DMA audio path
-# before any halt/reboot however triggered — no extra mitigation needed here
-# (nothing plays audio under system-update.target anyway).
-"$SYSTEMCTL" reboot || log "systemctl reboot failed"
+leave_update_mode || exit 1
 exit 0

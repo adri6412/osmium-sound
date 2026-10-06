@@ -58,7 +58,6 @@ const sections = computed(() => [
   // What the device is made of and under which licenses: the project, Lyrion,
   // the third-party notices and every Debian package of the image.
   { key: 'notices',   label: t('settings.sections.notices.label'),   desc: t('settings.sections.notices.desc') },
-  { key: 'debug',     label: t('settings.sections.debug.label'),     desc: t('settings.sections.debug.desc') },
   // Reached from System and Updates ("Check the network"), not listed itself.
   { key: 'netCheck',  label: t('settings.sections.netCheck.label'),  desc: t('settings.sections.netCheck.desc'), hidden: true },
 ]);
@@ -66,8 +65,10 @@ const listedSections = computed(() => sections.value.filter(s => !s.hidden));
 // 'multiroom' was this section's key before it became "Lyrion Music Server";
 // keep old bookmarks and the kiosk's deep links working. 'dsp' is held back
 // (see the sections list above) — redirect a hand-typed ?open=dsp back to the
-// section list instead of rendering the card.
-const normalizeSection = (k) => (k === 'multiroom' ? 'lyrion' : k === 'dsp' ? '' : (k || ''));
+// section list instead of rendering the card. 'debug' (the Plymouth/kdump
+// boot flags) is gone: on an A/B image /boot is read-only and grub.cfg is
+// static, so those switches never took effect.
+const normalizeSection = (k) => (k === 'multiroom' ? 'lyrion' : (k === 'dsp' || k === 'debug') ? '' : (k || ''));
 const open = ref(normalizeSection(route.query.open));
 watch(() => route.query.open, (v) => { open.value = normalizeSection(v); });
 function goto(k) { router.replace({ query: k ? { open: k } : {} }); }
@@ -108,50 +109,6 @@ async function downloadSupportBundle() {
   } catch (err) {
     say(t('settings.system.supportBundleFailed') || 'Download support bundle fallito', true);
     console.error('support bundle download failed', err);
-  }
-}
-
-// ── Boot debug flags (Settings → Debug) ──────────────────────────────
-// For a box that hangs at shutdown/boot behind the Plymouth splash instead of
-// crashing cleanly (possibly a kernel panic hidden behind it), or to capture
-// a vmcore off a real one. Both only take effect after a reboot — offer one
-// via the same reboot-wait overlay every other reboot-ending action here
-// uses (see waitForReboot() below).
-const plymouthDisabled = ref(false);
-const kdumpEnabled = ref(false);
-const kdumpInstalled = ref(true);
-const debugFlagsBusy = ref(false);
-async function loadDebugFlags() {
-  const [py, kd] = await Promise.all([api.sys('debug_plymouth'), api.sys('debug_kdump')]);
-  if (py.ok) plymouthDisabled.value = !!py.data.disabled;
-  if (kd.ok) { kdumpEnabled.value = !!kd.data.enabled; kdumpInstalled.value = kd.data.installed !== false; }
-}
-async function togglePlymouth(disable) {
-  if (debugFlagsBusy.value || disable === plymouthDisabled.value) return;
-  debugFlagsBusy.value = true;
-  const r = await api.sysPost('debug_plymouth', { disable });
-  debugFlagsBusy.value = false;
-  if (r.ok && r.data.success !== false) {
-    plymouthDisabled.value = disable;
-    say(bodyMsg(r, t('settings.debug.rebootRequired')));
-    if (confirm(t('settings.debug.rebootPrompt'))) { await api.sysPost('reboot', {}); waitForReboot(); }
-  } else {
-    say(bodyMsg(r, t('settings.debug.saveFailed')), true);
-  }
-}
-async function toggleKdump(enable) {
-  if (debugFlagsBusy.value || enable === kdumpEnabled.value) return;
-  debugFlagsBusy.value = true;
-  say(enable ? t('settings.debug.kdumpInstalling') : '');
-  const r = await api.sysPost('debug_kdump', { enable });
-  debugFlagsBusy.value = false;
-  if (r.ok && r.data.success !== false) {
-    kdumpEnabled.value = enable;
-    kdumpInstalled.value = true;
-    say(bodyMsg(r, t('settings.debug.rebootRequired')));
-    if (confirm(t('settings.debug.rebootPrompt'))) { await api.sysPost('reboot', {}); waitForReboot(); }
-  } else {
-    say(bodyMsg(r, t('settings.debug.saveFailed')), true);
   }
 }
 
@@ -497,7 +454,10 @@ async function loadToggles() {
   const s = await api.sys('ssh'); if (s.ok) { sshState.available = !!s.data.available; sshState.enabled = !!s.data.enabled; }
 }
 async function setSsh(v) {
-  sshState.enabled = v; const r = await api.sysPost('ssh', { enable: v });
+  // Switching SSH on hands out a way to root: the server asks for the admin
+  // password again, not just this session.
+  if (v && !shell.admin) { say(t('settings.services.adminPasswordNeeded'), true); return; }
+  sshState.enabled = v; const r = await api.sysPost('ssh', { enable: v, admin_password: v ? shell.admin : undefined });
   say(bodyMsg(r, v ? t('settings.services.sshOn') : t('settings.services.sshOff')), !(r.ok && r.data.success !== false));
   loadToggles(); loadShell();
 }
@@ -508,7 +468,7 @@ async function setSsh(v) {
 // admin account, mirrored into a real Linux user with sudo at account creation
 // and at every password change. Devices provisioned before that shipped have no
 // such user yet, so this panel can create one on demand.
-const shell = reactive({ supported: true, exists: false, username: '', form: '', password: '', busy: false });
+const shell = reactive({ supported: true, exists: false, username: '', form: '', password: '', admin: '', busy: false });
 async function loadShell() {
   const r = await api.sys('shell_account');
   // Older api_server has no such endpoint — hide the whole block rather than
@@ -521,11 +481,11 @@ async function loadShell() {
 }
 async function saveShellAccount() {
   shell.busy = true;
-  const r = await api.sysPost('shell_account', { username: shell.form, password: shell.password });
+  const r = await api.sysPost('shell_account', { username: shell.form, password: shell.password, admin_password: shell.admin });
   shell.busy = false;
   const ok = r.ok && r.data.success !== false;
   say(bodyMsg(r, ok ? t('settings.services.sshLoginSaved') : t('settings.services.sshLoginFailed')), !ok);
-  if (ok) { shell.password = ''; loadShell(); }
+  if (ok) { shell.password = ''; shell.admin = ''; loadShell(); }
 }
 // ── Bluetooth speakers (A2DP source) ─────────────────────────────
 // Pair a speaker or a pair of headphones and it becomes a Lyrion player of
@@ -772,9 +732,18 @@ async function loadLms() {
     lms.savedHost = lms.host;
   }
 }
+// This box's own Lyrion answers the discovery broadcast too, and following it
+// would switch the local server off and leave nothing to play from. The API
+// already leaves it out; the address this page was opened on and the
+// interface addresses are dropped here as well, like the kiosk does.
 async function discoverLms() {
   say(t('settings.lyrion.searching'));
-  const r = await api.sys('discover_lms'); if (r.ok) { lms.servers = r.data.servers || []; say(''); }
+  const [r, i] = await Promise.all([api.sys('discover_lms'), api.sys('info')]);
+  if (!r.ok) return;
+  const own = new Set([window.location.hostname]);
+  if (i.ok) for (const f of (i.data.network_interfaces || [])) if (f.address) own.add(String(f.address));
+  lms.servers = (r.data.servers || []).filter((s) => s.ip && !own.has(String(s.ip)));
+  say('');
 }
 // Switching between this device's own server and one on the network only
 // half-applies on a running box, so the change ends in a reboot — asked for
@@ -1742,12 +1711,15 @@ async function uploadRestore(e) {
 async function saveBackupScheduled(v) {
   backupScheduled.value = v;
   const r = await api.backupSettingsSave({ scheduled: v });
-  if (r.data && r.data.success === false) say(bodyMsg(r, t('settings.backup.settingsFailed')), true);
+  if (!r.ok || (r.data && r.data.success === false)) {
+    say(bodyMsg(r, t('settings.backup.settingsFailed')), true);
+    loadBackups();   // the switch shows what the device really kept
+  }
 }
 
 onMounted(async () => {
   loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadUiRotation(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadNpAnimation(); loadAnimStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale(); loadDebugFlags();
+  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadUiRotation(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadNpAnimation(); loadAnimStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -1883,7 +1855,7 @@ onUnmounted(() => {
         <span class="seg">
           <button v-for="m in sq.choices.dsd" :key="m" :disabled="sqBusy" :class="{ active: sq.conf.dsd === m }" @click="setSq({ dsd: m })">{{ t('settings.audio.dsd.' + m) }}</button>
         </span>
-        <p class="muted">{{ t(sq.dsd_detected === 'native' ? 'settings.audio.dsdDetectedNative' : 'settings.audio.dsdDetectedDop') }} {{ t('settings.audio.dsdHelp') }}</p>
+        <p class="muted">{{ t(sq.dsd_detected === 'native' ? 'settings.audio.dsdDetectedNative' : sq.dsd_detected === 'pcm' ? 'settings.audio.dsdDetectedPcm' : 'settings.audio.dsdDetectedDop') }} {{ t('settings.audio.dsdHelp') }}</p>
 
         <label>{{ t('settings.audio.dsdDelayLabel') }}</label>
         <span class="seg">
@@ -2265,6 +2237,8 @@ onUnmounted(() => {
         <span>{{ t('settings.services.ssh') }} <span class="muted">{{ t('settings.services.sshHint') }}</span></span>
         <Toggle :model-value="sshState.enabled" @update:model-value="setSsh" />
       </div>
+      <label>{{ t('settings.services.adminPassword') }}</label>
+      <input v-model="shell.admin" type="password" autocomplete="current-password" />
       <!-- SSH login. Shown once SSH is on (or a login already exists), because
            that is the only context in which it means anything. -->
       <template v-if="shell.supported && (sshState.enabled || shell.exists)">
@@ -2279,7 +2253,7 @@ onUnmounted(() => {
         <label>{{ t('settings.services.sshPassword') }}</label>
         <input v-model="shell.password" type="password" autocomplete="new-password" />
         <div class="row" style="margin-top: 10px;">
-          <button class="secondary" :disabled="shell.busy || !shell.form || shell.password.length < 8" @click="saveShellAccount">
+          <button class="secondary" :disabled="shell.busy || !shell.form || shell.password.length < 8 || !shell.admin" @click="saveShellAccount">
             {{ shell.busy ? '…' : (shell.exists ? t('settings.services.sshLoginUpdate') : t('settings.services.sshLoginCreate')) }}
           </button>
         </div>
@@ -2911,22 +2885,6 @@ onUnmounted(() => {
         </div>
         <p class="muted" style="margin-top: 14px;">{{ t('settings.notices.sourceOffer') }}</p>
       </template>
-    </div>
-
-    <div class="card" v-if="open === 'debug'">
-      <p class="sub">{{ t('settings.debug.bootHint') }}</p>
-      <div class="between item">
-        <span>{{ t('settings.debug.plymouth') }}
-          <span class="muted">{{ t('settings.debug.plymouthHelp') }}</span>
-        </span>
-        <Toggle :model-value="plymouthDisabled" :disabled="debugFlagsBusy" @update:model-value="togglePlymouth" />
-      </div>
-      <div class="between item">
-        <span>{{ t('settings.debug.kdump') }}
-          <span class="muted">{{ kdumpInstalled ? t('settings.debug.kdumpHelp') : t('settings.debug.kdumpNotInstalled') }}</span>
-        </span>
-        <Toggle :model-value="kdumpEnabled" :disabled="debugFlagsBusy" @update:model-value="toggleKdump" />
-      </div>
     </div>
   </template>
 </template>

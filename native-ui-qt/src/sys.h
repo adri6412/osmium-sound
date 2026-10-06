@@ -9,6 +9,7 @@
 #include <QFileSystemWatcher>
 #include <QPointF>
 #include <QTimer>
+#include <QVariantMap>
 
 class QQuickWindow;
 class QWindow;
@@ -92,6 +93,10 @@ public:
     // Icona lucide gia' tinta (file SVG in cache): si disegna come vettore,
     // senza passare da una texture — vedi Icon.qml per il perche'.
     Q_INVOKABLE QString tintedIcon(const QString &name, const QColor &color);
+    // quante icone tinte ci sono ora in cache, quante ne sono state scritte
+    // da quando e' partita e quante volte la cache e' stata svuotata (per il
+    // canale di prova: un tocco non deve farle crescere)
+    Q_INVOKABLE QVariantMap tintStats() const;
     void setIconDir(const QString &dir) { m_iconDir = dir; }
     // box-shadow CSS (blur, spread, colore) per un rettangolo con angoli
     // `radius`: un PNG 9-patch pre-sfocato in cache, da usare con BoxShadow.qml
@@ -116,6 +121,9 @@ private:
     QString m_assets, m_configDir;
     QString m_iconDir, m_iconCacheDir;
     QHash<QString, QString> m_tinted;   // chiave nome|colore -> URL del file
+    int m_tintedIcons = 0, m_tintedMade = 0, m_tintedPrunes = 0;
+    void iconCacheDir();                // crea la cartella (e la ripulisce al primo uso)
+    void pruneTinted();
     bool m_pointer = true, m_dev = false, m_startExpanded = false;
     int m_rotation = 0, m_savedRotation = -1, m_hwRotation = 0;
     QFileSystemWatcher m_confWatch;

@@ -1546,6 +1546,25 @@ def _preserved_ipv4_args(conn):
     return args
 
 
+#: Name a rebuilt Wi-Fi profile is tried under until it has associated; see
+#: _wifi_join(). Never shown: it either becomes the SSID or is deleted.
+_WIFI_TRIAL_SUFFIX = ' (osmium-trial)'
+
+
+def _active_connection_ids():
+    """Names of the NetworkManager profiles active right now."""
+    ids = set()
+    try:
+        r = _run(['nmcli', '-t', '-f', 'NAME', 'connection', 'show', '--active'])
+        for line in r.stdout.strip().split('\n'):
+            parts = _terse_split(line)
+            if parts and parts[0]:
+                ids.add(parts[0])
+    except Exception:
+        pass
+    return ids
+
+
 def _wifi_join(ssid, password, dev, band=''):
     """Join `ssid`, returning the CompletedProcess of the step that decided it.
 
@@ -1558,8 +1577,13 @@ def _wifi_join(ssid, password, dev, band=''):
     "802-11-wireless-security.key-mgmt: property is missing" (issue #98).
     Re-joining a network the box had already been on — exactly what someone
     does after a spell on the cable — therefore always failed, and no amount
-    of retyping the password could help. Dropping the stale profile first and
-    spelling out key-mgmt ourselves removes both halves of that.
+    of retyping the password could help. A fresh profile with key-mgmt spelled
+    out removes both halves of that.
+
+    The fresh profile is tried under a temporary name, next to the saved one,
+    and replaces it only once it has associated. Deleting the saved profile
+    first meant a mistyped password left the box with no profile for its own
+    network at all -- offline at once, and for good on a box with no screen.
 
     With no password there is nothing to write, so a saved profile is
     activated as it stands (its stored secret is still good) and only a
@@ -1583,12 +1607,16 @@ def _wifi_join(ssid, password, dev, band=''):
         # for an empty password, which is exactly what an open AP wants).
 
     sec_args = _wifi_security_args(ssid, password)
-    # Read before the delete, write back into the replacement: the admin web UI
-    # can put a fixed address on a Wi-Fi profile too, and it lives on the very
-    # profile being rebuilt here.
-    ip_args = _preserved_ipv4_args(ssid) if _wifi_profile_exists(ssid) else []
-    _run(['nmcli', 'connection', 'delete', 'id', ssid])   # clear any stale profile
-    add = ['nmcli', 'connection', 'add', 'type', 'wifi', 'con-name', ssid, 'ssid', ssid]
+    saved = _wifi_profile_exists(ssid)
+    # Read from the saved profile, written into the replacement: the admin web
+    # UI can put a fixed address on a Wi-Fi profile too, and it lives on the
+    # very profile being rebuilt here.
+    ip_args = _preserved_ipv4_args(ssid) if saved else []
+    was_up = saved and ssid in _active_connection_ids()
+    name = ssid + _WIFI_TRIAL_SUFFIX if saved else ssid
+    if saved:
+        _run(['nmcli', 'connection', 'delete', 'id', name])   # an attempt cut short
+    add = ['nmcli', 'connection', 'add', 'type', 'wifi', 'con-name', name, 'ssid', ssid]
     if dev:
         add += ['ifname', dev]
     r = _run(add + sec_args + band_args + ip_args)
@@ -1599,15 +1627,23 @@ def _wifi_join(ssid, password, dev, band=''):
     # _connect_wifi). Kept to two attempts on purpose: the admin web UI proxies
     # this call and gives up on the whole request after 90s.
     for attempt in range(2):
-        r = _run(['nmcli', 'connection', 'up', 'id', ssid], timeout=30)
+        r = _run(['nmcli', 'connection', 'up', 'id', name], timeout=30)
         if r.returncode == 0:
+            if saved:
+                # It works: now, and only now, it takes the saved one's place.
+                _run(['nmcli', 'connection', 'delete', 'id', ssid])
+                _run(['nmcli', 'connection', 'modify', 'id', name, 'connection.id', ssid])
             return r
         if attempt == 0:
             time.sleep(2)
     # Don't leave a profile that can't associate lying around: it would be the
     # stale profile the next attempt trips over, and until then NetworkManager
     # keeps retrying it with a password we already know doesn't work.
-    _run(['nmcli', 'connection', 'delete', 'id', ssid])
+    _run(['nmcli', 'connection', 'delete', 'id', name])
+    if was_up:
+        # The attempt took the radio off the network the box was on; the
+        # saved profile is untouched, so put it back.
+        _run(['nmcli', 'connection', 'up', 'id', ssid], timeout=45)
     return r
 
 
@@ -1624,7 +1660,10 @@ def wifi_saved():
                 active.add(parts[0])
     except Exception:
         pass
-    names = sorted(_connection_ids_for_device_type('wifi'), key=lambda n: (n not in active, n.lower()))
+    # A join being tried right now (see _wifi_join) is not a saved network.
+    names = sorted((n for n in _connection_ids_for_device_type('wifi')
+                    if not n.endswith(_WIFI_TRIAL_SUFFIX)),
+                   key=lambda n: (n not in active, n.lower()))
     return {'networks': [{'ssid': n, 'in_use': n in active} for n in names]}
 
 
@@ -2015,11 +2054,14 @@ def _sq_load():
     model, _ = sq.load(SQUEEZELITE_CONF, SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
     return model
 
-def _sq_save(model):
-    """Persist the model and render the defaults file from it. True when the
-    rendered ARGS line changed, i.e. when a player restart is worth it."""
-    model = sq.save(model, SQUEEZELITE_CONF)
-    return sq.write_default(sq.render(model), SQUEEZELITE_DEFAULT)
+def _sq_update(change):
+    """Load the model, `change(model)` it (in place, or return a new one),
+    persist it and render the defaults file — under the model's lock, so two
+    requests (or a request and squeezelite's ExecStartPre) cannot lose each
+    other's change. True when the rendered ARGS line changed, i.e. when a
+    player restart is worth it."""
+    _, changed = sq.update(change, SQUEEZELITE_CONF, SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
+    return changed
 
 def list_audio_devices():
     """List ALSA playback devices (cards) usable as squeezelite output.
@@ -2100,9 +2142,7 @@ def set_audio_device(device):
     # The DSD mode, the rate limit and the rest stay as the model says; the
     # render decides `-D`'s format for the new DAC on its own (auto).
     try:
-        model = _sq_load()
-        model['output'] = device
-        _sq_save(model)
+        _sq_update(lambda model: model.update(output=device))
     except Exception:
         log.exception("set_audio_device: write config failed")
         return {'success': False, 'code': 'audio.writeConfigFailed',
@@ -2128,7 +2168,9 @@ def get_squeezelite_conf():
     return {
         'conf': model,
         'args': sq.render(model),
-        'dsd_detected': 'native' if sq.is_native(fmt) else 'dop',
+        # 'pcm': no USB DAC on this output (HDMI, the onboard codec, default),
+        # so Automatic lets squeezelite convert DSD to PCM -- see sq.probe().
+        'dsd_detected': 'native' if sq.is_native(fmt) else ('pcm' if fmt == sq.PCM_ONLY else 'dop'),
         'dsd_format': fmt,
         'mixers': sq.mixer_controls(model['output']),
         'choices': {'dsd': list(sq.DSD_MODES), 'dsd_delay_ms': list(sq.DSD_DELAYS),
@@ -2137,26 +2179,27 @@ def get_squeezelite_conf():
     }
 
 def set_squeezelite_conf(changes):
-    model = _sq_load()
-    try:
+    def change(model):
         model = sq.set_fields(model, changes)
+        if model['volume'] == 'hardware' and not model['mixer']:
+            mixers = sq.mixer_controls(model['output'])
+            if not mixers:
+                raise sq.InvalidField('squeezelite.noMixer', 'mixer')
+            model['mixer'] = mixers[0]
+        return model
+    return _apply_squeezelite_conf(change, 'squeezelite.saved')
+
+def reset_squeezelite_conf():
+    return _apply_squeezelite_conf(sq.reset_tunables, 'squeezelite.reset')
+
+def _apply_squeezelite_conf(change, msg_key):
+    """`change(model)` returns the new model; it runs under the model's lock
+    (_sq_update), and an InvalidField from it saves nothing."""
+    try:
+        changed = _sq_update(change)
     except sq.InvalidField as e:
         return {'success': False, 'code': e.code,
                 'message': _t(e.code, _lang(), field=e.field, detail=e.detail)}
-    if model['volume'] == 'hardware' and not model['mixer']:
-        mixers = sq.mixer_controls(model['output'])
-        if not mixers:
-            return {'success': False, 'code': 'squeezelite.noMixer',
-                    'message': _t('squeezelite.noMixer', _lang())}
-        model['mixer'] = mixers[0]
-    return _apply_squeezelite_conf(model, 'squeezelite.saved')
-
-def reset_squeezelite_conf():
-    return _apply_squeezelite_conf(sq.reset_tunables(_sq_load()), 'squeezelite.reset')
-
-def _apply_squeezelite_conf(model, msg_key):
-    try:
-        changed = _sq_save(model)
     except Exception:
         log.exception("squeezelite conf: write failed")
         return {'success': False, 'code': 'audio.writeConfigFailed',
@@ -2200,19 +2243,75 @@ def _valid_hostname(name):
         return False
     return all(_HOSTNAME_LABEL_RE.match(l) for l in labels)
 
-def _resolves(name, timeout=5):
-    """True if the name resolves to an address, giving up after `timeout` s
-    (getaddrinfo has no timeout of its own and a dead DNS can hang for 30 s)."""
+def _lookup_host(name, timeout=5):
+    """The addresses `name` resolves to (an empty set if it does not), giving
+    up after `timeout` s (getaddrinfo has no timeout of its own and a dead DNS
+    can hang for 30 s)."""
     result = []
     def lookup():
         try:
-            result.append(bool(socket.getaddrinfo(name, 9000, proto=socket.IPPROTO_TCP)))
+            infos = socket.getaddrinfo(name, 9000, proto=socket.IPPROTO_TCP)
+            result.append({_bare_addr(i[4][0]) for i in infos})
         except OSError:
-            result.append(False)
+            result.append(set())
     th = threading.Thread(target=lookup, daemon=True)
     th.start()
     th.join(timeout)
-    return bool(result and result[0])
+    return result[0] if result else set()
+
+def _resolves(name, timeout=5):
+    """True if the name resolves to an address (see _lookup_host)."""
+    return bool(_lookup_host(name, timeout))
+
+def _bare_addr(addr):
+    """An address as compared against this box's own: lower case, without an
+    IPv6 zone index ("fe80::1%eth0") and without the IPv4-mapped prefix."""
+    addr = str(addr or '').split('%', 1)[0].strip().lower()
+    if addr.startswith('::ffff:') and _valid_ipv4(addr[7:]):
+        addr = addr[7:]
+    return addr
+
+def _own_addresses():
+    """Every address this box answers on, all interfaces and loopback, IPv4
+    and IPv6. Read live: DHCP can hand out a new one at any time."""
+    addrs = {'127.0.0.1', '::1'}
+    try:
+        import psutil
+        for entries in psutil.net_if_addrs().values():
+            for a in entries:
+                if a.family in (socket.AF_INET, socket.AF_INET6):
+                    addrs.add(_bare_addr(a.address))
+    except Exception:
+        # No psutil: `ip -o addr` lists the same thing, "2: eth0 inet 1.2.3.4/24 ..."
+        try:
+            r = _run(['ip', '-o', 'addr', 'show'], timeout=5)
+            for line in (r.stdout or '').splitlines():
+                parts = line.split()
+                for fam in ('inet', 'inet6'):
+                    if fam in parts:
+                        i = parts.index(fam)
+                        if i + 1 < len(parts):
+                            addrs.add(_bare_addr(parts[i + 1].split('/', 1)[0]))
+        except Exception:
+            log.exception("_own_addresses: cannot list the interfaces")
+    addrs.discard('')
+    return addrs
+
+def _own_host_names():
+    """Names that always mean this box, whatever DNS says about them."""
+    names = {'localhost', 'localhost.localdomain'}
+    try:
+        host = socket.gethostname().strip().rstrip('.').lower()
+    except Exception:
+        host = ''
+    if host:
+        short = host.split('.', 1)[0]
+        names |= {host, short, short + '.local'}
+    return names
+
+def _is_own_address(addr):
+    addr = _bare_addr(addr)
+    return addr.startswith('127.') or addr in _own_addresses()
 
 def get_lms_role():
     host = _current_lms_host()
@@ -2263,24 +2362,35 @@ def set_lms_role(mode, host):
         if not (_valid_ipv4(host) or _valid_hostname(host)):
             return {'success': False, 'code': 'lms.invalidHost',
                     'message': _t('lms.invalidHost', _lang(), host=host)}
-        if host in ('127.0.0.1', 'localhost'):
+        if host in ('127.0.0.1', 'localhost') or (_valid_ipv4(host) and host.startswith('127.')):
             return {'success': False, 'code': 'lms.useLocalMode',
                     'message': _t('lms.useLocalMode', _lang())}
         # squeezelite resolves the name once when it starts; a typo would only
         # show after the reboot the owner is asked for next, as a player that
         # never connects. Check it here while there is still a form to fix it.
-        if not _valid_ipv4(host) and not _resolves(host):
-            return {'success': False, 'code': 'lms.hostNotFound',
-                    'message': _t('lms.hostNotFound', _lang(), host=host)}
+        if _valid_ipv4(host):
+            addrs = {host}
+        elif host in _own_host_names():
+            addrs = None
+        else:
+            addrs = _lookup_host(host)
+            if not addrs:
+                return {'success': False, 'code': 'lms.hostNotFound',
+                        'message': _t('lms.hostNotFound', _lang(), host=host)}
+        # 🚨 Following this very box (its LAN address, its name, its .local
+        # name — discovery lists the local Lyrion too) switches the local
+        # Lyrion off and then points the player at it: no music, and
+        # hifi-lyrion-ensure keeps it off at every boot after.
+        if addrs is None or any(_is_own_address(a) for a in addrs):
+            return {'success': False, 'code': 'lms.ownAddress',
+                    'message': _t('lms.ownAddress', _lang(), host=host)}
         target = host
     else:
         return {'success': False, 'code': 'lms.invalidMode',
                 'message': _t('lms.invalidMode', _lang(), mode=mode)}
 
     try:
-        model = _sq_load()
-        model['server'] = target
-        _sq_save(model)
+        _sq_update(lambda model: model.update(server=target))
     except Exception:
         log.exception("set_lms_role: write config failed")
         return {'success': False, 'code': 'lms.sqConfigMissing',
@@ -2335,9 +2445,7 @@ def set_player_name(name):
         return {'success': False, 'code': 'player.invalidName',
                 'message': _t('player.invalidName', _lang())}
     try:
-        model = _sq_load()
-        model['name'] = name
-        _sq_save(model)
+        _sq_update(lambda model: model.update(name=name))
     except Exception:
         log.exception("set_player_name: write config failed")
         return {'success': False, 'code': 'lms.sqConfigMissing',
@@ -2465,7 +2573,10 @@ def set_device_name(name):
 # port). This is the exact zero-config mechanism official Squeezebox
 # controllers use to find servers, so no IP has to be typed in by hand.
 def discover_lms_servers(timeout=1.5):
+    """Lyrion servers on the LAN other than this box's own: the local Lyrion
+    answers the broadcast too, and following it is refused (set_lms_role)."""
     found = {}
+    own = _own_addresses()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -2479,6 +2590,8 @@ def discover_lms_servers(timeout=1.5):
             except socket.timeout:
                 continue
             if not data or data[:1] != b'E':
+                continue
+            if addr[0].startswith('127.') or _bare_addr(addr[0]) in own:
                 continue
             name, port = None, '9000'
             body, i = data[1:], 0
@@ -2829,7 +2942,7 @@ def set_shell_account(username, password):
 SUPPORT_LOG_DIR = '/var/log/hifi'
 SUPPORT_JOURNAL_UNITS = [
     'hifi-api', 'hifi-webui', 'hifi-sources', 'hifi-vumeter', 'hifi-firstboot',
-    'hifi-quiesce-audio-shutdown', 'squeezelite', 'lyrionmusicserver',
+    'hifi-playback-quiesce', 'hifi-quiesce-audio-shutdown', 'squeezelite', 'lyrionmusicserver',
     # Says whether this boot came up with its data partition — a boot that
     # fell back to a tmpfs /data runs on the image's factory settings and
     # silently drops everything written during it, which from the outside
@@ -3683,25 +3796,59 @@ def set_player_enabled(enabled):
         return {'success': False, 'enabled': get_player_enabled()['enabled'],
                 'code': 'update.inProgressRetry', 'message': _t('update.inProgressRetry', _lang())}
     action = 'enable' if enabled else 'disable'
+    previous = get_player_enabled()['enabled']
+    # The file goes first: _restart_squeezelite_if_enabled() and the rest of
+    # the API read it, so it must already say "off" while squeezelite is being
+    # stopped (a DAC change landing in between would otherwise start it again).
+    # Written atomically, so a power cut never leaves it empty or half-written.
+    if not _write_player_enabled_file(enabled):
+        return {'success': False, 'enabled': previous,
+                'code': 'player.toggleFailed', 'message': _t('player.toggleFailed', _lang())}
     try:
         r = subprocess.run(['systemctl', action, '--now', 'squeezelite'],
                            capture_output=True, text=True, timeout=30)
-        if r.returncode != 0:
+        ok = r.returncode == 0
+        if not ok:
             log.error("set_player_enabled %s failed: %s", action, (r.stderr or '').strip())
-            return {'success': False, 'enabled': get_player_enabled()['enabled'],
-                    'code': 'player.toggleFailed', 'message': _t('player.toggleFailed', _lang())}
     except Exception:
         log.exception("set_player_enabled failed")
-        return {'success': False, 'enabled': get_player_enabled()['enabled'],
+        ok = False
+    if not ok:
+        # Keep the file in step with what systemd still has.
+        _write_player_enabled_file(previous)
+        return {'success': False, 'enabled': previous,
                 'code': 'player.toggleFailed', 'message': _t('player.toggleFailed', _lang())}
-    try:
-        os.makedirs(os.path.dirname(PLAYER_ENABLED_FILE), exist_ok=True)
-        with open(PLAYER_ENABLED_FILE, 'w') as f:
-            f.write('1' if enabled else '0')
-    except Exception:
-        log.exception("set_player_enabled: failed to persist state")
+    if enabled:
+        # The VU meter daemon no longer depends on squeezelite (see
+        # hifi-vumeter.service), but a box that was turned off with the old
+        # unit had it stopped along with the player: bring it back. A no-op
+        # when it is already running.
+        try:
+            subprocess.run(['systemctl', 'start', 'hifi-vumeter'],
+                           capture_output=True, text=True, timeout=30)
+        except Exception:
+            log.exception("set_player_enabled: could not start hifi-vumeter")
     msg = _t('player.enabled' if enabled else 'player.disabled', _lang())
     return {'success': True, 'enabled': enabled, 'message': msg}
+
+def _write_player_enabled_file(enabled):
+    """Persist the player switch atomically (tmp + rename). True on success."""
+    tmp = PLAYER_ENABLED_FILE + '.tmp'
+    try:
+        os.makedirs(os.path.dirname(PLAYER_ENABLED_FILE), exist_ok=True)
+        with open(tmp, 'w') as f:
+            f.write('1' if enabled else '0')
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, PLAYER_ENABLED_FILE)
+        return True
+    except Exception:
+        log.exception("set_player_enabled: failed to persist state")
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return False
 
 def _restart_squeezelite_if_enabled(timeout=30):
     """`systemctl restart` starts a unit regardless of its enablement, so a
@@ -5521,25 +5668,17 @@ def set_nowplaying_autoexpand(seconds):
     return {'success': True, 'seconds': seconds}
 
 # ──────────────────────────────────────────────────────────────────
-#  Boot debug flags (Settings → Debug, admin webui only). For diagnosing a box
-#  that hangs at boot/shutdown behind the Plymouth splash instead of actually
-#  crashing cleanly, or that needs a captured vmcore off a real kernel panic.
-#  Both edit only GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub, via the
-#  same read-modify-write + `update-grub` pattern as the 0005-silent-grub OS
-#  migration -- never grub-install/shim/Secure Boot (that's the one thing that
-#  can brick a headless unit; regenerating grub.cfg from the already-installed
-#  bootloader cannot). Both require an actual reboot to take effect, since a
-#  running kernel's own cmdline can't be changed retroactively.
+#  GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub, on a legacy (writable)
+#  root only: the screen rotation for the boot splash (_apply_rotation_to_boot)
+#  edits it with the same read-modify-write + `update-grub` pattern as the
+#  0005-silent-grub OS migration -- never grub-install/shim/Secure Boot (that's
+#  the one thing that can brick a headless unit; regenerating grub.cfg from
+#  the already-installed bootloader cannot). An image slot has /boot in the
+#  read-only squashfs and a static grub.cfg, which is why the Plymouth/kdump
+#  "Debug" switches that used to live here were removed: they never worked
+#  there and left the settings saying something the boot did not do.
 # ──────────────────────────────────────────────────────────────────
 GRUB_DEFAULTS_FILE = '/etc/default/grub'
-KDUMP_DEFAULTS_FILE = '/etc/default/kdump-tools'
-# Reserved for the crash kernel once kdump is on -- taken out of normal use
-# permanently after the next boot, so kept modest; standard x86_64 default.
-KDUMP_CRASHKERNEL = 'crashkernel=256M'
-# Stripped when disabling Plymouth so panic/boot text is actually visible
-# (loglevel=0 silences the console same as the splash does); restored as a
-# group when re-enabling.
-_PLYMOUTH_QUIET_TOKENS = ('quiet', 'splash', 'loglevel=0')
 
 def _read_kv_file(path, key):
     try:
@@ -5592,63 +5731,6 @@ def _set_grub_cmdline_default(tokens):
     if r.returncode != 0:
         r = _run(['update-grub2'], timeout=60)
     return r.returncode == 0
-
-def get_plymouth_disabled():
-    return {'disabled': 'plymouth.enable=0' in _grub_cmdline_default().split()}
-
-def set_plymouth_disabled(disable):
-    tokens = [t for t in _grub_cmdline_default().split()
-              if t not in _PLYMOUTH_QUIET_TOKENS and t != 'plymouth.enable=0']
-    if disable:
-        tokens.append('plymouth.enable=0')
-    else:
-        tokens = list(_PLYMOUTH_QUIET_TOKENS) + tokens
-    if not _set_grub_cmdline_default(tokens):
-        return {'success': False, 'disabled': get_plymouth_disabled()['disabled'],
-                'code': 'debug.updateGrubFailed', 'message': _t('debug.updateGrubFailed', _lang())}
-    return {'success': True, 'disabled': disable, 'code': 'debug.rebootRequired',
-            'message': _t('debug.rebootRequired', _lang())}
-
-def _kdump_tools_installed():
-    return subprocess.run(['dpkg', '-s', 'kdump-tools'], capture_output=True, timeout=10).returncode == 0
-
-def get_kdump_enabled():
-    return {'enabled': KDUMP_CRASHKERNEL in _grub_cmdline_default().split(),
-            'installed': _kdump_tools_installed()}
-
-def set_kdump_enabled(enable):
-    if enable and not _kdump_tools_installed():
-        try:
-            # kdump-tools alone is enough on Debian: it depends on makedumpfile
-            # and kexec-tools itself, and this appliance's own kernel already
-            # supports kexec. linux-crashdump is an Ubuntu-only meta-package
-            # that doesn't exist here -- installing it unconditionally failed
-            # the whole command every time (apt-get install fails atomically
-            # on an unresolvable package name), which is why this always
-            # errored regardless of actual Internet connectivity.
-            r = subprocess.run(['apt-get', 'install', '-y', 'kdump-tools'],
-                               capture_output=True, text=True, timeout=180,
-                               env=dict(os.environ, DEBIAN_FRONTEND='noninteractive'))
-        except Exception:
-            r = None
-        if r is None or r.returncode != 0 or not _kdump_tools_installed():
-            log.error("kdump-tools install failed: %s", (r.stderr if r else '').strip())
-            return {'success': False, 'enabled': get_kdump_enabled()['enabled'],
-                    'code': 'debug.kdumpInstallFailed', 'message': _t('debug.kdumpInstallFailed', _lang())}
-    tokens = [t for t in _grub_cmdline_default().split() if not t.startswith('crashkernel=')]
-    if enable:
-        tokens.append(KDUMP_CRASHKERNEL)
-    if not _set_grub_cmdline_default(tokens):
-        return {'success': False, 'enabled': get_kdump_enabled()['enabled'],
-                'code': 'debug.updateGrubFailed', 'message': _t('debug.updateGrubFailed', _lang())}
-    _write_kv_file(KDUMP_DEFAULTS_FILE, 'KDUMP_ENABLED', 'true' if enable else 'false')
-    try:
-        subprocess.run(['systemctl', 'enable' if enable else 'disable', '--now', 'kdump-tools'],
-                       capture_output=True, timeout=30)
-    except Exception:
-        pass
-    return {'success': True, 'enabled': enable, 'code': 'debug.rebootRequired',
-            'message': _t('debug.rebootRequired', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
 #  Provisioning + factory reset. The first-boot hotspot/captive flow and
@@ -5911,7 +5993,7 @@ def _write_dsp_target(dev):
 
 # The squeezelite ARGS line is no longer edited here as a string: the DSP
 # path flips `dsp.enabled` in the hifi_squeezelite model (see _sq_load /
-# _sq_save next to set_audio_device) and the render puts squeezelite on the
+# _sq_update next to set_audio_device) and the render puts squeezelite on the
 # Loopback at DSP_RATE with soxr, or back on the DAC with `-D`, from that.
 
 def _camilla_config_dict(playback_dev, bands, crossfeed, room_correction=False, balance=0.0):
@@ -6008,6 +6090,36 @@ def _lms_request(playerid, command, timeout=5):
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read()).get('result')
 
+def _own_player_mac():
+    """The player MAC this box's squeezelite runs with (`-m`, kept in
+    squeezelite.json by hifi_squeezelite), lower case; '' when unknown."""
+    try:
+        return str(_sq_load().get('mac') or '').strip().lower()
+    except Exception:
+        return ''
+
+def _own_player_ids(players):
+    """The ids, among Lyrion's players_loop, of THIS box's own squeezelite.
+
+    🚨 Not "the first one connecting from 127.0.0.1": every Bluetooth speaker
+    has a squeezelite of its own on this box (hifi-bt-player@), connecting
+    from loopback just the same, and players_loop comes in no fixed order —
+    so a DSP apply could pause, and a resume after boot restart, a speaker's
+    player instead. The MAC identifies it; the loopback heuristic (minus the
+    speakers' own player ids) is only for a box whose MAC is not known."""
+    mac = _own_player_mac()
+    if mac:
+        return [p.get('playerid') for p in players
+                if str(p.get('playerid') or '').lower() == mac]
+    try:
+        bt = {_bt_player_mac(str(s.get('mac', ''))).lower()
+              for s in (_bt_read_doc().get('speakers') or []) if s.get('mac')}
+    except Exception:
+        bt = set()
+    return [p.get('playerid') for p in players
+            if str(p.get('ip', '')).startswith('127.0.0.1:')
+            and str(p.get('playerid') or '').lower() not in bt]
+
 def _local_playing_player():
     """(playerid, elapsed_seconds) of THIS device's own squeezelite instance
     if it's currently playing, else (None, 0.0) — only its stream is affected
@@ -6019,16 +6131,14 @@ def _local_playing_player():
     shape) just means we don't pause, not a reason to fail the DSP apply."""
     try:
         result = _lms_request('-', ['serverstatus', 0, 999]) or {}
-        for p in result.get('players_loop', []):
-            if str(p.get('ip', '')).startswith('127.0.0.1:'):
-                playerid = p.get('playerid')
-                st = _lms_request(playerid, ['status', '-', 1]) or {}
-                if st.get('mode') == 'play':
-                    try:
-                        elapsed = float(st.get('time') or 0.0)
-                    except (TypeError, ValueError):
-                        elapsed = 0.0
-                    return playerid, elapsed
+        for playerid in _own_player_ids(result.get('players_loop', [])):
+            st = _lms_request(playerid, ['status', '-', 1]) or {}
+            if st.get('mode') == 'play':
+                try:
+                    elapsed = float(st.get('time') or 0.0)
+                except (TypeError, ValueError):
+                    elapsed = 0.0
+                return playerid, elapsed
     except Exception:
         log.exception('_local_playing_player failed')
     return None, 0.0
@@ -6126,6 +6236,10 @@ def _resume_playback_after_boot():
         elapsed = float(state.get('time') or 0.0)
     except (TypeError, ValueError):
         return
+    # The player the capture was taken from (hifi-capture-playback-state.py
+    # records it): the queue and position belong to that one. Without it,
+    # this box's own squeezelite, found by its MAC (_own_player_ids).
+    saved = str(state.get('playerid') or '').strip()
     playerid = None
     try:
         for _ in range(90):  # up to ~90s: LMS's own startup/library scan can
@@ -6133,17 +6247,20 @@ def _resume_playback_after_boot():
                               # 5s systemd RestartSec reconnect attempts.
             try:
                 result = _lms_request('-', ['serverstatus', 0, 999]) or {}
-                for p in result.get('players_loop', []):
-                    if str(p.get('ip', '')).startswith('127.0.0.1:'):
-                        candidate = p.get('playerid')
-                        # A candidate can appear in players_loop just from
-                        # LMS's own bookkeeping before slimproto has actually
-                        # re-registered it — confirm it's really connected
-                        # (same check _lms_resume makes) before trusting it.
-                        st = _lms_request(candidate, ['status', '-', 1]) or {}
-                        if st.get('player_connected'):
-                            playerid = candidate
-                        break
+                players = result.get('players_loop', [])
+                if saved:
+                    candidates = [p.get('playerid') for p in players
+                                  if str(p.get('playerid') or '').lower() == saved.lower()]
+                else:
+                    candidates = _own_player_ids(players)
+                for candidate in candidates[:1]:
+                    # A candidate can appear in players_loop just from
+                    # LMS's own bookkeeping before slimproto has actually
+                    # re-registered it — confirm it's really connected
+                    # (same check _lms_resume makes) before trusting it.
+                    st = _lms_request(candidate, ['status', '-', 1]) or {}
+                    if st.get('player_connected'):
+                        playerid = candidate
             except Exception:
                 pass
             if playerid:
@@ -6226,11 +6343,11 @@ def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balanc
     # restart: it would otherwise drop squeezelite's connection to Lyrion and
     # interrupt whatever's currently playing for no reason — only CamillaDSP
     # needs to reload to pick up the new EQ.
-    model = _sq_load()
-    if playback_dev:
-        model['output'] = playback_dev
-    model['dsp']['enabled'] = True
-    if _sq_save(model):
+    def dsp_on(model):
+        if playback_dev:
+            model['output'] = playback_dev
+        model['dsp']['enabled'] = True
+    if _sq_update(dsp_on):
         # squeezelite must release the real DAC (by restarting onto the
         # loopback) BEFORE CamillaDSP tries to open that same hw: device —
         # otherwise the two processes fight over an exclusive-access
@@ -6258,10 +6375,10 @@ def _apply_dsp_off():
         dac = _read_dsp_target()
         # Back on the DAC: `-D` as the model's DSD mode says, the forced rate
         # and the resampling gone — all from the render of dsp.enabled=False.
-        model = _sq_load()
-        model['output'] = dac or model['output'] or 'default'
-        model['dsp']['enabled'] = False
-        _sq_save(model)
+        def dsp_off(model):
+            model['output'] = dac or model['output'] or 'default'
+            model['dsp']['enabled'] = False
+        _sq_update(dsp_off)
         subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
                        capture_output=True, text=True, timeout=30)
         _restart_squeezelite_if_enabled()
@@ -6985,17 +7102,31 @@ def _bt_remotes_supported():
     return known
 
 
+# A window still open for at least this much less than asked for is left as
+# it is: rounds of scans (the wizards ask every ten seconds) would otherwise
+# rewrite bluetooth.json on flash at every one of them.
+BT_PAIRING_WINDOW_SLACK = 60
+
+
 def _bt_open_pairing_window(seconds=BT_PAIRING_WINDOW):
     """Ask the supervisor for the radio, and wait until it is actually up."""
     with _bt_apply_lock:
         doc = _bt_read_doc()
-        doc['remote_pairing_until'] = int(time.time()) + int(seconds)
+        until = int(time.time()) + int(seconds)
         try:
-            _bt_write_doc(doc)
-        except Exception:
-            log.exception("bt remotes: could not persist the pairing window")
-            return False
-    _bt_kick()
+            current = float(doc.get('remote_pairing_until') or 0)
+        except (TypeError, ValueError):
+            current = 0
+        changed = current < until - min(BT_PAIRING_WINDOW_SLACK, int(seconds) // 2)
+        if changed:
+            doc['remote_pairing_until'] = until
+            try:
+                _bt_write_doc(doc)
+            except Exception:
+                log.exception("bt remotes: could not persist the pairing window")
+                return False
+    if changed or not _bt_snapshot().get('adapter'):
+        _bt_kick()
     for _ in range(20):
         if _bt_snapshot().get('adapter'):
             return True
@@ -7177,8 +7308,16 @@ def bt_remote_add(mac):
 # kiosk then shows its key map and the practice run by itself.
 #
 # What that costs, and when it stops:
-#   * the radio stays up while no remote is paired (the pairing window is
-#     renewed on every round, so the supervisor keeps it on);
+#   * the radio stays up while it listens (the pairing window is renewed on
+#     every round, so the supervisor keeps it on), and every round is a 10 s
+#     inquiry, which on a Wi-Fi/Bluetooth combo chip is felt on the Wi-Fi;
+#   * so it only listens while the owner has Bluetooth on, and only during
+#     the first BT_AUTOPAIR_UPTIME seconds after a boot. 🚨 It used to run
+#     forever on every screen box without a remote, Bluetooth off or not:
+#     radio always up, an inquiry every ~75 s and bluetooth.json rewritten
+#     ~1100 times a day. The first pairing of a remote does not depend on it:
+#     the setup wizard, Settings → Remote control and the web admin all ask
+#     for an explicit scan (bt_remotes_scan), which opens its own window;
 #   * it stops for good as soon as one remote is saved — a second one is
 #     added from Settings;
 #   * never on a box without a screen (a remote drives nothing there), and
@@ -7197,7 +7336,19 @@ _BT_CERTIFIED = (
 BT_AUTOPAIR_EVERY = 60           # seconds between two listening rounds
 BT_AUTOPAIR_LISTEN = 10          # seconds of discovery per round
 BT_AUTOPAIR_RETRY = 600          # a remote that failed to pair is left alone this long
+BT_AUTOPAIR_UPTIME = 15 * 60     # listen only this long after a boot
 _bt_autopair_failed = {}
+_API_STARTED = time.monotonic()
+
+
+def _uptime():
+    """Seconds since the box booted (since this API started, if unreadable):
+    a restart of the API alone must not open the listening time again."""
+    try:
+        with open('/proc/uptime') as f:
+            return float(f.read().split()[0])
+    except Exception:
+        return time.monotonic() - _API_STARTED
 
 
 def _bt_certified_model(dev, chosen=None):
@@ -7248,12 +7399,14 @@ def _remote_intro_again(model):
 
 def _bt_autopair_wanted():
     """Should this round listen at all? See the block comment above."""
+    if _uptime() > BT_AUTOPAIR_UPTIME:
+        return False
+    doc = _bt_read_doc()
+    if not doc.get('enabled') or doc.get('remotes'):
+        return False
     if not _bt_remotes_available() or not _bt_remotes_supported():
         return False
     if get_display_mode().get('mode') != 'gui':
-        return False
-    doc = _bt_read_doc()
-    if doc.get('remotes'):
         return False
     snap = _bt_snapshot()
     if any(sp.get('connected') for sp in (snap.get('speakers') or [])):
@@ -7296,7 +7449,7 @@ def _bt_autopair_round():
 
 def _bt_autopair_background():
     time.sleep(45)                   # let the boot and the supervisor settle first
-    while True:
+    while _uptime() <= BT_AUTOPAIR_UPTIME:
         pause = BT_AUTOPAIR_EVERY
         try:
             if _bt_autopair_wanted() and not _bt_autopair_round():
@@ -8072,11 +8225,23 @@ def set_ota_channel(channel):
 # request and lets repeated checks reuse the result.
 _RELEASE_CACHE = {}        # channel -> (fetched_at, release_dict)
 _RELEASE_CACHE_TTL = 60    # seconds
-# The server now runs threaded (app.run(threaded=True)), so a single "check
-# updates" — which calls _fetch_release 3× concurrently for UI/system/OS — can
-# race on this dict. Serialise access; the cache makes all but the first call
-# cheap anyway.
+# A check that found nothing is remembered too, briefly: without it every
+# caller in the next minute ran the whole Pages → mirror → API chain again.
+_RELEASE_FAILED = {}       # channel -> (failed_at, exception)
+_RELEASE_FAILED_TTL = 60   # seconds
+# Fetches in progress: channel -> threading.Event set when it ends. The server
+# runs threaded, and a single "check updates" asks for UI/system/OS at once,
+# the kiosk and the Updates page sometimes together. 🚨 The lock only guards
+# these dicts and is never held over network I/O: holding it across the fetch
+# chain (up to three 15 s timeouts plus DNS) queued every other caller behind
+# it, each then repeating the chain — about 135 s for the last answer on a box
+# with no internet, long after the web admin (15 s) and the kiosk (60 s) had
+# given up. Now one caller fetches and the others wait for its result.
+_RELEASE_INFLIGHT = {}
+_RELEASE_WAIT = 55         # seconds a caller waits for someone else's fetch
 _RELEASE_CACHE_LOCK = threading.Lock()
+# How long the update sources' names may take to resolve, all at once.
+_RELEASE_DNS_TIMEOUT = 4
 
 def _fetch_pages_manifest(channel, base=None):
     """Read the channel's static manifest from GitHub Pages (or from `base`,
@@ -8116,53 +8281,118 @@ def _fetch_github_api_release(channel):
                       if not _ALPHA_TAG_RE.search(str(rel.get('tag_name', '')))), {})
     return next((rel for rel in rels if not rel.get('prerelease')), {})
 
-def _fetch_release(channel):
-    """Fetch the release to offer for the given channel.
+_GITHUB_API_HOST = 'api.github.com'
 
-    Source order: the static GitHub Pages manifest (a CDN, not rate-limited) is
-    tried first; only if it's unreachable do we fall back to the GitHub REST API
-    (60 req/hour/IP unauthenticated). Result is cached briefly, and on a total
-    fetch failure the last good release is reused so a momentary blip doesn't
-    surface as an error."""
-    with _RELEASE_CACHE_LOCK:
-        now = time.time()
-        cached = _RELEASE_CACHE.get(channel)
-        if cached and now - cached[0] < _RELEASE_CACHE_TTL:
-            return cached[1]
+def _ota_resolvable_hosts(hosts):
+    """The subset of `hosts` that resolve, looked up in parallel and bounded
+    by _RELEASE_DNS_TIMEOUT in all. With the router up but no internet behind
+    it each lookup otherwise sits out the resolver's own timeouts, once per
+    source and again inside urlopen; an address needs no lookup."""
+    out, threads = set(), []
+    lock = threading.Lock()
+    def look(h):
+        if _lookup_host(h, _RELEASE_DNS_TIMEOUT):
+            with lock:
+                out.add(h)
+    for h in hosts:
+        if not h or _valid_ipv4(h) or ':' in h:
+            out.add(h)
+            continue
+        th = threading.Thread(target=look, args=(h,), daemon=True)
+        th.start()
+        threads.append(th)
+    deadline = time.monotonic() + _RELEASE_DNS_TIMEOUT
+    for th in threads:
+        th.join(max(0, deadline - time.monotonic()))
+    with lock:
+        return set(out)
 
-        # 1. Preferred: static manifest on Pages.
+def _fetch_release_chain(channel):
+    """One pass over the sources, in order of preference; raises when none
+    answers. No locks held: see _fetch_release."""
+    pages_host = urllib.parse.urlparse(OTA_MANIFEST_BASE).hostname or ''
+    mirror_host = urllib.parse.urlparse(OTA_PROD_MIRROR_BASE).hostname or ''
+    reachable = _ota_resolvable_hosts({pages_host, mirror_host, _GITHUB_API_HOST})
+    if not reachable:
+        # No DNS (or no network at all): fail now rather than after three
+        # timeouts that cannot end any differently.
+        raise OSError('update sources do not resolve: no network or no DNS')
+
+    # 1. Preferred: static manifest on Pages (a CDN, not rate-limited).
+    if pages_host in reachable:
         try:
             release = _fetch_pages_manifest(channel)
             if release:
-                _RELEASE_CACHE[channel] = (now, release)
                 return release
             log.warning("Pages manifest for channel %s empty; falling back to API", channel)
         except Exception:
             log.warning("Pages manifest fetch failed for channel %s; falling back to API", channel)
 
-        # 2. The copy of the manifest next to the payloads on
-        #    file.osmiumsound.it (same host the download comes from anyway).
+    # 2. The copy of the manifest next to the payloads on
+    #    file.osmiumsound.it (same host the download comes from anyway).
+    if mirror_host in reachable:
         try:
             release = _fetch_pages_manifest(channel, OTA_PROD_MIRROR_BASE)
             if release:
-                _RELEASE_CACHE[channel] = (now, release)
                 return release
         except Exception:
             log.warning("mirror manifest fetch failed for channel %s; falling back to API", channel)
 
-        # 3. Fallback: the rate-limited GitHub REST API.
-        try:
-            release = _fetch_github_api_release(channel)
-        except Exception:
-            # Reuse the last good release (even if past the TTL) rather than failing
-            # the whole check on a transient blip / exhausted rate limit.
-            if cached:
-                log.warning("release fetch failed; serving cached release for channel %s", channel)
-                return cached[1]
-            raise
+    # 3. Fallback: the rate-limited GitHub REST API (60 req/hour/IP).
+    if _GITHUB_API_HOST not in reachable:
+        raise OSError('no update source answered')
+    return _fetch_github_api_release(channel)
 
-        _RELEASE_CACHE[channel] = (now, release)
-        return release
+def _fetch_release(channel):
+    """Fetch the release to offer for the given channel.
+
+    Source order: the static GitHub Pages manifest, its mirror on
+    file.osmiumsound.it, then the GitHub REST API (_fetch_release_chain).
+    The result is cached briefly; a failure is cached briefly too, and while
+    it stands — or when the fetch fails outright — the last good release is
+    reused so a momentary blip doesn't surface as an error.
+
+    Single-flight: only one caller per channel goes to the network, the
+    others wait (bounded) for its outcome. The lock is never held over I/O."""
+    while True:
+        with _RELEASE_CACHE_LOCK:
+            now = time.time()
+            cached = _RELEASE_CACHE.get(channel)
+            if cached and now - cached[0] < _RELEASE_CACHE_TTL:
+                return cached[1]
+            failed = _RELEASE_FAILED.get(channel)
+            if failed and now - failed[0] < _RELEASE_FAILED_TTL:
+                if cached:
+                    return cached[1]
+                raise OSError(f'update check failed {int(now - failed[0])} s ago: {failed[1]}')
+            pending = _RELEASE_INFLIGHT.get(channel)
+            if pending is None:
+                pending = _RELEASE_INFLIGHT[channel] = threading.Event()
+                break
+        # Someone else is fetching: wait for it, then read what it stored.
+        if not pending.wait(_RELEASE_WAIT):
+            if cached:
+                return cached[1]
+            raise TimeoutError('update check still in progress')
+
+    # This caller fetches. Whatever happens, the waiters are released.
+    try:
+        release = _fetch_release_chain(channel)
+    except Exception as e:
+        with _RELEASE_CACHE_LOCK:
+            _RELEASE_FAILED[channel] = (time.time(), e)
+            _RELEASE_INFLIGHT.pop(channel, None)
+        pending.set()
+        if cached:
+            log.warning("release fetch failed; serving cached release for channel %s", channel)
+            return cached[1]
+        raise
+    with _RELEASE_CACHE_LOCK:
+        _RELEASE_CACHE[channel] = (time.time(), release)
+        _RELEASE_FAILED.pop(channel, None)
+        _RELEASE_INFLIGHT.pop(channel, None)
+    pending.set()
+    return release
 
 def _debian_codename():
     """VERSION_CODENAME from /etc/os-release ('bookworm', 'trixie', ...), or
@@ -9773,24 +10003,6 @@ def api_tailscale_install():
 def api_tailscale_set():
     data = request.get_json(silent=True) or {}
     return jsonify(set_tailscale(bool(data.get('enable'))))
-
-@app.route('/debug_plymouth', methods=['GET'])
-def api_debug_plymouth_get():
-    return jsonify(get_plymouth_disabled())
-
-@app.route('/debug_plymouth', methods=['POST'])
-def api_debug_plymouth_set():
-    data = request.get_json(silent=True) or {}
-    return jsonify(set_plymouth_disabled(bool(data.get('disable'))))
-
-@app.route('/debug_kdump', methods=['GET'])
-def api_debug_kdump_get():
-    return jsonify(get_kdump_enabled())
-
-@app.route('/debug_kdump', methods=['POST'])
-def api_debug_kdump_set():
-    data = request.get_json(silent=True) or {}
-    return jsonify(set_kdump_enabled(bool(data.get('enable'))))
 
 @app.route('/pointer_status', methods=['GET'])
 def api_pointer_status():

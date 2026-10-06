@@ -33,6 +33,7 @@ class WifiConnectTests(unittest.TestCase):
     def setUp(self):
         self.calls = []          # every nmcli argv, in order
         self.profiles = set()    # Wi-Fi profile names NetworkManager holds
+        self.active = set()      # the ones active right now
         self.up_results = [0]    # return codes for successive `connection up`
         self.add_rc = 0
         #: profile name -> `nmcli -t -f ipv4.* connection show` output
@@ -41,6 +42,8 @@ class WifiConnectTests(unittest.TestCase):
     # ── stubs ────────────────────────────────────────────────────────
     def _fake_run(self, cmd, timeout=20):
         self.calls.append(cmd)
+        if cmd[:4] == ['nmcli', '-t', '-f', 'NAME'] and cmd[-1] == '--active':
+            return _cp(cmd, stdout=''.join(f'{n}\n' for n in sorted(self.active)))
         if cmd[:5] == ['nmcli', '-t', '-f', 'NAME,TYPE', 'connection']:
             rows = ''.join(f'{n}:802-11-wireless\n' for n in sorted(self.profiles))
             return _cp(cmd, stdout=rows)
@@ -56,6 +59,10 @@ class WifiConnectTests(unittest.TestCase):
             if self.add_rc == 0:
                 self.profiles.add(cmd[cmd.index('con-name') + 1])
             return _cp(cmd, rc=self.add_rc, stderr='add refused' if self.add_rc else '')
+        if cmd[1:3] == ['connection', 'modify'] and 'connection.id' in cmd:
+            self.profiles.discard(cmd[4])
+            self.profiles.add(cmd[cmd.index('connection.id') + 1])
+            return _cp(cmd)
         if cmd[1:3] == ['connection', 'up']:
             rc = self.up_results.pop(0) if self.up_results else 4
             return _cp(cmd, rc=rc, stderr='activation failed' if rc else '')
@@ -91,16 +98,21 @@ class WifiConnectTests(unittest.TestCase):
         self.profiles.add('HomeNet')
         res = self._connect('HomeNet', 'hunter2hunter2')
         self.assertTrue(res['success'], res)
-        # The stale profile goes first — that's what made NetworkManager reject
-        # the update with the missing key-mgmt.
-        self.assertEqual(self._argv('nmcli', 'connection', 'delete'),
-                         ['nmcli', 'connection', 'delete', 'id', 'HomeNet'])
+        # A fresh profile, not an update of the stale one — the update is what
+        # NetworkManager rejected with the missing key-mgmt. It is tried under
+        # a name of its own and takes the saved one's place once it works.
+        trial = 'HomeNet' + api_server._WIFI_TRIAL_SUFFIX
+        self.assertIn(['nmcli', 'connection', 'up', 'id', trial], [c[:5] for c in self.calls])
+        self.assertIn(['nmcli', 'connection', 'delete', 'id', 'HomeNet'], self.calls)
+        self.assertIn(['nmcli', 'connection', 'modify', 'id', trial, 'connection.id', 'HomeNet'],
+                      self.calls)
+        self.assertEqual(self.profiles, {'HomeNet'})
         add = self._argv('nmcli', 'connection', 'add')
+        self.assertEqual(add[add.index('con-name') + 1], trial)
         self.assertIn('802-11-wireless-security.key-mgmt', add)
         self.assertEqual(add[add.index('802-11-wireless-security.key-mgmt') + 1], 'wpa-psk')
         self.assertEqual(add[add.index('802-11-wireless-security.psk') + 1], 'hunter2hunter2')
         self.assertEqual(add[add.index('ifname') + 1], 'wlan0')
-        self.assertIsNotNone(self._argv('nmcli', 'connection', 'up', 'id', 'HomeNet'))
         # …and the shorthand is not used at all any more.
         self.assertIsNone(self._argv('nmcli', 'device', 'wifi', 'connect'))
 
@@ -238,6 +250,35 @@ class WifiConnectTests(unittest.TestCase):
         # Nothing left behind for the next attempt to trip over.
         self.assertNotIn('HomeNet', self.profiles)
         self.assertEqual(self.enabled, [])   # and the cable is left alone
+
+    def test_a_wrong_password_keeps_the_saved_profile(self):
+        """Retyping the password of the network the box is on, with a typo:
+        the saved profile -- and with it the box's way back onto its own
+        network -- must survive, and the box goes back onto it."""
+        self.profiles.add('HomeNet')
+        self.active.add('HomeNet')
+        self.up_results = [4, 4, 0]
+        res = self._connect('HomeNet', 'wrong-password')
+        self.assertFalse(res['success'])
+        self.assertEqual(res['code'], 'network.connectFailed')
+        self.assertEqual(self.profiles, {'HomeNet'})
+        self.assertNotIn(['nmcli', 'connection', 'delete', 'id', 'HomeNet'], self.calls)
+        self.assertEqual(self.calls[-1][:5], ['nmcli', 'connection', 'up', 'id', 'HomeNet'])
+
+    def test_a_wrong_password_for_a_saved_network_not_in_use_is_not_activated(self):
+        self.profiles.add('HomeNet')
+        self.up_results = [4, 4]
+        res = self._connect('HomeNet', 'wrong-password')
+        self.assertFalse(res['success'])
+        self.assertEqual(self.profiles, {'HomeNet'})
+        self.assertNotIn(['nmcli', 'connection', 'up', 'id', 'HomeNet'],
+                         [c[:5] for c in self.calls])
+
+    def test_a_trial_profile_is_not_listed_as_saved(self):
+        self.profiles.update({'HomeNet', 'HomeNet' + api_server._WIFI_TRIAL_SUFFIX})
+        with patch.object(api_server, '_run', self._fake_run):
+            r = api_server.wifi_saved()
+        self.assertEqual([n['ssid'] for n in r['networks']], ['HomeNet'])
 
     def test_add_failure_is_reported_verbatim(self):
         self.add_rc = 2

@@ -53,8 +53,10 @@ app = Flask(__name__)
 # can stream an unbounded body and it gets fully received/spooled to disk
 # before any of this file's own per-route size checks ever run — those checks
 # are still kept below as the real business-logic limits, this is just the
-# outer backstop. 80MB comfortably covers a couple of FIR filters + tiny
-# config files in one restore archive.
+# outer backstop. 80MB comfortably covers a couple of FIR filters. The
+# restore upload is the exception: a backup carrying the album/artist archive
+# is far bigger, so /api/restore parses its body itself, to disk and with its
+# own limits (see _receive_restore_upload).
 app.config['MAX_CONTENT_LENGTH'] = 80 * 1024 * 1024
 
 
@@ -186,6 +188,47 @@ def _slug(*parts):
     return re.sub(r"[^A-Za-z0-9._-]+", "_", s).strip("_.") or "share"
 
 
+def _free_source_id(sources, base, salt):
+    """A source id derived from a name, made unique.
+
+    The ids are slugs of a folder name or of server+share, and a slug is not
+    unique: /data/music/_a/Jazz and /data/music/_b/Jazz are both "local-Jazz",
+    and so are the shares "Musica" and "Musica è", or "Rock Pop" and
+    "Rock_Pop". The second add used to replace the first in our state while
+    Lyrion kept scanning both, and the first could no longer be removed.
+
+    `base` is returned as it is when no source has it yet, so every id that
+    already exists keeps working and the first source of a name keeps the
+    old format. Otherwise a short hash of `salt` (the full path, or the UNC)
+    goes after it: stable, so the same folder always gets the same id.
+    Callers look for the source with the same path/share first and reuse
+    its id — this is only for a different one."""
+    taken = {s.get("id") for s in sources}
+    if base not in taken:
+        return base
+    digest = hashlib.sha1(str(salt).encode("utf-8", "surrogateescape")).hexdigest()
+    cand = f"{base}-{digest[:6]}"
+    n = 2
+    while cand in taken:
+        cand = f"{base}-{digest[:6]}-{n}"
+        n += 1
+    return cand
+
+
+def _same_local_path(src, path):
+    """Is `src` the `local` source for the (already resolved) `path`?"""
+    return (src.get("type") == "local" and bool(src.get("path"))
+            and os.path.normpath(src["path"]) == os.path.normpath(path))
+
+
+def _same_smb_share(src, server, share):
+    """Is `src` the SMB source for //server/share? Both names are
+    case-insensitive on every SMB server."""
+    return (src.get("type") == "smb"
+            and (src.get("server") or "").strip().strip("/").lower() == server.lower()
+            and (src.get("share") or "").strip().strip("/").lower() == share.lower())
+
+
 def _field_ok(value):
     """True if `value` is safe to pass as a mount option / command argument.
 
@@ -268,6 +311,175 @@ def _run_json(cmd, timeout=30):
         return None
 
 
+# ─────────────────────── mount table, bounded probes ────────────────
+# 🚨 A NAS switched off while its share is mounted turns every stat() of
+# that mountpoint — os.path.ismount(), realpath(), statvfs(), isdir() — into
+# a wait of tens of seconds or minutes in the kernel. Done under _lock that
+# froze every route taking it (USB adoption, adding and removing sources),
+# and the kiosk asks for /api/sources every four seconds, so threads piled
+# up behind it. Whether something is mounted therefore comes from the
+# kernel's mount table, which never asks the filesystem, and whatever has to
+# look inside a network mount goes through _bounded_probe().
+MOUNTINFO = "/proc/self/mountinfo"
+_NET_FSTYPES = frozenset(("cifs", "smb3", "smbfs", "nfs", "nfs4", "9p", "ceph",
+                          "fuse.sshfs", "fuse.glusterfs", "glusterfs", "davfs", "fuse.davfs2"))
+_PROBE_TIMEOUT = 2.0
+
+
+def _unescape_mountinfo(field):
+    """mountinfo writes space, tab, newline and backslash as \\040 and so on."""
+    return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), field)
+
+
+def _mount_table():
+    """{mountpoint: [(fstype, options), ...]} from /proc/self/mountinfo, the
+    first mount of a stack first; None when the table cannot be read."""
+    table = {}
+    try:
+        with open(MOUNTINFO, encoding="utf-8", errors="surrogateescape") as f:
+            for line in f:
+                pre, sep, post = line.partition(" - ")
+                fields = pre.split(" ")
+                rest = post.split(" ")
+                if not sep or len(fields) < 6 or not rest:
+                    continue
+                table.setdefault(_unescape_mountinfo(fields[4]), []).append(
+                    (rest[0], fields[5]))
+    except OSError:
+        return None
+    return table
+
+
+def _mp_key(path):
+    """`path` as the mount table spells it, without stat-ing `path` itself:
+    the folder holding it is resolved (our mount roots, on a local disk) and
+    the last component is kept as written."""
+    p = os.path.normpath(os.path.abspath(path))
+    return os.path.join(os.path.realpath(os.path.dirname(p)), os.path.basename(p))
+
+
+def _mount_depth(path, table=None):
+    """How many mounts sit on `path`: 0 for none, 2 or more for a stack (the
+    same disk mounted twice on one folder — see _mountpoint_lock())."""
+    if not path:
+        return 0
+    if table is None:
+        table = _mount_table()
+    if table is None:
+        return 1 if os.path.ismount(path) else 0
+    return len(table.get(_mp_key(path), ()))
+
+
+def _mount_entry(path, table=None):
+    """(fstype, options) of the top mount ON `path`, or None."""
+    if table is None:
+        table = _mount_table()
+    stack = (table or {}).get(_mp_key(path)) if path else None
+    return stack[-1] if stack else None
+
+
+def _on_network_fs(path, table=None):
+    """True when `path` lies on a network filesystem (SMB, NFS…), judged from
+    the mount table and the path as written — nothing is stat-ed."""
+    if not path:
+        return False
+    if table is None:
+        table = _mount_table()
+    if not table:
+        return False
+    p = os.path.normpath(os.path.abspath(path))
+    best = None
+    for mp in table:
+        if (p == mp or p.startswith(mp.rstrip("/") + "/")) and (best is None or len(mp) > len(best)):
+            best = mp
+    return best is not None and table[best][-1][0] in _NET_FSTYPES
+
+
+_probes = {}
+_probes_lock = threading.Lock()
+
+
+def _bounded_probe(fn, path, default=None, timeout=_PROBE_TIMEOUT):
+    """fn(path) in a helper thread, waited for at most `timeout` seconds;
+    `default` when it does not answer in time or raises. One probe per
+    (fn, path) at a time: while one is still stuck on a dead server, the next
+    caller gets `default` straight away instead of leaving another thread
+    stuck beside it."""
+    key = (getattr(fn, "__name__", repr(fn)), path)
+    box = {}
+
+    def run():
+        try:
+            box["v"] = fn(path)
+        except Exception:
+            pass
+    with _probes_lock:
+        old = _probes.get(key)
+        if old is not None and old.is_alive():
+            return default
+        t = threading.Thread(target=run, daemon=True, name="fs-probe")
+        _probes[key] = t
+        t.start()
+    t.join(timeout)
+    if t.is_alive():
+        print(f"[sources] {key[0]}({path}) did not answer in {timeout:g}s: server gone?")
+        return default
+    with _probes_lock:
+        if _probes.get(key) is t:
+            del _probes[key]
+    return box.get("v", default)
+
+
+def _fs_probe(fn, path, default=None, table=None, network=False):
+    """fn(path) directly on a local filesystem, through _bounded_probe() on a
+    network one (or when the caller already knows it is one)."""
+    if not path:
+        return default
+    if network or _on_network_fs(path, table):
+        return _bounded_probe(fn, path, default)
+    try:
+        return fn(path)
+    except Exception:
+        return default
+
+
+def _resolve_quick(path, table=None, net_roots=()):
+    """realpath() of `path`, except on a network filesystem (or under one of
+    `net_roots`, the mountpoints of our SMB sources), where it is only
+    normalised: realpath() stats every component, and that is what hangs."""
+    p = os.path.normpath(os.path.abspath(path))
+    if any(p == r or p.startswith(r.rstrip("/") + "/") for r in net_roots) or _on_network_fs(p, table):
+        return p
+    return os.path.realpath(path)
+
+
+def _resolve_mountpoint(mountpoint, table=None):
+    """The resolved path of a source's mountpoint. Something mounted on it is
+    a real directory by definition, so it is taken from the mount table
+    without a stat; an unmounted one is a plain local folder and safe to
+    realpath() (which also catches a mountpoint that is a symlink)."""
+    if table is None:
+        table = _mount_table()
+    key = _mp_key(mountpoint)
+    if table and key in table:
+        return key
+    return os.path.realpath(mountpoint)
+
+
+_mount_locks = {}
+_mount_locks_guard = threading.Lock()
+
+
+def _mountpoint_lock(mountpoint):
+    """One lock per mountpoint, held from the "is it mounted?" check to the
+    mount itself. At boot remount_all() and usb_sync() both mount the same
+    adopted USB disk; ext4 and vfat accept a second mount stacked on the
+    first, and "Remove" then took off only the top one."""
+    key = _mp_key(mountpoint)
+    with _mount_locks_guard:
+        return _mount_locks.setdefault(key, threading.Lock())
+
+
 # ─────────────────────────── SMB mounting ───────────────────────────
 def _smb_wants_rw(src):
     """Is this SMB source meant to be writable? The one place that answers it.
@@ -301,7 +513,19 @@ def mount_smb(src):
     are tried before giving up, and src["rw"] is flipped to False so the
     stored state tells the truth about what they got (the list shows it
     read-only, and _rip_writable_sources() won't offer it as a rip
-    destination)."""
+    destination).
+
+    A login the server refuses ends the attempt at the first protocol
+    version: the version does not fix a password, and every refused login
+    counts towards the lockout of the account (see remount_all()).
+
+    Serialized per mountpoint (_mountpoint_lock()): the boot-time remount and
+    an "add" of the same share must not both mount it."""
+    with _mountpoint_lock(src["mountpoint"]):
+        return _mount_smb_locked(src)
+
+
+def _mount_smb_locked(src):
     server = src["server"].strip().strip("/")
     share = src["share"].strip().strip("/")
     try:
@@ -316,15 +540,16 @@ def mount_smb(src):
     # The mountpoint is derived from user-supplied server/share; resolve it and
     # make sure it can never escape MOUNT_ROOT before we create or mount onto it.
     root = os.path.realpath(MOUNT_ROOT)
-    mountpoint = os.path.realpath(src["mountpoint"])
+    mountpoint = _resolve_mountpoint(src["mountpoint"])
     # Strictly below the root: the slug is never empty, so a mountpoint equal
     # to MOUNT_ROOT itself could only be a bug, never a legitimate share.
     if not mountpoint.startswith(root + os.sep):
         return False, _ht('mount.invalidMountpoint', _hlang()), ""
-    os.makedirs(mountpoint, exist_ok=True)
-
-    if os.path.ismount(mountpoint):
+    # From the mount table, before anything stats the folder: a share whose
+    # server has gone away answers a stat() only minutes later.
+    if _mount_depth(mountpoint):
         return True, _ht('mount.alreadyMounted', _hlang()), ""
+    os.makedirs(mountpoint, exist_ok=True)
 
     # mount.cifs against an unreachable/silently-dropping host can block the
     # kernel-level mount() syscall in uninterruptible sleep (D state) for far
@@ -371,6 +596,11 @@ def mount_smb(src):
                         return True, _ht('mount.mountedSmbRo', _hlang(), vers=vers), last
                     return True, _ht('mount.mountedSmb', _hlang(), vers=vers), ""
                 last = (r.stderr or r.stdout).strip()
+                if _smb_reason(last) in _SMB_AUTH_CODES:
+                    # The server negotiated this version and turned the login
+                    # down: an older one would only be another refused login
+                    # on an account that NAS boxes lock after a handful.
+                    break
             code = _smb_reason(last)
             if code:
                 # A password, a share name or a server that isn't answering:
@@ -388,9 +618,20 @@ def mount_smb(src):
                 pass
 
 
+_SMB_AUTH_CODES = ("msg.smbBadCredentials", "msg.smbPasswordExpired", "msg.smbAccountLocked")
+
+
 def umount(mountpoint):
-    if os.path.ismount(mountpoint):
-        _run(["umount", "-l", mountpoint])
+    """Lazy unmount of a network share. Mounted or not is read from the mount
+    table, and umount(8) is told not to canonicalize the path (-c): either
+    would stat a share whose server is gone and wait minutes for it. Every
+    mount stacked on the folder goes."""
+    if not mountpoint:
+        return
+    key = _mp_key(mountpoint)
+    for _ in range(max(0, min(_mount_depth(key), 8))):
+        if _run(["umount", "-l", "-c", key], timeout=15).returncode != 0:
+            break
 
 
 def umount_clean(mountpoint):
@@ -407,14 +648,27 @@ def umount_clean(mountpoint):
     open Samba handle), and only then do we detach lazily rather than leave
     the user with a source that refuses to go away.
 
+    The flush is `sync -f` on this disk alone, not a global `sync`: that one
+    also waits for whatever is still to be written to a network share, and
+    with its NAS switched off it never came back — under _lock, with every
+    other route queued behind it. A disk mounted twice on the same folder
+    (see _mountpoint_lock()) is unmounted as many times as it is stacked.
+
     Returns (ok, lazy_used)."""
-    if not mountpoint or not os.path.ismount(mountpoint):
+    if not mountpoint or not _mount_depth(mountpoint):
         return True, False
-    _run(["sync"], timeout=60)
-    if _run(["umount", mountpoint], timeout=30).returncode == 0:
-        return True, False
-    r = _run(["umount", "-l", mountpoint], timeout=30)
-    return r.returncode == 0, True
+    lazy = False
+    with _mountpoint_lock(mountpoint):
+        for _ in range(8):
+            if not _mount_depth(mountpoint):
+                break
+            _run(["sync", "-f", mountpoint], timeout=60)
+            if _run(["umount", mountpoint], timeout=30).returncode == 0:
+                continue
+            lazy = True
+            if _run(["umount", "-l", mountpoint], timeout=30).returncode != 0:
+                return False, lazy
+    return not _mount_depth(mountpoint), lazy
 
 
 def _drop_adopted_mountpoint(mountpoint):
@@ -432,13 +686,16 @@ def _drop_adopted_mountpoint(mountpoint):
     user's folder."""
     if not mountpoint:
         return
-    p = os.path.realpath(mountpoint)
-    for root in (os.path.realpath(USB_ADOPTED_ROOT), os.path.realpath(INTERNAL_MOUNT_ROOT)):
-        if p.startswith(root + os.sep):
-            break
-    else:
+    roots = (os.path.realpath(USB_ADOPTED_ROOT), os.path.realpath(INTERNAL_MOUNT_ROOT))
+    # Judged on the path as written first, so an SMB mountpoint (whose server
+    # may be gone) is never stat-ed here at all.
+    lexical = os.path.normpath(os.path.abspath(mountpoint))
+    if not any(lexical.startswith(root + os.sep) for root in roots):
         return
-    if os.path.ismount(p):
+    if _mount_depth(mountpoint):
+        return
+    p = os.path.realpath(mountpoint)
+    if not any(p.startswith(root + os.sep) for root in roots):
         return
     try:
         os.rmdir(p)                      # fails, harmlessly, if not empty
@@ -605,13 +862,16 @@ def _share_name(label):
     base = _slug(label or "Musica")
     if not base:
         base = "Musica"
-    names = set()
+    # Share names are case-insensitive to Samba and to every client, and a
+    # section called [global] (a disk labelled "GLOBAL") would rewrite the
+    # server's own settings instead of adding a share.
+    names = set(_SMB_RESERVED_SHARES)
     for s in _adopted_disk_sources():
-        names.add(s.get("share") or "Musica")
-    if base not in names:
+        names.add((s.get("share") or "Musica").lower())
+    if base.lower() not in names:
         return base
     n = 2
-    while f"{base}-{n}" in names:
+    while f"{base}-{n}".lower() in names:
         n += 1
     return f"{base}-{n}"
 
@@ -922,8 +1182,43 @@ def _ensure_music_root():
         print(f"[sources] {DATA_MUSIC_ROOT}: {e}")
 
 
+# Section names smb.conf gives a meaning of its own.
+_SMB_RESERVED_SHARES = ("global", "homes", "printers")
+# 🚨 What must never reach smb.conf in a share's path. A newline ends the
+# `path =` line, and whatever follows is parsed as more configuration: a
+# folder made over the network as "x\n[evil]\n  root preexec = …" and then
+# published added a share that runs commands as root (reproduced on a
+# device). The backslash continues a line, a %-letter is a macro Samba
+# expands (%H is a home folder, %$(VAR) an environment variable), and
+# leading or trailing blanks are trimmed by the parser — the share would
+# then point at a different folder from the one shown.
+_SMB_CONF_UNSAFE_PATH = re.compile(r"[\x00-\x1f\x7f\\]|%[A-Za-z$(]|^\s|\s$")
+_SMB_SHARE_NAME = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9._ -]{0,79}")
+# The same control characters, for every name the API creates or renames.
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _smb_conf_problem(share, path):
+    """Why `share`/`path` cannot be written into smb.conf, or None. Checked
+    where the file is written, whatever the source of the values: a folder
+    with such a name can be made over SSH or from a PC, and a state file can
+    come from a restored backup."""
+    if not isinstance(share, str) or not _SMB_SHARE_NAME.fullmatch(share) \
+            or share.lower() in _SMB_RESERVED_SHARES:
+        return "share name"
+    if not isinstance(path, str) or not path.startswith("/") or _SMB_CONF_UNSAFE_PATH.search(path):
+        return "path"
+    return None
+
+
 def _samba_share_block(share, path, group):
-    """The smb.conf stanza for one published folder, as a list of lines."""
+    """The smb.conf stanza for one published folder, as a list of lines --
+    none at all (and a line in the log) when the name or the path could
+    change the meaning of the file, see _smb_conf_problem()."""
+    problem = _smb_conf_problem(share, path)
+    if problem:
+        print(f"[sources] not sharing {share!r} -> {path!r}: unsafe {problem} for smb.conf")
+        return []
     lines = [
         f"\n[{share}]",
         f"   path = {path}",
@@ -962,12 +1257,21 @@ def regen_samba_shares():
     disks = _adopted_disk_sources()
     group = _share_group_name()
     lines = []
+    seen = set()
     for src in disks:
         share = src.get("share") or "Musica"
         mp = src.get("mountpoint") or src.get("path")  # "path" for a shared local folder
         if not mp:
             continue
-        lines += _samba_share_block(share, mp, group)
+        if str(share).lower() in seen:
+            # A second section with the same name would be merged into the
+            # first by Samba, its path silently replacing the other one.
+            print(f"[sources] not sharing {mp!r}: share name {share!r} already in use")
+            continue
+        block = _samba_share_block(share, mp, group)
+        if block:
+            seen.add(str(share).lower())
+        lines += block
 
     os.makedirs(os.path.dirname(SAMBA_SHARES_FILE), exist_ok=True)
     tmp = SAMBA_SHARES_FILE + ".tmp"
@@ -1003,7 +1307,20 @@ def _mount_adopted_disk(src, root):
     """Mount one adopted (internal or USB) source by stable PARTUUID — or, for
     a "superfloppy" USB stick with no partition table (common on cheap USB
     flash drives), by filesystem UUID instead. Always read-write. Returns
-    (ok, message)."""
+    (ok, message).
+
+    The "already mounted?" check and the mount itself happen under the
+    mountpoint's own lock (_mountpoint_lock()): at boot remount_all() and
+    usb_sync() reach the same disk at the same moment, and both used to find
+    it unmounted and both mount it — one stacked on the other."""
+    mountpoint = src.get("mountpoint")
+    if not mountpoint:
+        return False, _ht('mount.missingIdentifiers', _hlang())
+    with _mountpoint_lock(mountpoint):
+        return _mount_adopted_disk_locked(src, root)
+
+
+def _mount_adopted_disk_locked(src, root):
     partuuid = src.get("partuuid")
     fsuuid = src.get("fsuuid")
     fstype = (src.get("fstype") or "").lower()
@@ -1015,7 +1332,10 @@ def _mount_adopted_disk(src, root):
     if p != root and not p.startswith(root + os.sep):
         return False, _ht('mount.invalidMountpoint', _hlang())
     os.makedirs(mountpoint, exist_ok=True)
-    if os.path.ismount(mountpoint):
+    depth = _mount_depth(mountpoint)
+    if depth:
+        if depth > 1:
+            print(f"[sources] {mountpoint} is mounted {depth} times over")
         return True, _ht('mount.alreadyMounted', _hlang())
 
     if fstype == "ext4":
@@ -1063,13 +1383,53 @@ def mount_usb_adopted(src):
     return _mount_adopted_disk(src, USB_ADOPTED_ROOT)
 
 
+# SMB sources whose server refused the stored login during this run:
+# id -> (fingerprint of server, share and login; i18n code; raw detail).
+# 🚨 A wrong password used to be tried again every five seconds for five
+# minutes, four protocol versions each time — some 180 refused logins
+# from one box at every boot, which is how a Windows PC locks the account
+# and a Synology bans the address. One refusal is enough to know: the source
+# is left alone until its login changes (adding the share again with the
+# right password, or a restore) or the service starts again.
+_smb_auth_failed = {}
+
+
+def _smb_login_fingerprint(src):
+    raw = json.dumps([src.get("server"), src.get("share"), src.get("login"),
+                      src.get("username"), src.get("password")], default=str)
+    return hashlib.sha256(raw.encode("utf-8", "surrogateescape")).hexdigest()
+
+
+def _smb_auth_blocked(src):
+    """(code, detail) when the server already refused this source's current
+    login, else None."""
+    entry = _smb_auth_failed.get(src.get("id"))
+    if entry and entry[0] == _smb_login_fingerprint(src):
+        return entry[1], entry[2]
+    return None
+
+
+def _remount_smb(src):
+    """mount_smb() for the boot-time remount, recording a refused login."""
+    if _smb_auth_blocked(src):
+        return
+    ok, _msg, detail = mount_smb(src)
+    code = None if ok else _smb_reason(detail)
+    if code in _SMB_AUTH_CODES:
+        _smb_auth_failed[src.get("id")] = (_smb_login_fingerprint(src), code, (detail or "")[:800])
+        print(f"[sources] {src.get('server')}/{src.get('share')}: login refused ({code}), "
+              f"not tried again until it changes")
+    elif ok:
+        _smb_auth_failed.pop(src.get("id"), None)
+
+
 def remount_all():
     state = load_state()
     for src in state.get("sources", []):
         t = src.get("type")
         try:
             if t == "smb":
-                mount_smb(src)  # (ok, msg, detail); the loop retries
+                _remount_smb(src)  # the loop retries what is worth retrying
             elif t == "internal":
                 mount_internal(src)
             elif t == "usb":
@@ -1080,18 +1440,21 @@ def remount_all():
 
 
 def _all_smb_mounted():
-    """True if every configured SMB source is currently mounted (or none exist)."""
+    """True if every configured SMB source is currently mounted (or none
+    exist), a source whose login was refused counting as done: retrying it
+    is exactly what must not happen."""
+    table = _mount_table()
     for src in load_state().get("sources", []):
-        if src.get("type") == "smb":
+        if src.get("type") == "smb" and not _smb_auth_blocked(src):
             try:
-                if not os.path.ismount(os.path.realpath(src["mountpoint"])):
+                if not _mount_depth(src["mountpoint"], table):
                     return False
             except Exception:
                 return False
     return True
 
 
-def remount_all_retry(attempts=60, delay=5):
+def remount_all_retry(attempts=60, delay=5, max_delay=60):
     """Mount SMB shares, retrying in the background until they all mount.
 
     Boot no longer waits for the network (NetworkManager-wait-online is masked
@@ -1099,7 +1462,13 @@ def remount_all_retry(attempts=60, delay=5):
     one-shot mount fails with -101 (ENETUNREACH). Keep retrying so the shares
     come up on their own once the network is available — without ever delaying
     boot or the UI (this runs in a daemon thread).
+
+    Every `delay` seconds for the first minute, which is when the network
+    comes up; then the wait doubles up to `max_delay`, so a NAS that is off
+    for the evening is not knocked on every five seconds. A refused login is
+    never retried (see _smb_auth_failed).
     """
+    wait = delay
     for i in range(attempts):
         try:
             remount_all()
@@ -1109,7 +1478,9 @@ def remount_all_retry(attempts=60, delay=5):
             if i:
                 print(f"[sources] SMB shares mounted after {i + 1} attempt(s)")
             return
-        time.sleep(delay)
+        time.sleep(wait)
+        if (i + 1) * delay >= 60:
+            wait = min(max_delay, wait * 2)
     print("[sources] gave up mounting SMB shares (network/server unreachable)")
 
 
@@ -1445,7 +1816,9 @@ def _remount_reconnected_usb(raw_ids):
             continue
         ids = [i.lower() for i in (src.get("partuuid"), src.get("fsuuid")) if i]
         mountpoint = src.get("mountpoint")
-        if not any(i in raw_ids for i in ids) or not mountpoint or os.path.ismount(mountpoint):
+        # Only a hint: mount_usb_adopted() checks again under the
+        # mountpoint's lock, since remount_all() may be mounting it right now.
+        if not any(i in raw_ids for i in ids) or not mountpoint or _mount_depth(mountpoint):
             continue
         ok, msg = mount_usb_adopted(src)
         if not ok:
@@ -2982,10 +3355,16 @@ def current_paths(state):
     Lyrion via *every* path, not just the live push api_add_smb() itself
     skips: the restart-based apply_to_lyrion() safety net (still used by the
     first-run wizard) rebuilds mediadirs from this function too, and would
-    otherwise hand over the bare mount root before the user ever chose."""
+    otherwise hand over the bare mount root before the user ever chose.
+
+    Nothing here waits on a network share whose server is gone: mountpoints
+    come from the mount table (_resolve_mountpoint()) and a path inside a
+    share is resolved through _bounded_probe(), falling back to the path as
+    written when the server does not answer."""
     smb_root = os.path.realpath(MOUNT_ROOT)
     internal_root = os.path.realpath(INTERNAL_MOUNT_ROOT)
     usb_root = os.path.realpath(USB_ADOPTED_ROOT)
+    table = _mount_table()
     paths = []
     for src in state.get("sources", []):
         if src.get("pending_activation"):
@@ -3000,31 +3379,32 @@ def current_paths(state):
             mp = src.get("mountpoint")
             if not mp:
                 continue
-            p = os.path.realpath(mp)
+            p = _resolve_mountpoint(mp, table)
             if p != smb_root and not p.startswith(smb_root + os.sep):
                 continue
         elif t == "internal":
             mp = src.get("mountpoint")
             if not mp:
                 continue
-            p = os.path.realpath(mp)
+            p = _resolve_mountpoint(mp, table)
             if p != internal_root and not p.startswith(internal_root + os.sep):
                 continue
         elif t == "usb":
             mp = src.get("mountpoint")
             if not mp:
                 continue
-            p = os.path.realpath(mp)
+            p = _resolve_mountpoint(mp, table)
             if p != usb_root and not p.startswith(usb_root + os.sep):
                 continue
         else:
             raw = src.get("path")
-            p = _local_path_allowed(raw) if raw else None
+            p = _local_path_quick(raw, table) if raw else None
         if p and t in ("smb", "internal", "usb"):
             sub = (src.get("subpath") or "").strip("/")
             if sub:
                 mount_root = p
-                cand = os.path.realpath(os.path.join(mount_root, sub))
+                joined = os.path.normpath(os.path.join(mount_root, sub))
+                cand = _fs_probe(os.path.realpath, joined, None, table, network=(t == "smb")) or joined
                 # Re-confine to this source's own mountpoint (not just the
                 # shared smb_root/internal_root/usb_root) so a subpath can
                 # never wander into a sibling mount, let alone escape it
@@ -3037,7 +3417,18 @@ def current_paths(state):
     return paths
 
 
-def _sync_from_lyrion(state):
+def _lyrion_mediadirs():
+    """Lyrion's live list of music folders, or None when it cannot be asked."""
+    try:
+        current = _lyrion_request(["pref", "mediadirs", "?"]).get("_p2")
+    except Exception:
+        return None
+    if not isinstance(current, list):
+        current = [current] if current else []
+    return current
+
+
+def _sync_from_lyrion(state, current=None):
     """Pull any change made directly in Lyrion's own source list into our
     state, so the next Apply doesn't blindly clobber it with a mount root.
     Without this, a subfolder picked in Lyrion's own setup wizard (rather
@@ -3065,26 +3456,31 @@ def _sync_from_lyrion(state):
 
     Best-effort: any failure to reach Lyrion (not installed yet, service
     down) just leaves state untouched. Returns True if state was modified,
-    so the caller knows whether to save_state()."""
-    try:
-        current = _lyrion_request(["pref", "mediadirs", "?"]).get("_p2")
-    except Exception:
-        return False
-    if not isinstance(current, list):
-        current = [current] if current else []
+    so the caller knows whether to save_state().
+
+    `current` is Lyrion's list when the caller already fetched it (outside
+    _lock, see api_list()). The callers hold _lock, so nothing below may wait
+    on a network share: mountpoints come from the mount table, folders inside
+    a share are compared as written, and the rest goes through
+    _bounded_probe() (_resolve_quick(), _local_path_quick(), _fs_probe())."""
+    if current is None:
+        current = _lyrion_mediadirs()
     if not current:
         return False
 
     sources = state.get("sources", [])
-    managed = [(s, os.path.realpath(s["mountpoint"]))
+    table = _mount_table()
+    managed = [(s, _resolve_mountpoint(s["mountpoint"], table))
                for s in sources if s.get("type") in ("smb", "internal", "usb") and s.get("mountpoint")]
-    local_paths = {os.path.realpath(s["path"]) for s in sources if s.get("type") == "local" and s.get("path")}
+    net_roots = [root for s, root in managed if s.get("type") == "smb"]
+    local_paths = {_resolve_quick(s["path"], table, net_roots)
+                   for s in sources if s.get("type") == "local" and s.get("path")}
 
     changed = False
     for raw in current:
         if not raw:
             continue
-        p = os.path.realpath(raw)
+        p = _resolve_quick(raw, table, net_roots)
         owner = next(((s, root) for s, root in managed
                       if p == root or p.startswith(root + os.sep)), None)
         if owner:
@@ -3104,12 +3500,14 @@ def _sync_from_lyrion(state):
         # Not under any mount we manage: offer it as a `local` source rather
         # than let it disappear on the next Apply, but only inside the same
         # confinement api_add_local() itself enforces.
-        allowed = _local_path_allowed(raw)
-        if not allowed or allowed in local_paths or not os.path.isdir(allowed):
+        allowed = _local_path_quick(raw, table)
+        if not allowed or allowed in local_paths \
+                or not _fs_probe(os.path.isdir, allowed, False, table):
             continue
-        sid = _slug("local", os.path.basename(allowed.rstrip("/")))
-        if any(s.get("id") == sid for s in sources):
-            continue
+        # A folder whose name another source already has gets an id of its
+        # own (_free_source_id()). Skipping it, as before, left a second
+        # "Jazz" scanned by Lyrion but missing from the list, for good.
+        sid = _free_source_id(sources, _slug("local", os.path.basename(allowed.rstrip("/"))), allowed)
         sources.append({"id": sid, "type": "local", "name": allowed, "path": allowed})
         local_paths.add(allowed)
         changed = True
@@ -3297,26 +3695,31 @@ def _apply_to_lyrion_background():
 # and every member is checked against the manifest's sha256 before it is
 # written. A malicious or corrupt archive therefore has nowhere to aim.
 # Distinct from the "hifi-backup" name used by the scheduled hifi-backup.service
-# (see 0033-backup-scheduler.sh): systemd-run refuses to create a transient unit
+# (shipped in includes.chroot/etc/systemd/system, byte-identical to what
+# 0033-backup-scheduler.sh writes): systemd-run refuses to create a transient unit
 # that shares a name with one that already has a fragment file on disk — that
 # collision made every manual backup fail with "already loaded or has a
 # fragment file", unconditionally, the moment the scheduler shipped.
 BACKUP_UNIT = "hifi-backup-manual"
 BACKUP_JOB = "/run/hifi-backup-job.json"
 BACKUP_SCRIPT = "/usr/local/sbin/hifi-backup-run.py"
-# 32MB per file is generous for config, a FIR filter or the web-admin database.
-MAX_RESTORE_MEMBER_SIZE = 32 * 1024 * 1024
+# Per-file ceiling for a restore: hb.member_size_limit() — 32MB for config, a
+# FIR filter or the web-admin database, more for the album/artist archive.
+# The backup side leaves out anything above the same limits, so a restore
+# never refuses what a backup was allowed to hold.
+MAX_RESTORE_MEMBER_SIZE = hb.MAX_MEMBER_SIZE
 # Lyrion keeps one .prefs file per plugin and per player, and /var/lib/bluetooth
 # one directory per pairing, so a full profile is thousands of tiny files — not
 # the handful the config-only backup this replaces used to hold.
 MAX_RESTORE_MEMBERS = 20000
-# Compressed-upload ceiling, checked BEFORE tarfile ever walks the archive.
-# Deliberately far tighter than MAX_RESTORE_MEMBERS * MAX_RESTORE_MEMBER_SIZE:
-# a real backup is small (the Lyrion library cache, the only genuinely large
-# thing on the box, is excluded by the manifest). Bounds how much a maliciously
-# well-compressed small upload can force us to decompress while enumerating
-# members, since that has to happen before any per-member size check can run.
-MAX_RESTORE_ARCHIVE_SIZE = 64 * 1024 * 1024
+# Upload ceiling, and the most a restore will ever decompress from one archive:
+# every gzip layer is measured against it BEFORE tarfile walks the archive
+# (hb.payload_size — listing a .tar.gz decompresses all of it, before any
+# per-member check can run), so a small, maliciously well-compressed upload
+# cannot keep the CPU busy for hours or fill the disk. It used to be a flat
+# 64MB, which a backup holding the album/artist archive could not fit under.
+# Free disk space is the second, usually tighter, limit, checked at each step.
+MAX_RESTORE_ARCHIVE_SIZE = hb.MAX_RESTORE_PAYLOAD
 
 # _restore_members() writes every member 0600 root:root — the right default
 # for anything sensitive, but wrong for the handful of /etc/hifi-player files
@@ -3376,6 +3779,14 @@ def _backup_status():
         return {"state": "idle"}
 
 
+def _backup_error_message(e):
+    """hb.BackupError in the owner's language when it carries an i18n code."""
+    code = getattr(e, "code", None)
+    if code:
+        return _ht(code, _hlang(), **(getattr(e, "fields", None) or {}))
+    return str(e)
+
+
 def _passphrase_ok(value):
     """A passphrase is handed to openssl through stdin, never a shell, so the
     only real constraints are that it is printable and bounded."""
@@ -3418,37 +3829,56 @@ def _restore_members(tar, manifest, categories, progress_cb=None):
             progress_cb(i, total)
         if not member.isfile():
             continue  # dirs, symlinks, devices: never followed, never created
-        if member.size > MAX_RESTORE_MEMBER_SIZE:
-            errors.append(_ht('restore.memberTooLarge', _hlang(), name=member.name))
-            continue
         dest = hb.restore_dest_for_member(member.name, categories)
         if not dest:
             continue  # outside the allow-list, or a category not selected
+        if member.size > hb.member_size_limit(dest):
+            errors.append(_ht('restore.memberTooLarge', _hlang(), name=member.name))
+            continue
+        tmp = dest + ".restore.tmp"
         try:
             src = tar.extractfile(member)
             if src is None:
                 continue
-            data = src.read()
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            if member.size > 1024 * 1024 and not hb.free_space_ok(os.path.dirname(dest), member.size):
+                # Filling the disk to the last byte would take Lyrion, the
+                # logs and every other writer down with this restore.
+                errors.append(_ht('restore.memberNoSpace', _hlang(), name=os.path.basename(dest)))
+                continue
+            # Streamed to a sibling temp file and hashed on the way: the
+            # album/artist archive can be hundreds of MB, which used to be
+            # read whole into memory. Nothing replaces `dest` until the
+            # checksum matches.
+            digest = hashlib.sha256()
+            with open(tmp, "wb") as f:
+                os.chmod(tmp, 0o600)
+                for block in iter(lambda: src.read(1024 * 1024), b""):
+                    digest.update(block)
+                    f.write(block)
 
             expected = digests.get(member.name)
-            if expected and hashlib.sha256(data).hexdigest() != expected:
+            if expected and digest.hexdigest() != expected:
+                os.unlink(tmp)
                 errors.append(_ht('restore.checksumInvalid', _hlang(), name=os.path.basename(dest)))
                 continue
 
             if dest == STATE_FILE and current_sources:
                 # An unencrypted backup has its SMB passwords blanked; keep the
                 # ones this device already knows so the shares still mount.
-                data = hb.merge_sources_state(data, current_sources)
+                with open(tmp, "rb") as f:
+                    data = hb.merge_sources_state(f.read(), current_sources)
+                with open(tmp, "wb") as f:
+                    f.write(data)
 
-            os.makedirs(os.path.dirname(dest), exist_ok=True)
-            tmp = dest + ".restore.tmp"
-            with open(tmp, "wb") as f:
-                f.write(data)
-            os.chmod(tmp, 0o600)
             os.replace(tmp, dest)
             restored.append(dest)
         except Exception as e:
             print(f"[sources] restore failed for {dest}: {e}")
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
             errors.append(_ht('restore.memberFailed', _hlang(), name=os.path.basename(dest)))
     if progress_cb:
         progress_cb(total, total)
@@ -3708,15 +4138,17 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
     """
     if report is None:
         report = lambda *a, **kw: None  # noqa: E731
-    workdir = tempfile.mkdtemp(prefix="hifi-restore-", dir="/run")
-    os.chmod(workdir, 0o700)
+    # On disk, not /run: an encrypted backup is copied out of its wrapper and
+    # decrypted here, and /run is RAM.
+    workdir = hb.make_workdir("restore")
     tar = None
     try:
         report("opening", 20, _ht('restore.openingArchive', _hlang()))
         try:
-            tar, manifest = hb.open_backup(path, workdir, passphrase)
+            tar, manifest = hb.open_backup(path, workdir, passphrase,
+                                           max_payload=MAX_RESTORE_ARCHIVE_SIZE)
         except hb.BackupError as e:
-            return {"success": False, "message": str(e)}, 400
+            return {"success": False, "message": _backup_error_message(e)}, 400
 
         # A backup written by a newer build may use members or semantics this
         # code does not understand; refuse rather than half-apply it.
@@ -3788,7 +4220,7 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
         shutil.rmtree(workdir, ignore_errors=True)
 
 
-def _snapshot_before_restore():
+def _snapshot_before_restore(protect=()):
     """Take a restore point first.
 
     Restoring is the one operation here that overwrites live configuration, and
@@ -3796,26 +4228,45 @@ def _snapshot_before_restore():
     snapshot is built inline (not via the worker) so it is guaranteed to be on
     disk before the first file is overwritten — an async job could still be
     running when the restore starts.
+
+    It is filed as hb.PRE_RESTORE_TRIGGER, which rotation keeps apart from the
+    owner's backups (only the newest one stays, and it costs the owner none of
+    theirs), and `protect` — the generation being restored — is never rotated
+    away: with as many backups as "keep", restoring the oldest one used to
+    delete it here, before it was read. Skipped when the disk cannot hold it,
+    rather than filling the disk to the last byte. Returns the new id or None.
     """
     try:
         os.makedirs(hb.STORE_DIR, exist_ok=True)
         os.chmod(hb.STORE_DIR, 0o700)
         hb.prune_incomplete(hb.STORE_DIR)
+        cats = list(hb.UNATTENDED_CATEGORIES)
+        need = hb.estimate_peak(cats, "/", encrypted=False)
+        if not hb.free_space_ok(hb.STORE_DIR, need):
+            print(f"[sources] pre-restore snapshot skipped: ~{need // (1024 * 1024)} MB "
+                  f"needed, not enough free disk space")
+            hb.record_history(hb.STORE_DIR, "backup\tskipped\tpre-restore\tno space")
+            return None
         gen_id = hb.new_gen_id()
         gen_dir = os.path.join(hb.STORE_DIR, gen_id)
         os.makedirs(gen_dir, exist_ok=True)
         os.chmod(gen_dir, 0o700)
-        cats = list(hb.UNATTENDED_CATEGORIES)
-        manifest = hb.build_archive(os.path.join(gen_dir, hb.ARCHIVE_NAME),
-                                    cats, "/", encrypted=False,
-                                    extra={"created": gen_id,
-                                           "trigger": "pre-restore",
-                                           "versions": hb.device_versions()})
-        tmp = os.path.join(gen_dir, hb.MANIFEST_NAME + ".tmp")
-        with open(tmp, "w") as f:
-            json.dump(manifest, f, indent=2)
-        os.replace(tmp, os.path.join(gen_dir, hb.MANIFEST_NAME))
-        hb.rotate(hb.STORE_DIR, hb.read_settings()["keep"])
+        try:
+            manifest = hb.build_archive(os.path.join(gen_dir, hb.ARCHIVE_NAME),
+                                        cats, "/", encrypted=False,
+                                        extra={"created": gen_id,
+                                               "trigger": hb.PRE_RESTORE_TRIGGER,
+                                               "versions": hb.device_versions()})
+            tmp = os.path.join(gen_dir, hb.MANIFEST_NAME + ".tmp")
+            with open(tmp, "w") as f:
+                json.dump(manifest, f, indent=2)
+            os.replace(tmp, os.path.join(gen_dir, hb.MANIFEST_NAME))
+        except Exception:
+            # Give the space of a half-built archive back right away instead
+            # of at the next prune: the restore that follows needs it.
+            shutil.rmtree(gen_dir, ignore_errors=True)
+            raise
+        hb.rotate(hb.STORE_DIR, hb.read_settings()["keep"], protect=protect)
         hb.record_history(hb.STORE_DIR, f"backup\tcompleted\t{gen_id}\tpre-restore")
         return gen_id
     except Exception as e:
@@ -3823,24 +4274,31 @@ def _snapshot_before_restore():
         return None
 
 
-def _run_restore_async(path, passphrase, categories, workdir_to_clean=None):
+def _run_restore_async(path, passphrase, categories, workdir_to_clean=None, gen_id=None):
     """Background-thread body for a restore job. Runs in-process (unlike the
     backup job, restore never needs to survive sources_server itself dying —
     nothing it does restarts this process — so a plain daemon thread is enough,
     no systemd-run/status-file-on-tmpfs-for-a-separate-process needed beyond the
     status file itself, which exists purely so polling requests don't have to
-    share state with this thread directly)."""
+    share state with this thread directly).
+
+    gen_id is the stored generation being restored, if any: it was pinned by
+    _start_restore (so no rotation can remove it while it is being read) and
+    is unpinned here once the restore is over."""
     try:
         _write_restore_status("preparing", 5, _ht('restore.preparing', _hlang()))
         _write_restore_status("snapshotting", 10, _ht('restore.snapshotting', _hlang()))
-        _snapshot_before_restore()
+        snapshot = _snapshot_before_restore(protect=(gen_id,) if gen_id else ())
 
         def report(state, progress, message):
             _write_restore_status(state, progress, message)
 
         payload, status = _restore_from_path(path, passphrase, categories, report)
         if status == 200 and payload.get("success"):
-            _write_restore_status("done", 100, payload.get("message", _ht('restore.completed', _hlang())),
+            message = payload.get("message", _ht('restore.completed', _hlang()))
+            if snapshot is None:
+                message += " " + _ht('restore.noSnapshot', _hlang())
+            _write_restore_status("done", 100, message,
                                   restored=payload.get("restored"), categories=payload.get("categories"))
         else:
             _write_restore_status("error", 0, payload.get("message", _ht('restore.failed', _hlang())))
@@ -3850,18 +4308,27 @@ def _run_restore_async(path, passphrase, categories, workdir_to_clean=None):
     finally:
         if workdir_to_clean:
             shutil.rmtree(workdir_to_clean, ignore_errors=True)
+        if gen_id:
+            hb.unpin_generation()
         _RESTORE_LOCK.release()
 
 
-def _start_restore(path, passphrase, categories, workdir_to_clean=None):
+def _start_restore(path, passphrase, categories, workdir_to_clean=None, gen_id=None):
     """Start a restore job in the background. Returns None on success, or a
     (payload, status) error pair if one is already running."""
     if not _RESTORE_LOCK.acquire(blocking=False):
         return {"success": False, "code": "restore.alreadyInProgress",
                 "message": _ht('restore.alreadyInProgress', _hlang())}, 409
+    if gen_id:
+        try:
+            hb.pin_generation(gen_id)
+        except OSError as e:
+            # The explicit `protect` of the safety snapshot still covers the
+            # restore's own rotation; only a timer firing mid-restore is not.
+            print(f"[sources] could not pin {gen_id} for the restore: {e}")
     _write_restore_status("preparing", 0, _ht('common.starting', _hlang()))
     threading.Thread(target=_run_restore_async,
-                     args=(path, passphrase, categories, workdir_to_clean),
+                     args=(path, passphrase, categories, workdir_to_clean, gen_id),
                      daemon=True, name="restore-worker").start()
     return None
 
@@ -3879,23 +4346,49 @@ def api_backup():
     denied = _require_pair_token()
     if denied:
         return denied
-    workdir = tempfile.mkdtemp(prefix="hifi-backup-dl-", dir="/run")
+    # Built on disk and streamed from there. It used to be built in /run and
+    # read whole into memory — twice the archive in RAM (tmpfs + the response),
+    # plus the SQLite snapshot of the album/artist archive, also in /run.
+    workdir = None
     try:
+        workdir = hb.make_workdir("download")
+        cats = list(hb.UNATTENDED_CATEGORIES)
+        need = hb.estimate_peak(cats, "/", encrypted=False)
+        if not hb.free_space_ok(workdir, need):
+            return _backup_no_space(need)
         path = os.path.join(workdir, hb.ARCHIVE_NAME)
         stamp = hb.new_gen_id()
-        hb.build_archive(path, list(hb.UNATTENDED_CATEGORIES), "/",
+        hb.build_archive(path, cats, "/",
                          encrypted=False,
                          extra={"created": stamp, "trigger": "download",
                                 "versions": hb.device_versions()})
-        with open(path, "rb") as f:
-            data = f.read()
+        f = open(path, "rb")
     except Exception as e:
         print(f"[sources] backup build failed: {e}")
         return jsonify({"success": False, "message": _ht('backup.createFailed', _hlang())}), 500
     finally:
-        shutil.rmtree(workdir, ignore_errors=True)
-    resp = Response(data, mimetype="application/gzip")
-    resp.headers["Content-Disposition"] = f'attachment; filename="osmium-backup-{stamp}.tar.gz"'
+        # The open file keeps its bytes until the response has sent them.
+        if workdir:
+            shutil.rmtree(workdir, ignore_errors=True)
+    return _send_backup_file(f, f"osmium-backup-{stamp}.tar.gz")
+
+
+def _backup_no_space(need):
+    mb = (need + hb.FREE_SPACE_MARGIN) // (1024 * 1024) + 1
+    return jsonify({"success": False, "code": "backup.noSpace",
+                    "message": _ht('backup.noSpace', _hlang(), mb=mb)}), 507
+
+
+def _send_backup_file(f, name):
+    """Stream an open archive in chunks instead of reading it into memory —
+    with the album/artist archive inside, a backup runs to hundreds of MB.
+    The caller may already have unlinked the file; `f` is closed once sent."""
+    from flask import send_file
+    size = os.fstat(f.fileno()).st_size
+    resp = send_file(f, mimetype="application/gzip", as_attachment=True,
+                     download_name=name, conditional=False, etag=False)
+    resp.content_length = size
+    resp.headers["Content-Disposition"] = f'attachment; filename="{name}"'
     return resp
 
 
@@ -3999,22 +4492,24 @@ def api_backup_download(gen_id):
     try:
         if manifest.get("enc"):
             # Wrap manifest + ciphertext so the download can be restored
-            # anywhere, not just from the directory it was produced in.
-            workdir = tempfile.mkdtemp(prefix="hifi-backup-dl-", dir="/run")
+            # anywhere, not just from the directory it was produced in. On
+            # disk, not /run (RAM): the wrapper is a full copy of the backup.
+            workdir = hb.make_workdir("download")
+            need = os.path.getsize(src) + 1024 * 1024
+            if not hb.free_space_ok(workdir, need):
+                return _backup_no_space(need)
             wrapper = os.path.join(workdir, "wrapper.tar.gz")
             hb.wrap_encrypted(wrapper, manifest, src)
             src = wrapper
-        with open(src, "rb") as f:
-            data = f.read()
+        # Opened now, so a rotation while it is being sent cannot take it away.
+        f = open(src, "rb")
     except OSError:
         return jsonify({"success": False, "message": _ht('backup.unreadable', _hlang())}), 500
     finally:
         if workdir:
             shutil.rmtree(workdir, ignore_errors=True)
 
-    resp = Response(data, mimetype="application/gzip")
-    resp.headers["Content-Disposition"] = f'attachment; filename="osmium-backup-{gen_id}.tar.gz"'
-    return resp
+    return _send_backup_file(f, f"osmium-backup-{gen_id}.tar.gz")
 
 
 @app.route("/api/backup/<gen_id>", methods=["DELETE"])
@@ -4052,18 +4547,27 @@ def api_backup_restore(gen_id):
     if manifest.get("enc"):
         # The stored ciphertext has no wrapper; hand open_backup the manifest
         # by building one on the fly, so both entry points take the same road.
-        # The wrapper lives in its own workdir, which the restore job cleans
-        # up itself once it's actually done reading from it.
-        workdir = tempfile.mkdtemp(prefix="hifi-restore-src-", dir="/run")
-        path = os.path.join(workdir, "wrapper.tar.gz")
+        # The wrapper lives in its own workdir (on disk: it is a full copy),
+        # which the restore job cleans up itself once it's actually done
+        # reading from it.
         try:
+            workdir = hb.make_workdir("restore-src")
+            need = os.path.getsize(stored_path) + 1024 * 1024
+            if not hb.free_space_ok(workdir, need):
+                shutil.rmtree(workdir, ignore_errors=True)
+                return _backup_no_space(need)
+            path = os.path.join(workdir, "wrapper.tar.gz")
             hb.wrap_encrypted(path, manifest, stored_path)
         except Exception as e:
-            shutil.rmtree(workdir, ignore_errors=True)
+            if workdir:
+                shutil.rmtree(workdir, ignore_errors=True)
             return jsonify({"success": False,
                             "message": _ht('restore.prepareFailed', _hlang(), err=e)}), 500
 
-    err = _start_restore(path, passphrase, data.get("categories"), workdir)
+    # gen_id: pinned for the length of the restore, so neither the restore's
+    # own safety snapshot nor the weekly timer can rotate it away — an
+    # unencrypted backup is read in place.
+    err = _start_restore(path, passphrase, data.get("categories"), workdir, gen_id=gen_id)
     if err:
         if workdir:
             shutil.rmtree(workdir, ignore_errors=True)
@@ -4079,21 +4583,58 @@ def api_backup_settings():
     if request.method == "GET":
         return jsonify(hb.read_settings())
     data = request.get_json(silent=True) or {}
-    settings = {"scheduled": bool(data.get("scheduled")),
-                "keep": max(1, min(20, int(data.get("keep") or hb.DEFAULT_KEEP)))}
+    previous = hb.read_settings()
+    # The web admin and the companion send only {"scheduled": …}: a missing
+    # "keep" is the one already saved, not the default (every toggle of the
+    # schedule used to reset it to 5).
     try:
+        keep = int(data.get("keep") or previous["keep"])
+    except (TypeError, ValueError):
+        keep = previous["keep"]
+    settings = {"scheduled": bool(data.get("scheduled")),
+                "keep": max(1, min(20, keep))}
+
+    def _save(values):
         os.makedirs(os.path.dirname(hb.SETTINGS_FILE), exist_ok=True)
         tmp = hb.SETTINGS_FILE + ".tmp"
         with open(tmp, "w") as f:
-            json.dump(settings, f, indent=2)
+            json.dump(values, f, indent=2)
         os.replace(tmp, hb.SETTINGS_FILE)
+
+    try:
+        _save(settings)
     except OSError as e:
         return jsonify({"success": False, "message": _ht('backup.saveFailed', _hlang(), err=e)}), 500
-    # The timer unit itself ships from the OS channel; this only flips it,
-    # and 0033-backup-scheduler.sh re-applies the same choice on every OS
-    # update so it survives one.
+    # The units ship in the image (includes.chroot, timer enabled by the
+    # 0400 hook) and in the system bundle; backup.json is what decides, since
+    # hifi-backup-run.py --scheduled exits at once when it says "off". This
+    # flips the timer to match, and on a legacy install 0033-backup-scheduler.sh
+    # re-applies the same choice on every OS update. On an image the symlink
+    # lands in /etc's overlay upper layer, so it survives image updates too.
     action = "enable" if settings["scheduled"] else "disable"
-    _run(["systemctl", action, "--now", "hifi-backup.timer"], timeout=30)
+    try:
+        r = _run(["systemctl", action, "--now", "hifi-backup.timer"], timeout=30)
+        detail = ""
+        if r.returncode != 0:
+            detail = ((r.stderr or r.stdout or "").strip()[:300]
+                      or f"systemctl {action}: exit {r.returncode}")
+    except (OSError, subprocess.TimeoutExpired) as e:
+        detail = str(e)[:300] or "systemctl"
+    if detail:
+        print(f"[sources] systemctl {action} hifi-backup.timer failed: {detail}")
+        if settings["scheduled"]:
+            # Saying "saved" here is how the weekly backup stayed silently off
+            # on every image install (the unit did not even exist there). Put
+            # the old choice back so what the UI reloads is the truth.
+            try:
+                _save(dict(previous, keep=settings["keep"]))
+            except OSError:
+                pass
+            return jsonify({"success": False, "code": "backup.scheduleFailed",
+                            "message": _ht('backup.scheduleFailed', _hlang(), detail=detail),
+                            "scheduled": previous["scheduled"], "keep": settings["keep"]}), 500
+        # Turning it off cannot silently fail the owner: the worker itself
+        # exits at once when backup.json says "not scheduled".
     return jsonify({"success": True, **settings})
 
 
@@ -4110,28 +4651,87 @@ def api_restore():
     denied = _require_pair_token()
     if denied:
         return denied
-    f = request.files.get("file")
-    if not f:
-        return _err("msg.noFile", 400)
-    archive_bytes = f.read(MAX_RESTORE_ARCHIVE_SIZE + 1)
-    if len(archive_bytes) > MAX_RESTORE_ARCHIVE_SIZE:
-        return _err("msg.fileTooLarge", 400)
-    passphrase = request.form.get("passphrase") or ""
+    workdir = hb.make_workdir("upload")
+    try:
+        parsed = _receive_restore_upload(workdir)
+    except Exception as e:
+        print(f"[sources] restore upload failed: {e}")
+        parsed = _err("msg.saveFailed", 500)
+    if not isinstance(parsed, dict):
+        shutil.rmtree(workdir, ignore_errors=True)
+        return parsed
+    passphrase = parsed["passphrase"]
     if not _passphrase_ok(passphrase):
+        shutil.rmtree(workdir, ignore_errors=True)
         return jsonify({"success": False, "message": _ht('backup.invalidPassphrase', _hlang())}), 400
-    requested = request.form.get("categories") or ""
-    categories = [c for c in requested.split(",") if c] or None
+    categories = [c for c in parsed["categories"].split(",") if c] or None
 
-    workdir = tempfile.mkdtemp(prefix="hifi-upload-", dir="/run")
-    os.chmod(workdir, 0o700)
-    upload = os.path.join(workdir, "upload.tar.gz")
-    with open(upload, "wb") as out:
-        out.write(archive_bytes)
-    err = _start_restore(upload, passphrase, categories, workdir)
+    err = _start_restore(parsed["upload"], passphrase, categories, workdir)
     if err:
         shutil.rmtree(workdir, ignore_errors=True)
         return jsonify(err[0]), err[1]
     return jsonify({"success": True, "started": True}), 202
+
+
+def _receive_restore_upload(workdir):
+    """Take the multipart upload of /api/restore straight to disk.
+
+    request.files would hold it to the app-wide 80MB cap and spool it through
+    /tmp (tmpfs, RAM); the old code then also read it whole into memory and
+    wrote it to /run (RAM again). Here every file part goes to its own file in
+    `workdir`, the body is capped at MAX_RESTORE_ARCHIVE_SIZE (plus room for
+    the multipart framing) and at the free space on disk, and the small text
+    fields are held to 1MB. Returns {"upload", "passphrase",
+    "categories"} or a ready error response."""
+    from werkzeug.exceptions import RequestEntityTooLarge
+    from werkzeug.formparser import parse_form_data
+    import inspect
+
+    limit = MAX_RESTORE_ARCHIVE_SIZE + 1024 * 1024
+    length = request.content_length
+    if length is not None and length > limit:
+        return _err("msg.fileTooLarge", 400)
+    if length and not hb.free_space_ok(workdir, length):
+        return _backup_no_space(length)
+
+    parts = []
+
+    def _to_disk(total_content_length=None, content_type=None, filename=None,
+                 content_length=None):
+        part = tempfile.NamedTemporaryFile(dir=workdir, prefix="part-", delete=False)
+        parts.append(part)
+        return part
+
+    # max_form_memory_size also bounds werkzeug's own read buffer (64KB
+    # chunks), so it has to sit well above that; 1MB still keeps the text
+    # fields (a passphrase, a category list) from ever being a memory sink.
+    kwargs = {"stream_factory": _to_disk, "max_content_length": limit,
+              "max_form_memory_size": 1024 * 1024}
+    if "max_form_parts" in inspect.signature(parse_form_data).parameters:
+        kwargs["max_form_parts"] = 16
+    try:
+        try:
+            _stream, form, files = parse_form_data(request.environ, **kwargs)
+        except RequestEntityTooLarge:
+            return _err("msg.fileTooLarge", 400)
+        f = files.get("file")
+        if not f or not getattr(f.stream, "name", None):
+            return _err("msg.noFile", 400)
+        upload = f.stream.name
+        f.stream.flush()
+        if os.path.getsize(upload) > MAX_RESTORE_ARCHIVE_SIZE:
+            return _err("msg.fileTooLarge", 400)
+        return {"upload": upload,
+                "passphrase": form.get("passphrase") or "",
+                "categories": form.get("categories") or ""}
+    finally:
+        # Only the handles: the files stay in `workdir`, which the caller
+        # (or the restore job) removes.
+        for part in parts:
+            try:
+                part.close()
+            except Exception:
+                pass
 
 
 # ─────────────────────────── Room correction (FIR filter) ────────────
@@ -5101,9 +5701,10 @@ def _root_label(path):
 def _safe_name(name):
     """A single path component the user typed. Rejects separators, the dot
     entries and leading dots (which would make the result invisible in every
-    listing, including this one)."""
+    listing, including this one), and control characters: a line break in a
+    folder name ended up in smb.conf once the folder was published."""
     n = (name or "").strip()
-    if not n or len(n) > 255 or "/" in n or "\0" in n or n.startswith("."):
+    if not n or len(n) > 255 or "/" in n or _CONTROL_CHARS.search(n) or n.startswith("."):
         return None
     return n
 
@@ -5124,7 +5725,9 @@ def _unique_name(path):
 
 def _tree_size(path):
     try:
-        if os.path.islink(path) or not os.path.isdir(path):
+        if os.path.islink(path):
+            return os.lstat(path).st_size
+        if not os.path.isdir(path):
             return os.path.getsize(path)
     except OSError:
         return 0
@@ -5248,10 +5851,17 @@ def api_list():
     denied = _require_pair_token()
     if denied:
         return denied
+    # Lyrion is asked before taking _lock, and under it only state is
+    # touched: the kiosk polls this every few seconds, and with a NAS switched
+    # off the stat() calls below used to keep _lock for minutes. Mounted or
+    # not comes from the mount table; usage and "does the folder exist" on a
+    # network share are bounded probes (see _bounded_probe()).
+    current = _lyrion_mediadirs()
     with _lock:
         state = load_state()
-        if _sync_from_lyrion(state):
+        if current and _sync_from_lyrion(state, current):
             save_state(state)
+    table = _mount_table()
     out = []
     for s in state.get("sources", []):
         item = dict(s)
@@ -5261,14 +5871,20 @@ def api_list():
         item.pop("login", None)
         t = s.get("type")
         if t == "smb":
-            item["mounted"] = os.path.ismount(s["mountpoint"])
+            item["mounted"] = _mount_depth(s.get("mountpoint", ""), table) > 0
+            refused = None if item["mounted"] else _smb_auth_blocked(s)
+            if refused:
+                # The boot-time remount stopped at the first refused login;
+                # this says why the share is not there.
+                item["mount_error"] = {"code": refused[0], "message": _m(refused[0])}
         elif t in ("internal", "usb"):
-            item["mounted"] = os.path.ismount(s.get("mountpoint", ""))
+            item["mounted"] = _mount_depth(s.get("mountpoint", ""), table) > 0
             item["share"] = s.get("share")
         else:
-            item["exists"] = os.path.isdir(s.get("path", ""))
+            item["exists"] = bool(_fs_probe(os.path.isdir, s.get("path", ""), False, table))
         if item.get("mounted") or item.get("exists"):
-            item["usage"] = _fs_usage(s.get("mountpoint") or s.get("path"))
+            item["usage"] = _fs_probe(_fs_usage, s.get("mountpoint") or s.get("path"), None,
+                                      table, network=(t == "smb"))
         out.append(item)
     return jsonify({"sources": out, "paths": current_paths(state)})
 
@@ -5378,6 +5994,27 @@ def _local_path_allowed(path):
     return _under_roots(path, ALLOWED_LOCAL_ROOTS)
 
 
+_UNANSWERED = object()
+
+
+def _local_path_quick(path, table=None):
+    """_local_path_allowed() that never waits on a network share whose server
+    is gone: on a network filesystem the resolution runs through
+    _bounded_probe(), and when that does not answer the path as written is
+    confined instead (lexically, against the same roots)."""
+    if not _on_network_fs(path, table):
+        return _local_path_allowed(path)
+    got = _bounded_probe(_local_path_allowed, path, _UNANSWERED)
+    if got is not _UNANSWERED:
+        return got
+    p = os.path.normpath(os.path.abspath(path))
+    for root in ALLOWED_LOCAL_ROOTS:
+        r = os.path.normpath(root)
+        if p == r or p.startswith(r.rstrip("/") + "/"):
+            return p
+    return None
+
+
 @app.route("/api/sources/local", methods=["POST"])
 def api_add_local():
     """Add a rootfs folder as a `local` source. With `samba: true`, also
@@ -5411,6 +6048,11 @@ def api_add_local():
         path = _local_path_allowed(path)
         if not path:
             return _err("msg.pathNotAllowed", 400)
+    # A folder name with a line break in it (made over SSH or from a PC) is
+    # refused outright; to be shared, the path must also be one smb.conf
+    # cannot misread (_smb_conf_problem(); regen_samba_shares() checks again).
+    if _CONTROL_CHARS.search(path) or (samba and _smb_conf_problem("x", path)):
+        return _err("msg.unsafeFolderName", 400)
     if not os.path.isdir(path):
         if not samba:
             return _err("msg.folderMissing", 400, path=path)
@@ -5421,7 +6063,11 @@ def api_add_local():
 
     with _lock:
         state = load_state()
-        sid = _slug("local", os.path.basename(path.rstrip("/")))
+        # The same folder again replaces its own entry (and keeps its id);
+        # another folder with the same name gets an id of its own.
+        same = next((s for s in state["sources"] if _same_local_path(s, path)), None)
+        sid = same["id"] if same else _free_source_id(
+            state["sources"], _slug("local", os.path.basename(path.rstrip("/"))), path)
         src = {"id": sid, "type": "local", "name": path, "path": path}
         if is_playlistdir:
             # Publishing the playlist folder is not the same as adding a music
@@ -5482,6 +6128,26 @@ def _file_path_allowed(path):
     return _under_roots(path, _FILE_ROOTS)
 
 
+def _file_entry_allowed(path):
+    """_file_path_allowed() for an entry the manager is about to act ON --
+    delete, rename, move, copy -- rather than look inside. The folder holding
+    it is resolved and confined; the last component is kept as it is. Resolving
+    that too would hand the operation to whatever a symlink points at: deleting
+    a link to an album deleted the album and left the link behind."""
+    if not path or not isinstance(path, str):
+        return None
+    path = path.rstrip("/")
+    name = os.path.basename(path)
+    parent = _file_path_allowed(os.path.dirname(path)) if name not in ("", ".", "..") else None
+    if not parent:
+        # A root itself (its parent is outside every root) is still named the
+        # way it always was, so the protected-path refusal stays the one the
+        # owner sees; a link standing in for a root gets nothing.
+        full = _file_path_allowed(path)
+        return full if full and not os.path.islink(path) else None
+    return os.path.join(parent, name)
+
+
 @app.route("/api/local/browse", methods=["GET"])
 def api_browse_local():
     """List immediate subdirectories under a path -- powers the "Add local
@@ -5529,6 +6195,10 @@ def api_mkdir_local():
     name = (data.get("name") or "").strip()
     if not parent or not name or "/" in name or name in (".", ".."):
         return _err("msg.pathNotAllowed", 400)
+    if _CONTROL_CHARS.search(name):
+        # A line break in a folder name ended up in smb.conf once the folder
+        # was published, and the rest of the name became configuration.
+        return _err("msg.badName", 400)
     parent_ok = _local_path_allowed(parent)
     if not parent_ok or not os.path.isdir(parent_ok):
         return _err("msg.folderMissing", 400, path=parent)
@@ -5555,7 +6225,7 @@ def api_add_smb():
     if not server or not share:
         return _err("msg.smbFieldsRequired", 400)
     name = data.get("name") or f"{server}/{share}"
-    sid = _slug("smb", server, share)
+    sid, mountpoint = _smb_slot(load_state().get("sources", []), server, share)
     # Opt-in, backward-compatible: callers that don't ask to defer (the kiosk's
     # SourcesManager.jsx today) keep the old behaviour of handing the whole
     # mount straight to Lyrion. The wizard and webui's Settings -> Sources
@@ -5569,7 +6239,7 @@ def api_add_smb():
         "name": name,
         "server": server,
         "share": share,
-        "mountpoint": os.path.join(MOUNT_ROOT, _slug(server, share)),
+        "mountpoint": mountpoint,
         # On by default — see mount_smb()'s docstring. A caller that asks
         # for read-only still gets it, and so does a share the server only
         # lets us read (mount_smb() flips this back itself).
@@ -5597,6 +6267,9 @@ def api_add_smb():
     if not ok:
         return _err_detail(_smb_reason(detail) or "msg.mountFailed", 400,
                            detail=detail, message=msg)
+    # The login works now: whatever the boot-time remount recorded against
+    # this source no longer applies.
+    _smb_auth_failed.pop(sid, None)
     with _lock:
         state = load_state()
         state["sources"] = [s for s in state["sources"] if s.get("id") != sid]
@@ -5606,6 +6279,30 @@ def api_add_smb():
         _lyrion_push_live(add_paths=[src["mountpoint"]])
     return jsonify({"success": True, "message": msg, "id": sid,
                     "mountpoint": src["mountpoint"], "pending_activation": defer})
+
+
+def _smb_slot(sources, server, share):
+    """(id, mountpoint) for //server/share. The share already in the list
+    keeps its own (adding it again is how a new password is put in). A new
+    one gets the id and mountpoint of the old format unless another share
+    already has them: "Musica" and "Musica è", "Rock Pop" and "Rock_Pop"
+    make the same slug, and the second add then found the first share's
+    mountpoint "already mounted" and showed its music under the new name.
+    Two different shares never share a mountpoint."""
+    same = next((s for s in sources if _same_smb_share(s, server, share)
+                 and s.get("id") and s.get("mountpoint")), None)
+    if same:
+        return same["id"], same["mountpoint"]
+    base = _slug("smb", server, share)
+    sid = _free_source_id(sources, base, f"//{server}/{share}")
+    folder = _slug(server, share) + sid[len(base):]
+    taken = {_mp_key(s["mountpoint"]) for s in sources if s.get("mountpoint")}
+    mountpoint = os.path.join(MOUNT_ROOT, folder)
+    n = 2
+    while _mp_key(mountpoint) in taken:
+        mountpoint = os.path.join(MOUNT_ROOT, f"{folder}-{n}")
+        n += 1
+    return sid, mountpoint
 
 
 def _host_ok(value):
@@ -5778,10 +6475,12 @@ def _file_op_targets(data, need_dest):
     protected = _protected_paths()
     paths = []
     for item in raw:
-        p = _file_path_allowed(item)
+        p = _file_entry_allowed(item)
         if not p or not os.path.lexists(p):
             return None, None, _err("msg.pathNotAllowed", 400)
-        if os.path.realpath(p) in protected:
+        # A link is only ever the link: removing one that points at a
+        # mountpoint takes nothing away from the mountpoint.
+        if not os.path.islink(p) and os.path.realpath(p) in protected:
             return None, None, _err("msg.fileProtected", 400)
         paths.append(p)
     dest = None
@@ -5842,13 +6541,13 @@ def api_files_rename():
     if denied:
         return denied
     data = request.get_json(silent=True) or {}
-    src = _file_path_allowed((data.get("path") or "").strip())
+    src = _file_entry_allowed((data.get("path") or "").strip())
     name = _safe_name(data.get("name"))
     if not src or not os.path.lexists(src):
         return _err("msg.pathNotAllowed", 400)
     if not name:
         return _err("msg.badName", 400)
-    if os.path.realpath(src) in _protected_paths():
+    if not os.path.islink(src) and os.path.realpath(src) in _protected_paths():
         return _err("msg.fileProtected", 400)
     parent = os.path.dirname(src)
     if not _writable(parent):
@@ -5935,24 +6634,42 @@ def api_set_subpath(sid):
         return denied
     data = request.get_json(silent=True) or {}
     subpath = (data.get("subpath") or "").strip("/")
+    # The folder is checked before taking _lock, from a snapshot of the
+    # state: on a share whose server is gone every stat() waits for minutes,
+    # and it must not hold up every other route meanwhile.
+    snap = next((s for s in load_state().get("sources", []) if s.get("id") == sid), None)
+    if not snap:
+        return _err("msg.sourceNotFound", 404)
+    if snap.get("type") not in ("smb", "internal", "usb"):
+        return _err("msg.subpathNotSupported", 400)
+    mountpoint = snap.get("mountpoint")
+    if subpath and mountpoint:
+        table = _mount_table()
+        network = snap.get("type") == "smb"
+        root = _resolve_mountpoint(mountpoint, table)
+        joined = os.path.join(root, subpath)
+
+        def confine(p, _root=root):
+            return _under_roots(p, (_root,))
+        cand = _fs_probe(confine, joined, _UNANSWERED, table, network)
+        if cand is _UNANSWERED:
+            # No answer from the server: the path as written, confined.
+            cand = os.path.normpath(joined)
+            if cand != root and not cand.startswith(root + os.sep):
+                cand = None
+        if cand is None:
+            return _err("msg.pathNotAllowed", 400)
+        if cand == root:
+            subpath = ""  # "." and friends: the mount itself, i.e. no subpath
+        elif _mount_depth(mountpoint, table) and not _fs_probe(os.path.isdir, cand, False, table, network):
+            return _err("msg.folderMissing", 400, path=cand)
     with _lock:
         state = load_state()
         src = next((s for s in state["sources"] if s.get("id") == sid), None)
         if not src:
             return _err("msg.sourceNotFound", 404)
-        if src.get("type") not in ("smb", "internal", "usb"):
-            return _err("msg.subpathNotSupported", 400)
         was_pending = bool(src.get("pending_activation"))
         mountpoint = src.get("mountpoint")
-        if subpath and mountpoint:
-            root = os.path.realpath(mountpoint)
-            cand = _under_roots(os.path.join(root, subpath), (root,))
-            if cand is None:
-                return _err("msg.pathNotAllowed", 400)
-            if cand == root:
-                subpath = ""  # "." and friends: the mount itself, i.e. no subpath
-            elif os.path.ismount(mountpoint) and not os.path.isdir(cand):
-                return _err("msg.folderMissing", 400, path=cand)
         src["subpath"] = subpath
         # Staged until the live push below lands -- tell _sync_from_lyrion()
         # to leave this source alone in the meantime, otherwise a GET
@@ -5961,7 +6678,8 @@ def api_set_subpath(sid):
         src["subpath_pending"] = True
         src.pop("pending_activation", None)
         save_state(state)
-        target = current_paths({"sources": [src]})
+        src = dict(src)
+    target = current_paths({"sources": [src]})
     # Swap the old mediadir for the newly picked subfolder right away: there
     # is no Apply button to reach any more.
     if _lyrion_push_live(drop_roots=[mountpoint] if mountpoint else (),
@@ -6331,6 +7049,7 @@ def api_internal_format_status():
 
 _cd_info_cache = {}  # freedb discid -> MusicBrainz lookup (see _cd_lookup), or a miss marker
 _cd_leadouts = {}    # freedb discid -> exact lead-out in frames (0: not available)
+_cd_data_tracks = {}  # freedb discid -> numbers of its data tracks
 # How long a disc that MusicBrainz does not know, or a lookup that failed, is
 # left alone. CdRip polls /api/cd/info every few seconds: without these, an
 # unknown disc or a device without internet would query MusicBrainz on every
@@ -6373,12 +7092,28 @@ def _cd_toc():
         # `seconds` is the lead-out divided by 75, so this is at most 74
         # frames short: close enough for the fuzzy TOC search.
         leadout = total_sec * 75
+    # Enhanced CD: the data track after the music is neither ripped nor part
+    # of the MusicBrainz disc id (hcd.audio_toc()). Read once per disc, like
+    # the lead-out; a drive that cannot say is treated as all audio, and the
+    # worker still skips a track cdparanoia calls "non audio".
+    data_tracks = _cd_data_tracks.get(discid)
+    if data_tracks is None:
+        if len(_cd_data_tracks) > 32:
+            _cd_data_tracks.clear()
+        data_tracks = _cd_data_tracks[discid] = tuple(hcd.read_data_tracks(CD_DEVICE) or ())
+    audio = hcd.audio_toc(offsets, leadout, data_tracks)
+    if not audio["tracks"]:
+        return None
+    offsets, leadout = audio["offsets"], audio["leadout"]
+    ntracks = len(offsets)
     lengths = []
     for i in range(ntracks):
         end = offsets[i + 1] if i + 1 < ntracks else leadout
         lengths.append(max(0, (end - offsets[i]) // 75))
     return {"discid": discid, "ntracks": ntracks, "offsets": offsets,
-            "total_sec": total_sec, "lengths": lengths, "leadout": leadout}
+            "total_sec": total_sec, "lengths": lengths, "leadout": leadout,
+            # the audio track numbers, the only ones a rip may read
+            "audio_tracks": audio["tracks"]}
 
 
 def _cd_exact_leadout(ntracks, offsets, total_sec):
@@ -6518,6 +7253,11 @@ def _cd_metadata(toc, release=None):
     for i in range(toc["ntracks"]):
         title = titles[i] if i < len(titles) and titles[i] else f"Track {i + 1:02d}"
         tracks.append({"num": i + 1, "title": title, "length": toc["lengths"][i]})
+    audio = toc.get("audio_tracks")
+    if audio is not None:
+        # A data track (mixed-mode disc) keeps its place in the numbering
+        # and in MusicBrainz's track list, but is never offered for ripping.
+        tracks = [t for t in tracks if t["num"] in audio]
     return {
         "mbid": choice["mbid"] if choice else None,
         "artist": artist or "Unknown Artist",
@@ -6552,13 +7292,15 @@ def _cd_tag_plan(meta, artist):
     mb_artist = hmeta.artist_credit_text(rel.get("artist-credit"))
     if artist and artist != mb_artist:
         album_tags = [(k, artist if k == "ALBUMARTIST" else v) for k, v in album_tags]
-    artists = []
-    for i in range(len(meta["tracks"])):
-        ta = track_artists[i] if i < len(track_artists) else ""
+    # By the track's place on the disc: a data track left out of the rip
+    # (mixed-mode disc) must not shift every tag onto the next track.
+    positions = [int(t.get("num") or (i + 1)) - 1 for i, t in enumerate(meta["tracks"])]
+    artists, tags = [], []
+    for pos in positions:
+        ta = track_artists[pos] if 0 <= pos < len(track_artists) else ""
         artists.append(ta if ta and ta != mb_artist else artist)
-    while len(track_tags) < len(meta["tracks"]):
-        track_tags.append([])
-    return album_tags, track_tags[:len(meta["tracks"])], artists
+        tags.append(track_tags[pos] if 0 <= pos < len(track_tags) else [])
+    return album_tags, tags, artists
 
 
 def _rip_state():
@@ -6635,12 +7377,16 @@ def _lyrion_edit_mediadirs_live(drop_roots=(), add_paths=(), force_rescan=False)
     current = _lyrion_request(["pref", "mediadirs", "?"]).get("_p2")
     if not isinstance(current, list):
         current = [current] if current else []
-    victims = [os.path.realpath(r) for r in drop_roots if r]
+    # Removing a source runs this under _lock: a folder on a share whose
+    # server is gone must be compared as written, never stat-ed.
+    table = _mount_table()
+    net_roots = (os.path.realpath(MOUNT_ROOT),)
+    victims = [_resolve_quick(r, table, net_roots) for r in drop_roots if r]
     wanted = []
     for d in current:
         if not d:
             continue
-        p = os.path.realpath(d)
+        p = _resolve_quick(d, table, net_roots)
         if any(p == v or p.startswith(v + os.sep) for v in victims):
             continue
         wanted.append(d)
@@ -6688,9 +7434,9 @@ def _source_lyrion_roots(src):
     the source goes."""
     if src.get("type") in ("smb", "internal", "usb"):
         mp = src.get("mountpoint")
-        return [os.path.realpath(mp)] if mp else []
+        return [_resolve_mountpoint(mp)] if mp else []
     raw = src.get("path")
-    return [os.path.realpath(raw)] if raw else []
+    return [_resolve_quick(raw, None, (os.path.realpath(MOUNT_ROOT),))] if raw else []
 
 
 def _lyrion_remove_mediadir_live(roots):
@@ -6823,12 +7569,25 @@ def _rip_writable_sources():
     or USB disks, plus any SMB share mounted read-write — which is the
     default, but not one the server always allows (see mount_smb())."""
     out = []
+    table = _mount_table()
     for s in load_state().get("sources", []):
         t = s.get("type")
         if t not in ("internal", "usb") and not (t == "smb" and _smb_wants_rw(s)):
             continue
         mp = s.get("mountpoint") or ""
-        if os.path.ismount(mp) and os.access(mp, os.W_OK):
+        entry = _mount_entry(mp, table) if table is not None else None
+        if table is None:
+            mounted = bool(mp) and os.path.ismount(mp)
+        else:
+            mounted = entry is not None
+        if not mounted:
+            continue
+        if t == "smb" and entry is not None:
+            # A share's mount options say whether it is writable; access()
+            # on it would ask a server that may have gone away.
+            if "rw" in entry[1].split(","):
+                out.append(s)
+        elif os.access(mp, os.W_OK):
             out.append(s)
     return out
 
@@ -6881,7 +7640,7 @@ def _cd_target_root(path):
         return None, None, None
     real = os.path.realpath(path)
     for src in _rip_writable_sources():
-        mp = os.path.realpath(src.get("mountpoint") or "")
+        mp = _resolve_mountpoint(src["mountpoint"]) if src.get("mountpoint") else ""
         if not mp:
             continue
         if real == mp:
@@ -7412,6 +8171,7 @@ SOURCES_I18N = {
         "msg.fileIntoItself": "A folder cannot be copied into itself.",
         "msg.fileExists": "\u201c{name}\u201d already exists here.",
         "msg.badName": "Invalid name.",
+        "msg.unsafeFolderName": "This folder's name contains characters that cannot be used here (a line break, a backslash, or a % followed by a letter): rename the folder first.",
         "msg.fileOpFailed": "The operation did not finish: {detail}",
         "msg.jobNotFound": "This operation is no longer available.",
         "files.rootMusic": "Music on this player",
@@ -7590,6 +8350,7 @@ SOURCES_I18N = {
         "msg.fileIntoItself": "Una cartella non si può copiare dentro sé stessa.",
         "msg.fileExists": "\u201c{name}\u201d esiste già qui.",
         "msg.badName": "Nome non valido.",
+        "msg.unsafeFolderName": "Il nome di questa cartella contiene caratteri che qui non si possono usare (un a capo, una barra rovesciata o un % seguito da una lettera): rinomina prima la cartella.",
         "msg.fileOpFailed": "L'operazione non è stata completata: {detail}",
         "msg.jobNotFound": "Questa operazione non è più disponibile.",
         "files.rootMusic": "Musica su questo apparecchio",

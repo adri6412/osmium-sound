@@ -61,6 +61,8 @@ import urllib.request
 SYSROOT = os.environ.get("HIFI_SYSROOT", "")
 SYSTEMCTL = os.environ.get("HIFI_SYSTEMCTL", "systemctl")
 LYRION_RPC = os.environ.get("HIFI_LYRION_RPC", "http://127.0.0.1:9000/jsonrpc.js")
+# Free bytes on /data as the tests want them to be (unset: what statvfs says).
+DATA_FREE = os.environ.get("HIFI_DATA_FREE", "")
 
 DATA_MNT = "/data"
 MUSIC_ROOT = "/data/music"
@@ -411,11 +413,20 @@ def copy_tree(src, dest, update=True):
     return True
 
 
-def verify(src, dest):
-    """How many files did not arrive, or arrived a different size. Stat only,
-    so it costs nothing on a big library, and it catches the one failure that
-    matters before the original is deleted: a copy that ran out of room."""
-    bad = 0
+# How much of the end of each file verify(content=True) compares. The end is
+# what a copy cut short gets wrong — the blocks written last, or a hole read
+# back as zeros — and one block per file keeps it cheap on a large library.
+TAIL_BYTES = 4096
+
+
+def _tail(path, size):
+    with open(path, "rb") as f:
+        f.seek(max(0, size - TAIL_BYTES))
+        return f.read(TAIL_BYTES)
+
+
+def _pairs(src, dest):
+    """(source path, destination path, source lstat) for every file of src."""
     base = real(src)
     for root, dirs, files in os.walk(base, followlinks=False):
         rel = os.path.relpath(root, base)
@@ -427,14 +438,80 @@ def verify(src, dest):
                 ss = os.lstat(s)
             except OSError:
                 continue                  # vanished while we walked: not ours
+            yield s, d, ss
+
+
+def verify(src, dest, content=False):
+    """How many files did not arrive, or arrived a different size. Stat only,
+    so it costs nothing on a big library, and it catches the one failure that
+    matters before the original is deleted: a copy that ran out of room.
+
+    With `content`, the last block of every regular file is compared too:
+    the check that runs right before the original is deleted, after the copy
+    has been flushed to the disk (see durable())."""
+    bad = 0
+    for s, d, ss in _pairs(src, dest):
+        try:
+            ds = os.lstat(d)
+        except OSError:
+            bad += 1
+            continue
+        if os.path.islink(s):
+            continue
+        if ss.st_size != ds.st_size:
+            bad += 1
+            continue
+        if content and ss.st_size > 0 and os.path.isfile(s):
             try:
-                ds = os.lstat(d)
+                if _tail(s, ss.st_size) != _tail(d, ds.st_size):
+                    bad += 1
             except OSError:
                 bad += 1
-                continue
-            if not os.path.islink(s) and ss.st_size != ds.st_size:
-                bad += 1
     return bad
+
+
+def durable(dest):
+    """Everything copied into dest actually on the disk.
+
+    🚨 The original is deleted right after this. The source (the legacy
+    root) and /data are different filesystems: without a flush, a power cut
+    within the next half minute or so of delayed allocation can leave the
+    originals deleted — that part is journalled — and the copies empty.
+    syncfs() of /data where the platform has it, sync() otherwise."""
+    try:
+        import ctypes
+        libc = ctypes.CDLL(None, use_errno=True)
+        fd = os.open(real(dest), os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            if libc.syncfs(fd) == 0:
+                return
+        finally:
+            os.close(fd)
+    except Exception:
+        pass
+    os.sync()
+
+
+def already_there(src, dest):
+    """What of src is already at dest, the same size, counted the way
+    tree_size() counts it. A resumed run must not ask /data for room that the
+    interrupted one has already taken."""
+    total = 0
+    seen = set()
+    if not dest or not os.path.isdir(real(dest)):
+        return 0
+    for s, d, ss in _pairs(src, dest):
+        if ss.st_nlink > 1:
+            if ss.st_ino in seen:
+                continue
+            seen.add(ss.st_ino)
+        try:
+            ds = os.lstat(d)
+        except OSError:
+            continue
+        if ds.st_size == ss.st_size:
+            total += ss.st_blocks * 512
+    return total
 
 
 def ensure_music_root():
@@ -624,8 +701,18 @@ def cmd_move():
         summary(entries, {}, [])
         return 0
 
-    need = sum(e["bytes"] for e in todo)
-    free = shutil.disk_usage(real(DATA_MNT)).free
+    # 🚨 Minus what an interrupted run already copied: those bytes are on
+    # /data and already missing from `free`, so counting them again refused a
+    # resume for good on a partition that had room for the rest. Only the
+    # destinations that are certain count — a /home copy, or a move whose
+    # folder is in the manifest; a new move gets a folder that is not there.
+    need = 0
+    for e in todo:
+        known = DATA_HOME + e["path"][len(HOME):] if e["action"] == "copy" \
+            else manifest.get(e["path"])
+        need += max(0, e["bytes"] - already_there(e["path"], known))
+    free = int(DATA_FREE) if DATA_FREE.isdigit() \
+        else shutil.disk_usage(real(DATA_MNT)).free
     if free < need + MARGIN_MIB * 1024 * 1024:
         warn("the data partition has %d MiB free and the music on the system "
              "disk needs %d MiB: not moving anything"
@@ -661,6 +748,16 @@ def cmd_move():
             log("%s: %d file(s) to copy again" % (src, missing))
             copy_tree(src, dest, update=False)
             missing = verify(src, dest)
+        if not missing:
+            # On the disk first, then checked from there: see durable().
+            durable(dest)
+            missing = verify(src, dest, content=True)
+            if missing:
+                log("%s: %d file(s) differ from the original: copying again"
+                    % (src, missing))
+                copy_tree(src, dest, update=False)
+                durable(dest)
+                missing = verify(src, dest, content=True)
         if missing:
             errors.append("%s: %d file(s) did not arrive in %s"
                           % (src, missing, dest))

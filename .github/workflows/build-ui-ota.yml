@@ -265,6 +265,14 @@ jobs:
           bash tests/test-ab-media.sh
           echo "== second chance at the A/B switch (shell) =="
           bash tests/test-ab-image.sh
+          echo "== UI apply resumes after an interruption (shell) =="
+          bash tests/test-ota-ui-apply.sh
+          echo "== legacy cleanup, --deep included (shell) =="
+          bash tests/test-ab-convert-cleanup.sh
+          echo "== boot health and watchdog (shell) =="
+          bash tests/test-boot-health.sh
+          echo "== A/B boot selector under grub-emu (shell; skips without grub-emu) =="
+          bash tests/test-grub-selector.sh
           echo "== update plan (python) =="
           python3 -m pip install --quiet flask flask-cors
           python3 tests/test_update_plan.py
@@ -364,7 +372,11 @@ jobs:
             tests/test-ext-guardian.sh tests/test-apt-shim.sh tests/test-factory-reset.sh \
             tests/test-lyrion-ensure.sh tests/test-stream-tune.sh tests/test-ab-media.sh \
             tests/test-bundle-fetch.sh \
-            tests/test-ab-image.sh distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh
+            tests/test-ab-image.sh distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-boot-health.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-boot-watchdog.sh \
+            tests/test-ota-ui-apply.sh tests/test-ab-convert-cleanup.sh \
+            tests/test-boot-health.sh tests/test-grub-selector.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
           export HIFI_PAYLOAD_DIR="$PWD/distro/os-update"

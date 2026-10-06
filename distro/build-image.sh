@@ -438,6 +438,16 @@ CMDLINE=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"$/\1/p' "$CH/etc/default
 mkdir -p "$CH/boot/grub"
 sed -e "s|@KVER@|$KVER|g" -e "s|@CMDLINE@|$CMDLINE|g" "$SHARE/slot-grub.cfg.tmpl" > "$CH/boot/grub/grub.cfg"
 if command -v grub-script-check >/dev/null 2>&1; then grub-script-check "$CH/boot/grub/grub.cfg" || die "grub.cfg dello slot non valido"; fi
+# This image's identity, as a GRUB environment block (1024 bytes: header, one
+# variable, '#' padding — what grub-editenv writes). The ESP selector reads it
+# with load_env and hifi-boot-health.sh records it once a boot of this image
+# is good: a proven image gets more than one attempt after a bad boot, a new
+# one (whose id was never recorded) stays a one-shot trial. Version plus the
+# commit time: the same build is the same id, a rebuild is a new one.
+OSMIUM_ID="${VERSION:-unknown}@${SOURCE_DATE_EPOCH}"
+case "$OSMIUM_ID" in *[!0-9A-Za-z.@_+-]*) die "OSMIUM_ID non valido: $OSMIUM_ID" ;; esac
+{ printf '# GRUB Environment Block\nOSMIUM_ID=%s\n' "$OSMIUM_ID"; head -c 1024 /dev/zero | tr '\0' '#'; } \
+    | head -c 1024 > "$CH/boot/grub/osmium-id.env"
 # /vmlinuz e /initrd.img (symlink Debian) restano: comodi per il ramo legacy del selettore
 cat > "$CH/etc/fstab" <<'FSTAB'
 # /etc/fstab — Osmium Sound image (A/B slot, read-only root).
@@ -507,6 +517,8 @@ if command -v grub-fstest >/dev/null; then
     grub-fstest "$SQ" cat /boot/grub/grub.cfg 2>&1 | grep -q '^linux ' \
         || die "grub-fstest non legge /boot/grub/grub.cfg dal rootfs.squashfs: GRUB non avvierebbe lo slot"
     log "grub-fstest: il grub.cfg dello slot è leggibile dal squash4 di GRUB"
+    grub-fstest "$SQ" cat /boot/grub/osmium-id.env 2>&1 | grep -qx "OSMIUM_ID=$OSMIUM_ID" \
+        || die "grub-fstest non legge /boot/grub/osmium-id.env dal rootfs.squashfs"
 else
     log "ATTENZIONE: grub-fstest assente sull'host, salto la verifica di lettura GRUB del squashfs"
 fi

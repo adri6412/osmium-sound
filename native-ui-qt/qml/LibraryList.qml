@@ -292,7 +292,7 @@ Item {
                     Rectangle {
                         x: parent.width - 6 - 30; y: parent.height - 6 - 30; width: 30; height: 30; radius: 15
                         color: Theme.mix(Theme.blackA(0.6), Theme.gold, card.playF)      // active:bg-hifi-gold active:text-black
-                        Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 14; color: Theme.mix(Theme.white, Theme.black, card.playF) }
+                        Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 14; color: Theme.white; pressColor: Theme.black; press: card.playF }
                     }
                 }
                 Text { x: 8; y: artBox.height + 8; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }

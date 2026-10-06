@@ -23,7 +23,11 @@ ConditionKernelCommandLine=!boot=live
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/hifi-boot-health.sh
-TimeoutStartSec=400
+# 🚨 No time limit: the script keeps trying until the boot is good (it used
+# to give up after 300 s, and with it the slot). Whether a late boot is
+# abandoned is hifi-boot-watchdog's decision. Nothing is ordered after this
+# unit, so a long wait holds nothing up.
+TimeoutStartSec=infinity
 
 [Install]
 WantedBy=multi-user.target

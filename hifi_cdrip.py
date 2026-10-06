@@ -30,6 +30,7 @@ import os
 import re
 import stat
 import struct
+import time
 import unicodedata
 import urllib.request
 import zlib
@@ -403,6 +404,93 @@ def parse_cdparanoia_toc(text):
     return toc
 
 
+# ── Data tracks (Enhanced CD, mixed mode) ───────────────────────────
+# An "Enhanced" CD carries its audio tracks and then, in a second session, a
+# data track (videos, a web page). Nothing used to tell the two apart: the
+# rip plan included the data track, cdparanoia refused it ("non audio
+# track"), and the failure threw away every audio track already read. The
+# MusicBrainz disc id came out wrong as well, since MusicBrainz leaves the
+# trailing data track out and ends the disc 11400 frames (the gap between
+# the two sessions) before it starts.
+CDROMREADTOCHDR = 0x5305
+CDROMREADTOCENTRY = 0x5306
+CDROM_LBA = 0x01
+CDROM_DATA_TRACK = 0x04
+SESSION_GAP_FRAMES = 11400
+_TOCENTRY = struct.Struct('=BBBxiB3x')     # struct cdrom_tocentry, 12 bytes
+
+
+def parse_tocentry(buf):
+    """(track, control bits, LBA) of one CDROMREADTOCENTRY answer. The
+    control nibble is the upper half of the second byte (cdte_ctrl:4 after
+    cdte_adr:4, filled from the low bits up)."""
+    track, adr_ctrl, _fmt, lba, _mode = _TOCENTRY.unpack(bytes(buf[:_TOCENTRY.size]))
+    return track, (adr_ctrl >> 4) & 0x0f, lba
+
+
+def read_data_tracks(device=CD_DEVICE):
+    """Numbers of the tracks that carry data rather than audio, read from the
+    TOC's control bits with the same ioctls cd-discid uses — no tool to run,
+    nothing to spin up. None when the TOC cannot be read."""
+    import fcntl
+    try:
+        fd = os.open(device, os.O_RDONLY | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        hdr = bytearray(2)
+        fcntl.ioctl(fd, CDROMREADTOCHDR, hdr)
+        first, last = hdr[0], hdr[1]
+        if not 1 <= first <= last <= 99:
+            return None
+        data = []
+        for n in range(first, last + 1):
+            buf = bytearray(_TOCENTRY.pack(n, 0, CDROM_LBA, 0, 0))
+            fcntl.ioctl(fd, CDROMREADTOCENTRY, buf)
+            _track, ctrl, _lba = parse_tocentry(buf)
+            if ctrl & CDROM_DATA_TRACK:
+                data.append(n)
+        return data
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
+def audio_toc(offsets, leadout, data_tracks):
+    """The disc as MusicBrainz sees it, and which tracks can be ripped.
+
+    `offsets` (frames, lead-in included) and `leadout` describe every track
+    from 1, as cd-discid prints them; `data_tracks` are the numbers of the
+    data tracks. Trailing data tracks are dropped from the TOC and the disc
+    ends SESSION_GAP_FRAMES before the first of them (libdiscid's rule); a
+    data track anywhere else stays in the TOC, as it does on MusicBrainz, but
+    is not ripped. Returns {'offsets', 'leadout', 'tracks'} with `tracks` the
+    audio track numbers."""
+    n = len(offsets)
+    data = {int(t) for t in data_tracks or () if 1 <= int(t) <= n}
+    keep = n
+    while keep > 1 and keep in data:
+        keep -= 1
+    offsets = list(offsets)
+    if keep < n:
+        end = offsets[keep] - SESSION_GAP_FRAMES
+        # a single-session disc has no gap to take off
+        leadout = end if end > offsets[keep - 1] else offsets[keep]
+        offsets = offsets[:keep]
+    tracks = [t for t in range(1, keep + 1) if t not in data]
+    return {'offsets': offsets, 'leadout': leadout, 'tracks': tracks}
+
+
+_NON_AUDIO_RE = re.compile(r'non[- ]?audio|data track', re.IGNORECASE)
+
+
+def is_non_audio_error(text):
+    """True for cdparanoia's refusal of a data track ("Selected span
+    contains non audio track")."""
+    return bool(_NON_AUDIO_RE.search(text or ''))
+
+
 def frames_to_msf(frames):
     frames = max(0, int(frames))
     return f'{frames // (75 * 60):02d}:{(frames // 75) % 60:02d}.{frames % 75:02d}'
@@ -416,12 +504,41 @@ def safe_name(value, fallback, ascii_only=False):
     space, dot, dash, underscore, parentheses and the ampersand goes."""
     v = str(value or '')
     if ascii_only:
-        v = unicodedata.normalize('NFKD', v).encode('ascii', 'ignore').decode('ascii')
-        v = re.sub(r"[^A-Za-z0-9 ._\-()&',]", '_', v)
-        v = re.sub(r'_+', '_', v)
+        folded = unicodedata.normalize('NFKD', v).encode('ascii', 'ignore').decode('ascii')
+        # A title in a script with no Latin form (Japanese, Cyrillic, Greek…)
+        # folds to nothing or to a stray digit. Keep it as written then:
+        # otherwise every such disc becomes "Unknown Album" and the next rip
+        # lands on top of the last one.
+        kept = sum(c.isalnum() for c in folded)
+        if kept and kept * 2 >= sum(c.isalnum() for c in v):
+            v = re.sub(r"[^A-Za-z0-9 ._\-()&',]", '_', folded)
+            v = re.sub(r'_+', '_', v)
     v = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', v)
-    v = ' '.join(v.split()).strip(' .')
-    return v[:120] or fallback
+    v = ' '.join(v.split())[:120]
+    # ext4 counts bytes, not characters: 120 kana are 360 bytes and flac or
+    # makedirs fail with ENAMETOOLONG. 200 leaves room for "NN - " and ".flac".
+    while len(v.encode('utf-8')) > 200:
+        v = v[:-1]
+    return v.strip(' .') or fallback
+
+
+def unused_dir(path):
+    """`path`, or "path (2)", "path (3)"… when a folder with something in it
+    is already there. A second disc with the same artist and title — two
+    unknown discs both named "Unknown Album", a reissue — gets a folder of its
+    own instead of replacing the files of the first."""
+    def taken(p):
+        try:
+            return os.path.lexists(p) and (not os.path.isdir(p) or bool(os.listdir(p)))
+        except OSError:
+            return True
+    if not taken(path):
+        return path
+    for n in range(2, 1000):
+        cand = f'{path} ({n})'
+        if not taken(cand):
+            return cand
+    return f'{path} ({int(time.time())})'
 
 
 # ── The audio of a WAV, for the log ─────────────────────────────────

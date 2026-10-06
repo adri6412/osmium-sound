@@ -238,6 +238,11 @@ private:
     qint64 m_lastStatus = 0, m_lastPrefs = 0, m_lastSettings = 0, m_lastUsb = 0, m_lastOta = 0, m_lastNet = 0, m_lastElapsedTick = 0;
     QString m_netState = "unknown", m_netType, m_netSsid, m_netIp;
     bool m_statusInFlight = false, m_wantNow = false;
+    // "in riproduzione" vale solo finche' Lyrion lo conferma: l'ultimo
+    // `status` riuscito (quando e' arrivato e quando era partito), l'ultimo
+    // play/pausa chiesto e fin quando il play ottimista aspetta la conferma
+    qint64 m_lastStatusOk = 0, m_lastStatusOkSent = -1, m_playCmdAt = -1, m_playHoldUntil = 0;
+    int m_playSeq = 0;
 
     bool m_connected = false;
     QString m_playerName, m_playerId, m_localName;
@@ -280,4 +285,9 @@ private:
     // chiavette usb
     QStringList m_usbSeen;
     bool m_usbBaseline = false;
+    // la tabella dei mount (/proc/self/mounts) avvisa da sola quando cambia:
+    // si interroga /api/sources a raffica solo allora, di rado altrimenti
+    void watchMounts();
+    int m_mountsFd = -1;
+    qint64 m_usbBurstUntil = 0;
 };

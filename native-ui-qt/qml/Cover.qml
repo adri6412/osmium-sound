@@ -10,7 +10,11 @@ Item {
     property real devScale: 1
     property real fallbackIcon: 40
     property color border: Theme.wa(0.08)
-    readonly property bool ready: img.status === Image.Ready || prev.hasImage
+    // 🚨 un indirizzo vuoto (coda svuotata, nessun brano) e' "nessuna
+    // copertina": il ripiego, non l'ultima immagine tenuta in `prev`
+    readonly property bool hasSource: String(source) !== ""
+    readonly property bool ready: hasSource && (img.status === Image.Ready || prev.hasImage)
+    onHasSourceChanged: if (!hasSource) prev.source = ""
 
     DiagonalFallback {                         // bg-gradient-to-br from-hifi-gray to-hifi-dark
         anchors.fill: parent

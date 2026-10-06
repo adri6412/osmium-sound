@@ -48,7 +48,7 @@ echo "          installer's remove-live-packages purge; self-disables on success
 systemctl enable hifi-firstboot.service || true
 
 echo "I: [hifi] enabling audio quiesce before any shutdown/reboot (DMA panic workaround)"
-systemctl enable hifi-quiesce-audio-shutdown.service || true
+systemctl enable hifi-playback-quiesce.service || true
 
 echo "I: [hifi] enabling OTA stage-resume (finishes a download interrupted by a reboot;"
 echo "          no-op on every boot without a pending stage plan)"
@@ -114,6 +114,18 @@ echo "I: [hifi] enabling systemd-oomd and the memory log"
 # change cannot leave the policy in the slice drop-ins with nobody to apply it.
 systemctl enable systemd-oomd.service || true
 systemctl enable hifi-memlog.timer || true
+
+echo "I: [hifi] enabling the weekly backup timer"
+# Enabled, yet the backup stays off by default: the decision is
+# /etc/hifi-player/backup.json ("scheduled", false when absent), which
+# hifi-backup-run.py --scheduled reads first and exits on. Enabled here because
+# an image never runs apply.d/0033 (which used to be the only thing creating
+# and enabling these units): on every A/B install the toggle in Settings
+# said "saved" and nothing ever ran. With the timer already there, an owner
+# who turned the schedule on back then gets backups without touching anything.
+# The Settings toggle still enables/disables the timer itself, and 0033 does
+# the same on legacy installs.
+systemctl enable hifi-backup.timer || true
 
 echo "I: [hifi] making journald persistent across reboots"
 mkdir -p /var/log/journal

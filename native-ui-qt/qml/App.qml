@@ -322,8 +322,12 @@ Item {
         case "volumeUp": remoteVolume(repeat ? 2 : 5); return
         case "volumeDown": remoteVolume(repeat ? -2 : -5); return
         case "mute":
+            // volume fisso: toggleMute non fa nulla, e il riquadro mentirebbe
+            if (Player.volumeFixed) return
+            // toggleMute cambia `muted` subito (ottimista): qui c'e' gia' lo
+            // stato NUOVO, e il riquadro dice quello
             Player.toggleMute()
-            toast.say(Player.muted ? "volume-2" : "volume-x", Tr.t(Player.muted ? "remote.soundOn" : "remote.muted"))
+            toast.say(Player.muted ? "volume-x" : "volume-2", Tr.t(Player.muted ? "player.muted" : "player.soundOn"))
             return
         case "nowPlaying": setExpanded(!expanded); return
         // Schermo intero: il player si apre da solo se era chiuso. Senza VU e
@@ -352,7 +356,7 @@ Item {
         // the touchscreen "unplugged and plugged back in" (api_server
         // reset_touchscreen): for a panel that stops answering the finger
         case "resetTouch":
-            toast.say("refresh-cw", Tr.t("remote.touchRestarting"))
+            toast.say("refresh-cw", Tr.t("player.touchRestarting"))
             Api.post(Api.apiBase + "/touch/reset", {}, function(ok, d) {
                 if (d && d.message) toast.say(ok && d.success !== false ? "check" : "x", d.message)
             }, 15000)

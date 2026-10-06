@@ -1,0 +1,10 @@
+[Unit]
+Description=HiFi Player scheduled backup (weekly)
+
+[Timer]
+OnCalendar=weekly
+Persistent=false
+RandomizedDelaySec=3600
+
+[Install]
+WantedBy=timers.target

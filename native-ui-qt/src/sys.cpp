@@ -228,17 +228,50 @@ bool Sys::injecting() const { return g_clock.elapsed() < m_injectUntil; }
 // Chromium con currentColor + colore CSS con alpha (i tratti che si
 // sovrappongono si sommano, identico a Electron). Il file finisce in una
 // cartella temporanea e si genera una volta sola per coppia (icona, colore):
-// le coppie sono poche decine, nessun colore e' animato.
+// le coppie sono poche decine.
+// 🚨 Il colore di un'icona NON va animato: ogni tinta intermedia era un file
+// nuovo scritto e riletto sul thread della UI (~18 per tocco con Tap.mix). Il
+// tocco si fa con i due strati di Icon.qml (pressColor/press). Per sicurezza
+// la cache ha comunque un tetto: oltre, si svuota e si ricomincia.
+static const int kMaxTintedIcons = 1024;
+
+void Sys::iconCacheDir() {
+    if (!m_iconCacheDir.isEmpty()) return;
+    m_iconCacheDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
+                     + "/hifi-qt-icons-" + QString::number(getuid());
+    QDir dir(m_iconCacheDir);
+    dir.mkpath(".");
+    // le icone lasciate da un avvio precedente (con le versioni che tingevano
+    // a ogni fotogramma erano migliaia, in RAM su /tmp): si rifanno al bisogno.
+    // Le ombre restano, costano da calcolare e sono sempre le stesse.
+    for (const QString &f : dir.entryList({"*.svg", "*.svg.tmp"}, QDir::Files)) dir.remove(f);
+}
+
+void Sys::pruneTinted() {
+    qWarning("icone tinte: %d in cache, si svuota (un colore animato su un'Icon?)", m_tintedIcons);
+    for (auto it = m_tinted.begin(); it != m_tinted.end();) {
+        if (it.key().startsWith(QLatin1String("bs|"))) { ++it; continue; }
+        // VectorImage legge il file solo quando cambia `source`: le icone
+        // gia' a schermo non ne hanno piu' bisogno
+        if (!it.value().isEmpty()) QFile::remove(QUrl(it.value()).toLocalFile());
+        it = m_tinted.erase(it);
+    }
+    m_tintedIcons = 0;
+    m_tintedPrunes++;
+}
+
+QVariantMap Sys::tintStats() const {
+    return {{"icons", m_tintedIcons}, {"made", m_tintedMade}, {"prunes", m_tintedPrunes}};
+}
+
 QString Sys::tintedIcon(const QString &name, const QColor &color) {
     if (name.isEmpty() || m_iconDir.isEmpty()) return QString();
     const QString key = name + '|' + color.name(QColor::HexArgb);
     auto it = m_tinted.constFind(key);
     if (it != m_tinted.constEnd()) return *it;
-    if (m_iconCacheDir.isEmpty()) {
-        m_iconCacheDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
-                         + "/hifi-qt-icons-" + QString::number(getuid());
-        QDir().mkpath(m_iconCacheDir);
-    }
+    iconCacheDir();
+    if (m_tintedIcons >= kMaxTintedIcons) pruneTinted();
+    m_tintedIcons++;
     const QString path = m_iconCacheDir + '/' + name + '-' + color.name(QColor::HexArgb).mid(1) + ".svg";
     if (!QFile::exists(path)) {
         QFile in(m_iconDir + '/' + name + ".svg");
@@ -260,6 +293,7 @@ QString Sys::tintedIcon(const QString &name, const QColor &color) {
         out.write(svg); out.close();
         QFile::remove(path);
         QFile::rename(path + ".tmp", path);
+        m_tintedMade++;
     }
     const QString url = QUrl::fromLocalFile(path).toString();
     m_tinted.insert(key, url);
@@ -303,11 +337,7 @@ QString Sys::boxShadow(qreal radius, qreal blur, qreal spread, const QColor &col
     const QString key = QString("bs|%1|%2|%3|%4").arg(radius).arg(blur).arg(spread).arg(color.name(QColor::HexArgb));
     auto it = m_tinted.constFind(key);
     if (it != m_tinted.constEnd()) return *it;
-    if (m_iconCacheDir.isEmpty()) {
-        m_iconCacheDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
-                         + "/hifi-qt-icons-" + QString::number(getuid());
-        QDir().mkpath(m_iconCacheDir);
-    }
+    iconCacheDir();
     const QString path = m_iconCacheDir + "/shadow-" + QString::fromLatin1(QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Md5).toHex().left(12)) + ".png";
     if (!QFile::exists(path)) {
         const double sigma = blur / 2.0;

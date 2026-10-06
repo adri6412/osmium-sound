@@ -5,7 +5,24 @@
 #include <QRegularExpression>
 #include <QUrl>
 #include <QtDebug>
+#include <QSocketNotifier>
 #include <cmath>
+#ifdef Q_OS_LINUX
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
+// Senza uno `status` riuscito da tanto cosi', "in riproduzione" non vale piu':
+// Lyrion spento o bloccato, il player sparito. Piu' dei 8 s di attesa di una
+// richiesta, perche' una risposta lenta ma buona non faccia sfarfallare.
+static const qint64 kStatusStaleMs = 10000;
+// Un play chiesto da qui resta acceso (ottimista) al massimo tanto, se nessuno
+// `status` partito DOPO il comando lo conferma.
+static const qint64 kPlayConfirmMs = 5000;
+// /api/sources: di rado di suo (ogni giro rilegge le preferenze di Lyrion),
+// ogni 2 s per qualche secondo quando cambia la tabella dei mount — e' li'
+// che una chiavetta adottata compare. Senza quell'avviso, una via di mezzo.
+static const qint64 kUsbPollMs = 30000, kUsbPollNoWatchMs = 12000, kUsbBurstMs = 10000, kUsbBurstEveryMs = 2000;
 
 Player::Player(QObject *parent) : QObject(parent) {
     m_clock.start();
@@ -20,10 +37,27 @@ Player::Player(QObject *parent) : QObject(parent) {
         if ((m_localName.isEmpty() || m_playerProvisional) && now - m_lastNameFetch >= 5000) fetchLocalName();
         if (m_connected && now - m_lastPrefs >= 5000) { m_lastPrefs = now; pollPrefs(); }
         if (now - m_lastSettings >= 5000) { m_lastSettings = now; pollSettings(); }
-        if (now - m_lastUsb >= 4000) { m_lastUsb = now; pollUsb(); }
+        const qint64 usbEvery = now < m_usbBurstUntil ? kUsbBurstEveryMs : m_mountsFd >= 0 ? kUsbPollMs : kUsbPollNoWatchMs;
+        if (now - m_lastUsb >= usbEvery) { m_lastUsb = now; pollUsb(); }
         if (now - m_lastOta >= 3000) { m_lastOta = now; pollOta(); }
         // the service caches its answer for 10 s: asking more often is pointless
         if (now - m_lastNet >= 15000) { m_lastNet = now; pollNet(); }
+        // 🚨 Lyrion o il player non rispondono piu' (o un play ottimista non e'
+        // stato confermato): non si suona. Prima `playing` restava vero per
+        // sempre a Lyrion fermo — niente salvaschermo, animazioni del Now
+        // Playing a 30 Hz senza fine, avanzamento che contava da solo.
+        if (m_playing) {
+            const bool held = now < m_playHoldUntil;
+            const bool unconfirmed = m_playHoldUntil > 0 && !held && m_lastStatusOkSent <= m_playCmdAt;
+            const bool stale = !held && now - m_lastStatusOk >= kStatusStaleMs;
+            if (unconfirmed || stale) {
+                qInfo("player: %s, not playing any more", unconfirmed ? "play not confirmed by Lyrion" : "no status from Lyrion");
+                m_playing = false; m_playHoldUntil = 0;
+                derive();
+                emit controlsChanged();
+            }
+        }
+        if (m_playHoldUntil > 0 && now >= m_playHoldUntil) m_playHoldUntil = 0;
         // l'avanzamento scorre in locale fra un poll e l'altro (app.c)
         if (m_playing && m_duration > 0 && now - m_lastElapsedTick >= 500) {
             m_lastElapsedTick = now;
@@ -45,7 +79,35 @@ void Player::start() {
     pollOta();
     pollNet();
     m_lastSettings = m_lastUsb = m_lastOta = m_lastNet = m_clock.elapsed();
+    watchMounts();
     m_tick.start();
+}
+
+// Il kernel segnala ogni cambio della tabella dei mount con POLLPRI su
+// /proc/self/mounts (finche' il file non viene riletto). Una chiavetta che
+// sources_server adotta viene montata: e' il momento di guardare /api/sources.
+void Player::watchMounts() {
+#ifdef Q_OS_LINUX
+    int fd = ::open("/proc/self/mounts", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) { qWarning("player: cannot watch the mount table, USB polled every %llds", (long long)(kUsbPollNoWatchMs / 1000)); return; }
+    m_mountsFd = fd;
+    auto drain = [fd]() {
+        // rileggere tutto il file azzera l'avviso, se no torna subito
+        char buf[4096];
+        ::lseek(fd, 0, SEEK_SET);
+        while (::read(fd, buf, sizeof buf) > 0) {}
+    };
+    drain();
+    auto *sn = new QSocketNotifier(fd, QSocketNotifier::Exception, this);
+    connect(sn, &QSocketNotifier::activated, this, [this, drain]() {
+        drain();
+        const qint64 now = m_clock.elapsed();
+        // il primo giro fra un secondo (il tempo di salvare la sorgente), poi
+        // ogni 2 s per 10 s
+        m_lastUsb = qMin(m_lastUsb, now - kUsbBurstEveryMs + 1000);
+        m_usbBurstUntil = now + kUsbBurstMs;
+    });
+#endif
 }
 
 void Player::callJs(QJSValue cb, const QVariantList &args) {
@@ -212,13 +274,18 @@ static QString S(const QVariantMap &m, const char *k) { return m.value(k).toStri
 
 void Player::pollStatus() {
     m_statusInFlight = true;
-    Api::instance()->lmsRequest(m_playerId, {"status", "-", "1", "tags:aldoTINxcKues"}, [this](bool ok, const QVariant &data, int) {
+    const qint64 sentAt = m_clock.elapsed();
+    Api::instance()->lmsRequest(m_playerId, {"status", "-", "1", "tags:aldoTINxcKues"}, [this, sentAt](bool ok, const QVariant &data, int) {
         m_statusInFlight = false;
         QVariantMap r = data.toMap().value("result").toMap();
         if (!ok || r.isEmpty()) {
+            // `playing` lo spegne il giro del tick dopo kStatusStaleMs: un solo
+            // errore di passaggio non fa sfarfallare animazioni e salvaschermo
             if (m_connected) { m_connected = false; emit connectedChanged(); }
             return;
         }
+        m_lastStatusOk = m_clock.elapsed();
+        m_lastStatusOkSent = sentAt;
         if (!m_connected) { m_connected = true; emit connectedChanged(); }
         // #99: Lyrion names, in every status, the player it belongs to. If that
         // is not us (stale pick from before our squeezelite registered, or a
@@ -230,6 +297,9 @@ void Player::pollStatus() {
             m_playerProvisional = true;
         }
         bool playing = S(r, "mode") == "play";
+        // a play/pause sent AFTER this question: the answer is older than the
+        // command and must not undo it (the next poll tells the truth)
+        if (m_playCmdAt >= sentAt) playing = m_playing;
         // a player that does not report it counts as on
         bool power = !r.contains("power") || r.value("power").toInt() != 0;
         double elapsed = r.value("time").toDouble(), duration = r.value("duration").toDouble();
@@ -563,7 +633,23 @@ void Player::cmd(const QVariantList &params) {
 void Player::refresh() { m_wantNow = true; }
 
 void Player::play(bool on) {
-    cmd(on ? QVariantList{"play"} : QVariantList{"pause", "1"});
+    if (m_playerId.isEmpty()) return;             // nessun player: niente da far finta di suonare
+    // Ottimista, ma con la rete di sicurezza: un comando che non arriva a
+    // Lyrion rimette subito "fermo", e un play che nessuno `status` successivo
+    // conferma entro kPlayConfirmMs si spegne dal tick.
+    const qint64 now = m_clock.elapsed();
+    const int seq = ++m_playSeq;
+    m_playCmdAt = now;
+    m_playHoldUntil = on ? now + kPlayConfirmMs : 0;
+    Api::instance()->lmsRequest(m_playerId, on ? QVariantList{"play"} : QVariantList{"pause", "1"},
+                                [this, on, seq](bool ok, const QVariant &, int) {
+        m_wantNow = true;
+        if (ok || seq != m_playSeq) return;
+        m_playHoldUntil = 0;
+        // play fallito: non suona. Pausa fallita: lo dira' il prossimo status
+        // (o, a Lyrion muto, resta fermo, che e' lo stato sicuro)
+        if (on && m_playing) { m_playing = false; derive(); emit controlsChanged(); }
+    }, 8000);
     if (m_playing != on) { m_playing = on; derive(); emit controlsChanged(); }
 }
 void Player::togglePlay() { play(!m_playing); }

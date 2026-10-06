@@ -151,6 +151,26 @@ class PairingWindowTests(RemoteTestCase):
             self._argv('systemctl', 'kill', '-s', 'HUP', 'hifi-bt-out.service'),
             [['systemctl', 'kill', '-s', 'HUP', 'hifi-bt-out.service']])
 
+    def test_an_open_window_is_not_rewritten_by_every_scan(self):
+        # Flash wear: the wizards scan every ten seconds; the window only
+        # needs extending when it is about to run short.
+        api_server.bt_remotes_scan(5)
+        first = os.stat(api_server.BT_STATE_FILE).st_mtime_ns
+        until = self._state()['remote_pairing_until']
+        os.utime(api_server.BT_STATE_FILE, ns=(1, 1))
+        api_server.bt_remotes_scan(5)
+        api_server.bt_remotes_scan(5)
+        self.assertEqual(os.stat(api_server.BT_STATE_FILE).st_mtime_ns, 1)
+        self.assertEqual(self._state()['remote_pairing_until'], until)
+        self.assertNotEqual(first, 1)
+        # ... and is extended once it is.
+        doc = self._state()
+        doc['remote_pairing_until'] = int(api_server.time.time()) + 5
+        self._write_state(doc)
+        api_server.bt_remotes_scan(5)
+        self.assertGreater(self._state()['remote_pairing_until'],
+                           int(api_server.time.time()) + api_server.BT_PAIRING_WINDOW - 5)
+
     def test_pairing_never_enables_or_starts_a_unit_itself(self):
         """🚨 The supervisor owns BlueZ. Starting bluetoothd from here would
         be torn down again on its next pass, halfway through a pairing."""
@@ -306,6 +326,39 @@ class AutoPairTests(RemoteTestCase):
         p = patch.object(api_server, 'get_display_mode', lambda: {'mode': 'gui'})
         p.start()
         self.addCleanup(p.stop)
+        # Background listening needs Bluetooth on, and a box that has just
+        # booted.
+        self._write_state({'enabled': True, 'speakers': [], 'remotes': []})
+        self.uptime = 120
+        p = patch.object(api_server, '_uptime', lambda: self.uptime)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_never_while_bluetooth_is_off(self):
+        # 🚨 It kept the radio up and scanned every minute with Bluetooth off.
+        self._write_state({'enabled': False, 'speakers': [], 'remotes': []})
+        self.assertFalse(api_server._bt_autopair_wanted())
+        os.unlink(api_server.BT_STATE_FILE)               # never chosen = off
+        self.assertFalse(api_server._bt_autopair_wanted())
+
+    def test_only_in_the_first_minutes_after_a_boot(self):
+        self.assertTrue(api_server._bt_autopair_wanted())
+        self.uptime = api_server.BT_AUTOPAIR_UPTIME + 1
+        self.assertFalse(api_server._bt_autopair_wanted())
+
+    def test_the_background_loop_ends_with_the_listening_time(self):
+        self.uptime = api_server.BT_AUTOPAIR_UPTIME + 1
+        with patch.object(api_server, '_bt_autopair_round',
+                          side_effect=AssertionError('no round after the window')):
+            api_server._bt_autopair_background()           # returns instead of looping
+
+    def test_the_wizard_scan_works_with_bluetooth_off_and_long_after_boot(self):
+        # The first pairing of a remote never depended on the background round.
+        self._write_state({'enabled': False, 'speakers': [], 'remotes': []})
+        self.uptime = 10 ** 6
+        self._see(REMOTE, 'Xiaomi RC')
+        out = api_server.bt_remotes_scan(10, 'xiaomi')
+        self.assertEqual(out['paired'], REMOTE)
 
     def test_the_certified_names_are_recognised(self):
         m = api_server._bt_certified_model

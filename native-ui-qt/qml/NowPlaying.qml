@@ -118,10 +118,13 @@ Item {
             layer.enabled: true
             layer.textureSize: Qt.size(400, 400)
             onStatusChanged: if (status === Image.Ready) bgPrev.source = source
+            // coda svuotata: niente copertina, quindi niente fondale — non
+            // quello del brano di prima tenuto in bgPrev
+            onSourceChanged: if (String(source) === "") bgPrev.source = ""
         }
         MultiEffect {
             source: bgSrc.status === Image.Ready ? bgSrc : bgPrev
-            visible: bgSrc.status === Image.Ready || bgPrev.status === Image.Ready
+            visible: Player.artworkUrl !== "" && (bgSrc.status === Image.Ready || bgPrev.status === Image.Ready)
             width: 400; height: 400
             x: root.width / 2 - 640; y: root.height / 2 - 640
             scale: 3.2
@@ -342,7 +345,8 @@ Item {
             Item {                                 // shuffle
                 x: 9 - 20; y: controls.cy - 20; width: 40; height: 40
                 Icon { anchors.centerIn: parent; name: "shuffle"; size: 18; scale: shTap.tapScale
-                       color: Player.shuffle > 0 ? Theme.gold : shTap.mix(Theme.silverA(0.6), Theme.white) }
+                       color: Player.shuffle > 0 ? Theme.gold : Theme.silverA(0.6)
+                       pressColor: Theme.white; press: Player.shuffle > 0 ? 0 : shTap.pressAnim }
                 Tap { id: shTap; tap: 0.88; onClicked: Player.cycleShuffle() }
             }
             Item {                                 // precedente (whileTap .9)
@@ -380,7 +384,8 @@ Item {
             Item {                                 // ripeti
                 x: 170 + 9 - 20 + 4 * controls.g; y: controls.cy - 20; width: 40; height: 40
                 Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 18; scale: rpTap.tapScale
-                       color: Player.repeat > 0 ? Theme.gold : rpTap.mix(Theme.silverA(0.6), Theme.white) }
+                       color: Player.repeat > 0 ? Theme.gold : Theme.silverA(0.6)
+                       pressColor: Theme.white; press: Player.repeat > 0 ? 0 : rpTap.pressAnim }
                 Tap { id: rpTap; tap: 0.88; onClicked: Player.cycleRepeat() }
             }
             Item {                                 // preferito (Lyrion Favorites): cuore pieno e oro se il brano lo e'
@@ -397,7 +402,8 @@ Item {
                 }
                 Icon { anchors.centerIn: parent; name: "heart"; filled: Player.isFavorite; size: 18
                        scale: favTap.tapScale * (1 + 0.3 * favBox.pop)
-                       color: Player.isFavorite ? Theme.gold : favTap.mix(Theme.silverA(0.6), Theme.white) }
+                       color: Player.isFavorite ? Theme.gold : Theme.silverA(0.6)
+                       pressColor: Theme.white; press: Player.isFavorite ? 0 : favTap.pressAnim }
                 Tap {
                     id: favTap; tap: 0.9
                     onClicked: {
@@ -417,7 +423,8 @@ Item {
             Item {
                 x: parent.width - 180 + 8.5 - 18; y: controls.cy - 18; width: 36; height: 36
                 Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 17; scale: muteTap.tapScale
-                       color: Player.volumeFixed ? Theme.silverA(0.21) : muteTap.mix(Theme.silverA(0.7), Theme.white) }
+                       color: Player.volumeFixed ? Theme.silverA(0.21) : Theme.silverA(0.7)
+                       pressColor: Theme.white; press: Player.volumeFixed ? 0 : muteTap.pressAnim }
                 Tap { id: muteTap; tap: 0.88; grow: 4; onClicked: Player.toggleMute() }
             }
             Item {

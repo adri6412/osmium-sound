@@ -510,7 +510,8 @@ Item {
             x: powerBtn.x - width
             Icon {
                 anchors.centerIn: parent; name: netIcon.icon; size: 16
-                color: netTap.mix(netIcon.off ? Theme.red400 : Theme.silverA(0.6), Theme.white)
+                color: netIcon.off ? Theme.red400 : Theme.silverA(0.6)
+                pressColor: Theme.white; press: netTap.pressAnim
                 scale: netTap.tapScale
             }
             Rectangle { visible: netIcon.st === "lan"; x: 19; y: 21; width: 7; height: 7; radius: 3.5; color: Theme.gold; border.width: 1; border.color: Theme.panel }
@@ -528,7 +529,8 @@ Item {
             x: parent.width - width - 4
             Icon {
                 anchors.centerIn: parent; name: "power"; size: 16
-                color: powerTap.mix(Theme.gold, Theme.white)
+                color: Theme.gold
+                pressColor: Theme.white; press: powerTap.pressAnim
                 scale: powerTap.tapScale
             }
             Tap {
@@ -594,7 +596,9 @@ Item {
                     readonly property bool badge: modelData.icon === "settings" && root.updateAvailable
                     width: 46 + (label ? 6 + tabText.implicitWidth : 0) + (badge && updText.visible ? 6 + updText.implicitWidth : 0); height: 40
                     readonly property color c: active ? Theme.white : tabTap.mix(Theme.silverA(0.5), Theme.white)
-                    Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: tabItem.modelData.icon; size: 14; color: tabItem.c }
+                    // l'icona non prende `c` (animato): due strati, vedi Icon.qml
+                    Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: tabItem.modelData.icon; size: 14
+                           color: tabItem.active ? Theme.white : Theme.silverA(0.5); pressColor: Theme.white; press: tabItem.active ? 0 : tabTap.pressAnim }
                     Rectangle { visible: tabItem.badge && tabBar.updMode === 2; x: 26; y: 10; width: 7; height: 7; radius: 3.5; color: Theme.gold; border.width: 1; border.color: Theme.panel }
                     Text { id: tabText; x: 36; anchors.verticalCenter: parent.verticalCenter; text: tabItem.label; color: tabItem.c; font.family: Theme.font; font.pixelSize: 12 }
                     Text {
@@ -833,7 +837,7 @@ Item {
                             Item {
                                 visible: search.text !== ""
                                 x: parent.width - 30; y: 7; width: 24; height: 24
-                                Icon { anchors.centerIn: parent; name: "x"; size: 14; color: xTap.mix(Theme.silverA(0.5), Theme.white) }   // active:text-white
+                                Icon { anchors.centerIn: parent; name: "x"; size: 14; color: Theme.silverA(0.5); pressColor: Theme.white; press: xTap.pressAnim }   // active:text-white
                                 Tap { id: xTap; grow: 6; onClicked: { search.text = ""; Library.filter = "" } }
                             }
                         }

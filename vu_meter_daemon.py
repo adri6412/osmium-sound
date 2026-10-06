@@ -69,10 +69,20 @@ class SqueezeliteVisualizer:
     def find_shm_file(self):
         """Find the squeezelite shared memory file in /dev/shm"""
         files = glob.glob('/dev/shm/squeezelite-*')
-        if files:
-            print(f"Found Squeezelite shared memory at: {files[0]}")
-            return files[0]
-        return None
+        if not files:
+            return None
+        # The name carries the player MAC, and a segment left by a player
+        # that has since changed MAC (a first `-m`, see hifi_squeezelite.
+        # derived_mac) stays in /dev/shm until reboot, frozen: the newest
+        # one is the player that is running.
+        def created(f):
+            try:
+                return os.stat(f).st_ctime
+            except OSError:
+                return 0
+        newest = max(files, key=created)
+        print(f"Found Squeezelite shared memory at: {newest}")
+        return newest
 
     def connect(self):
         """Connect to the shared memory file"""

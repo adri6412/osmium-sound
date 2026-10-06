@@ -102,6 +102,34 @@ PORT = int(os.environ.get('HIFI_WEBUI_PORT', '80'))
 
 app = Flask(__name__)
 
+# Request bodies are capped before anything reads them. Without a cap a single
+# POST — to the login page, no account needed — was read whole into memory:
+# two 300 MB ones took this process from 50 to 837 MB on a 4 GB box. Every
+# JSON call fits in 1 MB; the few routes that carry a file (a backup to
+# restore, a room-correction filter) get more, and _forward_to() streams those
+# through to sources_server without holding them here — sources_server
+# applies the real per-file limits.
+_BODY_LIMIT = 1024 * 1024
+# Above sources_server's own ceiling for a restore (MAX_RESTORE_PAYLOAD,
+# 1.25 GiB: the downloaded-information archive can be large).
+_UPLOAD_BODY_LIMIT = 2 * 1024 * 1024 * 1024
+_UPLOAD_PATHS = ('/api/system/restore', '/api/provision/restore', '/api/system/dsp_fir',
+                 '/api/restore', '/api/dsp/fir')
+app.config['MAX_CONTENT_LENGTH'] = _BODY_LIMIT
+
+
+@app.before_request
+def _body_limit():
+    if request.path in _UPLOAD_PATHS:
+        request.max_content_length = _UPLOAD_BODY_LIMIT
+
+
+@app.errorhandler(413)
+def _body_too_large(_e):
+    return jsonify({'success': False, 'code': 'request.tooLarge',
+                    'message': _wt('request.tooLarge', _lang())}), 413
+
+
 # Single writer for the provisioning state machine + AP transitions.
 _prov_lock = threading.Lock()
 
@@ -201,6 +229,8 @@ def _init_db():
         conn.execute('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)')
         # session_version lets change/reset-password invalidate every open cookie.
         conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('session_version', '1')")
+        # One row per live login (see _session_open): what makes a logout real.
+        conn.execute('CREATE TABLE IF NOT EXISTS sessions (sid TEXT PRIMARY KEY, expires REAL NOT NULL)')
         try:
             os.chmod(DB_PATH, 0o600)
         except Exception:
@@ -253,11 +283,66 @@ def _create_user(username, password):
     conn.close()
 
 
+# The session cookie is signed, not stored: on its own, clearing it at logout
+# only forgets it in that browser, and a copy taken earlier stayed good for
+# the cookie's whole lifetime. Each login now also gets a random id kept in
+# webui.db; logout deletes it, and a cookie whose id is gone is just a cookie.
+_SESSION_TTL = 7 * 24 * 3600
+
+
+def _session_open():
+    """Mark the current session logged in, with a fresh server-side id."""
+    sid = secrets.token_urlsafe(24)
+    now = time.time()
+    try:
+        conn = _db()
+        conn.execute('CREATE TABLE IF NOT EXISTS sessions (sid TEXT PRIMARY KEY, expires REAL NOT NULL)')
+        conn.execute('DELETE FROM sessions WHERE expires < ?', (now,))
+        conn.execute('INSERT INTO sessions (sid, expires) VALUES (?, ?)', (sid, now + _SESSION_TTL))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f'[webui] session store failed: {e}')
+    session.clear()
+    session['auth'] = True
+    session['sid'] = sid
+    session['sv'] = _session_version()
+    session.permanent = True
+
+
+def _session_close(keep=None):
+    """Forget the current session server-side, or -- with `keep` -- every
+    session but that one (a password change logs everybody else out)."""
+    try:
+        conn = _db()
+        if keep:
+            conn.execute('DELETE FROM sessions WHERE sid != ?', (keep,))
+        else:
+            conn.execute('DELETE FROM sessions WHERE sid = ?', (session.get('sid') or '',))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f'[webui] session store failed: {e}')
+
+
+def _session_known(sid):
+    if not sid:
+        return False
+    try:
+        conn = _db()
+        row = conn.execute('SELECT 1 FROM sessions WHERE sid = ? AND expires >= ?',
+                           (sid, time.time())).fetchone()
+        conn.close()
+        return row is not None
+    except Exception:
+        return False
+
+
 def _logged_in():
     """True if the request carries a valid, current session cookie."""
     if not session.get('auth'):
         return False
-    return session.get('sv') == _session_version()
+    return session.get('sv') == _session_version() and _session_known(session.get('sid'))
 
 
 def _verify_password(password):
@@ -730,6 +815,12 @@ _monitor_start = time.monotonic()
 _NET_MONITOR_GRACE = 90  # seconds after daemon start before raising a recovery AP
 _NET_DOWN_TICKS = 3      # consecutive "no network" answers before the recovery AP
 _net_down_ticks = 0
+# With the recovery AP up, a Wi-Fi-only box can never see its home network
+# come back: its one radio is the AP. So, every so often and only while
+# nobody is on the hotspot, the AP steps aside and NetworkManager gets a
+# window to rejoin a saved network.
+_NET_RETRY_EVERY = 180   # seconds between attempts
+_NET_RETRY_WINDOW = 60   # how long each attempt waits for the saved network
 
 
 def _has_any_connectivity():
@@ -763,7 +854,8 @@ def _raise_net_recovery_ap():
     _net_recovery['networks_cached_at'] = time.time()
     ok, ssid = _raise_ap(dev)
     if ok:
-        _net_recovery.update({'active': True, 'ssid': ssid, 'psk': None, 'error': None})
+        _net_recovery.update({'active': True, 'ssid': ssid, 'psk': None, 'error': None,
+                              'tried_at': time.monotonic()})
         print(f'[webui] network lost — raised recovery hotspot {ssid}')
     else:
         _net_recovery['error'] = _wt('network.recoveryApFailed', _lang())
@@ -775,6 +867,45 @@ def _teardown_net_recovery():
         _teardown_ap()
         print('[webui] network restored — recovery hotspot dropped')
     _net_recovery.update({'active': False, 'ssid': None, 'psk': None, 'error': None})
+
+
+def _ap_clients(dev):
+    """How many stations are on our AP right now; None when it can't be
+    told (then nothing is taken away from under anybody)."""
+    if FAKE or not dev:
+        return None
+    try:
+        r = subprocess.run(['iw', 'dev', dev, 'station', 'dump'],
+                           capture_output=True, text=True, timeout=10)
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    return sum(1 for line in r.stdout.splitlines() if line.startswith('Station '))
+
+
+def _recovery_retry_due(now, tried_at, clients, connecting):
+    """Whether the recovery AP should step aside for another try at the saved
+    networks: only with nobody on it (a phone joined to it is somebody fixing
+    the network right now) and no join of theirs in flight."""
+    if connecting or clients is None or clients > 0:
+        return False
+    return now - (tried_at or 0) >= _NET_RETRY_EVERY
+
+
+def _retry_saved_wifi():
+    """Drop the AP and give NetworkManager a window to rejoin a saved Wi-Fi
+    network. True when the box is back on a network."""
+    dev = _wifi_device()
+    _teardown_ap()
+    if dev:
+        _nmcli(['device', 'connect', dev], timeout=45)
+    deadline = time.monotonic() + _NET_RETRY_WINDOW
+    while time.monotonic() < deadline:
+        if _has_any_connectivity():
+            return True
+        time.sleep(5)
+    return False
 
 
 def _network_monitor_tick():
@@ -793,12 +924,33 @@ def _network_monitor_tick():
             if _net_recovery['active']:
                 _teardown_net_recovery()
             return
-        # A Wi-Fi roam or a DHCP renewal can read as "down" for one tick; the
-        # hotspot takes a Wi-Fi-only unit off the home network, so only after
-        # a minute of certain absence (three ticks, 20 s apart).
-        _net_down_ticks += 1
-        if _net_down_ticks >= _NET_DOWN_TICKS and not _net_recovery['active']:
-            _raise_net_recovery_ap()
+        if _net_recovery['active']:
+            retry = _recovery_retry_due(time.monotonic(), _net_recovery.get('tried_at'),
+                                        _ap_clients(_wifi_device()),
+                                        _net_recovery.get('connecting'))
+            if not retry:
+                return
+            _net_recovery['retrying'] = True
+        else:
+            # A Wi-Fi roam or a DHCP renewal can read as "down" for one tick;
+            # the hotspot takes a Wi-Fi-only unit off the home network, so
+            # only after a minute of certain absence (three ticks, 20 s apart).
+            _net_down_ticks += 1
+            if _net_down_ticks >= _NET_DOWN_TICKS:
+                _raise_net_recovery_ap()
+            return
+    # Outside the lock: the window takes up to a minute, and the recovery
+    # page's status calls must not hang behind it.
+    print('[webui] recovery hotspot unused — trying the saved Wi-Fi networks again')
+    back = _retry_saved_wifi()
+    with _net_lock:
+        _net_recovery['retrying'] = False
+        if back:
+            _net_down_ticks = 0
+            _net_recovery.update({'active': False, 'ssid': None, 'psk': None, 'error': None})
+            print('[webui] network restored — recovery hotspot stays down')
+        elif not _raise_net_recovery_ap():
+            _net_recovery['active'] = False
 
 
 def _network_monitor_loop():
@@ -1126,10 +1278,6 @@ _AUTH_ROUTES = {
     ('/api/system/lyrion_channel', 'POST'): '/lyrion_channel',
     ('/api/system/reboot', 'POST'): '/reboot',
     ('/api/system/shutdown', 'POST'): '/shutdown',
-    ('/api/system/debug_plymouth', 'GET'): '/debug_plymouth',
-    ('/api/system/debug_plymouth', 'POST'): '/debug_plymouth',
-    ('/api/system/debug_kdump', 'GET'): '/debug_kdump',
-    ('/api/system/debug_kdump', 'POST'): '/debug_kdump',
 }
 
 # Pre-auth set reachable during the captive window ONLY (no destructive ops).
@@ -1346,10 +1494,7 @@ def _account_setup(username, password):
         return {'success': False, 'message': _wt('auth.setupFieldsTooShort', _lang())}, 400
     _create_user(username, password)
     shell_ok = _sync_shell_account(username, password)
-    session.clear()
-    session['auth'] = True
-    session['sv'] = _session_version()
-    session.permanent = True
+    _session_open()
     return {'success': True, 'shell_account': shell_ok}, 200
 
 
@@ -1373,17 +1518,31 @@ def auth_login():
         _record_fail(ip)
         return jsonify({'success': False, 'code': 'auth.invalidCredentials',
                         'message': _wt('auth.invalidCredentials', _lang())}), 401
-    session.clear()
-    session['auth'] = True
-    session['sv'] = _session_version()
-    session.permanent = True
+    _session_open()
     return jsonify({'success': True})
 
 
 @app.route('/api/auth/logout', methods=['POST'])
 def auth_logout():
+    _session_close()
     session.clear()
     return jsonify({'success': True})
+
+
+def _password_check(password):
+    """The admin password asked again before something a stolen session must
+    not be able to do on its own. Shares the login's per-address throttle, so
+    these forms are no back door for guessing it. None when it is right,
+    otherwise the response to send."""
+    ip = request.remote_addr
+    if _rate_limited(ip):
+        return jsonify({'success': False, 'code': 'auth.tooManyAttempts',
+                        'message': _wt('auth.tooManyAttempts', _lang())}), 429
+    if not _verify_password(password or ''):
+        _record_fail(ip)
+        return jsonify({'success': False, 'code': 'auth.wrongPassword',
+                        'message': _wt('auth.wrongPassword', _lang())}), 403
+    return None
 
 
 @app.route('/api/auth/change-password', methods=['POST'])
@@ -1395,13 +1554,18 @@ def auth_change_password():
     current = data.get('current_password') or ''
     new = data.get('new_password') or ''
     username = (data.get('username') or (_get_user()['username'] if _get_user() else '')).strip()
+    if _rate_limited(request.remote_addr):
+        return jsonify({'success': False, 'code': 'auth.tooManyAttempts',
+                        'message': _wt('auth.tooManyAttempts', _lang())}), 429
     if not _verify_password(current):
+        _record_fail(request.remote_addr)
         return jsonify({'success': False, 'message': _wt('auth.wrongCurrentPassword', _lang())}), 403
     if len(username) < 3 or len(new) < 8:
         return jsonify({'success': False, 'message': _wt('auth.setupFieldsTooShort', _lang())}), 400
     _create_user(username, new)
     shell_ok = _sync_shell_account(username, new)
     _bump_session_version()  # log every other session out
+    _session_close(keep=session.get('sid'))
     session['sv'] = _session_version()  # keep THIS session valid
     return jsonify({'success': True, 'shell_account': shell_ok})
 
@@ -1658,7 +1822,7 @@ def provision_lyrion_mode_set():
                         'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
     body, status = _proxy(API_BASE, '/lms_role', method='POST',
-                          body={'mode': data.get('mode'), 'host': data.get('host')}, timeout=30)
+                          body={'mode': data.get('mode'), 'host': data.get('host')}, timeout=90)
     return jsonify(body), status
 
 
@@ -1678,7 +1842,7 @@ def provision_set_name():
                         'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
     body, status = _proxy(API_BASE, '/device_name', method='POST',
-                          body={'name': (data.get('name') or '').strip()}, timeout=20)
+                          body={'name': (data.get('name') or '').strip()}, timeout=90)
     return jsonify(body), status
 
 
@@ -1973,13 +2137,19 @@ def netrecovery_wifi_connect():
     password = data.get('password') or ''
     band = _picked_band(data.get('band'))
     # Reply first (the AP is about to drop; the phone must know to expect it).
+    _net_recovery['connecting'] = True    # no idle-AP retry under their feet
     threading.Thread(target=_bg_netrecovery_connect, args=(ssid, password, band), daemon=True).start()
     return jsonify({'success': True, 'dropping_ap': True})
 
 
 def _bg_netrecovery_connect(ssid, password, band=''):
-    ok, err, ap = _connect_wifi(ssid, password, band=band)
+    try:
+        ok, err, ap = _connect_wifi(ssid, password, band=band)
+    except Exception as e:
+        ok, err, ap = False, str(e)[:200], None
     with _net_lock:
+        _net_recovery['connecting'] = False
+        _net_recovery['tried_at'] = time.monotonic()
         if ok:
             # Connected: _connect_wifi already tore the AP down; the network
             # monitor's next tick confirms connectivity and would reach the
@@ -1994,6 +2164,9 @@ def _bg_netrecovery_connect(ssid, password, band=''):
 
 
 # ── generic system proxy (partitioned) ───────────────────────────────
+_REAUTH_ROUTES = {('/api/system/shell_account', 'POST'), ('/api/system/ssh', 'POST')}
+
+
 def _handle_proxy(local_path, method):
     key = (local_path, method)
     if _provisioning() and not _logged_in():
@@ -2009,9 +2182,17 @@ def _handle_proxy(local_path, method):
         return jsonify({'success': False, 'code': 'proxy.endpointNotAllowed',
                         'message': _wt('proxy.endpointNotAllowed', _lang())}), 403
     body = request.get_json(silent=True) if method != 'GET' else None
+    # A Linux login with sudo, or SSH switched on: the admin password again,
+    # not just the session (a copied cookie must not be enough for root).
+    if key in _REAUTH_ROUTES and (key != ('/api/system/ssh', 'POST')
+                                  or (isinstance(body, dict) and body.get('enable'))):
+        wrong = _password_check(body.get('admin_password') if isinstance(body, dict) else None)
+        if wrong:
+            return wrong
+    if isinstance(body, dict):
+        body.pop('admin_password', None)
     data, status = _proxy(API_BASE, api_path, method=method, body=body,
-                          timeout=220 if 'debug_kdump' in api_path  # may apt-get install kdump-tools
-                          else 200 if 'tailscale_install' in api_path
+                          timeout=200 if 'tailscale_install' in api_path
                           # Bluetooth talks to hardware that answers when it
                           # feels like it: a scan runs for its full window, and
                           # pairing waits on a speaker whose button someone
@@ -2027,7 +2208,12 @@ def _handle_proxy(local_path, method):
                           else 90 if 'apply' in api_path or 'dsp' in api_path
                           or 'tailscale' in api_path or 'ssh' in api_path
                           or 'wifi_connect' in api_path or 'wired_dhcp' in api_path
-                          or 'debug_plymouth' in api_path
+                          # Lyrion stopped or started (TimeoutStopSec=30) and
+                          # squeezelite restarted; a rename restarts avahi too.
+                          # Cut off at 15 s, the change went on to completion
+                          # while the page said it had failed — and skipped the
+                          # reboot that finishes it.
+                          or api_path in ('/lms_role', '/device_name')
                           # probes with their own timeouts, up to ~35 s in all
                           else 45 if api_path == '/network_check' else 15)
     return jsonify(data), status
@@ -2061,9 +2247,9 @@ def factory_reset():
     if denied:
         return denied
     data = request.get_json(silent=True) or {}
-    if not _verify_password(data.get('password') or ''):
-        return jsonify({'success': False, 'code': 'auth.wrongPassword',
-                        'message': _wt('auth.wrongPassword', _lang())}), 403
+    wrong = _password_check(data.get('password'))
+    if wrong:
+        return wrong
     body, status = _proxy(API_BASE, '/factory_reset', method='POST', body={})
     return jsonify(body), status
 
@@ -2116,19 +2302,41 @@ def _forward_to(base, path, timeout=120, service_label='servizio'):
         v = request.headers.get(h)
         if v:
             req.add_header(h, v)
-    body = request.get_data() if request.method in ('POST', 'PUT', 'PATCH') else None
+    body = None
+    if request.method in ('POST', 'PUT', 'PATCH'):
+        length = request.content_length
+        if length is not None and 'chunked' not in request.headers.get('Transfer-Encoding', ''):
+            # Streamed through, within the cap _body_limit() set: a restore
+            # archive never sits whole in this process's memory.
+            body = request.stream
+            req.add_header('Content-Length', str(length))
+        else:
+            body = request.get_data()   # no length given: read, still capped
     try:
-        with urllib.request.urlopen(req, data=body, timeout=timeout) as resp:
-            out = Response(resp.read(), status=resp.status,
-                           content_type=resp.headers.get('Content-Type', 'application/octet-stream'))
-            disposition = resp.headers.get('Content-Disposition')
+        resp = urllib.request.urlopen(req, data=body, timeout=timeout)
     except urllib.error.HTTPError as e:
         out = Response(e.read(), status=e.code,
                        content_type=e.headers.get('Content-Type', 'application/json'))
-        disposition = None
+        return out
     except Exception as e:
         print(f'[webui] {service_label} forward {path} failed: {e}')
         return jsonify({'success': False, 'message': _wt('proxy.serviceUnreachable', _lang())}), 502
+
+    def relay():
+        # A downloaded backup goes out as it comes in, not read whole first.
+        try:
+            while True:
+                chunk = resp.read(64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            resp.close()
+    out = Response(relay(), status=resp.status,
+                   content_type=resp.headers.get('Content-Type', 'application/octet-stream'))
+    if resp.headers.get('Content-Length'):
+        out.headers['Content-Length'] = resp.headers['Content-Length']
+    disposition = resp.headers.get('Content-Disposition')
     if disposition:
         out.headers['Content-Disposition'] = disposition
     # Framing policy (this response is embedded by our own Settings page, and
@@ -2137,8 +2345,8 @@ def _forward_to(base, path, timeout=120, service_label='servizio'):
     return out
 
 
-def _forward_to_sources(path):
-    return _forward_to(SOURCES_BASE, path, timeout=120, service_label='sorgenti')
+def _forward_to_sources(path, timeout=120):
+    return _forward_to(SOURCES_BASE, path, timeout=timeout, service_label='sorgenti')
 
 
 def _forward_to_api(path, timeout=60):
@@ -2273,7 +2481,9 @@ def backup_download_now_proxy():
     denied = _require_session()
     if denied:
         return denied
-    return _forward_to_sources('/api/backup')
+    # "Download now" builds the archive inside this request: with a large
+    # downloaded-information database, gzip on a weak CPU outlasts 2 minutes.
+    return _forward_to_sources('/api/backup', timeout=900)
 
 
 @app.route('/api/system/backup/<path:rest>', methods=['GET', 'POST', 'DELETE'])

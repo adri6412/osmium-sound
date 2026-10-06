@@ -196,5 +196,64 @@ expect "an image slot has nothing to move" \
     "$(printf '%s' "$out" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['entries']))")" 0
 rm -rf "$T/usr/lib/osmium"
 
+add_source() {  # <name>: /srv/<name> as a Music Sources folder
+    python3 - "$T" "$1" <<'ADD'
+import json, sys
+T, name = sys.argv[1], sys.argv[2]
+p = T + "/etc/hifi-sources.json"
+st = json.load(open(p))
+st["sources"].append({"id": "local-" + name, "type": "local",
+                      "name": "/srv/" + name, "path": "/srv/" + name})
+json.dump(st, open(p, "w"))
+ADD
+}
+manifest_add() {  # <old> <new>
+    python3 - "$T" "$1" "$2" <<'MAN'
+import json, sys
+p = sys.argv[1] + "/data/music/.osmium-moved.json"
+m = json.load(open(p)); m[sys.argv[2]] = sys.argv[3]
+json.dump(m, open(p, "w"))
+MAN
+}
+MiB=1048576
+
+# ── 9. a resume counts only what is still to copy ───────────────────────
+# 10 MiB to move, 6 of them already on /data from the run that was cut
+# short, 132 MiB free: the 4 MiB left plus the 128 MiB margin fit. Counting
+# the whole 10 MiB again refused the resume for ever.
+mkdir -p "$T/srv/grande"
+head -c $((6 * MiB)) /dev/urandom > "$T/srv/grande/a.bin"
+head -c $((4 * MiB)) /dev/urandom > "$T/srv/grande/b.bin"
+cp "$T/srv/grande/b.bin" "$T/b.ref"
+add_source grande
+HIFI_DATA_FREE=$((132 * MiB)) run move >"$T/move5.log" 2>&1
+expect "a fresh move that does not fit is refused" "$?" 1
+expect "...and nothing is removed"               "$([ -f "$T/srv/grande/a.bin" ] && echo yes || echo no)" yes
+manifest_add /srv/grande /data/music/grande
+mkdir -p "$T/data/music/grande"
+cp -a "$T/srv/grande/a.bin" "$T/data/music/grande/a.bin"
+HIFI_DATA_FREE=$((132 * MiB)) run move >"$T/move6.log" 2>&1
+expect "a resume that fits goes ahead"           "$?" 0
+expect "...and the rest arrived"                 "$(cmp -s "$T/data/music/grande/b.bin" "$T/b.ref" && echo yes || echo no)" yes
+expect "...and the original is gone"             "$([ -L "$T/srv/grande" ] && echo link || echo other)" link
+
+# ── 10. a copy the right size but with the wrong bytes is not trusted ───
+# What a power cut leaves after a copy whose data never reached the disk: a
+# file of the right length full of zeros, newer than the original — cp -u
+# would skip it and a size check would pass it. The original must not be
+# deleted on its word.
+mkdir -p "$T/srv/quarta"
+head -c 65536 /dev/urandom > "$T/srv/quarta/z.bin"
+cp "$T/srv/quarta/z.bin" "$T/z.ref"
+add_source quarta
+manifest_add /srv/quarta /data/music/quarta
+mkdir -p "$T/data/music/quarta"
+head -c 65536 /dev/zero > "$T/data/music/quarta/z.bin"
+touch -d '+1 hour' "$T/data/music/quarta/z.bin"
+run move >"$T/move7.log" 2>&1
+expect "a zero-filled copy is redone"            "$?" 0
+expect "...with the real bytes"                  "$(cmp -s "$T/data/music/quarta/z.bin" "$T/z.ref" && echo same || echo different)" same
+expect "...before the original goes"             "$([ -L "$T/srv/quarta" ] && echo link || echo other)" link
+
 echo "test-ab-media: $pass ok, $fail failed"
 [ "$fail" = 0 ]

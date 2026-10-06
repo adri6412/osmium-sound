@@ -105,8 +105,11 @@ stage_dir() {  # <kind> <version> — mkdir the staged dir the plan step refers 
 }
 
 run_runner() {
-    HIFI_APPLY_TEST_ROOT="$ROOT" sh "$RUNNER" >> "$ROOT/runner.log" 2>&1 || return $?
+    HIFI_APPLY_TEST_ROOT="$ROOT" HIFI_APPLY_FAIL_HOLD_SECS=0 \
+        sh "$RUNNER" >> "$ROOT/runner.log" 2>&1 || return $?
 }
+rebooted()   { grep -q '^reboot$' "$ROOT/systemctl-calls" && echo yes || echo no; }
+parked()     { [ -e "$ROOT/system-update" ] && echo yes || echo no; }
 
 installed() { cat "$ROOT/$1" 2>/dev/null; }  # <SYSTEM_VERSION|OS_VERSION|UI_VERSION>
 calls()     { tr '\n' ' ' < "$ROOT/calls" | sed 's/ *$//'; }
@@ -177,8 +180,12 @@ check "bad plan: exits non-zero" "1" "$rc"
 check "bad plan: system applied before the bad step was hit" "system apply $ROOT/update/staged/system/v2 v2" \
       "$(calls)"
 check "bad plan: state is error" "error" "$(state_of phase)"
-check "bad plan: does not reboot" "no" "$(grep -q '^reboot$' "$ROOT/systemctl-calls" && echo yes || echo no)"
-check "bad plan: /system-update left in place" "yes" "$([ -f "$ROOT/system-update" ] && echo yes || echo no)"
+# …and the box goes back to the normal system: parked under
+# system-update.target it has no API, web admin or interface, and every
+# power cycle used to come straight back to the same failure.
+check "bad plan: reboots" "yes" "$(rebooted)"
+check "bad plan: /system-update removed" "no" "$(parked)"
+check "bad plan: plan removed" "no" "$([ -e "$ROOT/update/plan" ] && echo yes || echo no)"
 
 # ── 4. a step that keeps failing gives up after its retry budget ──────
 setup
@@ -194,7 +201,10 @@ check "retry: exits non-zero" "1" "$rc"
 check "retry: attempted exactly twice" "2" "$(grep -c '^system ' "$ROOT/calls")"
 check "retry: ui never reached" "" "$(grep '^ui ' "$ROOT/calls" || true)"
 check "retry: state is error" "error" "$(state_of phase)"
-check "retry: /system-update left in place" "yes" "$([ -f "$ROOT/system-update" ] && echo yes || echo no)"
+check "retry: /system-update removed" "no" "$(parked)"
+check "retry: reboots into the normal system" "yes" "$(rebooted)"
+check "retry: error survives for the API" "update.apply.failed" \
+      "$(sed -n 's/.*"key":"\([^"]*\)".*/\1/p' "$ROOT/update/error.json")"
 
 # ── 5. a missing staged directory is refused, not silently skipped ────
 setup
@@ -336,6 +346,71 @@ check "failed step: error.json carries the key" "update.apply.failed" \
       "$(sed -n 's/.*"key":"\([^"]*\)".*/\1/p' "$ROOT/update/error.json")"
 check "failed step: params name the kind" "yes" \
       "$(grep -q '"params":{"kind":"system","version":"v2"' "$ROOT/update/error.json" && echo yes || echo no)"
+
+# ── no plan at all: leave update mode instead of failing on every boot ──
+setup
+rc=0
+run_runner || rc=$?
+check "no plan: exits non-zero" "1" "$rc"
+check "no plan: key" "update.apply.noPlan" "$(state_of key)"
+check "no plan: /system-update removed" "no" "$(parked)"
+check "no plan: reboots" "yes" "$(rebooted)"
+
+# ── sessions that die before they can leave are counted, then let go ──
+setup
+stub system ok
+stage_dir system v2
+write_plan <<EOF
+step system done 1 v2 https://e/sys.tgz aaaa -
+EOF
+printf '3\n' > "$ROOT/update/apply-boots"    # three update-mode boots already
+rc=0
+run_runner || rc=$?
+check "boot budget: gives up" "update.apply.gaveUp" "$(state_of key)"
+check "boot budget: nothing applied" "" "$(calls)"
+check "boot budget: /system-update removed" "no" "$(parked)"
+check "boot budget: reboots" "yes" "$(rebooted)"
+check "boot budget: counter cleared" "no" "$([ -e "$ROOT/update/apply-boots" ] && echo yes || echo no)"
+
+setup
+stub system ok
+stage_dir system v2
+write_plan <<EOF
+step system done 1 v2 https://e/sys.tgz aaaa -
+EOF
+run_runner || true
+check "boot budget: a good session clears the counter" "no" \
+      "$([ -e "$ROOT/update/apply-boots" ] && echo yes || echo no)"
+
+# ── the system step rewrites this very script while it runs ───────────
+# `cp -af` rewrites /usr/local/sbin/*.sh in place; a shell reading the
+# runner by offset would then execute the middle of the new file.
+setup
+SELF="$ROOT/sbin/hifi-update-apply-runner.sh"
+cp "$RUNNER" "$SELF"
+cat > "$ROOT/sbin/hifi-system-update.sh" <<EOF
+#!/bin/sh
+printf 'system %s\n' "\$*" >> "$ROOT/calls"
+printf '%s\n' "\$3" > "$ROOT/SYSTEM_VERSION"
+# a "new" runner of a different length: garbage at the old offsets
+i=0; { printf '#!/bin/sh\n'; while [ \$i -lt 400 ]; do printf 'echo NEW RUNNER LINE %s; fi; done\n' \$i; i=\$((i+1)); done; } > "$SELF"
+EOF
+chmod +x "$ROOT/sbin/hifi-system-update.sh"
+stub ui ok
+stage_dir system v2; stage_dir ui v2
+write_plan <<EOF
+step system done 1 v2 https://e/sys.tgz aaaa -
+step ui done 1 v2 https://e/ui.tgz cccc -
+EOF
+rc=0
+HIFI_APPLY_TEST_ROOT="$ROOT" HIFI_APPLY_FAIL_HOLD_SECS=0 sh "$SELF" >> "$ROOT/runner.log" 2>&1 || rc=$?
+check "self-overwrite: completes" "0" "$rc"
+check "self-overwrite: ui still applied" "v2" "$(installed UI_VERSION)"
+check "self-overwrite: state done" "done" "$(state_of phase)"
+check "self-overwrite: nothing from the new file ran" "no" \
+      "$(grep -q 'NEW RUNNER LINE' "$ROOT/runner.log" && echo yes || echo no)"
+check "self-overwrite: private copy cleaned up" "" \
+      "$(ls -d /var/tmp/hifi-update-apply-runner.* 2>/dev/null || true)"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

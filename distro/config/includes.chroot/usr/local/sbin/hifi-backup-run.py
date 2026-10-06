@@ -137,7 +137,9 @@ def main():
     hb.prune_incomplete(store)
 
     write_status("checking", 10, "Verifica spazio disponibile…")
-    need = hb.estimate_size(categories, "/")
+    # The real peak, not just the bytes read: the SQLite snapshot sits beside
+    # the growing archive, and an encrypted run holds plaintext + ciphertext.
+    need = hb.estimate_peak(categories, "/", encrypted=bool(passphrase))
     if not hb.free_space_ok(store, need):
         fail(f"spazio insufficiente: servono ~{need // (1024 * 1024) + 64} MB", store)
 
@@ -208,6 +210,9 @@ def main():
         _abandon(gen_dir)
         fail(f"scrittura manifest fallita: {e}", store)
 
+    # Counts the owner's backups only (a restore's safety snapshot is kept
+    # apart) and never removes the generation a running restore is reading
+    # (hb.rotate honours its pin) — the timer can fire mid-restore.
     dropped = hb.rotate(store, keep)
     size = 0
     try:

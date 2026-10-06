@@ -548,7 +548,7 @@ Item {
     }
     Timer { id: reloadLater; interval: 400; onTriggered: cfg.load() }
     // while Lyrion scans, the Library rows follow it (only with that section open)
-    Timer { interval: 2000; repeat: true; running: cfg.lib.scanning && root.active >= 0 && root.secs[root.active].id === "multiroom"; onTriggered: cfg.loadLibrary() }
+    Timer { interval: 2000; repeat: true; running: root.visible && cfg.lib.scanning && root.active >= 0 && root.secs[root.active].id === "multiroom"; onTriggered: cfg.loadLibrary() }
     function fmtDuration(sec) {
         var d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60)
         if (d > 0) return d + " " + Tr.t("settings.lyrion.days") + " " + h + " h"
@@ -1250,7 +1250,8 @@ Item {
         sep()
         label("settings.audio.advancedTitle"); help("settings.audio.advancedHint", 12)
         label("settings.audio.dsdLabel", 14)
-        help(s.dsd_detected === "native" ? "settings.audio.dsdDetectedNative" : "settings.audio.dsdDetectedDop", 12)
+        help(s.dsd_detected === "native" ? "settings.audio.dsdDetectedNative"
+             : s.dsd_detected === "pcm" ? "settings.audio.dsdDetectedPcm" : "settings.audio.dsdDetectedDop", 12)
         var dm = ch.dsd || ["auto", "dop", "native", "off"], dc = []
         for (i = 0; i < dm.length; i++) dc.push(cell(Tr.t("settings.audio.dsd." + dm[i]), dm[i], c.dsd === dm[i], "sq_dsd", { hh: 44 }))
         grid(dc)
@@ -2093,9 +2094,11 @@ Item {
     // (or off) without making the owner tap anything. Held back while a
     // command is in flight, and while the on-screen keyboard is up — a
     // rebuild there would throw away what is being typed.
+    // 🚨 root.visible: la sezione resta "aperta" anche con le Impostazioni
+    // nascoste, e ogni giro e' un bluetoothctl nell'api_server
     Timer {
         interval: 5000; repeat: true
-        running: root.active >= 0 && root.secs[root.active].id === "btSpeakers"
+        running: root.visible && root.active >= 0 && root.secs[root.active].id === "btSpeakers"
                  && !root.btBusy && !(Ui.vk && Ui.vk.active)
         onTriggered: cfg.loadBt()
     }

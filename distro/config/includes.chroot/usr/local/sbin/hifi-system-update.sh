@@ -208,6 +208,12 @@ apply)
     if [ -f /etc/systemd/system/hifi-update-apply.service ]; then
         systemctl enable hifi-update-apply.service 2>/dev/null || true
     fi
+    # Saves the playback position and quiets the audio at shutdown (it
+    # replaces hifi-quiesce-audio-shutdown.service, whose leftover
+    # shutdown.target.wants link kept it from ever running).
+    if [ -f /etc/systemd/system/hifi-playback-quiesce.service ]; then
+        systemctl enable hifi-playback-quiesce.service 2>/dev/null || true
+    fi
 
     write_status 'done' 100 "Componenti aggiornati a $VERSION"
     ;;
@@ -271,6 +277,11 @@ full)
     write_status restarting 90 "Riavvio servizi…"
     systemctl daemon-reload || true
     for svc in hifi-vumeter hifi-sources squeezelite; do
+        # A player the owner switched off (server-only mode) stays off: a
+        # restart would start it again until the next reboot.
+        if [ "$svc" = squeezelite ] && [ "$(cat /etc/hifi-player/player-enabled 2>/dev/null)" = 0 ]; then
+            continue
+        fi
         systemctl restart "$svc" 2>/dev/null || true
     done
     # Bluetooth speakers: hifi-bt-out.service is the only Bluetooth unit that
@@ -293,6 +304,12 @@ full)
     fi
     if [ -f /etc/systemd/system/hifi-update-apply.service ]; then
         systemctl enable hifi-update-apply.service 2>/dev/null || true
+    fi
+    # Saves the playback position and quiets the audio at shutdown (it
+    # replaces hifi-quiesce-audio-shutdown.service, whose leftover
+    # shutdown.target.wants link kept it from ever running).
+    if [ -f /etc/systemd/system/hifi-playback-quiesce.service ]; then
+        systemctl enable hifi-playback-quiesce.service 2>/dev/null || true
     fi
 
     rm -rf "$WORKDIR"

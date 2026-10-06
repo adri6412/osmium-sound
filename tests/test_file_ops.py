@@ -183,6 +183,73 @@ class CopyMoveDeleteTests(FileOpsBase):
         self.assertIsNotNone(err)
 
 
+class SymlinkEntryTests(FileOpsBase):
+    """A link is acted on as the link. Resolving it first handed the operation
+    to its target: deleting a "Favourites" link to an album deleted the album
+    and left a dangling link behind."""
+
+    def setUp(self):
+        super().setUp()
+        self.album = os.path.join(self.root, "Album")
+        self.link = os.path.join(self.root, "Favourites")
+        os.symlink(self.album, self.link)
+
+    def test_targets_name_the_link_not_what_it_points_at(self):
+        paths, _d, err = self.targets({"paths": [self.link]}, need_dest=False)
+        self.assertIsNone(err)
+        self.assertEqual(paths, [os.path.join(os.path.realpath(self.root), "Favourites")])
+
+    def test_deleting_a_link_keeps_its_target(self):
+        paths, _d, _e = self.targets({"paths": [self.link]}, need_dest=False)
+        job = self.run_job("delete", paths)
+        self.assertEqual(job["state"], "done", job.get("detail"))
+        self.assertFalse(os.path.lexists(self.link))
+        self.assertTrue(os.path.exists(os.path.join(self.album, "CD1", "01.flac")))
+
+    def test_a_trailing_slash_does_not_reach_through_the_link(self):
+        paths, _d, _e = self.targets({"paths": [self.link + "/"]}, need_dest=False)
+        self.run_job("delete", paths)
+        self.assertTrue(os.path.isdir(self.album))
+
+    def test_moving_a_link_moves_the_link(self):
+        dest = os.path.join(self.root, "Dest")
+        paths, d, err = self.targets({"paths": [self.link], "dest": dest}, need_dest=True)
+        self.assertIsNone(err)
+        job = self.run_job("move", paths, d)
+        self.assertEqual(job["state"], "done", job.get("detail"))
+        self.assertTrue(os.path.islink(os.path.join(dest, "Favourites")))
+        self.assertTrue(os.path.isdir(self.album))
+
+    def test_renaming_a_link_renames_the_link(self):
+        with ss.app.test_client() as c:
+            r = c.post("/api/local/rename", json={"path": self.link, "name": "Best"})
+        self.assertEqual(r.status_code, 200, r.get_json())
+        self.assertTrue(os.path.islink(os.path.join(self.root, "Best")))
+        self.assertTrue(os.path.isdir(self.album))
+
+    def test_a_link_out_of_the_roots_can_go_but_its_target_stays(self):
+        outside = os.path.join(self.tmp, "outside")
+        os.makedirs(outside)
+        link = os.path.join(self.root, "escape")
+        os.symlink(outside, link)
+        paths, _d, err = self.targets({"paths": [link]}, need_dest=False)
+        self.assertIsNone(err)
+        self.run_job("delete", paths)
+        self.assertTrue(os.path.isdir(outside))
+
+    def test_a_link_inside_a_linked_folder_is_still_confined(self):
+        # The folder part is still resolved: a path through a link that
+        # leaves the roots is refused as before.
+        os.symlink("/etc", os.path.join(self.root, "etc"))
+        _p, _d, err = self.targets({"paths": [os.path.join(self.root, "etc", "passwd")]},
+                                   need_dest=False)
+        self.assertIsNotNone(err)
+
+    def test_a_root_is_still_protected(self):
+        _p, _d, err = self.targets({"paths": [self.root + "/"]}, need_dest=False)
+        self.assertIsNotNone(err)
+
+
 class OwnershipTests(FileOpsBase):
     """The service runs as root, Samba writes as hifimusic: whatever the file
     manager makes has to end up the share account's, or a PC on the network

@@ -178,22 +178,22 @@ Item {
         opacity: Player.connected ? 1 : 0.3            // disabled:opacity-30 senza player
         Item {
             x: 84; width: 28; height: 28
-            Icon { anchors.centerIn: parent; name: "shuffle"; size: 16; color: Player.shuffle > 0 ? Theme.gold : shTap.mix(Theme.silverA(0.5), Theme.white); scale: shTap.tapScale }
+            Icon { anchors.centerIn: parent; name: "shuffle"; size: 16; color: Player.shuffle > 0 ? Theme.gold : Theme.silverA(0.5); pressColor: Theme.white; press: Player.shuffle > 0 ? 0 : shTap.pressAnim; scale: shTap.tapScale }
             Tap { id: shTap; tap: 0.88; onClicked: Player.cycleShuffle() }
         }
         Item {
             x: 132; width: 28; height: 28
-            Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 16; color: Player.repeat > 0 ? Theme.gold : rpTap.mix(Theme.silverA(0.5), Theme.white); scale: rpTap.tapScale }
+            Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 16; color: Player.repeat > 0 ? Theme.gold : Theme.silverA(0.5); pressColor: Theme.white; press: Player.repeat > 0 ? 0 : rpTap.pressAnim; scale: rpTap.tapScale }
             Tap { id: rpTap; tap: 0.88; onClicked: Player.cycleRepeat() }
         }
         Item {
             x: 180; width: 28; height: 28
-            Icon { anchors.centerIn: parent; name: "list-music"; size: 16; color: qTap.mix(Theme.silverA(0.5), Theme.white); scale: qTap.tapScale }
+            Icon { anchors.centerIn: parent; name: "list-music"; size: 16; color: Theme.silverA(0.5); pressColor: Theme.white; press: qTap.pressAnim; scale: qTap.tapScale }
             Tap { id: qTap; tap: 0.88; onClicked: root.openQueue() }
         }
         Item {
             x: 228; width: 28; height: 28
-            Icon { anchors.centerIn: parent; name: "moon"; size: 16; color: Player.sleepSecs > 0 ? Theme.gold : slTap.mix(Theme.silverA(0.5), Theme.white); scale: slTap.tapScale }
+            Icon { anchors.centerIn: parent; name: "moon"; size: 16; color: Player.sleepSecs > 0 ? Theme.gold : Theme.silverA(0.5); pressColor: Theme.white; press: Player.sleepSecs > 0 ? 0 : slTap.pressAnim; scale: slTap.tapScale }
             Tap { id: slTap; tap: 0.88; onClicked: root.openSleep() }
         }
     }
@@ -205,7 +205,7 @@ Item {
         readonly property real frac: Math.max(0, Math.min(100, Player.volume)) / 100
         Item {
             x: 11; y: 4; width: 24; height: 24
-            Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 14; color: Player.volumeFixed ? Theme.silverA(0.18) : Player.muted ? Theme.gold : muteTap.mix(Theme.silverA(0.6), Theme.white); scale: muteTap.tapScale }
+            Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 14; color: Player.volumeFixed ? Theme.silverA(0.18) : Player.muted ? Theme.gold : Theme.silverA(0.6); pressColor: Theme.white; press: Player.volumeFixed || Player.muted ? 0 : muteTap.pressAnim; scale: muteTap.tapScale }
             Tap { id: muteTap; tap: 0.88; grow: 4; onClicked: Player.toggleMute() }
         }
         Item {

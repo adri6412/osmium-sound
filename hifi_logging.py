@@ -83,6 +83,24 @@ class _StreamToLogger(io.TextIOBase):
             self._echo.flush()
 
 
+class _QuietAccessLog(logging.Filter):
+    """Drops Werkzeug's line for every request that went fine. Werkzeug
+    writes them to stderr, which tee_stdio_to_file() files under ERROR: with
+    the kiosk polling every few seconds the rotated logs filled with
+    "ERROR … GET /api/sources 200" and kept only a day or two of history,
+    all of it looking like failures. Client and server errors still get
+    through."""
+
+    def filter(self, record):
+        args = record.args if isinstance(record.args, tuple) else ()
+        if len(args) >= 2:
+            try:
+                return int(str(args[1])) >= 400
+            except ValueError:
+                pass
+        return True
+
+
 def tee_stdio_to_file(name):
     """Redirect this process's stdout/stderr so every existing print() call
     keeps reaching the console/journald AND also lands in a size-rotated file
@@ -90,3 +108,4 @@ def tee_stdio_to_file(name):
     logger = get_logger(name, echo=False)
     sys.stdout = _StreamToLogger(logger, logging.INFO, sys.__stdout__)
     sys.stderr = _StreamToLogger(logger, logging.ERROR, sys.__stderr__)
+    logging.getLogger('werkzeug').addFilter(_QuietAccessLog())

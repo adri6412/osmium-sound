@@ -47,6 +47,7 @@ directory and exercise the real code paths without needing a live appliance —
 archive member names are always root-relative, so an archive built under a fake
 root restores identically under the real one.
 """
+import gzip
 import hashlib
 import hmac
 import json
@@ -85,6 +86,43 @@ DEFAULT_KEEP = 5
 # disk mid-tar silently truncates, and a truncated backup that looks fine is
 # worse than no backup at all.
 FREE_SPACE_MARGIN = 64 * 1024 * 1024
+# The "trigger" a restore's own safety snapshot is filed under. Those are kept
+# apart from the owner's backups: at most PRE_RESTORE_KEEP of them, and they do
+# not count against the owner's "keep" — a restore used to push the oldest real
+# backup out to make room for its snapshot (and when that oldest one was the
+# very backup being restored, delete it before it was read).
+PRE_RESTORE_TRIGGER = "pre-restore"
+PRE_RESTORE_KEEP = 1
+# The generation a restore is reading, written for as long as the restore runs.
+# rotate() never removes it, whoever calls it (the restore's own snapshot, the
+# weekly timer firing mid-restore). On tmpfs, so a stale pin left by a crash
+# lasts until the next boot at most.
+RESTORE_PIN_FILE = "/run/hifi-restore-pin"
+
+# ── size limits, the same on both sides ──────────────────────────────
+# A backup never writes a member a restore would refuse, and a restore refuses
+# anything above these — what used to happen instead was a backup that held
+# the album/artist archive and a restore that skipped it as "too large".
+# Generous for config, a FIR filter or the web-admin database.
+MAX_MEMBER_SIZE = 32 * 1024 * 1024
+# The album/artist archive (METADATA_DB, below) is the one big thing in a
+# profile: hundreds of MB on a large library.
+MAX_METADATA_DB_SIZE = 1024 * 1024 * 1024
+# Everything else together: thousands of small Lyrion prefs, the installed
+# plugins, filters, the Wi-Fi profiles.
+_OTHER_MEMBERS_ALLOWANCE = 256 * 1024 * 1024
+# Ceiling on the bytes a restore will ever decompress from one archive (each
+# gzip layer is measured BEFORE tarfile walks it — see payload_size), and on
+# the size of an upload. Without it a small, maliciously well-compressed upload
+# could keep the CPU busy for hours or fill the disk while being unpacked.
+# Free disk space is the other, tighter, limit — checked at each step.
+MAX_RESTORE_PAYLOAD = MAX_METADATA_DB_SIZE + _OTHER_MEMBERS_ALLOWANCE
+# Archives are built and unpacked here, on disk: /run and /tmp are tmpfs, i.e.
+# RAM, which a big archive used to fill. Dotted names are never a valid
+# generation id, so these are never listed, restored or rotated; a leftover of
+# a crash is removed by prune_incomplete once it is clearly stale.
+WORKDIR_PREFIX = ".work-"
+WORKDIR_STALE_SECS = 6 * 3600
 
 
 # ── never, under any circumstances ───────────────────────────────────
@@ -159,6 +197,12 @@ def is_denied(logical):
     if logical in DENY_FILES:
         return True
     return any(logical.startswith(p) for p in DENY_PREFIXES)
+
+
+def member_size_limit(logical):
+    """Largest size this "/"-anchored path may have in an archive — the same
+    number decides what a backup leaves out and what a restore refuses."""
+    return MAX_METADATA_DB_SIZE if logical == METADATA_DB else MAX_MEMBER_SIZE
 
 
 # ── the manifest ─────────────────────────────────────────────────────
@@ -337,6 +381,12 @@ class _FileMember:
 
     def __init__(self, path):
         self.path = path
+
+    def discard(self):
+        try:
+            os.unlink(self.path)
+        except OSError:
+            pass
 
     def add_to(self, tar, arc, mtime=None):
         """Write it as `arc` and return its sha256; the file goes either way."""
@@ -618,6 +668,38 @@ def estimate_size(categories, root="/"):
     return total
 
 
+def estimate_peak(categories, root="/", encrypted=False):
+    """Most disk space building an archive of `categories` takes at once.
+
+    estimate_size() alone undercounts: while the archive grows, the SQLite
+    snapshot it is copying from (as big as the database, write-ahead log
+    included) sits beside it, and an encrypted backup holds the plaintext
+    archive and its ciphertext together before the plaintext goes. Compression
+    is ignored, so this stays an over-estimate. Members build_archive leaves
+    out for size are not counted."""
+    total, count, snapshot = 0, 0, 0
+    for logical, real in iter_members(categories, root):
+        try:
+            size = os.path.getsize(real)
+        except OSError:
+            continue
+        if size > member_size_limit(logical):
+            continue
+        if _transform_for(logical) is _transform_sqlite:
+            try:
+                size += os.path.getsize(real + "-wal")
+            except OSError:
+                pass
+            snapshot = max(snapshot, size)
+        total += size
+        count += 1
+    # tar header + padding per member, plus the manifest
+    archive = total + count * 1024 + 64 * 1024
+    if encrypted:
+        return max(archive + snapshot, 2 * archive)
+    return archive + snapshot
+
+
 # ── archive construction ─────────────────────────────────────────────
 def build_archive(dest_path, categories, root="/", encrypted=False, extra=None):
     """Write a .tar.gz of `categories` to `dest_path`; return its manifest.
@@ -638,7 +720,15 @@ def build_archive(dest_path, categories, root="/", encrypted=False, extra=None):
     with tarfile.open(tmp, "w:gz") as tar:
         for logical, real in iter_members(categories, root):
             transform = _transform_for(logical)
+            limit = member_size_limit(logical)
             try:
+                if os.path.getsize(real) > limit:
+                    # Never archive what a restore would refuse (and never
+                    # read or snapshot it to find out). Checked again below on
+                    # what is actually archived: a snapshot also carries the
+                    # write-ahead log, a transform may change the size.
+                    ctx["notes"].append(f"too-large:{logical}")
+                    continue
                 if transform:
                     data = transform(real, ctx)
                     if data is None:
@@ -651,6 +741,13 @@ def build_archive(dest_path, categories, root="/", encrypted=False, extra=None):
                 continue
             arc = logical.lstrip("/")
             mtime = int(os.path.getmtime(real))
+            size = (os.path.getsize(data.path) if isinstance(data, _FileMember)
+                    else len(data))
+            if size > limit:
+                if isinstance(data, _FileMember):
+                    data.discard()
+                ctx["notes"].append(f"too-large:{logical}")
+                continue
             if isinstance(data, _FileMember):
                 members[arc] = data.add_to(tar, arc, mtime)
             else:
@@ -718,7 +815,15 @@ _SCRYPT_P = 1
 
 
 class BackupError(Exception):
-    """Anything that must abort a backup or restore with a message for the UI."""
+    """Anything that must abort a backup or restore with a message for the UI.
+
+    `code` (+ `fields`), when given, is a hifi_i18n key the HTTP layer
+    translates into the owner's language; str(e) stays the fallback."""
+
+    def __init__(self, message, code=None, **fields):
+        super().__init__(message)
+        self.code = code
+        self.fields = fields
 
 
 def _hmac_key(passphrase, salt):
@@ -784,19 +889,59 @@ def decrypt_archive(enc_path, plain_path, passphrase, enc_meta):
 # wrapper is what makes an encrypted download restorable anywhere, instead of
 # only from the generation directory it was produced in.
 def wrap_encrypted(dest_path, manifest, enc_path):
-    with tarfile.open(dest_path, "w:gz") as tar:
+    # Fastest compression: the ciphertext does not compress at all, and at the
+    # default level 9 gzip spent most of a minute on a big one for nothing.
+    with tarfile.open(dest_path, "w:gz", compresslevel=1) as tar:
         _add_member(tar, MANIFEST_NAME,
                     json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8"))
         tar.add(enc_path, arcname=ENC_NAME)
 
 
-def open_backup(path, workdir, passphrase=""):
+def payload_size(path, limit):
+    """Bytes `path` (a gzip file) decompresses to; BackupError past `limit`.
+
+    Run before tarfile ever walks an archive a restore was handed: listing a
+    .tar.gz decompresses all of it, so a small upload built to expand a
+    thousandfold would otherwise cost hours of CPU (and, for the ciphertext
+    of an encrypted wrapper, the disk it is copied to) before any per-member
+    check could look at it. Stops reading as soon as the limit is passed."""
+    total = 0
+    try:
+        with gzip.open(path, "rb") as f:
+            while True:
+                block = f.read(1024 * 1024)
+                if not block:
+                    break
+                total += len(block)
+                if total > limit:
+                    raise BackupError("Archivio troppo grande", code="restore.archiveTooLarge",
+                                      mb=limit // (1024 * 1024))
+    except BackupError:
+        raise
+    except Exception:
+        raise BackupError("Archivio non valido o corrotto")
+    return total
+
+
+def _need_space(path, need):
+    if not free_space_ok(path, need):
+        raise BackupError("Spazio su disco insufficiente", code="backup.noSpace",
+                          mb=(need + FREE_SPACE_MARGIN) // (1024 * 1024) + 1)
+
+
+def open_backup(path, workdir, passphrase="", max_payload=None):
     """Open a backup file of either shape.
 
     Returns (tarfile, manifest). The caller closes the tarfile and removes
     `workdir`. Raises BackupError for anything the user needs to be told about
     (wrong passphrase, tampering, unreadable archive).
+
+    With `max_payload`, every gzip layer is measured first (payload_size) and
+    the copies an encrypted backup needs in `workdir` are checked against the
+    free space there — the restore path always passes it.
     """
+    if max_payload is not None:
+        payload_size(path, max_payload)
     try:
         outer = tarfile.open(path, "r:gz")
     except Exception:
@@ -812,6 +957,10 @@ def open_backup(path, workdir, passphrase=""):
             manifest = json.loads(
                 outer.extractfile(MANIFEST_NAME).read().decode("utf-8"))
             enc_meta = manifest.get("enc") or {}
+            enc_size = outer.getmember(ENC_NAME).size
+            if max_payload is not None:
+                # The ciphertext, then the archive it decrypts to.
+                _need_space(workdir, 2 * enc_size)
             enc_path = os.path.join(workdir, ENC_NAME)
             with open(enc_path, "wb") as out, outer.extractfile(ENC_NAME) as src:
                 shutil.copyfileobj(src, out)
@@ -825,6 +974,13 @@ def open_backup(path, workdir, passphrase=""):
 
     plain_path = os.path.join(workdir, ARCHIVE_NAME)
     decrypt_archive(enc_path, plain_path, passphrase, enc_meta)
+    # The ciphertext has served its purpose: give its space back now.
+    try:
+        os.unlink(enc_path)
+    except OSError:
+        pass
+    if max_payload is not None:
+        payload_size(plain_path, max_payload)
     try:
         inner = tarfile.open(plain_path, "r:gz")
     except Exception:
@@ -992,8 +1148,19 @@ def prune_incomplete(store=STORE_DIR):
         names = os.listdir(store)
     except OSError:
         return 0
+    now = datetime.now().timestamp()
     for name in names:
         path = _gen_dir(store, name)
+        if name.startswith(WORKDIR_PREFIX) and os.path.isdir(path):
+            # A download or restore that died with its scratch space. Only
+            # once clearly stale: a live one may be in use right now.
+            try:
+                stale = now - os.path.getmtime(path) > WORKDIR_STALE_SECS
+            except OSError:
+                stale = False
+            if stale:
+                shutil.rmtree(path, ignore_errors=True)
+            continue
         if not os.path.isdir(path) or not valid_gen_id(name):
             continue
         if read_manifest(store, name) is None:
@@ -1002,12 +1169,63 @@ def prune_incomplete(store=STORE_DIR):
     return removed
 
 
-def rotate(store=STORE_DIR, keep=DEFAULT_KEEP):
-    """Keep the newest `keep` complete generations, drop the rest."""
+def make_workdir(purpose, store=None):
+    """A private scratch directory on disk, beside the generations.
+
+    Not /run or /tmp: both are tmpfs here, and a big archive built or unpacked
+    there used to take its size out of RAM. Same filesystem and same 0700
+    store as the backups themselves, and never mistaken for one (see
+    WORKDIR_PREFIX). The caller removes it."""
+    store = store or STORE_DIR
+    os.makedirs(store, exist_ok=True)
+    os.chmod(store, 0o700)
+    path = tempfile.mkdtemp(prefix=f"{WORKDIR_PREFIX}{purpose}-", dir=store)
+    os.chmod(path, 0o700)
+    return path
+
+
+def pin_generation(gen_id, pin_file=None):
+    """Mark `gen_id` as being read by a restore: rotate() leaves it alone."""
+    pin_file = pin_file or RESTORE_PIN_FILE
+    tmp = pin_file + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(f"{gen_id}\n")
+    os.replace(tmp, pin_file)
+
+
+def unpin_generation(pin_file=None):
+    try:
+        os.unlink(pin_file or RESTORE_PIN_FILE)
+    except OSError:
+        pass
+
+
+def pinned_generations(pin_file=None):
+    try:
+        with open(pin_file or RESTORE_PIN_FILE) as f:
+            return {line.strip() for line in f if valid_gen_id(line.strip())}
+    except OSError:
+        return set()
+
+
+def rotate(store=STORE_DIR, keep=DEFAULT_KEEP, protect=(), pin_file=None):
+    """Keep the newest `keep` of the owner's generations, drop the rest.
+
+    A restore's safety snapshots (PRE_RESTORE_TRIGGER) are counted apart and
+    only the newest PRE_RESTORE_KEEP of them stay, so taking one never costs
+    the owner a backup. Whatever is in `protect` or pinned by a running
+    restore (pin_generation) is never removed, even past the limit: deleting
+    the archive a restore is about to read is how a restore of the oldest
+    backup used to fail and lose that backup too."""
     keep = max(1, int(keep or DEFAULT_KEEP))
+    spared = set(protect or ()) | pinned_generations(pin_file)
     gens = list_generations(store)
+    owners = [g for g in gens if g.get("trigger") != PRE_RESTORE_TRIGGER]
+    safety = [g for g in gens if g.get("trigger") == PRE_RESTORE_TRIGGER]
     dropped = []
-    for gen in gens[keep:]:
+    for gen in owners[keep:] + safety[PRE_RESTORE_KEEP:]:
+        if gen["id"] in spared:
+            continue
         shutil.rmtree(_gen_dir(store, gen["id"]), ignore_errors=True)
         dropped.append(gen["id"])
     return dropped
@@ -1037,10 +1255,10 @@ def record_history(store, line):
         pass
 
 
-def read_settings(path=SETTINGS_FILE):
+def read_settings(path=None):
     """Scheduling preferences. Absent file = the shipped default (off)."""
     try:
-        with open(path) as f:
+        with open(path or SETTINGS_FILE) as f:
             data = json.load(f)
     except Exception:
         data = {}

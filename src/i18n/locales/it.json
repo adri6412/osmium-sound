@@ -1154,6 +1154,7 @@
       "dsd": { "auto": "Automatico", "dop": "DoP", "native": "Nativo", "off": "Converti in PCM" },
       "dsdDetectedNative": "Questo DAC dichiara il DSD nativo. DoP incapsula gli stessi bit in cornici PCM, di solito fino a DSD128. Converti in PCM serve alle uscite senza DSD, come l'HDMI.",
       "dsdDetectedDop": "Questo DAC non dichiara il DSD nativo, quindi Automatico usa il DoP. Converti in PCM serve alle uscite senza DSD, come l'HDMI.",
+      "dsdDetectedPcm": "Questa uscita non è un DAC USB (HDMI o l'audio integrato), quindi Automatico converte il DSD in PCM. Scegli DoP solo se vi è collegato un DAC che lo accetta.",
       "dsdDelayLabel": "Pausa al passaggio tra PCM e DSD",
       "maxRateLabel": "Frequenza massima",
       "maxRateHelp": "Quello che sta sopra viene ricampionato da Lyrion prima di arrivare al player. Automatico lascia decidere il DAC.",

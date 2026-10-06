@@ -553,7 +553,8 @@ class SupervisorHarness(unittest.TestCase):
             return _cp(cmd)
         if cmd[0] == 'systemctl':
             if cmd[1] == 'is-active':
-                return _cp(cmd, stdout=('active\n' if cmd[2] in self.active else 'inactive\n'))
+                return _cp(cmd, stdout=''.join('active\n' if u in self.active else 'inactive\n'
+                                               for u in cmd[2:]))
             if cmd[1] == 'show':
                 return _cp(cmd, stdout='loaded\n')
             if cmd[1] == 'list-units':
@@ -601,6 +602,87 @@ class SupervisorTests(SupervisorHarness):
         self.mod.Supervisor().tick()
         self.assertIn(['systemctl', 'stop', 'hifi-bt-aplay.service'], self.calls)
         self.assertIn(['systemctl', 'stop', 'hifi-bt-watcher.service'], self.calls)
+
+    def test_off_is_torn_down_once_then_costs_no_process(self):
+        """🚨 Measured on a device with Bluetooth off: the tear-down ran on
+        every pass, ~6 systemctl processes every 8 s, ~2% CPU forever."""
+        self._write({'enabled': False, 'speakers': []})
+        self.active.add('bluetooth.service')
+        sup = self.mod.Supervisor()
+        sup.tick()
+        self.assertIn(['bluetoothctl', 'power', 'off'], self.calls)
+        self.calls.clear()
+        for _ in range(5):
+            sup.tick()
+        self.assertEqual(self.calls, [])
+
+    def test_off_still_notices_a_stack_started_behind_its_back(self):
+        self._write({'enabled': False, 'speakers': []})
+        sup = self.mod.Supervisor()
+        sup.tick()
+        self.active.add('bluetooth.service')
+        self.calls.clear()
+        sup.tick()
+        self.assertEqual(self.calls, [])          # not yet due
+        sup.down_checked -= self.mod.IDLE_RECHECK_SECONDS + 1
+        sup.tick()
+        self.assertIn(['systemctl', 'stop', 'bluetooth.service'], self.calls)
+        # and once it is down again, the check is one process, not six
+        self.calls.clear()
+        sup.down_checked -= self.mod.IDLE_RECHECK_SECONDS + 1
+        sup.tick()
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.calls[0][:2], ['systemctl', 'is-active'])
+
+    def test_switching_it_on_while_idle_is_picked_up_from_the_file(self):
+        self._write({'enabled': False, 'speakers': []})
+        sup = self.mod.Supervisor()
+        sup.tick()
+        self._write({'enabled': True, 'speakers': [{'mac': MAC, 'name': 'Anker'}]})
+        os.utime(self.mod.STATE_FILE, ns=(1, 1))   # whatever the clock's resolution
+        sup.tick()
+        self.assertIn(['systemctl', 'start', 'hifi-bluealsa.service'], self.calls)
+        self.assertTrue(self._status()['enabled'])
+
+    def test_up_for_a_remote_alone_runs_the_full_pass_once_a_minute(self):
+        """Measured on a device with output off and one remote paired: the full
+        pass every 8 s cost ~1.5% of a CPU."""
+        self._write({'enabled': False, 'speakers': [],
+                     'remotes': [{'mac': MAC, 'name': 'AR'}]})
+        sup = self.mod.Supervisor()
+        sup.tick()
+        self.assertIn(['bluetoothctl', 'info', MAC], self.calls)
+        self.calls.clear()
+        for _ in range(5):
+            sup.tick()
+        self.assertEqual(self.calls, [])
+        sup.quiet_at -= self.mod.REMOTES_ONLY_RECHECK_SECONDS + 1
+        sup.tick()
+        self.assertIn(['bluetoothctl', 'info', MAC], self.calls)
+
+    def test_up_for_a_remote_alone_still_reads_a_change_or_a_sighup_at_once(self):
+        self._write({'enabled': False, 'speakers': [],
+                     'remotes': [{'mac': MAC, 'name': 'AR'}]})
+        sup = self.mod.Supervisor()
+        sup.tick()
+        self.calls.clear()
+        sup.tick(force=True)
+        self.assertIn(['bluetoothctl', 'info', MAC], self.calls)
+        self._write({'enabled': True, 'speakers': [{'mac': MAC, 'name': 'Anker'}],
+                     'remotes': []})
+        os.utime(self.mod.STATE_FILE, ns=(2, 2))
+        self.calls.clear()
+        sup.tick()
+        self.assertIn(['systemctl', 'start', 'hifi-bluealsa.service'], self.calls)
+
+    def test_a_sighup_is_never_skipped_by_the_idle_check(self):
+        self._write({'enabled': False, 'speakers': []})
+        sup = self.mod.Supervisor()
+        sup.tick()
+        self._write({'enabled': True, 'speakers': []})
+        sup.down_sig = sup.state_sig()   # a rewrite the fingerprint missed
+        sup.tick(force=True)
+        self.assertIn(['systemctl', 'start', 'hifi-bluealsa.service'], self.calls)
 
     def test_on_brings_up_bluealsa_and_the_pairing_agent(self):
         self._write({'enabled': True, 'speakers': []})

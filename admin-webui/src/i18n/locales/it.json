@@ -275,10 +275,6 @@
         "label": "Licenze e crediti",
         "desc": "Di cosa è fatto l'apparecchio, e con quali licenze"
       },
-      "debug": {
-        "label": "Debug",
-        "desc": "Diagnostica avvio/crash, catture di rete HAR"
-      },
       "netCheck": {
         "label": "Diagnosi rete",
         "desc": "Trova dove si ferma la connessione: cavo o Wi-Fi, router, internet o server degli aggiornamenti."
@@ -342,6 +338,7 @@
       "dsd": { "auto": "Automatico", "dop": "DoP", "native": "Nativo", "off": "Converti in PCM" },
       "dsdDetectedNative": "Questo DAC dichiara il DSD nativo.",
       "dsdDetectedDop": "Questo DAC non dichiara il DSD nativo, quindi Automatico usa il DoP.",
+      "dsdDetectedPcm": "Questa uscita non è un DAC USB (HDMI o l'audio integrato), quindi Automatico converte il DSD in PCM.",
       "dsdHelp": "Nativo manda il flusso DSD così com'è. DoP lo incapsula in cornici PCM: stessi bit, doppia banda, di solito fino a DSD128. Converti in PCM serve alle uscite senza DSD, come l'HDMI.",
       "dsdDelayLabel": "Pausa al passaggio tra PCM e DSD",
       "dsdDelayHelp": "Alcuni DAC fanno un click o restano muti un attimo al passaggio; una breve pausa lo evita.",
@@ -787,7 +784,9 @@
       "sshLoginCreate": "Crea accesso SSH",
       "sshLoginUpdate": "Cambia password SSH",
       "sshLoginSaved": "Accesso SSH aggiornato",
-      "sshLoginFailed": "Impossibile aggiornare l'accesso SSH"
+      "sshLoginFailed": "Impossibile aggiornare l'accesso SSH",
+      "adminPassword": "La tua password di amministratore (serve per attivare SSH o cambiare l'accesso SSH)",
+      "adminPasswordNeeded": "Prima inserisci la tua password di amministratore"
     },
     "tailscale": {
       "hint": "Collega questo apparecchio alla tua rete Tailscale personale (tailnet) per raggiungerlo — interfaccia web, Lyrion Music Server, condivisioni di rete, tutto — da ovunque arrivi la tua tailnet, ad esempio per accedere alla libreria musicale fuori casa. Non è un link pubblico: solo i dispositivi della tua tailnet possono raggiungerlo.",
@@ -1109,18 +1108,6 @@
       "factoryConfirm": "Cancella TUTTE le impostazioni e questo account, poi riavvia nel setup. Continuare?",
       "factoryStarted": "Ripristino di fabbrica avviato — il dispositivo si riavvierà",
       "factoryFailed": "Ripristino fallito"
-    },
-    "debug": {
-      "bootHint": "Per un dispositivo che si blocca all'avvio o allo spegnimento dietro la schermata di boot invece di andare in errore in modo pulito — possibile kernel panic nascosto. Entrambe le opzioni richiedono un riavvio per avere effetto.",
-      "plymouth": "Disattiva schermata di boot (Plymouth)",
-      "plymouthHelp": "Mostra il testo reale di avvio/spegnimento invece della schermata grafica, così un blocco o un kernel panic sono effettivamente visibili sullo schermo.",
-      "kdump": "Salva un memory dump al kernel panic",
-      "kdumpHelp": "Riserva una piccola quantità di RAM per salvare il crash su disco (/var/crash) e poterlo analizzare dopo un kernel panic.",
-      "kdumpNotInstalled": "Installa gli strumenti per il memory dump la prima volta che viene attivato (richiede una connessione a Internet).",
-      "kdumpInstalling": "Installazione degli strumenti per il memory dump…",
-      "rebootRequired": "Salvato — riavvia il dispositivo perché la modifica abbia effetto.",
-      "rebootPrompt": "Riavviare ora il dispositivo per applicare la modifica?",
-      "saveFailed": "Impossibile salvare questa impostazione"
     },
     "netCheck": {
       "open": "Controlla la rete",

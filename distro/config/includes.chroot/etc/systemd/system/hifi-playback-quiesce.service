@@ -1,0 +1,33 @@
+[Unit]
+Description=HiFi Player - save the playback position and quiesce audio before shutdown/reboot
+# Active from boot and doing nothing until it is stopped: the work is
+# ExecStop=, which runs at the start of EVERY halt/poweroff/reboot/kexec,
+# however it was triggered (SSH `sudo reboot`, `systemctl reboot`, the app's
+# own reboot/shutdown endpoints, an OS-update, factory reset, or the physical
+# power button via logind), with no per-caller cooperation required.
+#
+# Units are stopped in the reverse of their start order, so After= the
+# audio services means this one is stopped -- and captures the playback
+# state -- before any of them goes down, while LMS and squeezelite still
+# answer. The previous shape (a oneshot pulled in by shutdown.target with
+# Conflicts=shutdown.target) never ran at all: systemd dropped its start job
+# as conflicting with the very target that wanted it, and even without the
+# conflict a unit STARTED during shutdown is ordered after every unit being
+# STOPPED, i.e. after LMS was already gone.
+#
+# A new name, too: the old one is still enabled into shutdown.target.wants on
+# every device migration 0027 reached (and in the images built until now), and
+# that leftover link turns the shutdown into a start job for an already-active
+# unit -- which systemd keeps over the stop, so ExecStop= never ran. Seen on a
+# real device; under this name nothing old points at it.
+After=lyrionmusicserver.service squeezelite.service camilladsp.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/usr/local/sbin/hifi-quiesce-audio-shutdown.sh
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

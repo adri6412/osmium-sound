@@ -1,7 +1,13 @@
 [Unit]
 Description=HiFi Player - Squeezelite VU Meter WebSocket Daemon
+# Ordering only, on purpose: no Requires=/Wants=/BindsTo= on squeezelite.
+# Requires= made this enabled unit pull squeezelite up at every boot even on a
+# "server only" box whose owner had disabled it, and stop propagation took the
+# VU meters down with `systemctl disable --now squeezelite` (enable --now did
+# not bring them back). The daemon copes with squeezelite being absent or
+# restarted on its own (it re-globs the /dev/shm segment), and it also serves
+# Bluetooth playback, so it has every reason to run without the player.
 After=network.target squeezelite.service
-Requires=squeezelite.service
 
 [Service]
 Type=simple

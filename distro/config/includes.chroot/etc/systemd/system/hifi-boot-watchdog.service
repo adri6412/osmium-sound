@@ -9,3 +9,6 @@ ConditionKernelCommandLine=!boot=live
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/hifi-boot-watchdog.sh
+# The script may wait while a first boot is still busy (bounded by its own
+# cap, 30 min after boot): no start timeout of systemd's own on top of it.
+TimeoutStartSec=infinity

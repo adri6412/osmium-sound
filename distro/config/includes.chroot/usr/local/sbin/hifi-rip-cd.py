@@ -111,6 +111,22 @@ def read_toc(device):
     return hifi_cdrip.parse_cdparanoia_toc((r.stdout or "") + "\n" + (r.stderr or ""))
 
 
+def audio_only(tracks, toc):
+    """(tracks to rip, numbers left out). `cdparanoia -Q` lists the audio
+    tracks only, so a planned track past the last one it lists is the data
+    track of an Enhanced CD (the service leaves those out already when the
+    drive reports them; this is for a plan made without that). Without a TOC
+    every track is kept, and a "non audio" read is skipped in main()."""
+    if not toc:
+        return list(tracks), []
+    last = max(toc)
+    kept, skipped = [], []
+    for i, tr in enumerate(tracks):
+        num = int(tr.get("num") or (i + 1))
+        (skipped if num > last else kept).append(num if num > last else tr)
+    return kept, skipped
+
+
 CD_FRAME_BYTES = 2352      # one CD frame of audio: 588 stereo 16-bit samples
 
 
@@ -381,6 +397,13 @@ def main():
     toc = read_toc(device)
     drive = hifi_cdrip.drive_info(device)
     cancelled()
+    tracks, skipped = audio_only(tracks, toc)
+    for num in skipped:
+        print(f"I: [hifi-rip] track {num} is not audio (Enhanced CD data track): skipped")
+    total = len(tracks)
+    if not tracks:
+        shutil.rmtree(work, ignore_errors=True)
+        fail("nessuna traccia audio da rippare")
 
     results, outputs = [], []
     for i, tr in enumerate(tracks):
@@ -396,6 +419,17 @@ def main():
             write_status("ripping", num, total, int((_i + frac) * 100 / total), _label)
         res = rip_track(device, num, wav, opt, expected, on_progress)
         cancelled()
+        if not res.get("ok") and hifi_cdrip.is_non_audio_error(res.get("error")):
+            # A data track the TOC did not give away: there is nothing to
+            # rip in it, and failing here used to throw away every audio
+            # track already read.
+            print(f"I: [hifi-rip] track {num}: cdparanoia says it is not audio, skipped")
+            skipped.append(num)
+            try:
+                os.remove(wav)
+            except OSError:
+                pass
+            continue
         if not res.get("ok"):
             shutil.rmtree(work, ignore_errors=True)
             fail(f"lettura traccia {num} fallita (disco rovinato?)", num, total)
@@ -441,6 +475,17 @@ def main():
         results.append(res)
         outputs.append(out)
 
+    if not results:
+        shutil.rmtree(work, ignore_errors=True)
+        fail("nessuna traccia audio da rippare")
+    if len(results) != total:
+        # A track turned out to be data halfway through: the files already
+        # encoded carry a TRACKTOTAL that counted it.
+        total = len(results)
+        if opt["format"] == "flac":
+            run(["metaflac", "--remove-tag=TRACKTOTAL", f"--set-tag=TRACKTOTAL={total}"] + outputs,
+                timeout=300)
+
     if opt["replaygain"] and opt["format"] == "flac" and outputs:
         write_status("ripping", total, total, 99, "ReplayGain…")
         run(["metaflac", "--add-replay-gain"] + outputs, timeout=1800)
@@ -448,6 +493,9 @@ def main():
 
     if cover:
         shutil.copyfile(cover, os.path.join(work, "cover.jpg"))
+    # Decided only now, with every track in hand: the folder may have been
+    # filled by another rip (or from a PC) while this one was reading.
+    dest = hifi_cdrip.unused_dir(dest)
     if opt["log_file"]:
         log_name = hifi_cdrip.safe_name(f"{artist} - {album}", "rip", clean) + ".log"
         with open(os.path.join(work, log_name), "w", encoding="utf-8") as f:

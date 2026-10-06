@@ -287,12 +287,13 @@ class MountOptionTests(unittest.TestCase):
         self.assertIn("read-only", msg.lower())
 
     def test_a_wrong_password_is_not_retried_read_only(self):
-        # Four protocol versions and no more: a second pass would only cost
-        # the owner four more timeouts to reach the same sentence.
+        # One login and no more: no other protocol version and no read-only
+        # pass fixes a password, and every refused login counts towards the
+        # lockout of the account on the NAS.
         self._answers(lambda n: _completed(rc=32, stderr="mount error: NT_STATUS_LOGON_FAILURE"))
         ok, msg, detail = ss.mount_smb(self._src())
         self.assertFalse(ok)
-        self.assertEqual(len(self.calls), 4)
+        self.assertEqual(len(self.calls), 1)
         self.assertEqual(msg, ss._m("msg.smbBadCredentials"))
         self.assertIn("LOGON_FAILURE", detail)
 

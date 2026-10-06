@@ -38,6 +38,10 @@ class LmsRoleTestCase(unittest.TestCase):
         # The player-enabled check reads a file of its own; keep the restart
         # path alive so the role change is exercised end to end.
         self._patch('PLAYER_ENABLED_FILE', os.path.join(self.tmp, 'player-enabled'))
+        # This box's own addresses and name, fixed instead of read from the
+        # machine running the tests.
+        self._patch('_own_addresses', lambda: {'127.0.0.1', '::1', '192.168.1.133', 'fe80::1'})
+        self._patch('_own_host_names', lambda: {'localhost', 'osmium', 'osmium.local'})
 
     def tearDown(self):
         for name, value in self._saved.items():
@@ -113,7 +117,7 @@ class LmsRoleTestCase(unittest.TestCase):
         self.assertEqual(self._args(), DEFAULT_ARGS)
 
     def test_unresolvable_name_touches_nothing(self):
-        self._patch('_resolves', lambda name: False)
+        self._patch('_lookup_host', lambda name, timeout=5: set())
         result = api_server.set_lms_role('follow', 'nas.lan')
         self.assertFalse(result['success'])
         self.assertEqual(result['code'], 'lms.hostNotFound')
@@ -129,7 +133,7 @@ class LmsRoleTestCase(unittest.TestCase):
     # ── a DNS name instead of an IP ──────────────────────────────────
 
     def test_follow_accepts_a_dns_name(self):
-        self._patch('_resolves', lambda name: True)
+        self._patch('_lookup_host', lambda name, timeout=5: {'192.168.1.60'})
         result = api_server.set_lms_role('follow', ' NAS.Local. ')
         self.assertTrue(result['success'])
         self.assertEqual(result['host'], 'nas.local')
@@ -137,10 +141,66 @@ class LmsRoleTestCase(unittest.TestCase):
         self.assertEqual(api_server.get_lms_role(), {'mode': 'follow', 'host': 'nas.local'})
 
     def test_ip_address_is_not_looked_up(self):
-        def boom(name):
+        def boom(name, timeout=5):
             raise AssertionError('an IP address must not go through DNS')
-        self._patch('_resolves', boom)
+        self._patch('_lookup_host', boom)
         self.assertTrue(api_server.set_lms_role('follow', '192.168.1.50')['success'])
+
+    # ── this box itself is never a server to follow ──────────────────
+
+    def test_own_lan_address_refused(self):
+        # Discovery lists the local Lyrion too; following it switched the
+        # local server off and left nothing to play from.
+        result = api_server.set_lms_role('follow', '192.168.1.133')
+        self.assertFalse(result['success'])
+        self.assertEqual(result['code'], 'lms.ownAddress')
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self._args(), DEFAULT_ARGS)
+
+    def test_own_host_names_refused_without_dns(self):
+        def boom(name, timeout=5):
+            raise AssertionError('the box knows its own name')
+        self._patch('_lookup_host', boom)
+        for name in ('osmium', 'Osmium.local', 'osmium.local.'):
+            result = api_server.set_lms_role('follow', name)
+            self.assertFalse(result['success'], name)
+            self.assertEqual(result['code'], 'lms.ownAddress', name)
+        self.assertEqual(self.calls, [])
+
+    def test_name_resolving_to_this_box_refused(self):
+        for addrs in ({'192.168.1.133'}, {'fe80::1'}, {'127.0.1.1'}, {'::ffff:192.168.1.133'}):
+            self._patch('_lookup_host', lambda name, timeout=5, a=addrs: set(a))
+            result = api_server.set_lms_role('follow', 'alias.lan')
+            self.assertFalse(result['success'], addrs)
+            self.assertEqual(result['code'], 'lms.ownAddress', addrs)
+        self.assertEqual(self.calls, [])
+
+    def test_other_loopback_addresses_refused(self):
+        result = api_server.set_lms_role('follow', '127.0.1.1')
+        self.assertFalse(result['success'])
+        self.assertEqual(result['code'], 'lms.useLocalMode')
+
+    def test_discovery_leaves_this_box_out(self):
+        answers = [(b'E' + b'NAME' + bytes([4]) + b'self', ('192.168.1.133', 3483)),
+                   (b'E' + b'NAME' + bytes([3]) + b'nas', ('192.168.1.50', 3483))]
+
+        class FakeSock:
+            def setsockopt(self, *a): pass
+            def settimeout(self, t): pass
+            def sendto(self, data, addr): pass
+            def close(self): pass
+            def recvfrom(self, n):
+                if answers:
+                    return answers.pop(0)
+                raise api_server.socket.timeout()
+
+        saved = api_server.socket.socket
+        api_server.socket.socket = lambda *a, **k: FakeSock()
+        try:
+            found = api_server.discover_lms_servers(timeout=0.05)
+        finally:
+            api_server.socket.socket = saved
+        self.assertEqual([s['ip'] for s in found], ['192.168.1.50'])
 
     def test_follow_on_loopback_refused(self):
         result = api_server.set_lms_role('follow', '127.0.0.1')

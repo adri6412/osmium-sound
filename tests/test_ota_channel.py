@@ -47,6 +47,10 @@ class OtaChannelTestCase(unittest.TestCase):
         self._saved = {}
         self._patch('OTA_CHANNEL_FILE', os.path.join(self.tmp, 'ota-channel'))
         self._patch('OTA_ALPHA_MARKER_FILE', os.path.join(self.tmp, 'ota-alpha-unlocked'))
+        # The source chain checks that the hosts resolve before fetching; the
+        # fetches themselves are faked below, so no real DNS either.
+        self._patch('_ota_resolvable_hosts', lambda hosts: set(hosts))
+        api_server._RELEASE_FAILED.clear()
         os.environ.pop('HIFI_OTA_CHANNEL', None)
 
     def tearDown(self):

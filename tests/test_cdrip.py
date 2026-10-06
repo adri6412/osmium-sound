@@ -153,6 +153,31 @@ class TestTocAndNames(unittest.TestCase):
         self.assertEqual(hcd.safe_name('   ', 'Unknown Album'), 'Unknown Album')
         self.assertEqual(len(hcd.safe_name('x' * 300, 'f')), 120)
 
+    def test_safe_name_keeps_a_title_with_no_latin_form(self):
+        # Folding 坂本龍一 or Кино to ASCII leaves nothing: every such disc
+        # used to become "Unknown Album" and overwrite the previous one.
+        self.assertEqual(hcd.safe_name('坂本龍一', 'Unknown Artist', ascii_only=True), '坂本龍一')
+        self.assertEqual(hcd.safe_name('Кино 2', 'Unknown Album', ascii_only=True), 'Кино 2')
+        self.assertEqual(hcd.safe_name('Sigur Rós', 'x', ascii_only=True), 'Sigur Ros')
+
+    def test_safe_name_fits_ext4_in_bytes(self):
+        name = hcd.safe_name('ベスト' * 100, 'x')
+        self.assertLessEqual(len(name.encode('utf-8')), 200)
+        self.assertTrue(name.startswith('ベスト'))
+        self.assertLessEqual(len(('01 - ' + name + '.flac').encode('utf-8')), 255)
+
+    def test_unused_dir_never_reuses_a_folder_with_music(self):
+        tmp = tempfile.mkdtemp()
+        album = os.path.join(tmp, 'Unknown Artist', 'Unknown Album')
+        self.assertEqual(hcd.unused_dir(album), album)          # not there yet
+        os.makedirs(album)
+        self.assertEqual(hcd.unused_dir(album), album)          # there but empty
+        open(os.path.join(album, '01 - Track 01.flac'), 'wb').close()
+        self.assertEqual(hcd.unused_dir(album), album + ' (2)')
+        os.makedirs(album + ' (2)')
+        open(os.path.join(album + ' (2)', 'x'), 'wb').close()
+        self.assertEqual(hcd.unused_dir(album), album + ' (3)')
+
     def test_wav_crc(self):
         tmp = tempfile.mkdtemp()
         p = os.path.join(tmp, 't.wav')
