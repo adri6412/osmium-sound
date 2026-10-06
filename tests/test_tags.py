@@ -591,8 +591,9 @@ class ServiceTests(unittest.TestCase):
                                    'disccount': 1}
         self.lyrion.tracks[704] = tracks
         self.lyrion.artists = [{'id': 977, 'artist': 'Pink Floyd'}]
+        # the JSON stand-ins have no audio to compare across the safety copy
         self.fmt = mock.patch.multiple(ht, read_file=JsonFormat.read_file, write_file=JsonFormat.write_file,
-                                       writers=JsonFormat.writers)
+                                       writers=JsonFormat.writers, _audio_signature=lambda path: ('json',))
         self.fmt.start()
 
     def tearDown(self):
@@ -805,7 +806,8 @@ class ServiceTests(unittest.TestCase):
 
     def test_write_errors_are_listed(self):
         def broken(path, fmt, set_, remove):
-            if path == self.paths[1]:
+            # tags go to the safety copy of the track, never to the track itself
+            if path == ht.safe_copy_path(self.paths[1]):
                 raise ht.FileTagError('disk on fire')
             JsonFormat.write_file(path, fmt, set_, remove)
         with mock.patch.object(ht, 'write_file', broken):

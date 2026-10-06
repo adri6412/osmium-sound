@@ -836,6 +836,102 @@ def write_file(path, fmt, set_, remove):
     raise FileTagError('no writer for this format')
 
 
+# ── Writing without risking the track ────────────────────────────────
+# A tag change that no longer fits the file's padding makes the writer move
+# the whole audio inside the file; a power cut or a dropped NAS in the middle
+# of that leaves a damaged track, and the undo journal only holds the tag
+# values. So a track is never written in place: it is copied next to itself,
+# the copy gets the tags and is checked, and only then takes the original's
+# place in one rename. One track at a time, so the extra space needed is one
+# track's worth, and no copy is left behind.
+SAFE_COPY_MARK = '.osmium-tmp'
+SAFE_COPY_SPARE = 16 * 1024 * 1024     # room left on the disk besides the copy
+
+
+def safe_copy_path(path):
+    """Where the working copy of `path` goes: hidden, in the same folder (so
+    the final rename stays on one filesystem) and with the same extension
+    (mutagen goes by it to tell some formats apart)."""
+    folder, name = os.path.split(path)
+    stem, ext = os.path.splitext(name)
+    return os.path.join(folder, '.' + stem + SAFE_COPY_MARK + ext)
+
+
+def _audio_signature(path):
+    """What the tag writer must never change: the audio's length, rate and
+    channels, and for FLAC the MD5 of the decoded audio it carries."""
+    mutagen = mutagen_module()
+    if mutagen is not None:
+        try:
+            audio = mutagen.File(path)
+        except Exception as e:  # noqa: BLE001
+            raise FileTagError(f'{type(e).__name__}: {e}')
+        if audio is None:
+            raise FileTagError('unrecognised file')
+        info = audio.info
+        return (round(float(getattr(info, 'length', 0) or 0), 3), getattr(info, 'sample_rate', None),
+                getattr(info, 'channels', None), getattr(info, 'md5_signature', None))
+    exe = metaflac_path()
+    if not exe:
+        return None
+    try:
+        r = subprocess.run([exe, '--show-md5sum', '--show-total-samples', '--show-sample-rate', path],
+                           capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise FileTagError(f'metaflac: {e}')
+    if r.returncode != 0:
+        raise FileTagError(('metaflac: ' + (r.stderr or f'exit {r.returncode}').strip())[:400])
+    return tuple(r.stdout.split())
+
+
+def _fsync_dir(folder):
+    try:
+        fd = os.open(folder, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def write_file_safely(path, fmt, set_, remove):
+    """write_file() on a copy of the track, which then replaces it."""
+    tmp = safe_copy_path(path)
+    st = os.stat(path)
+    folder = os.path.dirname(path) or '.'
+    try:
+        if os.path.lexists(tmp):
+            os.remove(tmp)                       # left by an interrupted job
+        if shutil.disk_usage(folder).free < st.st_size + SAFE_COPY_SPARE:
+            raise FileTagError('not enough free space for a safety copy of this track')
+        shutil.copyfile(path, tmp)
+        before = _audio_signature(path)
+        write_file(tmp, fmt, set_, remove)
+        if _audio_signature(tmp) != before:
+            raise FileTagError('the audio changed while writing the tags; the track was left as it was')
+        with open(tmp, 'rb') as f:
+            os.fsync(f.fileno())
+        try:
+            os.chown(tmp, st.st_uid, st.st_gid)
+        except OSError:
+            pass                                 # FAT, exFAT, SMB: the mount decides
+        try:
+            os.chmod(tmp, st.st_mode & 0o7777)
+        except OSError:
+            pass
+        os.replace(tmp, path)
+        _fsync_dir(folder)
+    finally:
+        if os.path.lexists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
 # ── Lyrion's reading of the tags (read-only fallback) ────────────────
 def _fold(key):
     return re.sub(r'[^A-Z0-9]', '', str(key).upper())
@@ -1380,7 +1476,7 @@ class TagService:
                     try:
                         if confine(f['path'], self.roots) != f['path']:
                             raise FileTagError('the file is no longer inside the music folders')
-                        write_file(f['path'], f['format'], f['set'], f['remove'])
+                        write_file_safely(f['path'], f['format'], f['set'], f['remove'])
                         st = os.stat(f['path'])
                         with lock:
                             f.update(written=True, size=st.st_size, mtime_ns=st.st_mtime_ns)
@@ -1518,6 +1614,16 @@ class TagService:
         for name in names:
             doc = self._load(name[:-5])
             if doc and doc.get('state') == 'running':
+                # the working copy of the track that was being written when
+                # the job stopped (see write_file_safely); the original is
+                # intact either way
+                for f in doc.get('files') or []:
+                    tmp = safe_copy_path(f.get('path') or '')
+                    if f.get('path') and os.path.lexists(tmp):
+                        try:
+                            os.remove(tmp)
+                        except OSError:
+                            pass
                 doc.update(state='error', interrupted=True)
                 doc.setdefault('errors', []).append({'track_id': None, 'code': 'library.interrupted', 'detail': ''})
                 try:
