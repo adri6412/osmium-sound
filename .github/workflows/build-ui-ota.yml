@@ -583,7 +583,10 @@ jobs:
         with:
           name: ab-image
           path: /mnt/image-out/hifi-image-*
-          retention-days: 14
+          # only carries the image to publish-image in this same run; once
+          # published it lives on R2 and in the release. One day is enough
+          # for a same-day re-run of a failed publish.
+          retention-days: 1
           if-no-files-found: error
 
   # Unico punto in cui una release viene creata: quando c'è tutto.
