@@ -66,7 +66,7 @@ Item {
     readonly property var glass: [146, 25.5, 350, 187.5]
     readonly property real winW: glass[2] - glass[0]
     readonly property real winH: glass[3] - glass[1]
-    readonly property real loaderX: winW / 2 + 20             // in the window
+    readonly property real loaderX: winW / 2                  // in the window, centred
     readonly property real axisX: winW / 2                    // the file's axis
     readonly property real radius: 190                       // to the discs' centres
     readonly property real discD: 128

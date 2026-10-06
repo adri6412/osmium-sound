@@ -65,7 +65,7 @@ KNOB = (104, 225)
 KNOB_R = 8
 
 # the window's insides
-LOADER_X = (GLASS[0] + GLASS[2]) / 2 + 20   # the loader's column
+LOADER_X = (GLASS[0] + GLASS[2]) / 2        # the loader's column: centred in the window
 DISC_D = 128                         # disc diameter in units
 VFD_COL = (196, 236, 255)
 

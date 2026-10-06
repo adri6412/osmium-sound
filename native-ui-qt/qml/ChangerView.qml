@@ -49,9 +49,10 @@ Item {
     readonly property real stageS: Math.min(box.width / 600, box.height / 260)
     // the drive's opening at the top of the window, at the loader: where a
     // disc put in reaches the scene, which takes it down into its slot
-    // (AnimChanger: loader x 255.5; the disc's centre at dropStart 0.55 of
-    // the way up is 94 - 0.55 * 150 into the window, which starts at 25.5)
-    readonly property point slotIn: Qt.point(box.x + (box.width - 600 * stageS) / 2 + 255.5 * stageS,
+    // (AnimChanger: loader x 235.5, centred in the window; the disc's centre
+    // at dropStart 0.55 of the way up is 94 - 0.55 * 150 into the window,
+    // which starts at 25.5)
+    readonly property point slotIn: Qt.point(box.x + (box.width - 600 * stageS) / 2 + 235.5 * stageS,
                                              box.y + (box.height - 260 * stageS) / 2 + (25.5 + 94 - 0.55 * 150) * stageS)
     // there it stands nearly edge-on, as the discs at the loader do
     readonly property real slotTurn: 84
