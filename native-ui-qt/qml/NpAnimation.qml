@@ -198,9 +198,75 @@ Item {
             if (starts.length < 2) return
             var cur = Math.max(0, Math.min(pl.length - 1, Player.index)), k = 0
             for (var j = 0; j < starts.length; j++) if (starts[j] <= cur) k = j
-            Player.cmd(["playlist", "index", String(starts[((k + dir) % starts.length + starts.length) % starts.length])])
+            var to = String(starts[((k + dir) % starts.length + starts.length) % starts.length])
+            if (root.loadedKind !== "changer") { Player.cmd(["playlist", "index", to]); return }
+            root.changerJump(to)
         })
     }
+    // The changer to another disc: the music waits for it. Lyrion's jump
+    // plays at once when it is playing, and an earlier pause could reach it
+    // after the jump: so the pause first, then the jump without playing
+    // (`noplay`), in that order; the music comes back once the disc sits in
+    // the drive (changerSeated).
+    function changerJump(to) {
+        var was = Player.playing
+        // paused, it stays paused once the new disc is in, even if Lyrion
+        // reports a moment of play during the jump
+        root.discStayPaused = !was
+        if (!was) discStayLimit.restart()
+        Player.query(["pause", "1"], function() {
+            Player.query(["playlist", "index", String(to), "0", "1"], function() {
+                if (was) { root.discPlayWait = true; discPlayLimit.restart() }
+            })
+        })
+    }
+    // The end of a disc: Lyrion would go on to the next album by itself and
+    // the changer could only pause it once heard. On the last track of a disc
+    // (the next one in the queue is another album) the changer takes over a
+    // moment before its end, as with DISC +. Not in random order: the next
+    // track is not known.
+    readonly property bool changerLive: live && active && loadedKind === "changer" && changerDiscs === null
+    property bool lastOfDisc: false
+    readonly property string curTrack: changerLive ? Player.trackId + "#" + Player.index : ""
+    onCurTrackChanged: {
+        lastOfDisc = false
+        if (curTrack === "" || Player.shuffle !== 0) return
+        var at = Player.index, want = curTrack
+        Player.query(["status", String(at), "2", "tags:l"], function(ok, r) {
+            var pl = ok && r ? r.playlist_loop || [] : []
+            root.lastOfDisc = root.curTrack === want && pl.length === 2 && pl[0].album !== pl[1].album
+        })
+    }
+    // Player.elapsed moves in half-second steps: the place in the track is
+    // the last step plus the time since it
+    readonly property real elapsedNow: Player.elapsed
+    property double elapsedAt: 0
+    onElapsedNowChanged: elapsedAt = Date.now()
+    Timer {
+        interval: 100; repeat: true
+        running: root.changerLive && root.lastOfDisc && Player.playing && Player.duration > 0
+        onTriggered: {
+            var at = root.elapsedNow + Math.max(0, (Date.now() - root.elapsedAt) / 1000)
+            if (Player.duration - at <= 0.3) {
+                root.lastOfDisc = false
+                root.changerJump(Player.index + 1)
+            }
+        }
+    }
+    // The wait for the new disc begins once the new album has reached the
+    // scene: armed earlier, the scene would still hold the old disc as the
+    // one in place and the music would start at once.
+    property bool discPlayWait: false
+    function armDiscPlay() {
+        if (!discPlayWait) return
+        discPlayWait = false
+        discPlayLimit.stop()
+        if (Ui.app) Ui.app.changerAwaitPlay = true
+    }
+    onMediaKeyChanged: if (discPlayWait) Qt.callLater(armDiscPlay)
+    property bool discStayPaused: false
+    Timer { id: discStayLimit; interval: 15000; onTriggered: root.discStayPaused = false }
+    Timer { id: discPlayLimit; interval: 5000; onTriggered: root.armDiscPlay() }
     // A disc of the CD changer sits in the drive: the music the owner is
     // waiting for starts now (App.changerAwaitPlay: Done, Play on the
     // changer). Also when the wait begins with the disc already there.
@@ -268,6 +334,7 @@ Item {
             // the CD changer: the music waits for its disc to be in the drive
             else if (name === "hold") {
                 if (value.hold) Player.play(false)
+                else if (root.discStayPaused) { root.discStayPaused = false; discStayLimit.stop() }
                 else {
                     // the pause kept the place; a track just begun (the queue
                     // moved on to the next disc) starts over from its top

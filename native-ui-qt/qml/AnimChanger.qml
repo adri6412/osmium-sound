@@ -204,7 +204,9 @@ Item {
     property bool holding: false
     function checkHold() {
         if (!live || !active) return
-        if (playing && !loaded && power && hasTrack && !ejected && !holding) {
+        // again each time the music starts while the disc is not in place:
+        // a jump that reached Lyrion after the first pause starts it once more
+        if (playing && !loaded && power && hasTrack && !ejected) {
             holding = true
             root.action("hold", { hold: true })
         } else if (holding && loaded) {
