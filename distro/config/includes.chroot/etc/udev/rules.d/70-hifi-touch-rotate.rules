@@ -16,5 +16,9 @@ SUBSYSTEM!="input", GOTO="hifi_touch_rotate_end"
 KERNEL!="event*", GOTO="hifi_touch_rotate_end"
 ENV{ID_INPUT_TOUCHSCREEN}!="1", GOTO="hifi_touch_rotate_end"
 IMPORT{cmdline}="hifi.rotate"
-ENV{hifi.rotate}=="180", ENV{LIBINPUT_CALIBRATION_MATRIX}="-1 0 1 0 -1 1"
+ENV{hifi.rotate}=="180", ENV{LIBINPUT_CALIBRATION_MATRIX}="-1 0 1 0 -1 1", GOTO="hifi_touch_rotate_end"
+# The panel orientation alone turns the plane too: the command line is a file
+# on the ESP shared by both A/B slots, and a slot with an older version writes
+# it without hifi.rotate (api_server.py rewrites it at its next start).
+PROGRAM=="/usr/bin/grep -q panel_orientation=upside_down /proc/cmdline", ENV{LIBINPUT_CALIBRATION_MATRIX}="-1 0 1 0 -1 1"
 LABEL="hifi_touch_rotate_end"

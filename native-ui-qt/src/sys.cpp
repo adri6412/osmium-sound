@@ -65,11 +65,20 @@ Sys::Sys(const QString &assets, QObject *parent) : QObject(parent), m_assets(ass
     m_dev = qEnvironmentVariableIsSet("HIFI_DEV");
     m_pointer = conf("pointer-enabled", "1").trimmed() != "0";
     {
-        // HIFI_CMDLINE: the rig's stand-in for /proc/cmdline
+        // HIFI_CMDLINE: the rig's stand-in for /proc/cmdline. What turns the
+        // plane is the panel orientation, hifi.rotate only says so: 🚨 the
+        // command line is a file on the ESP shared by both A/B slots, and a
+        // slot with an older version rewrites it in its own form (the
+        // orientation alone), so the next boot of a newer one has the turn
+        // without the token — the canvas turned on top of it, upside down.
         QFile cl(qEnvironmentVariable("HIFI_CMDLINE", QStringLiteral("/proc/cmdline")));
-        if (cl.open(QIODevice::ReadOnly | QIODevice::Text)
-            && QString::fromUtf8(cl.readAll()).split(QRegularExpression("\\s+")).contains(QStringLiteral("hifi.rotate=180")))
-            m_hwRotation = 180;
+        if (cl.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            const QStringList toks = QString::fromUtf8(cl.readAll()).split(QRegularExpression("\\s+"));
+            for (const QString &t : toks)
+                if (t == QLatin1String("hifi.rotate=180")
+                    || (t.startsWith(QLatin1String("video=")) && t.endsWith(QLatin1String(":panel_orientation=upside_down"))))
+                    m_hwRotation = 180;
+        }
     }
     readRotation();
     // The directory AND the file. api_server replaces the file (write to a
