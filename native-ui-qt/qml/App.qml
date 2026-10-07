@@ -86,6 +86,14 @@ Item {
     }
     // the changer on screen in Now Playing (NpAnimation.changerOnScreen)
     property Item changerScreen: null
+    // With it on screen, music chosen anywhere in the interface is queued
+    // without playing (Player.cmd) and the changer plays it once the disc is
+    // in its drive: Lyrion never starts early, nothing has to be paused.
+    Binding { target: Player; property: "holdStarts"; value: app.changerScreen !== null }
+    Connections {
+        target: Player
+        function onStartHeld() { if (app.changerScreen) app.changerScreen.awaitNewDisc() }
+    }
     function changerTakesPlay() {
         if (Player.playing) return false
         if (changerPending && changerDiscs.length > 0) {
@@ -549,8 +557,8 @@ Item {
     Screensaver {
         id: screensaver
         anchors.fill: parent
-        // 5 minuti senza tocchi e niente in riproduzione (App.jsx)
-        idleMs: 5 * 60 * 1000
+        // un minuto senza tocchi e niente in riproduzione (era 5, come App.jsx)
+        idleMs: 60 * 1000
         lastInput: app.lastInput
         blocked: wizard.active || app.busyOverlay
     }

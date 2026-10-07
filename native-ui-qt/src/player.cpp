@@ -637,8 +637,39 @@ void Player::updateArtwork() {
 }
 
 // ─── comandi ───────────────────────────────────────────────────────────────
+// The same command, queuing instead of playing: Lyrion's "load / play this"
+// commands start the music at once, their "add" counterparts do not. Empty
+// when `params` does not start other music.
+static QVariantList queuedForm(const QVariantList &params) {
+    QStringList p;
+    for (const QVariant &v : params) p << v.toString();
+    QVariantList q = params;
+    if (p.size() >= 2 && p[0] == "playlistcontrol" && p.contains("cmd:load")) { q[p.indexOf("cmd:load")] = "cmd:add"; return q; }
+    if (p.size() >= 3 && p[0] == "playlist" && p[1] == "play") { q[1] = "add"; return q; }
+    if (p.size() >= 3 && p[0] == "playlist" && p[1] == "loadtracks") { q[1] = "addtracks"; return q; }
+    // an app's item: <app> playlist play item_id:...
+    if (p.size() >= 4 && p[0] != "playlist" && p[1] == "playlist" && p[2] == "play") { q[2] = "add"; return q; }
+    return {};
+}
+
 void Player::cmd(const QVariantList &params) {
     if (m_playerId.isEmpty()) return;
+    // The CD changer on screen: the music starts once its disc is in the
+    // drive, so other music is put in the queue without playing -- the queue
+    // emptied first, as the "load" or "play" would have done -- and the
+    // changer is told (startHeld) to load the disc and then play. Lyrion never
+    // starts it early, so nothing has to be paused afterwards.
+    if (m_holdStarts) {
+        const QVariantList queued = queuedForm(params);
+        if (!queued.isEmpty()) {
+            Api *a = Api::instance();
+            const QString id = m_playerId;
+            a->lmsRequest(id, QVariantList{"playlist", "clear"}, [this, a, id, queued](bool, const QVariant &, int) {
+                a->lmsRequest(id, queued, [this](bool, const QVariant &, int) { m_wantNow = true; emit startHeld(); }, 8000);
+            }, 8000);
+            return;
+        }
+    }
     // (gli array QML si convertono da soli in QVariantList: qui basta l'id)
     Api::instance()->lmsRequest(m_playerId, params, [this](bool, const QVariant &, int) { m_wantNow = true; }, 8000);
 }

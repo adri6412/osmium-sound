@@ -264,6 +264,9 @@ Item {
         if (Ui.app) Ui.app.changerAwaitPlay = true
     }
     onMediaKeyChanged: if (discPlayWait) Qt.callLater(armDiscPlay)
+    // other music queued without playing (Player.startHeld): play it once its
+    // disc is in the drive
+    function awaitNewDisc() { discStayPaused = false; discPlayWait = true; discPlayLimit.restart() }
     property bool discStayPaused: false
     Timer { id: discStayLimit; interval: 15000; onTriggered: root.discStayPaused = false }
     Timer { id: discPlayLimit; interval: 5000; onTriggered: root.armDiscPlay() }

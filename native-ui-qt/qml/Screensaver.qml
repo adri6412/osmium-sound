@@ -1,5 +1,5 @@
-// L'orologio a schermo intero (Screensaver.jsx / screensaver.c): dopo 5
-// minuti senza tocchi e senza musica, oppure alzato a mano dall'orologio del
+// L'orologio a schermo intero (Screensaver.jsx / screensaver.c): dopo un
+// minuto senza tocchi e senza musica, oppure alzato a mano dall'orologio del
 // Now Playing (allora si toglie solo con un tocco). Dissolvenza di 1 s, sfondo
 // che si sposta fra 5 posizioni ogni 45 s, due punti che lampeggiano.
 import QtQuick
@@ -8,7 +8,7 @@ import Hifi.Ui
 
 Item {
     id: root
-    property int idleMs: 300000
+    property int idleMs: 60000
     property real lastInput: 0
     property bool blocked: false
     property bool active: false
@@ -37,13 +37,20 @@ Item {
     }
     function hide() { if (!active || closing) return; closing = true; fade = 0 }
     Timer { interval: 50; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.active = false; root.closing = false; root.manual = false } }
-    // 5 minuti di inattivita' senza riproduzione locale; se la musica riparte
+    // Il minuto si conta dal piu' recente fra l'ultimo tocco e la fine della
+    // musica: contato solo dal tocco, chi ascoltava senza toccare trovava
+    // l'orologio appena messo in pausa (e durante il cambio disco del
+    // caricatore, che ferma la musica per qualche secondo).
+    property real silentSince: Sys.now()
+    readonly property bool playingNow: Player.playing
+    onPlayingNowChanged: if (!playingNow) silentSince = Sys.now()
+    // un minuto di inattivita' senza riproduzione locale; se la musica riparte
     // da fuori si toglie da solo (tranne quello alzato a mano)
     Timer {
         interval: 5000; repeat: true; running: true
         onTriggered: {
             if (!root.active) {
-                if (!Player.playing && Sys.now() - root.lastInput >= root.idleMs && !root.blocked) root.show(false)
+                if (!Player.playing && Sys.now() - Math.max(root.lastInput, root.silentSince) >= root.idleMs && !root.blocked) root.show(false)
             } else if (!root.manual && Player.playing) root.hide()
         }
     }

@@ -75,6 +75,10 @@ class Player : public QObject {
     Q_PROPERTY(QString prefDigitalVol READ prefDigitalVol NOTIFY modeChanged)
     // impostazioni lette dal api_server
     Q_PROPERTY(bool vuEnabled READ vuEnabled WRITE setVuEnabled NOTIFY settingsChanged)
+    // The CD changer is on screen (App.changerScreen): a command that would
+    // start other music queues it instead, without playing, and startHeld()
+    // is emitted -- the changer puts the disc in, then plays (see cmd()).
+    Q_PROPERTY(bool holdStarts READ holdStarts WRITE setHoldStarts NOTIFY holdStartsChanged)
     // the VU meter skin (a folder in assets/vu/), chosen in Settings → Playback
     Q_PROPERTY(QString vuStyle READ vuStyle WRITE setVuStyle NOTIFY settingsChanged)
     // the Now Playing animation shown instead of the VU meters when they are
@@ -192,6 +196,8 @@ public:
     // The server's players for the picker: cb(ok, [{id, name, isOwn, connected}])
     Q_INVOKABLE void players(const QJSValue &cb);
     Q_INVOKABLE void cmd(const QVariantList &params);
+    bool holdStarts() const { return m_holdStarts; }
+    void setHoldStarts(bool on) { if (on != m_holdStarts) { m_holdStarts = on; emit holdStartsChanged(); } }
     // Interrogazione con risposta: cb(ok, result) dove result e' `result` del JSON-RPC.
     Q_INVOKABLE void query(const QVariantList &params, const QJSValue &cb);
     // Come query ma senza player (comandi di server: players, serverstatus...).
@@ -219,6 +225,8 @@ signals:
     void favoriteChanged();
     void usbMounted(const QString &label);
     void trackChanged();          // brano nuovo (titolo/artista/album diversi)
+    void holdStartsChanged();
+    void startHeld();             // other music queued without playing (holdStarts)
 
 private:
     void findPlayer();
@@ -278,6 +286,7 @@ private:
     bool m_volumeFixed = false;
     QString m_prefRg = "0", m_prefTrType = "0", m_prefTrDur = "0", m_prefDigVol = "1";
     bool m_vuEnabled = true;
+    bool m_holdStarts = false;
     QString m_vuStyle = "classic";
     QString m_npAnimation = "none";
     int m_autoexpand = 0;
