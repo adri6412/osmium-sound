@@ -210,10 +210,6 @@ Item {
     // the drive (changerSeated).
     function changerJump(to) {
         var was = Player.playing
-        // paused, it stays paused once the new disc is in, even if Lyrion
-        // reports a moment of play during the jump
-        root.discStayPaused = !was
-        if (!was) discStayLimit.restart()
         Player.query(["pause", "1"], function() {
             Player.query(["playlist", "index", String(to), "0", "1"], function() {
                 if (was) { root.discPlayWait = true; discPlayLimit.restart() }
@@ -266,9 +262,7 @@ Item {
     onMediaKeyChanged: if (discPlayWait) Qt.callLater(armDiscPlay)
     // other music queued without playing (Player.startHeld): play it once its
     // disc is in the drive
-    function awaitNewDisc() { discStayPaused = false; discPlayWait = true; discPlayLimit.restart() }
-    property bool discStayPaused: false
-    Timer { id: discStayLimit; interval: 15000; onTriggered: root.discStayPaused = false }
+    function awaitNewDisc() { discPlayWait = true; discPlayLimit.restart() }
     Timer { id: discPlayLimit; interval: 5000; onTriggered: root.armDiscPlay() }
     // A disc of the CD changer sits in the drive: the music the owner is
     // waiting for starts now (App.changerAwaitPlay: Done, Play on the
@@ -335,16 +329,6 @@ Item {
             else if (name === "random") Player.cycleShuffle()
             else if (name === "disc") root.changeDisc(value)
             // the CD changer: the music waits for its disc to be in the drive
-            else if (name === "hold") {
-                if (value.hold) Player.play(false)
-                else if (root.discStayPaused) { root.discStayPaused = false; discStayLimit.stop() }
-                else {
-                    // the pause kept the place; a track just begun (the queue
-                    // moved on to the next disc) starts over from its top
-                    if (Player.elapsed < 3) Player.seek(0)
-                    Player.play(true)
-                }
-            }
             else if (name === "playSeated") {
                 if (!Player.power) Player.cmd(["power", "1"])
                 if (Ui.app) Ui.app.changerAwaitPlay = true

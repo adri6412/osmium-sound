@@ -177,7 +177,6 @@ Item {
             stopAll()
             travel = 0; outSlot = -1; outKey = ""; word = ""
             prepSlot = -1; drops = []
-            holding = false
             return
         }
         // Shown while the music plays, or paused partway into a track: its
@@ -195,39 +194,14 @@ Item {
         }
         Qt.callLater(step)
     }
-    // ── the music waits for the disc ───────────────────────────────────────
-    // Playing with no disc seated in the drive (the queue moved on to the next
-    // album, or Play came while the disc was still in the file): the music
-    // is held (paused) and given back once the disc
-    // sits on the spindle. And each time a disc comes to sit there, the
-    // owner may be waiting for it to start (App.changerAwaitPlay): `seated`.
-    property bool holding: false
-    function checkHold() {
-        if (!live || !active) return
-        // again each time the music starts while the disc is not in place:
-        // a jump that reached Lyrion after the first pause starts it once more
-        if (playing && !loaded && power && hasTrack && !ejected) {
-            holding = true
-            root.action("hold", { hold: true })
-        } else if (holding && loaded) {
-            holding = false
-            root.action("hold", { hold: false })
-        }
-    }
-    onLoadedChanged: {
-        if (live && active && loaded) root.action("seated", true)
-        checkHold()
-    }
-    // Lyrion ignores a pause that reaches it before the new album's first
-    // track has really started (seen: the album loaded at 1.15 s, the
-    // changer's pauses at 1.19 and 1.25, its first track started at 1.30 and
-    // played through the whole change). So while the music waits for the
-    // disc, the pause is said again; a pause to a paused player does nothing.
-    Timer {
-        interval: 400; repeat: true
-        running: root.live && root.active && root.holding && !root.loaded
-        onTriggered: root.action("hold", { hold: true })
-    }
+    // ── the music and the disc ─────────────────────────────────────────────
+    // The music the kiosk starts waits for its disc: Play, DISC -/+, the end
+    // of a disc and anything chosen in the interface reach Lyrion only once
+    // the disc sits on the spindle (App.changerAwaitPlay, Player.holdStarts).
+    // Each time a disc comes to sit there, `seated` says so. Music started
+    // from elsewhere (a phone, the web admin) plays at once; the changer
+    // loads its disc meanwhile -- pausing it afterwards only cut it up.
+    onLoadedChanged: if (live && active && loaded) root.action("seated", true)
     function turnTo(tgt) {
         var fwd = ((tgt - atSlot) % slots + slots) % slots
         var n = fwd <= 60 ? fwd : fwd - slots            // the target comes in from the right, mostly
@@ -298,7 +272,6 @@ Item {
     onLiveChanged: sync()
     onPlayingChanged: {
         if (live && playing && ejected) { ejected = false; Qt.callLater(step) }
-        checkHold()
     }
     onArtworkChanged: if (live && artSlot >= 0 && artSlot === slotFor(mediaKey) && (travel <= 0.0001 || outKey === mediaKey)) artUrl = artwork
     Component.onCompleted: sync()
@@ -862,10 +835,7 @@ Item {
             }
             else root.action("pause", true)
         }
-        else if (k === "stop") {
-            holding = false                 // stopped: nothing to give back once the disc is in
-            root.action("stop", true)
-        }
+        else if (k === "stop") root.action("stop", true)
         else if (k === "eject" || k === "unload") {
             if (k === "eject" && ejected) { ejected = false; Qt.callLater(step); return }
             ejected = true
