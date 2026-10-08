@@ -560,6 +560,8 @@ Item {
         // un minuto senza tocchi e niente in riproduzione (era 5, come App.jsx)
         idleMs: 60 * 1000
         lastInput: app.lastInput
-        blocked: wizard.active || app.busyOverlay
+        // nor while the CD changer is putting in the disc the music waits for:
+        // that pause is part of playing, not silence
+        blocked: wizard.active || app.busyOverlay || app.changerAwaitPlay
     }
 }
