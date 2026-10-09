@@ -229,13 +229,13 @@ Item {
         })
     }
     // The changer to another disc: the music waits for it. Lyrion's jump
-    // plays at once when it is playing, and an earlier pause could reach it
-    // after the jump: so the pause first, then the jump without playing
-    // (`noplay`), in that order; the music comes back once the disc sits in
-    // the drive (changerSeated).
+    // plays at once when it is playing, and it ignores `noplay` from a pause
+    // too (it jumps and plays): only stopped does it stay put. So the stop
+    // first, then the jump without playing, in that order; the music comes
+    // back once the disc sits in the drive (changerSeated).
     function changerJump(to) {
         var was = Player.playing
-        Player.query(["pause", "1"], function() {
+        Player.query(["stop"], function() {
             Player.query(["playlist", "index", String(to), "0", "1"], function() {
                 if (was) { root.discPlayWait = true; discPlayLimit.restart() }
             })
