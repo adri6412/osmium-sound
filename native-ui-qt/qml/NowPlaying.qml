@@ -352,7 +352,7 @@ Item {
             Item {                                 // precedente (whileTap .9)
                 x: 30 + 12 - 22 + controls.g; y: controls.cy - 22; width: 44; height: 44
                 Icon { anchors.centerIn: parent; name: "skip-back"; size: 24; color: Theme.silver; scale: prevTap.tapScale }
-                Tap { id: prevTap; tap: 0.9; onClicked: Player.prev() }
+                Tap { id: prevTap; tap: 0.9; onClicked: Ui.app ? Ui.app.skipTrack(-1) : Player.prev() }
             }
             Item {                                 // play, con alone 0 0 24px oro/40
                 id: playBtn
@@ -379,7 +379,7 @@ Item {
             Item {                                 // successivo
                 x: 134 + 12 - 22 + 3 * controls.g; y: controls.cy - 22; width: 44; height: 44
                 Icon { anchors.centerIn: parent; name: "skip-forward"; size: 24; color: Theme.silver; scale: nextTap.tapScale }
-                Tap { id: nextTap; tap: 0.9; onClicked: Player.next() }
+                Tap { id: nextTap; tap: 0.9; onClicked: Ui.app ? Ui.app.skipTrack(1) : Player.next() }
             }
             Item {                                 // ripeti
                 x: 170 + 9 - 20 + 4 * controls.g; y: controls.cy - 20; width: 40; height: 40

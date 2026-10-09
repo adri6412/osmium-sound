@@ -94,6 +94,13 @@ Item {
         target: Player
         function onStartHeld() { if (app.changerScreen) app.changerScreen.awaitNewDisc() }
     }
+    // Next / previous: with the CD changer on screen a skip onto another disc
+    // waits for that disc, as DISC -/+ does (NpAnimation.changerSkip)
+    function skipTrack(dir) {
+        if (changerScreen) changerScreen.changerSkip(dir)
+        else if (dir > 0) Player.next()
+        else Player.prev()
+    }
     function changerTakesPlay() {
         if (Player.playing) return false
         if (changerPending && changerDiscs.length > 0) {
@@ -352,8 +359,8 @@ Item {
         case "play": if (!changerTakesPlay()) Player.play(true); return
         case "pause": Player.play(false); return
         case "stop": Player.cmd(["stop"]); return
-        case "next": Player.next(); return
-        case "prev": Player.prev(); return
+        case "next": skipTrack(1); return
+        case "prev": skipTrack(-1); return
         case "forward": Player.seek(Player.elapsed + 30); return
         case "rewind": Player.seek(Math.max(0, Player.elapsed - 30)); return
         case "volumeUp": remoteVolume(repeat ? 2 : 5); return

@@ -175,6 +175,7 @@ Item {
     // change. Until the answer comes, a track outside the disc known is its
     // new disc's first.
     readonly property bool discCount: live && loadedKind === "changer" && discLen > 0
+    property var queueAlbums: []            // each queued track's album, for changerSkip
     property int discFirst: 0
     property int discLen: 0
     readonly property int discTrack: Player.index >= discFirst && Player.index < discFirst + discLen ? Player.index - discFirst : 0
@@ -192,6 +193,7 @@ Item {
             while (b < pl.length && pl[b].album === pl[at].album) b++
             root.discFirst = a
             root.discLen = b - a
+            root.queueAlbums = pl.map(function(t) { return t.album })
         })
     }
     Binding { when: root.display; target: loader.item; property: "repeatMode"; value: root.live ? Player.repeat : 0 }
@@ -240,6 +242,29 @@ Item {
                 if (was) { root.discPlayWait = true; discPlayLimit.restart() }
             })
         })
+    }
+    // Next / previous with the changer on screen. Within the disc as ever;
+    // onto another disc (the next album in the queue, or the previous one)
+    // as DISC -/+: the music waits for that disc. Pressed in a burst, each
+    // press goes on from where the last one went (skipTo), and while a disc
+    // is on its way the jumps do not play, so the wait goes on.
+    property int skipTo: -1
+    Timer { id: skipForget; interval: 4000; onTriggered: root.skipTo = -1 }
+    function changerSkip(dir) {
+        var al = queueAlbums, n = al.length
+        if (n === 0 || n !== Player.total || Player.index < 0 || Player.shuffle !== 0) {
+            if (dir > 0) Player.next(); else Player.prev()
+            return
+        }
+        var from = skipTo >= 0 && skipTo < n ? skipTo : Player.index
+        var to = ((from + dir) % n + n) % n
+        skipTo = to; skipForget.restart()
+        if (al[to] !== al[from]) { changerJump(to); return }
+        // waiting for a disc, or stopped (a disc change from a pause), the
+        // jump does not play (from a pause Lyrion plays it anyway, as ever)
+        if (discPlayWait || (Ui.app && Ui.app.changerAwaitPlay) || !Player.playing)
+            Player.cmd(["playlist", "index", String(to), "0", "1"])
+        else Player.cmd(["playlist", "index", String(to)])
     }
     // The end of a disc: Lyrion would go on to the next album by itself and
     // the changer could only pause it once heard. On the last track of a disc
@@ -336,8 +361,8 @@ Item {
         target: root.live ? loader.item : null
         ignoreUnknownSignals: true
         function onAction(name, value) {
-            if (name === "prev") Player.prev()
-            else if (name === "next") Player.next()
+            if (name === "prev") { if (root.changerLive) root.changerSkip(-1); else Player.prev() }
+            else if (name === "next") { if (root.changerLive) root.changerSkip(1); else Player.next() }
             else if (name === "play") {
                 if (!Player.power) Player.cmd(["power", "1"])
                 // discs waiting in the CD changer: its Play is Done
