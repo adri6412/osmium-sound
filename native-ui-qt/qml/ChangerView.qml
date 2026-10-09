@@ -107,6 +107,11 @@ Item {
         for (var i = 0; i < chosen.length; i++) if (chosen[i].id === id) return i
         return -1
     }
+    // the disc in front is already in the changer: its gold ring is its mark
+    readonly property bool curChosen: {
+        var it = (rev, chosen, count > 0 ? Library.get(cur) : null)
+        return !!it && chosenAt(String(it.id)) >= 0
+    }
     function flightOf(id) {
         for (var i = 0; i < flights.count; i++) if (flights.get(i).albumId === id) return i
         return -1
@@ -316,6 +321,9 @@ Item {
         function navOk() { if (root.count > 0) root.toggle(root.cur); return true }
         NavRing {
             fill: false
+            // not over a disc already loaded: it stands out of the row, so
+            // the two rings met askew -- the gold one is enough there
+            visible: !root.curChosen
             radius: root.cs / 2 + 6
             x: root.cx - root.cs / 2 - 6; y: root.discY - 6
             width: root.cs + 12; height: root.cs + 12
