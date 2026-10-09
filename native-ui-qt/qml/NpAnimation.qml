@@ -167,8 +167,33 @@ Item {
     // running for them by NowPlaying while that scene is on screen)
     Binding { when: loader.item !== null && loader.item.levelL !== undefined; target: loader.item; property: "levelL"; value: root.live ? Vu.left : 0 }
     Binding { when: loader.item !== null && loader.item.levelR !== undefined; target: loader.item; property: "levelR"; value: root.live ? Vu.right : 0 }
-    Binding { when: root.display; target: loader.item; property: "trackIndex"; value: root.live ? Player.index : -1 }
-    Binding { when: root.display; target: loader.item; property: "trackTotal"; value: root.live ? Player.total : 0 }
+    Binding { when: root.display; target: loader.item; property: "trackIndex"; value: !root.live ? -1 : root.discCount ? root.discTrack : Player.index }
+    Binding { when: root.display; target: loader.item; property: "trackTotal"; value: !root.live ? 0 : root.discCount ? root.discLen : Player.total }
+    // The changer counts the tracks of the disc playing, not of the whole
+    // queue (every loaded album is in it): where that album starts in the
+    // queue and how many tracks it has, asked again at each track or queue
+    // change. Until the answer comes, a track outside the disc known is its
+    // new disc's first.
+    readonly property bool discCount: live && loadedKind === "changer" && discLen > 0
+    property int discFirst: 0
+    property int discLen: 0
+    readonly property int discTrack: Player.index >= discFirst && Player.index < discFirst + discLen ? Player.index - discFirst : 0
+    readonly property string discQuery: live && loadedKind === "changer" ? Player.index + "/" + Player.total + "/" + Player.trackId : ""
+    onDiscQueryChanged: Qt.callLater(countDisc)
+    function countDisc() {
+        if (discQuery === "" || Player.index < 0 || Player.total <= 0) { discLen = 0; return }
+        var want = discQuery, at = Player.index
+        Player.query(["status", "0", String(Player.total), "tags:l"], function(ok, r) {
+            if (root.discQuery !== want) return
+            var pl = ok && r ? r.playlist_loop || [] : []
+            if (at >= pl.length) { root.discLen = 0; return }
+            var a = at, b = at + 1
+            while (a > 0 && pl[a - 1].album === pl[at].album) a--
+            while (b < pl.length && pl[b].album === pl[at].album) b++
+            root.discFirst = a
+            root.discLen = b - a
+        })
+    }
     Binding { when: root.display; target: loader.item; property: "repeatMode"; value: root.live ? Player.repeat : 0 }
     Binding { when: root.display; target: loader.item; property: "shuffleMode"; value: root.live ? Player.shuffle : 0 }
     // the track playing, not the album: the CD players' display shows it, the

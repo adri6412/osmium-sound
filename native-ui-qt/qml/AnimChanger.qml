@@ -67,7 +67,9 @@ Item {
     readonly property real winW: glass[2] - glass[0]
     readonly property real winH: glass[3] - glass[1]
     readonly property real loaderX: winW / 2                  // in the window, centred
-    readonly property real axisX: winW / 2                    // the file's axis
+    // the file's axis, a little left of the loader: the disc in front of it
+    // shows a sliver of its label (and its artwork), not its bare edge
+    readonly property real axisX: winW / 2 - 30
     readonly property real radius: 190                       // to the discs' centres
     readonly property real discD: 128
     readonly property real discY: 94                         // their centres, at rest
