@@ -418,7 +418,7 @@
       "album": "Album",
       "start": "Avvia rip",
       "eject": "Espelli",
-      "noDestination": "Nessuna destinazione scrivibile: adotta un disco interno da Impostazioni → Sorgenti musicali.",
+      "noDestination": "Nessuna destinazione scrivibile: aggiungi una cartella di musica o un disco da Impostazioni → Sorgenti musicali.",
       "edition": "Edizione",
       "editionDisc": "disco {n} di {total}"
     },
@@ -996,7 +996,7 @@
       "enableLabel": "Rip dei CD",
       "enableText": "Riconosce i dischi e propone il rip",
       "targetLabel": "Cartella di destinazione predefinita",
-      "targetHelp": "Una cartella dentro una sorgente musicale scrivibile (disco interno o USB, condivisione di rete scrivibile). Gli album finiscono lì come Artista/Album.",
+      "targetHelp": "Una cartella dentro una sorgente musicale scrivibile (la musica su questo apparecchio, disco interno o USB, condivisione di rete scrivibile). Gli album finiscono lì come Artista/Album.",
       "targetUnset": "Non impostata: l'unica sorgente scrivibile, oppure si sceglie al momento",
       "targetBad": "Adesso non disponibile (disco scollegato o condivisione non montata)",
       "targetPick": "Sfoglia",

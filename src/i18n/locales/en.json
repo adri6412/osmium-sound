@@ -418,7 +418,7 @@
       "album": "Album",
       "start": "Start rip",
       "eject": "Eject",
-      "noDestination": "No writable destination: adopt an internal disk from Settings → Music sources.",
+      "noDestination": "No writable destination: add a music folder or a disk in Settings → Music sources.",
       "edition": "Edition",
       "editionDisc": "disc {n} of {total}"
     },
@@ -996,7 +996,7 @@
       "enableLabel": "CD Ripping",
       "enableText": "Detect discs and offer to rip them",
       "targetLabel": "Default target folder",
-      "targetHelp": "A folder inside a writable music source (internal or USB disk, writable network share). Albums land there as Artist/Album.",
+      "targetHelp": "A folder inside a writable music source (the music on this player, internal or USB disk, writable network share). Albums land there as Artist/Album.",
       "targetUnset": "Not set: the only writable source, or asked at rip time",
       "targetBad": "Not available right now (disk unplugged or share not mounted)",
       "targetPick": "Browse",

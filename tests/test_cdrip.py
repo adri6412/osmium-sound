@@ -587,5 +587,103 @@ class TestApi(unittest.TestCase):
         self.assertTrue(self.ss._rip_running())
 
 
+class TestSystemDiskDestinations(unittest.TestCase):
+    """A player with nothing but its system disk can rip: /data/music and the
+    `local` music folders are destinations, and the rip lands in the library."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        os.environ.setdefault('HIFI_META_CACHE_DIR', os.path.join(cls.tmp, 'cache'))
+        os.environ.setdefault('HIFI_META_ETC_DIR', cls.tmp)
+        with mock.patch('hifi_logging.tee_stdio_to_file'):
+            import sources_server
+        cls.ss = sources_server
+
+    def setUp(self):
+        self.tmp = os.path.realpath(tempfile.mkdtemp())
+        self.data = os.path.join(self.tmp, 'data')
+        self.music = os.path.join(self.data, 'music')
+        self.rock = os.path.join(self.music, 'Rock')
+        os.makedirs(self.rock)
+        self._saved = {}
+        self._patch('STATE_FILE', os.path.join(self.tmp, 'sources.json'))
+        self._patch('DATA_MNT', self.data)
+        self._patch('DATA_MUSIC_ROOT', self.music)
+        self._patch('ALLOWED_LOCAL_ROOTS', (self.music,))
+        self._patch('_mount_table', lambda: {})
+        self.lyrion = []
+        self._patch('_lyrion_push_live', lambda drop_roots=(), add_paths=(): self.lyrion.append(list(add_paths)))
+        real_ismount = os.path.ismount
+        self._ismount = mock.patch('os.path.ismount', lambda p: p == self.data or real_ismount(p))
+        self._ismount.start()
+
+    def tearDown(self):
+        self._ismount.stop()
+        for k, v in self._saved.items():
+            setattr(self.ss, k, v)
+
+    def _patch(self, name, value):
+        self._saved[name] = getattr(self.ss, name)
+        setattr(self.ss, name, value)
+
+    def _state(self, sources):
+        self.ss.save_state({'sources': sources})
+
+    def test_system_music_with_no_sources(self):
+        self._state([])
+        out = self.ss._rip_writable_sources()
+        self.assertEqual([(s['id'], s['mountpoint']) for s in out], [(self.ss.RIP_SYSTEM_ID, self.music)])
+        mp, src, real = self.ss._cd_target_root(self.rock)
+        self.assertEqual((mp, src['id'], real), (self.music, self.ss.RIP_SYSTEM_ID, self.rock))
+
+    def test_no_data_partition_no_system_entry(self):
+        self._state([])
+        self._ismount.stop()
+        self._ismount = mock.patch('os.path.ismount', return_value=False)
+        self._ismount.start()
+        self.assertEqual(self.ss._rip_writable_sources(), [])
+
+    def test_local_folders_innermost_first(self):
+        self._state([{'id': 'local-Rock', 'type': 'local', 'name': self.rock, 'path': self.rock},
+                     {'id': 'local-pl', 'type': 'local', 'name': self.music, 'path': self.music, 'media': False},
+                     {'id': 'local-out', 'type': 'local', 'name': '/etc', 'path': '/etc'}])
+        out = self.ss._rip_writable_sources()
+        # the playlist-only entry and the folder outside the allowed roots are not offered
+        self.assertEqual(sorted(s['id'] for s in out), sorted(['local-Rock', self.ss.RIP_SYSTEM_ID]))
+        _mp, src, _real = self.ss._cd_target_root(os.path.join(self.rock))
+        self.assertEqual(src['id'], 'local-Rock')
+        _mp, src, _real = self.ss._cd_target_root(self.music)
+        self.assertEqual(src['id'], self.ss.RIP_SYSTEM_ID)
+
+    def test_system_music_listed_once_when_added(self):
+        self._state([{'id': 'local-music', 'type': 'local', 'name': self.music, 'path': self.music}])
+        self.assertEqual([s['id'] for s in self.ss._rip_writable_sources()], ['local-music'])
+
+    def test_rip_into_library(self):
+        self._state([{'id': 'local-Rock', 'type': 'local', 'name': self.rock, 'path': self.rock}])
+        self.ss._rip_into_library(os.path.join(self.rock))           # held already
+        self.assertEqual(self.lyrion, [])
+        self.ss._rip_into_library(self.music)                         # not yet: added
+        self.assertEqual(self.lyrion, [[self.music]])
+        paths = [s['path'] for s in self.ss.load_state()['sources']]
+        self.assertEqual(paths, [self.rock, self.music])
+        self.ss._rip_into_library(self.music)                         # once only
+        self.assertEqual(len(self.ss.load_state()['sources']), 2)
+        self.ss._rip_into_library('/etc')                             # never outside the roots
+        self.assertEqual(len(self.ss.load_state()['sources']), 2)
+
+    def test_ripped_album_not_listed_beside_its_disk(self):
+        ss = self.ss
+        calls = []
+        self._patch('_lyrion_request', lambda cmd: calls.append(cmd) or {'_p2': [self.music + '/']})
+        self._patch('_lyrion_rescan', lambda: calls.append(['rescan']))
+        ss._lyrion_add_mediadir_live(os.path.join(self.music, 'Artist', 'Album'))
+        self.assertEqual(calls, [['pref', 'mediadirs', '?'], ['rescan']])
+        calls.clear()
+        ss._lyrion_add_mediadir_live('/mnt/hifi-usb/x')
+        self.assertIn(['pref', 'mediadirs', [self.music + '/', '/mnt/hifi-usb/x']], calls)
+
+
 if __name__ == '__main__':
     unittest.main()

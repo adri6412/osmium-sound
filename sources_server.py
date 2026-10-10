@@ -7708,10 +7708,24 @@ def _lyrion_push_live(drop_roots=(), add_paths=()):
 
 
 def _lyrion_add_mediadir_live(path):
-    """Add `path` to Lyrion's live mediadirs and trigger a scan. Always
-    rescans even when the folder is already listed — the other caller of this
-    is the CD ripper, where the destination folder is unchanged and it is the
-    new files inside it that need picking up."""
+    """Have Lyrion scan `path`: a rescan when a live mediadir already holds
+    it, else add it first. Always rescans — the caller is the CD ripper,
+    where it is the new files inside the folder that need picking up.
+
+    🚨 Not added when already held: a ripped album folder listed beside the
+    disk it sits on was scanned twice, and _sync_from_lyrion() then took it
+    for the source's own subfolder, or for a new `local` source of its own."""
+    current = _lyrion_request(["pref", "mediadirs", "?"]).get("_p2")
+    if not isinstance(current, list):
+        current = [current] if current else []
+    # as written, not resolved: a mediadir on a share that went away must
+    # not hang the check
+    real = os.path.normpath(path)
+    for d in current:
+        p = os.path.normpath(d) if d else ""
+        if p and (real == p or real.startswith(p.rstrip(os.sep) + os.sep)):
+            _lyrion_rescan()
+            return
     _lyrion_edit_mediadirs_live(add_paths=[path], force_rescan=True)
 
 
@@ -7853,14 +7867,35 @@ def _repair_shared_ownership_loop(delays=(20, 60, 180, 600)):
             print(f"[sources] _repair_shared_ownership error: {e}")
 
 
+RIP_SYSTEM_ID = "__system__"
+
+
 def _rip_writable_sources():
     """Sources the rip can write into: adopted (rw, hifimusic-owned) internal
-    or USB disks, plus any SMB share mounted read-write — which is the
-    default, but not one the server always allows (see mount_smb())."""
+    or USB disks, any SMB share mounted read-write — which is the default,
+    but not one the server always allows (see mount_smb()) — and the music
+    on the system disk itself: every `local` music folder, plus the
+    player's own /data/music even before anything was added from there.
+
+    🚨 Without the last two a player with no second disk could not rip at
+    all ("no writable destination") though its system disk has room. A
+    `local` entry comes back with `mountpoint` = its folder, so every caller
+    treats them all alike."""
     out = []
+    local_paths = set()
     table = _mount_table()
     for s in load_state().get("sources", []):
         t = s.get("type")
+        if t == "local":
+            # a folder under /mnt may be on a share: asked nothing, skipped
+            raw = s.get("path") or ""
+            if s.get("media") is False or not raw or _on_network_fs(raw, table):
+                continue
+            path = _local_path_allowed(raw)
+            if path and os.path.isdir(path) and os.access(path, os.W_OK):
+                local_paths.add(path)
+                out.append(dict(s, mountpoint=path))
+            continue
         if t not in ("internal", "usb") and not (t == "smb" and _smb_wants_rw(s)):
             continue
         mp = s.get("mountpoint") or ""
@@ -7878,7 +7913,37 @@ def _rip_writable_sources():
                 out.append(s)
         elif os.access(mp, os.W_OK):
             out.append(s)
+    music = os.path.realpath(DATA_MUSIC_ROOT)
+    if music not in local_paths and os.path.ismount(DATA_MNT) \
+            and os.path.isdir(music) and os.access(music, os.W_OK):
+        out.append({"id": RIP_SYSTEM_ID, "type": "local", "name": _m("files.rootMusic"),
+                    "path": music, "mountpoint": music})
     return out
+
+
+def _rip_into_library(root):
+    """Make sure the folder a rip goes into is in the library before the rip
+    starts. Disks and shares are there already; a folder on the system disk
+    may not be — /data/music is offered as a destination before anyone
+    added it — and a rip Lyrion never scans looks like a rip that got lost.
+    Adds the folder as a `local` source, as Music Sources would, when no
+    `local` source holds it yet."""
+    real = _local_path_allowed(root)
+    if not real:
+        return
+    with _lock:
+        state = load_state()
+        for s in state.get("sources", []):
+            if s.get("type") != "local" or s.get("media") is False or not s.get("path"):
+                continue
+            p = os.path.realpath(s["path"])
+            if real == p or real.startswith(p + os.sep):
+                return
+        sources = state.setdefault("sources", [])
+        sid = _free_source_id(sources, _slug("local", os.path.basename(real.rstrip("/"))), real)
+        sources.append({"id": sid, "type": "local", "name": real, "path": real})
+        save_state(state)
+    _lyrion_push_live(add_paths=[real])
 
 
 @app.route("/api/cd/info", methods=["GET"])
@@ -7922,13 +7987,15 @@ def _cd_settings():
 def _cd_target_root(path):
     """(mountpoint, source, real path) of the writable source `path` sits in,
     or (None, None, None): a destination is only ever a folder inside an
-    adopted internal or USB disk, or a network share mounted read-write. The
+    adopted internal or USB disk, a network share mounted read-write or the
+    music on the system disk (see _rip_writable_sources()). The
     real path handed back is the one to use from here on: it is the resolved
     one, checked to be under the mountpoint."""
     if not path:
         return None, None, None
     real = os.path.realpath(path)
-    for src in _rip_writable_sources():
+    # the innermost first: a `local` folder inside /data/music is its own source
+    for src in sorted(_rip_writable_sources(), key=lambda s: -len(s.get("mountpoint") or "")):
         mp = _resolve_mountpoint(src["mountpoint"]) if src.get("mountpoint") else ""
         if not mp:
             continue
@@ -7975,6 +8042,10 @@ def _cd_start_rip(data, toc, auto=False):
         if src is None:
             return _err("msg.noWritableTarget", 400)
         root = src["mountpoint"]
+    try:
+        _rip_into_library(root)
+    except Exception as e:
+        print(f"[sources] rip destination {root} not added to the library: {e}")
 
     meta = _cd_metadata(toc, data.get("release"))
     artist = str(data.get("artist") or meta["artist"]).strip() or "Unknown Artist"
@@ -8431,10 +8502,10 @@ SOURCES_I18N = {
         "msg.formatInProgress": "A format is already running.",
         "msg.noAudioCd": "No audio CD in the drive.",
         "msg.ripInProgress": "A rip is already running.",
-        "msg.noWritableTarget": "No writable destination: adopt an internal disk first.",
+        "msg.noWritableTarget": "No writable destination: add a music folder or a disk in Music sources first.",
         "msg.cdDisabled": "CD ripping is turned off in Settings.",
         "msg.cdInvalidValue": "Invalid value for {field}.",
-        "msg.cdTargetOutside": "The destination folder must be inside a writable music source (internal disk, USB disk or a writable network share).",
+        "msg.cdTargetOutside": "The destination folder must be inside a writable music source (the music on this player, an internal or USB disk, or a writable network share).",
         "msg.cdNoDrive": "No optical drive found.",
         "msg.cdOffsetLookupFailed": "Could not reach the AccurateRip drive list: {err}",
         "msg.cdOffsetNotFound": "{drive} is not in the AccurateRip drive list. Look it up at accuraterip.com/driveoffsets.htm and type the offset by hand.",
@@ -8610,10 +8681,10 @@ SOURCES_I18N = {
         "msg.formatInProgress": "Formattazione già in corso.",
         "msg.noAudioCd": "Nessun CD audio nel lettore.",
         "msg.ripInProgress": "Rip già in corso.",
-        "msg.noWritableTarget": "Nessuna destinazione scrivibile: adotta un disco interno.",
+        "msg.noWritableTarget": "Nessuna destinazione scrivibile: aggiungi prima una cartella di musica o un disco in Sorgenti musicali.",
         "msg.cdDisabled": "Il rip dei CD è disattivato nelle Impostazioni.",
         "msg.cdInvalidValue": "Valore non valido per {field}.",
-        "msg.cdTargetOutside": "La cartella di destinazione deve stare dentro una sorgente musicale scrivibile (disco interno, disco USB o condivisione di rete scrivibile).",
+        "msg.cdTargetOutside": "La cartella di destinazione deve stare dentro una sorgente musicale scrivibile (la musica su questo apparecchio, un disco interno o USB, o una condivisione di rete scrivibile).",
         "msg.cdNoDrive": "Nessun lettore ottico trovato.",
         "msg.cdOffsetLookupFailed": "Elenco AccurateRip dei lettori non raggiungibile: {err}",
         "msg.cdOffsetNotFound": "{drive} non è nell'elenco AccurateRip dei lettori. Cercalo su accuraterip.com/driveoffsets.htm e scrivi l'offset a mano.",

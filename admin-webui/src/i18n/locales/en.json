@@ -396,7 +396,7 @@
       "targetPick": "Browse…",
       "targetUse": "Use this folder",
       "targetClear": "Clear",
-      "targetHelp": "A folder inside a writable music source: an internal or USB disk, or a network share mounted read-write. Albums land there as Artist/Album.",
+      "targetHelp": "A folder inside a writable music source: the music on this player, an internal or USB disk, or a network share mounted read-write. Albums land there as Artist/Album.",
       "prefixLabel": "Directory prefix",
       "prefixPlaceholder": "e.g. CD rips",
       "prefixHelp": "A folder inside the default target folder that every ripped album goes into, chosen from the folder browser; none to rip straight into the target.",
