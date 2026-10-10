@@ -34,6 +34,11 @@ try:
 except Exception:
     pass
 import hifi_cdrip  # noqa: E402
+try:
+    from hifi_i18n import t as _t  # noqa: E402
+except Exception:                   # a status line is never worth a crash
+    def _t(code, lang, **_v):
+        return code
 
 STATUS = "/run/hifi-rip-status.json"
 IMAGE_VERSION_FILE = "/usr/lib/osmium/IMAGE_VERSION"
@@ -42,9 +47,21 @@ _proc = None          # the cdparanoia/flac/sox running right now
 _cancelled = False
 
 
+def msg(code, **values):
+    """A status line: its hifi_i18n code and values. sources_server says it
+    in the language of whoever asks (/api/cd/rip/status), so the kiosk and
+    the web admin each read their own; `message` stays, in English, for a
+    reader that does not translate."""
+    return {"code": code, "vars": {k: str(v) for k, v in values.items()}}
+
+
 def write_status(state, track, total, progress, message, **extra):
-    payload = {"state": state, "track": track, "total": total,
-               "progress": progress, "message": message}
+    payload = {"state": state, "track": track, "total": total, "progress": progress}
+    if isinstance(message, dict):
+        payload.update(message)
+        payload["message"] = _t(message["code"], "en", **message["vars"])
+    else:
+        payload["message"] = message
     payload.update(extra)
     tmp = STATUS + ".tmp"
     with open(tmp, "w") as f:
@@ -54,7 +71,8 @@ def write_status(state, track, total, progress, message, **extra):
 
 def fail(message, track=0, total=0):
     write_status("error", track, total, 0, message)
-    print(f"E: [hifi-rip] {message}", file=sys.stderr)
+    text = _t(message["code"], "en", **message["vars"]) if isinstance(message, dict) else message
+    print(f"E: [hifi-rip] {text}", file=sys.stderr)
     sys.exit(1)
 
 
@@ -343,12 +361,12 @@ def place_album(work, dest, root, owner):
 
 def main():
     if len(sys.argv) != 2:
-        fail("usage: hifi-rip-cd.py <plan.json>")
+        fail(msg("cdrip.usage"))
     try:
         with open(sys.argv[1]) as f:
             plan = json.load(f)
     except Exception as e:
-        fail(f"piano di rip illeggibile: {e}")
+        fail(msg("cdrip.badPlan", err=e))
 
     signal.signal(signal.SIGTERM, _on_term)
     signal.signal(signal.SIGINT, _on_term)
@@ -359,9 +377,9 @@ def main():
     total = len(tracks)
     opt = hifi_cdrip.normalize(plan.get("options"))
     if not os.path.isdir(root):
-        fail("destinazione non montata")
+        fail(msg("cdrip.destNotMounted"))
     if not tracks:
-        fail("nessuna traccia da rippare")
+        fail(msg("cdrip.noTracks"))
 
     artist = plan.get("artist") or "Unknown Artist"
     album = plan.get("album") or "Unknown Album"
@@ -390,10 +408,10 @@ def main():
     def cancelled():
         if _cancelled:
             shutil.rmtree(work, ignore_errors=True)
-            write_status("cancelled", 0, total, 0, "Copia annullata")
+            write_status("cancelled", 0, total, 0, msg("cdrip.cancelled"))
             sys.exit(0)
 
-    write_status("ripping", 0, total, 0, "Lettura dell'indice del disco…")
+    write_status("ripping", 0, total, 0, msg("cdrip.readingToc"))
     toc = read_toc(device)
     drive = hifi_cdrip.drive_info(device)
     cancelled()
@@ -403,13 +421,13 @@ def main():
     total = len(tracks)
     if not tracks:
         shutil.rmtree(work, ignore_errors=True)
-        fail("nessuna traccia audio da rippare")
+        fail(msg("cdrip.noAudioTracks"))
 
     results, outputs = [], []
     for i, tr in enumerate(tracks):
         num = int(tr.get("num") or (i + 1))
         title = tr.get("title") or f"Track {num:02d}"
-        label = f"Traccia {num}/{total}: {title}"
+        label = msg("cdrip.track", num=num, total=total, title=title)
         write_status("ripping", num, total, int(i * 100 / total), label)
         wav = os.path.join(work, f"track{num:02d}.wav")
         fname = f"{num:02d} - {hifi_cdrip.safe_name(title, f'Track {num:02d}', clean)}"
@@ -432,7 +450,7 @@ def main():
             continue
         if not res.get("ok"):
             shutil.rmtree(work, ignore_errors=True)
-            fail(f"lettura traccia {num} fallita (disco rovinato?)", num, total)
+            fail(msg("cdrip.readFailed", num=num), num, total)
         res["num"] = num
         pre_flag = bool((toc.get(num) or {}).get("pre"))
         pre_tags = []
@@ -470,14 +488,14 @@ def main():
             cancelled()
             if r.returncode != 0 or not os.path.isfile(out):
                 shutil.rmtree(work, ignore_errors=True)
-                fail(f"codifica traccia {num} fallita", num, total)
+                fail(msg("cdrip.encodeFailed", num=num), num, total)
         res["file"] = os.path.basename(out)
         results.append(res)
         outputs.append(out)
 
     if not results:
         shutil.rmtree(work, ignore_errors=True)
-        fail("nessuna traccia audio da rippare")
+        fail(msg("cdrip.noAudioTracks"))
     if len(results) != total:
         # A track turned out to be data halfway through: the files already
         # encoded carry a TRACKTOTAL that counted it.
@@ -487,7 +505,7 @@ def main():
                 timeout=300)
 
     if opt["replaygain"] and opt["format"] == "flac" and outputs:
-        write_status("ripping", total, total, 99, "ReplayGain…")
+        write_status("ripping", total, total, 99, msg("cdrip.replayGain"))
         run(["metaflac", "--add-replay-gain"] + outputs, timeout=1800)
         cancelled()
 
@@ -504,13 +522,12 @@ def main():
     place_album(work, dest, root, owner)
 
     inaccurate = sum(1 for r in results if r.get("accurate") is False)
-    msg = f"{album} — {total} tracce"
-    if inaccurate:
-        msg += f" ({inaccurate} non verificate)"
+    done = (msg("cdrip.doneUnverified", album=album, total=total, unverified=inaccurate) if inaccurate
+            else msg("cdrip.done", album=album, total=total))
     ejected = False
     if opt["eject"]:
         ejected = run(["eject", device], timeout=30).returncode == 0
-    write_status("done", total, total, 100, msg, dest=dest, root=root, inaccurate=inaccurate, ejected=ejected)
+    write_status("done", total, total, 100, done, dest=dest, root=root, inaccurate=inaccurate, ejected=ejected)
 
 
 if __name__ == "__main__":
@@ -519,4 +536,4 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception as e:  # any unexpected crash still lands in the status file
-        fail(f"errore inatteso: {e}")
+        fail(msg("cdrip.unexpected", err=e))

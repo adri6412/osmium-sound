@@ -8104,8 +8104,8 @@ def _cd_start_rip(data, toc, auto=False):
         json.dump(plan, f)
     os.chmod(RIP_PLAN, 0o600)
     with open(RIP_STATUS, "w") as f:
-        json.dump({"state": "starting", "track": 0, "total": len(tracks),
-                   "progress": 0, "message": _ht('common.starting', _hlang())}, f)
+        json.dump({"state": "starting", "track": 0, "total": len(tracks), "progress": 0,
+                   "message": _ht('common.starting', 'en'), "code": "common.starting"}, f)
 
     _run(["systemd-run", "--no-block", "--collect", "--unit=" + RIP_UNIT,
           RIP_SCRIPT, RIP_PLAN], timeout=10)
@@ -8142,7 +8142,7 @@ def api_cd_cancel():
     if _rip_running():
         with open(RIP_STATUS, "w") as f:
             json.dump({"state": "cancelled", "track": 0, "total": 0, "progress": 0,
-                       "message": _ht('common.cancelled', _hlang())}, f)
+                       "message": _ht('common.cancelled', 'en'), "code": "common.cancelled"}, f)
     return jsonify({"success": True})
 
 
@@ -8247,7 +8247,20 @@ def api_cd_rip_status():
     denied = _require_pair_token()
     if denied:
         return denied
-    return jsonify(_rip_state())
+    return jsonify(_rip_state_for_reader())
+
+
+def _rip_state_for_reader():
+    """The rip status with its line in the reader's language: the worker
+    writes a hifi_i18n code and its values (hifi-rip-cd.py msg()), and the
+    kiosk and the web admin may each be in another one. A status without a
+    code (an older worker) is handed back as written."""
+    st = _rip_state()
+    code = st.get("code")
+    if code:
+        values = st.get("vars") if isinstance(st.get("vars"), dict) else {}
+        st["message"] = _ht(code, _hlang(), **values)
+    return st
 
 
 @app.route("/api/cd/eject", methods=["POST"])

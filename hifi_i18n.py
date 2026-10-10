@@ -454,6 +454,26 @@ MESSAGES = {
                                      'it': 'systemd-run non ha risposto'},
     'common.starting': {'en': 'Starting…', 'it': 'Avvio…'},
     'common.cancelled': {'en': 'Cancelled', 'it': 'Annullato'},
+
+    # ── CD rip worker (hifi-rip-cd.py): it writes the code and its values
+    # into the status file, /api/cd/rip/status says it in the reader's
+    # language ─────────────────────────────────────────────────────────
+    'cdrip.usage': {'en': 'usage: hifi-rip-cd.py <plan.json>', 'it': 'uso: hifi-rip-cd.py <plan.json>'},
+    'cdrip.badPlan': {'en': 'Unreadable rip plan: {err}', 'it': 'Piano di rip illeggibile: {err}'},
+    'cdrip.destNotMounted': {'en': 'The destination is not mounted', 'it': 'La destinazione non è montata'},
+    'cdrip.noTracks': {'en': 'No tracks to rip', 'it': 'Nessuna traccia da rippare'},
+    'cdrip.noAudioTracks': {'en': 'No audio tracks to rip', 'it': 'Nessuna traccia audio da rippare'},
+    'cdrip.cancelled': {'en': 'Rip cancelled', 'it': 'Copia annullata'},
+    'cdrip.readingToc': {'en': 'Reading the disc index…', 'it': 'Lettura dell\'indice del disco…'},
+    'cdrip.track': {'en': 'Track {num}/{total}: {title}', 'it': 'Traccia {num}/{total}: {title}'},
+    'cdrip.readFailed': {'en': 'Reading track {num} failed (damaged disc?)',
+                         'it': 'Lettura della traccia {num} fallita (disco rovinato?)'},
+    'cdrip.encodeFailed': {'en': 'Encoding track {num} failed', 'it': 'Codifica della traccia {num} fallita'},
+    'cdrip.replayGain': {'en': 'ReplayGain…', 'it': 'ReplayGain…'},
+    'cdrip.done': {'en': '{album} — {total} tracks', 'it': '{album} — {total} tracce'},
+    'cdrip.doneUnverified': {'en': '{album} — {total} tracks ({unverified} not verified)',
+                             'it': '{album} — {total} tracce ({unverified} non verificate)'},
+    'cdrip.unexpected': {'en': 'Unexpected error: {err}', 'it': 'Errore inatteso: {err}'},
     'roomcorr.updateRequired': {'en': 'A system update is required', 'it': 'Aggiornamento di sistema richiesto'},
     'roomcorr.micNotFound': {'en': 'Microphone not found: connect a USB mic',
                              'it': 'Microfono non trovato: collega un mic USB'},

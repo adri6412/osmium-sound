@@ -262,6 +262,20 @@ class TestWorkerLog(unittest.TestCase):
         cls.rip = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.rip)
 
+    def test_status_lines_carry_a_code(self):
+        status = os.path.join(tempfile.mkdtemp(), 'rip-status.json')
+        with mock.patch.object(self.rip, 'STATUS', status):
+            self.rip.write_status('ripping', 2, 9, 20, self.rip.msg('cdrip.track', num=2, total=9, title='Freddie {x}'))
+            with open(status) as f:
+                st = json.load(f)
+            self.assertEqual((st['code'], st['vars']), ('cdrip.track', {'num': '2', 'total': '9', 'title': 'Freddie {x}'}))
+            self.assertEqual(st['message'], 'Track 2/9: Freddie {x}')
+            self.rip.write_status('error', 0, 0, 0, 'plain text')      # still accepted as it is
+            with open(status) as f:
+                st = json.load(f)
+            self.assertEqual(st['message'], 'plain text')
+            self.assertNotIn('code', st)
+
     def test_build_log(self):
         plan = {'artist': 'Miles Davis', 'album': 'Kind of Blue', 'year': '1959', 'discid': '3b0a2c05', 'device': '/dev/sr0',
                 'album_tags': [['MUSICBRAINZ_ALBUMID', 'abc-123'], ['LABEL', 'Columbia']]}
@@ -576,6 +590,20 @@ class TestApi(unittest.TestCase):
         with mock.patch.object(ss.time, 'sleep'), mock.patch.object(hcd, 'hand_over_tree', return_value=3) as hot:
             ss._rip_watcher()
         hot.assert_called_once_with(os.path.dirname(dest), dest, (1234, 902))
+
+    def test_status_in_the_readers_language(self):
+        with open(self.ss.RIP_STATUS, 'w') as f:
+            json.dump({'state': 'ripping', 'track': 3, 'total': 10, 'progress': 25, 'message': 'Track 3/10: Time',
+                       'code': 'cdrip.track', 'vars': {'num': '3', 'total': '10', 'title': 'Time'}}, f)
+        r = self.client.get('/api/cd/rip/status', headers={'X-UI-Lang': 'it'})
+        self.assertEqual(r.get_json()['message'], 'Traccia 3/10: Time')
+        r = self.client.get('/api/cd/rip/status', headers={'X-UI-Lang': 'en'})
+        self.assertEqual(r.get_json()['message'], 'Track 3/10: Time')
+        # an older worker: no code, the line as written
+        with open(self.ss.RIP_STATUS, 'w') as f:
+            json.dump({'state': 'ripping', 'message': 'Traccia 3/10: Time'}, f)
+        r = self.client.get('/api/cd/rip/status', headers={'X-UI-Lang': 'en'})
+        self.assertEqual(r.get_json()['message'], 'Traccia 3/10: Time')
 
     def test_terminal_states(self):
         for state in ('idle', 'done', 'error', 'cancelled'):
