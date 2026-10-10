@@ -1,6 +1,6 @@
 {
   "id": "blue-neon",
-  "version": 1,
+  "version": 2,
   "name": {
     "en": "Blue Neon",
     "it": "Neon blu"
@@ -8,29 +8,29 @@
   "order": 120,
   "size": [
     2048,
-    873
+    1063
   ],
   "under": "under.png",
   "over": "over.png",
   "needle": {
     "image": "needle.png",
-    "width": 22.74,
-    "height": 599.03,
-    "pivotX": 11.37,
-    "pivotY": 711.63
+    "width": 21.21,
+    "height": 637.66,
+    "pivotX": 10.25,
+    "pivotY": 720.23
   },
   "meters": [
     [
-      503.38,
-      896.67
+      498.82,
+      937.26
     ],
     [
-      1528.16,
-      896.67
+      1534.13,
+      937.19
     ]
   ],
   "angles": [
-    -31.42,
-    33.58
+    -31.4,
+    33.57
   ]
 }
