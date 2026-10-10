@@ -419,6 +419,14 @@ def main():
     for num in skipped:
         print(f"I: [hifi-rip] track {num} is not audio (Enhanced CD data track): skipped")
     total = len(tracks)
+    # TRACKTOTAL is the disc's, not this rip's: only some tracks may have been
+    # picked (plan["disc_tracks"]; a plan without it rips them all)
+    disc_total = int(plan.get("disc_tracks") or 0)
+
+    def tracktotal():
+        # a data track found on the way (skipped) is not one of the disc's
+        return disc_total - len(skipped) if disc_total else total
+
     if not tracks:
         shutil.rmtree(work, ignore_errors=True)
         fail(msg("cdrip.noAudioTracks"))
@@ -471,7 +479,7 @@ def main():
             cmd = ["flac", "--silent", f"-{opt['flac_compression']}", "--force",
                    f"--tag=ARTIST={track_artist}", f"--tag=ALBUM={album}",
                    f"--tag=TITLE={title}", f"--tag=TRACKNUMBER={num}",
-                   f"--tag=TRACKTOTAL={total}"]
+                   f"--tag=TRACKTOTAL={tracktotal()}"]
             if year:
                 cmd.append(f"--tag=DATE={year}")
             if plan.get("discid"):
@@ -501,7 +509,7 @@ def main():
         # encoded carry a TRACKTOTAL that counted it.
         total = len(results)
         if opt["format"] == "flac":
-            run(["metaflac", "--remove-tag=TRACKTOTAL", f"--set-tag=TRACKTOTAL={total}"] + outputs,
+            run(["metaflac", "--remove-tag=TRACKTOTAL", f"--set-tag=TRACKTOTAL={tracktotal()}"] + outputs,
                 timeout=300)
 
     if opt["replaygain"] and opt["format"] == "flac" and outputs:

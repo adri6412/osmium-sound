@@ -426,7 +426,10 @@
       "askQuestion": "Do you want to copy it into your music library?",
       "askNo": "No",
       "askYes": "Yes, copy it",
-      "askLater": "You can copy it later from Settings → CD ripping."
+      "askLater": "You can copy it later from Settings → CD ripping.",
+      "pickedCount": "{n} of {total} tracks",
+      "pickAll": "Select all",
+      "pickNone": "Clear all"
     },
     "bluetooth": {
       "unknownTrack": "Bluetooth playback",

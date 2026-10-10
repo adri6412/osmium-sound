@@ -276,6 +276,43 @@ class TestWorkerLog(unittest.TestCase):
             self.assertEqual(st['message'], 'plain text')
             self.assertNotIn('code', st)
 
+    def test_some_tracks_keep_the_discs_numbers(self):
+        """Two tracks of three: each keeps its number on the disc, and
+        TRACKTOTAL is the disc's three, not the two ripped."""
+        tmp = tempfile.mkdtemp()
+        root = os.path.join(tmp, 'music')
+        os.makedirs(root)
+        plan = {'device': '/dev/null', 'root': root, 'artist': 'A', 'album': 'B', 'disc_tracks': 3,
+                'tracks': [{'num': 1, 'title': 'One'}, {'num': 3, 'title': 'Three'}],
+                'options': {'format': 'flac', 'replaygain': False, 'log_file': False, 'eject': False}}
+        plan_path = os.path.join(tmp, 'plan.json')
+        with open(plan_path, 'w') as f:
+            json.dump(plan, f)
+        flacs = []
+
+        def fake_rip(device, num, wav, opt, expected=0, on_progress=None):
+            open(wav, 'wb').close()
+            return {'ok': True, 'crc': 1, 'reads': 1, 'accurate': None}
+
+        def fake_run(cmd, timeout):
+            if cmd[0] == 'flac':
+                flacs.append(cmd)
+                open(cmd[cmd.index('-o') + 1], 'wb').close()
+            return mock.Mock(returncode=0, stdout='', stderr='')
+        r = self.rip
+        with mock.patch.object(r, 'STATUS', os.path.join(tmp, 'status.json')), \
+                mock.patch.object(r, 'read_toc', return_value={1: {'length': 10}, 2: {'length': 10}, 3: {'length': 10}}), \
+                mock.patch.object(r, 'rip_track', side_effect=fake_rip), mock.patch.object(r, 'run', side_effect=fake_run), \
+                mock.patch.object(r, 'place_album'), mock.patch.object(r, 'rip_owner', return_value=None), \
+                mock.patch.object(hcd, 'drive_info', return_value={}), mock.patch.object(hcd, 'hand_over'), \
+                mock.patch.object(r.sys, 'argv', ['hifi-rip-cd.py', plan_path]):
+            r.main()
+        self.assertEqual([[a for a in c if a.startswith(('--tag=TRACKNUMBER', '--tag=TRACKTOTAL'))] for c in flacs],
+                         [['--tag=TRACKNUMBER=1', '--tag=TRACKTOTAL=3'], ['--tag=TRACKNUMBER=3', '--tag=TRACKTOTAL=3']])
+        with open(os.path.join(tmp, 'status.json')) as f:
+            st = json.load(f)
+        self.assertEqual((st['state'], st['total']), ('done', 2))
+
     def test_build_log(self):
         plan = {'artist': 'Miles Davis', 'album': 'Kind of Blue', 'year': '1959', 'discid': '3b0a2c05', 'device': '/dev/sr0',
                 'album_tags': [['MUSICBRAINZ_ALBUMID', 'abc-123'], ['LABEL', 'Columbia']]}
@@ -519,6 +556,34 @@ class TestApi(unittest.TestCase):
         with open(ss.RIP_PLAN) as f:
             plan = json.load(f)
         self.assertEqual(plan['root'], self.mount)
+
+    def test_rip_selected_tracks(self):
+        """`selected`: only those of the disc's tracks are ripped, each with
+        its own title and tags, and the plan keeps the disc's track count."""
+        ss = self.ss
+        self._patch('RIP_PLAN', os.path.join(self.tmp, 'rip-plan.json'))
+        self._patch('RIP_COVER', os.path.join(self.tmp, 'rip-cover.jpg'))
+        self._patch('_cd_lookup', lambda toc: None)
+        self._patch('_rip_watcher', lambda: None)
+        self._patch('_ensure_samba_uid_gid', lambda: (1234, 902))
+        toc = {'discid': 'abcd1234', 'ntracks': 3, 'offsets': [150, 20000, 30000], 'total_sec': 600,
+               'lengths': [264, 133, 200], 'leadout': 45000}
+        self._patch('_cd_toc', lambda: toc)
+        picked = os.path.join(self.mount, 'Rips')
+        r = self.client.post('/api/cd/rip', json={'target': picked, 'selected': [1, 3], 'tracks': ['One', 'Two', 'Three']})
+        self.assertEqual(r.status_code, 202, r.get_json())
+        self.assertEqual(r.get_json()['total'], 2)
+        with open(ss.RIP_PLAN) as f:
+            plan = json.load(f)
+        self.assertEqual([(t['num'], t['title']) for t in plan['tracks']], [(1, 'One'), (3, 'Three')])
+        self.assertEqual(plan['disc_tracks'], 3)
+        # nothing ticked, or only numbers the disc does not have: refused
+        for sel in ([], [9], ['x']):
+            with open(ss.RIP_STATUS, 'w') as f:
+                json.dump({'state': 'idle'}, f)
+            r = self.client.post('/api/cd/rip', json={'target': picked, 'selected': sel})
+            self.assertEqual(r.status_code, 400, sel)
+            self.assertEqual(r.get_json()['code'], 'msg.cdNoTracksSelected')
 
     def test_repair_shared_ownership(self):
         """At start, what an earlier server or worker left root-owned under

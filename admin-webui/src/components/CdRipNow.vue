@@ -24,6 +24,13 @@ const info = ref(null);
 const artist = ref('');
 const album = ref('');
 const titles = ref([]);
+// the disc's track numbers beside `titles`, and which get ripped: all of them
+// for a new disc, untick the ones to leave out
+const nums = ref([]);
+const picked = ref([]);
+const pickedCount = computed(() => picked.value.filter(Boolean).length);
+const allPicked = computed(() => pickedCount.value === picked.value.length);
+function pickAll(on) { picked.value = titles.value.map(() => on); }
 const release = ref('');
 const dest = ref('');          // '__default__' or a source_id
 const destPath = ref('');      // a folder picked in the browser, overrides `dest`
@@ -43,7 +50,8 @@ const dests = computed(() => {
   for (const x of d.destinations || []) out.push({ id: x.source_id, label: x.name && x.name !== x.path ? `${x.name} (${x.path})` : x.path });
   return out;
 });
-const canStart = computed(() => !busy.value && !!info.value && !info.value.no_disc && (!!destPath.value || dests.value.length > 0));
+const canStart = computed(() => !busy.value && !!info.value && !info.value.no_disc && pickedCount.value > 0
+  && (!!destPath.value || dests.value.length > 0));
 
 function releaseLabel(r) {
   const bits = [r.date, r.country, [r.label, r.catno].filter(Boolean).join(' ')];
@@ -76,6 +84,9 @@ async function readDisc(rel = '') {
     artist.value = d.artist || '';
     album.value = d.album || '';
     titles.value = (d.tracks || []).map((x) => x.title || '');
+    const n = (d.tracks || []).map((x, i) => Number(x.num || i + 1));
+    // another edition of the same disc keeps the ticks; a new disc gets them all
+    if (n.join() !== nums.value.join()) { nums.value = n; pickAll(true); }
     release.value = d.mbid || '';
     dest.value = dests.value.length ? dests.value[0].id : '';
     if (d.ripping) startPoll();
@@ -94,7 +105,8 @@ async function toggle() {
 watch(release, (v, old) => { if (old && v && v !== old && info.value && v !== info.value.mbid) readDisc(v); });
 
 async function start() {
-  const body = { artist: artist.value, album: album.value, tracks: titles.value };
+  const selected = nums.value.filter((_, i) => picked.value[i]);
+  const body = { artist: artist.value, album: album.value, tracks: titles.value, selected };
   if (destPath.value) body.target = destPath.value;
   else body.source_id = dest.value;
   if (release.value) body.release = release.value;
@@ -105,7 +117,7 @@ async function start() {
       emit('say', (r.data && r.data.message) || t('settings.cdRip.ripFailed'), true);
       return;
     }
-    status.value = { state: 'starting', track: 0, total: titles.value.length, progress: 0, message: '' };
+    status.value = { state: 'starting', track: 0, total: selected.length, progress: 0, message: '' };
     emit('changed');
     startPoll();
   } finally { busy.value = false; }
@@ -179,10 +191,17 @@ function pickFolder(p) { destPath.value = p; picking.value = false; }
             <option v-for="r in info.releases" :key="r.mbid" :value="r.mbid">{{ releaseLabel(r) }}</option>
           </select>
         </template>
-        <label>{{ t('settings.cdRip.ripTracks') }}</label>
-        <ol class="riptracks">
-          <li v-for="(_, i) in titles" :key="i"><input v-model="titles[i]" /></li>
-        </ol>
+        <div class="pickhead">
+          <label>{{ t('settings.cdRip.ripTracks') }} · {{ t('settings.cdRip.ripPicked', { n: pickedCount, total: titles.length }) }}</label>
+          <button class="ghost fit" @click="pickAll(!allPicked)">{{ allPicked ? t('settings.cdRip.ripPickNone') : t('settings.cdRip.ripPickAll') }}</button>
+        </div>
+        <ul class="riptracks">
+          <li v-for="(_, i) in titles" :key="i" :class="{ off: !picked[i] }">
+            <input type="checkbox" v-model="picked[i]" :aria-label="t('settings.cdRip.ripPickTrack', { n: nums[i] })" />
+            <span class="num">{{ nums[i] }}</span>
+            <input v-model="titles[i]" :disabled="!picked[i]" />
+          </li>
+        </ul>
 
         <label>{{ t('settings.cdRip.ripDestination') }}</label>
         <p class="muted" v-if="!dests.length && !destPath">{{ t('settings.cdRip.ripNoDestination') }}</p>
@@ -210,9 +229,13 @@ function pickFolder(p) { destPath.value = p; picking.value = false; }
 .ripbox { margin-top: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .ripbar { width: 100%; height: 8px; background: var(--panel); border-radius: 99px; overflow: hidden; margin: 12px 0; }
 .ripbar i { display: block; height: 100%; background: var(--gold); transition: width .4s; }
-.riptracks { margin: 6px 0 0; padding-left: 28px; max-height: 320px; overflow-y: auto; }
-.riptracks li { margin: 4px 0; color: var(--muted); }
-.riptracks input { width: 100%; }
+.pickhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.riptracks { list-style: none; margin: 6px 0 0; padding: 0; max-height: 320px; overflow-y: auto; }
+.riptracks li { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--muted); }
+.riptracks li.off input:not([type=checkbox]) { opacity: .45; }
+.riptracks input[type=checkbox] { width: 20px; height: 20px; flex: none; accent-color: var(--gold); margin: 0; }
+.riptracks .num { width: 22px; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
+.riptracks input:not([type=checkbox]) { flex: 1; min-width: 0; }
 .ok { color: var(--ok); }
 .bad { color: var(--danger); }
 select { max-width: 100%; }

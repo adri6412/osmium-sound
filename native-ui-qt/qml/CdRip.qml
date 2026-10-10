@@ -15,6 +15,13 @@ Item {
     property string artist: ""
     property string album: ""
     property var tracks: []
+    // the disc's track numbers, beside `tracks`, and which of them get ripped
+    // (all of them for a new disc; untick the ones to leave out)
+    property var nums: []
+    property var picked: []
+    readonly property int pickedCount: { var n = 0; for (var i = 0; i < picked.length; i++) if (picked[i]) n++; return n }
+    function togglePick(i) { var p = picked.slice(); p[i] = !p[i]; picked = p }
+    function pickAll(on) { picked = tracks.map(function() { return on }) }
     // the MusicBrainz releases the disc may be (/api/cd/info `releases`), the
     // one in use and the one picked by hand; picking refills artist, album and
     // titles from that release
@@ -91,6 +98,8 @@ Item {
                 root.release = String(d.mbid || "")
                 root.artist = String(d.artist || ""); root.album = String(d.album || "")
                 root.tracks = (d.tracks || []).map(function(t) { return String(t.title || "") }).slice(0, 40)
+                root.nums = (d.tracks || []).map(function(t, i) { return Number(t.num || (i + 1)) }).slice(0, 40)
+                root.pickAll(true)
                 root.destSel = 0
                 // 🚨 disco NUOVO: si azzera l'esito della copia precedente. Senza
                 // questo, dopo una copia riuscita lo stato restava "done" per
@@ -187,13 +196,15 @@ Item {
         })
     }
     function startRip() {
-        if (!dests.length && !destPath) return
-        var body = { artist: artist, album: album, tracks: tracks }
+        if ((!dests.length && !destPath) || !pickedCount) return
+        var sel = []
+        for (var i = 0; i < nums.length; i++) if (picked[i]) sel.push(nums[i])
+        var body = { artist: artist, album: album, tracks: tracks, selected: sel }
         if (destPath) body.target = destPath
         else body.source_id = dests[destSel].id
         if (release) body.release = release
         Api.post(Api.srcBase + "/api/cd/rip", body, function() { root.loadStatus() })
-        state = "starting"; ripping = true; total = tracks.length
+        state = "starting"; ripping = true; total = sel.length
     }
 
     Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, 0.7 * root.fade); MouseArea { anchors.fill: parent; onClicked: if (!root.ripping) root.close() } }
@@ -311,17 +322,39 @@ Item {
                 Icon { x: parent.width - 24; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 16; color: Theme.silver }
                 Tap { onClicked: root.pickRelease() }
             }
+            // how many are ticked, and one tap to tick or untick them all
+            Item {
+                id: pickRow
+                x: 20; y: relRow.visible ? 138 : 96; width: parent.width - 40; height: 28
+                Text { anchors.verticalCenter: parent.verticalCenter; text: Tr.tf("player.cd.pickedCount", "n", String(root.pickedCount)).replace("{total}", String(root.tracks.length)); color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
+                Text {
+                    id: pickAllText
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    text: Tr.t(root.pickedCount === root.tracks.length ? "player.cd.pickNone" : "player.cd.pickAll")
+                    color: Theme.gold; font.family: Theme.font; font.pixelSize: 12; font.bold: true
+                    Tap { grow: 8; onClicked: root.pickAll(root.pickedCount !== root.tracks.length) }
+                }
+            }
             ListView {
                 id: trackList
-                x: 20; y: relRow.visible ? 138 : 96; width: parent.width - 40; height: parent.height - y - parent.foot
+                x: 20; y: pickRow.y + pickRow.height + 4; width: parent.width - 40; height: parent.height - y - parent.foot
                 clip: true; model: root.tracks.length
                 boundsBehavior: Flickable.StopAtBounds
                 delegate: Item {
                     required property int index
                     width: trackList.width; height: 32
-                    Text { width: 24; height: 28; horizontalAlignment: Text.AlignRight; verticalAlignment: Text.AlignVCenter; text: String(index + 1); color: Theme.silverA(0.5); font.family: Theme.mono; font.pixelSize: 11 }
+                    readonly property bool on: !!root.picked[index]
+                    // the tick: the track is ripped
+                    Rectangle {
+                        x: 0; y: 4; width: 20; height: 20; radius: 4
+                        color: parent.on ? Theme.gold : "transparent"; border.width: 1; border.color: parent.on ? Theme.gold : Theme.silverA(0.4)
+                        Icon { anchors.centerIn: parent; visible: parent.parent.on; name: "check"; size: 14; color: Theme.black }
+                        Tap { grow: 6; onClicked: root.togglePick(index) }
+                    }
+                    Text { x: 24; width: 22; height: 28; horizontalAlignment: Text.AlignRight; verticalAlignment: Text.AlignVCenter; text: String(root.nums[index] || index + 1); color: Theme.silverA(parent.on ? 0.5 : 0.25); font.family: Theme.mono; font.pixelSize: 11 }
                     TextField_ {
-                        x: 32; width: parent.width - 32; height: 28; radius: 4; textSize: 12; padding: 8; restBorder: Theme.border
+                        x: 52; width: parent.width - 52; height: 28; radius: 4; textSize: 12; padding: 8; restBorder: Theme.border
+                        opacity: parent.on ? 1 : 0.4
                         text: root.tracks[index] || ""
                         onTextEdited: (t) => { var tr = root.tracks.slice(); tr[index] = t; root.tracks = tr }
                     }
@@ -349,9 +382,9 @@ Item {
             Rectangle {
                 x: ejectBtn.x + ejectBtn.width + 8; y: ejectBtn.y; width: parent.width - 20 - x; height: 42; radius: 8
                 color: stTap.mix(Theme.gold, "#ca8a04")
-                opacity: root.dests.length ? 1 : 0.4              // disabled:opacity-40 su tutto, testo compreso
+                opacity: root.dests.length && root.pickedCount ? 1 : 0.4   // disabled:opacity-40 su tutto, testo compreso
                 Text { anchors.centerIn: parent; text: Tr.t("player.cd.start"); color: Theme.black; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
-                Tap { id: stTap; enabled: root.dests.length > 0; onClicked: root.startRip() }
+                Tap { id: stTap; enabled: root.dests.length > 0 && root.pickedCount > 0; onClicked: root.startRip() }
             }
         }
     }

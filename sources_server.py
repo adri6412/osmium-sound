@@ -8021,9 +8021,18 @@ def _cd_start_rip(data, toc, auto=False):
     """Start the worker for the disc `toc`. `data` may carry source_id (a
     writable source, or "__default__" for the folder from Settings), release,
     artist, album, year and track titles; without a source the default folder
-    is used, or the only writable source. Returns (body, status)."""
+    is used, or the only writable source. `selected` lists the disc's
+    track numbers to rip (every track when absent). Returns (body, status)."""
     settings = _cd_settings()
     sources = _rip_writable_sources()
+    picked = data.get("selected")
+    if picked is not None:
+        try:
+            picked = {int(n) for n in picked}
+        except (TypeError, ValueError):
+            return _err("msg.cdNoTracksSelected", 400)
+        if not picked:
+            return _err("msg.cdNoTracksSelected", 400)
     source_id = (data.get("source_id") or "").strip()
     target = str(data.get("target") or "").strip()
     default = _cd_default_target(settings)
@@ -8082,6 +8091,13 @@ def _cd_start_rip(data, toc, auto=False):
     for i, tr in enumerate(tracks):
         tr["artist"] = track_artists[i] if i < len(track_artists) else artist
         tr["tags"] = [list(t) for t in (track_tags[i] or [])] if i < len(track_tags) else []
+    # Only now, with every track's tags in place by its position on the disc:
+    # the ones left out are dropped, and TRACKTOTAL stays the disc's.
+    disc_tracks = len(tracks)
+    if picked is not None:
+        tracks = [t for t in tracks if int(t.get("num") or 0) in picked]
+        if not tracks:
+            return _err("msg.cdNoTracksSelected", 400)
     plan = {
         "device": CD_DEVICE,
         "root": root,
@@ -8091,6 +8107,8 @@ def _cd_start_rip(data, toc, auto=False):
         "discid": toc["discid"],
         "cover": RIP_COVER if os.path.exists(RIP_COVER) else "",
         "tracks": tracks,
+        # how many audio tracks the disc has, for TRACKTOTAL when only some are ripped
+        "disc_tracks": disc_tracks,
         "album_tags": [list(t) for t in album_tags],
         # Settings → CD ripping, frozen for this rip (hifi-rip-cd.py reads them)
         "options": settings,
@@ -8516,6 +8534,7 @@ SOURCES_I18N = {
         "msg.noAudioCd": "No audio CD in the drive.",
         "msg.ripInProgress": "A rip is already running.",
         "msg.noWritableTarget": "No writable destination: add a music folder or a disk in Music sources first.",
+        "msg.cdNoTracksSelected": "Pick at least one track to rip.",
         "msg.cdDisabled": "CD ripping is turned off in Settings.",
         "msg.cdInvalidValue": "Invalid value for {field}.",
         "msg.cdTargetOutside": "The destination folder must be inside a writable music source (the music on this player, an internal or USB disk, or a writable network share).",
@@ -8695,6 +8714,7 @@ SOURCES_I18N = {
         "msg.noAudioCd": "Nessun CD audio nel lettore.",
         "msg.ripInProgress": "Rip già in corso.",
         "msg.noWritableTarget": "Nessuna destinazione scrivibile: aggiungi prima una cartella di musica o un disco in Sorgenti musicali.",
+        "msg.cdNoTracksSelected": "Scegli almeno una traccia da rippare.",
         "msg.cdDisabled": "Il rip dei CD è disattivato nelle Impostazioni.",
         "msg.cdInvalidValue": "Valore non valido per {field}.",
         "msg.cdTargetOutside": "La cartella di destinazione deve stare dentro una sorgente musicale scrivibile (la musica su questo apparecchio, un disco interno o USB, o una condivisione di rete scrivibile).",

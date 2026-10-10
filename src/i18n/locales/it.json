@@ -426,7 +426,10 @@
       "askQuestion": "Vuoi copiarlo nella tua libreria musicale?",
       "askNo": "No",
       "askYes": "Sì, copialo",
-      "askLater": "Puoi copiarlo anche dopo da Impostazioni → Rip dei CD."
+      "askLater": "Puoi copiarlo anche dopo da Impostazioni → Rip dei CD.",
+      "pickedCount": "{n} di {total} brani",
+      "pickAll": "Seleziona tutti",
+      "pickNone": "Togli tutti"
     },
     "bluetooth": {
       "unknownTrack": "Riproduzione Bluetooth",

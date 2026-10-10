@@ -568,6 +568,7 @@ class H(BaseHTTPRequestHandler):
             if u.path.startswith("/api/meta/"): return self._json(*meta_get(u.path, q))
             if u.path == "/api/cd/info": return self._json(STATE["cd"])
             if u.path == "/api/cd/rip/status": return self._json(STATE["cdrip"])
+            if u.path == "/mock/cd/last": return self._json(STATE.get("cdrip_last") or {})
             if u.path == "/api/cd/settings":       # Settings → CD ripping, the defaults
                 st = STATE["cdrip"].get("state", "idle")
                 return self._json({"success": True, "target_ok": False, "targets": [],
@@ -711,7 +712,9 @@ class H(BaseHTTPRequestHandler):
                                        "detail": "tree connect failed: NT_STATUS_BAD_NETWORK_NAME"}, 400)
                 return self._json({"success": True, "checked": True})
             if u.path == "/api/cd/rip":
-                STATE["cdrip"] = {"state": "ripping", "message": "Copia in corso", "progress": 30, "track": 2, "total": len(data.get("tracks", []))}
+                STATE["cdrip_last"] = data            # what the kiosk asked for: GET /mock/cd/last
+                STATE["cdrip"] = {"state": "ripping", "message": "Copia in corso", "progress": 30, "track": 2,
+                                  "total": len(data.get("selected") or data.get("tracks", []))}
                 threading.Timer(6.0, lambda: STATE.__setitem__("cdrip", {"state": "done", "message": "Copia completata", "progress": 100})).start()
             if u.path == "/api/meta/settings":
                 for k in ("online", "prefetch"):
