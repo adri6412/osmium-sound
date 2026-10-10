@@ -539,7 +539,8 @@ Item {
     Wizard { id: wizard; anchors.fill: parent; devScale: app.devicePixelScale }
     Dialogs { id: dialogs; anchors.fill: parent }
     OtaOverlay { id: ota; anchors.fill: parent }
-    CdRip { id: cdrip; anchors.fill: parent }
+    // a disc that goes in is asked about over everything, but not over these
+    CdRip { id: cdrip; anchors.fill: parent; blocked: wizard.active || ota.active || tutorial.active || remoteTour.active || remotePair.active || dialogs.active }
     FolderChooser { id: folderChooser; anchors.fill: parent }
     Tutorial {                                             // the guided tours, over everything but the saver
         id: tutorial; anchors.fill: parent

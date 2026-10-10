@@ -8,6 +8,8 @@ import Toggle from '../components/Toggle.vue';
 import Icon from '../components/Icon.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
 import SourcesPanel from '../components/SourcesPanel.vue';
+import FolderPicker from '../components/FolderPicker.vue';
+import CdRipNow from '../components/CdRipNow.vue';
 import VuSkinPreview from '../components/VuSkinPreview.vue';
 import RemoteIntro from '../components/RemoteIntro.vue';
 import RemotePairing from '../components/RemotePairing.vue';
@@ -2119,6 +2121,8 @@ onUnmounted(() => {
       <p class="sub">{{ t('settings.cdRip.hint') }}</p>
       <p class="muted" v-if="!cd">{{ t('common.loading') }}</p>
       <template v-else>
+        <!-- the rip of the disc in the drive, from here as from the kiosk -->
+        <CdRipNow :enabled="!!cd.settings.enabled" :ripping="!!cd.ripping" @changed="loadCd" @say="say" />
         <label>{{ t('settings.cdRip.enableLabel') }}</label>
         <span class="seg">
           <button :disabled="cdBusy" :class="{ active: cd.settings.enabled }" @click="setCd({ enabled: true })">{{ t('settings.cdRip.on') }}</button>

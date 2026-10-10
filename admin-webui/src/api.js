@@ -194,6 +194,10 @@ export const api = {
   cdOffsetLookup: () => req('/api/system/cd/settings/offset_lookup', { method: 'POST', body: {} }),
   cdEject: () => req('/api/system/cd/eject', { method: 'POST', body: {} }),
   cdCancel: () => req('/api/system/cd/cancel', { method: 'POST', body: {} }),
+  // the rip itself (CdRipNow.vue): the disc in the drive, start, progress
+  cdInfo: (release = '') => req('/api/system/cd/info' + (release ? '?release=' + encodeURIComponent(release) : '')),
+  cdRip: (body) => req('/api/system/cd/rip', { method: 'POST', body }),
+  cdRipStatus: () => req('/api/system/cd/rip/status'),
   sourcesAddSmb: ({ server, share, username, password, rw, defer_activation }) =>
     req('/api/system/sources/smb', { method: 'POST', body: { server, share, username, password, rw, defer_activation } }),
   // Guided "add a network folder": the appliance looks for file servers on the

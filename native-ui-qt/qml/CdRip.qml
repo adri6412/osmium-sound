@@ -1,5 +1,8 @@
 // Rilevamento del CD e copia su disco (CdRip.jsx / cdrip.c): lo stato e la
 // finestra stanno qui; la fascia in cima alla scheda Musica e' CdBanner.
+// A disc that goes in is asked about once, in a large Yes / No window over
+// everything (`asking`); Yes opens the rip window, No leaves the disc alone.
+// From then on the rip is in Settings → CD ripping (ripNow()), always.
 import QtQuick
 import Hifi
 import Hifi.Ui
@@ -35,7 +38,28 @@ Item {
     property bool closing: false
     // Settings → CD ripping → Enable: off, the disc is ignored altogether
     property bool enabled: true
-    readonly property bool bannerVisible: haveDisc && discid !== dismissed && enabled
+    // the Yes / No question for a disc that just went in
+    property bool asking: false
+    // set by App.qml: the first-run wizard, a tour or an update is on screen
+    property bool blocked: false
+    property string autoStart: "off"
+    property string mbid: ""
+    // sources_server starts this one by itself (cd_monitor): nothing to ask
+    readonly property bool autoWillStart: autoStart === "always" || (autoStart === "if_tags" && mbid !== "")
+    // 🚨 Once per insertion: `dismissed` takes the disc as soon as it is
+    // asked about, and is cleared only when the drive reports no disc — not
+    // on a failed poll, or a hiccup would ask again.
+    readonly property bool wantAsk: haveDisc && enabled && discid !== "" && discid !== dismissed && !ripping
+                                    && !autoWillStart && !open && !blocked && (state === "" || state === "idle")
+    onWantAskChanged: if (wantAsk) ask()
+    onHaveDiscChanged: if (!haveDisc && asking) close()
+    // the strip on the Music tab: only while a rip runs, or to eject after it
+    // (its own close, `bannerClosed`, is only for that last case)
+    property string bannerClosed: ""
+    readonly property bool bannerVisible: enabled && (ripping || (haveDisc && discid !== bannerClosed
+                                          && (state === "done" || state === "error" || state === "cancelled")))
+    // where the remote's spotlight starts: on Yes
+    readonly property Item navFirst: asking ? yesTap : null
     anchors.fill: parent
     visible: open
     // il telecomando resta qui dentro finche' questo strato e' aperto
@@ -53,6 +77,7 @@ Item {
             // disco tolto: lo stato della copia precedente non vale piu', e il
             // prossimo disco dev'essere trattato come nuovo
             if (!ok || !d || typeof d !== "object" || d.no_disc) {
+                if (ok && d && d.no_disc) root.dismissed = ""
                 root.haveDisc = false
                 if (!root.ripping) { root.discid = ""; root.state = ""; root.msg = "" }
                 return
@@ -80,6 +105,8 @@ Item {
             root.dests = dl
             root.defaultTargetPath = d.default_target && d.default_target.path ? String(d.default_target.path) : ""
             root.enabled = d.enabled !== false
+            root.autoStart = String(d.auto_start || "off")
+            root.mbid = String(d.mbid || "")
             root.haveDisc = true
             if (d.ripping) root.ripping = true
         }, 5000)
@@ -103,7 +130,7 @@ Item {
         hasDrive = Sys.exists("/dev/cdrom") || Sys.exists("/dev/sr0")
         // lettore staccato: il disco non c'e' piu'
         if (!hasDrive && haveDisc) {
-            haveDisc = false
+            haveDisc = false; dismissed = ""
             if (!ripping) { discid = ""; state = ""; msg = "" }
         }
         return hasDrive
@@ -113,8 +140,25 @@ Item {
 
     function openDialog() { open = true; closing = false; sc.set(0.94); sc.to = 1; closeScale = 1; fade = 1 }
     function close() { if (!open || closing) return; closing = true; closeScale = 0.94; fade = 0 }
-    Timer { interval: 40; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.open = false; root.closing = false } }
-    function dismissBanner() { dismissed = discid }
+    Timer { interval: 40; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.open = false; root.closing = false; root.asking = false } }
+    function dismissBanner() { bannerClosed = discid }
+    function ask() { dismissed = discid; asking = true; openDialog() }
+    // Settings → CD ripping → "Rip the CD": the rip window for the disc in the
+    // drive, whatever was answered when it went in. cb(result): "ok",
+    // "noDrive", "noDisc" or "disabled".
+    function ripNow(cb) {
+        if (!checkDrive()) { if (cb) cb("noDrive"); return }
+        if (ripping) { asking = false; openDialog(); if (cb) cb("ok"); return }
+        Api.get(Api.srcBase + "/api/cd/info", function(ok, d) {
+            if (!ok || !d || typeof d !== "object" || d.no_disc) { if (cb) cb("noDisc"); return }
+            if (d.enabled === false) { if (cb) cb("disabled"); return }
+            root.dismissed = String(d.discid || "")
+            root.loadInfo()
+            root.asking = false
+            root.openDialog()
+            if (cb) cb("ok")
+        }, 5000)
+    }
     // ── the destination: the kiosk's folder chooser (FolderChooser.qml), the
     // same navigator Music sources and the playlist folder use ─────────────
     function openBrowser() {
@@ -153,8 +197,48 @@ Item {
     }
 
     Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, 0.7 * root.fade); MouseArea { anchors.fill: parent; onClicked: if (!root.ripping) root.close() } }
+    // ── the question, when a disc goes in ─────────────────────────────────
+    Rectangle {
+        id: askCard
+        visible: root.asking
+        width: Math.min(560, root.width - 48); height: askCol.implicitHeight + 64
+        anchors.centerIn: parent
+        radius: 16; color: Theme.panel; border.width: 1; border.color: Theme.border
+        opacity: root.fade; scale: sc.value * root.closeScale
+        BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 50; spread: -12; offsetY: 25; color: Theme.blackA(0.25) }
+        MouseArea { anchors.fill: parent }
+        Column {
+            id: askCol
+            x: 32; y: 32; width: parent.width - 64; spacing: 16
+            Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "disc"; size: 56; color: Theme.gold }
+            Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Tr.t("player.cd.askTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 22; font.bold: true }
+            Text {
+                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
+                text: root.artist || root.album ? [root.artist, root.album].filter(function(x) { return !!x }).join(" — ")
+                                                : Tr.tf("player.cd.askTracks", "count", String(root.tracks.length))
+                color: Theme.silver; font.family: Theme.font; font.pixelSize: 16
+            }
+            Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Tr.t("player.cd.askQuestion"); color: Theme.white; font.family: Theme.font; font.pixelSize: 18 }
+            Item { width: 1; height: 4 }
+            Row {
+                width: parent.width; spacing: 12
+                Rectangle {
+                    width: (parent.width - 12) / 2; height: 56; radius: 10; color: noTap.mix(Theme.accent, Theme.dark)
+                    Text { anchors.centerIn: parent; text: Tr.t("player.cd.askNo"); color: Theme.white; font.family: Theme.font; font.pixelSize: 18 }
+                    Tap { id: noTap; onClicked: root.close() }
+                }
+                Rectangle {
+                    width: (parent.width - 12) / 2; height: 56; radius: 10; color: yesTap.mix(Theme.gold, "#ca8a04")
+                    Text { anchors.centerIn: parent; text: Tr.t("player.cd.askYes"); color: Theme.black; font.family: Theme.font; font.pixelSize: 18; font.bold: true }
+                    Tap { id: yesTap; onClicked: root.asking = false }
+                }
+            }
+            Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Tr.t("player.cd.askLater"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
+        }
+    }
     Rectangle {
         id: card
+        visible: !root.asking
         width: Math.min(512, root.width - 48); height: root.height * 0.85
         anchors.centerIn: parent
         radius: 16; color: Theme.panel; border.width: 1; border.color: Theme.border

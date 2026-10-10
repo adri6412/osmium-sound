@@ -568,6 +568,17 @@ class H(BaseHTTPRequestHandler):
             if u.path.startswith("/api/meta/"): return self._json(*meta_get(u.path, q))
             if u.path == "/api/cd/info": return self._json(STATE["cd"])
             if u.path == "/api/cd/rip/status": return self._json(STATE["cdrip"])
+            if u.path == "/api/cd/settings":       # Settings → CD ripping, the defaults
+                st = STATE["cdrip"].get("state", "idle")
+                return self._json({"success": True, "target_ok": False, "targets": [],
+                                   "ripping": st not in ("idle", "done", "error", "cancelled"),
+                                   "drive": {"present": True, "label": "HL-DT-ST DVDRW GX50N (sr0)"},
+                                   "settings": {"enabled": True, "target": "", "dir_prefix": "", "auto_start": "off",
+                                                "format": "flac", "flac_compression": 5, "retries": 2,
+                                                "pre_emphasis": "ignore", "clean_names": True, "replaygain": True,
+                                                "log_file": True, "eject": True, "speed": 0, "offset": 0, "paranoia": True},
+                                   "choices": {"auto_start": ["off", "if_tags", "always"], "retries": [0, 1, 2, 5],
+                                               "pre_emphasis": ["ignore", "tag", "filter"], "speed": [0, 4, 8, 16, 24, 32, 48]}})
             if u.path in table: return self._json(table[u.path])
             return self._json({"error": "mock"}, 404)
     def do_POST(self):

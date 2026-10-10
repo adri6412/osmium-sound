@@ -1200,6 +1200,10 @@ Item {
         var s = cfg.cdrip, c = s.settings || {}, ch = s.choices || {}, i
         if (!s.loaded) { note(Tr.t("common.loading"), "dark"); return }
         help("settings.cdRip.help")
+        // the rip window for the disc in the drive (CdRip.ripNow), whatever
+        // was answered when it went in
+        grid([acell(Tr.t(s.ripping ? "settings.cdRip.ripOpen" : "settings.cdRip.ripNow"), "cd_rip_now", "gold", { icon: "disc", hh: 52 })])
+        help("settings.cdRip.ripNowHelp", 12)
         toggle(Tr.t("settings.cdRip.enableLabel"), Tr.t("settings.cdRip.enableText"), !!c.enabled, "cd_enabled")
         label("settings.cdRip.targetLabel", 14); help("settings.cdRip.targetHelp", 12)
         var tr = srcRow(c.target || Tr.t("settings.cdRip.targetUnset"), "", c.target && !s.target_ok ? Tr.t("settings.cdRip.targetBad") : "", "", "", !c.target || s.target_ok); tr.hh = 44; tr.px = 12
@@ -2367,6 +2371,10 @@ Item {
         case "cd_paranoia": cdSet({ paranoia: !row.on }); break
         case "cd_eject": cdSimple("/api/cd/eject", "settings.cdRip.ejected", "settings.cdRip.ejectFailed"); break
         case "cd_cancel": cdSimple("/api/cd/cancel", "settings.cdRip.cancelled", "settings.cdRip.cancelFailed"); break
+        case "cd_rip_now":
+            // a toast, not say(): the note lands at the foot of a long section
+            if (Ui.cdrip) Ui.cdrip.ripNow(function(r) { if (r !== "ok" && Ui.toast) Ui.toast.say("disc", Tr.t("settings.cdRip.ripNow_" + r)) })
+            break
         case "lms_skin": post(S("/api/lms_skin"), { skin: arg }); cfg.lmsSkin = arg; say(Tr.t("settings.lyrion.skinApplying")); break
         case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": case "sq_extra": case "cd_offset": return
         case "lms_role":

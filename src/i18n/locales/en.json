@@ -420,7 +420,13 @@
       "eject": "Eject",
       "noDestination": "No writable destination: add a music folder or a disk in Settings → Music sources.",
       "edition": "Edition",
-      "editionDisc": "disc {n} of {total}"
+      "editionDisc": "disc {n} of {total}",
+      "askTitle": "Audio CD inserted",
+      "askTracks": "{count} tracks",
+      "askQuestion": "Do you want to copy it into your music library?",
+      "askNo": "No",
+      "askYes": "Yes, copy it",
+      "askLater": "You can copy it later from Settings → CD ripping."
     },
     "bluetooth": {
       "unknownTrack": "Bluetooth playback",
@@ -990,6 +996,12 @@
       "debianMissing": "The package list of this image is not available."
     },
     "cdRip": {
+      "ripNow": "Rip the CD",
+      "ripOpen": "Rip in progress: show it",
+      "ripNowHelp": "Opens the copy of the disc that is in the drive: titles, destination folder and start.",
+      "ripNow_noDrive": "No CD drive connected.",
+      "ripNow_noDisc": "There is no CD in the drive.",
+      "ripNow_disabled": "CD ripping is switched off: switch it on below.",
       "help": "How an audio CD is copied into the library. Every row applies at once.",
       "saved": "Saved.",
       "saveFailed": "Could not save.",

@@ -1,4 +1,5 @@
-// La fascia dorata "CD rilevato" in cima alla scheda Musica.
+// La fascia dorata in cima alla scheda Musica: while a rip runs, and after it
+// to eject. A disc that goes in is asked about in CdRip's own window.
 import QtQuick
 import Hifi.Ui
 
@@ -21,6 +22,7 @@ Item {
             Tap { id: rTap; onClicked: root.cd.openDialog() }
         }
         Item {
+            visible: !(root.cd && root.cd.ripping)
             x: parent.width - 12 - 20; anchors.verticalCenter: parent.verticalCenter; width: 20; height: 20
             Icon { anchors.centerIn: parent; name: "x"; size: 14; color: Theme.silverA(0.5) }
             Tap { grow: 6; onClicked: root.cd.dismissBanner() }

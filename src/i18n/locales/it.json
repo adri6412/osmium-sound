@@ -420,7 +420,13 @@
       "eject": "Espelli",
       "noDestination": "Nessuna destinazione scrivibile: aggiungi una cartella di musica o un disco da Impostazioni → Sorgenti musicali.",
       "edition": "Edizione",
-      "editionDisc": "disco {n} di {total}"
+      "editionDisc": "disco {n} di {total}",
+      "askTitle": "CD audio inserito",
+      "askTracks": "{count} brani",
+      "askQuestion": "Vuoi copiarlo nella tua libreria musicale?",
+      "askNo": "No",
+      "askYes": "Sì, copialo",
+      "askLater": "Puoi copiarlo anche dopo da Impostazioni → Rip dei CD."
     },
     "bluetooth": {
       "unknownTrack": "Riproduzione Bluetooth",
@@ -990,6 +996,12 @@
       "debianMissing": "L'elenco dei pacchetti di questa immagine non è disponibile."
     },
     "cdRip": {
+      "ripNow": "Rippa il CD",
+      "ripOpen": "Rip in corso: mostralo",
+      "ripNowHelp": "Apre la copia del disco che è nel lettore: titoli, cartella di destinazione e avvio.",
+      "ripNow_noDrive": "Nessun lettore CD collegato.",
+      "ripNow_noDisc": "Nel lettore non c'è nessun CD.",
+      "ripNow_disabled": "Il rip dei CD è spento: accendilo qui sotto.",
       "help": "Come un CD audio viene copiato nella libreria. Ogni riga si applica subito.",
       "saved": "Salvato.",
       "saveFailed": "Salvataggio fallito.",
