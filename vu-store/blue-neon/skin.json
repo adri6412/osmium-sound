@@ -1,0 +1,36 @@
+{
+  "id": "blue-neon",
+  "version": 1,
+  "name": {
+    "en": "Blue Neon",
+    "it": "Neon blu"
+  },
+  "order": 120,
+  "size": [
+    2048,
+    873
+  ],
+  "under": "under.png",
+  "over": "over.png",
+  "needle": {
+    "image": "needle.png",
+    "width": 22.74,
+    "height": 599.03,
+    "pivotX": 11.37,
+    "pivotY": 711.63
+  },
+  "meters": [
+    [
+      503.38,
+      896.67
+    ],
+    [
+      1528.16,
+      896.67
+    ]
+  ],
+  "angles": [
+    -31.42,
+    33.58
+  ]
+}

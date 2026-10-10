@@ -39,6 +39,7 @@ pixels):
 | `aluminium` | VU Aluminium Style: under quadrante fix, over frame; v2 lancette | 750,830 / 230..1020 | 38.5,1041.91 | 796.59,1271.91 · 2024.46,1275.09 | -34.6,33.0 |
 | `glossy` | VU Glossy: under quadrante, over frame | 650,936 / 347..1170 | 143.0,761.5 | 793.0,1108.5 · 2014.0,1108.5 | -44.15,43.4 |
 | `titanium` | VU Titanium 2: under scala e magneti, over frame; red rod 57 px longer | 614,893 / 92..925 | 137.5,762.5 | 751.5,850.5 · 2096.5,850.5 | -45.31,44.86 |
+| `blue-neon` | VU Blue Meta: under BACK, over TOP (2612x1113) | 638,667 / 236..1000 | 14.5,907.6 | 642.0,1143.6 · 1949.0,1143.6 | -31.42,33.58 |
 
 The v2 Aluminium needle leans slightly in the artwork (tip at x 792, collar
 at 788.5): its axis is the collar's centre.
@@ -78,3 +79,9 @@ fault this artwork was redrawn to cure.
 Check the sprite over the whole sweep: `VuPanel.qml` does not clip the needle
 to the panel, so a corner that leaves the canvas is drawn over the Now Playing
 background.
+
+Blue Neon draws no coil: its straight needle turns on the centre of the scale
+arc (circle fit on the arc's lower edge, 0.9 px off on average; the ticks are
+radial about it), 30 px below the artwork and 10.5 px left of the drawn
+needle's axis. The cut stops at row 1000, so at any angle what is left of the
+needle's foot stays under the opaque band of the reflection (rows 800..1050).
