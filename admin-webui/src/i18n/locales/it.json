@@ -197,6 +197,10 @@
         "label": "Uscita audio",
         "desc": "DAC e nome del player"
       },
+      "audioAdvanced": {
+        "label": "Impostazioni Audio Avanzate",
+        "desc": "DSD, PCM in DSD, frequenza, buffer e opzioni del lettore"
+      },
       "btSpeakers": {
         "label": "Altoparlanti Bluetooth",
         "desc": "Suona su un altoparlante o in cuffia"
@@ -340,6 +344,8 @@
       "dsdNative": "DSD nativo",
       "advancedTitle": "Avanzate",
       "advancedHint": "Tutto quello che segue si applica subito e riavvia il player per un attimo. Automatico va bene per quasi tutti i DAC.",
+      "advancedLink": "DSD, conversione da PCM a DSD, limite di frequenza, buffer e il resto del lettore sono in Impostazioni Audio Avanzate.",
+      "zonesOwn": "Sono le impostazioni del lettore di questo apparecchio. Ogni zona audio ha le sue, in Zone audio.",
       "auto": "Automatico",
       "large": "Grande",
       "off": "Off",

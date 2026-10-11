@@ -197,6 +197,10 @@
         "label": "Audio output",
         "desc": "DAC and player name"
       },
+      "audioAdvanced": {
+        "label": "Advanced Audio Tweaks",
+        "desc": "DSD, PCM to DSD, sample rate, buffers and the player's options"
+      },
       "btSpeakers": {
         "label": "Bluetooth speakers",
         "desc": "Play to a speaker or headphones"
@@ -340,6 +344,8 @@
       "dsdNative": "native DSD",
       "advancedTitle": "Advanced",
       "advancedHint": "Everything below applies right away and restarts the player for a moment. Automatic is right for nearly every DAC.",
+      "advancedLink": "DSD, PCM to DSD conversion, sample rate limit, buffers and the rest of the player are in Advanced Audio Tweaks.",
+      "zonesOwn": "These are the settings of this device's own player. Every audio zone has its own, in Audio zones.",
       "auto": "Automatic",
       "large": "Large",
       "off": "Off",

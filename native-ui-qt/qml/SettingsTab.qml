@@ -152,6 +152,7 @@ Item {
         { id: "sources", icon: "hard-drive", key: "settings.sections.sources" },
         { id: "cdRip", icon: "disc", key: "settings.sections.cdRip" },
         { id: "audio", icon: "volume-2", key: "settings.sections.audio" },
+        { id: "audioAdvanced", icon: "option", key: "settings.sections.audioAdvanced" },
         { id: "zones", icon: "usb", key: "settings.sections.zones" },
         { id: "btSpeakers", icon: "bluetooth", key: "settings.sections.btSpeakers" },
         { id: "remote", icon: "remote", key: "settings.sections.remote" },
@@ -946,6 +947,7 @@ Item {
             case "sources": secSources(); break
             case "cdRip": secCdRip(); break
             case "audio": secAudio(); break
+            case "audioAdvanced": secAudioAdvanced(); break
             case "zones": secZones(); break
             case "playback": secPlayback(); break
             case "vuMeters": secVuMeters(); break
@@ -1249,13 +1251,18 @@ Item {
         }
         grid([acell(Tr.t("settings.audio.refreshList"), "audio_refresh", "accent", { icon: "rotate-cw", hh: 48 }),
               acell(Tr.t("settings.audio.setOutput"), "audio_apply", "gold", { icon: "volume-2", bold: true, hh: 48 })])
-        if (cfg.sq.loaded && cfg.sq.pcm2dsd && cfg.sq.pcm2dsd.modes) {
-            var c = cfg.sq.conf || {}
-            sep()
-            secPcm2dsd(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(cfg.sq.pcm2dsd.state || "off"),
-                       cfg.sq.pcm2dsd, String(c.volume || "software"), "")
-        }
-        if (cfg.sq.loaded) secSqueezelite()
+        // DSD, PCM to DSD and the rest of squeezelite: a section of their own
+        sep()
+        help("settings.audio.advancedLink", 12)
+        var adv = action(Tr.t("settings.sections.audioAdvanced"), "open_audio_advanced", "dark"); adv.icon = "option"; adv.hh = 48
+    }
+    // Settings → Advanced audio tweaks: everything about how the built-in
+    // player feeds the DAC (squeezelite's model, PCM to DSD). Zones keep
+    // their own copy of these in Audio zones.
+    function secAudioAdvanced() {
+        help("settings.audio.advancedHint")
+        if (!cfg.sq.loaded) { helpText(Tr.t("common.loading"), 13); return }
+        secSqueezelite()
     }
     // "Convert to DSD" for one player: the built-in one (zid "") or a zone.
     // Lyrion converts every PCM track on its way there (hifi-pcm2dsd.py);
@@ -1402,8 +1409,7 @@ Item {
     // used to need SSH and a hand edit. Every row applies at once.
     function secSqueezelite() {
         var s = cfg.sq, c = s.conf || {}, ch = s.choices || {}, i
-        sep()
-        label("settings.audio.advancedTitle"); help("settings.audio.advancedHint", 12)
+        note(Tr.t("settings.audio.zonesOwn"), "dark", "usb")
         label("settings.audio.dsdLabel", 14)
         help(s.dsd_detected === "native" ? "settings.audio.dsdDetectedNative"
              : s.dsd_detected === "pcm" ? "settings.audio.dsdDetectedPcm" : "settings.audio.dsdDetectedDop", 12)
@@ -1420,6 +1426,12 @@ Item {
         grid(mrc)
         if (s.mixers && s.mixers.length) toggle(Tr.t("settings.audio.volumeHardware"), Tr.t("settings.audio.volumeHelp"), c.volume === "hardware", "sq_hwvol")
         else note(Tr.t("settings.audio.volumeNoMixer"), "dark")
+        if (s.pcm2dsd && s.pcm2dsd.modes) {
+            sep()
+            secPcm2dsd(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(s.pcm2dsd.state || "off"),
+                       s.pcm2dsd, String(c.volume || "software"), "")
+            sep()
+        }
         toggle(Tr.t("settings.audio.alsaBufferLarge"), Tr.t("settings.audio.alsaBufferHelp"), c.alsa_buffer === "large", "sq_abuf")
         toggle(Tr.t("settings.audio.streamBufferLarge"), Tr.t("settings.audio.streamBufferHelp"), c.stream_buffer === "large", "sq_sbuf")
         toggle(Tr.t("settings.audio.realtimeLabel"), Tr.t("settings.audio.realtimeHelp"), !!c.realtime, "sq_rt")
@@ -2417,6 +2429,7 @@ Item {
         case "vumeter": post(A("/vu_meter"), { enable: !row.on }); cfg.vuMeter = !row.on; Player.vuEnabled = cfg.vuMeter; break
         case "vu_style": post(A("/vu_style"), { style: arg }); Player.vuStyle = arg; break
         case "open_animations": openSection("animations"); return
+        case "open_audio_advanced": openSection("audioAdvanced"); backTo = "audio"; return
         case "ui_motion": Sys.setConf("ui-motion", arg); Theme.motionLevel = arg; break
         case "anim_vu_off": post(A("/vu_meter"), { enable: false }); cfg.vuMeter = false; Player.vuEnabled = false; break
         case "np_anim":

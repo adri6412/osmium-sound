@@ -29,6 +29,8 @@ const { t, lang } = useI18n();
 const sections = computed(() => [
   { key: 'network',   label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
   { key: 'audio',     label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
+  // DSD, PCM to DSD and the rest of squeezelite's options, out of Audio
+  { key: 'audioAdvanced', label: t('settings.sections.audioAdvanced.label'), desc: t('settings.sections.audioAdvanced.desc') },
   // One more Lyrion player per further DAC (api_server.py /zones)
   { key: 'zones',     label: t('settings.sections.zones.label'),     desc: t('settings.sections.zones.desc') },
   { key: 'btSpeakers', label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
@@ -246,6 +248,7 @@ async function loadSq() {
   const r = await api.sys('squeezelite_conf');
   if (r.ok && r.data.conf) sqTake(r.data);
 }
+watch(open, (v) => { if (v === 'audioAdvanced') loadSq(); });
 async function sqCall(path, body, okMsg) {
   sqBusy.value = true;
   try {
@@ -1914,19 +1917,21 @@ onUnmounted(() => {
       <div class="row"><input v-model="playerName" /><button class="secondary fit" @click="saveName">{{ t('common.save') }}</button></div>
       <p class="sub" style="margin-top: 4px;">{{ t('settings.audio.playerNameHint') }}</p>
 
-      <!-- Every PCM track turned into DSD by Lyrion on its way to this player. -->
-      <div v-if="sq && sq.pcm2dsd" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
-        <p class="sub">{{ t('settings.pcm2dsd.title') }}</p>
-        <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :state="sq.pcm2dsd.state"
-                 :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
+      <!-- DSD, PCM to DSD and the rest of the player: Advanced audio tweaks -->
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="muted">{{ t('settings.audio.advancedLink') }}</p>
+        <button class="secondary" @click="goto('audioAdvanced')">{{ t('settings.sections.audioAdvanced.label') }} ›</button>
       </div>
+    </div>
 
-      <!-- Advanced: the rest of squeezelite's command line, one control per
-           option, applied at once. See setSq() above. -->
-      <div v-if="sq" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
-        <p class="sub">{{ t('settings.audio.advancedTitle') }}</p>
-        <p class="muted">{{ t('settings.audio.advancedHint') }}</p>
-
+    <!-- Advanced audio tweaks: the rest of squeezelite's command line, one
+         control per option, applied at once (setSq() above), and PCM to DSD.
+         The built-in player's only: every zone has its own in Audio zones. -->
+    <div class="card" v-if="open === 'audioAdvanced'">
+      <p class="sub">{{ t('settings.audio.advancedHint') }}</p>
+      <p class="muted">{{ t('settings.audio.zonesOwn') }}</p>
+      <p class="muted" v-if="!sq">{{ t('common.loading') }}</p>
+      <template v-if="sq">
         <label>{{ t('settings.audio.dsdLabel') }}</label>
         <span class="seg">
           <button v-for="m in sq.choices.dsd" :key="m" :disabled="sqBusy" :class="{ active: sq.conf.dsd === m }" @click="setSq({ dsd: m })">{{ t('settings.audio.dsd.' + m) }}</button>
@@ -1958,6 +1963,13 @@ onUnmounted(() => {
           </select>
         </template>
 
+        <!-- Every PCM track turned into DSD by Lyrion on its way to this player. -->
+        <div v-if="sq.pcm2dsd" style="margin-top: 18px; padding: 16px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.pcm2dsd.title') }}</p>
+          <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :state="sq.pcm2dsd.state"
+                   :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
+        </div>
+
         <label>{{ t('settings.audio.alsaBufferLabel') }}</label>
         <span class="seg">
           <button :disabled="sqBusy" :class="{ active: sq.conf.alsa_buffer === 'auto' }" @click="setSq({ alsa_buffer: 'auto' })">{{ t('settings.audio.auto') }}</button>
@@ -1986,7 +1998,7 @@ onUnmounted(() => {
         <label>{{ t('settings.audio.argsLabel') }}</label>
         <p class="muted" style="font-family: monospace; word-break: break-all; user-select: all;">squeezelite {{ sq.args }}</p>
         <button class="secondary" :disabled="sqBusy" @click="resetSq">{{ t('settings.audio.sqResetButton') }}</button>
-      </div>
+      </template>
     </div>
 
     <!-- Audio zones: every further DAC a Lyrion player of its own, next to
