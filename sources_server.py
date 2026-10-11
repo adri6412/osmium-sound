@@ -392,21 +392,44 @@ def _mount_entry(path, table=None):
     return stack[-1] if stack else None
 
 
-def _on_network_fs(path, table=None):
-    """True when `path` lies on a network filesystem (SMB, NFS…), judged from
-    the mount table and the path as written — nothing is stat-ed."""
+def _holding_fstype(path, table=None):
+    """Type of the filesystem `path` lies on, from the mount table and the
+    path as written (the deepest mount above it); None when unknown."""
     if not path:
-        return False
+        return None
     if table is None:
         table = _mount_table()
     if not table:
-        return False
+        return None
     p = os.path.normpath(os.path.abspath(path))
     best = None
     for mp in table:
         if (p == mp or p.startswith(mp.rstrip("/") + "/")) and (best is None or len(mp) > len(best)):
             best = mp
-    return best is not None and table[best][-1][0] in _NET_FSTYPES
+    return table[best][-1][0] if best is not None else None
+
+
+def _on_network_fs(path, table=None):
+    """True when `path` lies on a network filesystem (SMB, NFS…), judged from
+    the mount table and the path as written — nothing is stat-ed."""
+    return _holding_fstype(path, table) in _NET_FSTYPES
+
+
+# Filesystems that live in memory.
+_RAM_FSTYPES = frozenset(("tmpfs", "ramfs"))
+
+
+def _on_ram_fs(path, table=None):
+    """True when `path` lies on a filesystem kept in memory, judged from the
+    mount table and the path as written -- nothing is stat-ed, so it also
+    answers for a folder that does not exist yet.
+
+    🚨 On an A/B image /mnt is a tmpfs, and the roots disks and network shares
+    are mounted under (/mnt/hifi-internal and the others) are folders in it.
+    A folder there that is not inside a mounted disk is RAM: picked as a
+    "local folder" and shared over SMB, it would take a library copied from a
+    PC into the memory of the box, and be empty again at the next boot."""
+    return _holding_fstype(path, table) in _RAM_FSTYPES
 
 
 _probes = {}
@@ -6387,6 +6410,10 @@ def api_add_local():
         path = _local_path_allowed(path)
         if not path:
             return _err("msg.pathNotAllowed", 400)
+        # Entries already saved this way are left as they are; only adding a
+        # new one is refused.
+        if _on_ram_fs(path):
+            return _err("msg.folderInRam", 400)
     # A folder name with a line break in it (made over SSH or from a PC) is
     # refused outright; to be shared, the path must also be one smb.conf
     # cannot misread (_smb_conf_problem(); regen_samba_shares() checks again).
@@ -6544,6 +6571,8 @@ def api_mkdir_local():
     target = _local_path_allowed(os.path.join(parent_ok, name))
     if not target:
         return _err("msg.pathNotAllowed", 400)
+    if _on_ram_fs(target):
+        return _err("msg.folderInRam", 400)
     try:
         os.makedirs(target, exist_ok=True)
     except OSError as e:
@@ -6800,6 +6829,9 @@ def api_files_list():
         parent = ""             # at a root: one step up is the virtual top level
     return jsonify({"success": True, "path": cand, "parent": parent,
                     "writable": _writable(cand),
+                    # In memory: nothing new goes in, and the folder pickers
+                    # will not take it.
+                    "ram": _on_ram_fs(cand),
                     "protected": os.path.realpath(cand) in _protected_paths(),
                     "entries": entries})
 
@@ -6832,6 +6864,10 @@ def _file_op_targets(data, need_dest):
                                     path=str(data.get("dest") or ""))
         if not _writable(dest):
             return None, None, _err("msg.fileReadOnly", 400)
+        # What is already in a folder in memory can still be deleted or moved
+        # out of it; nothing new goes in.
+        if _on_ram_fs(dest):
+            return None, None, _err("msg.folderInRam", 400)
         for p in paths:
             # Copying a folder into itself never terminates.
             if dest == p or dest.startswith(p + os.sep):
@@ -7947,7 +7983,10 @@ def _rip_writable_sources():
             if s.get("media") is False or not raw or _on_network_fs(raw, table):
                 continue
             path = _local_path_allowed(raw)
-            if path and os.path.isdir(path) and os.access(path, os.W_OK):
+            # One saved before folders in RAM were refused stays a source,
+            # but a rip written there would be gone at the next boot.
+            if path and os.path.isdir(path) and os.access(path, os.W_OK) \
+                    and not _on_ram_fs(path, table):
                 local_paths.add(path)
                 out.append(dict(s, mountpoint=path))
             continue
@@ -8573,6 +8612,7 @@ SOURCES_I18N = {
         "msg.pathMissing": "Path missing.",
         "msg.pathNotAllowed": "This path is not allowed.",
         "msg.folderMissing": "The folder {path} does not exist.",
+        "msg.folderInRam": "This folder is only in the player's memory: what is copied into it is lost when the player restarts. Choose a folder inside a disk, or in Music on this player.",
         "msg.smbFieldsRequired": "Server and share name are required.",
         "msg.mountFailed": "Mount failed: {detail}",
         "msg.badDevice": "Invalid device.",
@@ -8753,6 +8793,7 @@ SOURCES_I18N = {
         "msg.pathMissing": "Percorso mancante.",
         "msg.pathNotAllowed": "Percorso non consentito.",
         "msg.folderMissing": "La cartella {path} non esiste.",
+        "msg.folderInRam": "Questa cartella sta solo nella memoria dell'apparecchio: quello che ci copi si perde al riavvio. Scegli una cartella dentro un disco, oppure in Musica su questo apparecchio.",
         "msg.smbFieldsRequired": "Server e nome condivisione obbligatori.",
         "msg.mountFailed": "Mount fallito: {detail}",
         "msg.badDevice": "Device non valido.",

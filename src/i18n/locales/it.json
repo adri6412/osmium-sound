@@ -31,7 +31,8 @@
     "empty": "Nessuna cartella qui",
     "freeOf": "{free} liberi di {total}",
     "items": "{n} elementi",
-    "emptyPlace": "Vuoto"
+    "emptyPlace": "Vuoto",
+    "inRam": "Questa cartella sta solo nella memoria dell'apparecchio: quello che ci finisce si perde al riavvio. Scegli una cartella dentro un disco."
   },
   "sources": {
     "active": "Sorgenti attive",

@@ -25,6 +25,8 @@ const path = ref('');
 const parent = ref('');
 const entries = ref([]);
 const writable = ref(false);
+// in the player's memory, not on a disk: what is there can go, nothing new comes in
+const ram = ref(false);
 const places = ref([]);          // the allowed roots, named by the appliance
 const loading = ref(false);
 const msg = ref('');
@@ -73,6 +75,7 @@ async function load(next = path.value, remember = true) {
   parent.value = r.data.parent || '';
   entries.value = r.data.entries || [];
   writable.value = !!r.data.writable;
+  ram.value = !!r.data.ram;
   selected.value = [];
   renaming.value = null;
   naming.value = false;
@@ -312,7 +315,7 @@ onBeforeUnmount(stopJob);
 
         <!-- actions -->
         <div v-if="!atRoot" class="fm-tools">
-          <button class="primary" :disabled="!writable" @click="naming = !naming">
+          <button class="primary" :disabled="!writable || ram" @click="naming = !naming">
             <Icon name="folder-plus" :size="16" /><span class="t">{{ t('files.newFolder') }}</span>
           </button>
           <button :disabled="selected.length !== 1 || !writable" @click="startRename">
@@ -324,7 +327,7 @@ onBeforeUnmount(stopJob);
           <button :disabled="!selected.length || !writable" @click="copySelection('move')">
             <Icon name="scissors" :size="16" /><span class="t">{{ t('files.cut') }}</span>
           </button>
-          <button :disabled="!clipboard || !writable" @click="paste">
+          <button :disabled="!clipboard || !writable || ram" @click="paste">
             <Icon name="clipboard" :size="16" />
             <span class="t">{{ t('files.paste') }}<template v-if="clipboard"> ({{ clipboard.paths.length }})</template></span>
           </button>
@@ -351,7 +354,8 @@ onBeforeUnmount(stopJob);
           {{ t('files.working') }} <span class="muted">{{ job.current }}</span>
           <div class="fm-prog"><i :style="{ width: (job.progress || 0) + '%' }"></i></div>
         </div>
-        <p v-if="!atRoot && !writable" class="sub" style="margin: 0 0 10px;">{{ t('files.readOnly') }}</p>
+        <p v-if="!atRoot && ram" class="sub" style="margin: 0 0 10px;">{{ t('files.inRam') }}</p>
+        <p v-else-if="!atRoot && !writable" class="sub" style="margin: 0 0 10px;">{{ t('files.readOnly') }}</p>
 
         <p v-if="loading" class="sub">{{ t('common.loading') }}</p>
         <div v-else-if="!entries.length" class="fm-empty">

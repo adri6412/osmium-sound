@@ -25,6 +25,8 @@ const parent = ref('');
 const entries = ref([]);
 const places = ref([]);
 const writable = ref(false);
+// in the player's memory, not on a disk: never a folder to pick
+const ram = ref(false);
 const loading = ref(false);
 const history = ref([]);
 const naming = ref(false);
@@ -46,6 +48,7 @@ async function load(next = '', remember = true) {
   // folders matter here
   entries.value = path.value ? all.filter((e) => e.dir) : all;
   writable.value = !!r.data.writable;
+  ram.value = !!r.data.ram;
   naming.value = false;
   if (!path.value) places.value = all;
 }
@@ -132,7 +135,7 @@ onMounted(() => load(props.startAt, false));
         </div>
 
         <div v-if="!atRoot" class="fm-tools">
-          <button class="primary" :disabled="!writable || loading" @click="naming = !naming">
+          <button class="primary" :disabled="!writable || ram || loading" @click="naming = !naming">
             <Icon name="folder-plus" :size="16" /><span class="t">{{ t('files.newFolder') }}</span>
           </button>
         </div>
@@ -140,7 +143,8 @@ onMounted(() => load(props.startAt, false));
           <input v-model="newName" type="text" :placeholder="t('files.newFolderName')" @keyup.enter="createFolder" />
           <button class="fit" :disabled="!newName.trim() || loading" @click="createFolder">{{ t('files.create') }}</button>
         </div>
-        <p v-if="!atRoot && !writable" class="sub" style="margin: 0 0 10px;">{{ t('files.readOnly') }}</p>
+        <p v-if="!atRoot && ram" class="sub" style="margin: 0 0 10px;">{{ t('files.inRam') }}</p>
+        <p v-else-if="!atRoot && !writable" class="sub" style="margin: 0 0 10px;">{{ t('files.readOnly') }}</p>
 
         <p v-if="loading" class="sub">{{ t('common.loading') }}</p>
         <div v-else-if="!entries.length" class="fm-empty">
@@ -164,7 +168,7 @@ onMounted(() => load(props.startAt, false));
           </div>
         </div>
 
-        <button style="margin-top: 12px;" :disabled="busy || loading || atRoot" @click="emit('pick', path)">{{ pickLabel }}</button>
+        <button style="margin-top: 12px;" :disabled="busy || loading || atRoot || ram" @click="emit('pick', path)">{{ pickLabel }}</button>
       </section>
     </div>
   </div>

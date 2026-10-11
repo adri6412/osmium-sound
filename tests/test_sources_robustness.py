@@ -427,5 +427,78 @@ class StackedMountTests(Base):
         self.assertEqual(ss._mount_depth(self.mp), 0)
 
 
+# ── G: a folder that only lives in RAM ───────────────────────────────
+class RamFolderTests(Base):
+    """On an A/B image /mnt is a tmpfs: the root disks are mounted under is
+    memory, and so is any folder in it that is not inside a mounted disk.
+    One was added as a local folder and shared over SMB (2026-10-11)."""
+
+    def setUp(self):
+        super().setUp()
+        self.mnt = os.path.join(self.tmp, "smb-mnt")
+        os.makedirs(self.mnt)
+        self.patch("_FILE_ROOTS", (self.root, self.mnt))
+        self.patch("_BROWSE_ROOTS", (self.root, self.mnt))
+        self.mounts.add("/", "squashfs")
+        self.mounts.add(self.root, "ext4")
+        self.mounts.add(self.mnt, "tmpfs")
+        self.disk = os.path.join(self.mnt, "Musica-391de6c0")
+        os.makedirs(os.path.join(self.disk, "Jazz"))
+        self.mounts.add(self.disk, "ext4")
+
+    def test_what_lies_in_memory(self):
+        self.assertTrue(ss._on_ram_fs(self.mnt))
+        self.assertTrue(ss._on_ram_fs(os.path.join(self.mnt, "not-yet")))
+        self.assertFalse(ss._on_ram_fs(self.disk))
+        self.assertFalse(ss._on_ram_fs(os.path.join(self.disk, "Jazz")))
+        self.assertFalse(ss._on_ram_fs(self.root))
+
+    def test_a_folder_in_memory_is_not_added_nor_created(self):
+        for path in (self.mnt, os.path.join(self.mnt, "new")):
+            r = self.client.post("/api/sources/local", json={"path": path, "samba": True})
+            self.assertEqual(r.status_code, 400, path)
+            self.assertEqual(r.get_json()["code"], "msg.folderInRam")
+        self.assertFalse(os.path.exists(os.path.join(self.mnt, "new")))
+        self.assertFalse(os.path.exists(ss.STATE_FILE))
+
+    def test_a_folder_inside_a_mounted_disk_still_is(self):
+        r = self.client.post("/api/sources/local",
+                             json={"path": os.path.join(self.disk, "Jazz"), "samba": True})
+        self.assertEqual(r.status_code, 200, r.get_json())
+        self.assertEqual([s["path"] for s in self.sources()], [os.path.join(self.disk, "Jazz")])
+
+    def test_no_new_folder_in_memory(self):
+        r = self.client.post("/api/local/mkdir", json={"path": self.mnt, "name": "Musica"})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.get_json()["code"], "msg.folderInRam")
+        self.assertFalse(os.path.exists(os.path.join(self.mnt, "Musica")))
+        r = self.client.post("/api/local/mkdir", json={"path": self.disk, "name": "Rock"})
+        self.assertEqual(r.status_code, 200)
+
+    def test_the_listing_says_so(self):
+        self.assertTrue(self.client.get("/api/local/list", query_string={"path": self.mnt}).get_json()["ram"])
+        self.assertFalse(self.client.get("/api/local/list", query_string={"path": self.disk}).get_json()["ram"])
+
+    def test_nothing_is_copied_in_but_what_is_there_can_go(self):
+        stray = os.path.join(self.mnt, "stray")
+        os.makedirs(stray)
+        with ss.app.app_context():
+            _p, _d, err = ss._file_op_targets(
+                {"paths": [os.path.join(self.disk, "Jazz")], "dest": self.mnt}, need_dest=True)
+            self.assertEqual(err[0].get_json()["code"], "msg.folderInRam")
+            paths, _d, err = ss._file_op_targets({"paths": [stray]}, need_dest=False)
+            self.assertIsNone(err)
+            self.assertEqual(paths, [stray])
+
+    def test_one_saved_before_stays_but_is_no_rip_destination(self):
+        with open(ss.STATE_FILE, "w") as f:
+            json.dump({"sources": [{"id": "local-smb-mnt", "type": "local", "name": self.mnt,
+                                    "path": self.mnt, "samba": True, "share": "smb-mnt"}]}, f)
+        ss.regen_samba_shares()
+        with open(ss.SAMBA_SHARES_FILE) as f:
+            self.assertIn(f"path = {self.mnt}", f.read())
+        self.assertNotIn("local-smb-mnt", [s.get("id") for s in ss._rip_writable_sources()])
+
+
 if __name__ == "__main__":
     unittest.main()

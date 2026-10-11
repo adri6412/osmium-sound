@@ -1297,6 +1297,7 @@
     "newFolderName": "Name of the new folder",
     "confirmDelete": "Delete {count} items? This cannot be undone.",
     "readOnly": "This folder cannot be changed: it is read-only.",
+    "inRam": "This folder is only in the player's memory: what goes into it is lost when the player restarts. Choose a folder inside a disk.",
     "working": "Working…",
     "done": "Done.",
     "opFailed": "The operation did not finish.",

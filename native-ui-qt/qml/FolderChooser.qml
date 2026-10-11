@@ -22,6 +22,7 @@ Item {
     property var places: []          // [{name, path, kind, usage:{free,total}, count}]
     property var entries: []         // folders of `path`, or the places at the root
     property bool writable: false
+    property bool ram: false         // in memory, not on a disk: never taken
     property bool loading: false
     property var history: []
     property string newName: ""
@@ -52,14 +53,14 @@ Item {
             if (!ok || !d || d.success === false) { if (next) root.load("", false); return }
             var p = String(d.path || "")
             if (remember && root.path !== p) { var h = root.history.slice(); h.push(root.path); root.history = h }
-            root.path = p; root.parentPath = String(d.parent || ""); root.writable = !!d.writable
+            root.path = p; root.parentPath = String(d.parent || ""); root.writable = !!d.writable; root.ram = !!d.ram
             var all = d.entries || []
             root.entries = p ? all.filter(function(e) { return !!e.dir }) : all
             if (!p) root.places = all
         }, 8000)
     }
     function goBack() { if (!history.length) return; var h = history.slice(); var prev = h.pop(); history = h; load(prev, false) }
-    function take() { if (atRoot) return; var p = path, f = cb; close(); if (f) f(p) }
+    function take() { if (atRoot || ram) return; var p = path, f = cb; close(); if (f) f(p) }
     function mkdir() {
         var name = newName; newName = ""
         if (!name || atRoot) return
@@ -186,10 +187,17 @@ Item {
                     }
                 }
             }
-            // new folder, only inside a writable folder
-            TextField_ { visible: !root.atRoot; x: 0; y: parent.height - 40; width: parent.width - 8 - 96; height: 36; textSize: 13; padding: 10; restBorder: Theme.border; text: root.newName; placeholder: Tr.t("fileChooser.newFolder"); onTextEdited: (t) => root.newName = t }
+            // new folder, only inside a writable folder; in a folder in memory
+            // the reason it cannot be taken instead
+            Text {
+                visible: !root.atRoot && root.ram
+                x: 0; y: parent.height - 40; width: parent.width - 8; height: 36
+                verticalAlignment: Text.AlignVCenter; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
+                text: Tr.t("fileChooser.inRam"); color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12
+            }
+            TextField_ { visible: !root.atRoot && !root.ram; x: 0; y: parent.height - 40; width: parent.width - 8 - 96; height: 36; textSize: 13; padding: 10; restBorder: Theme.border; text: root.newName; placeholder: Tr.t("fileChooser.newFolder"); onTextEdited: (t) => root.newName = t }
             Rectangle {
-                visible: !root.atRoot
+                visible: !root.atRoot && !root.ram
                 x: parent.width - 96; y: parent.height - 40; width: 96; height: 36; radius: 8; color: mkTap.mix(Theme.light, Theme.accent); opacity: root.newName !== "" && root.writable ? 1 : 0.4
                 Text { anchors.centerIn: parent; text: Tr.t("fileChooser.create"); color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
                 Tap { id: mkTap; enabled: root.newName !== "" && root.writable; onClicked: root.mkdir() }
@@ -204,9 +212,9 @@ Item {
         }
         Rectangle {
             x: 20 + cxText.implicitWidth + 32 + 8; y: parent.height - 20 - 42; width: parent.width - 20 - x; height: 42; radius: 8
-            color: okTap.mix(Theme.gold, "#ca8a04"); opacity: root.atRoot ? 0.4 : 1
+            color: okTap.mix(Theme.gold, "#ca8a04"); opacity: root.atRoot || root.ram ? 0.4 : 1
             Text { anchors.centerIn: parent; text: root.pickLabel; color: Theme.black; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
-            Tap { id: okTap; enabled: !root.atRoot; onClicked: root.take() }
+            Tap { id: okTap; enabled: !root.atRoot && !root.ram; onClicked: root.take() }
         }
     }
 }

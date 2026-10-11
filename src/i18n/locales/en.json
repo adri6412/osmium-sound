@@ -31,7 +31,8 @@
     "empty": "No folders here",
     "freeOf": "{free} free of {total}",
     "items": "{n} items",
-    "emptyPlace": "Empty"
+    "emptyPlace": "Empty",
+    "inRam": "This folder is only in the player's memory: what goes into it is lost when the player restarts. Choose a folder inside a disk."
   },
   "sources": {
     "active": "Active sources",
