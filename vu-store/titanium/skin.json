@@ -1,6 +1,6 @@
 {
   "id": "titanium",
-  "version": 5,
+  "version": 6,
   "name": {
     "en": "Titanium",
     "it": "Titanio"
@@ -14,23 +14,23 @@
   "over": "over.png",
   "needle": {
     "image": "needle.png",
-    "width": 208.39,
-    "height": 530.32,
-    "pivotX": 103.84,
-    "pivotY": 484.33
+    "width": 43.12,
+    "height": 690.57,
+    "pivotX": 21.63,
+    "pivotY": 684.61
   },
   "meters": [
     [
-      542.18,
-      649.61
+      529.89,
+      849.17
     ],
     [
-      1507.26,
-      649.61
+      1495.69,
+      849.17
     ]
   ],
   "angles": [
-    -48.03,
-    48.21
+    -33.24,
+    34.87
   ]
 }

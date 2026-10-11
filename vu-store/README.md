@@ -38,7 +38,7 @@ pixels):
 | `golden` | VU Golden: under quadranti, over frame | 700,775 / 280..1180 | 34.1,949.77 | 736.58,1229.77 · 2103.58,1231.77 | -34.1,34.3 |
 | `aluminium` | VU Aluminium Style: under quadrante fix, over frame; v2 lancette | 750,830 / 230..1020 | 38.5,1041.91 | 796.59,1271.91 · 2024.46,1275.09 | -34.6,33.0 |
 | `glossy` | VU Glossy: under quadrante, over frame | 650,936 / 347..1170 | 143.0,761.5 | 793.0,1108.5 · 2014.0,1108.5 | -44.15,43.4 |
-| `titanium` | VU Titanium New: under back, over front (2850x1460, v5) | 610,900 / 230..968 | 144.5,674 | 754.5,904 · 2097.5,904 | -48.03,48.21 |
+| `titanium` | VU Titanium New2: under back, over front (2850x1460, v6) | 722,782 / 229..1190 | 30.1,952.7 | 737.4,1181.7 · 2081.4,1181.7 | -33.24,34.87 |
 | `blue-neon` | VU Blue Meta 2: under Back, over Top-2 (2897x1503, v2) | 700,730 / 307..1209 | 14.5,1018.8 | 705.6,1325.8 · 2170.1,1325.7 | -31.40,33.57 |
 
 The v2 Aluminium needle leans slightly in the artwork (tip at x 792, collar
@@ -95,3 +95,11 @@ seen from the coil, halfway along them, and the ticks in between are off by at
 most 1.3 % of full scale. Near either end the coil shows tilted through the
 glass of the hub cover. The empty rows under the frame are kept, as in Blue
 Neon.
+
+Titanium v6 (VU Titanium New2) keeps the same dials and frame but drops the
+hub cover and the coil: a long straight needle comes up from under the frame.
+It turns on the centre of the scale arc (737.4,1181.7), which sits behind the
+opaque lower edge of the frame (rows 915..1195), so the ticks are exactly
+radial and the angles are those of the -20 and +3 ticks seen from there. The
+needle is cut so that its drawn axis (x 752.1) passes through the pivot; its
+dark foot (rows 990..1129) stays behind the frame at any angle.
