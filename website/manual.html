@@ -564,7 +564,7 @@
         </ul>
         <p>After adding or editing a source, the library is updated on its own. In web administration, Music sources is a menu — active sources, add a source, playlist folder, shared folders, manage files — where each screen has a way back.</p>
         <p>Under <strong>Playlist folder</strong> you choose where playlists are saved; share it on the network to copy playlists onto the device. Playlists made on Windows are fixed automatically so they play here too.</p>
-        <p>Step-by-step instructions for a Windows PC and a Mac, in both directions, are in <a href="#en-shares">Shared folders with Windows and Mac</a>.</p>
+        <p>Step-by-step instructions for a NAS, a Windows PC and a Mac are in <a href="#en-shares">Shared folders with Windows and Mac</a>.</p>
         <div class="box tip">
           <span class="label">External Lyrion server</span>
           <p>If the device follows a Lyrion Music Server already running elsewhere on your network (chosen during setup, or in Settings → Lyrion Music Server), the Music Sources section doesn't appear at all: sources are configured on that other device, not this one.</p>
@@ -573,19 +573,21 @@
 
       <section id="en-shares">
         <h2>Shared folders with Windows and Mac</h2>
-        <p>Your music can travel between the device and your computers in two ways: the device can <strong>play the music kept on a PC or a Mac</strong>, and you can <strong>copy music onto the device</strong> from a PC or a Mac. Both work over your home network; the computer and the device just need to be on the same network.</p>
+        <p>Your music can travel between the device and your computers in two ways: the device can <strong>play the music kept on a NAS or a Mac</strong>, and you can <strong>copy music onto the device</strong> from a PC or a Mac. Both work over your home network: everything just needs to be on the same network.</p>
 
-        <h3>Play the music kept on a Windows PC</h3>
+        <h3>Play the music kept on a NAS</h3>
+        <p>Here the NAS already shares the folder with your music, and you know a username and password that can open it.</p>
         <ol class="steps">
-          <li><strong>Share the music folder</strong>
-            In File Explorer, right-click the folder with your music → <em>Properties</em> → <em>Sharing</em> tab → <em>Share…</em>. Your own name is already in the list: press <em>Share</em>, then <em>Done</em>.</li>
-          <li><strong>Make your home network "Private"</strong>
-            Settings → Network &amp; internet → your Wi-Fi or Ethernet connection → <em>Network profile type</em>: <strong>Private network</strong>. On a "Public" network Windows hides its shared folders.</li>
-          <li><strong>Add it on the device</strong>
-            Settings → Music sources → add a <strong>Network folder</strong>. Your PC shows up in the list by its name: pick it, then pick the music folder.</li>
-          <li><strong>Sign in as you sign in to Windows</strong>
-            When the small window asks for a username and password, use your Windows account. If you sign in to Windows with a Microsoft account, that means its <strong>e-mail address</strong> and its <strong>password</strong> — not the PIN you type at start-up. An account without a password cannot be used over the network: give it one first.</li>
+          <li><strong>Add a network folder</strong>
+            Settings → Music sources → add a <strong>Network folder</strong>, on the screen or in web administration. The device looks for the NAS and computers on your network: your NAS shows up in the list by its name.</li>
+          <li><strong>Choose the shared folder</strong>
+            Pick the NAS, then the shared folder with your music. If the NAS asks who you are, a small window appears: type the NAS username and password that can open that folder.</li>
+          <li><strong>Reading only, or writing too</strong>
+            <em>Let the player write into this folder</em> is ticked: leave it if you also want to rip CDs onto the NAS, untick it to only listen. Then choose the whole folder or one of its subfolders.</li>
+          <li><strong>Done</strong>
+            The library fills up by itself; with many albums the first time takes a while.</li>
         </ol>
+        <p>If the NAS isn't in the list, choose <em>I'll type it myself</em> and type its name or its IP address — for example <code>nas.local</code> or <code>192.168.1.20</code> — then the name of the shared folder. When something doesn't work the device says why in plain words: wrong username or password, no shared folder with that name, NAS not answering. If it says the NAS speaks a version of file sharing it cannot use, switch on SMB2/SMB3 in the NAS's file-sharing settings.</p>
 
         <h3>Play the music kept on a Mac</h3>
         <ol class="steps">
@@ -599,8 +601,8 @@
             Settings → Music sources → add a <strong>Network folder</strong>: the Mac shows up by its name. Pick the folder and sign in with your Mac username and password.</li>
         </ol>
         <div class="box tip">
-          <span class="label">Keep the computer awake</span>
-          <p>The music stays on the computer: while you listen, the PC or Mac has to be switched on and not asleep. If the device cannot find it, it says why in plain words; you can also type the computer's name or its IP address yourself.</p>
+          <span class="label">Keep the Mac awake</span>
+          <p>The music stays on the Mac (or on the NAS): while you listen, it has to be switched on and not asleep. If the device cannot find it, it says why in plain words; you can also type its name or its IP address yourself.</p>
         </div>
 
         <h3>Copy music onto the device</h3>
@@ -803,7 +805,7 @@
           <tr><td>The Lyrion interface won't load</td><td>Check Settings → Lyrion Music Server: with <em>Internal</em>, restart the device; with <em>External</em>, make sure the other device is switched on and reachable.</td></tr>
           <tr><td>Missing streaming/radio sources</td><td>Add the corresponding plugin from Lyrion's page (Server settings → Manage Plugins) and sign in to the service — see <a href="#en-streaming">Streaming services</a>.</td></tr>
           <tr><td>A computer won't open the device's shared folder</td><td>Use the address and the <code>hifimusic</code> password shown in Settings → Music sources → Shared folders. On Windows, remove the device's entry from Credential Manager and try again — see <a href="#en-shares">Shared folders with Windows and Mac</a>.</td></tr>
-          <tr><td>The device can't open a folder on a PC or Mac</td><td>On Windows the network must be <em>Private</em> and the password is your Windows account's (with a Microsoft account, its e-mail and password, not the PIN). On a Mac, tick your account under <em>Windows File Sharing</em> — see <a href="#en-shares">Shared folders with Windows and Mac</a>.</td></tr>
+          <tr><td>The device can't open a folder on a NAS or a Mac</td><td>Use a NAS username and password that can open that shared folder, and keep SMB2/SMB3 switched on in the NAS. On a Mac, tick your account under <em>Windows File Sharing</em> — see <a href="#en-shares">Shared folders with Windows and Mac</a>.</td></tr>
           <tr><td>No audio</td><td>Check the selected audio device in Settings and that the DAC is recognized and connected.</td></tr>
           <tr><td>The installer's QR code doesn't lead anywhere</td><td>Confirm your phone is connected to the <code>Osmium-Setup-XXXX</code> network (it has no password) and try opening <a href="http://10.42.0.1">http://10.42.0.1</a> manually.</td></tr>
           <tr><td>The address shown at first boot doesn't open</td><td>The phone or computer must be on the same network as the device. Type the address exactly as shown, including <code>http://</code>.</td></tr>
@@ -1135,7 +1137,7 @@
         </ul>
         <p>Dopo aver aggiunto o modificato una sorgente, la libreria si aggiorna da sola. Nell'amministrazione web, Sorgenti musicali è un menu — sorgenti attive, aggiungi sorgente, cartella playlist, cartelle condivise, gestisci i file — dove ogni schermata ha il suo modo per tornare indietro.</p>
         <p>In <strong>Cartella playlist</strong> scegli dove vengono salvate le playlist; condividila in rete per copiarci playlist dal computer. Le playlist create su Windows vengono sistemate da sole, così suonano anche qui.</p>
-        <p>I passaggi per un PC Windows e per un Mac, nei due sensi, sono in <a href="#it-condivisioni">Cartelle condivise con Windows e Mac</a>.</p>
+        <p>I passaggi per un NAS, un PC Windows e un Mac sono in <a href="#it-condivisioni">Cartelle condivise con Windows e Mac</a>.</p>
         <div class="box tip">
           <span class="label">Server Lyrion esterno</span>
           <p>Se il dispositivo segue un Lyrion Music Server già presente altrove in rete (scelto durante il setup, o in Impostazioni → Lyrion Music Server), la sezione Sorgenti musicali non compare: le sorgenti si configurano su quell'altro dispositivo, non su questo.</p>
@@ -1144,19 +1146,21 @@
 
       <section id="it-condivisioni">
         <h2>Cartelle condivise con Windows e Mac</h2>
-        <p>La musica può passare tra l'apparecchio e i tuoi computer in due modi: l'apparecchio può <strong>suonare la musica che sta su un PC o su un Mac</strong>, e tu puoi <strong>copiare la musica sull'apparecchio</strong> da un PC o da un Mac. Tutto passa dalla rete di casa: basta che computer e apparecchio siano sulla stessa rete.</p>
+        <p>La musica può passare tra l'apparecchio e i tuoi computer in due modi: l'apparecchio può <strong>suonare la musica che sta su un NAS o su un Mac</strong>, e tu puoi <strong>copiare la musica sull'apparecchio</strong> da un PC o da un Mac. Tutto passa dalla rete di casa: basta che sia tutto sulla stessa rete.</p>
 
-        <h3>Suonare la musica che sta su un PC Windows</h3>
+        <h3>Suonare la musica che sta su un NAS</h3>
+        <p>Qui il NAS condivide già la cartella con la tua musica, e conosci un nome utente e una password che possono aprirla.</p>
         <ol class="steps">
-          <li><strong>Condividi la cartella della musica</strong>
-            In Esplora file, clic destro sulla cartella con la musica → <em>Proprietà</em> → scheda <em>Condivisione</em> → <em>Condividi…</em>. Il tuo nome è già nell'elenco: premi <em>Condividi</em>, poi <em>Fine</em>.</li>
-          <li><strong>Imposta la rete di casa come "Privata"</strong>
-            Impostazioni → Rete e Internet → la tua connessione Wi-Fi o Ethernet → <em>Tipo di profilo di rete</em>: <strong>Rete privata</strong>. Su una rete "Pubblica" Windows nasconde le sue cartelle condivise.</li>
-          <li><strong>Aggiungila sull'apparecchio</strong>
-            Impostazioni → Sorgenti musicali → aggiungi una <strong>Cartella di rete</strong>. Il tuo PC compare nell'elenco con il suo nome: sceglilo, poi scegli la cartella della musica.</li>
-          <li><strong>Entra come entri in Windows</strong>
-            Quando la finestrella chiede nome utente e password, usa il tuo account di Windows. Se entri in Windows con un account Microsoft, sono il suo <strong>indirizzo e-mail</strong> e la sua <strong>password</strong> — non il PIN che scrivi all'accensione. Un account senza password non si può usare in rete: prima dagliene una.</li>
+          <li><strong>Aggiungi una cartella di rete</strong>
+            Impostazioni → Sorgenti musicali → aggiungi una <strong>Cartella di rete</strong>, sullo schermo o nell'amministrazione web. L'apparecchio cerca i NAS e i computer della tua rete: il tuo NAS compare nell'elenco con il suo nome.</li>
+          <li><strong>Scegli la cartella condivisa</strong>
+            Scegli il NAS, poi la cartella condivisa con la tua musica. Se il NAS chiede chi sei, compare una piccola finestra: scrivi il nome utente e la password del NAS che possono aprire quella cartella.</li>
+          <li><strong>Solo lettura, o anche scrittura</strong>
+            <em>Permetti al lettore di scrivere in questa cartella</em> è spuntato: lascialo se vuoi anche rippare i CD sul NAS, toglilo se vuoi solo ascoltare. Poi scegli tutta la cartella o una sua sottocartella.</li>
+          <li><strong>Fatto</strong>
+            La libreria si riempie da sola; con tanti album la prima volta ci vuole un po'.</li>
         </ol>
+        <p>Se il NAS non è nell'elenco, scegli <em>Lo scrivo io</em> e scrivi il suo nome o il suo indirizzo IP — per esempio <code>nas.local</code> o <code>192.168.1.20</code> — poi il nome della cartella condivisa. Quando qualcosa non va l'apparecchio ti spiega il motivo a parole semplici: nome utente o password sbagliati, nessuna cartella condivisa con quel nome, NAS che non risponde. Se dice che il NAS usa una versione della condivisione file che non sa usare, attiva SMB2/SMB3 nelle impostazioni di condivisione file del NAS.</p>
 
         <h3>Suonare la musica che sta su un Mac</h3>
         <ol class="steps">
@@ -1170,8 +1174,8 @@
             Impostazioni → Sorgenti musicali → aggiungi una <strong>Cartella di rete</strong>: il Mac compare con il suo nome. Scegli la cartella ed entra con nome utente e password del Mac.</li>
         </ol>
         <div class="box tip">
-          <span class="label">Tieni sveglio il computer</span>
-          <p>La musica resta sul computer: mentre ascolti, il PC o il Mac deve essere acceso e non in stop. Se l'apparecchio non lo trova ti spiega il motivo a parole semplici; puoi anche scrivere tu il nome del computer o il suo indirizzo IP.</p>
+          <span class="label">Tieni sveglio il Mac</span>
+          <p>La musica resta sul Mac (o sul NAS): mentre ascolti, deve essere acceso e non in stop. Se l'apparecchio non lo trova ti spiega il motivo a parole semplici; puoi anche scrivere tu il suo nome o il suo indirizzo IP.</p>
         </div>
 
         <h3>Copiare la musica sull'apparecchio</h3>
@@ -1374,7 +1378,7 @@
           <tr><td>L'interfaccia Lyrion non carica</td><td>Controlla Impostazioni → Lyrion Music Server: con <em>Interno</em>, riavvia il dispositivo; con <em>Esterno</em>, verifica che l'altro dispositivo sia acceso e raggiungibile.</td></tr>
           <tr><td>Mancano sorgenti streaming/radio</td><td>Aggiungi il plugin corrispondente dalla pagina di Lyrion (Impostazioni Server → Plugin) ed entra nel servizio — vedi <a href="#it-streaming">Servizi di streaming</a>.</td></tr>
           <tr><td>Un computer non apre la cartella condivisa dell'apparecchio</td><td>Usa l'indirizzo e la password di <code>hifimusic</code> che trovi in Impostazioni → Sorgenti musicali → Cartelle condivise. Su Windows togli la voce dell'apparecchio da Gestione credenziali e riprova — vedi <a href="#it-condivisioni">Cartelle condivise con Windows e Mac</a>.</td></tr>
-          <tr><td>L'apparecchio non apre una cartella di un PC o di un Mac</td><td>Su Windows la rete deve essere <em>Privata</em> e la password è quella del tuo account di Windows (con un account Microsoft, la sua e-mail e la sua password, non il PIN). Sul Mac spunta il tuo account sotto <em>Condivisione documenti Windows</em> — vedi <a href="#it-condivisioni">Cartelle condivise con Windows e Mac</a>.</td></tr>
+          <tr><td>L'apparecchio non apre una cartella di un NAS o di un Mac</td><td>Usa un nome utente e una password del NAS che possono aprire quella cartella condivisa, e lascia attivo SMB2/SMB3 sul NAS. Sul Mac spunta il tuo account sotto <em>Condivisione documenti Windows</em> — vedi <a href="#it-condivisioni">Cartelle condivise con Windows e Mac</a>.</td></tr>
           <tr><td>Nessun audio</td><td>Controlla il dispositivo audio selezionato in Impostazioni e che il DAC sia riconosciuto e collegato.</td></tr>
           <tr><td>Il QR code dell'installazione non porta a nulla</td><td>Verifica che il telefono sia connesso alla rete <code>Osmium-Setup-XXXX</code> (non ha password) e prova ad aprire manualmente <a href="http://10.42.0.1">http://10.42.0.1</a>.</td></tr>
           <tr><td>L'indirizzo mostrato al primo avvio non si apre</td><td>Il telefono o il computer devono essere sulla stessa rete del dispositivo. Scrivi l'indirizzo esattamente come appare, <code>http://</code> compreso.</td></tr>
