@@ -193,6 +193,21 @@ print(sum(sizes(json.load(sys.stdin).get("images", []))))' 2>/dev/null || echo 0
     [ -n "$slot_dev" ] && base_sectors=$(written_sectors)
     echo "I: [hifi-image] slot di destinazione ${slot_dev:-?}, immagine ${img_bytes} byte"
 
+    # RAUC refuses a slot that is mounted anywhere ("Destination device
+    # '/dev/sda3' already mounted"), and nothing that runs has any business
+    # with the spare slot: seen in the field, the USB auto-adoption of
+    # sources_server had mounted it as a music source on a system installed
+    # on a USB stick, and every update failed at 40 % from then on.
+    if [ -n "$slot_dev" ]; then
+        for _mp in $(findmnt -rn -S "$slot_dev" -o TARGET 2>/dev/null | sort -r); do
+            echo "W: [hifi-image] lo slot di destinazione è montato su $_mp: lo smonto"
+            umount "$_mp" 2>/dev/null || umount -l "$_mp" 2>/dev/null || true
+        done
+        if findmnt -rn -S "$slot_dev" >/dev/null 2>&1; then
+            fail "The standby system slot $slot_dev is in use and cannot be written" update.image.slotBusy "{\"dev\":\"$slot_dev\"}"
+        fi
+    fi
+
     # RAUC streams the bundle through an NBD device and issues ONE HTTP range
     # request per read (src/nbd.c, start_read): with the kernel defaults those
     # are 128 KiB, which makes the download bound by the round trip and not by

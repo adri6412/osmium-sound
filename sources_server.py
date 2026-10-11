@@ -1418,7 +1418,31 @@ def mount_internal(src):
     return _mount_adopted_disk(src, INTERNAL_MOUNT_ROOT)
 
 
+def _usb_source_on_system_disk(src):
+    """True when an adopted USB source is a partition of the disk the system
+    runs from (see _usb_scan()). Resolved through the udev links and sysfs,
+    no process: this runs for every USB source at every boot."""
+    for link in (("/dev/disk/by-partuuid/", src.get("partuuid")),
+                 ("/dev/disk/by-uuid/", src.get("fsuuid"))):
+        if not link[1]:
+            continue
+        dev = os.path.realpath(link[0] + link[1])
+        name = os.path.basename(dev)
+        if not dev.startswith("/dev/") or not os.path.exists(dev):
+            continue
+        sysdir = os.path.realpath(os.path.join(_SYS_BLOCK, name))
+        if os.path.exists(os.path.join(sysdir, "partition")):
+            name = os.path.basename(os.path.dirname(sysdir))
+        return "/dev/" + name in _usb_system_disks()
+    return False
+
+
 def mount_usb_adopted(src):
+    # Never again for a source adopted before _usb_scan() skipped the system
+    # disk: left unmounted, usb_sync() drops it like an unplugged stick
+    # instead of mounting the spare root slot that RAUC must write.
+    if _usb_source_on_system_disk(src):
+        return False, _ht('mount.systemDisk', _hlang())
     return _mount_adopted_disk(src, USB_ADOPTED_ROOT)
 
 
@@ -1640,6 +1664,22 @@ _usb_scan_ts = 0.0
 # without this the stick would stay "needs formatting" until reboot.
 _USB_SCAN_MAX_AGE = 60
 
+# Partition labels of the A/B image layout (distro/build-image.sh). A disk
+# carrying either root slot is an Osmium system disk, ours or another one
+# plugged in, and none of its partitions is a music source.
+_SYSTEM_PARTLABELS = {"hifi-root-a", "hifi-root-b"}
+# _system_disk_paths() once it has found something: the disk the system runs
+# from does not change while it runs, and the scan below would otherwise fork
+# findmnt/lsblk again on every plug and unplug.
+_system_disks_cache = None
+
+
+def _usb_system_disks():
+    global _system_disks_cache
+    if not _system_disks_cache:
+        _system_disks_cache = _system_disk_paths() or None
+    return _system_disks_cache or set()
+
 
 def _usb_scan():
     """Every USB block device that could carry a filesystem, no adopted/
@@ -1650,6 +1690,17 @@ def _usb_scan():
     Partitions (see _is_efi_partition) -- a bootable installer stick has one
     alongside its real data partition, and it's never a legitimate music
     source.
+
+    Also skips the disk the system itself runs from, and any disk carrying
+    the A/B root slots. Osmium can be installed on a USB stick, and then
+    its own partitions are USB partitions too: seen in the field, both root
+    slots and the data partition adopted as "USB" sources, mounted under
+    USB_ADOPTED_ROOT and shared over Samba. The mount of the spare slot is
+    what broke every system update afterwards -- RAUC refuses to write a
+    slot that is mounted ("Destination device '/dev/sda3' already
+    mounted"). Sources adopted that way before this check existed are no
+    longer in the scan, so usb_sync() tears them down like an unplugged
+    stick once _USB_GONE_GRACE has passed.
 
     lsblk only runs when _block_fingerprint() differs from the previous call
     (or can't be computed, or the cache is too old): usb_monitor calls this
@@ -1671,16 +1722,21 @@ def _usb_scan():
         return list(_usb_scan_cache)
     try:
         r = _run(["lsblk", "-J", "-o",
-                  "PATH,NAME,TYPE,FSTYPE,LABEL,SIZE,TRAN,UUID,PARTUUID,PARTTYPENAME"], timeout=10)
+                  "PATH,NAME,TYPE,FSTYPE,LABEL,SIZE,TRAN,UUID,PARTUUID,PARTTYPENAME,PARTLABEL"],
+                 timeout=10)
         data = json.loads(r.stdout or "{}")
     except Exception:
         _usb_scan_fingerprint = None
         return None
+    system_disks = _usb_system_disks()
     out = []
     for dev in data.get("blockdevices", []):
         if dev.get("tran") != "usb" or dev.get("type") != "disk":
             continue
         kids = dev.get("children") or []
+        if dev.get("path") in system_disks or any(
+                (p.get("partlabel") or "") in _SYSTEM_PARTLABELS for p in kids):
+            continue
         if kids:
             out.extend(p for p in kids if p.get("type") == "part" and not _is_efi_partition(p))
         else:

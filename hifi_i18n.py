@@ -427,6 +427,8 @@ MESSAGES = {
                                 'it': 'Copia delle impostazioni sulla partizione dati fallita'},
     'update.image.installFailed': {'en': 'Installing the system image failed (rauc rc={rc})',
                                    'it': "Installazione dell'immagine di sistema fallita (rauc rc={rc})"},
+    'update.image.slotBusy': {'en': 'The standby system slot {dev} is in use and cannot be written: restart and try again',
+                              'it': 'Lo slot di sistema di riserva {dev} è in uso e non si può scrivere: riavvia e riprova'},
     'update.image.selectorFailed': {'en': 'Writing the A/B boot selector failed',
                                     'it': 'Scrittura del selettore di avvio A/B fallita'},
     'update.ab.noSpace': {
@@ -662,6 +664,8 @@ MESSAGES = {
     'mount.mountedSmbRo': {'en': 'Mounted read-only (SMB {vers}): the other device does not allow writing into this folder',
                            'it': 'Montato in sola lettura (SMB {vers}): l\'altro dispositivo non consente di scrivere in questa cartella'},
     'mount.genericFailed': {'en': 'Mount failed', 'it': 'Mount fallito'},
+    'mount.systemDisk': {'en': 'This partition belongs to the disk Osmium runs from: it is not a music source',
+                         'it': 'Questa partizione fa parte del disco da cui parte Osmium: non è una sorgente musicale'},
     'mount.missingIdentifiers': {'en': 'Missing partuuid/uuid or mount point',
                                  'it': 'partuuid/uuid o mountpoint mancante'},
     'mount.mounted': {'en': 'Mounted', 'it': 'Montato'},
