@@ -117,6 +117,17 @@ def main():
     if player_mac:
         argv += ["-m", player_mac]
 
+    # What Lyrion knows this player by, for the unit's ExecStopPost: when
+    # the speaker goes (switched off, removed) Lyrion is told to forget it
+    # instead of keeping a dead player in its list (hifi_squeezelite.py
+    # forget-unit).
+    try:
+        sys.path.insert(0, "/usr/local/bin")
+        import hifi_squeezelite
+        hifi_squeezelite.record_player(f"hifi-bt-player@{sys.argv[1]}.service", player_mac.lower(), argv[argv.index("-s") + 1])
+    except Exception as e:
+        print(f"cannot record the player for Lyrion: {e}", file=sys.stderr)
+
     os.execv(SQUEEZELITE, argv)
 
 

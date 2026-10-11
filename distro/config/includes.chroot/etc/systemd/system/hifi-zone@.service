@@ -20,6 +20,10 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 ExecStart=/usr/bin/python3 /usr/local/bin/hifi_squeezelite.py run-zone %i
+# The player is gone (stopped, its DAC unplugged, the speaker switched off
+# or removed): Lyrion forgets it instead of listing a dead player. Its
+# settings, queue and sync group come back with it (hifi_squeezelite.py).
+ExecStopPost=-/usr/bin/python3 /usr/local/bin/hifi_squeezelite.py forget-unit %n
 Restart=always
 RestartSec=5
 # 64: the zone is not configured, or switched off — nothing to retry.

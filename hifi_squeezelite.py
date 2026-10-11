@@ -64,6 +64,8 @@ is replaced from a temp file of its own, so no writer loses another's
 change or renames someone else's half-written file.
 """
 import contextlib
+import signal
+import urllib.request
 import fcntl
 import glob
 import hashlib
@@ -1068,9 +1070,87 @@ def sync_zones(zones_path=None, restart=()):
     return zones
 
 
+# ── Players of this device that come and go (zones, Bluetooth) ────
+# Lyrion keeps a player in its list after it disconnects, until it is told
+# to forget it: a zone whose DAC was unplugged or removed, a Bluetooth
+# speaker switched off, stayed there as a dead entry. Every such player
+# writes what Lyrion knows it by into PLAYERS_RUN_DIR when it starts; its
+# unit's ExecStopPost (`forget-unit %n`) reads that back and tells Lyrion
+# to forget it. Lyrion keeps the player's settings, its queue and its sync
+# group (unsync keepSyncGroupId), and does nothing if the player has already
+# reconnected, so a plain restart costs nothing.
+PLAYERS_RUN_DIR = '/run/hifi-players'
+LMS_HTTP_PORT = 9000
+
+
+def _unit_record(unit, run_dir=None):
+    return os.path.join(run_dir or PLAYERS_RUN_DIR, re.sub(r'[^A-Za-z0-9@._-]', '_', unit) + '.json')
+
+
+def record_player(unit, mac, server, run_dir=None):
+    """What `forget-unit` will need once `unit` stops."""
+    try:
+        path = _unit_record(unit, run_dir)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        _write_atomic(path, json.dumps({'mac': mac, 'server': server}) + '\n')
+    except OSError as e:
+        print(f'hifi_squeezelite: cannot record {unit}: {e}', file=sys.stderr)
+
+
+def _lms_host(server):
+    """squeezelite's -s value ('127.0.0.1', 'nas.local:3483', '[::1]:3483')
+    → the host Lyrion's web/JSON-RPC port answers on."""
+    s = str(server or '').strip() or '127.0.0.1'
+    if s.startswith('['):
+        return s[:s.index(']') + 1] if ']' in s else s
+    if s.count(':') == 1:
+        s = s.split(':', 1)[0]
+    elif s.count(':') > 1:
+        s = f'[{s}]'
+    return s
+
+
+def forget_player(server, mac, timeout=5.0, opener=None):
+    """Ask Lyrion to drop a disconnected player from its list. True when it
+    answered; never raises (Lyrion may be down, or on another device)."""
+    if not mac:
+        return False
+    url = f'http://{_lms_host(server)}:{LMS_HTTP_PORT}/jsonrpc.js'
+    body = json.dumps({'id': 1, 'method': 'slim.request', 'params': [mac, ['client', 'forget']]}).encode()
+    try:
+        req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+        with (opener or urllib.request.urlopen)(req, timeout=timeout) as resp:
+            resp.read()
+        return True
+    except Exception as e:
+        print(f'hifi_squeezelite: Lyrion did not forget {mac}: {e}', file=sys.stderr)
+        return False
+
+
+def forget_unit(unit, run_dir=None, forget=None):
+    """ExecStopPost of hifi-zone@ and hifi-bt-player@: the player is gone."""
+    path = _unit_record(unit, run_dir)
+    try:
+        with open(path, encoding='utf-8') as f:
+            rec = json.load(f)
+    except (OSError, ValueError):
+        return False
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+    ok = (forget or forget_player)(rec.get('server'), rec.get('mac'))
+    if ok:
+        print(f'hifi_squeezelite: {unit}: Lyrion told to forget {rec.get("mac")}')
+    return ok
+
+
 def run_zone(zid, zones_path=None, conf_path=CONF, poll=3.0, out=None):
     """ExecStart of hifi-zone@<id>: wait for the zone's DAC (a USB DAC that is
-    unplugged is not an error worth a restart loop), then become squeezelite."""
+    unplugged is not an error worth a restart loop), then run squeezelite —
+    and stop it again if the DAC goes away: squeezelite itself would stay
+    connected to Lyrion, a player with nothing behind it. Lyrion is told to
+    forget it, and the zone waits for its DAC to come back."""
     if not _ZONE_ID_RE.match(zid or ''):
         print(f'hifi_squeezelite: not a zone id: {zid!r}', file=sys.stderr)
         return 64
@@ -1078,20 +1158,54 @@ def run_zone(zid, zones_path=None, conf_path=CONF, poll=3.0, out=None):
     if zone is None or not zone['enabled']:
         print(f'hifi_squeezelite: zone {zid} is not configured or is off', file=sys.stderr)
         return 64
-    waited = False
-    while not card_present(zone['output']):
-        if not waited and out is not None:
-            print(f'hifi_squeezelite: zone {zid}: waiting for {zone["output"]}', file=out)
+    unit = ZONE_UNIT.format(zid)
+    state = {'proc': None}
+
+    def say(msg):
+        if out is not None:
+            print(f'hifi_squeezelite: zone {zid}: {msg}', file=out)
             out.flush()
-        waited = True
-        time.sleep(poll)
-    main, _ = load(conf_path)
-    argv = zone_argv(zone, main['server'])
-    if out is not None:
-        print('hifi_squeezelite: zone ' + zid + ': ' + ' '.join(argv), file=out)
-        out.flush()
-    os.execv(argv[0], argv)
-    return 1
+
+    def stop_child():
+        p = state['proc']
+        if p is None or p.poll() is not None:
+            return
+        p.terminate()
+        try:
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait()
+
+    def on_term(signum, frame):
+        stop_child()
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, on_term)
+    signal.signal(signal.SIGINT, on_term)
+    while True:
+        waited = False
+        while not card_present(zone['output']):
+            if not waited:
+                say(f'waiting for {zone["output"]}')
+            waited = True
+            time.sleep(poll)
+        main, _ = load(conf_path)
+        argv = zone_argv(zone, main['server'])
+        say(' '.join(argv))
+        record_player(unit, zone['mac'], main['server'])
+        state['proc'] = subprocess.Popen(argv)
+        while True:
+            try:
+                return state['proc'].wait(timeout=poll)      # it ended by itself: systemd restarts it
+            except subprocess.TimeoutExpired:
+                pass
+            if not card_present(zone['output']):
+                say(f'{zone["output"]} is gone: player stopped')
+                stop_child()
+                state['proc'] = None
+                forget_unit(unit)
+                break
 
 
 def main(argv):
@@ -1112,6 +1226,9 @@ def main(argv):
         return 0
     if cmd == 'run-zone' and len(argv) == 3:
         return run_zone(argv[2], out=sys.stdout)
+    if cmd == 'forget-unit' and len(argv) == 3:
+        forget_unit(argv[2])
+        return 0
     if cmd == 'lms-rules' and len(argv) == 2:
         # Lyrion's rules only: what hifi-lyrion-update.sh needs before it
         # starts a freshly installed Lyrion.
@@ -1124,7 +1241,7 @@ def main(argv):
         sync_zones()
         return 0
     print('usage: hifi_squeezelite.py apply | show | probe <hw:CARD=…,DEV=n> | run-zone <id> '
-          '| lms-rules | zones-sync', file=sys.stderr)
+          '| forget-unit <unit> | lms-rules | zones-sync', file=sys.stderr)
     return 2
 
 
