@@ -66,22 +66,32 @@ def sox_argv(kind, mode, flt, sox=SOX_NG):
             'channels', '2', 'gain', '-6', 'rate', '-v', str(RATES[mode]), 'sdm', '-f', flt]
 
 
-def bench(sox=SOX_NG, seconds=BENCH_SECONDS):
-    """{mode: share of real time} for a synthetic 44.1 kHz stereo track."""
-    gen = [sox, '-q', '-n', '-r', '44100', '-b', '16', '-c', '2', '-t', 'wav', '-',
-           'synth', str(seconds), 'pinknoise', 'gain', '-10']
+def bench(sox=SOX_NG, seconds=BENCH_SECONDS, tries=2):
+    """{mode: share of real time} for a 44.1 kHz stereo track. The track is
+    rendered to a file first, so only the conversion is timed, and each rate
+    is timed `tries` times keeping the best: one run on a box that is busy
+    for a moment (Lyrion starting, a scan) must not decide for good."""
+    import tempfile
     result = {}
-    for mode in ('dsd64', 'dsd128', 'dsd256'):
-        argv = sox_argv('wav', mode, DEFAULT['filter'], sox)
-        argv[argv.index('dsf') + 1] = '/dev/null'      # the output, '-' in a real run
-        t0 = time.monotonic()
-        src = subprocess.Popen(gen, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        subprocess.run(argv, stdin=src.stdout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                       check=False, timeout=seconds * 10)
-        src.wait(timeout=5)
-        result[mode] = round((time.monotonic() - t0) / seconds, 3)
-        if result[mode] > 1.5:
-            break                       # the next rate costs twice as much: no point timing it
+    with tempfile.TemporaryDirectory(prefix='pcm2dsd-bench-') as tmp:
+        wav = os.path.join(tmp, 'in.wav')
+        subprocess.run([sox, '-q', '-n', '-r', '44100', '-b', '16', '-c', '2', wav,
+                        'synth', str(seconds), 'pinknoise', 'gain', '-10'],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=60)
+        for mode in ('dsd64', 'dsd128', 'dsd256'):
+            argv = sox_argv('wav', mode, DEFAULT['filter'], sox)
+            argv[argv.index('-', argv.index('wav'))] = wav           # the input, stdin in a real run
+            argv[argv.index('dsf') + 1] = '/dev/null'                # the output, stdout in a real run
+            best = None
+            for _ in range(tries):
+                t0 = time.monotonic()
+                subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               check=False, timeout=seconds * 10)
+                took = (time.monotonic() - t0) / seconds
+                best = took if best is None else min(best, took)
+            result[mode] = round(best, 3)
+            if result[mode] > 1.5:
+                break                   # the next rate costs twice as much: no point timing it
     return result
 
 

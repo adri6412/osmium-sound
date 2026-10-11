@@ -1188,6 +1188,7 @@
       "confirmOk": "Turn DSD on",
       "applying": "Applying… Lyrion may restart for a few seconds.",
       "measuring": "Measuring what this processor can do: DSD256 shows up here if it is fast enough.",
+      "tooSlow": "This processor is not fast enough to convert to DSD while the music plays.",
       "filterLabel": "Noise shaping",
       "filterHelp": "How the conversion pushes its noise above the audible band. The differences are subtle: choose by ear.",
       "filter": {

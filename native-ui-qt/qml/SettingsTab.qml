@@ -1265,6 +1265,8 @@ Item {
         var pre = zid ? zid + "|" : "", i
         label("settings.pcm2dsd.label", 14)
         if (!info.available) { note(Tr.t("settings.pcm2dsd.why.noTools"), "dark", "info"); return }
+        // measured, and not even DSD64 fits: say so instead of a lone "Off"
+        if (info.measured && mode === "off" && (info.modes || []).length <= 1) { note(Tr.t("settings.pcm2dsd.tooSlow"), "dark", "info"); return }
         help("settings.pcm2dsd.help", 12)
         var modes = (info.modes || ["off"]).slice()
         if (modes.indexOf(mode) < 0) modes.push(mode)        // chosen earlier, no longer offered

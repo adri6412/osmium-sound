@@ -1254,6 +1254,7 @@
       "volumeWarning": "Il volume digitale non agisce sul DSD: usa il volume del DAC o dell'amplificatore. Abbassalo prima di cominciare.",
       "volumeConfirm": "In DSD il volume di questo player non cambia più niente: la musica esce a livello pieno e il volume si regola sul DAC o sull'amplificatore. Abbassa prima l'amplificatore. Proseguo?",
       "measuring": "Sto misurando cosa regge questo processore: DSD256 compare qui se è abbastanza veloce.",
+      "tooSlow": "Questo processore non è abbastanza veloce per convertire in DSD mentre la musica suona.",
       "filterLabel": "Modellazione del rumore",
       "filterHelp": "Come la conversione sposta il suo rumore oltre la banda udibile. Le differenze sono sottili: scegli a orecchio.",
       "filter": {

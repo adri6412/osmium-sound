@@ -365,7 +365,7 @@ class TestApi(unittest.TestCase):
 
     def bench(self, result):
         with open(self.api.PCM2DSD_BENCH_FILE, 'w') as f:
-            json.dump({'cpu': 'Test CPU x4', 'result': result}, f)
+            json.dump({'v': self.api.PCM2DSD_BENCH_VERSION, 'cpu': 'Test CPU x4', 'result': result}, f)
 
     def lyrion_restarts(self):
         return [c for c in self.calls if c[:3] == ['systemctl', 'restart', 'lyrionmusicserver']]
@@ -374,8 +374,12 @@ class TestApi(unittest.TestCase):
         self.assertEqual(self.api._pcm2dsd_modes(), (['off', 'dsd64', 'dsd128'], True))
         self.bench({'dsd64': 0.1, 'dsd128': 0.2, 'dsd256': 0.4})
         self.assertEqual(self.api._pcm2dsd_modes()[0], ['off', 'dsd64', 'dsd128', 'dsd256'])
-        os.unlink(self.api.PCM2DSD_BENCH_FILE)
+        # a measurement of the old kind is not trusted: taken again
+        with open(self.api.PCM2DSD_BENCH_FILE, 'w') as f:
+            json.dump({'cpu': 'Test CPU x4', 'result': {'dsd64': 0.97}}, f)
         os.unlink(self.sb.sox)                      # no sox_ng: nothing measured, no thread
+        self.assertEqual(self.api._pcm2dsd_modes(), (['off', 'dsd64', 'dsd128'], False))
+        os.unlink(self.api.PCM2DSD_BENCH_FILE)
         self.assertEqual(self.api._pcm2dsd_modes(), (['off', 'dsd64', 'dsd128'], False))
 
     def test_conf_turns_conversion_on_and_off(self):

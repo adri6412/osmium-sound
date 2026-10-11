@@ -25,6 +25,8 @@ const modes = computed(() => {
   if (!list.includes(props.mode)) list.push(props.mode);
   return list;
 });
+// measured, and not even DSD64 fits: say so instead of a lone "Off"
+const tooSlow = computed(() => props.info.measured && props.mode === 'off' && (props.info.modes || []).length <= 1);
 const why = computed(() => (props.state === 'off' || props.state === 'active'
   ? '' : t('settings.pcm2dsd.why.' + props.state)));
 
@@ -39,7 +41,8 @@ function pick(m) {
 <template>
   <div class="pcm2dsd">
     <label>{{ t('settings.pcm2dsd.label') }}</label>
-    <template v-if="info.available">
+    <p class="muted" v-if="info.available && tooSlow">{{ t('settings.pcm2dsd.tooSlow') }}</p>
+    <template v-else-if="info.available">
       <span class="seg">
         <button v-for="m in modes" :key="m" :disabled="busy" :class="{ active: mode === m }" @click="pick(m)">{{ label(m) }}</button>
       </span>

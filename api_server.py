@@ -2246,6 +2246,17 @@ PCM2DSD_BENCH_FILE = '/var/lib/hifi-player/pcm2dsd-bench.json'
 # The share of real time a DSD rate may take on this CPU and still be offered:
 # the rest of the box (the interface, Lyrion's own scans) needs room too.
 PCM2DSD_MAX_LOAD = 0.7
+# Bumped when the measurement changes: an older result is taken again. v1
+# timed the conversion together with the generation of its input, at the
+# first ask, often right after boot -- a 2-core Celeron came out at 97 % for
+# DSD64 that way and was denied a rate it plays at 56 %.
+PCM2DSD_BENCH_VERSION = 2
+# Wait for a quiet box before measuring: past the first minutes after boot
+# (Lyrion starting, the interface loading) and with the load average below
+# this share of the cores. Measured anyway after PCM2DSD_BENCH_MAX_WAIT s.
+PCM2DSD_BENCH_MIN_UPTIME = 180
+PCM2DSD_BENCH_QUIET_LOAD = 0.6
+PCM2DSD_BENCH_MAX_WAIT = 900
 _pcm2dsd_bench_lock = threading.Lock()
 _pcm2dsd_bench_thread = None
 
@@ -2261,7 +2272,21 @@ def _cpu_model():
     return platform.machine()
 
 
+def _box_is_quiet():
+    try:
+        with open('/proc/uptime') as f:
+            uptime = float(f.read().split()[0])
+        load1 = os.getloadavg()[0]
+    except (OSError, ValueError, IndexError):
+        return True
+    return uptime >= PCM2DSD_BENCH_MIN_UPTIME and load1 <= PCM2DSD_BENCH_QUIET_LOAD * (os.cpu_count() or 1)
+
+
 def _pcm2dsd_bench_run(cpu):
+    waited = 0
+    while not _box_is_quiet() and waited < PCM2DSD_BENCH_MAX_WAIT:
+        time.sleep(15)
+        waited += 15
     try:
         r = _run(['/usr/bin/python3', sq.PCM2DSD_WRAPPER, '--bench'], timeout=180)
         result = json.loads(r.stdout or '{}')
@@ -2269,7 +2294,7 @@ def _pcm2dsd_bench_run(cpu):
             raise ValueError(f'no result: {r.stderr!r}')
         os.makedirs(os.path.dirname(PCM2DSD_BENCH_FILE), exist_ok=True)
         with open(PCM2DSD_BENCH_FILE + '.tmp', 'w') as f:
-            json.dump({'cpu': cpu, 'result': result, 'at': int(time.time())}, f)
+            json.dump({'v': PCM2DSD_BENCH_VERSION, 'cpu': cpu, 'result': result, 'at': int(time.time())}, f)
         os.replace(PCM2DSD_BENCH_FILE + '.tmp', PCM2DSD_BENCH_FILE)
         log.info("pcm2dsd: this CPU needs %s of real time per DSD rate", result)
     except Exception:
@@ -2284,7 +2309,8 @@ def _pcm2dsd_bench():
     try:
         with open(PCM2DSD_BENCH_FILE) as f:
             doc = json.load(f)
-        if doc.get('cpu') == cpu and isinstance(doc.get('result'), dict):
+        if (doc.get('v') == PCM2DSD_BENCH_VERSION and doc.get('cpu') == cpu
+                and isinstance(doc.get('result'), dict)):
             return doc['result']
     except (OSError, ValueError, AttributeError):
         pass

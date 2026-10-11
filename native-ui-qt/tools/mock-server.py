@@ -457,7 +457,8 @@ def rpc(player, params):
 
 
 # ── Settings → Audio: the squeezelite model, PCM to DSD and the zones ──
-MOCK_P2D = {"modes": ["off", "dsd64", "dsd128"], "measured": True, "filters": ["clans-8", "sdm-8"],
+# MOCK_P2D_SLOW=1: a CPU that cannot even do DSD64
+MOCK_P2D = {"modes": ["off"] if os.environ.get("MOCK_P2D_SLOW") else ["off", "dsd64", "dsd128"], "measured": True, "filters": ["clans-8", "sdm-8"],
             "available": True, "server_local": True}
 MOCK_FREE = [{"id": "hw:CARD=Kitchen,DEV=0", "name": "iFi Zen DAC — USB Audio", "dsd": "native"}]
 
