@@ -205,6 +205,8 @@ MESSAGES = {
     'vuStore.busy': {'en': 'Already in progress', 'it': 'Operazione già in corso'},
     'vuStore.downloadFailed': {'en': 'Download failed — check the Internet connection',
                                'it': 'Download non riuscito — controlla la connessione a Internet'},
+    'vuStore.noRoom': {'en': 'Not enough room on the system disk: some space always stays free for Lyrion and the system',
+                       'it': 'Non c\'è abbastanza spazio sul disco di sistema: un po\' di spazio resta sempre libero per Lyrion e il sistema'},
     'vuStore.verifyFailed': {'en': 'The downloaded file is damaged and was discarded', 'it': 'Il file scaricato è danneggiato ed è stato scartato'},
     'vuStore.invalidPackage': {'en': 'This VU meter package is not valid', 'it': 'Il pacchetto di questo VU meter non è valido'},
     'vuStore.installFailed': {'en': 'Could not install the VU meter', 'it': 'Impossibile installare il VU meter'},
@@ -223,6 +225,8 @@ MESSAGES = {
     'animStore.busy': {'en': 'Already in progress', 'it': 'Operazione già in corso'},
     'animStore.downloadFailed': {'en': 'Download failed — check the Internet connection',
                                  'it': 'Download non riuscito — controlla la connessione a Internet'},
+    'animStore.noRoom': {'en': 'Not enough room on the system disk: some space always stays free for Lyrion and the system',
+                       'it': 'Non c\'è abbastanza spazio sul disco di sistema: un po\' di spazio resta sempre libero per Lyrion e il sistema'},
     'animStore.verifyFailed': {'en': 'The downloaded file is damaged and was discarded', 'it': 'Il file scaricato è danneggiato ed è stato scartato'},
     'animStore.invalidPackage': {'en': 'This animation package is not valid', 'it': "Il pacchetto di questa animazione non è valido"},
     'animStore.installFailed': {'en': 'Could not install the animation', 'it': "Impossibile installare l'animazione"},
@@ -535,6 +539,22 @@ MESSAGES = {
     'backup.startFailedDetail': {'en': 'Starting the backup failed: {detail}',
                                  'it': 'Avvio del backup fallito: {detail}'},
     'backup.startFailed': {'en': 'Starting the backup failed', 'it': 'Avvio del backup fallito'},
+    # ── The system disk's reserve (hifi_diskguard.py) ──────────────────
+    'disk.noRoom': {
+        'en': 'Not enough room on the system disk: this needs {need} GB and {room} GB are left, '
+              'because {reserve} GB always stay free for Lyrion and the system. '
+              'Free some space or use another disk.',
+        'it': 'Non c\'è abbastanza spazio sul disco di sistema: servono {need} GB e ne restano {room}, '
+              'perché {reserve} GB restano sempre liberi per Lyrion e il sistema. '
+              'Libera un po\' di spazio o usa un altro disco.'},
+    'disk.noRoomInstall': {
+        'en': 'Not enough room on the system disk to install Lyrion: it needs {need} GB free and there are {free}. Free some space and try again.',
+        'it': 'Non c\'è abbastanza spazio sul disco di sistema per installare Lyrion: servono {need} GB liberi e ce ne sono {free}. Libera un po\' di spazio e riprova.'},
+    'disk.noRoomStopped': {
+        'en': 'Stopped: the system disk reached the {reserve} GB kept free for Lyrion and the system. '
+              'What was not finished has been removed.',
+        'it': 'Interrotto: il disco di sistema è arrivato ai {reserve} GB tenuti liberi per Lyrion e il sistema. '
+              'Quel che non era finito è stato tolto.'},
     'backup.notFound': {'en': 'Backup not found', 'it': 'Backup non trovato'},
     'backup.unreadable': {'en': 'Backup is not readable', 'it': 'Backup non leggibile'},
     'backup.deleted': {'en': 'Backup deleted', 'it': 'Backup eliminato'},

@@ -40,6 +40,7 @@ import hifi_backup as hb
 import hifi_metadata as hmeta
 import hifi_tags as htags
 import hifi_cdrip as hcd
+import hifi_diskguard as hdg
 from hifi_logging import tee_stdio_to_file
 from hifi_i18n import t as _ht
 # Every print() below keeps reaching the console/journald unchanged AND now also
@@ -6048,7 +6049,28 @@ def _file_job_set(jid, **fields):
             job.update(fields)
 
 
-def _copy_tree(src, dst, bump):
+def _copy_file_budgeted(src, dst, budget):
+    """shutil.copy2() in 1 MiB steps, each one counted against the system
+    disk's reserve (hifi_diskguard): one big file must not be the one that
+    fills the disk either. A file stopped half way is removed."""
+    try:
+        with open(src, "rb") as fi, open(dst, "wb") as fo:
+            while True:
+                chunk = fi.read(1024 * 1024)
+                if not chunk:
+                    break
+                fo.write(chunk)
+                budget.add(len(chunk))
+    except BaseException:
+        try:
+            os.remove(dst)
+        except OSError:
+            pass
+        raise
+    shutil.copystat(src, dst)
+
+
+def _copy_tree(src, dst, bump, budget=None):
     """Recursive copy that reports as it goes. shutil.copytree() would be
     shorter but gives no progress, and copying a 200 GB library with a frozen
     bar looks exactly like a hang."""
@@ -6056,9 +6078,12 @@ def _copy_tree(src, dst, bump):
         os.makedirs(dst, exist_ok=True)
         _claim_for_share(dst)
         for name in sorted(os.listdir(src)):
-            _copy_tree(os.path.join(src, name), os.path.join(dst, name), bump)
+            _copy_tree(os.path.join(src, name), os.path.join(dst, name), bump, budget)
         return
-    shutil.copy2(src, dst, follow_symlinks=False)
+    if budget is not None and budget.active and os.path.isfile(src) and not os.path.islink(src):
+        _copy_file_budgeted(src, dst, budget)
+    else:
+        shutil.copy2(src, dst, follow_symlinks=False)
     _claim_for_share(dst)
     try:
         bump(os.path.getsize(dst), os.path.basename(dst))
@@ -6071,9 +6096,31 @@ def _file_worker(jid, op, paths, dest):
     filesystems (NAS -> internal disk) is a full copy, and the request would
     otherwise time out long before it finished."""
     counted = op in ("copy", "move")
-    total = sum(_tree_size(p) for p in paths) if counted else len(paths)
+    sizes = {p: _tree_size(p) for p in paths} if counted else {}
+    total = sum(sizes.values()) if counted else len(paths)
     _file_job_set(jid, total=total)
     state = {"done": 0}
+    budget = hdg.Budget(dest) if counted and dest else None
+    if budget is not None and budget.active:
+        # What lands on the system disk: everything copied, and what a move
+        # brings from another disk (a move within it only renames).
+        try:
+            dest_dev = os.stat(dest).st_dev
+        except OSError:
+            dest_dev = None
+        def grows(p):
+            if op == "copy":
+                return True
+            try:
+                return os.stat(p).st_dev != dest_dev
+            except OSError:
+                return True
+        try:
+            hdg.check(dest, sum(n for p, n in sizes.items() if grows(p)))
+        except hdg.NoRoom as e:
+            _file_job_set(jid, state="error", code="disk.noRoom", need=e.need, room=e.room,
+                          reserve=e.reserve, finished=time.time())
+            return
 
     def bump(n, name):
         state["done"] += n
@@ -6087,7 +6134,7 @@ def _file_worker(jid, op, paths, dest):
             if target and os.path.lexists(target):
                 target = _unique_name(target)
             if op == "copy":
-                _copy_tree(p, target, bump)
+                _copy_tree(p, target, bump, budget)
             elif op == "move":
                 try:
                     os.rename(p, target)      # same filesystem: instant
@@ -6096,7 +6143,7 @@ def _file_worker(jid, op, paths, dest):
                 except OSError:
                     # Crossing filesystems (EXDEV) or a busy mount: copy, then
                     # remove the original only once the copy is complete.
-                    _copy_tree(p, target, bump)
+                    _copy_tree(p, target, bump, budget)
                     if os.path.isdir(p) and not os.path.islink(p):
                         shutil.rmtree(p, ignore_errors=True)
                     else:
@@ -6108,6 +6155,11 @@ def _file_worker(jid, op, paths, dest):
                     os.remove(p)
                 bump(1, name)
         _file_job_set(jid, state="done", progress=100, current="")
+    except hdg.NoRoom as e:
+        # stopped at the reserve: the file half way is gone, the originals
+        # of a move are still where they were
+        _file_job_set(jid, state="error", code="disk.noRoomStopped", need=e.need, room=e.room,
+                      reserve=e.reserve)
     except OSError as e:
         _file_job_set(jid, state="error", code="msg.fileOpFailed",
                       detail=_oserror_detail(e))
@@ -6865,7 +6917,10 @@ def api_files_job():
     if not job:
         return _err("msg.jobNotFound", 404)
     job["success"] = True
-    if job.get("code"):
+    if job.get("code", "").startswith("disk."):
+        e = hdg.NoRoom(job.get("current") or "", job.get("need", 0), job.get("room", 0), job.get("reserve", 0))
+        job["message"] = hdg.message(e, _req_lang(), stopped=job["code"] == "disk.noRoomStopped")
+    elif job.get("code"):
         job["message"] = _m(job["code"])
     return jsonify(job)
 
@@ -8277,7 +8332,14 @@ def _rip_state_for_reader():
     code = st.get("code")
     if code:
         values = st.get("vars") if isinstance(st.get("vars"), dict) else {}
-        st["message"] = _ht(code, _hlang(), **values)
+        if code.startswith("disk."):           # the system disk's reserve: sizes in bytes
+            try:
+                e = hdg.NoRoom("", int(values.get("need", 0)), int(values.get("room", 0)), int(values.get("reserve", 0)))
+                st["message"] = hdg.message(e, _hlang(), stopped=code == "disk.noRoomStopped")
+            except (TypeError, ValueError):
+                st["message"] = _ht(code, _hlang())
+        else:
+            st["message"] = _ht(code, _hlang(), **values)
     return st
 
 

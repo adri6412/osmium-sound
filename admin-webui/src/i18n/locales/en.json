@@ -129,6 +129,12 @@
       "usedSharedDesc": "The device's software and your data.",
       "free": "Free",
       "freeDesc": "Still available for your data.",
+      "reserve": "Kept free",
+      "reserveDesc": "Always left free for Lyrion and the system: copies to this disk stop before it.",
+      "warnTitle": "The system disk is {percent}% full",
+      "warnText": "{room} are left for your music. When they run out, copies to this disk stop, so that Lyrion keeps working.",
+      "fullTitle": "The system disk is full",
+      "fullText": "Copies to this disk are stopped, so the {reserve} Lyrion and the system need stay free. Delete something or move some music to another disk.",
       "total": "Total"
     },
     "temperature": "CPU temperature",

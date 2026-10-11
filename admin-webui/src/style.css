@@ -469,6 +469,11 @@ h2.page { font-size: 20px; margin: 10px 0 4px; }
 .du-system { background: #7a7a7a; }
 .du-used, .du-usedShared { background: var(--gold); }
 .du-free { background: var(--light); }
+.du-reserve { background: repeating-linear-gradient(45deg, #6b6b6b 0 3px, #454545 3px 6px); }
+.disk-alert.warn { border-color: #facc15; }
+.disk-alert.warn h3 .dot { background: #facc15; }
+.disk-alert.full { border-color: #f87171; }
+.disk-alert.full h3 .dot { background: #f87171; }
 .du-wrap { overflow-x: auto; }
 table.du { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.du th { font-size: 12px; font-weight: 500; color: var(--muted); text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--border); }

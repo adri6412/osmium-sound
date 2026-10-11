@@ -47,6 +47,14 @@ case "$URL" in
 esac
 
 download_deb() {
+    # The .deb and what it unpacks into: about 1 GiB. Checked first, so a full
+    # disk is said plainly instead of ending in a half-installed Lyrion.
+    if [ -f /usr/local/bin/hifi_diskguard.py ]; then
+        mkdir -p "$WORKDIR"
+        if ! _room=$(python3 /usr/local/bin/hifi_diskguard.py need-free "$WORKDIR" 1073741824 2>/dev/null); then
+            if [ -n "$_room" ]; then fail "$_room"; fi
+        fi
+    fi
     hifi_curl_progress "$URL" "$DEB" 20 55 "Scaricamento Lyrion $VERSION…" \
         --proto '=https' --proto-redir '=https' \
         || fail "Download fallito da $URL"

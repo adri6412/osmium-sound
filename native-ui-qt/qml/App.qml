@@ -566,6 +566,26 @@ Item {
         onEnded: remoteIntro.check()                       // another known remote may be waiting for its map
     }
     Toast { id: toast; anchors.fill: parent }             // z-[10050]: sopra CD (z-70) e aggiornamento
+    // The system disk filling up (hifi_diskguard.py, /system_disk): a notice
+    // when it passes 90 %, and every half hour while it sits at the reserve
+    // kept for Lyrion, where copies to it are refused.
+    Timer {
+        id: diskWatch
+        property string level: "ok"
+        property real lastSaid: 0
+        interval: 60000; repeat: true; running: true; triggeredOnStart: true
+        onTriggered: Api.get(Api.apiBase + "/system_disk", function(ok, d) {
+            if (!ok || !d || !d.available) return
+            var lv = d.level, now = Sys.now(), was = diskWatch.level
+            diskWatch.level = lv
+            if (lv === "ok") return
+            if (lv === was && (lv === "warn" || now - diskWatch.lastSaid < 1800000)) return
+            diskWatch.lastSaid = now
+            var gb = function(n) { var x = (n / 1e9).toFixed(1); return Tr.lang === "it" ? x.replace(".", ",") : x }
+            toast.say("hard-drive", Tr.t("player.systemDisk." + lv)
+                      .replace("{percent}", Math.round(d.percent)).replace("{room}", gb(d.room)).replace("{reserve}", gb(d.reserve)))
+        }, 5000)
+    }
     VirtualKeyboard { id: vk; anchors.fill: parent }
     Screensaver {
         id: screensaver

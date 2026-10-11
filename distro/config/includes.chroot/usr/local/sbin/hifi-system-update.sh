@@ -204,6 +204,12 @@ apply)
     if [ -f /etc/systemd/system/hifi-zones.service ]; then
         systemctl enable hifi-zones.service 2>/dev/null || true
     fi
+    # The system disk's reserve for Lyrion (hifi-disk-reserve.service): the
+    # size now, the group for Lyrion at the next boot, when it starts after it.
+    if [ -f /etc/systemd/system/hifi-disk-reserve.service ]; then
+        systemctl enable hifi-disk-reserve.service 2>/dev/null || true
+        systemctl start hifi-disk-reserve.service 2>/dev/null || true
+    fi
     if [ -f /etc/systemd/system/hifi-webui.service ]; then
         systemctl enable hifi-webui.service 2>/dev/null || true
     fi
@@ -304,6 +310,12 @@ full)
     # only — it runs at the next boot, before Lyrion, which is when it is needed.
     if [ -f /etc/systemd/system/hifi-zones.service ]; then
         systemctl enable hifi-zones.service 2>/dev/null || true
+    fi
+    # The system disk's reserve for Lyrion (hifi-disk-reserve.service): the
+    # size now, the group for Lyrion at the next boot, when it starts after it.
+    if [ -f /etc/systemd/system/hifi-disk-reserve.service ]; then
+        systemctl enable hifi-disk-reserve.service 2>/dev/null || true
+        systemctl start hifi-disk-reserve.service 2>/dev/null || true
     fi
     if [ -f /etc/systemd/system/hifi-webui.service ]; then
         systemctl enable hifi-webui.service 2>/dev/null || true

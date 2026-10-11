@@ -190,10 +190,15 @@ const disk = computed(() => {
   const split = st.disk_system_gb != null && st.disk_device_gb != null;
   const total = split ? st.disk_device_gb : st.disk_total_gb;
   if (!(total > 0)) return null;
-  const used = Math.max(0, st.disk_total_gb - st.disk_free_gb);
+  // The reserve always kept free for Lyrion and the system (hifi_diskguard):
+  // a row of its own, taken out of "used", where the filesystem counts it.
+  const sd = st.system_disk;
+  const reserveGb = sd && sd.available ? Math.round((sd.reserve / 1024 ** 3) * 10) / 10 : 0;
+  const used = Math.max(0, st.disk_total_gb - st.disk_free_gb - reserveGb);
   const rows = [];
   if (split) rows.push({ key: 'system', gb: st.disk_system_gb });
   rows.push({ key: split ? 'used' : 'usedShared', gb: used });
+  if (reserveGb > 0) rows.push({ key: 'reserve', gb: reserveGb });
   rows.push({ key: 'free', gb: st.disk_free_gb });
   for (const r of rows) r.pct = Math.min(100, Math.max(0, (r.gb / total) * 100));
   // Whole percentages that still add up to 100 (largest remainder), or the
@@ -203,6 +208,13 @@ const disk = computed(() => {
   rows.map((r, i) => i).sort((a, b) => (rows[b].pct - floors[b]) - (rows[a].pct - floors[a]))
     .forEach((i) => { rows[i].share = floors[i] + (left-- > 0 ? 1 : 0); });
   return { rows, total };
+});
+// warn: more than 90 % used; full: at the reserve, copies to it are refused
+const diskAlert = computed(() => {
+  const sd = stats.value.system_disk;
+  if (!sd || !sd.available || (sd.level !== 'warn' && sd.level !== 'full')) return null;
+  const gb = (n) => fmtDiskGb(n / 1024 ** 3);
+  return { level: sd.level, percent: Math.round(sd.percent), room: gb(sd.room), reserve: gb(sd.reserve) };
 });
 const pctLabel = (r) => (r.share === 0 && r.gb > 0 ? '<1%' : r.share + '%');
 // In this table the parts carry a decimal, so the total does too (6.6 + 1.7
@@ -220,6 +232,10 @@ const gpu = computed(() => [
 
 <template>
   <h2 class="page">{{ t('dashboard.title') }}</h2>
+  <div v-if="diskAlert" class="card disk-alert" :class="diskAlert.level" role="alert">
+    <h3><span class="dot"></span>{{ t('dashboard.disk.' + diskAlert.level + 'Title', diskAlert) }}</h3>
+    <p class="sub">{{ t('dashboard.disk.' + diskAlert.level + 'Text', diskAlert) }}</p>
+  </div>
   <div class="grid">
     <a class="tile" :href="lmsUrl" target="_blank">
       <span class="t gold">{{ t('dashboard.music') }}</span>

@@ -455,6 +455,10 @@
     "removeFromPlaylist": "Togli dalla playlist",
     "playlistDeleteConfirm": "Eliminare la playlist \"{name}\"?",
     "playlistExists": "Esiste già una playlist con questo nome",
+    "systemDisk": {
+      "warn": "Il disco di sistema è pieno al {percent}%: restano {room} GB per la musica. A Lyrion serve un po' di spazio per lavorare.",
+      "full": "Il disco di sistema è pieno: le copie lì si fermano, così restano liberi i {reserve} GB che servono a Lyrion. Libera un po' di spazio."
+    },
     "signalPath": {
       "title": "Percorso del segnale",
       "source": "Sorgente",

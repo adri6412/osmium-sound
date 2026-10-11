@@ -35,6 +35,10 @@ except Exception:
     pass
 import hifi_cdrip  # noqa: E402
 try:
+    import hifi_diskguard  # noqa: E402
+except Exception:                   # an image without it: no reserve to keep
+    hifi_diskguard = None
+try:
     from hifi_i18n import t as _t  # noqa: E402
 except Exception:                   # a status line is never worth a crash
     def _t(code, lang, **_v):
@@ -69,9 +73,32 @@ def write_status(state, track, total, progress, message, **extra):
     os.replace(tmp, STATUS)
 
 
+def no_room(e, stopped=False):
+    """The status line for the system disk's reserve (hifi_diskguard): the
+    sizes in bytes, worded by sources_server in the reader's language."""
+    return msg("disk.noRoomStopped" if stopped else "disk.noRoom", need=e.need, room=e.room, reserve=e.reserve)
+
+
+def check_room(path, need, work, stopped=False, track=0, total=0):
+    """Stop before writing `need` more bytes at `path` would eat into the
+    system disk's reserve for Lyrion. Free on any other disk."""
+    if hifi_diskguard is None:
+        return
+    try:
+        hifi_diskguard.check(path, need)
+    except hifi_diskguard.NoRoom as e:
+        shutil.rmtree(work, ignore_errors=True)
+        fail(no_room(e, stopped), track, total)
+
+
 def fail(message, track=0, total=0):
     write_status("error", track, total, 0, message)
-    text = _t(message["code"], "en", **message["vars"]) if isinstance(message, dict) else message
+    if isinstance(message, dict) and message["code"].startswith("disk.") and hifi_diskguard is not None:
+        v = message["vars"]
+        text = hifi_diskguard.message(hifi_diskguard.NoRoom("", int(v["need"]), int(v["room"]), int(v["reserve"])),
+                                      "en", stopped=message["code"] == "disk.noRoomStopped")
+    else:
+        text = _t(message["code"], "en", **message["vars"]) if isinstance(message, dict) else message
     print(f"E: [hifi-rip] {text}", file=sys.stderr)
     sys.exit(1)
 
@@ -430,6 +457,10 @@ def main():
     if not tracks:
         shutil.rmtree(work, ignore_errors=True)
         fail(msg("cdrip.noAudioTracks"))
+    # The whole disc as WAV is a ceiling for what stays (FLAC is smaller)
+    # and for the one track in the works besides it.
+    check_room(work, sum(int((toc.get(int(tr.get("num") or (i + 1))) or {}).get("length") or 0) * CD_FRAME_BYTES
+                         for i, tr in enumerate(tracks)), work)
 
     results, outputs = [], []
     for i, tr in enumerate(tracks):
@@ -443,6 +474,9 @@ def main():
 
         def on_progress(frac, _i=i, _label=label):
             write_status("ripping", num, total, int((_i + frac) * 100 / total), _label)
+        # a track at a time too: the disk may be filling from elsewhere (the
+        # WAV, its check copy or de-emphasis, then the FLAC)
+        check_room(work, 2 * expected, work, stopped=i > 0, track=num, total=total)
         res = rip_track(device, num, wav, opt, expected, on_progress)
         cancelled()
         if not res.get("ok") and hifi_cdrip.is_non_audio_error(res.get("error")):

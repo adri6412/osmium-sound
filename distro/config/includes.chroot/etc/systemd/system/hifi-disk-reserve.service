@@ -1,0 +1,15 @@
+[Unit]
+# Osmium Sound — the system disk's reserve for Lyrion and the kiosk (see
+# hifi-disk-reserve.sh): before both, because a group added to a user only
+# counts for the processes started after it.
+Description=Osmium Sound - system disk reserve for Lyrion
+After=local-fs.target
+Before=lyrionmusicserver.service hifi-qt.service smbd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh /usr/local/sbin/hifi-disk-reserve.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -593,6 +593,11 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/squeezelite_conf": return self._json(mock_sq())
             if u.path == "/zones": return self._json(mock_zones())
             if u.path == "/signal_path": return self._json(mock_signal_path(parse_qs(u.query)))
+            if u.path == "/system_disk":           # MOCK_DISK=warn|full: the system disk filling up
+                lv = os.environ.get("MOCK_DISK", "ok"); tot = 64 * 10**9; res = int(tot * 0.05)
+                free = {"ok": 30 * 10**9, "warn": 5 * 10**9, "full": res - 10**8}.get(lv, 30 * 10**9)
+                return self._json({"success": True, "available": True, "total": tot, "free": free, "used": tot - free,
+                                   "reserve": res, "room": max(0, free - res), "percent": round((tot - free) * 100 / tot, 1), "level": lv})
             if u.path in table: return self._json(table[u.path])
             return self._json({"success": False, "error": "mock: " + u.path}, 404)
         if port == 8080:

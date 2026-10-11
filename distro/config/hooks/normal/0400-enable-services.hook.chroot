@@ -44,6 +44,7 @@ systemctl enable lyrionmusicserver.service  || true
 # before Lyrion at every boot from /etc/hifi-player (carried over by an A/B
 # swap), so like hifi-bt-out the unit is always on and the choice is the file.
 systemctl enable hifi-zones.service         || true
+systemctl enable hifi-disk-reserve.service  || true
 # Network audio receivers (AirPlay/UPnP/Spotify Connect) are Lyrion plugins,
 # not system services — nothing to enable here.
 

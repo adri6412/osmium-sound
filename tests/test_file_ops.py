@@ -335,5 +335,51 @@ class MessageCatalogTests(unittest.TestCase):
                 self.assertIn(code, ss.SOURCES_I18N[lang], f"{code} missing in {lang}")
 
 
+class SystemDiskReserveTests(FileOpsBase):
+    """Copies and moves onto the system disk stop at the reserve kept for
+    Lyrion (hifi_diskguard): refused up front when the total does not fit,
+    stopped half way when the disk fills meanwhile."""
+    GB = 1000 ** 3
+
+    def setUp(self):
+        super().setUp()
+        self._dg = (ss.hdg.on_system_disk, ss.hdg._vfs, ss.hdg.RECHECK_BYTES)
+        self.dest = os.path.join(self.root, "Dest")
+        ss.hdg.on_system_disk = lambda p: os.path.abspath(p).startswith(self.dest)
+
+    def tearDown(self):
+        ss.hdg.on_system_disk, ss.hdg._vfs, ss.hdg.RECHECK_BYTES = self._dg
+        super().tearDown()
+
+    def test_refused_up_front(self):
+        ss.hdg._vfs = lambda p: (100 * self.GB, 5 * self.GB + 100)    # 100 bytes above the reserve
+        job = self.run_job("copy", [os.path.join(self.root, "Album")], self.dest)
+        self.assertEqual((job["state"], job["code"]), ("error", "disk.noRoom"))
+        self.assertEqual(os.listdir(self.dest), [])
+        msg = ss.hdg.message(ss.hdg.NoRoom("", job["need"], job["room"], job["reserve"]), "it")
+        self.assertIn("Lyrion", msg)
+
+    def test_stopped_half_way_keeps_the_originals_of_a_move(self):
+        calls = {"n": 0}
+
+        def vfs(p):
+            calls["n"] += 1
+            return (100 * self.GB, 10 * self.GB if calls["n"] == 1 else 4 * self.GB)
+        ss.hdg._vfs = vfs
+        ss.hdg.RECHECK_BYTES = 256
+        src = os.path.join(self.root, "Album")
+        with mock.patch("os.rename", side_effect=OSError(18, "EXDEV")):     # as from another disk
+            job = self.run_job("move", [src], self.dest)
+        self.assertEqual((job["state"], job["code"]), ("error", "disk.noRoomStopped"))
+        self.assertTrue(os.path.exists(os.path.join(src, "CD1", "01.flac")))      # nothing lost
+        self.assertFalse(os.path.exists(os.path.join(self.dest, "Album", "CD1", "01.flac")))   # no half file
+
+    def test_other_disks_unlimited(self):
+        ss.hdg.on_system_disk = lambda p: False
+        ss.hdg._vfs = lambda p: (100 * self.GB, 0)
+        job = self.run_job("copy", [os.path.join(self.root, "Album")], self.dest)
+        self.assertEqual(job["state"], "done")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -129,6 +129,12 @@
       "usedSharedDesc": "Il software dell'apparecchio e i tuoi dati.",
       "free": "Libero",
       "freeDesc": "Ancora disponibile per i tuoi dati.",
+      "reserve": "Tenuto libero",
+      "reserveDesc": "Sempre libero per Lyrion e il sistema: le copie su questo disco si fermano prima.",
+      "warnTitle": "Il disco di sistema è pieno al {percent}%",
+      "warnText": "Restano {room} per la tua musica. Quando finiscono, le copie su questo disco si fermano, così Lyrion continua a funzionare.",
+      "fullTitle": "Il disco di sistema è pieno",
+      "fullText": "Le copie su questo disco sono ferme, così restano liberi i {reserve} che servono a Lyrion e al sistema. Cancella qualcosa o sposta un po' di musica su un altro disco.",
       "total": "Totale"
     },
     "temperature": "Temperatura CPU",

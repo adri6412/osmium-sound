@@ -27,6 +27,7 @@ from hifi_i18n import t as _t
 from hifi_i18n import MESSAGES as _I18N_MESSAGES
 import hifi_squeezelite as sq
 import hifi_signal_path
+import hifi_diskguard
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -700,6 +701,8 @@ def get_system_stats():
             'temp_c': _cpu_temp_c(),
             'gpu_percent': _gpu_busy_pct(),
             'gpu_temp_c': _gpu_temp_c(),
+            # the reserve kept for Lyrion and the warning level (hifi_diskguard)
+            'system_disk': hifi_diskguard.status(),
         }
     except Exception:
         log.exception("get_system_stats failed")
@@ -707,7 +710,7 @@ def get_system_stats():
                 'ram_total_mb': None, 'disk_path': None, 'disk_percent': None,
                 'disk_used_gb': None, 'disk_total_gb': None, 'disk_free_gb': None,
                 'disk_system_gb': None, 'disk_device_gb': None, 'temp_c': None,
-                'gpu_percent': None, 'gpu_temp_c': None}
+                'gpu_percent': None, 'gpu_temp_c': None, 'system_disk': None}
 
 _IFACE_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
 
@@ -5322,6 +5325,11 @@ def _vu_install_entry(entry):
     _vu_store['jobs']). True when installed."""
     sid = entry['id']
     try:
+        # the pack, unpacked next to it: never into the system disk's reserve
+        try:
+            hifi_diskguard.check(VU_STORE_DIR, 3 * int(entry['size']))
+        except hifi_diskguard.NoRoom:
+            raise _VuStoreError('vuStore.noRoom')
         data = _vu_http_get(urllib.parse.urljoin(VU_STORE_URL, entry['file']), entry['size'])
         if len(data) != entry['size'] or _hashlib.sha256(data).hexdigest() != entry['sha256']:
             raise _VuStoreError('vuStore.verifyFailed')
@@ -5773,6 +5781,11 @@ def _anim_install_entry(entry):
     _anim_store['jobs']). True when installed."""
     aid = entry['id']
     try:
+        # the pack, unpacked next to it: never into the system disk's reserve
+        try:
+            hifi_diskguard.check(ANIM_STORE_DIR, 3 * int(entry['size']))
+        except hifi_diskguard.NoRoom:
+            raise _AnimStoreError('animStore.noRoom')
         data = _anim_get(urllib.parse.urljoin(ANIM_STORE_URL, entry['file']), entry['size'])
         if len(data) != entry['size'] or _hashlib.sha256(data).hexdigest() != entry['sha256']:
             raise _AnimStoreError('animStore.verifyFailed')
@@ -10711,6 +10724,12 @@ def api_signal_path():
     except Exception:
         log.exception("signal_path failed")
         return jsonify({'success': False})
+
+# The system disk and its reserve for Lyrion (hifi_diskguard.py): the kiosk
+# and the web admin warn from this when it fills up.
+@app.route('/system_disk', methods=['GET'])
+def api_system_disk():
+    return jsonify(dict(hifi_diskguard.status(), success=True))
 
 @app.route('/zones', methods=['GET'])
 def api_zones():
