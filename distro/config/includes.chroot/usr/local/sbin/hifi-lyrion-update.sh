@@ -137,8 +137,6 @@ if [ -f /usr/lib/osmium/IMAGE_VERSION ]; then
     printf '%s\n' "$ver" > "$dest.new/VERSION"
     rm -rf "$dest"; mv "$dest.new" "$dest"
     systemctl stop lyrionmusicserver 2>/dev/null || true
-    # the version this one replaces: the one kept below as a way back
-    prev=$(basename "$(readlink "$LYR_ROOT/current" 2>/dev/null || true)")
     ln -sfn "$ver" "$LYR_ROOT/current.new" && mv -T "$LYR_ROOT/current.new" "$LYR_ROOT/current"
     sync
     # ciò che faceva il postinst: cartelle di stato del server e loro proprietario
@@ -146,22 +144,16 @@ if [ -f /usr/lib/osmium/IMAGE_VERSION ]; then
              /var/lib/squeezeboxserver/playlists /var/log/squeezeboxserver; do
         mkdir -p "$d"; chown squeezeboxserver:nogroup "$d" 2>/dev/null || true
     done
-    # versioni vecchie: si tiene solo la precedente
-    # "The previous one" is the version that was current until a moment ago.
-    # When there is none to go by (first install, or a reinstall of the same
-    # version) it is the highest of the others BY VERSION: the old loop kept
-    # whichever sorted last alphabetically, and 9.0.9 sorts after 9.0.10.
+    # versioni vecchie: si tiene solo quella in uso
+    # Only the version in use stays. The one it replaced used to be kept "as
+    # a way back", but nothing ever went back to it by itself, and on a 16 GB
+    # disk (about 5 GB of data partition) its ~225 MB were missed. A leftover
+    # <ver>.new of an interrupted install goes too.
     keep=$(basename "$(readlink "$LYR_ROOT/current")")
-    # (a leftover <ver>.new of an interrupted install is never the one kept)
-    others=$(find "$LYR_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name "$keep" \
-                  ! -name current -printf '%f\n' | sort -V)
-    if [ -z "$prev" ] || [ "$prev" = "$keep" ] \
-       || ! printf '%s\n' "$others" | grep -qxF "$prev"; then
-        prev=$(printf '%s\n' "$others" | grep -v '\.new$' | tail -n 1)
+    # (never with no version in use to go by: that would take them all)
+    if [ -n "$keep" ] && [ -d "$LYR_ROOT/$keep" ]; then
+        find "$LYR_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name "$keep" ! -name current -exec rm -rf {} +
     fi
-    for b in $others; do
-        if [ "$b" != "$prev" ]; then rm -rf "${LYR_ROOT:?}/$b"; fi
-    done
     write_status restarting 90 "Riavvio Lyrion…"
     systemctl daemon-reload 2>/dev/null || true
     # A deliberate start must not be refused by the unit's crash-loop limit

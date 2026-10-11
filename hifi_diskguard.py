@@ -8,7 +8,11 @@ first to hit "No space left on device", and it rewrites server.prefs half
 way, so it does not come back even after the space is freed (seen in the
 field, 2026-10).
 
-Two layers keep RESERVE free (max(2 GiB, 5 %) of the partition):
+Two layers keep the reserve free: 5 % of the partition, never less than
+512 MiB nor more than 2 GiB. On a 16 GB disk the data partition is about
+5 GB (the rest is the boot partition and the two system slots), and a 2 GiB
+floor took 40 % of it; 512 MiB is plenty for Lyrion's prefs, cache and
+database to keep writing, and 2 GiB is plenty on any disk:
 
   * this module, for everything our services write there. They run as root,
     and root ignores the ext4 reserve: every writer of user-sized data
@@ -32,7 +36,8 @@ import sys
 # What the reserve protects; its filesystem is "the system disk".
 SYSTEM_MARK = '/var/lib/squeezeboxserver'
 SYSTEM_FALLBACK = '/var'
-MIN_RESERVE = 2 * 1024 ** 3
+MIN_RESERVE = 512 * 1024 ** 2
+MAX_RESERVE = 2 * 1024 ** 3
 RESERVE_FRACTION = 0.05
 # Above this share of the disk used, the screens warn.
 WARN_FRACTION = 0.90
@@ -84,7 +89,7 @@ def on_system_disk(path, sys_dev=None):
 
 
 def reserve_for(total_bytes):
-    return int(max(MIN_RESERVE, total_bytes * RESERVE_FRACTION))
+    return int(min(MAX_RESERVE, max(MIN_RESERVE, total_bytes * RESERVE_FRACTION)))
 
 
 def _vfs(path):

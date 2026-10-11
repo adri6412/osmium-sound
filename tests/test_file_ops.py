@@ -352,7 +352,7 @@ class SystemDiskReserveTests(FileOpsBase):
         super().tearDown()
 
     def test_refused_up_front(self):
-        ss.hdg._vfs = lambda p: (100 * self.GB, 5 * self.GB + 100)    # 100 bytes above the reserve
+        ss.hdg._vfs = lambda p: (100 * self.GB, ss.hdg.MAX_RESERVE + 100)    # 100 bytes above the reserve
         job = self.run_job("copy", [os.path.join(self.root, "Album")], self.dest)
         self.assertEqual((job["state"], job["code"]), ("error", "disk.noRoom"))
         self.assertEqual(os.listdir(self.dest), [])
@@ -364,7 +364,7 @@ class SystemDiskReserveTests(FileOpsBase):
 
         def vfs(p):
             calls["n"] += 1
-            return (100 * self.GB, 10 * self.GB if calls["n"] == 1 else 4 * self.GB)
+            return (100 * self.GB, 10 * self.GB if calls["n"] == 1 else 1 * self.GB)
         ss.hdg._vfs = vfs
         ss.hdg.RECHECK_BYTES = 256
         src = os.path.join(self.root, "Album")

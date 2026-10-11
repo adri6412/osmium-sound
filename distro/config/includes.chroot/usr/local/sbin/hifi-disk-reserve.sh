@@ -3,7 +3,7 @@
 # for what our own services write, is hifi_diskguard.py).
 #
 # The data partition (/data, with /var, /home and the /etc overlay on it)
-# gets an ext4 reserve of max(2 GiB, 5 %) that only root and the
+# gets an ext4 reserve (5 %, between 512 MiB and 2 GiB) that only root and the
 # hifi-reserve group may use: Lyrion and the kiosk. Anything else — above all
 # a Samba copy, which writes as hifimusic — gets "disk full" at that line, and
 # Lyrion still has room for its prefs, cache and database.
@@ -17,6 +17,27 @@ set -u
 GROUP=hifi-reserve
 MEMBERS="squeezeboxserver hifi"
 log() { echo "hifi-disk-reserve: $*"; }
+
+# ── What nothing uses any more ──────────────────────────────────────
+# On a 16 GB disk the data partition is about 5 GB: these add up.
+# The Electron kiosk's profile (Chromium's caches, ~340 MB on a device that
+# ran it) once the screen is the Qt one; a device still on Electron keeps it.
+if [ "$(cat /etc/hifi-player/ui-engine 2>/dev/null)" = qt ]; then
+    for d in /home/hifi/.config/hifi-media-player "/home/hifi/.config/Osmium Sound"; do
+        if [ -d "$d" ]; then
+            rm -rf "$d" && log "removed $d (the Electron kiosk's profile)"
+        fi
+    done
+fi
+# Lyrion versions other than the one in use (hifi-lyrion-update.sh no longer
+# keeps the previous one; devices updated before still have it). Not a
+# <ver>.new: that may be an install going on.
+LYR_ROOT=/data/lyrion
+keep=$(basename "$(readlink "$LYR_ROOT/current" 2>/dev/null)" 2>/dev/null)
+if [ -n "$keep" ] && [ -d "$LYR_ROOT/$keep" ]; then
+    find "$LYR_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name "$keep" ! -name current ! -name '*.new' \
+        -exec rm -rf {} + -exec echo "hifi-disk-reserve: removed old Lyrion {}" \;
+fi
 
 MARK=/var/lib/squeezeboxserver
 [ -d "$MARK" ] || MARK=/var

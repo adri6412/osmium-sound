@@ -1,7 +1,7 @@
 [Unit]
-# Osmium Sound — the system disk's reserve for Lyrion and the kiosk (see
-# hifi-disk-reserve.sh): before both, because a group added to a user only
-# counts for the processes started after it.
+# Osmium Sound — the system disk's reserve for Lyrion and the kiosk, and
+# what nothing uses any more (see hifi-disk-reserve.sh): before both, because
+# a group added to a user only counts for the processes started after it.
 Description=Osmium Sound - system disk reserve for Lyrion
 After=local-fs.target
 Before=lyrionmusicserver.service hifi-qt.service smbd.service

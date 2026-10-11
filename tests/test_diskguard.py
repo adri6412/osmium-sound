@@ -27,16 +27,17 @@ def fake_vfs(total, free):
 
 class ReserveTest(unittest.TestCase):
     def test_reserve_size(self):
-        self.assertEqual(dg.reserve_for(16 * GB), dg.MIN_RESERVE)          # small disk: 2 GiB
-        self.assertEqual(dg.reserve_for(1000 * GB), int(1000 * GB * 0.05))  # large disk: 5 %
+        self.assertEqual(dg.reserve_for(5 * GB), dg.MIN_RESERVE)            # a 16 GB disk's data: 512 MiB
+        self.assertEqual(dg.reserve_for(20 * GB), int(20 * GB * 0.05))      # in between: 5 %
+        self.assertEqual(dg.reserve_for(1000 * GB), dg.MAX_RESERVE)         # large disk: 2 GiB
 
     def test_room_and_check(self):
-        with mock.patch.object(dg, 'on_system_disk', lambda p: True), fake_vfs(100 * GB, 8 * GB):
+        with mock.patch.object(dg, 'on_system_disk', lambda p: True), fake_vfs(20 * GB, 4 * GB):    # reserve 1 GB
             self.assertEqual(dg.room('/data/music'), 3 * GB)
             dg.check('/data/music', 2 * GB)
             with self.assertRaises(dg.NoRoom) as cm:
                 dg.check('/data/music', 4 * GB)
-            self.assertEqual((cm.exception.need, cm.exception.room, cm.exception.reserve), (4 * GB, 3 * GB, 5 * GB))
+            self.assertEqual((cm.exception.need, cm.exception.room, cm.exception.reserve), (4 * GB, 3 * GB, 1 * GB))
             self.assertEqual(cm.exception.errno, 28)
 
     def test_other_disks_are_free(self):
@@ -52,7 +53,7 @@ class ReserveTest(unittest.TestCase):
                 mock.patch.object(dg, '_vfs', lambda p: (100 * GB, state['free'])):
             b = dg.Budget('/data/music/a.flac')
             b.add(dg.RECHECK_BYTES)               # still above the reserve
-            state['free'] = 4 * GB
+            state['free'] = 1 * GB                 # below the 2 GiB of a 100 GB disk
             with self.assertRaises(dg.NoRoom):
                 b.add(dg.RECHECK_BYTES)
 
@@ -68,7 +69,7 @@ class ReserveTest(unittest.TestCase):
                 self.assertEqual(dg.status()['level'], 'ok')
             with fake_vfs(100 * GB, 9 * GB):
                 self.assertEqual(dg.status()['level'], 'warn')
-            with fake_vfs(100 * GB, 5 * GB):
+            with fake_vfs(100 * GB, 2 * GB):
                 s = dg.status()
                 self.assertEqual((s['level'], s['room']), ('full', 0))
 
