@@ -1,0 +1,56 @@
+#!/bin/sh
+# HiFi Player appliance — sox_ng, for the PCM to DSD conversion.
+#
+# Settings → Audio → "Convert to DSD" has Lyrion pipe every PCM track through
+# /usr/local/sbin/hifi-pcm2dsd.py, which runs sox_ng's `rate` + `sdm` (the
+# 1-bit sigma-delta modulator) and hands the player a DSF stream. Debian's sox
+# (14.4.2) has neither the sdm effect nor DSF output; sox_ng has both since
+# 14.6, but Debian only packages it from forky on. So it is built HERE from the
+# pinned upstream release, as one binary with no optional formats (it only
+# ever reads WAV/raw PCM on stdin and writes DSF on stdout), with OpenMP so
+# the two channels are modulated on two cores: on a Celeron J4105 DSD128 then
+# needs ~47 % of real time instead of ~63 %, and the toolchain is purged again
+# afterwards (same pattern as 0420-broadcom-wl).
+set -e
+
+SOX_VER="14.8.1"
+SOX_URL="https://codeberg.org/sox_ng/sox_ng/releases/download/sox_ng-${SOX_VER}/sox_ng-${SOX_VER}.tar.gz"
+SOX_SHA256="1dedd9ad574abc576bbda06743867fb778accf98a1eacde1a42913acbf072448"
+
+echo "I: [hifi] building sox_ng ${SOX_VER} (PCM to DSD)"
+before=$(mktemp)
+dpkg-query -W -f='${Package}\n' | sort > "$before"
+
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    gcc make libc6-dev curl ca-certificates
+# libgomp1 is the one runtime library the binary needs: installed on its own
+# line so it is in the "before" set of nobody and survives the purge below.
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libgomp1
+apt-mark manual libgomp1 >/dev/null
+
+work=$(mktemp -d)
+curl -fsSL --retry 5 --retry-delay 5 -o "$work/sox_ng.tar.gz" "$SOX_URL"
+echo "$SOX_SHA256  $work/sox_ng.tar.gz" | sha256sum -c -
+tar -xzf "$work/sox_ng.tar.gz" -C "$work"
+(
+    cd "$work/sox_ng-${SOX_VER}"
+    ./configure --quiet --disable-shared --enable-static --without-libltdl \
+        --without-png --without-oss --without-ffmpeg
+    make -j"$(nproc)" >/dev/null
+    install -m 0755 -s src/sox_ng /usr/local/bin/sox_ng
+)
+rm -rf "$work"
+/usr/local/bin/sox_ng --version
+
+# Purge what this hook pulled in, except libgomp1.
+after=$(mktemp)
+dpkg-query -W -f='${Package}\n' | sort > "$after"
+added=$(comm -13 "$before" "$after" | grep -vx libgomp1 | tr '\n' ' ')
+if [ -n "$added" ]; then
+    echo "I: [hifi] purging build-only packages: $added"
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y $added
+    DEBIAN_FRONTEND=noninteractive apt-get autoremove --purge -y
+fi
+rm -f "$before" "$after"
+ldd /usr/local/bin/sox_ng
+echo "I: [hifi] sox_ng hook done"

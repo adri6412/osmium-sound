@@ -1,0 +1,19 @@
+[Unit]
+# Osmium Sound — at boot: Lyrion's PCM → DSD rules, then the audio zones.
+#
+# Lyrion reads custom-convert.conf only when it starts, and the file lives in
+# the directory of the Lyrion version in use (/etc/squeezeboxserver), so it is
+# written here, before Lyrion, from the players' settings
+# (hifi_squeezelite.py zones-sync). Then every zone that is switched on gets
+# its hifi-zone@<id> unit started.
+Description=Osmium Sound - audio zones and PCM to DSD rules
+After=local-fs.target sound.target
+Before=lyrionmusicserver.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /usr/local/bin/hifi_squeezelite.py zones-sync
+
+[Install]
+WantedBy=multi-user.target

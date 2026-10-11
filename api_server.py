@@ -2130,6 +2130,10 @@ def set_audio_device(device):
     if device not in valid_devices:
         return {'success': False, 'code': 'audio.invalidDevice',
                 'message': _t('audio.invalidDevice', _lang(), device=device)}
+    zone = next((z for z in sq.load_zones(ZONES_CONF) if z['output'] == device), None)
+    if zone is not None:
+        return {'success': False, 'code': 'zones.dacInUse',
+                'message': _t('zones.dacInUse', _lang(), zone=zone['name'])}
 
     # When the DSP engine is ON, the chosen DAC is CamillaDSP's *playback*
     # device — squeezelite stays pointed at the Loopback. Re-apply the DSP
@@ -2153,6 +2157,7 @@ def set_audio_device(device):
         log.exception("set_audio_device: write config failed")
         return {'success': False, 'code': 'audio.writeConfigFailed',
                 'message': _t('audio.writeConfigFailed', _lang())}
+    _pcm2dsd_resync()
 
     try:
         r = _restart_squeezelite_if_enabled()
@@ -2182,10 +2187,12 @@ def get_squeezelite_conf():
         'choices': {'dsd': list(sq.DSD_MODES), 'dsd_delay_ms': list(sq.DSD_DELAYS),
                     'max_rate': [0, 96000, 192000, 384000]},
         'defaults': {k: sq.DEFAULTS[k] for k in sq.TUNABLE},
+        'pcm2dsd': _pcm2dsd_info(model, fmt),
     }
 
 def set_squeezelite_conf(changes):
     def change(model):
+        _check_pcm2dsd_mode(changes)
         model = sq.set_fields(model, changes)
         if model['volume'] == 'hardware' and not model['mixer']:
             mixers = sq.mixer_controls(model['output'])
@@ -2211,6 +2218,9 @@ def _apply_squeezelite_conf(change, msg_key):
         return {'success': False, 'code': 'audio.writeConfigFailed',
                 'message': _t('audio.writeConfigFailed', _lang())}
     result = {'success': True, 'message': _t(msg_key, _lang())}
+    if _pcm2dsd_resync():
+        result['lyrion_restarted'] = True
+        result['message'] = _t('squeezelite.savedLyrionRestart', _lang())
     if changed:
         try:
             r = _restart_squeezelite_if_enabled()
@@ -2221,6 +2231,282 @@ def _apply_squeezelite_conf(change, msg_key):
             result['message'] = _t('squeezelite.restartWarn', _lang(), err='restart failed')
     result.update(get_squeezelite_conf())
     return result
+
+# ── PCM → DSD ──────────────────────────────────────────────────────
+# Lyrion converts every PCM track for a player whose model asks for it (see
+# hifi_squeezelite.pcm2dsd_state and hifi-pcm2dsd.py). Its rules are read
+# only when Lyrion starts, so turning the conversion on or off for a player —
+# or anything that makes it stop applying, like another DAC or another Lyrion
+# server — rewrites them and restarts Lyrion. A new rate or filter does not:
+# the wrapper reads them at every track.
+ZONES_CONF = sq.ZONES_CONF
+PCM2DSD_MAP = sq.PCM2DSD_MAP
+LMS_CONVERT = sq.LMS_CONVERT
+PCM2DSD_BENCH_FILE = '/var/lib/hifi-player/pcm2dsd-bench.json'
+# The share of real time a DSD rate may take on this CPU and still be offered:
+# the rest of the box (the interface, Lyrion's own scans) needs room too.
+PCM2DSD_MAX_LOAD = 0.7
+_pcm2dsd_bench_lock = threading.Lock()
+_pcm2dsd_bench_thread = None
+
+
+def _cpu_model():
+    try:
+        with open('/proc/cpuinfo', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                if line.startswith('model name'):
+                    return line.split(':', 1)[1].strip() + f' x{os.cpu_count() or 1}'
+    except OSError:
+        pass
+    return platform.machine()
+
+
+def _pcm2dsd_bench_run(cpu):
+    try:
+        r = _run(['/usr/bin/python3', sq.PCM2DSD_WRAPPER, '--bench'], timeout=180)
+        result = json.loads(r.stdout or '{}')
+        if not isinstance(result, dict) or not result:
+            raise ValueError(f'no result: {r.stderr!r}')
+        os.makedirs(os.path.dirname(PCM2DSD_BENCH_FILE), exist_ok=True)
+        with open(PCM2DSD_BENCH_FILE + '.tmp', 'w') as f:
+            json.dump({'cpu': cpu, 'result': result, 'at': int(time.time())}, f)
+        os.replace(PCM2DSD_BENCH_FILE + '.tmp', PCM2DSD_BENCH_FILE)
+        log.info("pcm2dsd: this CPU needs %s of real time per DSD rate", result)
+    except Exception:
+        log.exception("pcm2dsd: CPU measurement failed")
+
+
+def _pcm2dsd_bench():
+    """{mode: share of real time} measured once on this CPU, or None while
+    it is still unknown (the first ask starts the measurement, ~5 s)."""
+    global _pcm2dsd_bench_thread
+    cpu = _cpu_model()
+    try:
+        with open(PCM2DSD_BENCH_FILE) as f:
+            doc = json.load(f)
+        if doc.get('cpu') == cpu and isinstance(doc.get('result'), dict):
+            return doc['result']
+    except (OSError, ValueError, AttributeError):
+        pass
+    if sq.tools_present():
+        with _pcm2dsd_bench_lock:
+            if _pcm2dsd_bench_thread is None or not _pcm2dsd_bench_thread.is_alive():
+                _pcm2dsd_bench_thread = threading.Thread(target=_pcm2dsd_bench_run, args=(cpu,), daemon=True)
+                _pcm2dsd_bench_thread.start()
+    return None
+
+
+def _pcm2dsd_modes():
+    """(the choices this CPU can sustain, measured?). Until it is measured,
+    DSD64 and DSD128 — what even a 1.5 GHz Celeron does — and not DSD256."""
+    bench = _pcm2dsd_bench()
+    if bench is None:
+        return ['off', 'dsd64', 'dsd128'], False
+    ok = [m for m in ('dsd64', 'dsd128', 'dsd256')
+          if isinstance(bench.get(m), (int, float)) and bench[m] <= PCM2DSD_MAX_LOAD]
+    return ['off'] + ok, True
+
+
+def _check_pcm2dsd_mode(changes):
+    mode = (changes or {}).get('pcm2dsd')
+    if mode in (None, 'off'):
+        return
+    if mode not in _pcm2dsd_modes()[0]:
+        raise sq.InvalidField('squeezelite.pcm2dsdTooHeavy', 'pcm2dsd', str(mode).upper())
+
+
+def _pcm2dsd_info(model, fmt):
+    """What Settings → Audio needs to show the choice for one player."""
+    modes, measured = _pcm2dsd_modes()
+    return {'state': sq.pcm2dsd_state(model, fmt), 'modes': modes, 'measured': measured,
+            'filters': list(sq.PCM2DSD_FILTERS), 'available': sq.tools_present(),
+            'server_local': sq.server_is_local(model['server'])}
+
+
+def _pcm2dsd_resync():
+    """Bring Lyrion's rules in line with the models. True when they changed
+    and a running Lyrion was restarted to read them."""
+    try:
+        changed = sq.sync_pcm2dsd(SQUEEZELITE_CONF, ZONES_CONF, PCM2DSD_MAP, LMS_CONVERT,
+                                  SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
+    except Exception:
+        log.exception("pcm2dsd: writing Lyrion's rules failed")
+        return False
+    if not changed:
+        return False
+    try:
+        if _run(['systemctl', 'is-active', '--quiet', 'lyrionmusicserver'], timeout=10).returncode != 0:
+            return False
+        log.info("pcm2dsd: rules changed, restarting Lyrion")
+        _run(['systemctl', 'reset-failed', 'lyrionmusicserver'], timeout=15)
+        _run(['systemctl', 'restart', 'lyrionmusicserver'], timeout=60)
+        return True
+    except Exception:
+        log.exception("pcm2dsd: Lyrion restart failed")
+        return False
+
+
+# ── Audio zones: one more player per DAC ────────────────────────────
+# Each further DAC can be a Lyrion player of its own (hifi_squeezelite's
+# zones, run by hifi-zone@<id>.service). The built-in player keeps its DAC;
+# a DAC is either the built-in player's or one zone's, never both.
+ZONE_TUNABLE = ('dsd', 'dsd_delay_ms', 'max_rate', 'volume', 'mixer', 'alsa_buffer',
+                'stream_buffer', 'realtime', 'pcm2dsd', 'pcm2dsd_filter')
+
+
+def _zones_fail(code, **kw):
+    out = {'success': False, 'code': code, 'message': _t(code, _lang(), **kw)}
+    out.update(get_zones())
+    out['success'] = False
+    return out
+
+
+def _zones_ok(code, **kw):
+    out = get_zones()
+    out['message'] = _t(code, _lang(), **kw)
+    return out
+
+
+def _zones_apply(restart=()):
+    """Rules first (a zone that converts to DSD needs them in Lyrion before it
+    asks for its first track), then the units. True when Lyrion restarted."""
+    restarted = _pcm2dsd_resync()
+    try:
+        sq.sync_zones(ZONES_CONF, restart=restart)
+    except Exception:
+        log.exception("zones: applying the units failed")
+    return restarted
+
+
+def get_zones():
+    try:
+        main = _sq_load()
+    except Exception:
+        main = sq.normalize({})
+    zones = sq.load_zones(ZONES_CONF)
+    running = sq.running_zone_units()
+    devices = [d for d in list_audio_devices()['devices'] if d['id'] != 'default']
+    names = {d['id']: d['name'] for d in devices}
+    used = {main['output']} | {z['output'] for z in zones}
+    modes, measured = _pcm2dsd_modes()
+    out = []
+    for z in zones:
+        fmt = sq.probe(z['output'])
+        with_server = dict(z, server=main['server'])
+        out.append({
+            'id': z['id'], 'name': z['name'], 'output': z['output'],
+            'output_name': names.get(z['output'], z['output']),
+            'enabled': z['enabled'], 'connected': sq.card_present(z['output']),
+            'running': z['id'] in running,
+            'conf': {k: z[k] for k in ZONE_TUNABLE},
+            'dsd_detected': 'native' if sq.is_native(fmt) else ('pcm' if fmt == sq.PCM_ONLY else 'dop'),
+            'mixers': sq.mixer_controls(z['output']),
+            'pcm2dsd_state': sq.pcm2dsd_state(with_server, fmt),
+        })
+    free = [{'id': d['id'], 'name': d['name'], 'dsd': d.get('dsd')} for d in devices
+            if d['id'] not in used and sq.zone_id(d['id'])]
+    return {'success': True, 'zones': out, 'free': free, 'max': sq.MAX_ZONES,
+            'main_output': main['output'], 'main_output_name': names.get(main['output'], main['output']),
+            'pcm2dsd': {'modes': modes, 'measured': measured, 'filters': list(sq.PCM2DSD_FILTERS),
+                        'available': sq.tools_present(), 'server_local': sq.server_is_local(main['server'])},
+            'choices': {'dsd': list(sq.DSD_MODES)}}
+
+
+def zone_add(output, name=''):
+    current = get_zones()
+    free = {d['id']: d for d in current['free']}
+    if output not in free:
+        return _zones_fail('zones.dacNotFree')
+    if len(current['zones']) >= sq.MAX_ZONES:
+        return _zones_fail('zones.tooMany', max=sq.MAX_ZONES)
+    clean = sq.clean_zone_name(name) if name else ''
+    if name and not clean:
+        return _zones_fail('zones.badName')
+    if not clean:
+        # "Topping D50s — USB Audio" → "Topping D50s"
+        clean = sq.clean_zone_name(free[output]['name'].split(' — ')[0][:32]) or sq.zone_id(output)
+    mac = sq.zone_mac(output)
+    if not mac:
+        return _zones_fail('zones.saveFailed')
+
+    def add(zones):
+        if any(z['output'] == output for z in zones):
+            raise ValueError('taken')
+        zones.append({'output': output, 'name': clean, 'mac': mac, 'enabled': True})
+    try:
+        sq.update_zones(add, ZONES_CONF)
+    except ValueError:
+        return _zones_fail('zones.dacNotFree')
+    except Exception:
+        log.exception("zones: add failed")
+        return _zones_fail('zones.saveFailed')
+    _zones_apply(restart={sq.zone_id(output)})
+    return _zones_ok('zones.added', name=clean)
+
+
+def zone_update(zid, changes):
+    changes = changes if isinstance(changes, dict) else {}
+    unknown = [k for k in changes if k not in ZONE_TUNABLE + ('name', 'enabled')]
+    if unknown:
+        return _zones_fail('squeezelite.unknownField', field=unknown[0], detail='')
+    try:
+        _check_pcm2dsd_mode(changes)
+    except sq.InvalidField as e:
+        return _zones_fail(e.code, field=e.field, detail=e.detail)
+    name = None
+    if 'name' in changes:
+        name = sq.clean_zone_name(changes['name'])
+        if not name:
+            return _zones_fail('zones.badName')
+    tunables = {k: v for k, v in changes.items() if k in ZONE_TUNABLE}
+
+    def change(zones):
+        z = sq.find_zone(zones, zid)
+        if z is None:
+            raise KeyError(zid)
+        if tunables:
+            new = sq.set_fields(z, tunables)
+            if new['volume'] == 'hardware' and not new['mixer']:
+                mixers = sq.mixer_controls(new['output'])
+                if not mixers:
+                    raise sq.InvalidField('squeezelite.noMixer', 'mixer')
+                new['mixer'] = mixers[0]
+            for k in ZONE_TUNABLE:
+                z[k] = new[k]
+        if name is not None:
+            z['name'] = name
+        if 'enabled' in changes:
+            z['enabled'] = bool(changes['enabled'])
+    try:
+        sq.update_zones(change, ZONES_CONF)
+    except KeyError:
+        return _zones_fail('zones.notFound')
+    except sq.InvalidField as e:
+        return _zones_fail(e.code, field=e.field, detail=e.detail)
+    except Exception:
+        log.exception("zones: update failed")
+        return _zones_fail('zones.saveFailed')
+    restarted = _zones_apply(restart={zid})
+    out = _zones_ok('squeezelite.savedLyrionRestart' if restarted else 'zones.saved')
+    out['lyrion_restarted'] = restarted
+    return out
+
+
+def zone_remove(zid):
+    def drop(zones):
+        if sq.find_zone(zones, zid) is None:
+            raise KeyError(zid)
+        return [z for z in zones if z['id'] != zid]
+    try:
+        sq.update_zones(drop, ZONES_CONF)
+    except KeyError:
+        return _zones_fail('zones.notFound')
+    except Exception:
+        log.exception("zones: remove failed")
+        return _zones_fail('zones.saveFailed')
+    _zones_apply()
+    return _zones_ok('zones.removed')
+
 
 # ── Multiroom: which Lyrion server this device's squeezelite follows ──
 # Standalone (default) is squeezelite's own local LMS (-s 127.0.0.1). "Follow"
@@ -2401,10 +2687,22 @@ def set_lms_role(mode, host):
         log.exception("set_lms_role: write config failed")
         return {'success': False, 'code': 'lms.sqConfigMissing',
                 'message': _t('lms.sqConfigMissing', _lang())}
+    # PCM → DSD only converts on this device's own Lyrion: its rules follow
+    # the choice, written before that Lyrion is started or stopped below.
+    try:
+        sq.sync_pcm2dsd(SQUEEZELITE_CONF, ZONES_CONF, PCM2DSD_MAP, LMS_CONVERT,
+                        SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
+    except Exception:
+        log.exception("set_lms_role: PCM to DSD rules")
     # Before the player restart below, so squeezelite comes back up with the
     # local server already stopped (following) or already running (standalone)
     # and can only land on the one that was just chosen.
     _set_local_lyrion_enabled(mode == 'local')
+    # The zones play from the same server as the built-in player.
+    try:
+        sq.sync_zones(ZONES_CONF, restart={z['id'] for z in sq.load_zones(ZONES_CONF)})
+    except Exception:
+        log.exception("set_lms_role: restarting the zones")
 
     try:
         r = _restart_squeezelite_if_enabled()
@@ -6428,7 +6726,9 @@ def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balanc
         if playback_dev:
             model['output'] = playback_dev
         model['dsp']['enabled'] = True
-    if _sq_update(dsp_on):
+    dsp_changed = _sq_update(dsp_on)
+    _pcm2dsd_resync()      # the DSP path plays PCM: no DSD conversion on it
+    if dsp_changed:
         # squeezelite must release the real DAC (by restarting onto the
         # loopback) BEFORE CamillaDSP tries to open that same hw: device —
         # otherwise the two processes fight over an exclusive-access
@@ -6460,6 +6760,7 @@ def _apply_dsp_off():
             model['output'] = dac or model['output'] or 'default'
             model['dsp']['enabled'] = False
         _sq_update(dsp_off)
+        _pcm2dsd_resync()
         subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
                        capture_output=True, text=True, timeout=30)
         _restart_squeezelite_if_enabled()
@@ -10350,6 +10651,26 @@ def api_set_squeezelite_conf():
 @app.route('/squeezelite_conf/reset', methods=['POST'])
 def api_reset_squeezelite_conf():
     return jsonify(reset_squeezelite_conf())
+
+@app.route('/zones', methods=['GET'])
+def api_zones():
+    return jsonify(get_zones())
+
+@app.route('/zones/add', methods=['POST'])
+def api_zone_add():
+    data = request.get_json(silent=True) or {}
+    return jsonify(zone_add(str(data.get('output') or ''), str(data.get('name') or '')))
+
+@app.route('/zones/update', methods=['POST'])
+def api_zone_update():
+    data = request.get_json(silent=True) or {}
+    changes = {k: v for k, v in data.items() if k != 'id'} if isinstance(data, dict) else {}
+    return jsonify(zone_update(str(data.get('id') or ''), changes))
+
+@app.route('/zones/remove', methods=['POST'])
+def api_zone_remove():
+    data = request.get_json(silent=True) or {}
+    return jsonify(zone_remove(str(data.get('id') or '')))
 
 @app.route('/lms_role', methods=['GET'])
 def api_lms_role():

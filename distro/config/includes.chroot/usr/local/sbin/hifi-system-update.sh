@@ -199,6 +199,11 @@ apply)
         systemctl enable hifi-bt-out.service 2>/dev/null || true
         systemctl restart hifi-bt-out.service 2>/dev/null || true
     fi
+    # Audio zones and Lyrion's PCM to DSD rules (hifi-zones.service): enabled
+    # only — it runs at the next boot, before Lyrion, which is when it is needed.
+    if [ -f /etc/systemd/system/hifi-zones.service ]; then
+        systemctl enable hifi-zones.service 2>/dev/null || true
+    fi
     if [ -f /etc/systemd/system/hifi-webui.service ]; then
         systemctl enable hifi-webui.service 2>/dev/null || true
     fi
@@ -294,6 +299,11 @@ full)
     if [ -f /etc/systemd/system/hifi-bt-out.service ]; then
         systemctl enable hifi-bt-out.service 2>/dev/null || true
         systemctl restart hifi-bt-out.service 2>/dev/null || true
+    fi
+    # Audio zones and Lyrion's PCM to DSD rules (hifi-zones.service): enabled
+    # only — it runs at the next boot, before Lyrion, which is when it is needed.
+    if [ -f /etc/systemd/system/hifi-zones.service ]; then
+        systemctl enable hifi-zones.service 2>/dev/null || true
     fi
     if [ -f /etc/systemd/system/hifi-webui.service ]; then
         systemctl enable hifi-webui.service 2>/dev/null || true

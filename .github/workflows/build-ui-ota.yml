@@ -290,6 +290,8 @@ jobs:
           python3 tests/test_metadata.py
           echo "== library editor: tags inside the files (python) =="
           python3 tests/test_tags.py
+          echo "== audio zones + PCM to DSD (python) =="
+          python3 tests/test_zones_pcm2dsd.py
           echo "== bluetooth speakers (python) =="
           python3 tests/test_bt_speakers.py
           echo "== bluetooth remote controls (python) =="

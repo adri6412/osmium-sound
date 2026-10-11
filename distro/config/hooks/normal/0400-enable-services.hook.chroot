@@ -40,6 +40,10 @@ systemctl enable hifi-webui.service   || true
 echo "I: [hifi] enabling audio backend (squeezelite + Lyrion Music Server)"
 systemctl enable squeezelite.service        || true
 systemctl enable lyrionmusicserver.service  || true
+# Audio zones (one more player per DAC) and Lyrion's PCM to DSD rules: written
+# before Lyrion at every boot from /etc/hifi-player (carried over by an A/B
+# swap), so like hifi-bt-out the unit is always on and the choice is the file.
+systemctl enable hifi-zones.service         || true
 # Network audio receivers (AirPlay/UPnP/Spotify Connect) are Lyrion plugins,
 # not system services — nothing to enable here.
 

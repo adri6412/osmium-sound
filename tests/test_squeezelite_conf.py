@@ -598,6 +598,11 @@ class TestApiServer(unittest.TestCase):
         self._patch('PLAYER_ENABLED_FILE', os.path.join(self.sb.dir, 'player-enabled'))
         self._patch('DSP_STATE_FILE', os.path.join(self.sb.dir, 'dsp.json'))
         self._patch('CAMILLA_CONFIG', os.path.join(self.sb.dir, 'camilladsp', 'config.yml'))
+        # zones and PCM to DSD: the files sync_pcm2dsd() and the zones write
+        self._patch('ZONES_CONF', os.path.join(self.sb.dir, 'hifi-player', 'zones.json'))
+        self._patch('PCM2DSD_MAP', os.path.join(self.sb.dir, 'hifi-player', 'pcm2dsd.json'))
+        self._patch('LMS_CONVERT', os.path.join(self.sb.dir, 'squeezeboxserver', 'custom-convert.conf'))
+        self._patch('PCM2DSD_BENCH_FILE', os.path.join(self.sb.dir, 'pcm2dsd-bench.json'))
         self.calls = []
         self._patch('_run', self._fake_run)
         self._patch('_read_bt_state', lambda: None)

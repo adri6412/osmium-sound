@@ -1187,6 +1187,11 @@ _AUTH_ROUTES = {
     ('/api/system/squeezelite_conf', 'GET'): '/squeezelite_conf',
     ('/api/system/squeezelite_conf', 'POST'): '/squeezelite_conf',
     ('/api/system/squeezelite_conf/reset', 'POST'): '/squeezelite_conf/reset',
+    # Settings → Audio zones: one more Lyrion player per further DAC.
+    ('/api/system/zones', 'GET'): '/zones',
+    ('/api/system/zones/add', 'POST'): '/zones/add',
+    ('/api/system/zones/update', 'POST'): '/zones/update',
+    ('/api/system/zones/remove', 'POST'): '/zones/remove',
     # Settings → Licenses & credits: the project, Lyrion, the third-party
     # notices and every Debian package of the image with its license.
     ('/api/system/credits', 'GET'): '/credits',
@@ -2224,6 +2229,8 @@ def _handle_proxy(local_path, method):
                           # here reported a failure for a join that then
                           # completed, leaving the UI and the box disagreeing.
                           else 90 if 'apply' in api_path or 'dsp' in api_path
+                          # Turning DSD conversion on or off restarts Lyrion.
+                          or api_path.startswith('/zones') or api_path.startswith('/squeezelite_conf')
                           or 'tailscale' in api_path or 'ssh' in api_path
                           or 'wifi_connect' in api_path or 'wired_dhcp' in api_path
                           # Lyrion stopped or started (TimeoutStopSec=30) and

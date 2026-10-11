@@ -82,6 +82,24 @@ MESSAGES = {
     'squeezelite.noMixer': {'en': 'This output has no hardware volume control',
                             'it': 'Questa uscita non ha un controllo di volume hardware'},
     'squeezelite.restartWarn': {'en': 'Saved; squeezelite restart: {err}', 'it': 'Salvato; riavvio di squeezelite: {err}'},
+    'squeezelite.savedLyrionRestart': {'en': 'Saved. Lyrion is restarting to load the DSD conversion: music is back in a few seconds',
+                                       'it': 'Salvato. Lyrion si riavvia per caricare la conversione in DSD: la musica torna fra pochi secondi'},
+    'squeezelite.pcm2dsdTooHeavy': {'en': 'This processor is not fast enough to convert to {detail} while playing',
+                                    'it': 'Questo processore non è abbastanza veloce per convertire in {detail} durante l\'ascolto'},
+
+    # ── Audio zones: one more player per DAC ────────────────────────
+    'zones.added': {'en': '"{name}" added: it is now a player of its own in Lyrion',
+                    'it': '"{name}" aggiunta: ora è un player a sé in Lyrion'},
+    'zones.saved': {'en': 'Saved, zone restarted', 'it': 'Salvato, zona riavviata'},
+    'zones.removed': {'en': 'Zone removed', 'it': 'Zona tolta'},
+    'zones.dacNotFree': {'en': 'This DAC is already in use, or no longer connected',
+                         'it': 'Questo DAC è già in uso, oppure non è più collegato'},
+    'zones.dacInUse': {'en': 'This DAC plays the zone "{zone}": remove the zone first',
+                       'it': 'Questo DAC suona la zona "{zone}": togli prima la zona'},
+    'zones.tooMany': {'en': 'At most {max} zones', 'it': 'Al massimo {max} zone'},
+    'zones.badName': {'en': 'Use up to 32 characters, without quotes', 'it': 'Usa al massimo 32 caratteri, senza virgolette'},
+    'zones.notFound': {'en': 'This zone no longer exists', 'it': 'Questa zona non esiste più'},
+    'zones.saveFailed': {'en': 'Could not save the zones', 'it': 'Non sono riuscito a salvare le zone'},
 
     # ── Multiroom / Lyrion server role ──────────────────────────────
     'lms.invalidHost': {'en': 'Invalid server address: {host}. Use an IP address (192.168.1.50) or a name (nas.local)',

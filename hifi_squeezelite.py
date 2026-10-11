@@ -41,7 +41,20 @@ Fields (the UI exposes the starred ones, the rest are set elsewhere):
   realtime *     `-p 45` for the output thread
   extra *        anything else, one line, validated: no quotes, no `$`, and
                  none of the options handled above
+  pcm2dsd *      off | dsd64 | dsd128 | dsd256: Lyrion turns every PCM track
+                 into DSD on its way to this player (sox_ng's sigma-delta
+                 modulator, see hifi-pcm2dsd.py). Only when this device is
+                 the Lyrion server and DSD actually reaches the DAC; then the
+                 player advertises DSD alone (`-c dsd`) so Lyrion has to use
+                 the rules this module writes into custom-convert.conf.
+  pcm2dsd_filter * the modulator's noise-shaping filter
   dsp.enabled    squeezelite plays into the CamillaDSP Loopback at 48 kHz
+
+Zones: every further DAC can be a player of its own (a "zone"), one
+squeezelite per DAC, run by hifi-zone@<id>.service through `run-zone <id>`.
+Their settings live in /etc/hifi-player/zones.json, one model each, with the
+same fields and the same renderer as the built-in player; the Lyrion server
+is always the built-in player's.
 
 Writers: api_server.py (several request threads) and the ExecStartPre
 `apply` (every 5 s while squeezelite crash-loops) all load, change and save
@@ -68,6 +81,18 @@ PROC_ASOUND = '/proc/asound'
 DSP_TARGET_FILE = '/var/lib/hifi-player/dsp-target'
 MACHINE_ID = '/etc/machine-id'
 LOOPBACK = 'hw:CARD=Loopback,DEV=0'
+ZONES_CONF = '/etc/hifi-player/zones.json'
+# What the PCM → DSD wrapper reads to know each player's rate and filter. Not
+# the models themselves: it runs as Lyrion's user, for every track.
+PCM2DSD_MAP = '/etc/hifi-player/pcm2dsd.json'
+# Lyrion reads custom-convert.conf next to its convert.conf, and only at start.
+# /etc/squeezeboxserver points into the Lyrion version in use, so a Lyrion
+# update leaves a fresh directory: the rules are written again at every boot
+# (hifi-zones.service, before Lyrion) and after every Lyrion update.
+LMS_CONVERT = '/etc/squeezeboxserver/custom-convert.conf'
+SOX_NG = '/usr/local/bin/sox_ng'
+PCM2DSD_WRAPPER = '/usr/local/sbin/hifi-pcm2dsd.py'
+SQUEEZELITE_BIN = '/usr/bin/squeezelite'
 DSP_RATE = 48000
 # How long a writer waits for another one to finish. A Settings → Audio save
 # may run amixer under the lock; anything longer than this is a stuck writer.
@@ -88,11 +113,14 @@ DEFAULTS = {
     'stream_buffer': 'auto',
     'realtime': False,
     'extra': '',
+    'pcm2dsd': 'off',
+    'pcm2dsd_filter': 'clans-8',
     'dsp': {'enabled': False},
 }
 # What Settings → Audio may change and "Back to defaults" resets.
 TUNABLE = ('dsd', 'dsd_delay_ms', 'max_rate', 'volume', 'mixer',
-           'alsa_buffer', 'stream_buffer', 'realtime', 'extra')
+           'alsa_buffer', 'stream_buffer', 'realtime', 'extra',
+           'pcm2dsd', 'pcm2dsd_filter')
 
 DSD_MODES = ('auto', 'dop', 'native', 'off')
 RATES = (0, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000)
@@ -101,7 +129,13 @@ ALSA_LARGE = '200:8'
 STREAM_LARGE = '16384:8192'
 RT_PRIORITY = '45'
 # Options the model renders itself: refused in `extra` so they cannot appear twice.
-MANAGED_FLAGS = ('-o', '-n', '-s', '-m', '-M', '-D', '-r', '-V', '-a', '-b', '-p', '-v', '-C')
+MANAGED_FLAGS = ('-o', '-n', '-s', '-m', '-M', '-D', '-r', '-V', '-a', '-b', '-p', '-v', '-C', '-c')
+
+# PCM → DSD: the DSD rate for each choice. From 44.1 kHz material that is
+# 64, 128 and 256 times the CD rate; 48 kHz material is resampled on the way.
+PCM2DSD_MODES = ('off', 'dsd64', 'dsd128', 'dsd256')
+PCM2DSD_RATES = {'dsd64': 2822400, 'dsd128': 5644800, 'dsd256': 11289600}
+PCM2DSD_FILTERS = ('clans-8', 'sdm-8')
 
 _NAME_RE = re.compile(r'^[A-Za-z0-9_.\-]{1,24}$')
 _HOST_RE = re.compile(r'^[A-Za-z0-9.\-:\[\]]{1,253}$')
@@ -300,6 +334,10 @@ def normalize(model):
     m['stream_buffer'] = 'large' if str(src.get('stream_buffer') or '') == 'large' else 'auto'
     m['realtime'] = bool(src.get('realtime'))
     m['extra'] = check_extra(src.get('extra'))[0]
+    p2d = str(src.get('pcm2dsd') or '').strip().lower()
+    m['pcm2dsd'] = p2d if p2d in PCM2DSD_MODES else 'off'
+    flt = str(src.get('pcm2dsd_filter') or '').strip().lower()
+    m['pcm2dsd_filter'] = flt if flt in PCM2DSD_FILTERS else DEFAULTS['pcm2dsd_filter']
     dsp = src.get('dsp') if isinstance(src.get('dsp'), dict) else {}
     m['dsp'] = {'enabled': bool(dsp.get('enabled'))}
     return m
@@ -343,6 +381,12 @@ def set_fields(model, changes):
                 raise InvalidField('squeezelite.invalidValue', key, str(value))
         elif key == 'realtime':
             if not isinstance(value, bool):
+                raise InvalidField('squeezelite.invalidValue', key, str(value))
+        elif key == 'pcm2dsd':
+            if value not in PCM2DSD_MODES:
+                raise InvalidField('squeezelite.invalidValue', key, str(value))
+        elif key == 'pcm2dsd_filter':
+            if value not in PCM2DSD_FILTERS:
                 raise InvalidField('squeezelite.invalidValue', key, str(value))
         elif key == 'extra':
             clean, bad, managed = check_extra(str(value or ''))
@@ -478,21 +522,59 @@ def dsd_token(model, fmt):
     return f'-D {delay}' if delay else '-D'
 
 
-def render(model, probe_fn=None):
-    """The ARGS line for a model. `probe_fn(device)` tells what the DAC
-    declares for DSD (defaults to reading /proc/asound)."""
+def tools_present():
+    """sox_ng and the wrapper Lyrion runs: both come with the system image."""
+    return os.path.exists(SOX_NG) and os.path.exists(PCM2DSD_WRAPPER)
+
+
+def server_is_local(server):
+    return str(server or '').strip() in ('127.0.0.1', 'localhost', '::1')
+
+
+def pcm2dsd_state(model, fmt):
+    """Why the PCM → DSD choice of `model` does or does not apply, given what
+    probe() says of its output: 'off', 'active', or the reason it cannot —
+    'noTools' (an image without sox_ng), 'remoteServer' (the conversion
+    rules live in the Lyrion this device runs, not in someone else's), 'dsp'
+    (the DSP path plays PCM into the Loopback), 'noDsd' (no DSD reaches the
+    DAC: DSD mode off, or an output that is no DSD DAC)."""
     m = normalize(model)
+    if m['pcm2dsd'] == 'off':
+        return 'off'
+    if not tools_present():
+        return 'noTools'
+    if not server_is_local(m['server']):
+        return 'remoteServer'
+    if m['dsp']['enabled']:
+        return 'dsp'
+    if dsd_token(m, fmt) is None:
+        return 'noDsd'
+    return 'active'
+
+
+def render_argv(model, probe_fn=None, visualizer=True, name=None):
+    """squeezelite's arguments for a model, as a list. `probe_fn(device)`
+    tells what the DAC declares for DSD (defaults to reading /proc/asound).
+    `visualizer`: `-v`, the VU meters' shared memory -- the built-in player
+    only. `name`: a zone's, which may have spaces (it goes through execv,
+    not through the ARGS line)."""
+    m = normalize(model)
+    if name:
+        m['name'] = name
     probe_fn = probe_fn or probe
     dsp = m['dsp']['enabled']
+    fmt = None if dsp else probe_fn(m['output'])
     out = []
     if m['mac']:
         out += ['-m', m['mac']]
     out += ['-o', LOOPBACK if dsp else m['output']]
     if not dsp:
-        tok = dsd_token(m, probe_fn(m['output']))
+        tok = dsd_token(m, fmt)
         if tok:
-            out.append(tok)
-    out += ['-v', '-C', '5', '-s', m['server'], '-n', m['name'], '-M', m['model']]
+            out += tok.split()
+    if visualizer:
+        out.append('-v')
+    out += ['-C', '5', '-s', m['server'], '-n', m['name'], '-M', m['model']]
     if dsp:
         out += ['-r', str(DSP_RATE), '-R']
     elif m['max_rate']:
@@ -501,13 +583,25 @@ def render(model, probe_fn=None):
         out += ['-V', m['mixer']]
     if m['alsa_buffer'] == 'large':
         out += ['-a', ALSA_LARGE]
-    if m['stream_buffer'] == 'large':
+    p2d = not dsp and pcm2dsd_state(m, fmt) == 'active'
+    # A DSD stream is 1.4 MB/s at DSD128: squeezelite's default 2 MB stream
+    # buffer would hold little more than a second of it.
+    if m['stream_buffer'] == 'large' or p2d:
         out += ['-b', STREAM_LARGE]
     if m['realtime']:
         out += ['-p', RT_PRIORITY]
+    if p2d:
+        # DSD is all the player admits to, so every PCM track has to go
+        # through one of the dsf rules written for its MAC (lms_rules()).
+        out += ['-c', 'dsd']
     if m['extra']:
-        out.append(m['extra'])
-    return ' '.join(out)
+        out += m['extra'].split()
+    return out
+
+
+def render(model, probe_fn=None):
+    """The ARGS line for the built-in player's model."""
+    return ' '.join(render_argv(model, probe_fn))
 
 
 # ── Files ───────────────────────────────────────────────────────────
@@ -712,6 +806,291 @@ def _apply(conf_path, default_path, dsp_target_path, probe_fn, out, machine_id_p
     return model, args, changed
 
 
+# ── Zones: one more player per DAC ──────────────────────────────────
+# A zone is a full model (same fields, same renderer) plus an id and an on/off
+# switch. The id comes from the output, so it stays put across reboots and can
+# name a systemd instance; the MAC is derived from the machine-id and the
+# output, so Lyrion keeps the zone's queue and settings for life.
+ZONE_UNIT = 'hifi-zone@{}.service'
+# squeezelite gets the name through execv, not through the ARGS line, so a
+# zone may have spaces in it ("Living room"); nothing that could confuse a
+# log line or a JSON reader, and the length Lyrion shows comfortably.
+_ZONE_NAME_RE = re.compile(r'^[^\x00-\x1f\x7f"\'\\`$]{1,32}$')
+_ZONE_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
+MAX_ZONES = 8
+
+
+def zone_id(output):
+    """'hw:CARD=D50s,DEV=0' → 'D50s-0'; None for an output that is not a card."""
+    card, dev = parse_device(output)
+    if card is None or card.isdigit():
+        return None
+    return f'{card}-{dev}'
+
+
+def zone_mac(output, machine_id_path=MACHINE_ID):
+    """Same scheme as derived_mac(), salted with the output so every zone is
+    a player of its own and never the built-in one."""
+    try:
+        with open(machine_id_path, encoding='ascii') as f:
+            seed = f.read().strip()
+    except (OSError, ValueError):
+        seed = ''
+    if not seed:
+        return ''
+    raw = '02' + hashlib.md5(f'{seed}|zone|{output}'.encode('ascii', 'replace')).hexdigest()[2:12]
+    return ':'.join(raw[i:i + 2] for i in range(0, 12, 2))
+
+
+def clean_zone_name(name):
+    name = ' '.join(str(name or '').split())
+    return name if _ZONE_NAME_RE.match(name) else ''
+
+
+def normalize_zone(src):
+    """A complete zone from whatever was read, or None when it cannot be one
+    (no usable output). The server is not the zone's own: see zone_argv()."""
+    if not isinstance(src, dict):
+        return None
+    z = normalize(src)
+    zid = zone_id(z['output'])
+    if zid is None:
+        return None
+    z['id'] = zid
+    z['name'] = clean_zone_name(src.get('name')) or zid
+    z['enabled'] = bool(src.get('enabled', True))
+    z['dsp'] = {'enabled': False}
+    return z
+
+
+def load_zones(path=None):
+    path = path or ZONES_CONF
+    try:
+        with open(path, encoding='utf-8') as f:
+            doc = json.load(f)
+    except (OSError, ValueError):
+        return []
+    zones, seen = [], set()
+    for src in (doc.get('zones') if isinstance(doc, dict) else None) or []:
+        z = normalize_zone(src)
+        if z and z['id'] not in seen:
+            seen.add(z['id'])
+            zones.append(z)
+    return zones
+
+
+def save_zones(zones, path=None):
+    path = path or ZONES_CONF
+    clean = [z for z in (normalize_zone(z) for z in zones) if z]
+    _write_atomic(path, json.dumps({'zones': clean}, indent=2, sort_keys=True) + '\n')
+    return clean
+
+
+def update_zones(fn, path=None, timeout=LOCK_TIMEOUT):
+    """Load → `fn(zones)` → save, under the zones' own lock. `fn` changes the
+    list in place or returns a new one; an exception saves nothing."""
+    path = path or ZONES_CONF
+    with locked(path, timeout):
+        zones = load_zones(path)
+        new = fn(zones)
+        if new is not None:
+            zones = new
+        return save_zones(zones, path)
+
+
+def find_zone(zones, zid):
+    for z in zones:
+        if z['id'] == zid:
+            return z
+    return None
+
+
+def zone_argv(zone, server, probe_fn=None):
+    """The full squeezelite command line for a zone. `server` is the built-in
+    player's: a zone joins whatever Lyrion this device plays from."""
+    z = dict(zone)
+    z['server'] = server
+    return [SQUEEZELITE_BIN] + render_argv(z, probe_fn, visualizer=False, name=zone.get('name'))
+
+
+def card_present(output, proc_asound=None):
+    card, _ = parse_device(output)
+    if card is None:
+        return False
+    root = os.path.realpath(proc_asound or PROC_ASOUND)
+    return _card_dir(root, card) is not None
+
+
+# ── PCM → DSD: Lyrion's side ──────────────────────────────────────────
+# Rules are keyed by the player's MAC, never `* *`: any other player on this
+# Lyrion (another Osmium, a phone, a Squeezebox) keeps playing as before.
+# With the player advertising DSD alone, Lyrion walks these for every track.
+# `I`: the stream comes on stdin (internet radio, streaming services), and
+# Lyrion puts `-` in $FILE$.
+_DECODE_FLAC = ('# IFT:{START=--skip=%t}U:{END=--until=%v}',
+                '[flac] -dcs $START$ $END$ -- $FILE$')
+_DECODE_FFMPEG = ('# IFT:{START=-ss %s}U:{END=-to %u}',
+                  '[ffmpeg] -v error -nostdin $START$ $END$ -i $FILE$ -map 0:a:0 -ac 2 -c:a pcm_s32le -f wav -')
+# Every type Lyrion can hand a player, by what decodes it best.
+_LMS_TYPES = (('flc', _DECODE_FLAC),) + tuple(
+    (t, _DECODE_FFMPEG) for t in ('wav', 'aif', 'alc', 'alcx', 'aac', 'mp4', 'mp4x', 'mp3', 'ogg', 'ogf',
+                                  'ops', 'wma', 'wmal', 'wmap', 'wvp', 'wvpx', 'ape', 'mpc'))
+# Spotify (the Spotty plugin) hands over raw 16-bit 44.1 kHz stereo; Spotty
+# fills in $CACHE$ itself in every spt rule. Without Spotty, [spotty] is not
+# found and Lyrion skips the rule.
+_SPOTTY = ('# RT:{START=--start-position %s}',
+           '[spotty] -n Squeezebox -c "$CACHE$" --single-track $URL$ --bitrate 320 '
+           '--disable-discovery --disable-audio-cache $START$')
+RULES_BEGIN = '# BEGIN Osmium PCM to DSD -- generated by hifi_squeezelite.py, do not edit'
+RULES_END = '# END Osmium PCM to DSD'
+
+
+def pcm2dsd_players(main, zones, probe_fn=None):
+    """{mac: {'mode', 'filter', 'name'}} for every player of this device whose
+    PCM → DSD applies right now. Zones only when switched on."""
+    probe_fn = probe_fn or probe
+    out = {}
+    candidates = [main] + [dict(z, server=main['server']) for z in zones if z.get('enabled')]
+    for m in candidates:
+        m = normalize(m)
+        if not m['mac']:
+            continue
+        if pcm2dsd_state(m, probe_fn(m['output'])) == 'active':
+            out[m['mac']] = {'mode': m['pcm2dsd'], 'filter': m['pcm2dsd_filter']}
+    return out
+
+
+def lms_rules(players):
+    """The block of custom-convert.conf for `players` (pcm2dsd_players())."""
+    if not players:
+        return ''
+    lines = [RULES_BEGIN]
+    for mac in sorted(players):
+        for typ, (caps, decode) in _LMS_TYPES:
+            lines += [f'{typ} dsf * {mac}', f'\t{caps}', f'\t{decode} | {PCM2DSD_WRAPPER} $CLIENTID$ wav']
+        caps, decode = _SPOTTY
+        lines += [f'spt dsf * {mac}', f'\t{caps}', f'\t{decode} | {PCM2DSD_WRAPPER} $CLIENTID$ raw']
+    lines.append(RULES_END)
+    return '\n'.join(lines) + '\n'
+
+
+def merge_rules(existing, block):
+    """`existing` custom-convert.conf with our block replaced by `block`
+    (removed when empty). Whatever else the owner put there stays."""
+    text = existing or ''
+    start = text.find(RULES_BEGIN)
+    if start >= 0:
+        end = text.find(RULES_END, start)
+        end = len(text) if end < 0 else end + len(RULES_END)
+        if end < len(text) and text[end] == '\n':
+            end += 1
+        text = text[:start] + text[end:]
+    if block:
+        if text and not text.endswith('\n'):
+            text += '\n'
+        text += block
+    return text
+
+
+def _write_if_changed(path, text, mode=0o644):
+    try:
+        with open(path, encoding='utf-8') as f:
+            if f.read() == text:
+                return False
+    except OSError:
+        if not text:
+            return False
+    _write_atomic(path, text)
+    os.chmod(path, mode)
+    return True
+
+
+def sync_pcm2dsd(conf_path=CONF, zones_path=None, map_path=None, rules_path=None,
+                 default_path=DEFAULT, dsp_target_path=DSP_TARGET_FILE, probe_fn=None):
+    """Write the map the wrapper reads and Lyrion's rules for what the models
+    say now. Returns True when the rules changed: Lyrion only reads them at
+    start, so the caller restarts it. A Lyrion that is not installed (no
+    /etc/squeezeboxserver) is left alone."""
+    main, _ = load(conf_path, default_path, dsp_target_path)
+    players = pcm2dsd_players(main, load_zones(zones_path), probe_fn)
+    map_path = map_path or PCM2DSD_MAP
+    if players or os.path.exists(map_path):
+        _write_if_changed(map_path, json.dumps(players, indent=2, sort_keys=True) + '\n')
+    rules_path = rules_path or LMS_CONVERT
+    if not os.path.isdir(os.path.dirname(rules_path)):
+        return False
+    try:
+        with open(rules_path, encoding='utf-8') as f:
+            existing = f.read()
+    except OSError:
+        existing = ''
+    return _write_if_changed(rules_path, merge_rules(existing, lms_rules(players)))
+
+
+def _systemctl(*args):
+    return subprocess.run(['systemctl', *args], capture_output=True, text=True, timeout=30)
+
+
+def running_zone_units():
+    """Instance ids of the hifi-zone@ units systemd has loaded and active."""
+    try:
+        r = _systemctl('list-units', '--plain', '--no-legend', '--state=active', 'hifi-zone@*.service')
+    except Exception:
+        return set()
+    ids = set()
+    for line in r.stdout.splitlines():
+        m = re.match(r'^hifi-zone@(.+)\.service\s', line.strip() + ' ')
+        if m:
+            ids.add(m.group(1))
+    return ids
+
+
+def sync_zones(zones_path=None, restart=()):
+    """Start the zones that are on, stop the ones that are off or gone.
+    `restart`: ids whose settings changed, restarted if already running.
+    Starts are queued (--no-block): at boot this runs from hifi-zones.service,
+    which Lyrion waits for, and a start that waited in turn would be a loop."""
+    zones = load_zones(zones_path)
+    want = {z['id'] for z in zones if z['enabled']}
+    running = running_zone_units()
+    for zid in sorted(running - want):
+        _systemctl('stop', ZONE_UNIT.format(zid))
+    for zid in sorted(want):
+        unit = ZONE_UNIT.format(zid)
+        if zid in running and zid in restart:
+            _systemctl('restart', '--no-block', unit)
+        elif zid not in running:
+            _systemctl('reset-failed', unit)
+            _systemctl('start', '--no-block', unit)
+    return zones
+
+
+def run_zone(zid, zones_path=None, conf_path=CONF, poll=3.0, out=None):
+    """ExecStart of hifi-zone@<id>: wait for the zone's DAC (a USB DAC that is
+    unplugged is not an error worth a restart loop), then become squeezelite."""
+    if not _ZONE_ID_RE.match(zid or ''):
+        print(f'hifi_squeezelite: not a zone id: {zid!r}', file=sys.stderr)
+        return 64
+    zone = find_zone(load_zones(zones_path), zid)
+    if zone is None or not zone['enabled']:
+        print(f'hifi_squeezelite: zone {zid} is not configured or is off', file=sys.stderr)
+        return 64
+    waited = False
+    while not card_present(zone['output']):
+        if not waited and out is not None:
+            print(f'hifi_squeezelite: zone {zid}: waiting for {zone["output"]}', file=out)
+            out.flush()
+        waited = True
+        time.sleep(poll)
+    main, _ = load(conf_path)
+    argv = zone_argv(zone, main['server'])
+    if out is not None:
+        print('hifi_squeezelite: zone ' + zid + ': ' + ' '.join(argv), file=out)
+        out.flush()
+    os.execv(argv[0], argv)
+    return 1
+
+
 def main(argv):
     cmd = argv[1] if len(argv) > 1 else ''
     if cmd == 'apply' and len(argv) == 2:
@@ -721,11 +1100,28 @@ def main(argv):
         model, imported = load()
         print(json.dumps(model, indent=2, sort_keys=True))
         print(f"ARGS='{render(model)}'" + ('  (model not saved yet: imported from the file)' if imported else ''))
+        for z in load_zones():
+            print(f"zone {z['id']} ({'on' if z['enabled'] else 'off'}): "
+                  + ' '.join(zone_argv(z, model['server'])))
         return 0
     if cmd == 'probe' and len(argv) == 3:
         print(probe(argv[2]))
         return 0
-    print('usage: hifi_squeezelite.py apply | show | probe <hw:CARD=…,DEV=n>', file=sys.stderr)
+    if cmd == 'run-zone' and len(argv) == 3:
+        return run_zone(argv[2], out=sys.stdout)
+    if cmd == 'lms-rules' and len(argv) == 2:
+        # Lyrion's rules only: what hifi-lyrion-update.sh needs before it
+        # starts a freshly installed Lyrion.
+        changed = sync_pcm2dsd()
+        print(f'hifi_squeezelite: Lyrion PCM to DSD rules {"written" if changed else "unchanged"}')
+        return 0
+    if cmd == 'zones-sync' and len(argv) == 2:
+        # At boot, before Lyrion: its rules, then the zones that are on.
+        sync_pcm2dsd()
+        sync_zones()
+        return 0
+    print('usage: hifi_squeezelite.py apply | show | probe <hw:CARD=…,DEV=n> | run-zone <id> '
+          '| lms-rules | zones-sync', file=sys.stderr)
     return 2
 
 

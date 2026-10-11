@@ -1,0 +1,40 @@
+[Unit]
+# Osmium Sound — one more player, on one more DAC (a "zone").
+#
+# %i is the zone id from /etc/hifi-player/zones.json (the DAC's ALSA card name
+# and device, e.g. D50s-0). `hifi_squeezelite.py run-zone` waits for that DAC
+# to be plugged in, then execs squeezelite with the zone's own settings and the
+# built-in player's Lyrion server — so the zone shows up in Lyrion as a player
+# of its own, with its own name, queue and volume, and can be synced with the
+# others there.
+#
+# Started and stopped by hifi-zones.service at boot and by api_server.py when
+# Settings → Audio zones changes; never enabled on its own.
+Description=Osmium Sound - audio zone player (%i)
+After=network-online.target sound.target
+Wants=network-online.target
+# A DAC that keeps failing is retried for as long as it takes, like the
+# built-in player.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/hifi_squeezelite.py run-zone %i
+Restart=always
+RestartSec=5
+# 64: the zone is not configured, or switched off — nothing to retry.
+RestartPreventExitStatus=64
+# Same as squeezelite.service: a player stuck on its DAC ignores SIGTERM.
+TimeoutStopSec=10
+
+# A zone is a DAC like the built-in one: the same weights and priority as
+# squeezelite.service, for the same reason (an underrun is audible).
+Nice=-10
+IOSchedulingClass=realtime
+IOSchedulingPriority=0
+CPUAccounting=yes
+IOAccounting=yes
+CPUWeight=1000
+IOWeight=1000
+ManagedOOMPreference=avoid
+OOMScoreAdjust=-900

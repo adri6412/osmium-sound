@@ -264,6 +264,9 @@ CATEGORIES = {
             # restore then drops the live JSON so the file gets imported again
             # (sources_server._restore_apply_side_effects).
             ("file", "/etc/hifi-player/squeezelite.json"),
+            # Settings → Audio zones (hifi_squeezelite.py); the PCM to DSD
+            # map and Lyrion's rules are rendered from these at the next boot.
+            ("file", "/etc/hifi-player/zones.json"),
             # Settings → CD ripping (hifi_cdrip.py)
             ("file", "/etc/hifi-player/cdrip.json"),
             ("file", "/etc/default/squeezelite"),
