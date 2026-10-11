@@ -13,6 +13,7 @@ import CdRipNow from '../components/CdRipNow.vue';
 import VuSkinPreview from '../components/VuSkinPreview.vue';
 import RemoteIntro from '../components/RemoteIntro.vue';
 import RemotePairing from '../components/RemotePairing.vue';
+import Pcm2Dsd from '../components/Pcm2Dsd.vue';
 import animCd from '../assets/anim/cd.jpg';
 import animCdfront from '../assets/anim/cdfront.jpg';
 import animChanger from '../assets/anim/changer.jpg';
@@ -28,6 +29,8 @@ const { t, lang } = useI18n();
 const sections = computed(() => [
   { key: 'network',   label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
   { key: 'audio',     label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
+  // One more Lyrion player per further DAC (api_server.py /zones)
+  { key: 'zones',     label: t('settings.sections.zones.label'),     desc: t('settings.sections.zones.desc') },
   { key: 'btSpeakers', label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
   { key: 'remote',    label: t('settings.sections.remote.label'),    desc: t('settings.sections.remote.desc') },
   { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
@@ -254,6 +257,50 @@ async function sqCall(path, body, okMsg) {
 }
 const setSq = (patch) => sqCall('squeezelite_conf', patch, t('settings.audio.sqSaved'));
 const resetSq = () => sqCall('squeezelite_conf/reset', {}, t('settings.audio.sqReset'));
+
+// ── Audio zones: one more player per further DAC ─────────────────
+// api_server.py get_zones / zone_add / zone_update / zone_remove. Each zone
+// is a Lyrion player of its own on its own DAC (hifi-zone@<id>), with the
+// built-in player's Lyrion server; every control applies at once.
+const zones = ref(null); const zBusy = ref(false); const zOpen = ref('');
+const zAdd = reactive({ output: '', name: '' }); const zNames = reactive({});
+function zTake(d) {
+  zones.value = d;
+  for (const z of d.zones || []) if (zNames[z.id] === undefined) zNames[z.id] = z.name;
+  if (!(d.free || []).some((f) => f.id === zAdd.output)) zAdd.output = (d.free && d.free[0] && d.free[0].id) || '';
+}
+async function loadZones() {
+  const r = await api.sys('zones');
+  if (r.ok && r.data.zones) zTake(r.data);
+}
+async function zCall(path, body, okMsg) {
+  zBusy.value = true;
+  try {
+    const r = await api.sysPost(path, body);
+    const ok = r.ok && r.data.success !== false;
+    if (r.ok && r.data.zones) zTake(r.data);
+    say(bodyMsg(r, ok ? okMsg : t('settings.zones.saveFailed')), !ok);
+    return ok;
+  } finally { zBusy.value = false; }
+}
+async function zoneAdd() {
+  if (await zCall('zones/add', { output: zAdd.output, name: zAdd.name }, t('settings.zones.saved'))) {
+    zAdd.name = '';
+    const last = zones.value.zones[zones.value.zones.length - 1];
+    if (last) { zOpen.value = last.id; zNames[last.id] = last.name; }
+  }
+}
+const zoneSet = (z, patch) => zCall('zones/update', { id: z.id, ...patch }, t('settings.zones.saved'));
+const zoneRename = (z) => zoneSet(z, { name: zNames[z.id] });
+function zoneRemove(z) {
+  if (confirm(t('settings.zones.removeConfirm', { name: z.name }))) zCall('zones/remove', { id: z.id }, t('settings.zones.removed'));
+}
+function zoneState(z) {
+  if (!z.enabled) return t('settings.zones.stateOff');
+  if (!z.connected) return t('settings.zones.stateUnplugged');
+  return z.running ? t('settings.zones.stateOn') : t('settings.zones.stateStarting');
+}
+watch(open, (v) => { if (v === 'zones') loadZones(); }, { immediate: true });
 
 // ── Licenses & credits ─────────────────────────────────────────────
 // api_server.py get_credits: the project, Lyrion, the hand-kept third-party
@@ -1867,6 +1914,13 @@ onUnmounted(() => {
       <div class="row"><input v-model="playerName" /><button class="secondary fit" @click="saveName">{{ t('common.save') }}</button></div>
       <p class="sub" style="margin-top: 4px;">{{ t('settings.audio.playerNameHint') }}</p>
 
+      <!-- Every PCM track turned into DSD by Lyrion on its way to this player. -->
+      <div v-if="sq && sq.pcm2dsd" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <p class="sub">{{ t('settings.pcm2dsd.title') }}</p>
+        <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :state="sq.pcm2dsd.state"
+                 :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
+      </div>
+
       <!-- Advanced: the rest of squeezelite's command line, one control per
            option, applied at once. See setSq() above. -->
       <div v-if="sq" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
@@ -1933,6 +1987,64 @@ onUnmounted(() => {
         <p class="muted" style="font-family: monospace; word-break: break-all; user-select: all;">squeezelite {{ sq.args }}</p>
         <button class="secondary" :disabled="sqBusy" @click="resetSq">{{ t('settings.audio.sqResetButton') }}</button>
       </div>
+    </div>
+
+    <!-- Audio zones: every further DAC a Lyrion player of its own, next to
+         the built-in one. See zoneAdd()/zoneSet() above. -->
+    <div class="card" v-if="open === 'zones'">
+      <p class="sub">{{ t('settings.zones.help') }}</p>
+      <template v-if="zones">
+        <p class="muted">{{ t('settings.zones.mainUses', { dac: zones.main_output_name }) }}</p>
+        <label>{{ t('settings.zones.yours') }}</label>
+        <p class="sub" v-if="!zones.zones.length">{{ t('settings.zones.none') }}</p>
+        <template v-for="z in zones.zones" :key="z.id">
+          <div class="net between" @click="zOpen = zOpen === z.id ? '' : z.id">
+            <span>
+              <span style="display:block;">{{ z.name }}</span>
+              <span class="muted">{{ z.output_name }} · {{ zoneState(z) }}</span>
+            </span>
+            <span class="check">{{ zOpen === z.id ? '▾' : '▸' }}</span>
+          </div>
+          <div v-if="zOpen === z.id" style="padding: 0 4px 10px;">
+            <div class="between item">
+              <span>{{ t('settings.zones.enabled') }}</span>
+              <Toggle :model-value="z.enabled" :disabled="zBusy" @update:model-value="(v) => zoneSet(z, { enabled: v })" />
+            </div>
+            <label>{{ t('settings.zones.name') }}</label>
+            <div class="row">
+              <input v-model="zNames[z.id]" maxlength="32" />
+              <button class="secondary fit" :disabled="zBusy" @click="zoneRename(z)">{{ t('common.save') }}</button>
+            </div>
+            <label>{{ t('settings.audio.dsdLabel') }}</label>
+            <span class="seg">
+              <button v-for="m in zones.choices.dsd" :key="m" :disabled="zBusy" :class="{ active: z.conf.dsd === m }" @click="zoneSet(z, { dsd: m })">{{ t('settings.audio.dsd.' + m) }}</button>
+            </span>
+            <p class="muted">{{ t(z.dsd_detected === 'native' ? 'settings.audio.dsdDetectedNative' : z.dsd_detected === 'pcm' ? 'settings.audio.dsdDetectedPcm' : 'settings.audio.dsdDetectedDop') }}</p>
+            <label>{{ t('settings.audio.volumeLabel') }}</label>
+            <span class="seg">
+              <button :disabled="zBusy" :class="{ active: z.conf.volume === 'software' }" @click="zoneSet(z, { volume: 'software' })">{{ t('settings.audio.volumeSoftware') }}</button>
+              <button :disabled="zBusy || !z.mixers.length" :class="{ active: z.conf.volume === 'hardware' }" @click="zoneSet(z, { volume: 'hardware' })">{{ t('settings.audio.volumeHardware') }}</button>
+            </span>
+            <p class="muted">{{ z.mixers.length ? t('settings.audio.volumeHelp') : t('settings.audio.volumeNoMixer') }}</p>
+            <Pcm2Dsd :mode="z.conf.pcm2dsd" :filter="z.conf.pcm2dsd_filter" :state="z.pcm2dsd_state"
+                     :info="zones.pcm2dsd" :volume="z.conf.volume" :busy="zBusy" @set="(p) => zoneSet(z, p)" />
+            <button class="danger" style="margin-top: 12px;" :disabled="zBusy" @click="zoneRemove(z)">{{ t('settings.zones.remove') }}</button>
+          </div>
+        </template>
+
+        <template v-if="zones.zones.length < zones.max">
+          <label>{{ t('settings.zones.addTitle') }}</label>
+          <template v-if="zones.free.length">
+            <select v-model="zAdd.output" :disabled="zBusy">
+              <option v-for="d in zones.free" :key="d.id" :value="d.id">{{ d.name }}</option>
+            </select>
+            <input v-model="zAdd.name" maxlength="32" :placeholder="t('settings.zones.namePlaceholder')" style="margin-top: 8px;" />
+            <button style="margin-top: 8px;" :disabled="zBusy || !zAdd.output" @click="zoneAdd">{{ t('settings.zones.add') }}</button>
+          </template>
+          <p class="sub" v-else>{{ t('settings.zones.noFreeDac') }}</p>
+        </template>
+        <button class="secondary" style="margin-top: 8px;" :disabled="zBusy" @click="loadZones">{{ t('settings.zones.refresh') }}</button>
+      </template>
     </div>
 
     <!-- Bluetooth speakers: pair one and it turns into a player of its own,

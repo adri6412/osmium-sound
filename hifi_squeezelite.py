@@ -1055,6 +1055,9 @@ def sync_zones(zones_path=None, restart=()):
     running = running_zone_units()
     for zid in sorted(running - want):
         _systemctl('stop', ZONE_UNIT.format(zid))
+        # squeezelite answers SIGTERM with a non-zero exit: a zone switched
+        # off would otherwise sit there as "failed"
+        _systemctl('reset-failed', ZONE_UNIT.format(zid))
     for zid in sorted(want):
         unit = ZONE_UNIT.format(zid)
         if zid in running and zid in restart:

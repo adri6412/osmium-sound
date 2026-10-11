@@ -425,6 +425,14 @@ class TestApi(unittest.TestCase):
         z = r['zones'][0]
         self.assertEqual((z['name'], z['conf']['pcm2dsd'], z['pcm2dsd_state']), ('Kitchen', 'dsd64', 'active'))
         self.assertIn(('restart', '--no-block', 'hifi-zone@Gen-0.service'), self.sq_calls)
+        # a new rate: the zone keeps playing, Lyrion is not restarted either
+        self.sq_calls.clear()
+        lyrion = len(self.lyrion_restarts())
+        r = self.api.zone_update('Gen-0', {'pcm2dsd': 'dsd128'})
+        self.assertEqual(r['zones'][0]['conf']['pcm2dsd'], 'dsd128')
+        self.assertFalse(r['lyrion_restarted'])
+        self.assertEqual(len(self.lyrion_restarts()), lyrion)
+        self.assertNotIn(('restart', '--no-block', 'hifi-zone@Gen-0.service'), self.sq_calls)
         zmac = sq.load_zones(self.sb.zones)[0]['mac']
         self.assertIn(f'flc dsf * {zmac}', slurp(self.sb.rules))
         for bad in ({'nope': 1}, {'pcm2dsd': 'dsd256'}, {'name': ''}, {'volume': 'hardware'}):
@@ -433,6 +441,7 @@ class TestApi(unittest.TestCase):
         r = self.api.zone_update('Gen-0', {'enabled': False})
         self.assertFalse(r['zones'][0]['enabled'])
         self.assertIn(('stop', 'hifi-zone@Gen-0.service'), self.sq_calls)
+        self.assertIn(('reset-failed', 'hifi-zone@Gen-0.service'), self.sq_calls)
         self.assertNotIn(zmac, slurp(self.sb.rules))
         r = self.api.zone_remove('Gen-0')
         self.assertTrue(r['success'])

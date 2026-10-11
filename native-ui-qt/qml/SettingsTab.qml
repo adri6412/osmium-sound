@@ -41,6 +41,13 @@ Item {
     // every time the five-second refresh lands.
     property int btBand: -1
     property string btNameEdit: ""
+    // Audio zones: the same pattern — which zone's panel is open, the name
+    // being typed into it, and the DAC + name picked for a new one.
+    property int zoneBand: -1
+    property string zoneNameEdit: ""
+    property string zoneNewOut: ""
+    property string zoneNewName: ""
+    property bool zoneBusy: false
     property bool btBusy: false
     property bool btScanning: false
     // Telecomando: la prova dei tasti e il Bluetooth della sua sezione.
@@ -145,6 +152,7 @@ Item {
         { id: "sources", icon: "hard-drive", key: "settings.sections.sources" },
         { id: "cdRip", icon: "disc", key: "settings.sections.cdRip" },
         { id: "audio", icon: "volume-2", key: "settings.sections.audio" },
+        { id: "zones", icon: "usb", key: "settings.sections.zones" },
         { id: "btSpeakers", icon: "bluetooth", key: "settings.sections.btSpeakers" },
         { id: "remote", icon: "remote", key: "settings.sections.remote" },
         { id: "playback", icon: "sliders", key: "settings.sections.playback" },
@@ -208,7 +216,20 @@ Item {
         property string otaChannel: "prod"; property var otaChannels: ["prod", "dev"]
         property string audioCur: ""; property var audio: []          // [{id,name,dsd}]
         // the rest of squeezelite's command line (api /squeezelite_conf)
-        property var sq: ({ loaded: false, conf: {}, args: "", dsd_detected: "dop", mixers: [], choices: {} })
+        property var sq: ({ loaded: false, conf: {}, args: "", dsd_detected: "dop", mixers: [], choices: {}, pcm2dsd: {} })
+        // Audio zones (api /zones): one more Lyrion player per further DAC.
+        // Read only while the section is open, like the Bluetooth speakers.
+        property var zones: ({ loaded: false, zones: [], free: [], max: 8, pcm2dsd: {}, choices: {}, main_output_name: "" })
+        function setZones(d) {
+            zones = { loaded: true, zones: d.zones || [], free: d.free || [], max: d.max || 8, pcm2dsd: d.pcm2dsd || {},
+                      choices: d.choices || {}, main_output_name: String(d.main_output_name || "") }
+        }
+        function loadZones() {
+            Api.get(api("/zones"), function(ok, d) {
+                if (ok && d && d.zones) setZones(d)
+                root.zoneBusy = false; root.rebuild()
+            }, 20000)
+        }
         // Settings → CD ripping (sources_server /api/cd/settings, hifi_cdrip.py)
         property var cdrip: ({ loaded: false, settings: {}, drive: {}, target_ok: false, targets: [], ripping: false, choices: {} })
         property string lmsMode: "local"; property string lmsHost: ""; property string playerName: ""; property string lyrionChannel: "release"
@@ -398,7 +419,7 @@ Item {
             })
             get(api("/squeezelite_conf"), function(d) {
                 sq = { loaded: !!d.conf, conf: d.conf || {}, args: String(d.args || ""), dsd_detected: String(d.dsd_detected || "dop"),
-                       mixers: d.mixers || [], choices: d.choices || {} }
+                       mixers: d.mixers || [], choices: d.choices || {}, pcm2dsd: d.pcm2dsd || {} }
             })
             get(api("/lms_role"), function(d) { lmsMode = str(d, "mode", "local"); lmsHost = str(d, "host") })
             get(api("/player_name"), function(d) { playerName = str(d, "name") })
@@ -574,7 +595,41 @@ Item {
         sqExtraDirty = false
         say((d && d.message) || Tr.t("settings.audio.saved"))
     }
-    function sqSet(body) { post(cfg.api("/squeezelite_conf"), body, sqDone) }
+    function sqSet(body) {
+        // turning DSD conversion on or off restarts Lyrion: give it time
+        if (body.pcm2dsd !== undefined) {
+            say(Tr.t("settings.pcm2dsd.applying"))
+            Api.post(cfg.api("/squeezelite_conf"), body, function(ok, d) { sqDone(ok, d); cfg.load() }, 90000)
+            return
+        }
+        post(cfg.api("/squeezelite_conf"), body, sqDone)
+    }
+    // Audio zones: every /zones/* reply carries the whole list, unpacked in
+    // one place (as btApply does for the speakers).
+    function zoneById(id) {
+        var zs = cfg.zones.zones || []
+        for (var i = 0; i < zs.length; i++) if (zs[i].id === id) return zs[i]
+        return null
+    }
+    function zoneApply(ok, d) {
+        zoneBusy = false
+        if (ok && d && d.zones) cfg.setZones(d)
+        if (!ok || !d) { say(Tr.t("settings.zones.saveFailed"), true); return }
+        if (d.message) { say(String(d.message), d.success === false); return }
+        rebuild()
+    }
+    function zoneSet(id, patch) {
+        var body = { id: id }
+        for (var k in patch) body[k] = patch[k]
+        zoneBusy = true
+        if (patch.pcm2dsd !== undefined) say(Tr.t("settings.pcm2dsd.applying"))
+        Api.post(cfg.api("/zones/update"), body, zoneApply, 90000)
+    }
+    // "<zone id>|<value>" for a zone's row, "<value>" for the built-in player's
+    function splitZoneArg(arg) {
+        var i = arg.indexOf("|")
+        return i >= 0 ? { zid: arg.slice(0, i), v: arg.slice(i + 1) } : { zid: "", v: arg }
+    }
     function sqReset() { post(cfg.api("/squeezelite_conf/reset"), {}, sqDone) }
     // CD ripping: one call per row, the server answers with the whole
     // settings and a message; post() reloads cfg afterwards
@@ -630,6 +685,7 @@ Item {
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
         btBand = -1; btNameEdit = ""; btBusy = false; btScanning = false
+        zoneBand = -1; zoneNameEdit = ""; zoneNewOut = ""; zoneNewName = ""; zoneBusy = false
         remoteTest = false; remoteBusy = false; remoteScanning = false
         wizReset()
         if (id === "timezone" && timezones.length === 0) Api.get(cfg.api("/timezones"), function(ok, d) { if (ok && d && d.timezones) { timezones = d.timezones.map(String); rebuild() } })
@@ -637,6 +693,7 @@ Item {
         if (id === "multiroom" && cfg.lmsMode === "follow") cfg.loadDiscover()
         if (id === "multiroom") cfg.loadLibrary()
         if (id === "btSpeakers") { btBusy = true; cfg.loadBt() }
+        if (id === "zones") { zoneBusy = true; cfg.loadZones() }
         if (id === "remote") { remoteBusy = true; cfg.loadRemotes() }
         if (id === "vuMeters") cfg.loadStore(true)
         if (id === "animations") cfg.loadAnimStore(true)
@@ -889,6 +946,7 @@ Item {
             case "sources": secSources(); break
             case "cdRip": secCdRip(); break
             case "audio": secAudio(); break
+            case "zones": secZones(); break
             case "playback": secPlayback(); break
             case "vuMeters": secVuMeters(); break
             case "animations": secAnimations(); break
@@ -1191,7 +1249,92 @@ Item {
         }
         grid([acell(Tr.t("settings.audio.refreshList"), "audio_refresh", "accent", { icon: "rotate-cw", hh: 48 }),
               acell(Tr.t("settings.audio.setOutput"), "audio_apply", "gold", { icon: "volume-2", bold: true, hh: 48 })])
+        if (cfg.sq.loaded && cfg.sq.pcm2dsd && cfg.sq.pcm2dsd.modes) {
+            var c = cfg.sq.conf || {}
+            sep()
+            secPcm2dsd(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(cfg.sq.pcm2dsd.state || "off"),
+                       cfg.sq.pcm2dsd, String(c.volume || "software"), "")
+        }
         if (cfg.sq.loaded) secSqueezelite()
+    }
+    // "Convert to DSD" for one player: the built-in one (zid "") or a zone.
+    // Lyrion converts every PCM track on its way there (hifi-pcm2dsd.py);
+    // the rows say why it may not apply, and that the digital volume no
+    // longer acts on the signal.
+    function secPcm2dsd(mode, filter, state, info, volume, zid) {
+        var pre = zid ? zid + "|" : "", i
+        label("settings.pcm2dsd.label", 14)
+        if (!info.available) { note(Tr.t("settings.pcm2dsd.why.noTools"), "dark", "info"); return }
+        help("settings.pcm2dsd.help", 12)
+        var modes = (info.modes || ["off"]).slice()
+        if (modes.indexOf(mode) < 0) modes.push(mode)        // chosen earlier, no longer offered
+        var mc = []
+        for (i = 0; i < modes.length; i++)
+            mc.push(cell(modes[i] === "off" ? Tr.t("settings.audio.off") : modes[i].toUpperCase(), pre + modes[i],
+                         mode === modes[i], "p2d_mode", { hh: 44 }))
+        grid(mc)
+        if (state !== "off" && state !== "active") note(Tr.t("settings.pcm2dsd.why." + state), "red", "alert-triangle")
+        else if (state === "active") {
+            helpText(Tr.tf("settings.pcm2dsd.active", "rate", mode.toUpperCase()), 12)
+            if (volume !== "hardware") note(Tr.t("settings.pcm2dsd.volumeWarning"), "red", "volume-2")
+        }
+        if (!info.measured) helpText(Tr.t("settings.pcm2dsd.measuring"), 12)
+        if (mode === "off") return
+        label("settings.pcm2dsd.filterLabel", 14); help("settings.pcm2dsd.filterHelp", 12)
+        var fl = info.filters || [], fc = []
+        for (i = 0; i < fl.length; i++)
+            fc.push(cell(Tr.t("settings.pcm2dsd.filter." + fl[i]), pre + fl[i], filter === fl[i], "p2d_filter", { hh: 44 }))
+        grid(fc)
+    }
+    // Settings → Audio zones: every further DAC a Lyrion player of its own
+    // (api /zones, hifi-zone@<id>), next to the built-in one.
+    function secZones() {
+        help("settings.zones.help")
+        var z = cfg.zones, i
+        if (!z.loaded) { helpText(Tr.t("common.loading"), 13); return }
+        note(Tr.tf("settings.zones.mainUses", "dac", z.main_output_name), "dark", "volume-2")
+        label("settings.zones.yours")
+        if (!z.zones.length) helpText(Tr.t("settings.zones.none"), 13)
+        for (i = 0; i < z.zones.length; i++) {
+            var zn = z.zones[i], c = zn.conf || {}
+            var state = !zn.enabled ? Tr.t("settings.zones.stateOff")
+                      : !zn.connected ? Tr.t("settings.zones.stateUnplugged")
+                      : zn.running ? Tr.t("settings.zones.stateOn") : Tr.t("settings.zones.stateStarting")
+            var b = bandRow("usb", String(zn.name), String(zn.output_name) + "   ·   " + state, zoneBand === i, "zone_band", String(i), false)
+            if (zoneBand !== i) continue
+            begin(b.children)
+            var sw = toggle(Tr.t("settings.zones.enabled"), "", !!zn.enabled, "zone_enable", zn.id); sw.dim = zoneBusy
+            input(Tr.t("settings.zones.name"), zoneNameEdit, "zone_name", false, zn.id)
+            var ren = action(Tr.t("settings.zones.rename"), "zone_rename", "accent"); ren.hh = 40; ren.arg = zn.id
+            label("settings.audio.dsdLabel", 14)
+            help(zn.dsd_detected === "native" ? "settings.audio.dsdDetectedNative"
+                 : zn.dsd_detected === "pcm" ? "settings.audio.dsdDetectedPcm" : "settings.audio.dsdDetectedDop", 12)
+            var dm = (z.choices && z.choices.dsd) || ["auto", "dop", "native", "off"], dc = []
+            for (var j = 0; j < dm.length; j++) dc.push(cell(Tr.t("settings.audio.dsd." + dm[j]), zn.id + "|" + dm[j], c.dsd === dm[j], "zone_dsd", { hh: 44 }))
+            grid(dc)
+            if (zn.mixers && zn.mixers.length) toggle(Tr.t("settings.audio.volumeHardware"), Tr.t("settings.audio.volumeHelp"), c.volume === "hardware", "zone_hwvol", zn.id)
+            else note(Tr.t("settings.audio.volumeNoMixer"), "dark")
+            secPcm2dsd(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(zn.pcm2dsd_state || "off"),
+                       z.pcm2dsd || {}, String(c.volume || "software"), zn.id)
+            grid([acell(Tr.t("settings.zones.remove"), "zone_remove", "red", { hh: 40, arg: zn.id, icon: "trash-2" })])
+            end()
+        }
+        if (z.zones.length < z.max) {
+            sep()
+            label("settings.zones.addTitle")
+            if (!z.free.length) helpText(Tr.t("settings.zones.noFreeDac"), 13)
+            else {
+                var sel = zoneNewOut
+                if (!sel || !z.free.some(function(f) { return f.id === sel })) sel = z.free[0].id
+                for (i = 0; i < z.free.length; i++) {
+                    var r = option(String(z.free[i].name), String(z.free[i].id), String(z.free[i].id), sel === z.free[i].id, "zone_pick")
+                    r.hh = 60; r.mono = true
+                }
+                input(Tr.t("settings.zones.namePlaceholder"), zoneNewName, "zone_new_name", false)
+                var ad = action(Tr.t("settings.zones.add"), "zone_add", "gold"); ad.icon = "plus"; ad.hh = 48; ad.arg = sel; ad.dim = zoneBusy
+            }
+        }
+        var rf = action(Tr.t("settings.zones.refresh"), "zone_refresh", "dark"); rf.icon = "rotate-cw"; rf.hh = 44
     }
     // Settings → CD ripping: Daphile's page, field by field (sources_server
     // /api/cd/settings, hifi_cdrip.py). The destination is picked with the
@@ -2062,6 +2205,8 @@ Item {
         case "cd_offset": cdOffsetEdit = text; cdOffsetDirty = true; break
         case "pick_new": pickNew = text; break
         case "bt_name": btNameEdit = text; break
+        case "zone_name": zoneNameEdit = text; break
+        case "zone_new_name": zoneNewName = text; break
         }
         // le righe dipendenti (pulsante "applica" attivo/spento) si rifanno subito
         dimRefresh.restart()
@@ -2345,6 +2490,62 @@ Item {
         case "sq_rt": sqSet({ realtime: !row.on }); break
         case "sq_extra_apply": sqSet({ extra: sqExtraDirty ? sqExtraEdit : String((cfg.sq.conf || {}).extra || "") }); break
         case "sq_reset": sqReset(); break
+        case "p2d_mode": {
+            var pm = splitZoneArg(arg), pz = pm.zid ? zoneById(pm.zid) : null
+            var pconf = pm.zid ? (pz ? pz.conf || {} : {}) : (cfg.sq.conf || {})
+            var curMode = String(pconf.pcm2dsd || "off")
+            if (pm.v === curMode) return
+            var p2dApply = function() { if (pm.zid) zoneSet(pm.zid, { pcm2dsd: pm.v }); else sqSet({ pcm2dsd: pm.v }) }
+            // from PCM to DSD with the player's own volume: it stops working
+            if (curMode === "off" && pm.v !== "off" && pconf.volume !== "hardware") {
+                Ui.dialogs.confirm(Tr.t("settings.pcm2dsd.volumeConfirm"), Tr.t("settings.pcm2dsd.confirmOk"), true,
+                                   function(ok) { if (ok) p2dApply() })
+                return
+            }
+            p2dApply()
+            return
+        }
+        case "p2d_filter": {
+            var pf = splitZoneArg(arg)
+            if (pf.zid) zoneSet(pf.zid, { pcm2dsd_filter: pf.v }); else sqSet({ pcm2dsd_filter: pf.v })
+            return
+        }
+        case "zone_band": {
+            var zi = Number(arg)
+            zoneBand = (zoneBand === zi) ? -1 : zi
+            var zb = zoneBand >= 0 ? (cfg.zones.zones || [])[zoneBand] : null
+            zoneNameEdit = zb ? String(zb.name || "") : ""
+            break
+        }
+        case "zone_enable": zoneSet(arg, { enabled: !row.on }); return
+        case "zone_rename":
+            if (!zoneNameEdit.trim()) return
+            zoneSet(arg, { name: zoneNameEdit.trim() })
+            return
+        case "zone_dsd": { var zd = splitZoneArg(arg); zoneSet(zd.zid, { dsd: zd.v }); return }
+        case "zone_hwvol": zoneSet(arg, { volume: row.on ? "software" : "hardware" }); return
+        case "zone_pick": zoneNewOut = arg; break
+        case "zone_add":
+            if (!arg || zoneBusy) return
+            zoneBusy = true
+            Api.post(A("/zones/add"), { output: arg, name: zoneNewName.trim() }, function(ok, d) {
+                if (ok && d && d.success !== false) {
+                    zoneNewName = ""; zoneNewOut = ""
+                    zoneBand = d.zones ? d.zones.length - 1 : -1
+                    zoneNameEdit = zoneBand >= 0 ? String(d.zones[zoneBand].name || "") : ""
+                }
+                zoneApply(ok, d)
+            }, 90000)
+            return
+        case "zone_remove":
+            Ui.dialogs.confirm(Tr.tf("settings.zones.removeConfirm", "name", (zoneById(arg) || {}).name || arg),
+                               Tr.t("settings.zones.remove"), true, function(ok) {
+                if (!ok) return
+                zoneBand = -1; zoneBusy = true
+                Api.post(A("/zones/remove"), { id: arg }, zoneApply, 90000)
+            })
+            return
+        case "zone_refresh": zoneBusy = true; cfg.loadZones(); return
         // Settings → CD ripping (secCdRip)
         case "cd_enabled": cdSet({ enabled: !row.on }); break
         case "cd_pick_open": pickOwner = 4; openChooser(String((cfg.cdrip.settings || {}).target || ""), Tr.t("settings.cdRip.targetUse")); break
@@ -2376,7 +2577,8 @@ Item {
             if (Ui.cdrip) Ui.cdrip.ripNow(function(r) { if (r !== "ok" && Ui.toast) Ui.toast.say("disc", Tr.t("settings.cdRip.ripNow_" + r)) })
             break
         case "lms_skin": post(S("/api/lms_skin"), { skin: arg }); cfg.lmsSkin = arg; say(Tr.t("settings.lyrion.skinApplying")); break
-        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": case "sq_extra": case "cd_offset": return
+        case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": case "sq_extra": case "cd_offset":
+        case "zone_name": case "zone_new_name": return
         case "lms_role":
             if (arg !== "local") { cfg.lmsMode = "follow"; cfg.loadDiscover(); break }
             // Already on this device's own server: only the toggle moves back,

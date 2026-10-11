@@ -19,6 +19,14 @@ STATE = {
     "audio": "hw:CARD=DAC,DEV=0", "shell_user": "", "pldir": "/srv/music/playlist", "skin": "osmium", "fmt": {"state": "idle"},
     "install": {"state": "idle"}, "cd": {"no_disc": True}, "cdrip": {"state": "idle"},
     "bt_remotes": {"available": True, "supported": True, "adapter": True, "remotes": [], "found": []},
+    # Settings → Audio (squeezelite model) and Audio zones; MOCK_ZONES=0 starts with none
+    "sq": {"dsd": "auto", "dsd_delay_ms": 0, "max_rate": 0, "volume": "software", "mixer": "", "alsa_buffer": "auto",
+           "stream_buffer": "auto", "realtime": False, "extra": "", "pcm2dsd": "off", "pcm2dsd_filter": "clans-8"},
+    "zones": [] if os.environ.get("MOCK_ZONES") == "0" else [
+        {"id": "D50s-0", "name": "Studio", "output": "hw:CARD=D50s,DEV=0", "output_name": "Topping D50s — USB Audio",
+         "enabled": True, "connected": True, "running": True, "dsd_detected": "native", "mixers": [], "pcm2dsd_state": "off",
+         "conf": {"dsd": "auto", "dsd_delay_ms": 0, "max_rate": 0, "volume": "software", "mixer": "", "alsa_buffer": "auto",
+                  "stream_buffer": "auto", "realtime": False, "pcm2dsd": "off", "pcm2dsd_filter": "clans-8"}}],
     # the top-bar connectivity icon: internet | lan | offline, wired | wireless | none
     "net": os.environ.get("MOCK_NET", "internet"), "net_type": os.environ.get("MOCK_NET_TYPE", "wired"),
     # Ricerca dei dispositivi in rete: uno con nome mDNS, uno che chiede la
@@ -447,6 +455,31 @@ def rpc(player, params):
         pass
     return {"id": 1, "method": "slim.request", "params": [player, params], "result": r}
 
+
+# ── Settings → Audio: the squeezelite model, PCM to DSD and the zones ──
+MOCK_P2D = {"modes": ["off", "dsd64", "dsd128"], "measured": True, "filters": ["clans-8", "sdm-8"],
+            "available": True, "server_local": True}
+MOCK_FREE = [{"id": "hw:CARD=Kitchen,DEV=0", "name": "iFi Zen DAC — USB Audio", "dsd": "native"}]
+
+
+def mock_sq():
+    c = STATE["sq"]
+    return {"success": True, "conf": dict(c, output=STATE["audio"], name="Osmium", server="127.0.0.1"),
+            "args": "-o " + STATE["audio"] + " -D :u32be -v -C 5 -s 127.0.0.1 -n Osmium -M Osmium" + (" -b 16384:8192 -c dsd" if c["pcm2dsd"] != "off" else ""),
+            "dsd_detected": "native", "dsd_format": "u32be", "mixers": ["PCM"],
+            "choices": {"dsd": ["auto", "dop", "native", "off"], "dsd_delay_ms": [0, 100, 250, 500], "max_rate": [0, 96000, 192000, 384000]},
+            "defaults": {}, "pcm2dsd": dict(MOCK_P2D, state="active" if c["pcm2dsd"] != "off" else "off")}
+
+
+def mock_zones(message=None, success=True):
+    used = {z["output"] for z in STATE["zones"]}
+    out = {"success": success, "zones": STATE["zones"], "free": [d for d in MOCK_FREE if d["id"] not in used], "max": 8,
+           "main_output": STATE["audio"], "main_output_name": "USB DAC", "pcm2dsd": MOCK_P2D,
+           "choices": {"dsd": ["auto", "dop", "native", "off"]}}
+    if message:
+        out["message"] = message
+    return out
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def _json(self, obj, code=200):
@@ -528,6 +561,8 @@ class H(BaseHTTPRequestHandler):
                 # e' il caso che l'elenco deve saper distinguere.
                 "/wifi_scan": {"networks": [{"ssid": "CasaWiFi", "security": "WPA2", "signal": 78, "band": "2.4", "saved": True}, {"ssid": "CasaWiFi", "security": "WPA2", "signal": 64, "band": "5", "saved": True}, {"ssid": "Ospiti", "security": "", "signal": 40, "band": "2.4"}, {"ssid": "Vicino", "security": "WPA2", "signal": 20, "band": "5"}]},
             }
+            if u.path == "/squeezelite_conf": return self._json(mock_sq())
+            if u.path == "/zones": return self._json(mock_zones())
             if u.path in table: return self._json(table[u.path])
             return self._json({"success": False, "error": "mock: " + u.path}, 404)
         if port == 8080:
@@ -622,6 +657,32 @@ class H(BaseHTTPRequestHandler):
                 mac = str(data.get("mac") or "")
                 r["remotes"] = [d for d in r["remotes"] if d["mac"] != mac]
                 return self._json(dict(r, success=True, message="Telecomando dimenticato"))
+        if port == 8000 and u.path in ("/squeezelite_conf", "/squeezelite_conf/reset"):
+            if "pcm2dsd" in data: time.sleep(1.5)        # Lyrion restarting
+            STATE["sq"].update({k: v for k, v in data.items() if k in STATE["sq"]})
+            r = mock_sq(); r["message"] = "Salvato, player riavviato"
+            return self._json(r)
+        if port == 8000 and u.path.startswith("/zones/"):
+            zid = str(data.get("id") or "")
+            z = next((x for x in STATE["zones"] if x["id"] == zid), None)
+            if u.path == "/zones/add":
+                d = next((x for x in MOCK_FREE if x["id"] == data.get("output")), None)
+                if not d: return self._json(mock_zones("Questo DAC è già in uso", False))
+                name = str(data.get("name") or "").strip() or d["name"].split(" — ")[0]
+                STATE["zones"].append({"id": "Kitchen-0", "name": name, "output": d["id"], "output_name": d["name"], "enabled": True,
+                                       "connected": True, "running": True, "dsd_detected": "native", "mixers": ["PCM"], "pcm2dsd_state": "off",
+                                       "conf": dict(STATE["sq"], pcm2dsd="off")})
+                return self._json(mock_zones(f'"{name}" aggiunta: ora è un player a sé in Lyrion'))
+            if z is None: return self._json(mock_zones("Questa zona non esiste più", False))
+            if u.path == "/zones/remove":
+                STATE["zones"].remove(z); return self._json(mock_zones("Zona tolta"))
+            if "pcm2dsd" in data: time.sleep(1.5)
+            for k, v in data.items():
+                if k == "name": z["name"] = v
+                elif k == "enabled": z["enabled"] = bool(v); z["running"] = bool(v)
+                elif k in z["conf"]: z["conf"][k] = v
+            z["pcm2dsd_state"] = "active" if z["conf"]["pcm2dsd"] != "off" else "off"
+            return self._json(mock_zones("Salvato, zona riavviata"))
         if port == 8000:
             if u.path == "/wifi_forget":
                 ssid = str(data.get("ssid") or "")

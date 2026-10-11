@@ -518,6 +518,7 @@
       "sources": "Music sources",
       "cdRip": "CD ripping",
       "audio": "Audio Output (DAC)",
+      "zones": "Audio zones",
       "playback": "Playback",
       "vuMeters": "VU Meters",
       "animations": "Animations",
@@ -1156,6 +1157,49 @@
     },
     "sources": {
       "help": "Add your music folders: USB sticks/drives (auto-mounted), network (SMB) or local folders. Changes take effect right away."
+    },
+    "zones": {
+      "help": "Every further DAC connected to this device can be a player of its own in Lyrion, with its own name, queue and volume: one per room, or one per system. Group them in Lyrion to play the same music everywhere.",
+      "mainUses": "The built-in player plays on: {dac}",
+      "yours": "Your zones",
+      "none": "No zones yet.",
+      "enabled": "Zone on",
+      "name": "Name in Lyrion",
+      "rename": "Save the name",
+      "namePlaceholder": "Name (optional, e.g. Kitchen)",
+      "stateOn": "ready",
+      "stateOff": "off",
+      "stateUnplugged": "DAC not connected",
+      "stateStarting": "starting…",
+      "addTitle": "Add a zone",
+      "add": "Add zone",
+      "noFreeDac": "No free DAC: connect another one to add a zone.",
+      "remove": "Remove zone",
+      "removeConfirm": "Remove the zone \"{name}\"? Its DAC becomes free again.",
+      "refresh": "Look for DACs again",
+      "saveFailed": "Could not save the zone"
+    },
+    "pcm2dsd": {
+      "label": "Convert to DSD",
+      "help": "Every track that is not DSD already (CD rips, high-resolution files, radio, streaming services) reaches the DAC as DSD, converted while it plays. DSD files are left as they are.",
+      "active": "On: everything reaches the DAC as {rate}.",
+      "volumeWarning": "The digital volume has no effect on DSD: use the volume of the DAC or of the amplifier.",
+      "volumeConfirm": "With DSD the volume of this player no longer changes anything: the music plays at full level and the volume is set on the DAC or the amplifier. Turn the amplifier down first.",
+      "confirmOk": "Turn DSD on",
+      "applying": "Applying… Lyrion may restart for a few seconds.",
+      "measuring": "Measuring what this processor can do: DSD256 shows up here if it is fast enough.",
+      "filterLabel": "Noise shaping",
+      "filterHelp": "How the conversion pushes its noise above the audible band. The differences are subtle: choose by ear.",
+      "filter": {
+        "clans-8": "CLANS, 8th order",
+        "sdm-8": "SDM, 8th order"
+      },
+      "why": {
+        "noTools": "This device needs a system update before it can convert to DSD.",
+        "remoteServer": "Only works when this device is its own Lyrion server: the music now comes from another one.",
+        "dsp": "Not available while sound processing is on.",
+        "noDsd": "No DSD reaches this DAC: choose a DAC that accepts it (natively or as DoP) and a DSD mode other than \"Convert to PCM\"."
+      }
     },
     "audio": {
       "help": "Choose the playback device (DAC). The selection is saved and kept across reboots. DSD playback is bit-perfect: native when the DAC accepts it that way, DoP otherwise.",

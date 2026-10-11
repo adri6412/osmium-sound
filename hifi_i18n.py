@@ -82,8 +82,8 @@ MESSAGES = {
     'squeezelite.noMixer': {'en': 'This output has no hardware volume control',
                             'it': 'Questa uscita non ha un controllo di volume hardware'},
     'squeezelite.restartWarn': {'en': 'Saved; squeezelite restart: {err}', 'it': 'Salvato; riavvio di squeezelite: {err}'},
-    'squeezelite.savedLyrionRestart': {'en': 'Saved. Lyrion is restarting to load the DSD conversion: music is back in a few seconds',
-                                       'it': 'Salvato. Lyrion si riavvia per caricare la conversione in DSD: la musica torna fra pochi secondi'},
+    'squeezelite.savedLyrionRestart': {'en': 'Saved. Lyrion is restarting to apply the DSD conversion: music is back in a few seconds',
+                                       'it': 'Salvato. Lyrion si riavvia per applicare la conversione in DSD: la musica torna fra pochi secondi'},
     'squeezelite.pcm2dsdTooHeavy': {'en': 'This processor is not fast enough to convert to {detail} while playing',
                                     'it': 'Questo processore non è abbastanza veloce per convertire in {detail} durante l\'ascolto'},
 

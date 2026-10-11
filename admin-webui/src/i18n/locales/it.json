@@ -278,6 +278,10 @@
       "netCheck": {
         "label": "Diagnosi rete",
         "desc": "Trova dove si ferma la connessione: cavo o Wi-Fi, router, internet o server degli aggiornamenti."
+      },
+      "zones": {
+        "label": "Zone audio",
+        "desc": "Altri DAC, ognuno un player a sé"
       }
     },
     "network": {
@@ -1218,6 +1222,49 @@
         "dns": "Funziona, ma alcuni indirizzi non si trovano: se gli aggiornamenti non vanno, riavvia il router.",
         "clock": "Funziona, ma l'orologio dell'apparecchio è un po' sbagliato: controlla il fuso orario.",
         "ota": "Funziona: il server principale non risponde, quindi l'apparecchio usa quello di riserva."
+      }
+    },
+    "zones": {
+      "help": "Ogni altro DAC collegato a questo apparecchio può diventare un player a sé in Lyrion, con nome, coda e volume suoi: uno per stanza, o uno per impianto. Raggruppali in Lyrion per sentire la stessa musica ovunque.",
+      "mainUses": "Il player principale suona su: {dac}",
+      "yours": "Le tue zone",
+      "none": "Ancora nessuna zona.",
+      "enabled": "Zona accesa",
+      "name": "Nome in Lyrion",
+      "namePlaceholder": "Nome (facoltativo, es. Cucina)",
+      "stateOn": "pronta",
+      "stateOff": "spenta",
+      "stateUnplugged": "DAC non collegato",
+      "stateStarting": "si sta avviando…",
+      "addTitle": "Aggiungi una zona",
+      "add": "Aggiungi zona",
+      "noFreeDac": "Nessun DAC libero: collegane un altro per aggiungere una zona.",
+      "remove": "Togli la zona",
+      "removeConfirm": "Togliere la zona \"{name}\"? Il suo DAC torna libero.",
+      "refresh": "Cerca di nuovo i DAC",
+      "saved": "Salvato",
+      "removed": "Zona tolta",
+      "saveFailed": "Non sono riuscito a salvare la zona"
+    },
+    "pcm2dsd": {
+      "title": "Conversione in DSD",
+      "label": "Converti in DSD",
+      "help": "Ogni brano che non è già DSD (CD rippati, file ad alta risoluzione, radio, servizi di streaming) arriva al DAC in DSD, convertito mentre suona. I file DSD restano come sono.",
+      "active": "Accesa: tutto arriva al DAC in {rate}.",
+      "volumeWarning": "Il volume digitale non agisce sul DSD: usa il volume del DAC o dell'amplificatore. Abbassalo prima di cominciare.",
+      "volumeConfirm": "In DSD il volume di questo player non cambia più niente: la musica esce a livello pieno e il volume si regola sul DAC o sull'amplificatore. Abbassa prima l'amplificatore. Proseguo?",
+      "measuring": "Sto misurando cosa regge questo processore: DSD256 compare qui se è abbastanza veloce.",
+      "filterLabel": "Modellazione del rumore",
+      "filterHelp": "Come la conversione sposta il suo rumore oltre la banda udibile. Le differenze sono sottili: scegli a orecchio.",
+      "filter": {
+        "clans-8": "CLANS, 8° ordine",
+        "sdm-8": "SDM, 8° ordine"
+      },
+      "why": {
+        "noTools": "Questo apparecchio ha bisogno di un aggiornamento di sistema per convertire in DSD.",
+        "remoteServer": "Funziona solo quando questo apparecchio è il proprio server Lyrion: ora la musica arriva da un altro.",
+        "dsp": "Non disponibile mentre l'elaborazione del suono è accesa.",
+        "noDsd": "A questo DAC non arriva DSD: scegli un DAC che lo accetti (nativo o DoP) e una modalità DSD diversa da \"Converti in PCM\"."
       }
     }
   },

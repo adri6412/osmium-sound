@@ -2459,11 +2459,17 @@ def zone_update(zid, changes):
         if not name:
             return _zones_fail('zones.badName')
     tunables = {k: v for k, v in changes.items() if k in ZONE_TUNABLE}
+    try:
+        server = _sq_load()['server']
+    except Exception:
+        server = '127.0.0.1'
+    argv = {}
 
     def change(zones):
         z = sq.find_zone(zones, zid)
         if z is None:
             raise KeyError(zid)
+        argv['before'] = sq.zone_argv(z, server)
         if tunables:
             new = sq.set_fields(z, tunables)
             if new['volume'] == 'hardware' and not new['mixer']:
@@ -2477,6 +2483,7 @@ def zone_update(zid, changes):
             z['name'] = name
         if 'enabled' in changes:
             z['enabled'] = bool(changes['enabled'])
+        argv['after'] = sq.zone_argv(z, server)
     try:
         sq.update_zones(change, ZONES_CONF)
     except KeyError:
@@ -2486,7 +2493,9 @@ def zone_update(zid, changes):
     except Exception:
         log.exception("zones: update failed")
         return _zones_fail('zones.saveFailed')
-    restarted = _zones_apply(restart={zid})
+    # a new DSD rate or filter only changes what Lyrion sends: the zone's own
+    # command line is the same, and the music it is playing need not stop
+    restarted = _zones_apply(restart={zid} if argv.get('before') != argv.get('after') else set())
     out = _zones_ok('squeezelite.savedLyrionRestart' if restarted else 'zones.saved')
     out['lyrion_restarted'] = restarted
     return out
