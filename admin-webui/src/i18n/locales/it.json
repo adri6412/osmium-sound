@@ -1097,9 +1097,25 @@
       "updateFailed": "Aggiornamento fallito"
     },
     "backup": {
-      "hint": "Salva la configurazione del dispositivo, le preferenze e le playlist di Lyrion. Imposta una passphrase per includere anche le credenziali (Wi-Fi, condivisioni SMB, questo account web-admin) in un file cifrato e ripristinabile — senza, viene salvato solo ciò che non è segreto.",
-      "passphrase": "Passphrase (opzionale)",
-      "passphraseHint": "Lascia vuoto per un backup semplice senza credenziali. Impostane una per salvare anche reti Wi-Fi, password SMB e questo account, cifrati.",
+      "hint": "Salva la configurazione del dispositivo, le preferenze e le playlist di Lyrion, le reti Wi-Fi, le condivisioni e questo account. Ogni backup è cifrato con la password dei backup.",
+      "passLabel": "Password dei backup",
+      "passIsSet": "Impostata",
+      "passShow": "Mostra",
+      "passHide": "Nascondi",
+      "passChange": "Cambia",
+      "passKeepHint": "L'apparecchio la ricorda e cifra con questa ogni backup, anche quello settimanale. Tienila da parte: serve per ripristinare un backup su un altro apparecchio.",
+      "passChooseHint": "Sceglila una volta: l'apparecchio la ricorda e cifra con questa ogni backup, anche quello settimanale. Tienila da parte: serve per ripristinare un backup su un altro apparecchio.",
+      "passChangeHint": "La nuova password vale per i backup da ora in poi. Quelli già fatti si aprono ancora con la vecchia.",
+      "passNew": "Nuova password (almeno {n} caratteri)",
+      "passConfirm": "Ripeti la password",
+      "passSave": "Salva password",
+      "passCancel": "Annulla",
+      "passSaved": "Password dei backup salvata",
+      "passSaveFailed": "Non sono riuscito a salvare la password dei backup",
+      "passTooShort": "La password dei backup deve avere almeno {n} caratteri",
+      "passMismatch": "Le due password non coincidono",
+      "restorePass": "Password per ripristinare (di solito non serve)",
+      "restorePassHint": "Scrivila solo per un backup fatto con un'altra password o su un altro apparecchio. Altrimenti si usa da sola quella dei backup.",
       "create": "Crea backup",
       "downloadNow": "Scarica ora",
       "restoreFromFile": "Ripristina da file",
@@ -1117,10 +1133,11 @@
       "deleteConfirm": "Eliminare questo backup? L'operazione non è reversibile.",
       "settingsFailed": "Salvataggio dell'impostazione fallito",
       "scheduled": "Backup automatico settimanale",
-      "scheduledHint": "Viene eseguito senza supervisione, quindi non include mai credenziali — solo impostazioni del dispositivo, sorgenti e preferenze/playlist di Lyrion.",
+      "scheduledHint": "Ogni settimana, cifrato con la password dei backup, con tutto dentro: anche reti Wi-Fi, condivisioni e account.",
       "stored": "Backup su questo dispositivo",
       "none": "Nessun backup ancora.",
-      "encrypted": "cifrato"
+      "encrypted": "cifrato",
+      "scheduledNeedsPass": "Il backup settimanale è fermo finché non scegli la password dei backup."
     },
     "language": {
       "hint": "Scegli la lingua dell'interfaccia."

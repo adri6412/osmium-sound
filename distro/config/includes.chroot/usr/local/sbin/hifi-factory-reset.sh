@@ -173,6 +173,9 @@ rm -f /system-update 2>/dev/null || true
 # to whoever provisions the device next.
 rm -rf /var/lib/hifi-player/backups 2>/dev/null || true
 rm -f /etc/hifi-player/backup.json 2>/dev/null || true
+# The sealed password every backup was encrypted with: the next owner chooses
+# their own.
+rm -f /etc/hifi-player/backup-passphrase 2>/dev/null || true
 systemctl disable --now hifi-backup.timer 2>/dev/null || true
 
 # Saved Wi-Fi networks (forget every SSID/password — the only network

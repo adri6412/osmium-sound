@@ -147,6 +147,9 @@ DENY_FILES = frozenset((
     # archive carries those logins decrypted, inside its own encryption, so
     # the key has no business travelling — and a restore must never swap it.
     "/etc/hifi-player/credential.secret",
+    # The sealed backup passphrase (see save_passphrase): it only opens with
+    # the key above, and a backup carrying the key to itself protects nothing.
+    "/etc/hifi-player/backup-passphrase",
     # Support/provisioning state that is re-derived, not user config.
     "/etc/hifi-player/github-support-pat",
     "/etc/hifi-player/shell-account",
@@ -344,10 +347,10 @@ CATEGORIES = {
     },
 }
 
-# Categories a scheduled (unattended) run can produce. A timer has nobody to
-# ask for a passphrase and we never persist one, so an automatic backup is
-# simply the non-secret half of the profile — stated plainly in the UI rather
-# than papered over.
+# What an archive without encryption may carry. New backups are always
+# encrypted (save_passphrase); this is still the content of a backup made
+# before that, and of the safety snapshot a restore takes on a device whose
+# owner has not chosen a passphrase yet (first-boot setup).
 UNATTENDED_CATEGORIES = tuple(k for k, v in CATEGORIES.items() if not v["secret"])
 ALL_CATEGORIES = tuple(CATEGORIES.keys())
 SECRET_CATEGORIES = tuple(k for k, v in CATEGORIES.items() if v["secret"])
@@ -465,10 +468,10 @@ class LoginUnreadable(Exception):
     """A sealed login that cannot be opened (key gone, TPM cleared, tampered)."""
 
 
-def _creds(args, data):
+def _creds(args, data, name=_LOGIN_CRED_NAME):
     env = dict(os.environ, SYSTEMD_CREDENTIAL_SECRET=LOGIN_KEY_FILE)
     try:
-        r = subprocess.run(["systemd-creds"] + args + ["--name=" + _LOGIN_CRED_NAME, "-", "-"],
+        r = subprocess.run(["systemd-creds"] + args + ["--name=" + name, "-", "-"],
                            input=data, capture_output=True, env=env, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as e:
         return None, str(e)
@@ -519,6 +522,56 @@ def seal_plain_logins(state):
         entry.pop("password", None)
         changed = True
     return changed
+
+
+# ── the backup passphrase, kept on the device ────────────────────────
+# Every backup is encrypted. The owner picks the passphrase once and the
+# device keeps it, sealed exactly like the share logins above, so the weekly
+# timer can encrypt too (it has nobody to ask) and a backup stored here can be
+# restored without typing it again. The owner still has to remember it: it is
+# what opens a downloaded backup on another device, and this file never
+# travels in one (DENY_FILES).
+PASSPHRASE_FILE = "/etc/hifi-player/backup-passphrase"
+_PASSPHRASE_CRED_NAME = "hifi-backup-passphrase"
+PASSPHRASE_MIN_LEN = 8
+
+
+def passphrase_set(path=None):
+    return os.path.isfile(path or PASSPHRASE_FILE)
+
+
+def save_passphrase(passphrase, path=None):
+    """Seal and store the passphrase. Raises LoginUnreadable if it cannot be
+    sealed: it is never written in the clear."""
+    path = path or PASSPHRASE_FILE
+    out, err = _creds(["encrypt", "--with-key=auto", "--tpm2-pcrs="],
+                      passphrase.encode("utf-8"), name=_PASSPHRASE_CRED_NAME)
+    if not out:
+        raise LoginUnreadable(err or "systemd-creds encrypt failed")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(out)
+    os.replace(tmp, path)
+
+
+def load_passphrase(path=None):
+    """The stored passphrase, or "" when none was ever chosen. Raises
+    LoginUnreadable when the file is there but cannot be opened (key gone,
+    TPM cleared): the owner then chooses it again."""
+    path = path or PASSPHRASE_FILE
+    try:
+        with open(path, "rb") as f:
+            blob = f.read()
+    except FileNotFoundError:
+        return ""
+    except OSError as e:
+        raise LoginUnreadable(str(e))
+    out, err = _creds(["decrypt"], blob, name=_PASSPHRASE_CRED_NAME)
+    if out is None:
+        raise LoginUnreadable(err or "systemd-creds decrypt failed")
+    return out.decode("utf-8")
 
 
 def _transform_sources(src, ctx):
@@ -914,6 +967,20 @@ def encrypt_archive(plain_path, enc_path, passphrase):
     mac = _file_hmac(enc_path, _hmac_key(passphrase, salt))
     return {"cipher": "aes-256-ctr", "kdf": f"pbkdf2-sha512-{_KDF_ITER}",
             "mac": "hmac-sha256-scrypt", "salt": salt.hex(), "hmac": mac}
+
+
+def encrypt_in_place(plain_path, enc_path, passphrase, manifest):
+    """Encrypt a freshly built archive and record how in its manifest. The
+    plaintext goes either way: it holds the credentials the passphrase is
+    there to protect."""
+    try:
+        manifest["enc"] = encrypt_archive(plain_path, enc_path, passphrase)
+    finally:
+        try:
+            os.unlink(plain_path)
+        except OSError:
+            pass
+    return manifest
 
 
 def decrypt_archive(enc_path, plain_path, passphrase, enc_meta):

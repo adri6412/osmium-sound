@@ -1097,9 +1097,25 @@
       "updateFailed": "Could not update"
     },
     "backup": {
-      "hint": "Save the device's configuration, Lyrion preferences and playlists. Set a passphrase to also include credentials (Wi-Fi, SMB shares, this web-admin account) in an encrypted, restorable file — without one, only non-secret settings are saved.",
-      "passphrase": "Passphrase (optional)",
-      "passphraseHint": "Leave empty for a plain backup with no credentials. Set one to also save Wi-Fi networks, SMB passwords and this account, encrypted.",
+      "hint": "Save the device's configuration, Lyrion preferences and playlists, Wi-Fi networks, shares and this account. Every backup is encrypted with the backup password.",
+      "passLabel": "Backup password",
+      "passIsSet": "Set",
+      "passShow": "Show",
+      "passHide": "Hide",
+      "passChange": "Change",
+      "passKeepHint": "The device remembers it and encrypts every backup with it, the weekly one too. Keep it somewhere safe: you need it to restore a backup on another device.",
+      "passChooseHint": "Choose it once: the device remembers it and encrypts every backup with it, the weekly one too. Keep it somewhere safe: you need it to restore a backup on another device.",
+      "passChangeHint": "The new password is used for backups from now on. The ones already made still open with the old one.",
+      "passNew": "New password (at least {n} characters)",
+      "passConfirm": "Repeat the password",
+      "passSave": "Save password",
+      "passCancel": "Cancel",
+      "passSaved": "Backup password saved",
+      "passSaveFailed": "Could not save the backup password",
+      "passTooShort": "The backup password needs at least {n} characters",
+      "passMismatch": "The two passwords do not match",
+      "restorePass": "Password to restore (usually not needed)",
+      "restorePassHint": "Type it only for a backup made with another password or on another device. Otherwise the backup password is used by itself.",
       "create": "Create backup",
       "downloadNow": "Download now",
       "restoreFromFile": "Restore from file",
@@ -1117,10 +1133,11 @@
       "deleteConfirm": "Delete this backup? This cannot be undone.",
       "settingsFailed": "Could not save the setting",
       "scheduled": "Automatic weekly backup",
-      "scheduledHint": "Runs unattended, so it never includes credentials — only device settings, sources and Lyrion preferences/playlists.",
+      "scheduledHint": "Every week, encrypted with the backup password, with everything in it: Wi-Fi networks, shares and account too.",
       "stored": "Backups on this device",
       "none": "No backup yet.",
-      "encrypted": "encrypted"
+      "encrypted": "encrypted",
+      "scheduledNeedsPass": "The weekly backup is on hold until you choose the backup password."
     },
     "language": {
       "hint": "Choose the interface language."

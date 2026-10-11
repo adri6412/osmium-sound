@@ -19,6 +19,7 @@ Run with:  python3 -m unittest tests.test_backup_restore_messages
 """
 import ast
 import importlib.util
+import io
 import json
 import os
 import re
@@ -149,6 +150,22 @@ class BackupWorkerStatusTests(_Tmp):
         self.assertEqual(it["message"], "Backup completato: 7 file.")
         self.assertEqual(en["message"], "Backup completed: 7 file(s).")
         self.assertEqual(it["id"], "g")
+
+    def test_the_weekly_run_never_makes_a_plain_backup(self):
+        status = os.path.join(self.tmp, "status.json")
+        mod = self._worker()
+        mod.STATUS = status
+        with patch.object(hb, "read_settings", lambda path=None: {"scheduled": True, "keep": 5}), \
+                patch.object(hb, "load_passphrase", lambda path=None: ""), \
+                patch.object(hb, "STORE_DIR", os.path.join(self.tmp, "store")), \
+                patch.object(sys, "argv", ["hifi-backup-run.py", "--scheduled"]), \
+                patch.object(sys, "stderr", io.StringIO()):
+            with self.assertRaises(SystemExit):
+                mod.main()
+        with open(status) as f:
+            self.assertEqual(json.load(f)["code"], "backup.passphraseMissing")
+        self.assertFalse(any(n for n in os.listdir(os.path.join(self.tmp, "store"))
+                             if n != hb.HISTORY_NAME))
 
     def test_no_italian_left_in_the_worker_status_calls(self):
         with open(os.path.join(REPO, "distro/config/includes.chroot/usr/local/sbin/hifi-backup-run.py")) as f:

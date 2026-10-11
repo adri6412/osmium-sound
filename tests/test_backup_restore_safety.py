@@ -9,6 +9,9 @@ weekly timer.
 - Downloads are streamed from disk, uploads go straight to disk.
 - The weekly timer ships in the image, and turning the schedule on reports
   a failure instead of answering "saved".
+- Every backup is encrypted with the one password the device keeps: none is
+  made, scheduled or downloaded without it, a restore falls back to it, and
+  it is kept sealed, never in the clear and never inside a backup.
 
 Run with:  python3 -m unittest tests.test_backup_restore_safety
 """
@@ -52,6 +55,7 @@ class _Patched(unittest.TestCase):
         self._patch(hb, "STORE_DIR", self.store)
         self._patch(hb, "RESTORE_PIN_FILE", os.path.join(self.tmp, "pin"))
         self._patch(hb, "SETTINGS_FILE", os.path.join(self.tmp, "backup.json"))
+        self._patch(hb, "PASSPHRASE_FILE", os.path.join(self.tmp, "backup-passphrase"))
         # Everything that would read the live system reads the fake root.
         build, peak = hb.build_archive, hb.estimate_peak
         self._patch(hb, "build_archive",
@@ -68,6 +72,11 @@ class _Patched(unittest.TestCase):
     def _patch(self, obj, name, value):
         self._saved.append((obj, name, getattr(obj, name)))
         setattr(obj, name, value)
+
+    def _with_passphrase(self, passphrase="correct horse"):
+        """The device keeps a backup password (sealing is SealedPassphraseTests')."""
+        self._patch(hb, "load_passphrase", lambda path=None: passphrase)
+        self._patch(hb, "passphrase_set", lambda path=None: True)
 
     def _make_gen(self, gen_id, trigger="manual"):
         gdir = os.path.join(self.store, gen_id)
@@ -297,14 +306,29 @@ class StreamingTests(_Patched):
         resp.close()
 
     def test_download_now_builds_on_disk_and_cleans_up(self):
+        self._with_passphrase("pw-download")
         resp = self.client.get("/api/backup")
         self.assertEqual(resp.status_code, 200)
-        with tarfile.open(fileobj=io.BytesIO(resp.data), mode="r:gz") as tar:
-            self.assertIn("etc/hifi-player/dsp.json", tar.getnames())
+        got = os.path.join(self.tmp, "got.tar.gz")
+        with open(got, "wb") as f:
+            f.write(resp.data)
         resp.close()
+        with tarfile.open(got, "r:gz") as outer:
+            self.assertIn(hb.ENC_NAME, outer.getnames())      # encrypted, not flat
+        work = tempfile.mkdtemp(dir=self.tmp)
+        tar, manifest = hb.open_backup(got, work, "pw-download")
+        with tar:
+            self.assertIn("etc/hifi-player/dsp.json", tar.getnames())
+        self.assertEqual(manifest["trigger"], "download")
         self.assertEqual([n for n in os.listdir(self.store) if n.startswith(hb.WORKDIR_PREFIX)], [])
 
+    def test_download_now_needs_the_backup_password(self):
+        resp = self.client.get("/api/backup")
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.get_json()["code"], "backup.passphraseMissing")
+
     def test_download_now_reports_no_space(self):
+        self._with_passphrase()
         self._patch(hb, "free_space_ok", lambda path, need: False)
         resp = self.client.get("/api/backup")
         self.assertEqual(resp.status_code, 507)
@@ -360,6 +384,7 @@ class ScheduleTests(_Patched):
         self._patch(ss, "_run", run)
 
     def test_enable_failure_is_reported_and_not_saved(self):
+        self._with_passphrase()
         self._systemctl(1, "Unit file hifi-backup.timer does not exist.")
         resp = self.client.post("/api/backup/settings", json={"scheduled": True})
         self.assertEqual(resp.status_code, 500)
@@ -372,10 +397,19 @@ class ScheduleTests(_Patched):
     def test_enable_success_and_keep_is_preserved(self):
         with open(hb.SETTINGS_FILE, "w") as f:
             json.dump({"scheduled": False, "keep": 9}, f)
+        self._with_passphrase()
         self._systemctl(0)
         resp = self.client.post("/api/backup/settings", json={"scheduled": True})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(hb.read_settings(), {"scheduled": True, "keep": 9})
+
+    def test_no_weekly_backup_without_the_backup_password(self):
+        self._systemctl(0)
+        resp = self.client.post("/api/backup/settings", json={"scheduled": True})
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.get_json()["code"], "backup.passphraseMissing")
+        self.assertFalse(hb.read_settings()["scheduled"])
+        self.assertEqual(self.calls, [])
 
     def test_disable_failure_still_turns_it_off(self):
         # the worker exits on "scheduled": false, so off is off regardless
@@ -383,6 +417,161 @@ class ScheduleTests(_Patched):
         resp = self.client.post("/api/backup/settings", json={"scheduled": False})
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(hb.read_settings()["scheduled"])
+
+
+class PassphraseTests(_Patched):
+    """One password, chosen once, encrypts every backup."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = ss.app.test_client()
+        self.saved = []
+        self._patch(hb, "save_passphrase", lambda p, path=None: self.saved.append(p))
+
+    def _job(self):
+        self._patch(ss, "BACKUP_SCRIPT", __file__)
+        self._patch(ss, "BACKUP_JOB", os.path.join(self.tmp, "job.json"))
+        self._patch(hb, "STATUS_FILE", os.path.join(self.tmp, "status.json"))
+        self._patch(ss, "_run", lambda cmd, timeout=30: SimpleNamespace(returncode=0, stdout="", stderr=""))
+
+    def test_choosing_it(self):
+        resp = self.client.post("/api/backup/passphrase", json={"passphrase": "short"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.get_json()["code"], "backup.passphraseTooShort")
+        self.assertEqual(self.saved, [])
+        resp = self.client.post("/api/backup/passphrase", json={"passphrase": "long enough"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self.saved, ["long enough"])
+
+    def test_it_is_shown_only_when_asked(self):
+        self.assertEqual(self.client.get("/api/backup/passphrase").get_json(), {"set": False})
+        self.assertEqual(self.client.get("/api/backup/passphrase?reveal=1").status_code, 409)
+        self._with_passphrase("open sesame")
+        self.assertEqual(self.client.get("/api/backup/passphrase").get_json(), {"set": True})
+        body = self.client.get("/api/backup/passphrase?reveal=1").get_json()
+        self.assertEqual(body["passphrase"], "open sesame")
+        self.assertTrue(self.client.get("/api/backup/list").get_json()["passphrase_set"])
+
+    def test_no_backup_without_it(self):
+        self._job()
+        resp = self.client.post("/api/backup/create", json={})
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.get_json()["code"], "backup.passphraseMissing")
+        self.assertFalse(os.path.exists(ss.BACKUP_JOB))
+
+    def test_a_backup_uses_the_stored_one_and_carries_everything(self):
+        self._job()
+        self._with_passphrase("stored pw")
+        resp = self.client.post("/api/backup/create", json={})
+        self.assertEqual(resp.status_code, 202)
+        with open(ss.BACKUP_JOB) as f:
+            job = json.load(f)
+        self.assertEqual(job["passphrase"], "stored pw")
+        self.assertEqual(job["categories"], list(hb.ALL_CATEGORIES))
+
+    def test_the_first_one_typed_in_the_app_is_kept(self):
+        # The companion app still sends a passphrase with each backup.
+        self._job()
+        resp = self.client.post("/api/backup/create", json={"passphrase": "from the app"})
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(self.saved, ["from the app"])
+        with open(ss.BACKUP_JOB) as f:
+            self.assertEqual(json.load(f)["passphrase"], "from the app")
+
+    def test_the_safety_snapshot_is_encrypted_and_complete(self):
+        self._with_passphrase("snap pw")
+        gen = ss._snapshot_before_restore()
+        manifest = hb.read_manifest(self.store, gen)
+        self.assertTrue(manifest.get("enc"))
+        self.assertEqual(manifest["categories"], list(hb.ALL_CATEGORIES))
+        self.assertFalse(os.path.exists(os.path.join(self.store, gen, hb.ARCHIVE_NAME)))
+        wrapper = os.path.join(self.tmp, "w.tar.gz")
+        hb.wrap_encrypted(wrapper, manifest, hb.archive_path(self.store, gen, manifest))
+        tar, _m = hb.open_backup(wrapper, tempfile.mkdtemp(dir=self.tmp), "snap pw")
+        with tar:
+            self.assertIn("etc/hifi-player/dsp.json", tar.getnames())
+
+    def test_never_inside_a_backup(self):
+        self.assertIn("/etc/hifi-player/backup-passphrase", hb.DENY_FILES)
+        self.assertEqual(hb.PASSPHRASE_FILE, os.path.join(self.tmp, "backup-passphrase"))
+        self.assertIsNone(hb.restore_dest_for_member("etc/hifi-player/backup-passphrase",
+                                                     list(hb.ALL_CATEGORIES)))
+
+
+class RestorePassphraseTests(_Patched):
+    def setUp(self):
+        super().setUp()
+        self.statuses = []
+        self.saved = []
+        self.passed = []
+        self._patch(ss, "_write_restore_status",
+                    lambda state, progress, message, **kw: self.statuses.append((state, message)))
+        self._patch(ss, "_snapshot_before_restore", lambda protect=(): "snap")
+        self._patch(ss, "PROVISIONING_MARKER", os.path.join(self.tmp, "provisioning-pending"))
+        self._patch(hb, "save_passphrase", lambda p, path=None: self.saved.append(p))
+        self.addCleanup(lambda: ss._job_lang.__dict__.pop("lang", None))
+
+    def _run(self, typed, result):
+        def fake_restore(path, passphrase, categories, report=None):
+            self.passed.append(passphrase)
+            return result
+        self._patch(ss, "_restore_from_path", fake_restore)
+        self.assertTrue(ss._RESTORE_LOCK.acquire(timeout=30))
+        ss._run_restore_async("x", typed, None, lang="en")
+        return self.statuses[-1]
+
+    def test_nothing_typed_uses_the_stored_one(self):
+        self._with_passphrase("stored pw")
+        self._run("", ({"success": True, "message": "ok", "restored": 1}, 200))
+        self.assertEqual(self.passed, ["stored pw"])
+        self.assertEqual(self.saved, [])
+
+    def test_a_backup_made_with_another_password_says_so(self):
+        self._with_passphrase("stored pw")
+        state, message = self._run("", ({"success": False, "code": "restore.wrongPassphrase",
+                                         "message": "x"}, 400))
+        self.assertEqual(state, "error")
+        self.assertEqual(message, ss._ht("restore.otherPassphrase", "en"))
+
+    def test_a_new_device_keeps_the_password_it_was_restored_with(self):
+        self._run("old box pw", ({"success": True, "message": "ok", "restored": 1}, 200))
+        self.assertEqual(self.passed, ["old box pw"])
+        self.assertEqual(self.saved, ["old box pw"])
+
+    def test_a_device_with_its_own_keeps_it(self):
+        self._with_passphrase("mine")
+        self._run("older one", ({"success": True, "message": "ok", "restored": 1}, 200))
+        self.assertEqual(self.saved, [])
+
+
+@unittest.skipUnless(shutil.which("systemd-creds"), "systemd-creds not installed")
+class SealedPassphraseTests(_Patched):
+    def setUp(self):
+        super().setUp()
+        self._patch(hb, "LOGIN_KEY_FILE", os.path.join(self.tmp, "credential.secret"))
+
+    def test_round_trip_sealed_on_disk(self):
+        self.assertFalse(hb.passphrase_set())
+        self.assertEqual(hb.load_passphrase(), "")
+        hb.save_passphrase("hunter2 hunter2")
+        self.assertTrue(hb.passphrase_set())
+        with open(hb.PASSPHRASE_FILE, "rb") as f:
+            self.assertNotIn(b"hunter2", f.read())
+        self.assertEqual(os.stat(hb.PASSPHRASE_FILE).st_mode & 0o777, 0o600)
+        self.assertEqual(hb.load_passphrase(), "hunter2 hunter2")
+
+    def test_a_lost_key_makes_it_unreadable(self):
+        hb.save_passphrase("hunter2 hunter2")
+        os.unlink(hb.LOGIN_KEY_FILE)
+        hb.seal_login("x", "y")            # a fresh key takes its place
+        with self.assertRaises(hb.LoginUnreadable):
+            hb.load_passphrase()
+
+    def test_a_share_login_does_not_open_as_the_passphrase(self):
+        with open(hb.PASSPHRASE_FILE, "w") as f:
+            f.write(hb.seal_login("g22", "hunter2"))    # same key, other name
+        with self.assertRaises(hb.LoginUnreadable):
+            hb.load_passphrase()
 
 
 class ShippedUnitsTests(unittest.TestCase):
@@ -418,6 +607,10 @@ class ShippedUnitsTests(unittest.TestCase):
         with open(os.path.join(REPO, "distro/config/includes.chroot/usr/local/sbin/hifi-backup-run.py")) as f:
             src = f.read()
         self.assertIn('if not settings["scheduled"]', src)
+
+    def test_factory_reset_forgets_the_backup_password(self):
+        with open(os.path.join(REPO, "distro/config/includes.chroot/usr/local/sbin/hifi-factory-reset.sh")) as f:
+            self.assertIn("rm -f /etc/hifi-player/backup-passphrase", f.read())
 
 
 if __name__ == "__main__":

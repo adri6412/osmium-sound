@@ -1608,17 +1608,47 @@ async function changePw() {
 }
 
 // ── backup / restore ──────────────────────────────────────────────
-// The passphrase is the single switch deciding whether credentials (Wi-Fi
-// PSKs, SMB passwords, this very account) go into the archive at all: filled
-// in means encrypted-and-complete, empty means plain-and-non-secret. It is
-// held only in this component's state, sent with the one request that needs
-// it, and never written anywhere.
+// Every backup is encrypted, with one password the owner chooses once and the
+// device keeps (hifi_backup.save_passphrase): create, download and the weekly
+// run never ask for it. backupPass is only for restoring a backup made with
+// another password, typed for that one request and never stored here.
 const backupPass = ref('');
 const backupGens = ref([]);
 const backupSecretCats = ref([]);
 const backupScheduled = ref(false);
 const backupBusy = ref(false);
 const restoreFileInput = ref(null);
+const backupPassSet = ref(false);
+const backupPassMin = ref(8);
+const backupPassForm = reactive({ open: false, next: '', confirm: '' });
+const backupPassShown = ref('');
+
+async function saveBackupPassphrase() {
+  if (backupPassForm.next.length < backupPassMin.value) {
+    say(t('settings.backup.passTooShort', { n: backupPassMin.value }), true);
+    return;
+  }
+  if (backupPassForm.next !== backupPassForm.confirm) {
+    say(t('settings.backup.passMismatch'), true);
+    return;
+  }
+  const r = await api.backupPassphraseSave(backupPassForm.next);
+  if (!(r.ok && r.data.success)) {
+    say(bodyMsg(r, t('settings.backup.passSaveFailed')), true);
+    return;
+  }
+  backupPassForm.open = false; backupPassForm.next = ''; backupPassForm.confirm = '';
+  backupPassShown.value = '';
+  say(t('settings.backup.passSaved'));
+  loadBackups();
+}
+
+async function toggleBackupPassShown() {
+  if (backupPassShown.value) { backupPassShown.value = ''; return; }
+  const r = await api.backupPassphraseReveal();
+  if (r.ok && r.data.passphrase) backupPassShown.value = r.data.passphrase;
+  else say(bodyMsg(r, t('settings.backup.passSaveFailed')), true);
+}
 
 function fmtBackupSize(n) {
   if (!n) return '';
@@ -1644,6 +1674,10 @@ async function loadBackups() {
   backupGens.value = r.data.generations || [];
   backupSecretCats.value = r.data.secret || [];
   backupScheduled.value = !!(r.data.settings && r.data.settings.scheduled);
+  // An older device has no single password: its backups still take one typed
+  // here, so it behaves as if one were set.
+  backupPassSet.value = r.data.passphrase_set !== false;
+  if (r.data.passphrase_min) backupPassMin.value = r.data.passphrase_min;
 }
 
 async function pollBackupStatus() {
@@ -1663,7 +1697,7 @@ async function pollBackupStatus() {
 async function createBackup() {
   backupBusy.value = true;
   say(t('settings.backup.working'));
-  const r = await api.backupCreate(backupPass.value, null);
+  const r = await api.backupCreate('', null);
   if (r.data && r.data.success === false) {
     backupBusy.value = false;
     say(bodyMsg(r, t('settings.backup.createFailed')), true);
@@ -2866,23 +2900,45 @@ onUnmounted(() => {
     <div class="card" v-if="open === 'backup'">
       <p class="sub">{{ t('settings.backup.hint') }}</p>
 
-      <label>{{ t('settings.backup.passphrase') }}</label>
-      <input v-model="backupPass" type="password" autocomplete="new-password" />
-      <p class="muted" style="margin-top: 4px;">{{ t('settings.backup.passphraseHint') }}</p>
+      <label>{{ t('settings.backup.passLabel') }}</label>
+      <template v-if="backupPassSet && !backupPassForm.open">
+        <div class="net between">
+          <span>{{ backupPassShown || t('settings.backup.passIsSet') }}</span>
+          <div class="row">
+            <button class="secondary fit" @click="toggleBackupPassShown">{{ backupPassShown ? t('settings.backup.passHide') : t('settings.backup.passShow') }}</button>
+            <button class="secondary fit" @click="backupPassForm.open = true">{{ t('settings.backup.passChange') }}</button>
+          </div>
+        </div>
+        <p class="muted" style="margin-top: 4px;">{{ t('settings.backup.passKeepHint') }}</p>
+      </template>
+      <template v-else>
+        <p class="muted" style="margin-top: 0;">{{ backupPassSet ? t('settings.backup.passChangeHint') : t('settings.backup.passChooseHint') }}</p>
+        <input v-model="backupPassForm.next" type="password" autocomplete="new-password" :placeholder="t('settings.backup.passNew', { n: backupPassMin })" />
+        <input v-model="backupPassForm.confirm" type="password" autocomplete="new-password" :placeholder="t('settings.backup.passConfirm')" style="margin-top: 8px;" />
+        <div class="row" style="margin-top: 8px;">
+          <button @click="saveBackupPassphrase">{{ t('settings.backup.passSave') }}</button>
+          <button v-if="backupPassSet" class="secondary" @click="backupPassForm.open = false; backupPassForm.next = ''; backupPassForm.confirm = ''">{{ t('settings.backup.passCancel') }}</button>
+        </div>
+      </template>
 
       <div class="row" style="margin-top: 12px;">
-        <button :disabled="backupBusy" @click="createBackup">{{ t('settings.backup.create') }}</button>
-        <button class="secondary" :disabled="backupBusy" @click="downloadBackup()">{{ t('settings.backup.downloadNow') }}</button>
+        <button :disabled="backupBusy || !backupPassSet" @click="createBackup">{{ t('settings.backup.create') }}</button>
+        <button class="secondary" :disabled="backupBusy || !backupPassSet" @click="downloadBackup()">{{ t('settings.backup.downloadNow') }}</button>
         <button class="secondary" @click="restoreFileInput.click()">{{ t('settings.backup.restoreFromFile') }}</button>
         <input ref="restoreFileInput" type="file" accept=".gz,.tar.gz,application/gzip" style="display: none;" @change="uploadRestore" />
       </div>
 
+      <label>{{ t('settings.backup.restorePass') }}</label>
+      <input v-model="backupPass" type="password" autocomplete="off" />
+      <p class="muted" style="margin-top: 4px;">{{ t('settings.backup.restorePassHint') }}</p>
+
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
         <div class="net between">
           <span>{{ t('settings.backup.scheduled') }}</span>
-          <Toggle :model-value="backupScheduled" @update:model-value="saveBackupScheduled" />
+          <Toggle :model-value="backupScheduled" :disabled="!backupPassSet && !backupScheduled" @update:model-value="saveBackupScheduled" />
         </div>
         <p class="muted">{{ t('settings.backup.scheduledHint') }}</p>
+        <p v-if="backupScheduled && !backupPassSet" class="nc-why warn">{{ t('settings.backup.scheduledNeedsPass') }}</p>
       </div>
 
       <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">

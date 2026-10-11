@@ -22,9 +22,11 @@ If this process is killed, power is cut, or the disk fills mid-tar, what is left
 behind has no manifest, is invisible to the listing, and is deleted on the next
 run — an interrupted backup can never be mistaken for a usable one.
 
-The job file lives on /run (tmpfs) because it may carry the passphrase. It is
-deleted as soon as it has been read; the passphrase is never written to
-persistent storage, and is never recorded in the manifest or the history.
+Every backup is encrypted. The job file lives on /run (tmpfs) because it
+carries the passphrase, and it is deleted as soon as it has been read. The
+only copy on disk is the sealed one the owner chose to keep
+(hifi_backup.save_passphrase), which a scheduled run opens itself; it is never
+recorded in the manifest or the history.
 """
 import json
 import os
@@ -127,13 +129,26 @@ def main():
             # exit quietly rather than producing an unwanted generation.
             print("I: [hifi-backup] backup pianificato disattivato, esco")
             return
-        job = {"categories": list(hb.UNATTENDED_CATEGORIES),
+        # Encrypted like every other backup, with the passphrase the owner
+        # chose once, so it carries the whole profile, Wi-Fi and logins too.
+        try:
+            stored = hb.load_passphrase()
+        except hb.LoginUnreadable as e:
+            print(f"E: [hifi-backup] passphrase illeggibile: {e}", file=sys.stderr)
+            fail("backup.passphraseUnreadable", hb.STORE_DIR)
+        if not stored:
+            fail("backup.passphraseMissing", hb.STORE_DIR)
+        job = {"categories": list(hb.ALL_CATEGORIES), "passphrase": stored,
                "trigger": "scheduled", "keep": settings["keep"]}
     else:
         job = read_job(sys.argv[1])
 
     store = job.get("store") or hb.STORE_DIR
     passphrase = job.get("passphrase") or ""
+    if not passphrase:
+        # Every backup is encrypted; sources_server.py never sends a job
+        # without one.
+        fail("backup.passphraseMissing", store)
     trigger = job.get("trigger") or "manual"
     keep = job.get("keep") or hb.read_settings()["keep"]
     categories = hb.selected_categories(job.get("categories"), bool(passphrase))

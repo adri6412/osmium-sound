@@ -4033,6 +4033,22 @@ def _passphrase_ok(value):
     return len(value) <= 256 and "\n" not in value and "\r" not in value
 
 
+def _stored_passphrase():
+    """The passphrase every backup is encrypted with, as (passphrase, None),
+    or ("", error response) when the owner has not chosen one yet or the
+    stored one cannot be opened any more."""
+    try:
+        passphrase = hb.load_passphrase()
+    except hb.LoginUnreadable as e:
+        print(f"[sources] backup passphrase unreadable: {e}")
+        return "", (jsonify({"success": False, "code": "backup.passphraseUnreadable",
+                             "message": _ht('backup.passphraseUnreadable', _hlang())}), 409)
+    if not passphrase:
+        return "", (jsonify({"success": False, "code": "backup.passphraseMissing",
+                             "message": _ht('backup.passphraseMissing', _hlang())}), 409)
+    return passphrase, None
+
+
 # ── restore ──────────────────────────────────────────────────────────
 def _restore_members(tar, manifest, categories, progress_cb=None):
     """Write back every member that the selected categories allow.
@@ -4387,7 +4403,7 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
             tar, manifest = hb.open_backup(path, workdir, passphrase,
                                            max_payload=MAX_RESTORE_ARCHIVE_SIZE)
         except hb.BackupError as e:
-            return {"success": False, "message": _backup_error_message(e)}, 400
+            return {"success": False, "code": e.code, "message": _backup_error_message(e)}, 400
 
         # A backup written by a newer build may use members or semantics this
         # code does not understand; refuse rather than half-apply it.
@@ -4480,8 +4496,15 @@ def _snapshot_before_restore(protect=()):
         os.makedirs(hb.STORE_DIR, exist_ok=True)
         os.chmod(hb.STORE_DIR, 0o700)
         hb.prune_incomplete(hb.STORE_DIR)
-        cats = list(hb.UNATTENDED_CATEGORIES)
-        need = hb.estimate_peak(cats, "/", encrypted=False)
+        # Encrypted, and so complete, like every backup once the owner has
+        # chosen a passphrase. Before that (a restore during first-boot setup)
+        # there is nothing secret worth keeping: the plain, non-secret half.
+        try:
+            passphrase = hb.load_passphrase()
+        except hb.LoginUnreadable:
+            passphrase = ""
+        cats = list(hb.ALL_CATEGORIES if passphrase else hb.UNATTENDED_CATEGORIES)
+        need = hb.estimate_peak(cats, "/", encrypted=bool(passphrase))
         if not hb.free_space_ok(hb.STORE_DIR, need):
             print(f"[sources] pre-restore snapshot skipped: ~{need // (1024 * 1024)} MB "
                   f"needed, not enough free disk space")
@@ -4492,11 +4515,14 @@ def _snapshot_before_restore(protect=()):
         os.makedirs(gen_dir, exist_ok=True)
         os.chmod(gen_dir, 0o700)
         try:
-            manifest = hb.build_archive(os.path.join(gen_dir, hb.ARCHIVE_NAME),
-                                        cats, "/", encrypted=False,
+            plain = os.path.join(gen_dir, hb.ARCHIVE_NAME)
+            manifest = hb.build_archive(plain, cats, "/", encrypted=bool(passphrase),
                                         extra={"created": gen_id,
                                                "trigger": hb.PRE_RESTORE_TRIGGER,
                                                "versions": hb.device_versions()})
+            if passphrase:
+                hb.encrypt_in_place(plain, os.path.join(gen_dir, hb.ENC_NAME),
+                                    passphrase, manifest)
             tmp = os.path.join(gen_dir, hb.MANIFEST_NAME + ".tmp")
             with open(tmp, "w") as f:
                 json.dump(manifest, f, indent=2)
@@ -4536,8 +4562,27 @@ def _run_restore_async(path, passphrase, categories, workdir_to_clean=None, gen_
         def report(state, progress, message):
             _write_restore_status(state, progress, message)
 
+        # Nothing typed: the passphrase this device keeps, which opens every
+        # backup it made since the owner chose it.
+        typed, used_stored = passphrase, False
+        if not passphrase:
+            try:
+                passphrase = hb.load_passphrase()
+            except hb.LoginUnreadable:
+                passphrase = ""
+            used_stored = bool(passphrase)
+
         payload, status = _restore_from_path(path, passphrase, categories, report)
+        if used_stored and payload.get("code") == "restore.wrongPassphrase":
+            payload["message"] = _ht('restore.otherPassphrase', _hlang())
         if status == 200 and payload.get("success"):
+            if typed and not hb.passphrase_set():
+                # A new device set up from a backup: its passphrase becomes
+                # this device's, so the next backups need no new one.
+                try:
+                    hb.save_passphrase(typed)
+                except (hb.LoginUnreadable, OSError) as e:
+                    print(f"[sources] keeping the restore passphrase failed: {e}")
             message = payload.get("message", _ht('restore.completed', _hlang()))
             if snapshot is None:
                 message += " " + _ht('restore.noSnapshot', _hlang())
@@ -4594,30 +4639,37 @@ def _start_restore(path, passphrase, categories, workdir_to_clean=None, gen_id=N
 def api_backup():
     """Build and stream a backup immediately.
 
-    Kept as-is (same URL, same behaviour) because it is what the plain download
-    link in the UI points at, and an <a href> cannot send a passphrase — so this
-    one is always the non-secret half of the profile. Encrypted backups go
-    through /api/backup/create.
+    Same URL as ever, since it is what the plain download link in the UI
+    points at. An <a href> cannot send a passphrase, and it no longer has to:
+    the archive is encrypted with the one the device keeps, like every other
+    backup, so it is the whole profile.
     """
     denied = _require_pair_token()
     if denied:
         return denied
+    passphrase, err = _stored_passphrase()
+    if err:
+        return err
     # Built on disk and streamed from there. It used to be built in /run and
     # read whole into memory — twice the archive in RAM (tmpfs + the response),
     # plus the SQLite snapshot of the album/artist archive, also in /run.
     workdir = None
     try:
         workdir = hb.make_workdir("download")
-        cats = list(hb.UNATTENDED_CATEGORIES)
-        need = hb.estimate_peak(cats, "/", encrypted=False)
+        cats = list(hb.ALL_CATEGORIES)
+        need = hb.estimate_peak(cats, "/", encrypted=True)
         if not hb.free_space_ok(workdir, need):
             return _backup_no_space(need)
-        path = os.path.join(workdir, hb.ARCHIVE_NAME)
+        plain = os.path.join(workdir, hb.ARCHIVE_NAME)
+        enc = os.path.join(workdir, hb.ENC_NAME)
         stamp = hb.new_gen_id()
-        hb.build_archive(path, cats, "/",
-                         encrypted=False,
-                         extra={"created": stamp, "trigger": "download",
-                                "versions": hb.device_versions()})
+        manifest = hb.build_archive(plain, cats, "/", encrypted=True,
+                                    extra={"created": stamp, "trigger": "download",
+                                           "versions": hb.device_versions()})
+        hb.encrypt_in_place(plain, enc, passphrase, manifest)
+        path = os.path.join(workdir, "wrapper.tar.gz")
+        hb.wrap_encrypted(path, manifest, enc)
+        os.unlink(enc)
         f = open(path, "rb")
     except Exception as e:
         print(f"[sources] backup build failed: {e}")
@@ -4673,7 +4725,20 @@ def api_backup_create():
     passphrase = data.get("passphrase") or ""
     if not _passphrase_ok(passphrase):
         return jsonify({"success": False, "message": _ht('backup.invalidPassphrase', _hlang())}), 400
-    categories = hb.selected_categories(data.get("categories"), bool(passphrase))
+    if passphrase:
+        # The web admin sends none: the device's own is used. The companion
+        # app still types one each time; the first becomes the device's, so
+        # the weekly backup can be encrypted too.
+        if not hb.passphrase_set():
+            try:
+                hb.save_passphrase(passphrase)
+            except (hb.LoginUnreadable, OSError) as e:
+                print(f"[sources] saving the backup passphrase failed: {e}")
+    else:
+        passphrase, err = _stored_passphrase()
+        if err:
+            return err
+    categories = hb.selected_categories(data.get("categories"), True)
     if not categories:
         return jsonify({"success": False,
                         "message": _ht('backup.noCategoriesSelected', _hlang())}), 400
@@ -4733,7 +4798,41 @@ def api_backup_list():
                     "categories": list(hb.ALL_CATEGORIES),
                     "secret": list(hb.SECRET_CATEGORIES),
                     "settings": hb.read_settings(),
-                    "scheduled_categories": list(hb.UNATTENDED_CATEGORIES)})
+                    "passphrase_set": hb.passphrase_set(),
+                    "passphrase_min": hb.PASSPHRASE_MIN_LEN,
+                    "scheduled_categories": list(hb.ALL_CATEGORIES)})
+
+
+@app.route("/api/backup/passphrase", methods=["GET", "POST"])
+def api_backup_passphrase():
+    """The passphrase every backup is encrypted with. GET says whether one is
+    set, and with ?reveal=1 hands it back — the owner needs it to open a
+    downloaded backup on another device, and being signed in is enough to see
+    it. POST chooses it, or changes it: backups made before keep the old one."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    if request.method == "GET":
+        if request.args.get("reveal") != "1":
+            return jsonify({"set": hb.passphrase_set()})
+        passphrase, err = _stored_passphrase()
+        if err:
+            return err
+        return jsonify({"set": True, "passphrase": passphrase})
+    data = request.get_json(silent=True) or {}
+    passphrase = data.get("passphrase") or ""
+    if not _passphrase_ok(passphrase) or len(passphrase) < hb.PASSPHRASE_MIN_LEN:
+        return jsonify({"success": False, "code": "backup.passphraseTooShort",
+                        "message": _ht('backup.passphraseTooShort', _hlang(),
+                                       n=hb.PASSPHRASE_MIN_LEN)}), 400
+    try:
+        hb.save_passphrase(passphrase)
+    except (hb.LoginUnreadable, OSError) as e:
+        print(f"[sources] saving the backup passphrase failed: {e}")
+        return jsonify({"success": False, "code": "backup.passphraseSaveFailed",
+                        "message": _ht('backup.passphraseSaveFailed', _hlang())}), 500
+    hb.record_history(hb.STORE_DIR, "passphrase\tset")
+    return jsonify({"success": True, "set": True})
 
 
 @app.route("/api/backup/<gen_id>", methods=["GET"])
@@ -4854,6 +4953,11 @@ def api_backup_settings():
         keep = previous["keep"]
     settings = {"scheduled": bool(data.get("scheduled")),
                 "keep": max(1, min(20, keep))}
+    if settings["scheduled"] and not previous["scheduled"] and not hb.passphrase_set():
+        # It would only fail every week: a backup is never made unencrypted.
+        return jsonify({"success": False, "code": "backup.passphraseMissing",
+                        "message": _ht('backup.passphraseMissing', _hlang()),
+                        "scheduled": False, "keep": previous["keep"]}), 409
 
     def _save(values):
         os.makedirs(os.path.dirname(hb.SETTINGS_FILE), exist_ok=True)

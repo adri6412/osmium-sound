@@ -165,6 +165,9 @@ export const api = {
   backupStatus: () => req('/api/system/backup/status'),
   backupSettings: () => req('/api/system/backup/settings'),
   backupSettingsSave: (settings) => req('/api/system/backup/settings', { method: 'POST', body: settings }),
+  backupPassphraseSave: (passphrase) =>
+    req('/api/system/backup/passphrase', { method: 'POST', body: { passphrase } }),
+  backupPassphraseReveal: () => req('/api/system/backup/passphrase?reveal=1'),
   backupCreate: (passphrase, categories) =>
     req('/api/system/backup/create', { method: 'POST', body: { passphrase, categories } }),
   backupDelete: (id) => req('/api/system/backup/' + id, { method: 'DELETE' }),
