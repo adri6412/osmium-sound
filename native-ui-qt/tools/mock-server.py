@@ -213,6 +213,8 @@ def rpc(player, params):
                  "playlist_loop": [{"id": 1001 + STATE["index"], "title": t[0], "artist": t[1], "album": t[2], "coverid": "1001", "album_id": 1 + STATE["index"] % 24, "artist_id": 1,
                                     "url": "file:///srv/music/%d.dsf" % STATE["index"],
                                     "bitrate": "2822kHz", "type": "dsf", "samplesize": 1, "samplerate": 2822400, "duration": STATE["duration"], "remote": 0}]}
+            if os.environ.get("MOCK_NOCOVER"):             # an album without a cover: Lyrion sends no coverid
+                r["playlist_loop"][0].pop("coverid", None)
             if os.environ.get("MOCK_TRACK") == "flac":     # a 24/96 FLAC instead (the signal path's PCM cases)
                 r["playlist_loop"][0].update(url="file:///srv/music/%d.flac" % STATE["index"], bitrate="2500kbps",
                                              type="flc", samplesize=24, samplerate=96000)

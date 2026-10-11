@@ -14,8 +14,10 @@
 //
 // The albums loaded from the albums view "CD changer" (ChangerView.qml) are
 // `discs`: disc 1, 2, 3... in the order they were chosen, each with its
-// artwork on the label; any other album gets a slot of its own among the
-// rest.
+// artwork on the label. They are the only discs in the file: the other slots
+// stay empty, except the one of an album playing that was not chosen (music
+// started from a phone), which needs a disc to go into the drive. An album
+// without a cover gets the Osmium Sound disc (the boot splash's mark).
 //
 // A pure scene (no Hifi imports) driven by NpAnimation.qml, like the others;
 // the images are built by tools/np-anim/changer.py, whose geometry constants
@@ -51,9 +53,8 @@ Item {
     // the albums loaded in the changer, disc 1 first: [{ key, art }], key as
     // mediaKey (NpAnimation.albumKey)
     property var discs: []
-    // Empty slots after the loaded discs, where the next ones go: shown when
-    // discs are loaded, or always with `sparse` (the albums view, where discs
-    // are put in). Otherwise the file is full.
+    // the albums view (where discs are put in) says so; the file shows only
+    // the chosen discs either way
     property bool sparse: false
     signal action(string name, var value)
 
@@ -119,8 +120,6 @@ Item {
     property string word: ""                 // the display's word during the moves
 
     readonly property bool busy: turning || moving || dropping
-    readonly property bool gapShown: sparse || discs.length > 0
-    readonly property int gapSlots: 6
     // the slot of the album playing, which has a disc even when not loaded
     readonly property int curSlot: live && hasTrack && mediaKey !== "" ? slotFor(mediaKey) : -1
 
@@ -539,11 +538,10 @@ Item {
                         readonly property bool out: no === root.outSlot
                         readonly property real up: (out ? root.lift * root.liftTravel : 0)
                                                  + (no === root.dropSlot ? root.drop * root.liftTravel : 0)
-                        // a disc in this slot: not in the empty ones after the
-                        // loaded discs (unless the album playing sits there), not
+                        // a disc in this slot: a chosen one, the album playing or
+                        // the one the loader holds -- no made-up discs -- and not
                         // one still on its way down
-                        readonly property bool filled: !(root.gapShown && no >= root.discs.length && no < root.discs.length + root.gapSlots
-                                                         && no !== root.curSlot && !out)
+                        readonly property bool filled: (no < root.discs.length || no === root.curSlot || out)
                                                        && root.drops.indexOf(no) < 0
                         readonly property real cx: root.axisX + root.radius * Math.sin(rad) * sc
                         readonly property real cy: root.eyeY + (root.discY - root.eyeY) * sc - up * sc
@@ -563,7 +561,9 @@ Item {
                             Pic {
                                 anchors.fill: parent
                                 sourceSize.width: root.px(root.discD); sourceSize.height: root.px(root.discD)
-                                source: root.assetsBase + (slot.phi < 0 ? "disc-data.png" : "disc-lbl-" + ((slot.no * 7 + 3) % 10) + ".png")
+                                // the label side: the Osmium Sound disc, under the
+                                // album's artwork when it has one
+                                source: root.assetsBase + (slot.phi < 0 ? "disc-data.png" : "disc-osmium.png")
                             }
                             // the artwork, cut to the printable ring (only on discs
                             // that have one: the masking costs a pass each)
@@ -664,10 +664,12 @@ Item {
                     layer.smooth: true
                     layer.textureSize: Qt.size(root.px(width), root.px(height))
                     Pic { anchors.fill: parent; source: root.assetsBase + "../cd/cd-label.png" }
+                    // the album's artwork, or the Osmium Sound print for one
+                    // without a cover
                     Loader {
                         anchors.fill: parent
-                        active: drive.present && root.artFor(root.outSlot) !== ""
-                        sourceComponent: CdArt { url: root.artFor(root.outSlot) }
+                        active: drive.present
+                        sourceComponent: CdArt { url: root.artFor(root.outSlot) || root.assetsBase + "osmium-print.png" }
                     }
                 }
                 // clear hub, mirror band and rim, and the light: they need not turn

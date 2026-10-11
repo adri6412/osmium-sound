@@ -705,61 +705,45 @@ def disc_data():
     save(out.resize((DISC_PX, DISC_PX), Image.LANCZOS), 'disc-data.png')
 
 
-LABELS = [
-    # base colour, accent, pattern
-    ((236, 233, 226), (200, 30, 40), 'band'),
-    ((22, 22, 24), (210, 170, 70), 'rings'),
-    ((150, 20, 28), (240, 220, 200), 'rings'),
-    ((28, 60, 140), (130, 190, 240), 'grad'),
-    ((196, 200, 206), (20, 20, 20), 'wedge'),
-    ((240, 160, 30), (250, 230, 120), 'rays'),
-    ((30, 110, 70), (240, 240, 230), 'dot'),
-    ((90, 40, 120), (220, 160, 230), 'rays'),
-    ((60, 60, 64), (255, 120, 40), 'band'),
-    ((210, 214, 220), (30, 30, 30), 'text'),
-]
+# The boot splash's mark (OSMIUM SOUND, the last frame of the Plymouth
+# intro): what a disc carries when its album has no cover.
+PLYMOUTH_MARK = os.path.normpath(os.path.join(HERE, '..', '..', '..', 'distro', 'config', 'includes.chroot',
+                                              'usr', 'share', 'plymouth', 'themes', 'hifi', 'frame-79.png'))
 
 
-def disc_label(i, base_rgb, acc, kind):
-    r, th, n = polar()
-    rng = np.random.default_rng(100 + i)
-    rgb = np.zeros((n, n, 3), np.float32) + np.array(base_rgb, np.float32)
-    acc = np.array(acc, np.float32)
-    if kind == 'band':
-        m = (np.abs(np.sin(th) * r) < 0.16) & (r > 0.4)
-        rgb[m] = acc
-    elif kind == 'rings':
-        for rr in (0.42, 0.62, 0.9):
-            rgb[np.abs(r - rr) < 0.012] = acc
-    elif kind == 'grad':
-        t = np.clip((np.cos(th) * r + 1) / 2, 0, 1)[..., None]
-        rgb = rgb * (1 - t) + acc * t
-    elif kind == 'wedge':
-        rgb[(np.cos(th - 2.2) > 0.75)] = acc
-    elif kind == 'rays':
-        rgb = np.where((np.cos(th * 9) > 0.55)[..., None], rgb * 0.5 + acc * 0.5, rgb)
-    elif kind == 'dot':
-        rgb[np.hypot(r * np.cos(th) - 0.35, r * np.sin(th) + 0.2) < 0.3] = acc
-    # printed lines of text (titles, the track list) as bars
+def osmium_print(n):
+    """The print of a disc whose album has no cover: matt black with a soft
+    sheen, two fine gold rings, and the boot splash's mark above the hole
+    (centred at 0.58 of the radius, so it sits on the printable ring of both
+    the file's discs and the drive's)."""
+    r, th, _ = polar(n)
+    rgb = np.zeros((n, n, 3), np.float32) + np.array([17, 17, 19], np.float32)
+    rgb += (16 * np.cos(th * 2 - 0.4) ** 8)[..., None]
+    gold = np.array([214, 178, 72], np.float32)
+    for rr in (0.43, 0.93):
+        rgb[np.abs(r - rr) < 0.005] = gold
     img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), 'RGB')
-    d = ImageDraw.Draw(img)
-    ink = (20, 20, 20) if sum(base_rgb) > 400 else (235, 235, 235)
-    c = n / 2
-    for k in range(int(rng.integers(2, 6))):
-        y = c + n * (0.22 + 0.05 * k) * (1 if k % 2 else -1) * (1 if rng.random() > 0.3 else 0.7)
-        half = n * rng.uniform(0.08, 0.25)
-        d.rectangle([c - half, y - n * 0.008, c + half, y + n * 0.008], fill=ink)
-    if kind == 'text':
-        for k in range(10):
-            y = c + n * (0.05 + 0.03 * k)
-            d.rectangle([c + n * 0.16, y - n * 0.005, c + n * rng.uniform(0.25, 0.36), y + n * 0.005], fill=ink)
+    mark = Image.open(PLYMOUTH_MARK).convert('RGBA')
+    mw = int(n * 0.56)
+    mh = round(mark.height * mw / mark.width)
+    mark = mark.resize((mw, mh), Image.LANCZOS)
+    img.paste(mark, ((n - mw) // 2, round(n / 2 - 0.58 * n / 2 - mh / 2)), mark)
+    return img
+
+
+def disc_osmium():
+    """disc-osmium.png, the label side of a disc in the file, and
+    osmium-print.png, the same print for the disc in the drive (masked to
+    the CD scene's printable ring there, like an album's artwork)."""
+    n = DISC_PX * 2
+    img = osmium_print(n)
+    save(img.resize((640, 640), Image.LANCZOS), 'osmium-print.png')
+    r, th, _ = polar(n)
     rgb = np.array(img, np.float32)
-    # a little sheen: printing is matt but not dead
-    rgb += (14 * np.cos(th * 2 - 0.4) ** 8)[..., None]
     a = np.full((n, n), 255, np.float32)
     hub(rgb, a, r, n)
     out = Image.fromarray(np.dstack([np.clip(rgb, 0, 255), a]).astype(np.uint8), 'RGBA')
-    save(out.resize((DISC_PX, DISC_PX), Image.LANCZOS), f'disc-lbl-{i}.png')
+    save(out.resize((DISC_PX, DISC_PX), Image.LANCZOS), 'disc-osmium.png')
 
 
 def disc_mask_and_gloss():
@@ -930,8 +914,7 @@ def main():
     drive_glass()
     drive_shadow()
     disc_data()
-    for i, (b, a, k) in enumerate(LABELS):
-        disc_label(i, b, a, k)
+    disc_osmium()
     disc_mask_and_gloss()
     glyphs()
     vfd_words()

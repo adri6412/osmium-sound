@@ -194,16 +194,16 @@ Item {
         layer.smooth: true
         layer.textureSize: Qt.size(Math.ceil(root.cs * root.devScale), Math.ceil(root.cs * root.devScale))
     }
-    // a disc: the album on its label (a printed label when it has no cover),
+    // a disc: the album on its label (the Osmium Sound disc when it has no cover),
     // the clear hub and rim over it
     component Disc: Item {
         id: d
         property string src: ""
-        property int label: 0
         width: root.cs; height: root.cs
+        // no cover (or not loaded yet): the Osmium Sound disc
         Image {
             anchors.fill: parent
-            source: root.art + "disc-lbl-" + d.label + ".png"
+            source: root.art + "disc-osmium.png"
             sourceSize.width: root.px; sourceSize.height: root.px
             smooth: true; asynchronous: true
             visible: artImg.status !== Image.Ready
@@ -267,10 +267,7 @@ Item {
                     axis { x: 0; y: 1; z: 0 }
                     angle: -slot.a * root.maxAngle
                 }
-                Disc {
-                    src: root.srcOf(slot.it)
-                    label: ((slot.k * 7 + 3) % 10 + 10) % 10
-                }
+                Disc { src: root.srcOf(slot.it) }
                 // the turned discs stand in the shade of the file
                 Rectangle {
                     anchors.fill: parent; radius: width / 2
@@ -478,7 +475,7 @@ Item {
                 axis { x: 0; y: 1; z: 0 }
                 angle: fly.turn
             }
-            Disc { src: fly.art ? Api.lmsBase + "/music/" + fly.art + "/cover?size=" + root.px : ""; label: (root.chosen.length + 3) % 10 }
+            Disc { src: fly.art ? Api.lmsBase + "/music/" + fly.art + "/cover?size=" + root.px : "" }
             // up a little out of the row, then to the drive's opening in the
             // window, shrinking to the size of the discs in the file and
             // turning edge-on like them; there the changer takes it down into

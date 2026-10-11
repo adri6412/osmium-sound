@@ -60,7 +60,12 @@ Item {
     readonly property bool hasTrack: !live || Player.title !== "" || Player.trackUrl !== ""
     readonly property bool playing: !live || Player.playing
     readonly property real progress: live && Player.duration > 0 ? Math.max(0, Math.min(1, Player.elapsed / Player.duration)) : 0
-    readonly property string artwork: live ? Player.artworkUrl : ""
+    // 🚨 a track without a cover still has an artwork URL: Lyrion answers it
+    // with its own placeholder icon. The CD changer prints its Osmium Sound
+    // disc instead, so it is told there is none (no coverid = no cover).
+    readonly property string artwork: !live ? ""
+                                    : loadedKind === "changer" && !Player.remote && Player.coverId === "" ? ""
+                                    : Player.artworkUrl
     // The album on the media: a new one takes it out and puts the next one in.
     // Album alone (a compilation keeps its disc while the artist changes); a
     // stream without an album is its station URL, so a radio's songs do not
