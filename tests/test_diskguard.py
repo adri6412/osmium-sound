@@ -129,5 +129,43 @@ class PrefsGuardTest(unittest.TestCase):
         self.assertTrue(self.pg.readable(os.path.join(self.root, 'plugin', 'c.prefs')))
 
 
+
+class LiveSessionTest(unittest.TestCase):
+    """No disk warnings on a live session, "Try" or the installer: the
+    "system disk" there is the medium the ISO runs from."""
+
+    def setUp(self):
+        import api_server
+        self.api = api_server
+        self.tmp = tempfile.TemporaryDirectory()
+        saved = api_server.PROC_CMDLINE
+        api_server.PROC_CMDLINE = os.path.join(self.tmp.name, 'cmdline')
+        self.addCleanup(setattr, api_server, 'PROC_CMDLINE', saved)
+        self.addCleanup(self.tmp.cleanup)
+        full = {'available': True, 'total': 8 * GB, 'free': 0, 'used': 8 * GB,
+                'reserve': GB // 2, 'room': 0, 'percent': 100.0, 'level': 'full'}
+        patcher = mock.patch.object(api_server.hifi_diskguard, 'status', lambda: dict(full))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def cmdline(self, text):
+        with open(self.api.PROC_CMDLINE, 'w') as f:
+            f.write(text + '\n')
+
+    def get(self):
+        return self.api.app.test_client().get('/system_disk').get_json()
+
+    def test_try_and_installer_say_nothing(self):
+        for line in ('boot=live components quiet splash',
+                     'boot=live components quiet splash hifi.installer=1'):
+            self.cmdline(line)
+            self.assertFalse(self.get()['available'], line)
+            self.assertFalse(self.api._system_disk_status()['available'], line)
+
+    def test_an_installed_box_still_warns(self):
+        self.cmdline('BOOT_IMAGE=/vmlinuz root=UUID=abc ro quiet splash rauc.slot=A')
+        self.assertEqual(self.get()['level'], 'full')
+
+
 if __name__ == '__main__':
     unittest.main()

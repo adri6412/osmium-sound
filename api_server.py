@@ -702,7 +702,7 @@ def get_system_stats():
             'gpu_percent': _gpu_busy_pct(),
             'gpu_temp_c': _gpu_temp_c(),
             # the reserve kept for Lyrion and the warning level (hifi_diskguard)
-            'system_disk': hifi_diskguard.status(),
+            'system_disk': _system_disk_status(),
         }
     except Exception:
         log.exception("get_system_stats failed")
@@ -10727,9 +10727,18 @@ def api_signal_path():
 
 # The system disk and its reserve for Lyrion (hifi_diskguard.py): the kiosk
 # and the web admin warn from this when it fills up.
+def _system_disk_status():
+    """hifi_diskguard.status(), except on a live session ("Try" or the
+    installer, both boot=live): there the "system disk" is the medium the ISO
+    runs from, full by design, and a box being tried or installed is no place
+    to tell anyone to free space on it."""
+    if _is_live_boot():
+        return {'available': False}
+    return hifi_diskguard.status()
+
 @app.route('/system_disk', methods=['GET'])
 def api_system_disk():
-    return jsonify(dict(hifi_diskguard.status(), success=True))
+    return jsonify(dict(_system_disk_status(), success=True))
 
 @app.route('/zones', methods=['GET'])
 def api_zones():
