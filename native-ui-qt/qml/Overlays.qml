@@ -7,10 +7,11 @@ import Hifi.Ui
 
 Item {
     id: root
-    property int active: 0            // 0 nessuno, 1 coda, 2 salva, 3 sonno, 4 nome (rinomina)
+    property int active: 0            // 0 nessuno, 1 coda, 2 salva, 3 sonno, 4 nome (rinomina), 5 percorso del segnale
     property int leaving: 0
     readonly property bool busy: active !== 0
     signal savedPlaylist()
+    signal openPlaybackSetting(string which)
 
     Spring { id: slide; stiffness: 240; damping: 28; rate: Theme.motionRate }     // 0 dentro, 1 fuori
     property real fade: 0
@@ -25,6 +26,11 @@ Item {
     }
     function openSleep() {
         active = 3; leaving = 0
+        fadeAnim.duration = Theme.dur(180)
+        fade = 1
+    }
+    function openSignalPath() {
+        active = 5; leaving = 0
         fadeAnim.duration = Theme.dur(180)
         fade = 1
     }
@@ -107,6 +113,16 @@ Item {
         opacity: root.fade
         scale: 0.92 + 0.08 * root.fade
         onDone: root.close()
+    }
+    // ─── percorso del segnale ──────────────────────────────────────────────
+    SignalPath {
+        anchors.centerIn: parent
+        visible: root.active === 5
+        open: root.active === 5 && root.leaving === 0 && !root.covered
+        opacity: root.fade
+        scale: 0.92 + 0.08 * root.fade
+        onDone: root.close()
+        onOpenSetting: { root.close(); root.openPlaybackSetting("bitperfect") }
     }
     Keys.onEscapePressed: close()
 }

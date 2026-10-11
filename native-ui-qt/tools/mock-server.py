@@ -213,6 +213,9 @@ def rpc(player, params):
                  "playlist_loop": [{"id": 1001 + STATE["index"], "title": t[0], "artist": t[1], "album": t[2], "coverid": "1001", "album_id": 1 + STATE["index"] % 24, "artist_id": 1,
                                     "url": "file:///srv/music/%d.dsf" % STATE["index"],
                                     "bitrate": "2822kHz", "type": "dsf", "samplesize": 1, "samplerate": 2822400, "duration": STATE["duration"], "remote": 0}]}
+            if os.environ.get("MOCK_TRACK") == "flac":     # a 24/96 FLAC instead (the signal path's PCM cases)
+                r["playlist_loop"][0].update(url="file:///srv/music/%d.flac" % STATE["index"], bitrate="2500kbps",
+                                             type="flc", samplesize=24, samplerate=96000)
         else:
             r = {"playlist_cur_index": STATE["index"], "playlist_tracks": len(QUEUE),
                  "playlist_loop": [{"id": 1001 + i, "title": q[0], "artist": q[1], "album": q[2], "playlist index": i} for i, q in enumerate(QUEUE)]}
@@ -481,6 +484,31 @@ def mock_zones(message=None, success=True):
         out["message"] = message
     return out
 
+def mock_signal_path(q):
+    """Now Playing's signal path through the real hifi_signal_path.describe(),
+    with a DAC that is fed whatever the track is (MOCK_SIGPATH=resampled feeds
+    it 48 kHz, =idle nothing; the PCM to DSD switch of Settings → Audio here
+    feeds it DSD)."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+    import hifi_signal_path as sp, hifi_squeezelite as sq
+    g = lambda k: (q.get(k) or [""])[0]
+    scen = os.environ.get("MOCK_SIGPATH", "")
+    main = sq.normalize(dict(STATE["sq"], mac=OWN["playerid"], output="hw:CARD=D50s,DEV=0"))
+    sq.tools_present = lambda: True
+    stype, rate, bits = g("type"), int(float(g("rate") or 0)), g("bits")
+    def hw(dev):
+        if scen == "idle": return None
+        if stype in ("dsf", "dff"): return {"format": "DSD_U32_BE", "rate": rate // 32, "channels": 2}
+        if main["pcm2dsd"] != "off": return {"format": "DSD_U32_BE", "rate": sq.PCM2DSD_RATES[main["pcm2dsd"]] // 32, "channels": 2}
+        return {"format": "S32_LE", "rate": 48000 if scen == "resampled" else rate or 44100, "channels": 2}
+    r = sp.describe({"type": stype, "rate": rate, "bits": bits, "remote": g("remote") == "1"},
+                    {"replaygain": g("rg") == "1", "crossfade": g("xfade") == "1", "digital_volume": g("digvol") == "1", "volume": g("volume")},
+                    g("player"), main, [],
+                    probe_fn=lambda d: "u32be", hw_fn=hw,
+                    card_fn=lambda d: {"card": "D50s", "name": "Topping D50s", "kind": "usb"})
+    return dict(r, success=True)
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def _json(self, obj, code=200):
@@ -564,6 +592,7 @@ class H(BaseHTTPRequestHandler):
             }
             if u.path == "/squeezelite_conf": return self._json(mock_sq())
             if u.path == "/zones": return self._json(mock_zones())
+            if u.path == "/signal_path": return self._json(mock_signal_path(parse_qs(u.query)))
             if u.path in table: return self._json(table[u.path])
             return self._json({"success": False, "error": "mock: " + u.path}, 404)
         if port == 8080:

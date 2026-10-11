@@ -43,6 +43,7 @@ Item {
     readonly property Item navFirst: playTap
     signal toggleView()
     signal openPlaybackSetting(string which)
+    signal openSignalPath()
     signal openSettings()
 
     readonly property real pad: 20
@@ -260,6 +261,7 @@ Item {
         // polled on the selected player, not on our own (#101)
         mode: Player.ledMode
         onOpenSetting: (which) => root.openPlaybackSetting(which)
+        onOpenPath: root.openSignalPath()
     }
 
     // ─── colonna di destra ─────────────────────────────────────────────────
@@ -302,9 +304,11 @@ Item {
             color: Theme.wa(0.05); border.width: 1; border.color: Theme.wa(0.05)
             Text {
                 id: chipText; anchors.centerIn: parent
-                text: Player.chip; color: Theme.silverA(0.5)
+                text: Player.chip; color: chipTap.mix(Theme.silverA(0.5), Theme.white)
                 font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.3
             }
+            // the signal path, as from the format lights under the cover
+            Tap { id: chipTap; grow: 8; navRadius: 4; onClicked: root.openSignalPath() }
         }
         Item { width: 1; height: 8 }
         Item {                                     // tempi

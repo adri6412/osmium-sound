@@ -460,6 +460,13 @@ Item {
     readonly property var pairWizard: remotePair
     readonly property var practice: remoteTour
     readonly property var nav: Nav                    // il riflettore del telecomando
+    // Settings → Playback, open on one setting (the lights under the cover,
+    // the signal path)
+    function openPlaybackSetting(which) {
+        app.setExpanded(false)
+        mainScreen.browser.openTab(4)
+        Ui.settings.openSection("playback", which)
+    }
 
     MainScreen {
         id: mainScreen
@@ -486,13 +493,10 @@ Item {
         onOpenPlayerPicker: app.openPlayerPicker()
         onStartScreensaver: screensaver.show(true)
         onToggleView: { app.viewVu = !app.viewVu; Sys.setConf("nowplaying-view", app.viewVu ? "vu" : "lyrics") }
-        // the BitPerfect / ReplayGain lights open Settings → Playback on that setting
+        // the ReplayGain light and the signal path open Settings → Playback on that setting
         onOpenSettings: { app.setExpanded(false); mainScreen.browser.openTab(4) }
-        onOpenPlaybackSetting: (which) => {
-            app.setExpanded(false)
-            mainScreen.browser.openTab(4)
-            Ui.settings.openSection("playback", which)
-        }
+        onOpenPlaybackSetting: (which) => app.openPlaybackSetting(which)
+        onOpenSignalPath: overlays.openSignalPath()
     }
     // Mentre le schermate scorrono i riquadri sotto il dito non sono quelli
     // disegnati: si lascia finire la molla (ui_transition_active).
@@ -503,6 +507,7 @@ Item {
         covered: screensaver.covering
         anchors.fill: parent
         onSavedPlaylist: { app.setExpanded(false); mainScreen.showPlaylists() }
+        onOpenPlaybackSetting: (which) => app.openPlaybackSetting(which)
     }
 
     // Auto-apertura del player (nowplaying-autoexpand) come main_tick()

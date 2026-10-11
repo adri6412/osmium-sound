@@ -26,6 +26,7 @@ from hifi_logging import get_logger
 from hifi_i18n import t as _t
 from hifi_i18n import MESSAGES as _I18N_MESSAGES
 import hifi_squeezelite as sq
+import hifi_signal_path
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -10686,6 +10687,30 @@ def api_set_squeezelite_conf():
 @app.route('/squeezelite_conf/reset', methods=['POST'])
 def api_reset_squeezelite_conf():
     return jsonify(reset_squeezelite_conf())
+
+# Now Playing → signal path: the kiosk passes what Lyrion says of the track
+# and of the player's prefs, this device adds what its DAC is really fed.
+@app.route('/signal_path', methods=['GET'])
+def api_signal_path():
+    a = request.args
+    flag = lambda k: a.get(k) in ('1', 'true')
+    try:
+        main = _sq_load()
+    except Exception:
+        main = sq.normalize({})
+    try:
+        zones = sq.load_zones(ZONES_CONF)
+    except Exception:
+        zones = []
+    source = {'type': a.get('type', ''), 'rate': a.get('rate'), 'bits': a.get('bits'), 'remote': flag('remote')}
+    lyrion = {'replaygain': flag('rg'), 'crossfade': flag('xfade'),
+              'digital_volume': flag('digvol'), 'volume': a.get('volume')}
+    try:
+        return jsonify(dict(hifi_signal_path.describe(source, lyrion, a.get('player', ''), main, zones),
+                            success=True))
+    except Exception:
+        log.exception("signal_path failed")
+        return jsonify({'success': False})
 
 @app.route('/zones', methods=['GET'])
 def api_zones():

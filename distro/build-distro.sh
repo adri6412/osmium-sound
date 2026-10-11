@@ -121,6 +121,7 @@ if [ "$STAGE" != "binary" ]; then
     [ -f "$REPO_ROOT/hifi_tags.py" ]       || die "Missing $REPO_ROOT/hifi_tags.py"
     [ -f "$REPO_ROOT/hifi_squeezelite.py" ] || die "Missing $REPO_ROOT/hifi_squeezelite.py"
     [ -f "$REPO_ROOT/hifi_cdrip.py" ]      || die "Missing $REPO_ROOT/hifi_cdrip.py"
+    [ -f "$REPO_ROOT/hifi_signal_path.py" ] || die "Missing $REPO_ROOT/hifi_signal_path.py"
 fi
 
 # ─────────────────────────── Normalise text files ──────────────────
@@ -294,7 +295,8 @@ cp -f "$REPO_ROOT/hifi_metadata.py"   "$BIN_DEST/"
 cp -f "$REPO_ROOT/hifi_tags.py"       "$BIN_DEST/"
 cp -f "$REPO_ROOT/hifi_squeezelite.py" "$BIN_DEST/"
 cp -f "$REPO_ROOT/hifi_cdrip.py"      "$BIN_DEST/"
-sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py" "$BIN_DEST/hifi_logging.py" "$BIN_DEST/hifi_backup.py" "$BIN_DEST/hifi_i18n.py" "$BIN_DEST/hifi_metadata.py" "$BIN_DEST/hifi_tags.py" "$BIN_DEST/hifi_squeezelite.py" "$BIN_DEST/hifi_cdrip.py"
+cp -f "$REPO_ROOT/hifi_signal_path.py" "$BIN_DEST/"
+sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py" "$BIN_DEST/hifi_logging.py" "$BIN_DEST/hifi_backup.py" "$BIN_DEST/hifi_i18n.py" "$BIN_DEST/hifi_metadata.py" "$BIN_DEST/hifi_tags.py" "$BIN_DEST/hifi_squeezelite.py" "$BIN_DEST/hifi_cdrip.py" "$BIN_DEST/hifi_signal_path.py"
 chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py"
 
 # Web-admin Vue build (built by CI before this script runs). REQUIRED: a
