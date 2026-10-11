@@ -1184,7 +1184,7 @@
       "help": "Ogni brano che non è già DSD (CD rippati, file ad alta risoluzione, radio, servizi di streaming) arriva al DAC in DSD, convertito mentre suona. I file DSD restano come sono.",
       "active": "Accesa: tutto arriva al DAC in {rate}.",
       "volumeWarning": "Il volume digitale non agisce sul DSD: usa il volume del DAC o dell'amplificatore.",
-      "volumeConfirm": "In DSD il volume di questo player non cambia più niente: la musica esce a livello pieno e il volume si regola sul DAC o sull'amplificatore. Abbassa prima l'amplificatore.",
+      "volumeConfirm": "Attenzione al volume. Con la conversione in DSD il volume di Osmium non agisce più: la musica esce sempre al massimo, e il volume si regola solo dal DAC o dall'amplificatore. Abbassa l'amplificatore prima di accendere. Se il tuo DAC ha un suo controllo di volume, puoi usarlo attivando «Volume dal mixer del DAC».",
       "confirmOk": "Accendi il DSD",
       "applying": "Applico… Lyrion potrebbe riavviarsi per qualche secondo.",
       "measuring": "Sto misurando cosa regge questo processore: DSD256 compare qui se è abbastanza veloce.",
