@@ -2187,9 +2187,6 @@ def _bg_netrecovery_connect(ssid, password, band=''):
 
 
 # ── generic system proxy (partitioned) ───────────────────────────────
-_REAUTH_ROUTES = {('/api/system/shell_account', 'POST'), ('/api/system/ssh', 'POST')}
-
-
 def _handle_proxy(local_path, method):
     key = (local_path, method)
     if _provisioning() and not _logged_in():
@@ -2205,15 +2202,6 @@ def _handle_proxy(local_path, method):
         return jsonify({'success': False, 'code': 'proxy.endpointNotAllowed',
                         'message': _wt('proxy.endpointNotAllowed', _lang())}), 403
     body = request.get_json(silent=True) if method != 'GET' else None
-    # A Linux login with sudo, or SSH switched on: the admin password again,
-    # not just the session (a copied cookie must not be enough for root).
-    if key in _REAUTH_ROUTES and (key != ('/api/system/ssh', 'POST')
-                                  or (isinstance(body, dict) and body.get('enable'))):
-        wrong = _password_check(body.get('admin_password') if isinstance(body, dict) else None)
-        if wrong:
-            return wrong
-    if isinstance(body, dict):
-        body.pop('admin_password', None)
     data, status = _proxy(API_BASE, api_path, method=method, body=body,
                           timeout=200 if 'tailscale_install' in api_path
                           # Bluetooth talks to hardware that answers when it

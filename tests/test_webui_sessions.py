@@ -76,36 +76,6 @@ class SessionTests(unittest.TestCase):
         self.assertTrue(self.status(a))
         self.assertFalse(self.status(b))
 
-    def test_shell_account_needs_the_admin_password(self):
-        c = self.login()
-        r = c.post('/api/system/shell_account', headers=CSRF,
-                   json={'username': 'admin', 'password': 'ssh-password'})
-        self.assertEqual(r.status_code, 403)
-        self.assertEqual(self.proxied, [])
-        r = c.post('/api/system/shell_account', headers=CSRF,
-                   json={'username': 'admin', 'password': 'ssh-password',
-                         'admin_password': 'correct-horse'})
-        self.assertEqual(r.status_code, 200, r.get_json())
-        # the admin password is checked here and never travels further
-        self.assertEqual(self.proxied, [('/shell_account', {'username': 'admin',
-                                                            'password': 'ssh-password'})])
-
-    def test_turning_ssh_on_needs_it_turning_it_off_does_not(self):
-        c = self.login()
-        self.assertEqual(c.post('/api/system/ssh', headers=CSRF, json={'enable': True}).status_code, 403)
-        self.assertEqual(c.post('/api/system/ssh', headers=CSRF, json={'enable': False}).status_code, 200)
-        r = c.post('/api/system/ssh', headers=CSRF,
-                   json={'enable': True, 'admin_password': 'correct-horse'})
-        self.assertEqual(r.status_code, 200)
-
-    def test_wrong_passwords_share_the_login_throttle(self):
-        c = self.login()
-        for _ in range(w._AUTH_FAIL_MAX):
-            c.post('/api/system/ssh', headers=CSRF, json={'enable': True, 'admin_password': 'x'})
-        r = c.post('/api/system/ssh', headers=CSRF,
-                   json={'enable': True, 'admin_password': 'correct-horse'})
-        self.assertEqual(r.status_code, 429)
-
 
 if __name__ == '__main__':
     unittest.main()

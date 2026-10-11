@@ -506,10 +506,7 @@ async function loadToggles() {
   const s = await api.sys('ssh'); if (s.ok) { sshState.available = !!s.data.available; sshState.enabled = !!s.data.enabled; }
 }
 async function setSsh(v) {
-  // Switching SSH on hands out a way to root: the server asks for the admin
-  // password again, not just this session.
-  if (v && !shell.admin) { say(t('settings.services.adminPasswordNeeded'), true); return; }
-  sshState.enabled = v; const r = await api.sysPost('ssh', { enable: v, admin_password: v ? shell.admin : undefined });
+  sshState.enabled = v; const r = await api.sysPost('ssh', { enable: v });
   say(bodyMsg(r, v ? t('settings.services.sshOn') : t('settings.services.sshOff')), !(r.ok && r.data.success !== false));
   loadToggles(); loadShell();
 }
@@ -520,7 +517,7 @@ async function setSsh(v) {
 // admin account, mirrored into a real Linux user with sudo at account creation
 // and at every password change. Devices provisioned before that shipped have no
 // such user yet, so this panel can create one on demand.
-const shell = reactive({ supported: true, exists: false, username: '', form: '', password: '', admin: '', busy: false });
+const shell = reactive({ supported: true, exists: false, username: '', form: '', password: '', busy: false });
 async function loadShell() {
   const r = await api.sys('shell_account');
   // Older api_server has no such endpoint — hide the whole block rather than
@@ -533,11 +530,11 @@ async function loadShell() {
 }
 async function saveShellAccount() {
   shell.busy = true;
-  const r = await api.sysPost('shell_account', { username: shell.form, password: shell.password, admin_password: shell.admin });
+  const r = await api.sysPost('shell_account', { username: shell.form, password: shell.password });
   shell.busy = false;
   const ok = r.ok && r.data.success !== false;
   say(bodyMsg(r, ok ? t('settings.services.sshLoginSaved') : t('settings.services.sshLoginFailed')), !ok);
-  if (ok) { shell.password = ''; shell.admin = ''; loadShell(); }
+  if (ok) { shell.password = ''; loadShell(); }
 }
 // ── Bluetooth speakers (A2DP source) ─────────────────────────────
 // Pair a speaker or a pair of headphones and it becomes a Lyrion player of
@@ -2385,8 +2382,6 @@ onUnmounted(() => {
         <span>{{ t('settings.services.ssh') }} <span class="muted">{{ t('settings.services.sshHint') }}</span></span>
         <Toggle :model-value="sshState.enabled" @update:model-value="setSsh" />
       </div>
-      <label>{{ t('settings.services.adminPassword') }}</label>
-      <input v-model="shell.admin" type="password" autocomplete="current-password" />
       <!-- SSH login. Shown once SSH is on (or a login already exists), because
            that is the only context in which it means anything. -->
       <template v-if="shell.supported && (sshState.enabled || shell.exists)">
@@ -2401,7 +2396,7 @@ onUnmounted(() => {
         <label>{{ t('settings.services.sshPassword') }}</label>
         <input v-model="shell.password" type="password" autocomplete="new-password" />
         <div class="row" style="margin-top: 10px;">
-          <button class="secondary" :disabled="shell.busy || !shell.form || shell.password.length < 8 || !shell.admin" @click="saveShellAccount">
+          <button class="secondary" :disabled="shell.busy || !shell.form || shell.password.length < 8" @click="saveShellAccount">
             {{ shell.busy ? '…' : (shell.exists ? t('settings.services.sshLoginUpdate') : t('settings.services.sshLoginCreate')) }}
           </button>
         </div>

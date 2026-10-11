@@ -825,9 +825,7 @@
       "sshLoginCreate": "Create SSH login",
       "sshLoginUpdate": "Change SSH password",
       "sshLoginSaved": "SSH login updated",
-      "sshLoginFailed": "Could not update the SSH login",
-      "adminPassword": "Your admin password (needed to turn SSH on or change the SSH login)",
-      "adminPasswordNeeded": "Enter your admin password first"
+      "sshLoginFailed": "Could not update the SSH login"
     },
     "tailscale": {
       "hint": "Join this appliance to your own Tailscale network (tailnet) so you can reach it — web UI, Lyrion Music Server, network shares, everything — from anywhere your tailnet reaches, e.g. to get at your music library away from home. This is not a public link: only devices on your own tailnet can reach it.",

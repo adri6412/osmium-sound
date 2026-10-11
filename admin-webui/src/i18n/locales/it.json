@@ -825,9 +825,7 @@
       "sshLoginCreate": "Crea accesso SSH",
       "sshLoginUpdate": "Cambia password SSH",
       "sshLoginSaved": "Accesso SSH aggiornato",
-      "sshLoginFailed": "Impossibile aggiornare l'accesso SSH",
-      "adminPassword": "La tua password di amministratore (serve per attivare SSH o cambiare l'accesso SSH)",
-      "adminPasswordNeeded": "Prima inserisci la tua password di amministratore"
+      "sshLoginFailed": "Impossibile aggiornare l'accesso SSH"
     },
     "tailscale": {
       "hint": "Collega questo apparecchio alla tua rete Tailscale personale (tailnet) per raggiungerlo — interfaccia web, Lyrion Music Server, condivisioni di rete, tutto — da ovunque arrivi la tua tailnet, ad esempio per accedere alla libreria musicale fuori casa. Non è un link pubblico: solo i dispositivi della tua tailnet possono raggiungerlo.",
