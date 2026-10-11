@@ -299,18 +299,25 @@ Item {
         }
         Item { width: 1; height: 6; visible: Player.chip !== "" }
         Rectangle {                                // etichetta del formato
+            // a touch larger than Electron's, with the ">" of the plate's
+            // labels: it opens the signal path. 4 px taller, so 4 px less
+            // below it: the times, the bar and the controls stay where they were.
             visible: Player.chip !== ""
-            width: chipText.implicitWidth + 16; height: 22; radius: 4
-            color: Theme.wa(0.05); border.width: 1; border.color: Theme.wa(0.05)
-            Text {
-                id: chipText; anchors.centerIn: parent
-                text: Player.chip; color: chipTap.mix(Theme.silverA(0.5), Theme.white)
-                font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.3
+            width: chipRow.implicitWidth + 20; height: 26; radius: 5
+            color: chipTap.mix(Theme.wa(0.05), Theme.wa(0.10)); border.width: 1; border.color: Theme.wa(0.08)
+            Row {
+                id: chipRow; anchors.centerIn: parent; spacing: 4
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Player.chip; color: chipTap.mix(Theme.silverA(0.65), Theme.white)
+                    font.family: Theme.font; font.pixelSize: 13; font.letterSpacing: 0.3
+                }
+                Icon { anchors.verticalCenter: parent.verticalCenter; name: "chevron-right"; size: 14; color: chipTap.mix(Theme.silverA(0.65), Theme.white) }
             }
             // the signal path, as from the format lights under the cover
-            Tap { id: chipTap; grow: 8; navRadius: 4; onClicked: root.openSignalPath() }
+            Tap { id: chipTap; grow: 8; navRadius: 5; onClicked: root.openSignalPath() }
         }
-        Item { width: 1; height: 8 }
+        Item { width: 1; height: Player.chip !== "" ? 4 : 8 }
         Item {                                     // tempi
             width: parent.width; height: 16
             Text { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; text: Player.formatTime(Player.elapsed); color: Theme.silverA(0.6); font.family: Theme.mono; font.pixelSize: 12 }
