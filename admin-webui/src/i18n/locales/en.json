@@ -637,7 +637,7 @@
       "opening": "Opening sources…",
       "openFailed": "Could not open sources",
       "active": "Active sources",
-      "none": "No sources yet. Add one below.",
+      "none": "No sources yet.",
       "localTag": "LOCAL",
       "usbTag": "USB",
       "internalTag": "INTERNAL",

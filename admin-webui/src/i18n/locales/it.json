@@ -637,7 +637,7 @@
       "opening": "Apertura sorgenti…",
       "openFailed": "Impossibile aprire le sorgenti",
       "active": "Sorgenti attive",
-      "none": "Nessuna sorgente. Aggiungine una qui sotto.",
+      "none": "Nessuna sorgente.",
       "localTag": "LOCALE",
       "usbTag": "USB",
       "internalTag": "INTERNO",
