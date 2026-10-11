@@ -219,14 +219,19 @@ class OtaChannelTestCase(unittest.TestCase):
             api_server.urllib.request.urlopen = saved
             api_server._RELEASE_CACHE.clear()
 
-    def test_alpha_semver_key_ranks_between_its_base_dev_and_the_next_one(self):
-        base = api_server._semver_key('2.5.21-dev.50')
-        alpha1 = api_server._semver_key('2.5.21-dev.50-alpha1')
-        alpha2 = api_server._semver_key('2.5.21-dev.50-alpha2')
-        next_dev = api_server._semver_key('2.5.21-dev.51')
-        self.assertLess(base, alpha1)
-        self.assertLess(alpha1, alpha2)
-        self.assertLess(alpha2, next_dev)
+    def test_alpha_semver_key_ranks_below_the_dev_it_previews(self):
+        # An alpha is a preview of the dev build it is nested on, tagged after
+        # the previous dev was published: dev.49 < dev.50-alpha1 < dev.50-alpha2
+        # < dev.50 < dev.51-alpha1. Ranking it above its dev (the rule this
+        # test was first written for, changed in d5fbcf6) kept a box on an
+        # alpha from ever being offered the promoted plain dev.
+        keys = [api_server._semver_key(v) for v in (
+            '2.5.21-dev.49', '2.5.21-dev.50-alpha1', '2.5.21-dev.50-alpha2',
+            '2.5.21-dev.50', '2.5.21-dev.51-alpha1', '2.5.21')]
+        self.assertEqual(keys, sorted(keys))
+        self.assertEqual(len(set(keys)), len(keys))
+        self.assertTrue(api_server._is_newer('2.5.21-dev.50', '2.5.21-dev.50-alpha2'))
+        self.assertFalse(api_server._is_newer('2.5.21-dev.50-alpha2', '2.5.21-dev.50'))
 
 
 if __name__ == '__main__':
