@@ -54,6 +54,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -65,6 +66,31 @@ try:                        # only used to validate Lyrion's YAML prefs
     import yaml             # python3-yaml ships on the appliance
 except Exception:           # pragma: no cover - dev machines may lack it
     yaml = None
+
+if yaml is not None:
+    class _LyrionLoader(yaml.SafeLoader):
+        """SafeLoader that also takes the Perl tags Lyrion writes.
+
+        🚨 Lyrion is Perl and its YAML carries Perl types: Qobuz keeps its
+        booleans as `!!perl/scalar:JSON::XS::Boolean`. Plain safe_load refuses
+        any unknown tag, so qobuz.prefs (account, login and every setting) was
+        dropped as "unparsable" from every backup, encrypted ones included.
+        A tagged node is read as the plain value under it: nothing is built
+        from the tag, and the file goes into the archive byte for byte."""
+
+    def _untagged(loader, _suffix, node):
+        if isinstance(node, yaml.MappingNode):
+            return loader.construct_mapping(node, deep=True)
+        if isinstance(node, yaml.SequenceNode):
+            return loader.construct_sequence(node, deep=True)
+        return loader.construct_scalar(node)
+
+    _LyrionLoader.add_multi_constructor("tag:yaml.org,2002:perl/", _untagged)
+    _LyrionLoader.add_multi_constructor("!", _untagged)
+
+
+def _load_lyrion_yaml(text):
+    return yaml.load(text, Loader=_LyrionLoader)
 
 
 # ── layout ───────────────────────────────────────────────────────────
@@ -165,6 +191,12 @@ DENY_FILES = frozenset((
     # fresh snapshot is how a database gets corrupted.
     "/var/lib/hifi-player/metadata/metadata.db-wal",
     "/var/lib/hifi-player/metadata/metadata.db-shm",
+    # Same for Lyrion's ratings and play counts (persist.db, taken as a
+    # snapshot): a write-ahead log copied beside it was a torn pair.
+    "/var/lib/squeezeboxserver/prefs/persist.db-wal",
+    "/var/lib/squeezeboxserver/prefs/persist.db-shm",
+    "/var/lib/lyrionmusicserver/prefs/persist.db-wal",
+    "/var/lib/lyrionmusicserver/prefs/persist.db-shm",
 ))
 DENY_PREFIXES = (
     "/var/lib/hifi-player/backups/",   # no backups inside backups
@@ -207,7 +239,11 @@ def is_denied(logical):
 def member_size_limit(logical):
     """Largest size this "/"-anchored path may have in an archive — the same
     number decides what a backup leaves out and what a restore refuses."""
-    return MAX_METADATA_DB_SIZE if logical == METADATA_DB else MAX_MEMBER_SIZE
+    # Lyrion's persist.db grows with the library (a row per track ever seen),
+    # past the small-file limit on a big one.
+    if logical == METADATA_DB or logical in _LYRION_PERSIST_DBS:
+        return MAX_METADATA_DB_SIZE
+    return MAX_MEMBER_SIZE
 
 
 # ── the manifest ─────────────────────────────────────────────────────
@@ -308,9 +344,13 @@ CATEGORIES = {
             # Both package layouts: squeezeboxserver is the Debian package
             # name, lyrionmusicserver the newer .debs. Whichever exists wins;
             # having both listed costs nothing.
-            ("dir", "/var/lib/squeezeboxserver/prefs", ()),
+            # prefs/ holds the favourites (favorites.opml), the ratings and
+            # play counts (persist.db) and every plugin's settings and login.
+            # .osmium-good is hifi-lyrion-prefs-guard.py's spare copy of the
+            # same files, rebuilt at every start of Lyrion.
+            ("dir", "/var/lib/squeezeboxserver/prefs", (".osmium-good",)),
             ("dir", "/var/lib/squeezeboxserver/playlists", ()),
-            ("dir", "/var/lib/lyrionmusicserver/prefs", ()),
+            ("dir", "/var/lib/lyrionmusicserver/prefs", (".osmium-good",)),
             ("dir", "/var/lib/lyrionmusicserver/playlists", ()),
             # cache/ as a whole is deliberately absent: it is the scanned
             # library database, it is large, and Lyrion rebuilds it from the
@@ -688,7 +728,7 @@ def _transform_lyrion_prefs(src, ctx):
         if yaml is None:
             return raw
         try:
-            data = yaml.safe_load(raw.decode("utf-8", "replace"))
+            data = _load_lyrion_yaml(raw.decode("utf-8", "replace"))
         except Exception:
             if attempt == 2:
                 ctx.setdefault("notes", []).append(f"skipped-unparsable:{src}")
@@ -698,15 +738,29 @@ def _transform_lyrion_prefs(src, ctx):
             ctx.setdefault("notes", []).append(f"lyrion-login-left-out:{src}")
             return None
         if os.path.basename(src) == "server.prefs" and isinstance(data, dict) and "server_uuid" in data:
-            del data["server_uuid"]
+            # Only that line goes. Dumping the parsed data again used to
+            # rewrite the whole file through Python's YAML, which turns
+            # Lyrion's on/off/yes/no strings into booleans.
+            out = _SERVER_UUID_LINE.sub(b"", raw)
             ctx.setdefault("notes", []).append(f"stripped-server-uuid:{src}")
-            return yaml.safe_dump(data, default_flow_style=False, allow_unicode=True).encode("utf-8")
+            return out
         return raw
     return None
 
 
+_SERVER_UUID_LINE = re.compile(rb"^server_uuid:[^\n]*(?:\n|$)", re.M)
+
+
+# Lyrion's ratings, play counts and "added" dates (tracks_persistent): a live
+# SQLite file in WAL mode, so a snapshot like the other databases.
+_LYRION_PERSIST_DBS = frozenset((
+    "/var/lib/squeezeboxserver/prefs/persist.db",
+    "/var/lib/lyrionmusicserver/prefs/persist.db",
+))
+
+
 def _transform_for(logical):
-    if logical in ("/etc/hifi-player/webui.db", METADATA_DB):
+    if logical in ("/etc/hifi-player/webui.db", METADATA_DB) or logical in _LYRION_PERSIST_DBS:
         return _transform_sqlite
     if logical == "/etc/hifi-sources.json":
         return _transform_sources

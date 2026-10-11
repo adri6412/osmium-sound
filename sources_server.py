@@ -4222,6 +4222,46 @@ def _chown_lyrion(paths):
             pass
 
 
+def _chown_lyrion_dirs(paths):
+    """Give Lyrion the folders a restore had to create for its files.
+
+    On a device set up from a backup, prefs/plugin/ and the plugin folders do
+    not exist yet: the restore makes them as root, and Lyrion (which runs as
+    its own user) could then read the restored files but never write a new
+    one there — a streaming service signed in again could not save its login.
+    Only folders still owned by root are taken, so the shared playlists
+    folder (hifimusic:hifishare) keeps its owner."""
+    uid, gid = _squeezebox_ids()
+    if uid is None:
+        return
+    bases = ("/var/lib/squeezeboxserver", "/var/lib/lyrionmusicserver")
+    seen = set()
+    for path in paths:
+        d = os.path.dirname(path)
+        while d not in seen and any(d.startswith(b + "/") for b in bases):
+            seen.add(d)
+            try:
+                if os.stat(d).st_uid == 0:
+                    os.chown(d, uid, gid)
+            except OSError:
+                pass
+            d = os.path.dirname(d)
+
+
+def _drop_stale_sqlite_logs(restored):
+    """A database restored as a snapshot must not meet the write-ahead log of
+    the one it replaced: SQLite would replay that log over it. Lyrion is
+    stopped at this point."""
+    for path in restored:
+        if os.path.basename(path) != "persist.db":
+            continue
+        for side in ("-wal", "-shm"):
+            try:
+                os.unlink(path + side)
+            except OSError:
+                pass
+
+
 def _fix_restored_permissions(restored):
     """Re-widen the handful of restored files a non-root reader needs — see
     WORLD_READABLE_RESTORES. Best-effort, same as _chown_lyrion."""
@@ -4429,6 +4469,7 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
                 report("restoring", pct, _ht('restore.restoringFiles', _hlang(), done=done, total=total))
             restored, errors = _restore_members(tar, manifest, categories, _member_progress)
             _fix_restored_permissions(restored)
+            _drop_stale_sqlite_logs(restored)
             if STATE_FILE in restored:
                 # An encrypted backup brings the share logins back opened.
                 try:
@@ -4440,6 +4481,7 @@ def _restore_from_path(path, passphrase, requested_categories, report=None):
                 report("starting_lyrion", 80, _ht('restore.startingLyrion', _hlang()))
                 touched = _lyrion_paths_touched(restored if restored else [])
                 _chown_lyrion(touched)
+                _chown_lyrion_dirs(touched)
                 if any("/cache/InstalledPlugins/Plugins/" in p for p in touched):
                     _invalidate_lyrion_plugin_cache()
                 _start_lyrion()

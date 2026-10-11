@@ -544,6 +544,22 @@ class RestorePassphraseTests(_Patched):
         self.assertEqual(self.saved, [])
 
 
+class RestoredLyrionDatabaseTests(_Patched):
+    def test_a_restored_persist_db_does_not_meet_the_old_log(self):
+        db = _write(self.root, "/var/lib/squeezeboxserver/prefs/persist.db", b"snapshot")
+        _write(self.root, "/var/lib/squeezeboxserver/prefs/persist.db-wal", b"old log")
+        _write(self.root, "/var/lib/squeezeboxserver/prefs/persist.db-shm", b"old index")
+        ss._drop_stale_sqlite_logs([db])
+        self.assertEqual(sorted(os.listdir(os.path.dirname(db))), ["persist.db"])
+
+    def test_an_old_backup_cannot_bring_a_log_back(self):
+        for side in ("-wal", "-shm"):
+            self.assertIsNone(hb.restore_dest_for_member(
+                "var/lib/squeezeboxserver/prefs/persist.db" + side, ["lyrion"]))
+        self.assertTrue(hb.restore_dest_for_member(
+            "var/lib/squeezeboxserver/prefs/persist.db", ["lyrion"]))
+
+
 @unittest.skipUnless(shutil.which("systemd-creds"), "systemd-creds not installed")
 class SealedPassphraseTests(_Patched):
     def setUp(self):

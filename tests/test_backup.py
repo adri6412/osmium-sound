@@ -290,6 +290,64 @@ class BuildArchiveTests(FakeRootTestCase):
         self.assertEqual(data["playlistdir"], "/music")
         self.assertTrue(any("stripped-server-uuid" in n for n in notes))
 
+    def test_server_prefs_keep_everything_else_byte_for_byte(self):
+        # Re-dumping through Python's YAML turned Lyrion's "on" into true.
+        rest = b"---\nlanguage: IT\nsavehistory: on\nmediadirs:\n  - /music\n"
+        _write(self.root, "/var/lib/squeezeboxserver/prefs/server.prefs",
+               b"---\nserver_uuid: 8f14e45f\nlanguage: IT\nsavehistory: on\nmediadirs:\n  - /music\n")
+        dest = os.path.join(self.root, "out.tar.gz")
+        hb.build_archive(dest, ["lyrion"], self.root)
+        with tarfile.open(dest) as tar:
+            raw = tar.extractfile("var/lib/squeezeboxserver/prefs/server.prefs").read()
+        self.assertEqual(raw, rest)
+
+    # 🚨 Field report 2026-10-11: Qobuz (account, login, settings) never came
+    # back from a backup. Lyrion writes Perl tags into its YAML and
+    # safe_load refused them, so the whole file was left out as unparsable.
+    QOBUZ = (b"---\n_version: 0\naccounts:\n  '123':\n    token: abc123\n"
+             b"    userdata:\n      credential:\n        parameters:\n"
+             b"          hires_streaming: !!perl/scalar:JSON::XS::Boolean 1\n"
+             b"preferredFormat: 27\n")
+
+    def test_qobuz_prefs_with_perl_tags_are_kept(self):
+        _write(self.root, "/var/lib/squeezeboxserver/prefs/plugin/qobuz.prefs", self.QOBUZ)
+        dest = os.path.join(self.root, "out.tar.gz")
+        notes = hb.build_archive(dest, ["lyrion"], self.root, encrypted=True)["notes"]
+        with tarfile.open(dest) as tar:
+            raw = tar.extractfile("var/lib/squeezeboxserver/prefs/plugin/qobuz.prefs").read()
+        self.assertEqual(raw, self.QOBUZ)
+        self.assertEqual(notes, [])
+
+    def test_a_tagged_login_still_stays_out_of_a_plain_archive(self):
+        _write(self.root, "/var/lib/squeezeboxserver/prefs/plugin/someservice.prefs", self.QOBUZ)
+        dest = os.path.join(self.root, "out.tar.gz")
+        notes = hb.build_archive(dest, ["lyrion"], self.root)["notes"]
+        self.assertTrue(any(n.startswith("lyrion-login-left-out:") for n in notes), notes)
+
+    def test_ratings_are_a_snapshot_and_the_guard_copy_stays_home(self):
+        prefs = os.path.join(self.root, "var/lib/squeezeboxserver/prefs")
+        os.makedirs(prefs)
+        con = sqlite3.connect(os.path.join(prefs, "persist.db"))
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("CREATE TABLE tracks_persistent (url TEXT, rating INT)")
+        con.execute("INSERT INTO tracks_persistent VALUES ('file:///a.flac', 80)")
+        con.commit()                     # the row is in the WAL, not yet in the file
+        _write(self.root, "/var/lib/squeezeboxserver/prefs/.osmium-good/server.prefs", b"---\n")
+        _write(self.root, "/var/lib/squeezeboxserver/prefs/favorites.opml", b"<opml/>")
+        dest = os.path.join(self.root, "out.tar.gz")
+        members = hb.build_archive(dest, ["lyrion"], self.root)["members"]
+        con.close()
+        names = set(members)
+        self.assertIn("var/lib/squeezeboxserver/prefs/favorites.opml", names)
+        self.assertIn("var/lib/squeezeboxserver/prefs/persist.db", names)
+        self.assertFalse([n for n in names if n.endswith(("-wal", "-shm")) or ".osmium-good" in n], names)
+        with tarfile.open(dest) as tar:
+            snap = os.path.join(self.root, "snap.db")
+            with open(snap, "wb") as f:
+                f.write(tar.extractfile("var/lib/squeezeboxserver/prefs/persist.db").read())
+        self.assertEqual(sqlite3.connect(snap).execute(
+            "SELECT rating FROM tracks_persistent").fetchall(), [(80,)])
+
 
 class SourcesRedactionTests(FakeRootTestCase):
     STATE = {"sources": [{"type": "smb", "server": "nas", "share": "music",
