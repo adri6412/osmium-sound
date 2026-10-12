@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.26-dev.1-alpha19",
-  "name": "v2.5.26-dev.1-alpha19",
-  "body": "## What's new in v2.5.26-dev.1-alpha19\n\n- cd changer: only the discs chosen in the file, the Osmium Sound disc for an album without a cover\n- vu store: Titanium v6, a long needle from under the frame, no hub cover\n- zones, bluetooth speakers: Lyrion forgets the player when it goes\n- settings: Advanced Audio Tweaks, a section of its own for DSD, PCM to DSD and squeezelite\n- system disk: a reserve Lyrion can always write into, so a full disk no longer breaks it\n- web admin: no \"Add one below\" under an empty sources list, there is nothing below it there\n- now playing: a larger format chip with the plate's \">\", it opens the signal path\n- now playing: the signal path, from the file to what the DAC is really fed\n- manual: play from a NAS instead of a Windows PC\n- manual: shared folders with Windows and Mac, and signing in to streaming services\n- vu store: Blue Neon v2, the meter sits higher in Now Playing\n- vu store: Blue Neon, a backlit neon meter\n",
+  "tag_name": "v2.5.26-dev.1-alpha20",
+  "name": "v2.5.26-dev.1-alpha20",
+  "body": "## What's new in v2.5.26-dev.1-alpha20\n\n- backup: Qobuz, ratings and the rest of Lyrion come back from a backup\n- backup: every backup is encrypted, with one password the device keeps\n- web admin: no admin password to turn SSH on or change the SSH login\n- sources: never adopt the system's own disk as a USB source\n- system disk: no \"disk full\" notice while trying or installing from the ISO\n- tests: an alpha ranks below the dev it previews, as the OTA code says\n- sources: no local folder in RAM, the tmpfs under /mnt is not a disk\n- system disk: a reserve that fits a 16 GB disk, and no more dead weight on it\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.26-dev.1-alpha19.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha19/hifi-qtui-v2.5.26-dev.1-alpha19.tar.gz",
-      "size": 22767859
+      "name": "hifi-qtui-v2.5.26-dev.1-alpha20.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha20/hifi-qtui-v2.5.26-dev.1-alpha20.tar.gz",
+      "size": 22767944
     },
     {
-      "name": "hifi-qtui-v2.5.26-dev.1-alpha19.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha19/hifi-qtui-v2.5.26-dev.1-alpha19.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.26-dev.1-alpha20.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha20/hifi-qtui-v2.5.26-dev.1-alpha20.tar.gz.sha256",
       "size": 105
     },
     {
-      "name": "hifi-system-v2.5.26-dev.1-alpha19.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha19/hifi-system-v2.5.26-dev.1-alpha19.tar.gz",
-      "size": 2080229
+      "name": "hifi-system-v2.5.26-dev.1-alpha20.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha20/hifi-system-v2.5.26-dev.1-alpha20.tar.gz",
+      "size": 2084599
     },
     {
-      "name": "hifi-system-v2.5.26-dev.1-alpha19.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha19/hifi-system-v2.5.26-dev.1-alpha19.tar.gz.sha256",
+      "name": "hifi-system-v2.5.26-dev.1-alpha20.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha20/hifi-system-v2.5.26-dev.1-alpha20.tar.gz.sha256",
       "size": 107
     },
     {
-      "name": "hifi-os-v2.5.26-dev.1-alpha19.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha19/hifi-os-v2.5.26-dev.1-alpha19.tar.gz",
-      "size": 131041
+      "name": "hifi-os-v2.5.26-dev.1-alpha20.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha20/hifi-os-v2.5.26-dev.1-alpha20.tar.gz",
+      "size": 131050
     },
     {
-      "name": "hifi-os-v2.5.26-dev.1-alpha19.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha19/hifi-os-v2.5.26-dev.1-alpha19.tar.gz.sha256",
+      "name": "hifi-os-v2.5.26-dev.1-alpha20.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha20/hifi-os-v2.5.26-dev.1-alpha20.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-os-v2.5.26-dev.1-alpha19.tar.gz.sha256.sig",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha19/hifi-os-v2.5.26-dev.1-alpha19.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.26-dev.1-alpha20.tar.gz.sha256.sig",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha20/hifi-os-v2.5.26-dev.1-alpha20.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.26-dev.1-alpha19.raucb",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha19/hifi-image-v2.5.26-dev.1-alpha19.raucb",
-      "size": 1027328677
+      "name": "hifi-image-v2.5.26-dev.1-alpha20.raucb",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha20/hifi-image-v2.5.26-dev.1-alpha20.raucb",
+      "size": 1027340965
     },
     {
-      "name": "hifi-image-v2.5.26-dev.1-alpha19.raucb.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha19/hifi-image-v2.5.26-dev.1-alpha19.raucb.sha256",
+      "name": "hifi-image-v2.5.26-dev.1-alpha20.raucb.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1-alpha20/hifi-image-v2.5.26-dev.1-alpha20.raucb.sha256",
       "size": 105
     }
   ]
