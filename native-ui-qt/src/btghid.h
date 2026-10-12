@@ -32,6 +32,7 @@
 #include <QDBusObjectPath>
 #include <QDBusVariant>
 #include <QHash>
+#include <QSet>
 #include <QObject>
 #include <QStringList>
 #include <QTimer>
@@ -59,6 +60,11 @@ public slots:
     // dentro il thread che li fara' girare, non in quello che ci ha costruiti.
     void begin();
     void rescan() { poll(); }
+
+private slots:
+    // BlueZ dice che un dispositivo si e' collegato (o ha finito di leggere i
+    // suoi servizi): si guarda subito, senza aspettare il giro dei 4 s.
+    void onBluezProps(const QString &iface, const QVariantMap &changed, const QStringList &invalidated);
 
 signals:
     void bridgedChanged();
@@ -95,5 +101,10 @@ private:
     // quando abbiamo provato l'ultima volta.
     QHash<QString, qint64> m_failed;
     QHash<QString, qint64> m_seen;        // devPath -> da quando e' collegato (ms)
+    // 🚨 I telecomandi che il nucleo ha gia' rifiutato una volta (mac): lo
+    // rifiuta a ogni ricollegamento (il G20S PRO manda la mappa monca appena
+    // si risveglia), quindi per loro niente attesa di GRACE_MS.
+    QSet<QString> m_needsBridge;
     QTimer *m_poll = nullptr;             // nasce in begin(), nel thread giusto
+    QTimer *m_soon = nullptr;             // un giro subito, dopo un segnale di BlueZ
 };

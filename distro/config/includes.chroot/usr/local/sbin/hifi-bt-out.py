@@ -227,6 +227,53 @@ def adapter_powered():
     return "Powered: yes" in out(["bluetoothctl", "show"], 10)
 
 
+# 🚨 A Bluetooth remote that has gone quiet for a few minutes drops its link
+# to save its battery and comes back on the next key press. That should take
+# a second or two; owners saw 20-40 s. The kernel puts a USB Bluetooth
+# controller in runtime suspend 2 s after its last traffic (btusb
+# enable_autosuspend=Y, seen on the "cameretta" box: power/control=auto,
+# runtime_status=suspended), and a suspended controller is slow, on some
+# chips very slow, to pass on the advertising of a remote asking to come
+# back. While the radio is up for something (a remote, a speaker, a pairing)
+# the controller stays awake; when Bluetooth is not used at all it goes back
+# to the kernel's power saving.
+BT_CLASS = os.environ.get("HIFI_BT_SYSFS", "/sys/class/bluetooth")
+
+
+def keep_controller_awake(awake):
+    """power/control of every USB Bluetooth controller: "on" or "auto".
+    Rewritten on every pass, so a controller that came back from a USB reset
+    (a new sysfs node, at the kernel's default) is held again. Returns the
+    controllers changed. UART and SDIO controllers have no such switch."""
+    want = "on" if awake else "auto"
+    changed = []
+    try:
+        names = sorted(os.listdir(BT_CLASS))
+    except OSError:
+        return changed
+    for name in names:
+        if not name.startswith("hci"):
+            continue
+        # hciN/device is the USB interface (1-9:1.0); the switch is on the
+        # USB device above it (1-9).
+        iface = os.path.realpath(os.path.join(BT_CLASS, name, "device"))
+        ctl = os.path.join(os.path.dirname(iface), "power", "control")
+        if "/usb" not in iface or not os.path.isfile(ctl):
+            continue
+        try:
+            with open(ctl) as f:
+                if f.read().strip() == want:
+                    continue
+            with open(ctl, "w") as f:
+                f.write(want)
+            changed.append(name)
+        except OSError as e:
+            log(f"{name}: cannot set power/control={want}: {e}")
+    if changed:
+        log(f"Bluetooth controller {'kept awake' if awake else 'back to power saving'}: {', '.join(changed)}")
+    return changed
+
+
 _CONNECTED_RE = re.compile(r"^\s*Connected:\s*(yes|no)\s*$", re.M)
 
 
@@ -351,6 +398,7 @@ class Supervisor:
         if unit_active(BLUEZ_UNIT):
             run(["bluetoothctl", "power", "off"], 10)
             stop_unit(BLUEZ_UNIT)
+        keep_controller_awake(False)
         self.retry.clear()
         self.seen.clear()
         self.quiet_since.clear()
@@ -436,6 +484,7 @@ class Supervisor:
             return False
         if not adapter_powered():
             run(["bluetoothctl", "power", "on"], 15)
+        keep_controller_awake(True)
         # The agent is up in both cases: it is what lets a pairing go through
         # on a box with no keypad, remote or speaker alike.
         start_unit(AGENT_UNIT)

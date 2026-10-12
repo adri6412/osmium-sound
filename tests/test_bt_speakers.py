@@ -936,5 +936,58 @@ class UnitFileTests(unittest.TestCase):
         self.assertIn('BindsTo=hifi-bluealsa.service', self._unit('hifi-bt-player@.service'))
 
 
+
+class ControllerAwakeTests(SupervisorHarness):
+    """A remote that dropped its link to save its battery came back 20-40 s
+    after a key press: the USB controller sat in runtime suspend. While the
+    radio is up it is kept awake; when Bluetooth goes down, the kernel's power
+    saving is back."""
+
+    def _tree(self):
+        sys_root = os.path.join(self.tmp, 'sys')
+        usb = os.path.join(sys_root, 'devices', 'pci0000:00', 'usb1', '1-9')
+        iface = os.path.join(usb, '1-9:1.0')
+        os.makedirs(os.path.join(usb, 'power'))
+        os.makedirs(iface)
+        with open(os.path.join(usb, 'power', 'control'), 'w') as f:
+            f.write('auto\n')
+        uart = os.path.join(sys_root, 'devices', 'platform', 'serial0')
+        os.makedirs(uart)
+        cls = os.path.join(sys_root, 'class', 'bluetooth')
+        os.makedirs(cls)
+        for name, dev in (('hci0', iface), ('hci1', uart)):
+            os.makedirs(os.path.join(cls, name))
+            os.symlink(dev, os.path.join(cls, name, 'device'))
+        p = patch.object(self.mod, 'BT_CLASS', cls)
+        p.start()
+        self.addCleanup(p.stop)
+        return os.path.join(usb, 'power', 'control')
+
+    def _read(self, path):
+        with open(path) as f:
+            return f.read().strip()
+
+    def test_awake_while_up_power_saving_when_down(self):
+        ctl = self._tree()
+        self.assertEqual(self.mod.keep_controller_awake(True), ['hci0'])   # the UART one has no switch
+        self.assertEqual(self._read(ctl), 'on')
+        self.assertEqual(self.mod.keep_controller_awake(True), [])         # nothing to rewrite
+        self.assertEqual(self.mod.keep_controller_awake(False), ['hci0'])
+        self.assertEqual(self._read(ctl), 'auto')
+
+    def test_no_bluetooth_at_all(self):
+        with patch.object(self.mod, 'BT_CLASS', os.path.join(self.tmp, 'missing')):
+            self.assertEqual(self.mod.keep_controller_awake(True), [])
+
+    def test_bring_up_and_tear_down_use_it(self):
+        with open(os.path.join(REPO, 'distro', 'config', 'includes.chroot', 'usr', 'local',
+                               'sbin', 'hifi-bt-out.py')) as f:
+            src = f.read()
+        up = src[src.index('    def bring_up('):src.index('    def watch_restarts(')]
+        down = src[src.index('    def tear_down('):src.index('    def stack_up(')]
+        self.assertIn('keep_controller_awake(True)', up)
+        self.assertIn('keep_controller_awake(False)', down)
+
+
 if __name__ == '__main__':
     unittest.main()

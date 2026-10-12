@@ -100,10 +100,29 @@ void BtGattHid::begin() {
     // guarda solo l'elenco degli oggetti, nessuna radio, nessuna paginazione.
     // Senza Bluetooth in funzione la chiamata fallisce e non si fa nulla.
     m_poll->start();
-    // il timer si ferma nel suo thread, prima che finisca (fermarlo dopo,
+    // 🚨 Un telecomando che si risveglia dopo qualche minuto di riposo: col
+    // solo giro ogni 4 s, piu' i 6 s di GRACE_MS, i tasti tornavano una decina
+    // di secondi dopo il ricollegamento (misurato sul "cameretta", G20S PRO:
+    // collegato alle 15:42:44.6, ponte attivo alle 15:42:54.5). BlueZ avvisa
+    // da solo quando un dispositivo si collega: quel segnale fa partire un
+    // giro subito (raccolti in uno, BlueZ ne manda diversi di fila).
+    m_soon = new QTimer(this);
+    m_soon->setSingleShot(true);
+    m_soon->setInterval(250);
+    connect(m_soon, &QTimer::timeout, this, &BtGattHid::poll);
+    QDBusConnection::systemBus().connect(BLUEZ, QString(), "org.freedesktop.DBus.Properties",
+                                         "PropertiesChanged", this,
+                                         SLOT(onBluezProps(QString,QVariantMap,QStringList)));
+    // i timer si fermano nel loro thread, prima che finisca (fermarli dopo,
     // dal distruttore nel thread principale, non si puo')
     connect(QThread::currentThread(), &QThread::finished, m_poll, &QTimer::stop, Qt::DirectConnection);
+    connect(QThread::currentThread(), &QThread::finished, m_soon, &QTimer::stop, Qt::DirectConnection);
     poll();
+}
+
+void BtGattHid::onBluezProps(const QString &iface, const QVariantMap &changed, const QStringList &) {
+    if (iface != QLatin1String("org.bluez.Device1")) return;
+    if (changed.contains("Connected") || changed.contains("ServicesResolved")) m_soon->start();
 }
 
 BtGattHid::~BtGattHid() {
@@ -180,8 +199,15 @@ void BtGattHid::poll() {
         if (QDateTime::currentMSecsSinceEpoch() - m_failed.value(path, -RETRY_MS) < RETRY_MS) continue;
         if (kernelHandles(mac)) continue;         // funziona da se': non si tocca
         if (quitting()) return;
-        // gli si lascia il tempo di farcela da solo
-        if (QDateTime::currentMSecsSinceEpoch() - m_seen.value(path) < GRACE_MS) continue;
+        // gli si lascia il tempo di farcela da solo, se non ha gia' mostrato
+        // che da solo non ce la fa
+        if (!m_needsBridge.contains(mac)
+            && QDateTime::currentMSecsSinceEpoch() - m_seen.value(path) < GRACE_MS) {
+            // e si torna a guardare allo scadere, non al giro dopo
+            QTimer::singleShot(int(GRACE_MS - (QDateTime::currentMSecsSinceEpoch() - m_seen.value(path))) + 50,
+                               this, &BtGattHid::poll);
+            continue;
+        }
 
         const QString name = dev.value("Alias").toString().isEmpty()
                            ? dev.value("Name").toString() : dev.value("Alias").toString();
@@ -351,6 +377,7 @@ void BtGattHid::start(const QString &devPath, const QString &mac, const QString 
     int live = 0;
     for (const Report &r : bb.reports) if (r.fd >= 0) live++;
     m_failed.remove(devPath);
+    m_needsBridge.insert(bb.mac);
     qInfo("btghid: %s: ponte attivo, %d rapporti in ascolto su %lld",
           qPrintable(name), live, (long long)bb.reports.size());
     emit bridgedChanged();
