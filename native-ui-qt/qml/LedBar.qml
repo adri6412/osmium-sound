@@ -16,9 +16,9 @@ Item {
     property bool dsd: Player.qDsd
     property int  mode: Player.ledMode           // 1 BitPerfect, 2 ReplayGain
     property real devScale: 1
-    // a tap on the ReplayGain tile (or its label) opens the setting behind
-    // that light; one on the Hi-Res / PCM / DSD column or on the BitPerfect
-    // tile opens the signal path, which leads on to the BitPerfect setting
+    // a tap on the BitPerfect or the ReplayGain tile (or its label) opens the
+    // setting behind that light (BitPerfect: the volume fixed at 100 %); one
+    // on the Hi-Res / PCM / DSD column opens the signal path
     signal openSetting(string which)
     signal openPath()
     height: width * 175 / 897
@@ -47,7 +47,8 @@ Item {
     // Tap zones, artwork columns: Hi-Res / PCM / DSD 0..200, BitPerfect
     // tile + label 205..420, ReplayGain 430..640, the plate's whole height
     Repeater {
-        model: [{ which: "path", x0: 0, x1: 420 }, { which: "replaygain", x0: 430, x1: 640 }]
+        model: [{ which: "path", x0: 0, x1: 202 }, { which: "bitperfect", x0: 202, x1: 425 },
+                { which: "replaygain", x0: 425, x1: 640 }]
         MouseArea {
             required property var modelData
             x: root.width * modelData.x0 / 897; width: root.width * (modelData.x1 - modelData.x0) / 897

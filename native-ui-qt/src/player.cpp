@@ -42,6 +42,15 @@ Player::Player(QObject *parent) : QObject(parent) {
         if (now - m_lastOta >= 3000) { m_lastOta = now; pollOta(); }
         // the service caches its answer for 10 s: asking more often is pointless
         if (now - m_lastNet >= 15000) { m_lastNet = now; pollNet(); }
+        // the BitPerfect light says what the signal path says: asked again
+        // soon after what it depends on changes (track, prefs, volume, player),
+        // and every few seconds while playing -- its proof is the DAC's
+        // hw_params, which follow the stream
+        if (m_connected && m_playing && !m_pathInFlight
+            && now - m_lastPath >= (signalPathQuery() != m_pathQuery ? 1000 : 5000)) {
+            m_lastPath = now;
+            pollSignalPath();
+        }
         // 🚨 Lyrion o il player non rispondono piu' (o un play ottimista non e'
         // stato confermato): non si suona. Prima `playing` restava vero per
         // sempre a Lyrion fermo — niente salvaschermo, animazioni del Now
@@ -569,6 +578,34 @@ void Player::pollNet() {
     }, 8000);
 }
 
+// What SignalPath.qml asks /signal_path about the track playing now.
+QString Player::signalPathQuery() const {
+    auto enc = [](const QString &v) { return QString::fromLatin1(QUrl::toPercentEncoding(v)); };
+    const bool rg = !m_prefRg.isEmpty() && m_prefRg != "0";
+    const bool xfade = !m_prefTrType.isEmpty() && m_prefTrType != "0" && m_prefTrDur.toDouble() > 0;
+    return QString("player=%1&type=%2").arg(enc(m_playerId), enc(m_type))
+        + QString("&rate=%1&bits=%2&remote=%3").arg(qRound(m_sampleRate)).arg(m_sampleSize).arg(m_remote ? 1 : 0)
+        + QString("&rg=%1&xfade=%2&digvol=%3&volume=%4").arg(rg ? 1 : 0).arg(xfade ? 1 : 0)
+              .arg(m_prefDigVol == "1" ? 1 : 0).arg(m_volume);
+}
+
+void Player::pollSignalPath() {
+    const QString q = signalPathQuery();
+    m_pathInFlight = true;
+    Api *a = Api::instance();
+    a->request("GET", a->apiBase() + "/signal_path?" + q, {}, [this, q](bool ok, const QVariant &d, int) {
+        m_pathInFlight = false;
+        if (!ok || d.typeId() != QMetaType::QVariantMap) return;     // the API restarting: keep what we knew
+        const QString v = d.toMap().value("verdict").toString();
+        m_pathQuery = q;
+        // the DAC closed for a moment (a track starting, a seek): no news
+        if (v == "idle" && !m_pathVerdict.isEmpty()) return;
+        if (v == m_pathVerdict) return;
+        m_pathVerdict = v;
+        derive();
+    }, 4000);
+}
+
 // ─── stato derivato (useLyrionPlayer.js / app.c derive()) ──────────────────
 void Player::derive() {
     QString t = m_type.toLower();
@@ -581,7 +618,15 @@ void Player::derive() {
     bool dva = m_prefDigVol == "1";
     bool fixed = m_prefDigVol == "0";
     bool trn = m_prefTrType != "0" && m_prefTrDur.toDouble() > 0;
-    bool bit = m_playing && !rg && !dva && !trn;
+    // BitPerfect follows the signal path's verdict (hifi_signal_path.py): the
+    // DAC's own hw_params, a digital volume that only counts below 100 %, DSD
+    // that the volume never touches, PCM to DSD that is a conversion. Another
+    // device's player ("unknown") lights it when nothing Lyrion says changes
+    // the samples. Until the first answer, the same rules from the prefs alone.
+    bool bit = m_pathVerdict.isEmpty() || m_pathVerdict == "idle"
+        ? !rg && !trn && !(dva && m_volume < 100)
+        : m_pathVerdict == "bitperfect" || m_pathVerdict == "unknown";
+    bit = m_playing && bit;
     int mode = !m_playing ? 0 : rg ? 2 : (bit ? 1 : 0);
     if (mode != m_ledMode || fixed != m_volumeFixed) { m_ledMode = mode; m_volumeFixed = fixed; emit modeChanged(); }
 

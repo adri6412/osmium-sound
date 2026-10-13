@@ -239,6 +239,8 @@ private:
     void pollUsb();
     void pollOta();
     void pollNet();
+    void pollSignalPath();
+    QString signalPathQuery() const;
     void checkFavorite();
     void derive();
     void updateArtwork();
@@ -282,6 +284,11 @@ private:
     bool m_power = true;
     int m_volume = 0, m_shuffle = 0, m_repeat = 0, m_sleepSecs = 0, m_index = 0, m_total = 0;
     int m_ledMode = 0;
+    // /signal_path's verdict on what plays now (bitperfect, converted,
+    // processed, idle, unknown; "" = not asked yet) and the query it answered
+    QString m_pathVerdict, m_pathQuery;
+    qint64 m_lastPath = 0;
+    bool m_pathInFlight = false;
     int m_coverPx = 600;
     bool m_volumeFixed = false;
     QString m_prefRg = "0", m_prefTrType = "0", m_prefTrDur = "0", m_prefDigVol = "1";
