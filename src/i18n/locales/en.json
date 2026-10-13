@@ -473,6 +473,8 @@
       "crossfade": "Crossfade between tracks",
       "resampled": "Sample rate changed to {rate}",
       "pcmToDsd": "Converted to {dsd}, {filter} filter",
+      "conversion": "Conversion",
+      "convertHere": "On this device, after the player: sox_ng",
       "lyrionHere": "On this device",
       "lyrionOn": "On {host}",
       "otherDevice": "Another device: its DAC cannot be seen from here",

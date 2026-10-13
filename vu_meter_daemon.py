@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import collections
 import mmap
 import os
 import struct
@@ -688,6 +689,52 @@ class BluetoothTapReader:
         return visualizer._stereo_levels_from_values_py(list(samples))
 
 
+# PCM to DSD on the player's side (hifi-pcm2dsd-player.py) puts its queue,
+# sox_ng and aplay between squeezelite and the DAC: what squeezelite exports
+# is heard about half a second later. While that path plays, the converter
+# keeps its measured delay in this file, and the meters are held back by it.
+P2D_LATENCY = '/run/hifi-pcm2dsd/latency'
+_MAX_DELAY = 3.0
+
+
+class DelayLine:
+    """Hands each frame back once `delay` seconds have passed since it came
+    in (the delay read from P2D_LATENCY, at most once a second); with no
+    delay, straight through. None until the first frame is due."""
+
+    def __init__(self, path=P2D_LATENCY, clock=time.monotonic):
+        self.path, self.clock = path, clock
+        self.frames = collections.deque()
+        self.seconds, self.read_at, self.last = 0.0, None, None
+
+    def delay(self):
+        now = self.clock()
+        if self.read_at is None or now - self.read_at >= 1.0:
+            self.read_at = now
+            try:
+                with open(self.path, encoding='ascii') as f:
+                    self.seconds = max(0.0, min(_MAX_DELAY, float(f.read().strip())))
+            except (OSError, ValueError):
+                self.seconds = 0.0
+        return self.seconds
+
+    def push(self, frame):
+        d = self.delay()
+        if d <= 0:
+            self.frames.clear()
+            self.last = frame
+            return frame
+        now = self.clock()
+        self.frames.append((now, frame))
+        while self.frames and self.frames[0][0] <= now - d:
+            self.last = self.frames.popleft()[1]
+        return self.last
+
+    def clear(self):
+        self.frames.clear()
+        self.last = None
+
+
 # Main-loop cadence. Full rate whenever something is actually feeding the
 # meters; slower once playback has been sitting still for a while, since a UI
 # left on Now Playing keeps a client connected for the whole pause and every
@@ -719,6 +766,7 @@ async def vu_meter_server(websocket, path=None):
     print(f"Client connected to VU meter stream")
     viz = SqueezeliteVisualizer()
     bt_tap = BluetoothTapReader()
+    delayed = DelayLine()
 
     # Send empty data initially
     empty_left, empty_right = viz._zero_levels()
@@ -726,6 +774,11 @@ async def vu_meter_server(websocket, path=None):
     def _payload(stereo_levels, active):
         left, right = stereo_levels
         return json.dumps({"levels_l": left, "levels_r": right, "active": active})
+
+    def _squeezelite_payload(stereo_levels, active):
+        # what squeezelite plays, when the DAC plays it
+        frame = delayed.push((stereo_levels, active))
+        return _payload(*frame) if frame else _payload((empty_left, empty_right), False)
 
     # Consecutive frames with no source feeding the meters. Only the branches
     # below that actually found a live source reset it, so any signal at all
@@ -746,7 +799,7 @@ async def vu_meter_server(websocket, path=None):
             if sq_active:
                 idle_frames = 0
                 active = any(l > 0 for l in levels[0]) or any(l > 0 for l in levels[1])
-                await websocket.send(_payload(levels, active))
+                await websocket.send(_squeezelite_payload(levels, active))
                 continue
 
             bt_levels = bt_tap.read_levels(viz)
@@ -760,11 +813,12 @@ async def vu_meter_server(websocket, path=None):
 
             if levels is None:
                 # Shared memory not found or error, send zeros
+                delayed.clear()
                 await websocket.send(_payload((empty_left, empty_right), False))
                 # Poll slower if not active
                 await asyncio.sleep(1.0)
             else:
-                await websocket.send(_payload(levels, False))
+                await websocket.send(_squeezelite_payload(levels, False))
 
     except websockets.exceptions.ConnectionClosed:
         print("Client disconnected")

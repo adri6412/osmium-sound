@@ -473,6 +473,8 @@
       "crossfade": "Dissolvenza tra i brani",
       "resampled": "Frequenza cambiata in {rate}",
       "pcmToDsd": "Convertito in {dsd}, filtro {filter}",
+      "conversion": "Conversione",
+      "convertHere": "Su questo apparecchio, dopo il lettore: sox_ng",
       "lyrionHere": "Su questo apparecchio",
       "lyrionOn": "Su {host}",
       "otherDevice": "Un altro apparecchio: il suo DAC da qui non si vede",

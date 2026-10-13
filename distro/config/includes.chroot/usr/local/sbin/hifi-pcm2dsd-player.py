@@ -32,6 +32,7 @@ does not apply): a change of rate, filter or DAC is picked up within a
 second. Runs as hifi-pcm2dsd-player.service.
 """
 import collections
+import fcntl
 import json
 import os
 import signal
@@ -41,6 +42,10 @@ import threading
 import time
 
 CONF = '/run/hifi-pcm2dsd/player.json'
+# How far behind squeezelite the DAC sounds, in seconds, while the DAC side
+# runs: vu_meter_daemon.py holds the meters back by as much, or they would
+# move half a second before the music.
+LATENCY = '/run/hifi-pcm2dsd/latency'
 SOX_NG = '/usr/local/bin/sox_ng'
 RATES = {'dsd64': 2822400, 'dsd128': 5644800, 'dsd256': 11289600}
 FILTERS = ('clans-8', 'sdm-8')
@@ -76,6 +81,10 @@ KI_PPM_PER_S2 = 25.0
 MAX_PPM = 2000.0
 RETRY_SECONDS = 5
 APLAY_BUFFER_US = 200000
+# sox_ng's own share of the delay: it works through its input in blocks
+# (8192 samples, 46 ms at 176.4 kHz), plus the rate filter's and sdm's
+SOX_SECONDS = 0.05
+F_GETPIPE_SZ = getattr(fcntl, 'F_GETPIPE_SZ', 1032)
 SHIFT_CTL = 'iface=PCM,name=PCM Rate Shift 100000,device=1,subdevice={sub}'
 DEBUG = bool(os.environ.get('HIFI_P2D_DEBUG'))
 
@@ -137,15 +146,65 @@ def sox_argv(conf, sox=SOX_NG):
 
 
 def aplay_argv(conf):
-    dsd = RATES[conf['mode']]
     if conf['carrier'] == 'dop':
         fmt = 'S24_3LE' if conf['dop_bits'] == 24 else 'S32_LE'
-        rate = dsd // 16
     else:
-        fmt, word, _ = NATIVE[conf['carrier']]
-        rate = dsd // (8 * word)
-    return ['aplay', '-q', '-D', conf['dac'], '-t', 'raw', '-f', fmt, '-c', '2', '-r', str(rate),
-            '-B', str(APLAY_BUFFER_US)]
+        fmt = NATIVE[conf['carrier']][0]
+    return ['aplay', '-q', '-D', conf['dac'], '-t', 'raw', '-f', fmt, '-c', '2',
+            '-r', str(aplay_rate(conf)), '-B', str(APLAY_BUFFER_US)]
+
+
+def aplay_rate(conf):
+    """Frames per second the DAC is opened at."""
+    dsd = RATES[conf['mode']]
+    if conf['carrier'] == 'dop':
+        return dsd // 16
+    return dsd // (8 * NATIVE[conf['carrier']][1])
+
+
+def dac_bytes_per_second(conf):
+    """What sox_ng writes per second, both channels: DoP samples, or the
+    1-bit stream."""
+    dsd = RATES[conf['mode']]
+    if conf['carrier'] == 'dop':
+        return dsd // 16 * 2 * (3 if conf['dop_bits'] == 24 else 4)
+    return dsd // 8 * 2
+
+
+def pipe_size(fd):
+    try:
+        return fcntl.fcntl(fd, F_GETPIPE_SZ)
+    except OSError:
+        return 65536
+
+
+def status_path(dac, proc_asound='/proc/asound'):
+    """/proc/asound/<card>/pcm<dev>p/sub0/status for 'hw:CARD=<card>,DEV=<dev>'."""
+    card, dev = None, '0'
+    for part in dac.split(':', 1)[-1].split(','):
+        key, _, value = part.partition('=')
+        if key == 'CARD':
+            card = value
+        elif key == 'DEV':
+            dev = value
+    if not card:
+        return None
+    return os.path.join(proc_asound, card, f'pcm{dev}p', 'sub0', 'status')
+
+
+def dac_delay_seconds(conf, path=None):
+    """What the DAC has queued and not played yet (ALSA's `delay`), or the
+    buffer aplay asks for when that cannot be read."""
+    path = path or status_path(conf['dac'])
+    try:
+        with open(path, encoding='ascii', errors='replace') as f:
+            for line in f:
+                key, _, value = line.partition(':')
+                if key.strip() == 'delay':
+                    return max(0, int(value.split()[0])) / aplay_rate(conf)
+    except (OSError, ValueError, IndexError, TypeError):
+        pass
+    return APLAY_BUFFER_US / 1e6
 
 
 # ── native DSD: DSDIFF → the DAC's words ─────────────────────────────
@@ -212,16 +271,21 @@ class Chain:
         self.conf = conf
         self.sox = self.aplay = self.pump = None
         self.failed = self.stopping = False
+        self.pipe_in = self.pipe_out = 65536
 
     def start(self):
         c = self.conf
         log(f"{c['mode'].upper()} {c['filter']} as {c['carrier']} to {c['dac']}")
         self.sox = subprocess.Popen(sox_argv(c), stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        # once running, every pipe on the way is full: aplay sets the pace
+        self.pipe_in = pipe_size(self.sox.stdin.fileno())
+        self.pipe_out = pipe_size(self.sox.stdout.fileno())
         if c['carrier'] == 'dop':
             self.aplay = subprocess.Popen(aplay_argv(c), stdin=self.sox.stdout)
             self.sox.stdout.close()           # aplay holds it now
         else:
             self.aplay = subprocess.Popen(aplay_argv(c), stdin=subprocess.PIPE)
+            self.pipe_out += pipe_size(self.aplay.stdin.fileno())
             self.pump = threading.Thread(target=self._repack, daemon=True)
             self.pump.start()
 
@@ -249,6 +313,15 @@ class Chain:
                 self.aplay.stdin.close()
             except OSError:
                 pass
+
+    def latency(self, backlog_s, dac_delay=None):
+        """Seconds from squeezelite's output to the DAC's: the PCM waiting
+        here, the full pipes on the way, sox_ng, what the DAC holds."""
+        c = self.conf
+        if dac_delay is None:
+            dac_delay = dac_delay_seconds(c)
+        return (backlog_s + self.pipe_in / (c['rate'] * FRAME_BYTES)
+                + self.pipe_out / dac_bytes_per_second(c) + SOX_SECONDS + dac_delay)
 
     def write(self, data):
         try:
@@ -343,8 +416,8 @@ class RateControl:
 
 
 class Player:
-    def __init__(self, conf, conf_path=CONF):
-        self.conf, self.conf_path = conf, conf_path
+    def __init__(self, conf, conf_path=CONF, latency_path=LATENCY):
+        self.conf, self.conf_path, self.latency_path = conf, conf_path, latency_path
         self.lock = threading.Lock()
         self.wake = threading.Condition(self.lock)
         self.queue = collections.deque()
@@ -414,9 +487,23 @@ class Player:
             self.queued = 0
             self.want = False
             self.backlog_sum = self.backlog_n = 0
+        self._publish(None)
         if chain is not None:
             chain.stop()
             log(why)
+
+    def _publish(self, seconds):
+        """The delay for the VU meters; None: nothing plays through here."""
+        try:
+            if seconds is None:
+                os.unlink(self.latency_path)
+                return
+            tmp = self.latency_path + '.tmp'
+            with open(tmp, 'w') as f:
+                f.write(f'{seconds:.3f}\n')
+            os.replace(tmp, self.latency_path)
+        except OSError:
+            pass
 
     def run(self):
         self.rec = subprocess.Popen(arecord_argv(self.conf), stdout=subprocess.PIPE)
@@ -473,6 +560,7 @@ class Player:
                         n, s = self.backlog_n, self.backlog_sum
                         self.backlog_sum = self.backlog_n = 0
                     if n:
+                        self._publish(chain.latency(s / n))
                         value = self.rate.update(s / n, now - last_control, now)
                         if DEBUG:
                             log(f'backlog {s / n:.3f} s (keeping {self.rate.target}), Loopback rate {value}')

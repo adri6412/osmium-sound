@@ -233,5 +233,57 @@ class VisSegmentTestCase(unittest.TestCase):
                 self.assertIsNone(self.viz._native_dsd_rate)
 
 
+
+
+class DelayLineTest(unittest.TestCase):
+    """The meters held back by what PCM to DSD on the player's side adds."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix='vudelay-')
+        self.path = os.path.join(self.dir, 'latency')
+        self.now = 100.0
+        self.line = vu.DelayLine(self.path, clock=lambda: self.now)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_no_file_no_delay(self):
+        self.assertEqual(self.line.push('a'), 'a')
+        self.assertEqual(self.line.push('b'), 'b')
+
+    def test_frames_come_out_late(self):
+        with open(self.path, 'w') as f:
+            f.write('0.500\n')
+        self.assertIsNone(self.line.push('a'))          # nothing due yet
+        self.now += 0.3
+        self.assertIsNone(self.line.push('b'))
+        self.now += 0.25                                 # 'a' is 0.55 s old
+        self.assertEqual(self.line.push('c'), 'a')
+        self.now += 0.3                                  # 'b' is 0.55 s old, 'c' only 0.3
+        self.assertEqual(self.line.push('d'), 'b')
+        self.now += 0.1                                  # nothing new due: hold the last one
+        self.assertEqual(self.line.push('e'), 'b')
+
+    def test_delay_reread_at_most_once_a_second(self):
+        with open(self.path, 'w') as f:
+            f.write('0.5\n')
+        self.line.push('a')
+        os.unlink(self.path)
+        self.now += 0.5
+        self.assertEqual(self.line.delay(), 0.5)
+        self.now += 0.6
+        self.assertEqual(self.line.delay(), 0.0)         # the converter stopped
+        self.assertEqual(self.line.push('z'), 'z')
+
+    def test_bad_or_huge_values(self):
+        with open(self.path, 'w') as f:
+            f.write('nonsense')
+        self.assertEqual(self.line.delay(), 0.0)
+        with open(self.path, 'w') as f:
+            f.write('60')
+        self.now += 2
+        self.assertEqual(self.line.delay(), vu._MAX_DELAY)
+
+
 if __name__ == '__main__':
     unittest.main()

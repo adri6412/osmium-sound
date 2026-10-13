@@ -493,6 +493,35 @@ class TestPlayerConverter(unittest.TestCase):
         self.assertTrue(self.p.is_silent(bytes(4096)))
         self.assertFalse(self.p.is_silent(bytes(4095) + b'\x01'))
 
+    def test_latency(self):
+        d = tempfile.mkdtemp(prefix='p2dl-')
+        status = os.path.join(d, 'status')
+        with open(status, 'w') as f:
+            f.write('state: RUNNING\nowner_pid   : 1\ndelay       : 17640\navail       : 0\n')
+        native = self.conf(carrier='u32be')
+        self.assertEqual(self.p.aplay_rate(native), 88200)
+        self.assertAlmostEqual(self.p.dac_delay_seconds(native, status), 0.2)
+        self.assertEqual(self.p.dac_delay_seconds(native, os.path.join(d, 'none')),
+                         self.p.APLAY_BUFFER_US / 1e6)
+        self.assertEqual(self.p.status_path('hw:CARD=D50s,DEV=0', '/p'), '/p/D50s/pcm0p/sub0/status')
+        self.assertIsNone(self.p.status_path('default', '/p'))
+        # the full pipes count: 64 KiB of PCM at 1.41 MB/s, 64 KiB of DSD64 at 705.6 kB/s
+        chain = self.p.Chain(native)
+        lat = chain.latency(0.3, dac_delay=0.2)
+        self.assertAlmostEqual(lat, 0.3 + 65536 / 1411200 + 65536 / 705600 + self.p.SOX_SECONDS + 0.2)
+        self.assertEqual(self.p.dac_bytes_per_second(self.conf(mode='dsd128')), 352800 * 2 * 4)
+        self.assertEqual(self.p.dac_bytes_per_second(self.conf(dop_bits=24)), 176400 * 2 * 3)
+
+    def test_publish(self):
+        d = tempfile.mkdtemp(prefix='p2dl-')
+        path = os.path.join(d, 'latency')
+        player = self.p.Player(self.conf(), os.path.join(d, 'player.json'), path)
+        player._publish(0.4567)
+        self.assertEqual(slurp(path), '0.457\n')
+        player._publish(None)
+        self.assertFalse(os.path.exists(path))
+        player._publish(None)                   # already gone: no error
+
     def test_rate_control(self):
         calls = []
         rc = self.p.RateControl('0', run=calls.append)
