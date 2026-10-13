@@ -193,13 +193,58 @@
       background: #3dcf5f; box-shadow: 0 0 7px #3dcf5f;
       flex-shrink: 0;
     }
-    .nav-links { display: flex; gap: 2rem; list-style: none; }
-    .nav-links a {
-      color: var(--muted); text-decoration: none;
-      font-size: 0.88rem; font-weight: 500;
+    /* The links live in a panel behind a Menu button, at every width: the
+       bar keeps only the logo, the language, Download and the button. */
+    .nav-burger {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: var(--bg-card); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      font-family: inherit; font-size: 0.82rem; font-weight: 600;
+      padding: 5px 11px; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .nav-burger:hover, .nav-burger[aria-expanded="true"] { border-color: rgba(245,184,32,0.5); color: var(--accent); }
+    .nav-burger line { transition: transform 0.2s, opacity 0.2s; transform-origin: 12px 12px; }
+    .nav-burger[aria-expanded="true"] .b1 { transform: translateY(5px) rotate(45deg); }
+    .nav-burger[aria-expanded="true"] .b2 { opacity: 0; }
+    .nav-burger[aria-expanded="true"] .b3 { transform: translateY(-5px) rotate(-45deg); }
+    .nav-menu {
+      position: absolute; top: calc(100% + 8px); right: clamp(1.25rem, 5vw, 4rem);
+      width: min(640px, calc(100vw - 2.5rem));
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem 1.5rem;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.3rem 1.5rem 1.4rem;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+    }
+    .nav-group-title {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 0.45rem;
+    }
+    .nav-menu ul { list-style: none; }
+    .nav-menu a {
+      display: block; padding: 0.42rem 0;
+      color: var(--text); text-decoration: none;
+      font-size: 0.92rem; font-weight: 500;
       transition: color 0.2s;
     }
-    .nav-links a:hover { color: var(--text); }
+    .nav-menu a:hover, .nav-menu a:focus-visible { color: var(--accent); }
+    .nav-menu a.accent { color: var(--accent); }
+    @media (max-width: 640px) {
+      .nav-menu {
+        left: 0.75rem; right: 0.75rem; width: auto;
+        grid-template-columns: 1fr 1fr; gap: 1rem 1.25rem;
+        max-height: calc(100vh - 90px); overflow-y: auto;
+      }
+      .nav-group:last-child { grid-column: 1 / -1; }
+      .nav-burger-label { display: none; }
+      .nav-burger { padding: 6px 8px; }
+    }
+    /* A phone: no room for Download in the bar (it is the first button of
+       the page, and Install is in the menu). */
+    @media (max-width: 520px) {
+      .nav-right > .btn-nav { display: none; }
+      .nav-right { gap: 0.6rem; }
+    }
     .btn-nav {
       background: var(--accent); color: #000;
       padding: 6px 16px; border-radius: 6px;
@@ -707,6 +752,49 @@
     @media (max-width: 640px) { .req-box { padding: 1.4rem 1.2rem; } }
     .section-desc a, .specs-table a { color: var(--accent); }
 
+    /* ── REMOTE CONTROLS ─────────────────────────────── */
+    #remotes { border-top: 1px solid var(--border); }
+    .remotes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.25rem;
+      max-width: 1120px; margin: 3rem auto 0;
+    }
+    .remote-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(245,184,32,0.35);
+      border-radius: var(--radius); overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .remote-map { display: block; background: #0a0a0a; border-bottom: 1px solid var(--border); }
+    .remote-map img { display: block; width: 100%; height: auto; }
+    .remote-body { padding: 1.4rem 1.5rem 1.6rem; }
+    .remote-badge {
+      display: inline-block; margin-bottom: 0.7rem;
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--accent); background: var(--accent-dim);
+      border: 1px solid rgba(245,184,32,0.3); border-radius: 999px; padding: 2px 10px;
+    }
+    .remote-body h3 { font-size: 1.05rem; font-weight: 600; }
+    .remote-body p { font-size: 0.9rem; color: var(--muted); line-height: 1.6; margin-top: 0.55rem; }
+    .remote-body .remote-sub { color: var(--accent); font-size: 0.82rem; font-weight: 600; margin-top: 0.2rem; }
+    .remote-body .remote-note { color: var(--text); }
+    .remotes-more {
+      max-width: 760px; margin: 2.25rem auto 0;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem 1.75rem;
+    }
+    .remotes-more h4 { font-size: 1rem; font-weight: 600; margin-bottom: 0.6rem; }
+    .remotes-more ul { padding-left: 1.1rem; }
+    .remotes-more li { font-size: 0.9rem; color: var(--muted); line-height: 1.6; margin-top: 0.4rem; }
+    .remotes-more li strong { color: var(--text); font-weight: 600; }
+    .remotes-foot { font-size: 0.84rem; color: var(--muted); line-height: 1.6; margin-top: 1rem; }
+    .remotes-foot a { color: var(--accent); }
+    @media (max-width: 640px) {
+      .remotes-grid { grid-template-columns: 1fr; }
+      .remotes-more { padding: 1.25rem 1.2rem; }
+    }
+
     /* ── MANUAL CALLOUT ──────────────────────────────────── */
     #manual { border-top: 1px solid var(--border); background: var(--bg-card); }
     #support { border-top: 1px solid var(--border); }
@@ -968,7 +1056,6 @@
 
     /* ── RESPONSIVE ──────────────────────────────────── */
     @media (max-width: 700px) {
-      .nav-links { display: none; }
       .specs-inner { grid-template-columns: 1fr; gap: 2rem; }
     }
     @media (max-width: 480px) {
@@ -994,23 +1081,43 @@
     <span class="nav-logo-name">Osmium <span class="ink">Sound</span></span>
     <span class="nav-dot"></span>
   </a>
-  <ul class="nav-links">
-    <li><a href="#hardware" data-en="Requirements" data-it="Requisiti">Requirements</a></li>
-    <li><a href="#install" data-en="Install" data-it="Installazione">Install</a></li>
-    <li><a href="#manual" data-en="Manual" data-it="Manuale" style="color:var(--accent)">Manual</a></li>
-    <li><a href="#features" data-en="Features" data-it="Funzioni">Features</a></li>
-    <li><a href="#screenshots" data-en="Screenshots" data-it="Screenshot">Screenshots</a></li>
-    <li><a href="#specs" data-en="Specs" data-it="Specifiche">Specs</a></li>
-    <li><a href="#android" data-en="Android app" data-it="App Android">Android app</a></li>
-    <li><a href="#apple" data-en="iPhone/iPad app" data-it="App iPhone/iPad">iPhone/iPad app</a></li>
-    <li><a href="#support" data-en="Support" data-it="Supporto" style="color:var(--accent)">Support</a></li>
-  </ul>
   <div class="nav-right">
     <div class="lang-switch" role="group" aria-label="Language">
       <button type="button" data-lang="en">EN</button>
       <button type="button" data-lang="it">IT</button>
     </div>
     <a class="btn-nav" href="#install" data-en="Download" data-it="Scarica">Download</a>
+    <button type="button" class="nav-burger" aria-expanded="false" aria-controls="navMenu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line class="b1" x1="4" y1="7" x2="20" y2="7"/><line class="b2" x1="4" y1="12" x2="20" y2="12"/><line class="b3" x1="4" y1="17" x2="20" y2="17"/></svg>
+      <span class="nav-burger-label" data-en="Menu" data-it="Menu">Menu</span>
+    </button>
+  </div>
+  <div class="nav-menu" id="navMenu" hidden>
+    <div class="nav-group">
+      <p class="nav-group-title" data-en="Get started" data-it="Per iniziare">Get started</p>
+      <ul>
+        <li><a href="#hardware" data-en="Requirements" data-it="Requisiti">Requirements</a></li>
+        <li><a href="#install" data-en="Install" data-it="Installazione">Install</a></li>
+        <li><a href="#manual" class="accent" data-en="Manual" data-it="Manuale">Manual</a></li>
+      </ul>
+    </div>
+    <div class="nav-group">
+      <p class="nav-group-title" data-en="Discover" data-it="Scopri">Discover</p>
+      <ul>
+        <li><a href="#features" data-en="Features" data-it="Funzioni">Features</a></li>
+        <li><a href="#remotes" data-en="Remote controls" data-it="Telecomandi">Remote controls</a></li>
+        <li><a href="#screenshots" data-en="Screenshots" data-it="Screenshot">Screenshots</a></li>
+        <li><a href="#specs" data-en="Specs" data-it="Specifiche">Specs</a></li>
+      </ul>
+    </div>
+    <div class="nav-group">
+      <p class="nav-group-title" data-en="Apps and help" data-it="App e aiuto">Apps and help</p>
+      <ul>
+        <li><a href="#android" data-en="Android app" data-it="App Android">Android app</a></li>
+        <li><a href="#apple" data-en="iPhone/iPad app" data-it="App iPhone/iPad">iPhone/iPad app</a></li>
+        <li><a href="#support" class="accent" data-en="Support" data-it="Supporto">Support</a></li>
+      </ul>
+    </div>
   </div>
 </nav>
 
@@ -1042,6 +1149,7 @@
   </div>
   <div class="hero-pills">
     <a class="pill pill-new" href="#live" data-live-any data-en="&lt;strong&gt;Live on YouTube:&lt;/strong&gt; 16 and 17 October" data-it="&lt;strong&gt;In diretta su YouTube:&lt;/strong&gt; 16 e 17 ottobre"><strong>Live on YouTube:</strong> 16 and 17 October</a>
+    <a class="pill pill-new" href="#remotes" data-en="&lt;strong&gt;New:&lt;/strong&gt; certified remote controls" data-it="&lt;strong&gt;Novità:&lt;/strong&gt; telecomandi certificati"><strong>New:</strong> certified remote controls</a>
     <a class="pill pill-new" href="#hardware" data-en="&lt;strong&gt;New:&lt;/strong&gt; older PCs with BIOS work too" data-it="&lt;strong&gt;Novità:&lt;/strong&gt; funziona anche sui PC con BIOS"><strong>New:</strong> older PCs with BIOS work too</a>
     <span class="pill"><strong>x86</strong> · Debian</span>
     <span class="pill"><strong>FLAC · DSD · 192kHz</strong></span>
@@ -1145,6 +1253,64 @@
         <tr><td data-en="Avoid" data-it="Da evitare">Avoid</td><td data-en="Atom “Bay Trail”/“Cherry Trail” tablets and HDMI sticks (2013–2015): many have a 32-bit UEFI that cannot boot the 64-bit image" data-it="Tablet e “stick” HDMI con Atom “Bay Trail”/“Cherry Trail” (2013–2015): molti hanno un UEFI a 32 bit che non può avviare l&#x27;immagine a 64 bit">Atom “Bay Trail”/“Cherry Trail” tablets and HDMI sticks (2013–2015): many have a 32-bit UEFI that cannot boot the 64-bit image</td></tr>
       </table>
     </div>
+  </div>
+</section>
+
+<!-- REMOTE CONTROLS: the three certified models (api_server.py
+     _BT_CERTIFIED, key maps from admin-webui/public/remotes) and what else
+     works. Images switch language with data-src-en/data-src-it. -->
+<section id="remotes">
+  <div class="centered">
+    <div class="section-label" data-en="Remote controls" data-it="Telecomandi">Remote controls</div>
+    <h2 class="section-title" data-en="Play it from the sofa" data-it="Comandalo dal divano">Play it from the sofa</h2>
+    <p class="section-desc" data-en="A remote control drives the whole screen: the arrows move from item to item, OK chooses, and play, volume and track keys do what they say. Three remotes are &lt;strong&gt;certified&lt;/strong&gt;: we tried every key, the device recognises them, connects them by itself and shows you what each key does." data-it="Un telecomando comanda tutto lo schermo: le frecce si spostano da un elemento all&#x27;altro, OK sceglie, e i tasti di riproduzione, volume e brano fanno quello che dicono. Tre telecomandi sono &lt;strong&gt;certificati&lt;/strong&gt;: li abbiamo provati tasto per tasto, l&#x27;apparecchio li riconosce, li collega da solo e ti mostra cosa fa ogni tasto.">A remote control drives the whole screen: the arrows move from item to item, OK chooses, and play, volume and track keys do what they say. Three remotes are <strong>certified</strong>: we tried every key, the device recognises them, connects them by itself and shows you what each key does.</p>
+  </div>
+  <div class="remotes-grid">
+    <div class="remote-card">
+      <a class="remote-map" href="remotes/firetv-en.jpg" data-href-en="remotes/firetv-en.jpg" data-href-it="remotes/firetv-it.jpg" target="_blank" rel="noopener">
+        <img src="remotes/firetv-en.jpg" data-src-en="remotes/firetv-en.jpg" data-src-it="remotes/firetv-it.jpg" width="1200" height="800" loading="lazy" alt="Amazon Fire TV remote with Alexa">
+      </a>
+      <div class="remote-body">
+        <span class="remote-badge" data-en="Certified" data-it="Certificato">Certified</span>
+        <h3 data-en="Amazon Fire TV remote with Alexa" data-it="Telecomando Amazon Fire TV con Alexa">Amazon Fire TV remote with Alexa</h3>
+        <p class="remote-sub" data-en="3rd generation · Bluetooth" data-it="3ª generazione · Bluetooth">3rd generation · Bluetooth</p>
+        <p data-en="To pair it: hold the Home key (⌂) until the light at the top blinks, and leave it near the device." data-it="Per collegarlo: tieni premuto il tasto Home (⌂) finché la luce in alto non lampeggia, e lascialo vicino all&#x27;apparecchio.">To pair it: hold the Home key (⌂) until the light at the top blinks, and leave it near the device.</p>
+        <p class="remote-note" data-en="Even the Prime Video, Netflix, Disney+ and Amazon Music keys have a job: queue, favourites, VU meters and full screen." data-it="Anche i tasti Prime Video, Netflix, Disney+ e Amazon Music hanno un compito: coda, preferiti, VU meter e schermo intero.">Even the Prime Video, Netflix, Disney+ and Amazon Music keys have a job: queue, favourites, VU meters and full screen.</p>
+      </div>
+    </div>
+    <div class="remote-card">
+      <a class="remote-map" href="remotes/xiaomi-en.jpg" data-href-en="remotes/xiaomi-en.jpg" data-href-it="remotes/xiaomi-it.jpg" target="_blank" rel="noopener">
+        <img src="remotes/xiaomi-en.jpg" data-src-en="remotes/xiaomi-en.jpg" data-src-it="remotes/xiaomi-it.jpg" width="1200" height="800" loading="lazy" alt="Xiaomi remote">
+      </a>
+      <div class="remote-body">
+        <span class="remote-badge" data-en="Certified" data-it="Certificato">Certified</span>
+        <h3 data-en="Xiaomi remote" data-it="Telecomando Xiaomi">Xiaomi remote</h3>
+        <p class="remote-sub" data-en="The Mi Box S one · Bluetooth" data-it="Quello del Mi Box S · Bluetooth">The Mi Box S one · Bluetooth</p>
+        <p data-en="To pair it: hold the ⋮⋮⋮ key and the ○ key together for 7–8 seconds, until the light blinks." data-it="Per collegarlo: tieni premuti insieme il tasto ⋮⋮⋮ e il tasto ○ per 7–8 secondi, finché la luce non lampeggia.">To pair it: hold the ⋮⋮⋮ key and the ○ key together for 7–8 seconds, until the light blinks.</p>
+        <p class="remote-note" data-en="It has no play keys of its own: the Netflix key becomes play / pause." data-it="Non ha tasti di riproduzione: il tasto Netflix diventa riproduci / pausa.">It has no play keys of its own: the Netflix key becomes play / pause.</p>
+      </div>
+    </div>
+    <div class="remote-card">
+      <a class="remote-map" href="remotes/g20s-en.jpg" data-href-en="remotes/g20s-en.jpg" data-href-it="remotes/g20s-it.jpg" target="_blank" rel="noopener">
+        <img src="remotes/g20s-en.jpg" data-src-en="remotes/g20s-en.jpg" data-src-it="remotes/g20s-it.jpg" width="1200" height="800" loading="lazy" alt="G20S PRO">
+      </a>
+      <div class="remote-body">
+        <span class="remote-badge" data-en="Certified" data-it="Certificato">Certified</span>
+        <h3 data-en="G20S PRO" data-it="G20S PRO">G20S PRO</h3>
+        <p class="remote-sub" data-en="USB receiver or Bluetooth" data-it="Chiavetta USB o Bluetooth">USB receiver or Bluetooth</p>
+        <p data-en="With its USB receiver it works as soon as you plug it in, the easiest way. Over Bluetooth: hold OK and Back together for 5–7 seconds, until the light blinks." data-it="Con la sua chiavetta USB funziona appena la infili: è il modo più semplice. Via Bluetooth: tieni premuti insieme OK e Indietro per 5–7 secondi, finché la luce non lampeggia.">With its USB receiver it works as soon as you plug it in, the easiest way. Over Bluetooth: hold OK and Back together for 5–7 seconds, until the light blinks.</p>
+        <p class="remote-note" data-en="The number keys are shortcuts: player, queue, shuffle, VU meters, full screen and more." data-it="I tasti numerici sono scorciatoie: player, coda, riproduzione casuale, VU meter, schermo intero e altro.">The number keys are shortcuts: player, queue, shuffle, VU meters, full screen and more.</p>
+      </div>
+    </div>
+  </div>
+  <div class="remotes-more">
+    <h4 data-en="They work too" data-it="Funzionano anche">They work too</h4>
+    <ul>
+      <li data-en="&lt;strong&gt;Any remote with a USB receiver&lt;/strong&gt; (2.4&amp;nbsp;GHz): plug the receiver in and it works straight away." data-it="&lt;strong&gt;Ogni telecomando con chiavetta USB&lt;/strong&gt; (2,4&amp;nbsp;GHz): infili la chiavetta e funziona subito."><strong>Any remote with a USB receiver</strong> (2.4&nbsp;GHz): plug the receiver in and it works straight away.</li>
+      <li data-en="&lt;strong&gt;Other Bluetooth remotes&lt;/strong&gt;: pair them from Settings → Remote control by tapping them in the list, then give each key the job you want." data-it="&lt;strong&gt;Gli altri telecomandi Bluetooth&lt;/strong&gt;: li colleghi da Impostazioni → Telecomando toccandoli nell&#x27;elenco, poi dai a ogni tasto il compito che vuoi."><strong>Other Bluetooth remotes</strong>: pair them from Settings → Remote control by tapping them in the list, then give each key the job you want.</li>
+      <li data-en="&lt;strong&gt;A keyboard&lt;/strong&gt;: arrows, Enter and its play and volume keys." data-it="&lt;strong&gt;Una tastiera&lt;/strong&gt;: frecce, Invio e i suoi tasti di riproduzione e volume."><strong>A keyboard</strong>: arrows, Enter and its play and volume keys.</li>
+    </ul>
+    <p class="remotes-foot" data-en="The remote drives the device&#x27;s own screen, so it is for the “with screen” mode. A Bluetooth remote needs Bluetooth on the PC. The power key never switches the device off by itself: it asks first. Everything else is in the &lt;a href=&quot;manual.html#en-remote&quot; target=&quot;_blank&quot;&gt;manual&lt;/a&gt;." data-it="Il telecomando comanda lo schermo dell&#x27;apparecchio, quindi serve nella modalità “con schermo”. Per un telecomando Bluetooth il PC deve avere il Bluetooth. Il tasto di accensione non spegne mai l&#x27;apparecchio da solo: prima chiede. Tutto il resto è nel &lt;a href=&quot;manual.html#it-telecomando&quot; target=&quot;_blank&quot;&gt;manuale&lt;/a&gt;.">The remote drives the device's own screen, so it is for the “with screen” mode. A Bluetooth remote needs Bluetooth on the PC. The power key never switches the device off by itself: it asks first. Everything else is in the <a href="manual.html#en-remote" target="_blank">manual</a>.</p>
   </div>
 </section>
 
@@ -1670,6 +1836,10 @@
       const val = el.dataset[lang];
       if (val != null) el.innerHTML = val;
     });
+    // Pictures with words in them (the remotes' key maps) come in both languages.
+    const suffix = lang === 'it' ? 'It' : 'En';
+    document.querySelectorAll('[data-src-en]').forEach(el => { el.src = el.dataset['src' + suffix]; });
+    document.querySelectorAll('[data-href-en]').forEach(el => { el.href = el.dataset['href' + suffix]; });
     document.querySelectorAll('.lang-switch button').forEach(b => {
       b.classList.toggle('active', b.dataset.lang === lang);
     });
@@ -1684,6 +1854,24 @@
   document.querySelectorAll('.lang-switch button').forEach(b => {
     b.addEventListener('click', () => applyLang(b.dataset.lang));
   });
+
+  // Menu button: opens the panel of links; a link, Escape or a click
+  // outside closes it.
+  (function () {
+    const btn = document.querySelector('.nav-burger');
+    const menu = document.getElementById('navMenu');
+    if (!btn || !menu) return;
+    const set = (open) => {
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    btn.addEventListener('click', (e) => { e.stopPropagation(); set(menu.hidden); });
+    menu.addEventListener('click', (e) => { if (e.target.closest('a')) set(false); });
+    document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target)) set(false); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !menu.hidden) { set(false); btn.focus(); }
+    });
+  })();
 
   // Live launch events: a card goes away once its event has ended, and the
   // strip, the hero pill and the section once both have. While a card is up,

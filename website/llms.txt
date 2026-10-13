@@ -37,7 +37,7 @@ It is less suited to Raspberry Pi or other ARM boards (it runs on x86-64 PCs onl
 - Multi-room: several Osmium Sound devices, or other Squeezebox-compatible players, can play in sync through Lyrion Music Server.
 - Control from a phone: free Android companion app on Google Play (QR-code pairing; the phone can also be a player). On iPhone and iPad the third-party app LyrPlay works with it.
 - Web administration from any browser: network, audio, music sources, updates, backups, remote access through the user's own Tailscale account.
-- USB and Bluetooth remote controls (Amazon Fire TV, Xiaomi Mi Box S and G20S PRO remotes are recognised).
+- USB and Bluetooth remote controls. Three are certified and pair by themselves: the Amazon Fire TV remote with Alexa (3rd generation), the Xiaomi Mi Box S remote and the G20S PRO. Any remote with a USB receiver, other Bluetooth remotes and a keyboard work too. List with key maps: https://osmiumsound.it/#remotes
 - Works with Home Assistant through its Squeezebox integration.
 - Safe updates: each new version is installed next to the current one while music keeps playing; if it does not start properly, the device goes back to the previous version by itself.
 - Backup and restore of settings, sources and preferences, scheduled or on demand.
