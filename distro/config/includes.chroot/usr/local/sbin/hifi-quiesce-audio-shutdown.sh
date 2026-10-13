@@ -35,13 +35,19 @@ set -eu
 # same as before this existed — never worth delaying a shutdown over.
 python3 /usr/local/sbin/hifi-capture-playback-state.py 2>/dev/null || true
 
-# --no-block: during a shutdown both already have a stop job queued behind
+# Whatever feeds the DAC: squeezelite, or CamillaDSP / the player side's PCM
+# to DSD conversion behind the Loopback.
+# --no-block: during a shutdown they already have a stop job queued behind
 # this unit's, and a blocking `systemctl stop` would wait on it -- for this
 # very script to finish -- until TimeoutStopSec. Queued (or merged with the
 # job already there) it runs right after this exits, long before
 # device_shutdown() reaches the DMA controller.
-if [ "$(systemctl is-active camilladsp.service 2>/dev/null)" = "active" ] \
-        || [ "$(systemctl is-active squeezelite.service 2>/dev/null)" = "active" ]; then
-    systemctl --no-block stop camilladsp.service squeezelite.service 2>/dev/null || true
-fi
+AUDIO_UNITS="camilladsp.service hifi-pcm2dsd-player.service squeezelite.service"
+for unit in $AUDIO_UNITS; do
+    if [ "$(systemctl is-active "$unit" 2>/dev/null)" = "active" ]; then
+        # shellcheck disable=SC2086
+        systemctl --no-block stop $AUDIO_UNITS 2>/dev/null || true
+        break
+    fi
+done
 exit 0

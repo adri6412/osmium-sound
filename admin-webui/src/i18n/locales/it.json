@@ -1278,6 +1278,7 @@
       "label": "Converti in DSD",
       "help": "Ogni brano che non è già DSD (CD rippati, file ad alta risoluzione, radio, servizi di streaming) arriva al DAC in DSD, convertito mentre suona. I file DSD restano come sono.",
       "active": "Accesa: tutto arriva al DAC in {rate}.",
+      "player": "Accesa: la musica arriva da un altro server Lyrion e la converte in {rate} questo apparecchio. Anche i file DSD vengono riconvertiti (passando dal PCM), e il volume di Osmium continua a funzionare.",
       "volumeWarning": "Il volume digitale non agisce sul DSD: usa il volume del DAC o dell'amplificatore. Abbassalo prima di cominciare.",
       "volumeConfirm": "Attenzione al volume. Con la conversione in DSD il volume di Osmium non agisce più: la musica esce sempre al massimo, e il volume si regola solo dal DAC o dall'amplificatore. Abbassa l'amplificatore prima di accendere. Se il tuo DAC ha un suo controllo di volume, puoi usarlo scegliendo «Mixer del DAC» in Controllo del volume.\n\nAccendo la conversione?",
       "measuring": "Sto misurando cosa regge questo processore: DSD256 compare qui se è abbastanza veloce.",
@@ -1290,7 +1291,7 @@
       },
       "why": {
         "noTools": "Questo apparecchio ha bisogno di un aggiornamento di sistema per convertire in DSD.",
-        "remoteServer": "Funziona solo quando questo apparecchio è il proprio server Lyrion: ora la musica arriva da un altro.",
+        "remoteServer": "Per una zona funziona solo quando questo apparecchio è il proprio server Lyrion: ora la musica arriva da un altro.",
         "dsp": "Non disponibile mentre l'elaborazione del suono è accesa.",
         "noDsd": "A questo DAC non arriva DSD: scegli un DAC che lo accetti (nativo o DoP) e una modalità DSD diversa da \"Converti in PCM\"."
       }

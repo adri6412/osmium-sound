@@ -1,17 +1,20 @@
 <script setup>
 // "Convert to DSD" for one player — the built-in one (Settings → Audio) or a
-// zone (Settings → Audio zones). Lyrion converts every PCM track on its way
-// to the player (api_server.py _pcm2dsd_info / hifi_squeezelite.pcm2dsd_state);
-// this only shows the choice, why it may not apply, and the one thing that
-// changes for the listener: digital volume no longer acts on the signal.
+// zone (Settings → Audio zones). This device's Lyrion converts every PCM
+// track on its way to the player; with another Lyrion server the built-in
+// player converts it itself (api_server.py _pcm2dsd_info /
+// hifi_squeezelite.pcm2dsd_state). This only shows the choice, why it may not
+// apply, and what changes for the listener: with this device's Lyrion the
+// digital volume no longer acts on the signal; on the player's side it does.
 import { computed } from 'vue';
 import { useI18n } from '../i18n';
 
 const props = defineProps({
   mode: { type: String, default: 'off' },       // off | dsd64 | dsd128 | dsd256
   filter: { type: String, default: 'clans-8' },
-  state: { type: String, default: 'off' },      // off | active | noTools | remoteServer | dsp | noDsd
-  info: { type: Object, required: true },       // { modes, measured, filters, available }
+  state: { type: String, default: 'off' },      // off | active | player | noTools | remoteServer | dsp | noDsd
+  info: { type: Object, required: true },       // { modes, measured, filters, available, server_local }
+  zone: { type: Boolean, default: false },
   volume: { type: String, default: 'software' },
   busy: { type: Boolean, default: false },
 });
@@ -27,12 +30,14 @@ const modes = computed(() => {
 });
 // measured, and not even DSD64 fits: say so instead of a lone "Off"
 const tooSlow = computed(() => props.info.measured && props.mode === 'off' && (props.info.modes || []).length <= 1);
-const why = computed(() => (props.state === 'off' || props.state === 'active'
+const why = computed(() => (['off', 'active', 'player'].includes(props.state)
   ? '' : t('settings.pcm2dsd.why.' + props.state)));
+// another server: the built-in player converts after its own volume
+const playerSide = computed(() => !props.zone && props.info.server_local === false);
 
 function pick(m) {
   if (m === props.mode) return;
-  if (props.mode === 'off' && m !== 'off' && props.volume !== 'hardware'
+  if (props.mode === 'off' && m !== 'off' && props.volume !== 'hardware' && !playerSide.value
       && !confirm(t('settings.pcm2dsd.volumeConfirm'))) return;
   emit('set', { pcm2dsd: m });
 }
@@ -52,6 +57,7 @@ function pick(m) {
         <p class="muted">{{ t('settings.pcm2dsd.active', { rate: mode.toUpperCase() }) }}</p>
         <p class="msg err" v-if="volume !== 'hardware'">{{ t('settings.pcm2dsd.volumeWarning') }}</p>
       </template>
+      <p class="muted" v-else-if="state === 'player'">{{ t('settings.pcm2dsd.player', { rate: mode.toUpperCase() }) }}</p>
       <p class="muted" v-if="!info.measured">{{ t('settings.pcm2dsd.measuring') }}</p>
       <template v-if="mode !== 'off'">
         <label>{{ t('settings.pcm2dsd.filterLabel') }}</label>

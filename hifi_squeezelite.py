@@ -111,6 +111,7 @@ P2D_PLAYER = '/usr/local/sbin/hifi-pcm2dsd-player.py'
 P2D_PLAYER_CONF = '/run/hifi-pcm2dsd/player.json'
 P2D_PLAYER_UNIT = 'hifi-pcm2dsd-player.service'
 SYS_ALOOP = '/sys/module/snd_aloop'
+LIB_MODULES = '/lib/modules'
 # How long a writer waits for another one to finish. A Settings → Audio save
 # may run amixer under the lock; anything longer than this is a stuck writer.
 LOCK_TIMEOUT = 15.0
@@ -580,7 +581,7 @@ def loopback_available(sys_module=None, modules_dir=None):
     if os.path.isdir(sys_module or SYS_ALOOP):
         return True
     if modules_dir is None:
-        modules_dir = os.path.join('/lib/modules', os.uname().release)
+        modules_dir = os.path.join(LIB_MODULES, os.uname().release)
     return bool(glob.glob(os.path.join(modules_dir, 'kernel', 'sound', 'drivers', 'snd-aloop.ko*')))
 
 
@@ -594,10 +595,11 @@ def pcm2dsd_state(model, fmt, zone=False):
     probe() says of its output: 'off'; 'active' (this device's Lyrion
     converts); 'player' (another server's music, converted by the built-in
     player itself); or the reason it cannot — 'noTools' (an image without
-    sox_ng), 'dsp' (the DSP path plays PCM into the Loopback), 'noDsd' (no
-    DSD reaches the DAC: DSD mode off, or an output that is no DSD DAC),
-    'remoteServer' (another server, and a zone: only the built-in player has
-    the Loopback path)."""
+    sox_ng, or without the player side's converter or the Loopback), 'dsp'
+    (the DSP path plays PCM into the Loopback), 'noDsd' (no DSD reaches the
+    DAC: DSD mode off, or an output that is no DSD DAC), 'remoteServer'
+    (another server, and a zone: only the built-in player has the Loopback
+    path)."""
     m = normalize(model)
     if m['pcm2dsd'] == 'off':
         return 'off'
@@ -609,8 +611,10 @@ def pcm2dsd_state(model, fmt, zone=False):
         return 'noDsd'
     if server_is_local(m['server']):
         return 'active'
-    if zone or not player_side_present():
+    if zone:
         return 'remoteServer'
+    if not player_side_present():
+        return 'noTools'
     return 'player'
 
 

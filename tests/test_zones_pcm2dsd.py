@@ -41,15 +41,25 @@ def load_wrapper():
 
 
 class ToolsSandbox(Sandbox):
-    """A Sandbox where sox_ng and the wrapper "are installed"."""
+    """A Sandbox where sox_ng, the wrapper, the player side's converter and
+    the Loopback "are installed"."""
 
     def __init__(self):
         super().__init__()
         self.sox = os.path.join(self.dir, 'sox_ng')
         self.wrapper = os.path.join(self.dir, 'hifi-pcm2dsd.py')
-        for path in (self.sox, self.wrapper):
+        self.player = os.path.join(self.dir, 'hifi-pcm2dsd-player.py')
+        for path in (self.sox, self.wrapper, self.player):
             with open(path, 'w') as f:
                 f.write('#!/bin/sh\n')
+        self.aloop = os.path.join(self.dir, 'sys', 'snd_aloop')
+        os.makedirs(self.aloop)
+        # the running kernel has snd-aloop to load
+        self.modules = os.path.join(self.dir, 'lib-modules')
+        drivers = os.path.join(self.modules, os.uname().release, 'kernel', 'sound', 'drivers')
+        os.makedirs(drivers)
+        open(os.path.join(drivers, 'snd-aloop.ko.xz'), 'w').close()
+        self.player_conf = os.path.join(self.dir, 'run', 'hifi-pcm2dsd', 'player.json')
         self.zones = os.path.join(self.dir, 'hifi-player', 'zones.json')
         self.map = os.path.join(self.dir, 'hifi-player', 'pcm2dsd.json')
         self.rules = os.path.join(self.dir, 'squeezeboxserver', 'custom-convert.conf')
@@ -59,15 +69,24 @@ class ToolsSandbox(Sandbox):
 
 
 class ToolsMixin:
+    PATCHED = ('SOX_NG', 'PCM2DSD_WRAPPER', 'PROC_ASOUND', 'P2D_PLAYER', 'SYS_ALOOP', 'LIB_MODULES',
+               'P2D_PLAYER_CONF', '_systemctl', '_modprobe_aloop')
+
     def setUp(self):
         self.sb = ToolsSandbox()
         self.sb.card('D50s', STREAM_NATIVE_BE)
         self.sb.card('Gen', STREAM_PCM_ONLY)
-        self._sq = (sq.SOX_NG, sq.PCM2DSD_WRAPPER, sq.PROC_ASOUND)
+        self._sq = {k: getattr(sq, k) for k in self.PATCHED}
+        self.systemctl, self.modprobed = [], []
         sq.SOX_NG, sq.PCM2DSD_WRAPPER, sq.PROC_ASOUND = self.sb.sox, self.sb.wrapper, self.sb.asound
+        sq.P2D_PLAYER, sq.SYS_ALOOP, sq.P2D_PLAYER_CONF = self.sb.player, self.sb.aloop, self.sb.player_conf
+        sq.LIB_MODULES = self.sb.modules
+        sq._systemctl = lambda *a: self.systemctl.append(a) or subprocess.CompletedProcess(a, 0, '', '')
+        sq._modprobe_aloop = lambda: self.modprobed.append(True)
 
     def tearDown(self):
-        sq.SOX_NG, sq.PCM2DSD_WRAPPER, sq.PROC_ASOUND = self._sq
+        for k, v in self._sq.items():
+            setattr(sq, k, v)
 
     def model(self, **kw):
         m = sq.normalize({'output': 'hw:CARD=D50s,DEV=0', 'mac': MAC})
@@ -99,7 +118,10 @@ class TestModel(ToolsMixin, unittest.TestCase):
         probe = self.sb.probe
         self.assertEqual(sq.pcm2dsd_state(self.model(), 'u32be'), 'off')
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64'), probe('hw:CARD=D50s,DEV=0')), 'active')
-        self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', server='192.168.1.9'), 'u32be'), 'remoteServer')
+        # another server: the built-in player converts on its own side; a zone cannot
+        self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', server='192.168.1.9'), 'u32be'), 'player')
+        self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', server='192.168.1.9'), 'u32be', zone=True),
+                         'remoteServer')
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', dsp={'enabled': True}), 'u32be'), 'dsp')
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', dsd='off'), 'u32be'), 'noDsd')
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64'), sq.PCM_ONLY), 'noDsd')
@@ -301,6 +323,199 @@ class TestWrapper(unittest.TestCase):
     def test_usage(self):
         self.assertEqual(self.w.main(['x']), 2)
         self.assertEqual(self.w.main(['x', MAC, 'flac']), 2)
+
+
+class TestPlayerSide(ToolsMixin, unittest.TestCase):
+    """PCM to DSD for music from another Lyrion: hifi_squeezelite's half."""
+
+    def remote(self, **kw):
+        return self.model(**dict({'pcm2dsd': 'dsd64', 'server': '192.168.1.9'}, **kw))
+
+    def test_state_needs_the_converter_and_the_loopback(self):
+        self.assertEqual(sq.pcm2dsd_state(self.remote(), 'u32be'), 'player')
+        self.assertEqual(sq.pcm2dsd_state(self.remote(dsp={'enabled': True}), 'u32be'), 'dsp')
+        self.assertEqual(sq.pcm2dsd_state(self.remote(dsd='off'), 'u32be'), 'noDsd')
+        os.rmdir(self.sb.aloop)
+        self.assertTrue(sq.loopback_available())                # not loaded, but there to load
+        self.assertFalse(sq.loopback_available(modules_dir=os.path.join(self.sb.dir, 'none')))
+        os.makedirs(self.sb.aloop)
+        os.unlink(self.sb.player)
+        self.assertEqual(sq.pcm2dsd_state(self.remote(), 'u32be'), 'noTools')
+
+    def test_render(self):
+        argv = sq.render_argv(self.remote(volume='hardware', mixer='PCM', max_rate=96000), self.sb.probe)
+        self.assertEqual(argv[argv.index('-o') + 1], sq.P2D_PLAYBACK)
+        self.assertEqual(argv[argv.index('-r') + 1:argv.index('-r') + 3], ['176400', '-R'])
+        for flag in ('-D', '-V', '-c'):
+            self.assertNotIn(flag, argv)
+        self.assertIn('-v', argv)                               # the VU meters keep working
+        self.assertEqual(argv[argv.index('-s') + 1], '192.168.1.9')
+        # off: straight to the DAC, native DSD as before
+        argv = sq.render_argv(self.model(server='192.168.1.9'), self.sb.probe)
+        self.assertEqual(argv[argv.index('-o') + 1], 'hw:CARD=D50s,DEV=0')
+        self.assertIn(':u32be', argv)
+
+    def test_player_conf(self):
+        c = sq.player_conf(self.remote(), self.sb.probe('hw:CARD=D50s,DEV=0'))
+        self.assertEqual(c, {'mode': 'dsd64', 'filter': 'clans-8', 'carrier': 'u32be', 'dop_bits': 32,
+                             'rate': sq.P2D_RATE, 'capture': sq.P2D_CAPTURE, 'dac': 'hw:CARD=D50s,DEV=0'})
+        # DoP when asked for, or when the DAC has no native DSD; 24-bit DoP
+        # for a DAC that only takes S24_3LE
+        self.assertEqual(sq.player_conf(self.remote(dsd='dop'), 'u32be')['carrier'], 'dop')
+        c = sq.player_conf(self.remote(output='hw:CARD=Gen,DEV=0'), self.sb.probe('hw:CARD=Gen,DEV=0'))
+        self.assertEqual((c['carrier'], c['dop_bits'], c['dac']), ('dop', 24, 'hw:CARD=Gen,DEV=0'))
+        self.assertIsNone(sq.player_conf(self.model(pcm2dsd='dsd64'), 'u32be'))        # own Lyrion converts
+        self.assertIsNone(sq.player_conf(self.model(server='192.168.1.9'), 'u32be'))   # off
+
+    def test_sync_player(self):
+        unit = sq.P2D_PLAYER_UNIT
+        self.assertTrue(sq.sync_player(self.remote(), self.sb.probe))
+        with open(self.sb.player_conf) as f:
+            self.assertEqual(json.load(f)['carrier'], 'u32be')
+        self.assertEqual(self.systemctl, [('start', '--no-block', unit)])
+        self.assertEqual(self.modprobed, [])                    # already loaded
+        # a new rate: the file changes, the service picks it up by itself
+        self.assertTrue(sq.sync_player(self.remote(pcm2dsd='dsd128'), self.sb.probe))
+        with open(self.sb.player_conf) as f:
+            self.assertEqual(json.load(f)['mode'], 'dsd128')
+        # back to this device's own Lyrion: the file goes, the service stops
+        self.systemctl.clear()
+        self.assertFalse(sq.sync_player(self.model(pcm2dsd='dsd64'), self.sb.probe))
+        self.assertFalse(os.path.exists(self.sb.player_conf))
+        self.assertEqual(self.systemctl, [('stop', unit)])
+        self.systemctl.clear()
+        self.assertFalse(sq.sync_player(self.model(), self.sb.probe))
+        self.assertEqual(self.systemctl, [])                    # nothing was running
+        os.rmdir(self.sb.aloop)
+        sq.sync_player(self.remote(), self.sb.probe)
+        self.assertEqual(self.modprobed, [True])
+
+    def test_apply_and_sync_bring_it_in_line(self):
+        sq.save(self.remote(), self.sb.conf)
+        sq.apply(self.sb.conf, self.sb.default, self.sb.dsp_target, self.sb.probe,
+                 machine_id_path=self.sb.machine_id)
+        self.assertTrue(os.path.exists(self.sb.player_conf))
+        self.assertIn(f'-o {sq.P2D_PLAYBACK}', slurp(self.sb.default))
+        sq.save(self.remote(dsp={'enabled': True}), self.sb.conf)
+        sq.sync_pcm2dsd(self.sb.conf, self.sb.zones, self.sb.map, os.path.join(self.sb.dir, 'none', 'x'),
+                        self.sb.default, self.sb.dsp_target, self.sb.probe)
+        self.assertFalse(os.path.exists(self.sb.player_conf))
+
+
+def load_player():
+    path = os.path.join(ROOT, 'distro', 'config', 'includes.chroot', 'usr', 'local', 'sbin',
+                        'hifi-pcm2dsd-player.py')
+    spec = importlib.util.spec_from_file_location('hifi_pcm2dsd_player', path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class TestPlayerConverter(unittest.TestCase):
+    """hifi-pcm2dsd-player.py: everything but the processes."""
+
+    CONF = {'mode': 'dsd64', 'filter': 'clans-8', 'carrier': 'dop', 'dop_bits': 32, 'rate': 176400,
+            'capture': 'hw:CARD=Loopback,DEV=1,SUBDEV=0', 'dac': 'hw:CARD=D50s,DEV=0'}
+
+    def setUp(self):
+        self.p = load_player()
+
+    def conf(self, **kw):
+        return self.p.clean_conf(dict(self.CONF, **kw))
+
+    @staticmethod
+    def after(argv, flag):
+        return argv[argv.index(flag) + 1]
+
+    def test_clean_conf(self):
+        c = self.conf()
+        self.assertEqual((c['subdevice'], c['dop_bits']), ('0', 32))
+        self.assertEqual(self.conf(filter='nope')['filter'], 'clans-8')
+        self.assertEqual(self.conf(dop_bits=16)['dop_bits'], 32)
+        for bad in ({'mode': 'dsd512'}, {'carrier': 'pcm'}, {'rate': '176400'}, {'dac': ''}, {'capture': None}):
+            self.assertIsNone(self.conf(**bad), bad)
+        self.assertIsNone(self.p.clean_conf(None))
+        self.assertIsNone(self.p.read_conf(os.path.join(tempfile.mkdtemp(prefix='p2dp-'), 'none.json')))
+
+    def test_dop_argv(self):
+        sox = self.p.sox_argv(self.conf(mode='dsd128'), '/x/sox_ng')
+        self.assertEqual(sox[0], '/x/sox_ng')
+        self.assertEqual(sox[-9:], ['gain', '-6', 'rate', '-v', '5644800', 'sdm', '-f', 'clans-8', 'dop'])
+        sink = sox[sox.index('-', sox.index('-c')) + 1:]
+        self.assertEqual(sink[:8], ['-t', 'raw', '-e', 'signed', '-b', '32', '-r', '352800'])
+        aplay = self.p.aplay_argv(self.conf(mode='dsd128'))
+        self.assertEqual((self.after(aplay, '-f'), self.after(aplay, '-r')), ('S32_LE', '352800'))
+        self.assertEqual(self.after(aplay, '-D'), 'hw:CARD=D50s,DEV=0')
+        c24 = self.conf(dop_bits=24)
+        sink = self.p.sox_argv(c24)[self.p.sox_argv(c24).index('-', 10) + 1:]
+        self.assertEqual(sink[5], '24')
+        self.assertEqual(self.after(self.p.aplay_argv(c24), '-f'), 'S24_3LE')
+
+    def test_native_argv(self):
+        c = self.conf(carrier='u32be')
+        sox = self.p.sox_argv(c)
+        i = sox.index('dff')
+        self.assertEqual(sox[i - 1:i + 2], ['-t', 'dff', '-'])
+        self.assertNotIn('dop', sox)
+        aplay = self.p.aplay_argv(c)
+        self.assertEqual((self.after(aplay, '-f'), self.after(aplay, '-r')), ('DSD_U32_BE', '88200'))
+        aplay = self.p.aplay_argv(self.conf(carrier='u16le', mode='dsd128'))
+        self.assertEqual((self.after(aplay, '-f'), self.after(aplay, '-r')), ('DSD_U16_LE', '352800'))
+        arec = self.p.arecord_argv(c)
+        self.assertEqual((self.after(arec, '-D'), self.after(arec, '-r')),
+                         ('hw:CARD=Loopback,DEV=1,SUBDEV=0', '176400'))
+
+    def test_dff_reader(self):
+        def chunk(cid, body):
+            return cid + len(body).to_bytes(8, 'big') + body + (b'\0' if len(body) & 1 else b'')
+        header = (b'FRM8' + b'\xff' * 8 + b'DSD ' + chunk(b'FVER', b'\x01\x05\x00\x00')
+                  + chunk(b'PROP', b'SND ' + chunk(b'FS  ', (2822400).to_bytes(4, 'big')) + b'x')
+                  + b'DSD ' + b'\xff' * 8)
+        payload = bytes(range(256)) * 4
+        stream = header + payload
+        r, out = self.p.DffReader(), b''
+        for i in range(0, len(stream), 7):              # in odd pieces, as a pipe hands them
+            out += r.feed(stream[i:i + 7])
+        self.assertEqual(out, payload)
+        with self.assertRaises(ValueError):
+            self.p.DffReader().feed(b'RIFF' + b'\0' * 20)
+
+    def test_pack_native(self):
+        data = bytes([0x10, 0x20, 0x11, 0x21, 0x12, 0x22, 0x13, 0x23])     # L0 R0 L1 R1 …
+        pack = self.p.pack_native
+        self.assertEqual(pack(data, 4, True), bytes([0x10, 0x11, 0x12, 0x13, 0x20, 0x21, 0x22, 0x23]))
+        self.assertEqual(pack(data, 4, False), bytes([0x13, 0x12, 0x11, 0x10, 0x23, 0x22, 0x21, 0x20]))
+        self.assertEqual(pack(data, 2, True), bytes([0x10, 0x11, 0x20, 0x21, 0x12, 0x13, 0x22, 0x23]))
+        self.assertEqual(pack(data, 2, False), bytes([0x11, 0x10, 0x21, 0x20, 0x13, 0x12, 0x23, 0x22]))
+        self.assertEqual(pack(data, 1, True), data)
+
+    def test_silence(self):
+        self.assertTrue(self.p.is_silent(bytes(4096)))
+        self.assertFalse(self.p.is_silent(bytes(4095) + b'\x01'))
+
+    def test_rate_control(self):
+        calls = []
+        rc = self.p.RateControl('0', run=calls.append)
+        rc.reset()
+        self.assertEqual(calls[-1][-1], '100000')
+        self.assertIn('device=1,subdevice=0', calls[-1][-2])
+        rc.restart(0.0)
+        self.assertEqual(rc.update(0.5, 2, 2.0), 100000)          # still settling: nothing moves
+        rc.update(0.30, 2, 12.0)
+        self.assertEqual((rc.target, rc.value), (0.30, 100000))
+        self.assertGreater(rc.update(0.32, 2, 14.0), 100000)      # backlog grows: slow the Loopback down
+        rc.integral = 0.0
+        self.assertLess(rc.update(0.28, 2, 16.0), 100000)
+        self.assertEqual(rc.update(5.0, 2, 18.0), 100000 + int(self.p.MAX_PPM / 10))
+        rc.restart(20.0)                                          # a new start learns a new level
+        self.assertIsNone(rc.target)
+        n = len(calls)
+        rc.update(5.0, 2, 22.0)
+        self.assertEqual(len(calls), n)                           # nothing to change: no amixer call
+        rc2 = self.p.RateControl('0', run=calls.append)
+        rc2.restart(0.0)
+        rc2.update(0.01, 2, 11.0)
+        self.assertEqual(rc2.target, self.p.MIN_TARGET_SECONDS)
 
 
 class TestApi(unittest.TestCase):

@@ -1265,9 +1265,10 @@ Item {
         secSqueezelite()
     }
     // "Convert to DSD" for one player: the built-in one (zid "") or a zone.
-    // Lyrion converts every PCM track on its way there (hifi-pcm2dsd.py);
-    // the rows say why it may not apply, and that the digital volume no
-    // longer acts on the signal.
+    // This device's Lyrion converts every PCM track on its way there
+    // (hifi-pcm2dsd.py); with another Lyrion server the built-in player
+    // converts it itself (hifi-pcm2dsd-player.py). The rows say why it may
+    // not apply, and whether the digital volume still acts on the signal.
     function secPcm2dsd(mode, filter, state, info, volume, zid) {
         var pre = zid ? zid + "|" : "", i
         label("settings.pcm2dsd.label", 14)
@@ -1282,7 +1283,8 @@ Item {
             mc.push(cell(modes[i] === "off" ? Tr.t("settings.audio.off") : modes[i].toUpperCase(), pre + modes[i],
                          mode === modes[i], "p2d_mode", { hh: 44 }))
         grid(mc)
-        if (state !== "off" && state !== "active") note(Tr.t("settings.pcm2dsd.why." + state), "red", "alert-triangle")
+        if (state === "player") helpText(Tr.tf("settings.pcm2dsd.player", "rate", mode.toUpperCase()), 12)
+        else if (state !== "off" && state !== "active") note(Tr.t("settings.pcm2dsd.why." + state), "red", "alert-triangle")
         else if (state === "active") {
             helpText(Tr.tf("settings.pcm2dsd.active", "rate", mode.toUpperCase()), 12)
             if (volume !== "hardware") note(Tr.t("settings.pcm2dsd.volumeWarning"), "red", "volume-2")
@@ -2511,8 +2513,10 @@ Item {
             var curMode = String(pconf.pcm2dsd || "off")
             if (pm.v === curMode) return
             var p2dApply = function() { if (pm.zid) zoneSet(pm.zid, { pcm2dsd: pm.v }); else sqSet({ pcm2dsd: pm.v }) }
-            // from PCM to DSD with the player's own volume: it stops working
-            if (curMode === "off" && pm.v !== "off" && pconf.volume !== "hardware") {
+            // from PCM to DSD with the player's own volume: it stops working --
+            // except on the player's side (another server), where it converts after it
+            var playerSide = !pm.zid && (cfg.sq.pcm2dsd || {}).server_local === false
+            if (curMode === "off" && pm.v !== "off" && pconf.volume !== "hardware" && !playerSide) {
                 Ui.dialogs.confirm(Tr.t("settings.pcm2dsd.volumeConfirm"), Tr.t("settings.pcm2dsd.confirmOk"), true,
                                    function(ok) { if (ok) p2dApply() })
                 return

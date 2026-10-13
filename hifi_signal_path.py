@@ -212,9 +212,13 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
     fmt = None if dsp else probe_fn(model['output'])
     tok = None if dsp else sq.dsd_token(model, fmt)
     carrier = None if tok is None else ('native' if sq.is_native(fmt) and model['dsd'] in ('auto', 'native') else 'dop')
-    p2d = None if dsp else sq.pcm2dsd_state(model, fmt)
+    p2d = None if dsp else sq.pcm2dsd_state(model, fmt, zone=bool(zone))
+    # converted on the player's side (music from another Lyrion): squeezelite
+    # plays PCM into the Loopback, its own volume included, and every track
+    # -- a DSD one decoded to PCM first -- is turned into DSD after it
+    player_side = p2d == 'player'
     hw = describe_hw(None if dsp else hw_fn(model['output']), carrier)
-    hardware_volume = model['volume'] == 'hardware' and bool(model['mixer'])
+    hardware_volume = not player_side and model['volume'] == 'hardware' and bool(model['mixer'])
     out['player'] = {
         'name': model['name'], 'volume': 'hardware' if hardware_volume else 'software',
         'realtime': model['realtime'], 'max_rate': model['max_rate'],
@@ -225,7 +229,12 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
     out['hw'] = hw
 
     converted = False
-    if not src_dsd and p2d == 'active':
+    if player_side:
+        converted = True
+        if src_dsd:
+            changes.append('dsdToPcm')
+        changes.append('pcmToDsd')
+    elif not src_dsd and p2d == 'active':
         converted = True
         changes.append('pcmToDsd')
     # software volume below 100 % is arithmetic on every PCM sample; a DSD
@@ -233,7 +242,7 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
     dsd_out = hw['kind'] == 'dsd' or bool(hw.get('maybe_dop') and (src_dsd or converted)) if hw else \
         (src_dsd and carrier is not None) or converted
     out['player']['dsd_out'] = dsd_out
-    if (not hardware_volume and not dsd_out and lyrion.get('digital_volume')
+    if (not hardware_volume and (player_side or not dsd_out) and lyrion.get('digital_volume')
             and _as_int(lyrion.get('volume')) < 100):
         changes.append('volume')
     if hw is not None:

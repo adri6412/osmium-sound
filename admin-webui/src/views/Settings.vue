@@ -2070,7 +2070,7 @@ onUnmounted(() => {
             </span>
             <p class="muted">{{ z.mixers.length ? t('settings.audio.volumeHelp') : t('settings.audio.volumeNoMixer') }}</p>
             <Pcm2Dsd :mode="z.conf.pcm2dsd" :filter="z.conf.pcm2dsd_filter" :state="z.pcm2dsd_state"
-                     :info="zones.pcm2dsd" :volume="z.conf.volume" :busy="zBusy" @set="(p) => zoneSet(z, p)" />
+                     :info="zones.pcm2dsd" :volume="z.conf.volume" :busy="zBusy" zone @set="(p) => zoneSet(z, p)" />
             <button class="danger" style="margin-top: 12px;" :disabled="zBusy" @click="zoneRemove(z)">{{ t('settings.zones.remove') }}</button>
           </div>
         </template>
