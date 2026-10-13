@@ -26,6 +26,7 @@ Osmium Sound includes and/or redistributes the following third-party components 
 | **Plymouth** | Debian trixie | GPL-2.0+ | Boot splash (Debian package). |
 | **labwc, wlroots, wlr-randr, XWayland, Xorg, LightDM** | Debian trixie | MIT / GPL / X11 (per package) | Session of the earlier Electron kiosk (Wayland compositor with X11 fallback, display manager), still used by installs that predate the A/B image layout (Debian packages). |
 | **NetworkManager, dnsmasq-base, Avahi, Samba, wsdd2, Tailscale** | Debian trixie / Tailscale repo | GPL / LGPL / BSD (per package) | Networking, setup hotspot, mDNS, SMB shares and their discovery, optional remote access (Tailscale is installed from Tailscale's own repository). |
+| **ipts** (kernel driver) and **iptsd** (daemon) | linux-surface patch `patches/6.12/0005-ipts.patch` @ `321be2e`; iptsd 3.1.0 | GPL-2.0+; iptsd statically links CLI11 (BSD-3-Clause), Eigen (MPL-2.0), fmt (MIT), inih (BSD-3-Clause), Microsoft GSL (MIT), spdlog (MIT) | Touchscreen of Microsoft Surface models with Intel Precise Touch (Surface Pro 4/5/6, Book 1/2, Laptop 1/2). Built unmodified from the pinned [linux-surface](https://github.com/linux-surface/linux-surface) and [iptsd](https://github.com/linux-surface/iptsd/releases/tag/v3.1.0) sources by `distro/config/hooks/normal/0440-surface-ipts.hook.chroot`. |
 | **Debian base system, kernel, firmware** | trixie (Debian 13) | Various (GPL/BSD/firmware EULAs) | Installed from official Debian repos. |
 
 ### GPL Source Code Offer
@@ -34,6 +35,7 @@ The above GPL- and LGPL-licensed components (Lyrion, squeezelite, CD tools, Qt 6
 
 - **Lyrion 9.1.0**: [LMS-Community GitHub](https://github.com/LMS-Community/slimserver/releases/tag/v9.1.0)
 - **Debian packages**: [Debian source repositories](https://deb.debian.org/debian-source/), suite `trixie`
+- **ipts / iptsd**: [linux-surface @ 321be2e](https://github.com/linux-surface/linux-surface/blob/321be2e7ebbb751153a97c6ed38836f2f4300dc6/patches/6.12/0005-ipts.patch), [iptsd v3.1.0](https://github.com/linux-surface/iptsd/archive/refs/tags/v3.1.0.tar.gz) (its static dependencies at the versions in `subprojects/*.wrap`)
 
 A complete source code archive matching this ISO can be provided upon written request to `info@osmiumsound.it`.
 

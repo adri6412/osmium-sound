@@ -1,0 +1,201 @@
+#!/bin/sh
+# HiFi Player appliance — touchscreen of the Surface Pro 4 (and the other
+# Microsoft Surface models with Intel Precise Touch: Pro 5/6, Book 1/2,
+# Laptop 1/2).
+#
+# On these the touch controller is not a HID device: it hangs off a second
+# Intel ME interface (PCI 8086:9d3e) and hands out raw capacitive heatmaps.
+# Two pieces turn that into a touchscreen, and Debian ships neither:
+#   - the `ipts` kernel driver, never merged upstream: built HERE from the
+#     linux-surface 6.12 patch (only its drivers/hid/ipts/ files, which are
+#     all new; the same patch also touches mei and the Intel IOMMU, see below);
+#   - iptsd, the daemon that reads the heatmaps from hidraw and feeds finger
+#     contacts back through uinput as a normal multitouch screen (the Qt
+#     interface and touchwatch then see it like any USB panel). Built from the
+#     pinned release with its dependencies linked in statically, so nothing
+#     but the binary stays behind.
+# The toolchain is purged again afterwards (same pattern as 0420-broadcom-wl).
+#
+# The IOMMU: linux-surface patches the kernel so the touch interface gets an
+# identity (pass-through) IOMMU domain, otherwise its DMA faults. Without that
+# patch the same is done at runtime by hifi-ipts-setup, which switches the
+# interface's IOMMU group to "identity" through sysfs (all its devices must be
+# unbound for that) BEFORE `ipts` ever loads: `ipts` is therefore blacklisted
+# from autoloading and loaded by hifi-ipts-setup.
+#
+# Not signed by Debian: with UEFI Secure Boot ON the kernel refuses ipts.ko and
+# the screen stays without touch, as before. On a Surface, Secure Boot is
+# turned off in the Surface UEFI (Security → Change configuration → None).
+set -e
+
+# linux-surface commit that last changed patches/6.12/0005-ipts.patch
+LS_COMMIT="321be2e7ebbb751153a97c6ed38836f2f4300dc6"
+LS_URL="https://raw.githubusercontent.com/linux-surface/linux-surface/${LS_COMMIT}/patches/6.12/0005-ipts.patch"
+LS_SHA256="3be7effab777f63c823dd61a18122e58fc00a6c324d0b25dcbb3946e50161e46"
+
+IPTSD_VER="3.1.0"
+IPTSD_URL="https://github.com/linux-surface/iptsd/archive/refs/tags/v${IPTSD_VER}.tar.gz"
+IPTSD_SHA256="af0aab95387a5107dfa8ac1ef90a29289f6b9d06e1a59121c9e5e732b27a266c"
+
+KVERS=$(ls /lib/modules)
+[ -n "$KVERS" ] || { echo "E: [hifi] no kernel in /lib/modules" >&2; exit 1; }
+
+echo "I: [hifi] building Surface IPTS touch (ipts for $KVERS, iptsd ${IPTSD_VER})"
+before=$(mktemp)
+dpkg-query -W -f='${Package}\n' | sort > "$before"
+
+HEADERS=""
+for k in $KVERS; do HEADERS="$HEADERS linux-headers-$k"; done
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    gcc g++ make git meson ninja-build pkgconf curl ca-certificates $HEADERS
+
+work=$(mktemp -d)
+curl -fsSL --retry 5 --retry-delay 5 -o "$work/ipts.patch" "$LS_URL"
+echo "$LS_SHA256  $work/ipts.patch" | sha256sum -c -
+curl -fsSL --retry 5 --retry-delay 5 -o "$work/iptsd.tar.gz" "$IPTSD_URL"
+echo "$IPTSD_SHA256  $work/iptsd.tar.gz" | sha256sum -c -
+
+# --- ipts.ko ---------------------------------------------------------------
+mkdir -p "$work/kernel"
+( cd "$work/kernel" && git apply --include='drivers/hid/ipts/*' "$work/ipts.patch" )
+keep=$(mktemp -d)
+for k in $KVERS; do
+    src="$work/kernel/drivers/hid/ipts"
+    make -C "/lib/modules/$k/build" M="$src" CONFIG_HID_IPTS=m clean >/dev/null
+    make -C "/lib/modules/$k/build" M="$src" CONFIG_HID_IPTS=m -j"$(nproc)" modules
+    mkdir -p "$keep/$k"
+    strip --strip-debug -o "$keep/$k/ipts.ko" "$src/ipts.ko"
+done
+
+# --- iptsd -----------------------------------------------------------------
+tar -xzf "$work/iptsd.tar.gz" -C "$work"
+(
+    cd "$work/iptsd-${IPTSD_VER}"
+    # Upstream builds the daemon for x86-64-v3 (AVX2). Every IPTS machine has
+    # it, but the image is one for all PCs: keep the baseline instruction set.
+    sed -i "/-march=x86-64-v3/d" src/meson.build
+    # forcefallback: CLI11, Eigen, fmt, inih, GSL and spdlog come from the
+    # hash-checked wraps and are linked in statically.
+    meson setup build --prefix=/usr/local --buildtype=release \
+        --wrap-mode=forcefallback -Dwerror=false -Db_lto=false \
+        -Ddebug_tools=[] -Dsample_config=false -Dservice_manager=[]
+    ninja -C build src/iptsd src/iptsd-check-device
+    install -m 0755 -s build/src/iptsd build/src/iptsd-check-device "$keep/"
+    mkdir -p "$keep/presets"
+    cp etc/presets/*.conf "$keep/presets/"
+)
+rm -rf "$work"
+
+# Purge everything this hook pulled in.
+after=$(mktemp)
+dpkg-query -W -f='${Package}\n' | sort > "$after"
+added=$(comm -13 "$before" "$after" | tr '\n' ' ')
+echo "I: [hifi] purging build-only packages: $added"
+DEBIAN_FRONTEND=noninteractive apt-get purge -y $added
+DEBIAN_FRONTEND=noninteractive apt-get autoremove --purge -y
+rm -f "$before" "$after"
+
+for k in $KVERS; do
+    mkdir -p "/lib/modules/$k/updates/surface-ipts"
+    cp "$keep/$k/ipts.ko" "/lib/modules/$k/updates/surface-ipts/"
+    depmod -a "$k"
+done
+install -m 0755 "$keep/iptsd" "$keep/iptsd-check-device" /usr/local/bin/
+mkdir -p /usr/local/share/iptsd
+cp "$keep/presets/"*.conf /usr/local/share/iptsd/
+rm -rf "$keep"
+ldd /usr/local/bin/iptsd
+
+cat > /etc/modprobe.d/hifi-surface-ipts.conf <<'EOF'
+# Osmium Sound — `ipts` (Surface touchscreen, built by hook 0440-surface-ipts)
+# must not autoload: hifi-ipts-setup@.service first moves the touch interface
+# to an identity IOMMU domain, then loads it by name.
+blacklist ipts
+EOF
+
+cat > /usr/local/sbin/hifi-ipts-setup.sh <<'EOF'
+#!/bin/sh
+# Osmium Sound — bring up the Intel Precise Touch screen of a Surface.
+# $1 = PCI address of the touch ME interface (8086:9d3e / 8086:34e4).
+#
+# Its DMA faults behind the Intel IOMMU (linux-surface patches the kernel to
+# give it a pass-through domain; Debian's kernel does not), so the IOMMU group
+# is switched to "identity" first. The kernel only allows that with every
+# device of the group unbound: the group also holds the main ME interface,
+# both are on mei_me, and both are bound again right after.
+dev="/sys/bus/pci/devices/$1"
+[ -e "$dev" ] || { echo "ipts: $1 is gone"; exit 0; }
+
+if [ -e "$dev/iommu_group" ]; then
+    grp=$(readlink -f "$dev/iommu_group")
+    if [ "$(cat "$grp/type")" != "identity" ]; then
+        bound=""
+        for d in "$grp"/devices/*; do
+            [ -e "$d/driver" ] || continue
+            a=$(basename "$d")
+            bound="$bound $a=$(basename "$(readlink -f "$d/driver")")"
+            echo "$a" > "$d/driver/unbind"
+        done
+        if echo identity > "$grp/type"; then
+            echo "ipts: IOMMU group $(basename "$grp") now identity"
+        else
+            echo "ipts: could not switch IOMMU group $(basename "$grp") to identity, touch may not work"
+        fi
+        for p in $bound; do
+            echo "${p%%=*}" > "/sys/bus/pci/drivers/${p#*=}/bind" \
+                || echo "ipts: could not bind ${p%%=*} back to ${p#*=}"
+        done
+    fi
+fi
+
+if ! modprobe ipts; then
+    if grep -qs '\[integrity\]\|\[confidentiality\]' /sys/kernel/security/lockdown; then
+        echo "ipts: the kernel refused the touch driver because UEFI Secure Boot is on;" \
+             "turn Secure Boot off in the Surface UEFI for the touchscreen to work"
+    fi
+    exit 1
+fi
+echo "ipts: driver loaded"
+EOF
+chmod 0755 /usr/local/sbin/hifi-ipts-setup.sh
+
+cat > /etc/systemd/system/hifi-ipts-setup@.service <<'EOF'
+[Unit]
+Description=Osmium Sound — Surface touchscreen (Intel Precise Touch) on %I
+DefaultDependencies=no
+After=systemd-udev-trigger.service systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/hifi-ipts-setup.sh %I
+EOF
+
+cat > /etc/systemd/system/iptsd@.service <<'EOF'
+[Unit]
+Description=Intel Precise Touch & Stylus Daemon (%I)
+Documentation=https://github.com/linux-surface/iptsd
+StopWhenUnneeded=yes
+BindsTo=%i.device
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/iptsd /%I
+Restart=on-failure
+RestartSec=2
+EOF
+
+cat > /etc/udev/rules.d/70-hifi-surface-ipts.rules <<'EOF'
+# Osmium Sound — Surface touchscreens with Intel Precise Touch (hook 0440-surface-ipts).
+# The touch ME interface: switch its IOMMU domain, then load ipts.
+ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x9d3e|0x34e4", \
+	TAG+="systemd", ENV{SYSTEMD_WANTS}+="hifi-ipts-setup@$kernel.service"
+# The hidraw node ipts creates: iptsd turns its heatmaps into a touchscreen.
+# DRIVERS matches an ancestor, so no other hidraw (keyboards, remotes) runs the check.
+SUBSYSTEM=="hidraw", ACTION=="add", DRIVERS=="ipts", TAG+="systemd", \
+	PROGRAM="/usr/local/bin/iptsd-check-device --quiet $env{DEVNAME}", \
+	PROGRAM="/bin/systemd-escape --path $env{DEVNAME}", \
+	ENV{SYSTEMD_WANTS}+="iptsd@$result.service"
+EOF
+
+echo "I: [hifi] surface-ipts hook done"

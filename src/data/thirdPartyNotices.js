@@ -45,6 +45,12 @@ export const thirdPartyNotices = [
         notes: 'Interface typeface and CJK glyphs.'
       },
       {
+        name: 'Surface touchscreen: ipts driver, iptsd',
+        version: 'linux-surface 6.12 patch, iptsd 3.1.0',
+        license: 'GPL-2.0+ (iptsd links CLI11, Eigen, fmt, inih, GSL, spdlog: BSD-3/MPL-2.0/MIT)',
+        notes: 'Built from the linux-surface sources for the touchscreen of Microsoft Surface models with Intel Precise Touch.'
+      },
+      {
         name: 'Debian base system, kernel, firmware',
         version: 'trixie (Debian 13)',
         license: 'Various (GPL/BSD/firmware EULAs)',
