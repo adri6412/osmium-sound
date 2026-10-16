@@ -503,7 +503,10 @@ jobs:
   usb-release:
     runs-on: ubuntu-latest
     needs: [build-iso, usb-image]
-    if: ${{ inputs.make_release && inputs.usb_image && needs.build-iso.result == 'success' && needs.usb-image.result == 'success' }}
+    # always(): build-iso needs `image`, which the single-filesystem ISO skips,
+    # and without it a skipped ancestor skips this job too (alpha27 shipped
+    # without its disk image that way).
+    if: ${{ always() && inputs.make_release && inputs.usb_image && needs.build-iso.result == 'success' && needs.usb-image.result == 'success' }}
     steps:
       - uses: actions/download-artifact@v8
         with:
