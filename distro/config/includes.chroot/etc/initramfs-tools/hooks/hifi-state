@@ -1,7 +1,8 @@
 #!/bin/sh
 # Osmium Sound — the tools scripts/local-bottom/hifi-state needs: the fsck for
 # /data (the stock `fsck` hook picks its binaries from fstab, which on an image
-# slot lists no ext4 at all) and the overlay module.
+# slot lists no ext4 at all) and the overlay module; and those of
+# scripts/local-premount/hifi-data-grow.
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "${1:-}" in
@@ -13,5 +14,18 @@ for b in e2fsck fsck.ext4; do
     p=$(command -v "$b" 2>/dev/null) || continue
     copy_exec "$p"
 done
+# scripts/local-premount/hifi-data-grow: stretching and formatting the data
+# partition at the first boot of the ready-made disk image. Under their own
+# names, like the conversion initrd's (usr/local/share/hifi-ab/initramfs/
+# hooks/hifi-ab): BusyBox's applets sit at the plain names, and copy_exec
+# does not overwrite a file that is already there.
+for b in sfdisk partx blockdev mke2fs; do
+    p=$(command -v "$b" 2>/dev/null) || { echo "W: hifi-state: $b not found" >&2; continue; }
+    copy_exec "$(readlink -f "$p")" "/usr/sbin/hifi-$b"
+done
+# without it mke2fs -t ext4 fails: "Filesystem type ext4 not defined"
+if [ -f /etc/mke2fs.conf ]; then
+    copy_file config /etc/mke2fs.conf
+fi
 manual_add_modules overlay squashfs vfat nls_cp437 nls_ascii nls_utf8
 exit 0

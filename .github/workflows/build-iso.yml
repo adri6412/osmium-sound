@@ -9,6 +9,8 @@ name: Build HiFi Player ISO (manual)
 #     • lyrion_url  : override the Lyrion .deb URL (optional)
 #     • suite       : Debian suite (default: trixie — labwc/xwayland non
 #                     esistono su bookworm, vedi build-distro.sh)
+#     • usb_image   : also build hifi-player-<tag>.img.xz, the image to write
+#                     straight onto a USB stick (default: true)
 
 on:
   workflow_dispatch:
@@ -36,6 +38,15 @@ on:
       # only to rebuild the historical layout.
       single_squashfs:
         description: 'One filesystem: the live system IS the image (~900 MiB smaller). Untick for the old two-filesystem ISO'
+        required: false
+        type: boolean
+        default: true
+      # Next to the ISO, never instead of it: a disk image people write onto
+      # a USB stick (or any disk) with Etcher or Rufus and boot as it is, with
+      # no installer round. The data partition takes the rest of the medium
+      # at the first boot. See distro/build-usb-image.sh.
+      usb_image:
+        description: 'Also build the ready-to-boot USB/disk image (.img.xz) next to the ISO'
         required: false
         type: boolean
         default: true
@@ -136,6 +147,108 @@ jobs:
           name: iso-system-image
           path: /mnt/image-out/hifi-image-*.rootfs.squashfs*
           retention-days: 3
+          if-no-files-found: error
+
+  # The ready-to-boot disk image. It builds its own system image, the same
+  # one the `image` job builds (and the OTA ships), rather than sharing that
+  # job: build-iso waits for `image`, and tying this one to it would make
+  # every single-filesystem ISO wait for a second image build for nothing.
+  usb-image:
+    if: ${{ inputs.usb_image }}
+    runs-on: ubuntu-latest
+    needs: qt-payload
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: debian:trixie
+      options: --privileged
+      volumes:
+        - /mnt:/mnt
+    steps:
+      - name: Install base tooling
+        run: |
+          set -eux
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git xz-utils sudo python3 build-essential \
+            live-build imagemagick xorriso debootstrap debian-archive-keyring rsync fakeroot \
+            cpio gzip squashfs-tools dosfstools mtools isolinux syslinux-common \
+            rauc e2fsprogs zstd grub-common openssl initramfs-tools-core \
+            fdisk mount util-linux
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: admin-webui/package-lock.json
+      - uses: actions/download-artifact@v8
+        with:
+          name: qt-payload
+          path: qtui
+      - run: chmod 755 qtui/hifi-qt
+      - name: Build web-admin (Vue)
+        run: (cd admin-webui && npm ci && npm run build)
+      - name: Build the system image (no bundle, no signing)
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mkdir -p /mnt/image-out
+          export IMAGE_OUT=/mnt/image-out IMAGE_WORK=/mnt IMAGE_VERSION="$INPUT_TAG"
+          chmod +x distro/build-distro.sh distro/build-image.sh
+          cd distro
+          ./build-distro.sh --stage image --suite trixie --no-bundle \
+            --qt-dir "$GITHUB_WORKSPACE/qtui" \
+            --app-version "${INPUT_TAG#v}"
+          ls -lh /mnt/image-out
+      - name: Build the disk image
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p /mnt/usb-out
+          SQ=$(ls -1 /mnt/image-out/hifi-image-*.rootfs.squashfs | head -n 1)
+          IMAGE_WORK=/mnt bash distro/build-usb-image.sh --rootfs "$SQ" \
+            --out "/mnt/usb-out/hifi-player-${INPUT_TAG}.img"
+          # xz: what Etcher, Rufus and Raspberry Pi Imager all open as it is.
+          # The empty slot B and ESP cost nothing; the slot is already gzip.
+          xz -T0 -6 -v "/mnt/usb-out/hifi-player-${INPUT_TAG}.img"
+          ls -lh /mnt/usb-out
+      - name: Checksum + sign the disk image
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          cd /mnt/usb-out
+          IMG="hifi-player-${INPUT_TAG}.img.xz"
+          sha256sum "$IMG" > "$IMG.sha256"
+          # Same offline Ed25519 key and same sidecars as the ISO.
+          if [ -z "$OTA_SIGNING_KEY" ]; then
+            echo "::error::OTA_SIGNING_KEY is not set"
+            exit 1
+          fi
+          printf '%s' "$OTA_SIGNING_KEY" > /tmp/ota-key.pem
+          openssl pkeyutl -sign -inkey /tmp/ota-key.pem -rawin \
+            -in "$IMG.sha256" -out "$IMG.sha256.sig"
+          rm -f /tmp/ota-key.pem
+          openssl pkeyutl -verify -pubin -inkey "$GITHUB_WORKSPACE/distro/ota-keys/ota-pubkey.pem" \
+            -rawin -in "$IMG.sha256" -sigfile "$IMG.sha256.sig" \
+            || { echo "::error::the signature does not verify against the shipped public key"; exit 1; }
+          SZ=$(stat -c %s "$IMG")
+          echo "disk image: $((SZ / 1048576)) MiB"
+          [ "$SZ" -le 2147483648 ] || { echo "::error::$IMG is over the 2 GiB limit for a release asset"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hifi-player-usb-${{ inputs.tag }}
+          path: /mnt/usb-out/hifi-player-*.img.xz*
+          retention-days: 14
           if-no-files-found: error
 
   build-iso:
@@ -385,12 +498,49 @@ jobs:
             ${{ steps.iso.outputs.iso }}.sha256
             ${{ steps.iso.outputs.iso }}.sha256.sig
 
+  # The disk image onto the same release, once build-iso has made sure the
+  # tag and the release exist: two jobs creating them at once would race.
+  usb-release:
+    runs-on: ubuntu-latest
+    needs: [build-iso, usb-image]
+    if: ${{ inputs.make_release && inputs.usb_image && needs.build-iso.result == 'success' && needs.usb-image.result == 'success' }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: hifi-player-usb-${{ inputs.tag }}
+          path: usb
+      - name: Read the release's current visibility
+        id: relstate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Same rule as build-iso: attaching a file never decides whether
+          # the release is visible.
+          D=$(gh release view "${{ inputs.tag }}" -R "${{ github.repository }}" --json isDraft -q .isDraft 2>/dev/null || echo false)
+          [ "$D" = "true" ] || D=false
+          echo "is_draft=$D" >> "$GITHUB_OUTPUT"
+          ls -lh usb
+      - name: Publish the disk image to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(inputs.tag, '-') }}
+          draft: ${{ steps.relstate.outputs.is_draft }}
+          files: |
+            usb/hifi-player-${{ inputs.tag }}.img.xz
+            usb/hifi-player-${{ inputs.tag }}.img.xz.sha256
+            usb/hifi-player-${{ inputs.tag }}.img.xz.sha256.sig
+
   # The stable ISO, its sidecars and latest.json to the root of the bucket
   # behind file.osmiumsound.it, where the site links it and the flasher looks
   # for it. Reads the files back from the release, so it also runs by hand.
+  # After usb-release, so the disk image goes along when there is one; a
+  # failed or skipped disk image never holds the ISO back.
   publish-iso:
-    needs: build-iso
-    if: ${{ inputs.make_release && !contains(inputs.tag, '-') }}
+    needs: [build-iso, usb-release]
+    if: ${{ always() && needs.build-iso.result == 'success' && inputs.make_release && !contains(inputs.tag, '-') }}
     uses: ./.github/workflows/publish-iso-r2.yml
     with:
       tag: ${{ inputs.tag }}

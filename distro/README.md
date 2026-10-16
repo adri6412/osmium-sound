@@ -288,6 +288,24 @@ change, Settings → SSH offers a "create SSH login" form.
 Without such a login, recovery is physical: GRUB `init=/bin/bash`, or the
 kiosk's own "reset web-admin password" button on the touchscreen.
 
+### Or: run straight from a USB stick, no install (`.img.xz`)
+
+The same workflow also builds `hifi-player-<tag>.img.xz` (input `usb_image`,
+on by default), released next to the ISO with its own `.sha256` and `.sig`.
+It is the disk the installer would write, already written: the five-partition
+A/B layout, the system image in slot A, GRUB for UEFI (shim, removable path,
+so Secure Boot works) and for legacy BIOS. Write it with balenaEtcher, Rufus,
+Raspberry Pi Imager or `xz -dc … | dd of=/dev/sdX` onto a stick or a disk of
+at least 8 GB, and boot it: it goes straight to the first-boot setup, and it
+takes OTA updates like an installed unit.
+
+At its first boot the initramfs (`scripts/local-premount/hifi-data-grow`)
+stretches the last partition, shipped as a 16 MiB `hifi-data-grow`, to the
+end of the medium, formats it, seeds the first-run marker and renames it
+`hifi-data`. The name is the only trigger, so no installed device is ever
+touched. Built by `distro/build-usb-image.sh` from the same system image the
+OTA ships; the bootloader is installed by that image's own `grub-install`.
+
 ### How the boot menu picks installer vs kiosk
 
 The boot menus are written by the binary hook

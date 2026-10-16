@@ -357,6 +357,7 @@ log "initrd dell'immagine (MODULES=most, zstd, plymouth)"
 # Windows): mkinitramfs IGNORA in silenzio gli hook non eseguibili, e gli
 # script hifi-* vanno resi eseguibili come fa l'hook 0300 per quelli legacy.
 chmod +x "$CH/etc/initramfs-tools/hooks/hifi-state" "$CH/etc/initramfs-tools/scripts/local-bottom/hifi-state" \
+    "$CH/etc/initramfs-tools/scripts/local-premount/hifi-data-grow" \
     "$SHARE/initramfs/hooks/hifi-ab" "$SHARE/initramfs/scripts/local-premount/hifi-ab-convert"
 chmod +x "$CH"/usr/local/sbin/hifi-*.sh "$CH"/usr/local/sbin/hifi-*.py "$CH"/usr/local/bin/*.py 2>/dev/null || true
 # the apt shim (/usr/local/bin/apt, ahead of /usr/bin in PATH and in sudo's

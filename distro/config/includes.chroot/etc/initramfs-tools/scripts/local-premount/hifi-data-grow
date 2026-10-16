@@ -1,0 +1,122 @@
+#!/bin/sh
+# shellcheck disable=SC2154,SC1091  # ROOT is set by the initramfs init; /scripts/functions only exists there
+# Osmium Sound — first boot of the ready-made disk image (build-usb-image.sh).
+#
+# That image is written straight onto a USB stick or a disk with Etcher, Rufus
+# or dd, so it cannot know how big the medium is: it carries the same A/B
+# layout the installer writes, but with a tiny, unformatted last partition
+# named "hifi-data-grow" in place of hifi-data. Here, with the root not
+# mounted yet, that partition is stretched to the end of the medium, formatted
+# as the installer would, seeded with the first-run marker, and only then
+# renamed hifi-data — from which point scripts/local-bottom/hifi-state mounts
+# it like on any installed unit.
+#
+# The name is the trigger, and nothing else: no installed or converted device
+# has a partition called that, so this can never touch real data. Every step
+# before the rename can be repeated: a power cut halfway leaves the old name,
+# and the next boot simply does it all again.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "${1:-}" in
+    prereqs) prereqs; exit 0 ;;
+esac
+. /scripts/functions
+
+slot=; rootspec=
+read -r cmdline < /proc/cmdline || cmdline=
+for x in $cmdline; do
+    case "$x" in
+        rauc.slot=*) slot=${x#rauc.slot=} ;;
+        root=*) rootspec=${x#root=} ;;
+    esac
+done
+[ -n "$slot" ] || exit 0
+
+# By absolute path, under their own names (hooks/hifi-state): BusyBox's
+# applets sit at the plain names and its mke2fs does not know -t.
+SFDISK=/usr/sbin/hifi-sfdisk; PARTX=/usr/sbin/hifi-partx; BLOCKDEV=/usr/sbin/hifi-blockdev
+MKE2FS=/usr/sbin/hifi-mke2fs
+for t in SFDISK PARTX BLOCKDEV MKE2FS; do
+    eval "v=\$$t"
+    [ -x "$v" ] || exit 0    # an initrd without the tools: leave the partition alone
+done
+
+case "$rootspec" in
+    PARTUUID=*) rootdev=$(readlink -f "/dev/disk/by-partuuid/${rootspec#PARTUUID=}" 2>/dev/null) ;;
+    UUID=*)     rootdev=$(readlink -f "/dev/disk/by-uuid/${rootspec#UUID=}" 2>/dev/null) ;;
+    /dev/*)     rootdev=$(readlink -f "$rootspec" 2>/dev/null) ;;
+    *)          rootdev=$(readlink -f "${ROOT:-}" 2>/dev/null) ;;
+esac
+[ -n "$rootdev" ] && [ -b "$rootdev" ] || exit 0
+disk=$(basename "$(readlink -f "/sys/class/block/${rootdev#/dev/}/..")")
+diskdev="/dev/$disk"
+[ -b "$diskdev" ] || exit 0
+
+# The partition by its GPT name, read with sfdisk: blkid would have to be
+# asked without its cache, and hifi-state asks it again after the rename.
+pn=
+for d in /sys/class/block/"$disk"*; do
+    [ -f "$d/partition" ] || continue
+    n=$(cat "$d/partition")
+    if [ "$("$SFDISK" --part-label "$diskdev" "$n" 2>/dev/null)" = hifi-data-grow ]; then
+        pn=$n
+        part="/dev/$(basename "$d")"
+        break
+    fi
+done
+[ -n "$pn" ] || exit 0
+
+LOG=/run/hifi-data-grow.log
+say() {
+    echo "hifi-data-grow: $*" >> "$LOG"
+    log_begin_msg "hifi-data-grow: $*"
+    log_end_msg
+}
+plymouth display-message --text="Osmium Sound: preparing the disk for first use…" 2>/dev/null || true
+say "growing $part (partition $pn of $diskdev) to the end of the disk"
+
+# 1. The backup GPT goes to the real end of the medium: it was written at the
+# end of the image, a few GB in. 2. The last partition takes all that follows.
+# --no-reread: the kernel holds no partition of this disk open yet, but the
+# check would still refuse while udev looks at it; partx tells it below.
+"$SFDISK" --relocate gpt-bak-std "$diskdev" >> "$LOG" 2>&1 \
+    || say "W: could not move the backup GPT to the end of the disk"
+echo ', +' | "$SFDISK" --no-reread --no-tell-kernel -N "$pn" "$diskdev" >> "$LOG" 2>&1 \
+    || say "W: sfdisk could not grow partition $pn"
+"$PARTX" -u --nr "$pn" "$diskdev" >> "$LOG" 2>&1 \
+    || "$BLOCKDEV" --rereadpt "$diskdev" >> "$LOG" 2>&1 || true
+udevadm settle --timeout=10 >/dev/null 2>&1 || true
+say "partition $pn: $(( $(cat "/sys/class/block/${part#/dev/}/size" 2>/dev/null || echo 0) / 2048 )) MiB"
+
+# Formatted exactly as hifi-disk-install.sh formats it. -t ext4 spelled out
+# and /etc/mke2fs.conf in the initrd: without them mke2fs falls back to ext2.
+if ! "$MKE2FS" -t ext4 -F -q -m 1 -L hifi-data -O metadata_csum_seed "$part" >> "$LOG" 2>&1; then
+    # Left with its old name: hifi-state finds no data partition, runs this
+    # boot on a tmpfs, and the next boot tries again.
+    say "E: mke2fs failed on $part"
+    exit 0
+fi
+
+# The installer's seeding, minus what hifi-state already does by itself (the
+# folders and the machine-id): the first-run marker, without which the unit
+# boots straight past the setup wizard.
+mkdir -p /run/hifi-data-grow
+if mount -t ext4 "$part" /run/hifi-data-grow >> "$LOG" 2>&1; then
+    mkdir -p /run/hifi-data-grow/etc/upper/hifi-player /run/hifi-data-grow/log
+    printf 'pending\n' > /run/hifi-data-grow/etc/upper/hifi-player/provisioning-pending
+    cp "$LOG" /run/hifi-data-grow/log/data-grow.log 2>/dev/null || true
+    sync
+    umount /run/hifi-data-grow
+else
+    say "E: cannot mount the new filesystem on $part"
+    exit 0
+fi
+
+# Last: from here on this is an ordinary hifi-data partition.
+if "$SFDISK" --no-reread --no-tell-kernel --part-label "$diskdev" "$pn" hifi-data >> "$LOG" 2>&1; then
+    rm -f /run/blkid/blkid.tab /etc/blkid.tab 2>/dev/null || true
+    say "done: $part is hifi-data"
+else
+    say "E: could not rename partition $pn to hifi-data"
+fi
+exit 0

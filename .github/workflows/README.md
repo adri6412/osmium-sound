@@ -8,7 +8,7 @@ storage housekeeping. Tag/branch conventions and the release channels are in
 | Workflow | Trigger | Produces |
 |---|---|---|
 | [`build-ui-ota.yml`](build-ui-ota.yml) | push of a `v*` tag (not `companion-*`); manual | OTA bundles `hifi-qtui-`, `hifi-system-`, `hifi-os-` (+ sha256, OS signature), offline dev installer, GitHub Release, payloads of every channel also on `file.osmiumsound.it/ota/<tag>/`, OTA manifest on `gh-pages` (+ a copy per channel on file.osmiumsound.it), then `prune-ota-r2.yml` |
-| [`build-iso.yml`](build-iso.yml) | manual (`workflow_dispatch`, tag as input) | `hifi-player-<tag>.iso` + `.sha256` + `.sha256.sig` + `latest.json` (artifact; optionally attached to the Release) |
+| [`build-iso.yml`](build-iso.yml) | manual (`workflow_dispatch`, tag as input) | `hifi-player-<tag>.iso` + `.sha256` + `.sha256.sig` + `latest.json`, and the USB/disk image `hifi-player-<tag>.img.xz` + sidecars (artifacts; optionally attached to the Release) |
 | [`build-companion-apk.yml`](build-companion-apk.yml) | push of a `companion-v*` tag; manual | signed APK, GitHub Release, unit-test/lint reports, self-hosted F-Droid repos on `gh-pages` |
 | [`build-flasher.yml`](build-flasher.yml) | manual | Osmium Flasher binaries (Windows `.exe`, Linux `.run`) as artifacts |
 | [`deploy-pages.yml`](deploy-pages.yml) | push to `main` touching `website/**`; end of every `build-ui-ota.yml` / `build-companion-apk.yml` run; manual | deploys `website/` + `ota/` + `fdroid/` from `gh-pages` to Cloudflare Pages (osmiumsound.it) with wrangler |
@@ -100,7 +100,17 @@ the **trixie** appliance image by default.
 **Inputs:** `tag` (required, e.g. `v2.5.21`), `make_release` (default true:
 create the tag if missing and attach the ISO to its Release — prerelease when
 the tag has a hyphen), `lyrion_url` (override the Lyrion `.deb` URL),
-`suite` (default `trixie`).
+`suite` (default `trixie`), `usb_image` (default true: also build the
+ready-to-boot disk image, below).
+
+**USB/disk image:** with `usb_image` on, the `usb-image` job builds the system
+image (the same `--stage image --no-bundle` the OTA ships) and turns it into
+`hifi-player-<tag>.img.xz` with `distro/build-usb-image.sh`: the installer's
+A/B layout already written, to flash with Etcher/Rufus and boot as it is (the
+data partition fills the medium at the first boot). It runs beside the ISO,
+never instead of it; `usb-release` attaches it, with its `.sha256` and
+`.sha256.sig`, to the same Release once `build-iso` has created that, and
+`publish-iso-r2.yml` copies it to file.osmiumsound.it along with a stable ISO.
 
 **Steps:** a separate `qt-payload` job on the bare runner builds the Qt on-screen interface (`native-ui-qt/ci/build-payload.sh`, needs Docker) → build the Electron app (still required by `build-distro.sh --app-dir`) and the web admin → `distro/build-distro.sh --app-dir … --qt-dir … --app-version <tag> --suite <suite>` as root → `hifi-player-<tag>.iso` → sha256 + **Ed25519 signature of the `.sha256` sidecar** (same key as the OS channel) → `latest.json` (`make-iso-manifest.py`, the manifest Osmium Flasher polls) → artifact `hifi-player-iso-<tag>` → optional Release upload.
 
