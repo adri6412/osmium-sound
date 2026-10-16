@@ -36,6 +36,9 @@ systemctl enable hifi-sources.service || true
 # setup hotspot + captive portal. Safe everywhere: it's a no-op portwise on a
 # configured unit and the marker gates the hotspot behaviour.
 systemctl enable hifi-webui.service   || true
+# A live session of the ISO runs the slot image itself, which has no marker in
+# /etc and no data partition: this puts both back (boot=live only).
+systemctl enable hifi-live-state.service || true
 
 echo "I: [hifi] enabling audio backend (squeezelite + Lyrion Music Server)"
 systemctl enable squeezelite.service        || true

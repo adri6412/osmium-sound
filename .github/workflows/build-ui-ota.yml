@@ -261,6 +261,8 @@ jobs:
           bash tests/test-factory-reset.sh
           echo "== lyrion bootstrap (shell) =="
           bash tests/test-lyrion-ensure.sh
+          echo "== live session state (shell) =="
+          bash tests/test-live-state.sh
           echo "== streaming read-ahead (shell) =="
           bash tests/test-stream-tune.sh
           echo "== image bundle download (shell) =="
@@ -379,7 +381,8 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-lyrion-ensure.sh \
             tests/test-ext-guardian.sh tests/test-apt-shim.sh tests/test-factory-reset.sh \
             tests/test-lyrion-ensure.sh tests/test-stream-tune.sh tests/test-ab-media.sh \
-            tests/test-bundle-fetch.sh \
+            tests/test-bundle-fetch.sh tests/test-live-state.sh \
+            distro/config/includes.chroot/usr/local/sbin/hifi-live-state.sh \
             tests/test-ab-image.sh distro/config/includes.chroot/usr/local/sbin/hifi-ab-image.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-boot-health.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-boot-watchdog.sh \

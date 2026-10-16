@@ -1,0 +1,16 @@
+[Unit]
+# Osmium Sound — /data in memory and the first-boot marker for a live session
+# of the ISO, whose root is the slot image (see hifi-live-state.sh). Before
+# everything that reads either of them.
+Description=Osmium Sound - state of a live session
+ConditionKernelCommandLine=boot=live
+After=local-fs.target
+Before=hifi-api.service hifi-webui.service hifi-sources.service hifi-qt.service lyrionmusicserver.service hifi-disk-reserve.service smbd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh /usr/local/sbin/hifi-live-state.sh
+
+[Install]
+WantedBy=multi-user.target
