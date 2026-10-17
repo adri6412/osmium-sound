@@ -110,14 +110,17 @@ A/B layout already written, to flash with Etcher/Rufus and boot as it is (the
 data partition fills the medium at the first boot). It runs beside the ISO,
 never instead of it; `usb-release` attaches it, with its `.sha256` and
 `.sha256.sig`, to the same Release once `build-iso` has created that, and
-`publish-iso-r2.yml` copies it to file.osmiumsound.it along with a stable ISO.
+`publish-iso-r2.yml` copies it to file.osmiumsound.it along with the ISO.
 
 **Steps:** a separate `qt-payload` job on the bare runner builds the Qt on-screen interface (`native-ui-qt/ci/build-payload.sh`, needs Docker) → build the Electron app (still required by `build-distro.sh --app-dir`) and the web admin → `distro/build-distro.sh --app-dir … --qt-dir … --app-version <tag> --suite <suite>` as root → `hifi-player-<tag>.iso` → sha256 + **Ed25519 signature of the `.sha256` sidecar** (same key as the OS channel) → `latest.json` (`make-iso-manifest.py`, the manifest Osmium Flasher polls) → artifact `hifi-player-iso-<tag>` → optional Release upload.
 
 The ISO itself is **not** served from GitHub to end users: the published image,
-its sidecars and `latest.json` are uploaded to **file.osmiumsound.it** (the
-flasher reads `https://file.osmiumsound.it/latest.json`). `tools/publish-iso.sh`
-produces that exact set of files by hand when needed.
+its sidecars and the flasher's manifest are uploaded to **file.osmiumsound.it**
+by `publish-iso-r2.yml`. Two channels, the two choices Osmium Flasher offers:
+a stable tag (`vX.Y.Z`) writes `latest.json` and every version stays in the
+bucket; a dev tag (`vX.Y.Z-dev.N`) writes `latest-dev.json` and the previous
+dev files are removed. An alpha is never published there. `tools/publish-iso.sh`
+produces the production set of files by hand when needed.
 
 > ⚠️ `gh workflow run build-iso.yml` needs an explicit `--ref <tag-or-branch>`;
 > without it the run builds from `main` regardless of the `tag` input.

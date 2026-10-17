@@ -70,7 +70,13 @@ Windows.
 
 ## What the first phase does
 
-1. Reads `https://file.osmiumsound.it/latest.json` to find the current image.
+1. Reads the two manifests next to the images on file.osmiumsound.it —
+   `latest.json` (production, stable) and `latest-dev.json` (development, the
+   newest work; a 404 just means none is out yet) — and offers what they carry:
+   the installer **ISO**, which installs Osmium Sound on the PC's internal disk,
+   and the ready-to-boot **USB image** (`.img.xz`, with `raw_size` in the
+   manifest), which runs it from the stick itself. The screens after the write
+   follow the choice (`data-only="iso"` / `data-only="usb"` in the markup).
 2. Verifies the Ed25519 signature over the `.sha256` sidecar with the OTA public
    key in `assets/ota-pubkey.pem`, then checks the image against the digest that
    sidecar carries. **An unsigned image is refused**, unlike OS OTA bundles where
@@ -84,6 +90,12 @@ Windows.
    not quietly leave a gigabyte behind for each one. On Windows that directory is
    `%APPDATA%\Osmium Flasher\images`, on Linux `~/.config/Osmium Flasher/images`,
    and on macOS `~/Library/Application Support/Osmium Flasher/images`.
+   The USB image is then **unpacked in the cache** (`unpack()`, lzma-native)
+   to a plain `.img`, and that is what gets written. Not etcher-sdk's on-the-fly
+   `XzSource`: writing alpha27's image through it onto a slow destination put
+   the system 16 MiB off its place (the verify pass caught it). Unpacked first,
+   it takes the ISO's write path. The cache then holds the pair, archive and
+   disk (~1 + 3.2 GB).
 4. Writes the image raw to the chosen stick and reads it back to verify.
 
 ## Layout

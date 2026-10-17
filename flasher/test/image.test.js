@@ -305,3 +305,100 @@ test('a cached image is reused instead of downloaded again', async () => {
     await fsp.rm(cacheDir, { recursive: true, force: true });
   }
 });
+
+// ── two channels, two kinds of image ──────────────────────────────────────
+
+function bothImages(tag) {
+  const iso = `hifi-player-${tag}.iso`;
+  const img = `hifi-player-${tag}.img.xz`;
+  const entry = (name, size, extra = {}) => ({ name, browser_download_url: `${base}/${name}`, size, ...extra });
+  return {
+    tag_name: tag, name: tag, body: '',
+    assets: [
+      entry(iso, 900), entry(`${iso}.sha256`, 90), entry(`${iso}.sha256.sig`, 64),
+      entry(img, 1000, { raw_size: 3241148416 }), entry(`${img}.sha256`, 90), entry(`${img}.sha256.sig`, 64),
+    ],
+  };
+}
+
+test('the catalog offers both images of a channel, and the raw size of the USB one', async () => {
+  await fsp.writeFile(path.join(dir, 'cat-prod.json'), JSON.stringify(bothImages('v9.9.9')));
+  await fsp.writeFile(path.join(dir, 'cat-dev.json'), JSON.stringify(bothImages('v9.9.10-dev.1')));
+  const cat = await image.fetchCatalog({ prod: `${base}/cat-prod.json`, dev: `${base}/cat-dev.json` });
+
+  assert.equal(cat.prod.ok, true);
+  assert.equal(cat.prod.iso.name, 'hifi-player-v9.9.9.iso');
+  assert.equal(cat.prod.iso.kind, 'iso');
+  assert.equal(cat.prod.usb.name, 'hifi-player-v9.9.9.img.xz');
+  assert.equal(cat.prod.usb.kind, 'usb');
+  assert.equal(cat.prod.usb.rawSize, 3241148416);
+  assert.ok(cat.prod.usb.sigUrl.endsWith('.img.xz.sha256.sig'));
+  // The sidecars of one image must never be taken for the other's.
+  assert.ok(cat.prod.iso.shaUrl.endsWith('.iso.sha256'));
+  assert.equal(cat.dev.version, 'v9.9.10-dev.1');
+});
+
+test('a channel that is not published yet is "not yet", not an error', async () => {
+  await fsp.writeFile(path.join(dir, 'cat-prod.json'), JSON.stringify(manifest()));
+  const cat = await image.fetchCatalog({ prod: `${base}/cat-prod.json`, dev: `${base}/no-such-manifest.json` });
+  assert.equal(cat.prod.ok, true);
+  assert.equal(cat.prod.iso.name, IMAGE_NAME);
+  assert.equal(cat.prod.usb, null, 'an ISO-only manifest offers no USB image');
+  assert.deepEqual([cat.dev.ok, cat.dev.code], [false, 'ENOTYET']);
+});
+
+test('a manifest an older flasher reads still yields the ISO', async () => {
+  // 1.0.1 and earlier take the first .iso asset: the USB image listed next to
+  // it must not get in the way.
+  await fsp.writeFile(path.join(dir, 'cat-both.json'), JSON.stringify(bothImages('v9.9.9')));
+  const release = await image.fetchManifest(`${base}/cat-both.json`);
+  assert.equal(release.name, 'hifi-player-v9.9.9.iso');
+});
+
+test('the shipped manifest addresses are the public ones', () => {
+  assert.equal(image.MANIFEST_URLS.prod, 'https://file.osmiumsound.it/latest.json');
+  assert.equal(image.MANIFEST_URLS.dev, 'https://file.osmiumsound.it/latest-dev.json');
+});
+
+test('the USB image is checked as an archive, then unpacked to the raw disk', async () => {
+  const lzma = require('lzma-native');
+  const name = 'hifi-player-v9.9.9-usb.img.xz';
+  const raw = Buffer.concat([crypto.randomBytes(512 * 1024), Buffer.alloc(2 * 1024 * 1024), crypto.randomBytes(512 * 1024)]);
+  const xz = await new Promise((resolve, reject) =>
+    lzma.compress(raw, { preset: 1 }, (out, err) => (err ? reject(err) : resolve(out))));
+  await fsp.writeFile(path.join(dir, name), xz);
+  const side = sidecarFor(name, crypto.createHash('sha256').update(xz).digest('hex'));
+  await fsp.writeFile(path.join(dir, `${name}.sha256`), side);
+  await fsp.writeFile(path.join(dir, `${name}.sha256.sig`), sign(side));
+  const entry = (n, size, extra = {}) => ({ name: n, browser_download_url: `${base}/${n}`, size, ...extra });
+  await fsp.writeFile(path.join(dir, 'usb.json'), JSON.stringify({
+    tag_name: 'v9.9.9', assets: [entry(name, xz.length, { raw_size: raw.length }), entry(`${name}.sha256`, 90), entry(`${name}.sha256.sig`, 64)],
+  }));
+
+  const usbCache = await fsp.mkdtemp(path.join(os.tmpdir(), 'osmium-usb-cache-'));
+  try {
+    const release = await image.fetchManifest(`${base}/usb.json`, 'usb');
+    const phases = new Set();
+    const result = await image.prepare(release, usbCache, PUBLIC_KEY, { onProgress: (p) => phases.add(p.phase) });
+
+    assert.equal(path.basename(result.file), 'hifi-player-v9.9.9-usb.img', 'the writer gets the raw image');
+    assert.equal(result.size, raw.length);
+    assert.ok((await fsp.readFile(result.file)).equals(raw), 'the unpacked image differs from the original');
+    assert.ok(phases.has('unpacking'), 'the interface is told about the unpacking');
+    // Both stay: the archive the signature vouches for and the disk made from it.
+    const left = (await fsp.readdir(usbCache)).sort();
+    assert.deepEqual(left, ['hifi-player-v9.9.9-usb.img', 'hifi-player-v9.9.9-usb.img.xz']);
+    assert.deepEqual(await image.pruneCache(usbCache, name), [], 'pruning must keep the pair');
+  } finally {
+    await fsp.rm(usbCache, { recursive: true, force: true });
+  }
+});
+
+test('a damaged archive is reported as such, and leaves nothing half-unpacked', async () => {
+  const bad = path.join(cache, 'broken.img.xz');
+  await fsp.writeFile(bad, Buffer.from('this is not xz at all'));
+  await assert.rejects(image.unpack(bad), (err) => err.code === 'EIMAGE');
+  const left = await fsp.readdir(cache);
+  assert.ok(!left.includes('broken.img') && !left.includes('broken.img.part'));
+  await fsp.rm(bad, { force: true });
+});

@@ -4,7 +4,7 @@
  * Osmium Flasher — main process.
  *
  * Stays unprivileged for its whole life. It fetches the manifest, downloads and
- * verifies the installer image, and lists candidate drives; the actual raw write
+ * verifies the image, and lists candidate drives; the actual raw write
  * is delegated to an elevated helper (see src/elevate.js).
  */
 
@@ -42,7 +42,7 @@ function failure(err) {
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 760,
-    height: 620,
+    height: 720,
     minWidth: 640,
     minHeight: 560,
     backgroundColor: '#101214',
@@ -81,11 +81,8 @@ ipcMain.handle('app:info', () => ({
 }));
 
 ipcMain.handle('manifest:fetch', async () => {
-  try {
-    return { ok: true, release: await image.fetchManifest() };
-  } catch (err) {
-    return failure(err);
-  }
+  // Never throws: each channel reports its own state.
+  return { ok: true, catalog: await image.fetchCatalog() };
 });
 
 ipcMain.handle('image:prepare', async (_event, release) => {
@@ -110,7 +107,8 @@ ipcMain.handle('image:cancel', () => {
 });
 
 ipcMain.handle('image:pick', async () => {
-  // Escape hatch for testers who already have an .iso on disk.
+  // Escape hatch for testers who already have an image on disk: the ISO, or
+  // the USB image already unpacked (.img; an .img.xz goes through `xz -d` first).
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Select an Osmium Sound image',
     filters: [{ name: 'Disk image', extensions: ['iso', 'img'] }],

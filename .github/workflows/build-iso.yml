@@ -543,7 +543,10 @@ jobs:
   # failed or skipped disk image never holds the ISO back.
   publish-iso:
     needs: [build-iso, usb-release]
-    if: ${{ always() && needs.build-iso.result == 'success' && inputs.make_release && !contains(inputs.tag, '-') }}
+    # Production (vX.Y.Z) and development (vX.Y.Z-dev.N) go to
+    # file.osmiumsound.it, the two channels Osmium Flasher offers; an alpha
+    # stays on its GitHub release.
+    if: ${{ always() && needs.build-iso.result == 'success' && inputs.make_release && (!contains(inputs.tag, '-') || (contains(inputs.tag, '-dev.') && !contains(inputs.tag, '-alpha'))) }}
     uses: ./.github/workflows/publish-iso-r2.yml
     with:
       tag: ${{ inputs.tag }}

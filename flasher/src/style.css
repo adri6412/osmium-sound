@@ -103,6 +103,26 @@ p.lead { color: var(--muted); margin: 0 0 1.3rem; }
   font-size: 0.9rem; color: var(--accent);
 }
 .release .size { color: var(--muted); font-size: 0.82rem; margin-left: auto; }
+.release.missing .tag { color: var(--muted); font-family: inherit; }
+
+/* ── the two choices: version and image ─────────────────────────────────── */
+h3.choice-title { font-size: 0.9rem; font-weight: 620; margin: 1.1rem 0 0.5rem; }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.9rem; }
+.choice {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
+  padding: 0.8rem 0.9rem; cursor: pointer; text-align: left;
+  color: inherit; font: inherit;
+}
+.choice:hover { background: var(--panel-hi); }
+.choice.sel { border-color: var(--accent); background: var(--panel-hi); }
+.choice .choice-name { font-weight: 620; }
+.choice .choice-desc { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+.choice .choice-ver {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem; color: var(--accent); margin-top: 0.15rem;
+}
+.choice.dev .choice-desc { color: #d9b37c; }
 
 /* ── drive list ─────────────────────────────────────────────────────────── */
 .drives { display: flex; flex-direction: column; gap: 0.5rem; }

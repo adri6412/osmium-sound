@@ -6,7 +6,13 @@
    The app walks the whole install, not just the stick: prepare the USB stick,
    boot the mini PC from it, then run the on-device installer. Phases 2 and 3
    happen on the other machine, so they are instructions rather than actions --
-   but leaving them out is what left people stranded halfway. */
+   but leaving them out is what left people stranded halfway.
+
+   Two choices up front: the channel (production, stable; development, the
+   newest work) and the image -- the installer ISO, which puts Osmium Sound on
+   the PC's internal disk, or the USB image, which runs it from the stick. The
+   later screens follow the image: elements marked data-only="iso" or
+   data-only="usb" show for that one alone. */
 
 // ── strings ────────────────────────────────────────────────────────────────
 const STRINGS = {
@@ -14,17 +20,30 @@ const STRINGS = {
     'step.stick': 'USB stick',
     'step.boot': 'Boot',
     'step.install': 'Install',
+    'step.setup': 'Setup',
 
-    'welcome.title': 'Install Osmium Sound on a mini PC',
-    'welcome.lead': 'Three steps: this app writes a USB stick, you boot the mini PC from it, and the installer on that machine does the rest. Nothing on this computer is touched.',
+    'welcome.title': 'Osmium Sound on a mini PC',
+    'welcome.lead': 'This app writes a USB stick for the mini PC: either to install Osmium Sound on its internal disk, or to run it straight from the stick. Nothing on this computer is touched.',
     'welcome.needTitle': 'What you need',
     'welcome.need1': 'An x86 mini PC to turn into the player.',
-    'welcome.need2': 'A USB stick of at least 8 GB. Everything already on it will be erased.',
+    'welcome.need2': 'A USB stick of at least 8 GB. Everything already on it will be erased. To run Osmium Sound from the stick, a fast USB 3 one is best.',
     'welcome.need3': 'This computer, connected to the internet — the image is about 1 GB.',
     'welcome.useLocal': 'Use an image already on this computer instead',
     'welcome.restore': 'Restore a USB stick to factory condition',
     'welcome.loading': 'Looking for the current image…',
     'welcome.localPicked': 'Local image — not signature-checked',
+    'welcome.channelTitle': 'Which version?',
+    'welcome.prod': 'Production',
+    'welcome.prodDesc': 'Stable: the version recommended for everyone.',
+    'welcome.dev': 'Development',
+    'welcome.devDesc': 'Has the latest new features, but may be unstable.',
+    'welcome.kindTitle': 'How will you use it?',
+    'welcome.iso': 'Install on the PC\'s internal disk',
+    'welcome.isoDesc': 'The stick is only for installing: Osmium Sound is copied onto the mini PC\'s internal disk, which is erased. Then the stick comes out.',
+    'welcome.usb': 'Use it straight from the USB stick',
+    'welcome.usbDesc': 'Osmium Sound starts and runs from the stick: the PC\'s internal disk is not touched. The stick stays plugged in.',
+    'welcome.notYet': 'Not available yet for this choice.',
+    'welcome.notYetShort': 'not out yet',
 
     'select.title': 'Choose the USB stick',
     'select.lead': 'Only removable drives are listed. Your system disk is never shown.',
@@ -39,6 +58,8 @@ const STRINGS = {
 
     'work.downloading': 'Downloading the image',
     'work.checking': 'Checking the image',
+    'work.unpacking': 'Unpacking the image',
+    'work.leadUnpack': 'The USB image travels compressed: it is unpacked here, on this computer, before it is written. This takes a few minutes.',
     'work.flashing': 'Writing to the USB stick',
     'work.verifying': 'Verifying what was written',
     'work.starting': 'Waiting for permission…',
@@ -54,8 +75,11 @@ const STRINGS = {
     'boot.s1': 'Plug the stick into the mini PC and switch it on.',
     'boot.s3': 'Restart and tap the boot-menu key repeatedly — usually F11, F12, Esc or Del, depending on the motherboard.',
     'boot.s4': 'Pick the USB stick from the list, then choose <strong>Install Osmium Sound</strong> from the menu that appears.',
-    'boot.tryTitle': 'Want a look first?',
-    'boot.try': 'Choose <strong>Try Osmium Sound (no install)</strong> instead to run the interface straight from the stick, without writing anything to the mini PC\'s disk. If it does not log in by itself, use <code>hifi</code> / <code>hifi</code>.',
+    'boot.s4Usb': 'Pick the USB stick from the list: Osmium Sound starts by itself.',
+    'boot.keepTitle': 'Leave the stick plugged in',
+    'boot.keep': 'From now on the stick is Osmium Sound\'s disk: the system, your settings and the updates all live on it. Take it out and the mini PC goes back to whatever it ran before.',
+    'boot.tryTitle': 'Just want to try it?',
+    'boot.try': 'Write the stick again choosing <strong>Use it straight from the USB stick</strong>: Osmium Sound then runs from the stick, without touching the mini PC\'s disk.',
     'boot.troubleTitle': 'The stick is not in the boot menu',
     'boot.trouble': 'Check that USB booting is enabled in the firmware setup, and try the other USB ports: rear ones are often more reliable than front ones. The image is signed for Secure Boot, so that is not the problem — but if nothing else works, a fussy firmware may still need Secure Boot turned off.',
 
@@ -69,6 +93,16 @@ const STRINGS = {
     'install.phoneTitle': 'No keyboard or mouse on the mini PC?',
     'install.phone': 'A QR code sits in the top-right corner of the screen from the very first frame. Scan it and run the whole install from your phone — the mini PC\'s screen mirrors the progress either way.',
 
+    'setup.title': 'Set up Osmium Sound',
+    'setup.s1': 'On the first start the stick makes room for your data by itself. It takes a moment: do not switch the mini PC off.',
+    'setup.s2': 'Then the guided setup appears: language, network, the player\'s name and the rest. Follow it on the screen, or from your phone by scanning the QR code.',
+    'setup.s3': 'When it is done, Osmium Sound is ready to play.',
+    'setup.laterTitle': 'Want it on the internal disk later?',
+    'setup.later': 'Come back here and choose <strong>Install on the PC\'s internal disk</strong>.',
+    'finishUsb.title': 'Osmium Sound is ready on the stick',
+    'finishUsb.lead': 'If the mini PC does not start from the stick by itself, put USB first in the firmware\'s boot order, or use the boot-menu key every time.',
+    'finishUsb.nextTitle': 'Updates arrive by themselves',
+    'finishUsb.next': 'The interface, the operating system and the music server are updated over the air from the Settings screen, straight on the stick. Do not use the stick for anything else: it holds the system and your settings.',
     'finish.title': 'That is the whole install',
     'finish.lead': 'The mini PC restarts into Osmium Sound on its own. Give it a moment on first boot while it sets itself up.',
     'finish.nextTitle': 'You will not need the stick again',
@@ -113,6 +147,9 @@ const STRINGS = {
     'err.EFORMAT': 'The stick could not be reformatted.',
     'err.ENOSIZE': 'The drive did not report its size, so it cannot be reformatted.',
     'err.EUNEXPECTED': 'Something went wrong that was not anticipated.',
+    'err.ENOTYET': 'This version is not available yet.',
+    'err.EIMAGE': 'The image could not be unpacked: it may be damaged. Try again.',
+    'err.ENOSPACE': 'This computer does not have enough free space: unpacking the USB image needs about 5 GB.',
     'error.report': 'Report file:',
   },
 
@@ -120,17 +157,30 @@ const STRINGS = {
     'step.stick': 'Chiavetta',
     'step.boot': 'Avvio',
     'step.install': 'Installazione',
+    'step.setup': 'Configurazione',
 
-    'welcome.title': 'Installa Osmium Sound su un mini PC',
-    'welcome.lead': "Tre passaggi: questa app scrive una chiavetta USB, tu avvii il mini PC da quella, e l'installer su quella macchina fa il resto. Su questo computer non viene toccato nulla.",
+    'welcome.title': 'Osmium Sound su un mini PC',
+    'welcome.lead': 'Questa app prepara una chiavetta USB per il mini PC: per installare Osmium Sound sul suo disco interno, oppure per usarlo direttamente dalla chiavetta. Su questo computer non viene toccato nulla.',
     'welcome.needTitle': 'Cosa serve',
     'welcome.need1': 'Un mini PC x86 da trasformare nel lettore.',
-    'welcome.need2': 'Una chiavetta USB da almeno 8 GB. Tutto quello che contiene verrà cancellato.',
+    'welcome.need2': 'Una chiavetta USB da almeno 8 GB. Tutto quello che contiene verrà cancellato. Per usare Osmium Sound dalla chiavetta è meglio una veloce, USB 3.',
     'welcome.need3': "Questo computer, connesso a internet — l'immagine pesa circa 1 GB.",
     'welcome.useLocal': "Usa invece un'immagine già presente su questo computer",
     'welcome.restore': 'Riporta una chiavetta alle condizioni di fabbrica',
     'welcome.loading': "Ricerca dell'immagine corrente…",
     'welcome.localPicked': 'Immagine locale — firma non verificata',
+    'welcome.channelTitle': 'Quale versione?',
+    'welcome.prod': 'Produzione',
+    'welcome.prodDesc': 'Stabile: la versione consigliata per tutti.',
+    'welcome.dev': 'Sviluppo',
+    'welcome.devDesc': 'Contiene le ultime novità, ma può essere instabile.',
+    'welcome.kindTitle': 'Come vuoi usarlo?',
+    'welcome.iso': 'Installa sul disco interno del PC',
+    'welcome.isoDesc': 'La chiavetta serve solo per installare: Osmium Sound viene copiato sul disco interno del mini PC, che viene cancellato. Poi la chiavetta si toglie.',
+    'welcome.usb': 'Usa direttamente dalla chiavetta USB',
+    'welcome.usbDesc': 'Osmium Sound parte e funziona dalla chiavetta: il disco interno del PC non viene toccato. La chiavetta resta sempre collegata.',
+    'welcome.notYet': 'Non ancora disponibile per questa scelta.',
+    'welcome.notYetShort': 'non ancora uscita',
 
     'select.title': 'Scegli la chiavetta USB',
     'select.lead': 'Sono elencate solo le unità rimovibili. Il disco di sistema non compare mai.',
@@ -145,6 +195,8 @@ const STRINGS = {
 
     'work.downloading': "Download dell'immagine",
     'work.checking': "Controllo dell'immagine",
+    'work.unpacking': "Decompressione dell'immagine",
+    'work.leadUnpack': "L'immagine per chiavetta viaggia compressa: viene decompressa qui, su questo computer, prima di essere scritta. Ci vuole qualche minuto.",
     'work.flashing': 'Scrittura sulla chiavetta',
     'work.verifying': 'Verifica di quanto scritto',
     'work.starting': "In attesa dell'autorizzazione…",
@@ -160,8 +212,11 @@ const STRINGS = {
     'boot.s1': 'Collega la chiavetta al mini PC e accendilo.',
     'boot.s3': 'Riavvia e premi ripetutamente il tasto del menu di avvio — di solito F11, F12, Esc o Canc, a seconda della scheda madre.',
     'boot.s4': "Scegli la chiavetta dall'elenco, poi seleziona <strong>Install Osmium Sound</strong> dal menu che compare.",
-    'boot.tryTitle': 'Vuoi prima dare un\'occhiata?',
-    'boot.try': "Scegli invece <strong>Try Osmium Sound (no install)</strong> per far partire l'interfaccia direttamente dalla chiavetta, senza scrivere nulla sul disco del mini PC. Se non effettua l'accesso da solo, usa <code>hifi</code> / <code>hifi</code>.",
+    'boot.s4Usb': "Scegli la chiavetta dall'elenco: Osmium Sound parte da solo.",
+    'boot.keepTitle': 'Lascia la chiavetta collegata',
+    'boot.keep': 'Da ora la chiavetta è il disco di Osmium Sound: sistema, impostazioni e aggiornamenti stanno lì. Se la togli, il mini PC torna al sistema che aveva prima.',
+    'boot.tryTitle': 'Vuoi solo provarlo?',
+    'boot.try': 'Riscrivi la chiavetta scegliendo <strong>Usa direttamente dalla chiavetta USB</strong>: Osmium Sound gira dalla chiavetta, senza toccare il disco del mini PC.',
     'boot.troubleTitle': "La chiavetta non compare nel menu di avvio",
     'boot.trouble': "Verifica che l'avvio da USB sia abilitato nel setup del firmware e prova le altre porte USB — quelle posteriori sono spesso più affidabili di quelle frontali. L'immagine è firmata per il Secure Boot, quindi non è quello il problema — ma se non si sblocca in altro modo, un firmware schizzinoso potrebbe volerlo comunque disattivato.",
 
@@ -175,6 +230,16 @@ const STRINGS = {
     'install.phoneTitle': 'Niente tastiera o mouse sul mini PC?',
     'install.phone': "Un QR code compare nell'angolo in alto a destra dello schermo fin dal primo istante. Scansionalo e guida tutta l'installazione dal telefono — lo schermo del mini PC mostra comunque l'avanzamento.",
 
+    'setup.title': 'Configura Osmium Sound',
+    'setup.s1': 'Al primo avvio la chiavetta prepara da sola lo spazio per i tuoi dati. Ci vuole un momento: non spegnere il mini PC.',
+    'setup.s2': 'Poi compare la configurazione guidata: lingua, rete, nome del lettore e il resto. Puoi seguirla sullo schermo oppure dal telefono, inquadrando il QR code.',
+    'setup.s3': 'Alla fine Osmium Sound è pronto a suonare.',
+    'setup.laterTitle': 'Più avanti lo vuoi sul disco interno?',
+    'setup.later': 'Torna qui e scegli <strong>Installa sul disco interno del PC</strong>.',
+    'finishUsb.title': 'Osmium Sound è pronto sulla chiavetta',
+    'finishUsb.lead': "Se il mini PC non parte da solo dalla chiavetta, metti l'USB al primo posto nell'ordine di avvio del firmware, oppure usa ogni volta il tasto del menu di avvio.",
+    'finishUsb.nextTitle': 'Gli aggiornamenti arrivano da soli',
+    'finishUsb.next': 'Interfaccia, sistema operativo e server musicale si aggiornano via OTA dalla schermata Impostazioni, direttamente sulla chiavetta. Non usarla per altro: contiene il sistema e le tue impostazioni.',
     'finish.title': "L'installazione finisce qui",
     'finish.lead': 'Il mini PC si riavvia da solo su Osmium Sound. Al primo avvio lascialo lavorare qualche istante mentre si configura.',
     'finish.nextTitle': 'La chiavetta non ti servirà più',
@@ -219,6 +284,9 @@ const STRINGS = {
     'err.EFORMAT': 'Non è stato possibile riformattare la chiavetta.',
     'err.ENOSIZE': "L'unità non riporta la propria dimensione, quindi non può essere riformattata.",
     'err.EUNEXPECTED': 'Si è verificato un problema non previsto.',
+    'err.ENOTYET': 'Questa versione non è ancora disponibile.',
+    'err.EIMAGE': "Non è stato possibile decomprimere l'immagine: potrebbe essere danneggiata. Riprova.",
+    'err.ENOSPACE': "Su questo computer non c'è abbastanza spazio libero: per decomprimere l'immagine per chiavetta servono circa 5 GB.",
     'error.report': 'File di diagnosi:',
   },
 };
@@ -270,7 +338,10 @@ const PHASE_ORDER = ['stick', 'boot', 'install'];
 const state = {
   screen: 'welcome',
   mode: 'install',      // 'install' walks the whole wizard; 'restore' just reformats
-  release: null,
+  catalog: null,        // { prod: {ok, version, iso, usb}, dev: … } from the manifests
+  channel: 'prod',      // 'prod' | 'dev'
+  kind: 'iso',          // 'iso' (install on the internal disk) | 'usb' (run from the stick)
+  release: null,        // the image the two choices point at, when there is one
   local: null,          // locally picked image, bypasses the manifest
   imagePromise: null,   // download+verify running in the background
   imageResult: null,
@@ -293,7 +364,28 @@ function show(screen) {
   render();
 }
 
+/** The image the two choices point at, or null when that one is not out. */
+function chosenRelease() {
+  const ch = state.catalog && state.catalog[state.channel];
+  return ch && ch.ok ? ch[state.kind] || null : null;
+}
+
+/** Bytes that end up on the stick: the unpacked disk for the USB image. */
+function bytesOnStick() {
+  if (state.local) return state.local.size;
+  if (state.release) return state.release.rawSize || state.release.size;
+  return 0;
+}
+
 // ── rendering ──────────────────────────────────────────────────────────────
+function renderKind() {
+  document.querySelectorAll('[data-only]').forEach((el) => {
+    el.hidden = el.dataset.only !== state.kind;
+  });
+  // Running from the stick has no install phase: the third step is the setup.
+  $('stepInstallLabel').textContent = t(state.kind === 'usb' ? 'step.setup' : 'step.install');
+}
+
 function renderStepper() {
   // Restoring a stick is not part of the three-phase install, so the wizard's
   // progress indicator would only be misleading there.
@@ -368,13 +460,37 @@ function renderFooter() {
   }
 }
 
+function renderChoices() {
+  const cat = state.catalog;
+  const verOf = (channel) => {
+    const ch = cat && cat[channel];
+    if (!ch) return '';
+    return ch.ok ? ch.version : ch.code === 'ENOTYET' ? t('welcome.notYetShort') : '—';
+  };
+  $('prodVer').textContent = verOf('prod');
+  $('devVer').textContent = verOf('dev');
+  document.querySelectorAll('#channelChoices .choice').forEach((el) => {
+    el.classList.toggle('sel', !state.local && el.dataset.channel === state.channel);
+    el.classList.toggle('dev', el.dataset.channel === 'dev');
+  });
+  document.querySelectorAll('#kindChoices .choice').forEach((el) => {
+    el.classList.toggle('sel', el.dataset.kind === state.kind);
+  });
+}
+
 function renderWelcome() {
+  renderChoices();
+  $('releaseCard').classList.toggle('missing', false);
   if (state.local) {
     $('releaseTag').textContent = t('welcome.localPicked');
     $('releaseSize').textContent = bytes(state.local.size);
   } else if (state.release) {
-    $('releaseTag').textContent = state.release.version;
+    $('releaseTag').textContent = state.release.name;
     $('releaseSize').textContent = bytes(state.release.size);
+  } else if (state.catalog) {
+    $('releaseTag').textContent = t('welcome.notYet');
+    $('releaseSize').textContent = '';
+    $('releaseCard').classList.toggle('missing', true);
   } else {
     $('releaseTag').textContent = t('welcome.loading');
     $('releaseSize').textContent = '';
@@ -384,9 +500,7 @@ function renderWelcome() {
 function renderDrives() {
   const list = $('driveList');
   const empty = $('driveEmpty');
-  const imageSize = state.imageResult ? state.imageResult.size
-    : state.local ? state.local.size
-      : state.release ? state.release.size : 0;
+  const imageSize = bytesOnStick();
 
   list.textContent = '';
   empty.hidden = state.drives.length > 0;
@@ -446,6 +560,7 @@ function renderWork() {
   $('workTitle').textContent = t('work.' + phase) || '';
   $('workLead').textContent =
     phase === 'downloading' ? t('work.leadDownload')
+      : phase === 'unpacking' ? t('work.leadUnpack')
       : phase === 'starting' ? t(state.elevated ? 'work.leadElevate' : 'work.leadDirect')
         : phase === 'formatting' ? t('work.leadFormat')
           : t('work.leadFlash');
@@ -485,6 +600,7 @@ function renderError() {
 }
 
 function render() {
+  renderKind();
   renderStepper();
   renderWelcome();
   if (state.screen === 'select') renderDrives();
@@ -503,22 +619,48 @@ function fail(err) {
 // ── flow ───────────────────────────────────────────────────────────────────
 async function loadManifest() {
   const res = await window.flasher.fetchManifest();
-  if (res.ok) {
-    state.release = res.release;
-    $('releaseError').hidden = true;
-  } else {
+  state.catalog = res.ok ? res.catalog : null;
+  // Production that cannot be read is the one real failure: the development
+  // channel simply may not be out yet.
+  const prod = state.catalog && state.catalog.prod;
+  if (prod && !prod.ok && prod.code !== 'ENOTYET') {
     $('releaseError').hidden = false;
-    $('releaseError').textContent = t('err.' + res.code) || res.message;
+    $('releaseError').textContent = t('err.' + prod.code) || prod.message;
+  } else {
+    $('releaseError').hidden = true;
   }
+  if (!state.local) state.release = chosenRelease();
+  render();
+}
+
+/** A different image was chosen: whatever was fetched for the old one goes. */
+function choose(channel, kind) {
+  if (channel) state.channel = channel;
+  if (kind) state.kind = kind;
+  const next = chosenRelease();
+  const changed = (next && next.name) !== (state.release && state.release.name);
+  if (state.local) {
+    state.local = null;
+  } else if (!changed) {
+    render();
+    return;
+  }
+  if (state.imagePromise) window.flasher.cancelImage();
+  state.imagePromise = null;
+  state.imageResult = null;
+  state.release = next;
   render();
 }
 
 function startImagePrepare() {
-  if (state.local || state.imagePromise) return;
-  state.imagePromise = window.flasher.prepareImage(state.release).then((res) => {
-    if (res.ok) state.imageResult = res;
+  if (state.local || state.imagePromise || !state.release) return;
+  const release = state.release;
+  const promise = window.flasher.prepareImage(release).then((res) => {
+    // A choice changed meanwhile: this result belongs to an image no longer wanted.
+    if (res.ok && state.imagePromise === promise) state.imageResult = res;
     return res;
   });
+  state.imagePromise = promise;
 }
 
 /** Back to the top of phase 1, keeping the image already downloaded. */
@@ -625,11 +767,23 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (state.screen === 'work') renderWork();
   });
 
+  document.querySelectorAll('#channelChoices .choice').forEach((el) => {
+    el.addEventListener('click', () => choose(el.dataset.channel, null));
+  });
+  document.querySelectorAll('#kindChoices .choice').forEach((el) => {
+    el.addEventListener('click', () => choose(null, el.dataset.kind));
+  });
+
   $('useLocal').addEventListener('click', async () => {
     const res = await window.flasher.pickImage();
     if (!res.ok) return;
+    if (state.imagePromise) window.flasher.cancelImage();
+    state.imagePromise = null;
+    state.imageResult = null;
     state.local = res;
     state.release = null;
+    // The file says which of the two it is, and so which screens follow.
+    state.kind = /\.img(\.xz)?$/i.test(res.file) ? 'usb' : 'iso';
     $('releaseError').hidden = true;
     render();
   });

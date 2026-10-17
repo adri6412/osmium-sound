@@ -23,7 +23,7 @@
 <nav class="stepper" id="stepper">
   <span class="step" data-phase="stick"><i>1</i><span data-i18n="step.stick"></span></span>
   <span class="step" data-phase="boot"><i>2</i><span data-i18n="step.boot"></span></span>
-  <span class="step" data-phase="install"><i>3</i><span data-i18n="step.install"></span></span>
+  <span class="step" data-phase="install"><i>3</i><span id="stepInstallLabel" data-i18n="step.install"></span></span>
 </nav>
 
 <main>
@@ -40,6 +40,34 @@
         <li data-i18n="welcome.need2"></li>
         <li data-i18n="welcome.need3"></li>
       </ul>
+    </div>
+
+    <!-- Two choices: which version, and how it will be used. Each manifest
+         may carry both images; what is not out yet says so. -->
+    <h3 class="choice-title" data-i18n="welcome.channelTitle"></h3>
+    <div class="choices" id="channelChoices">
+      <button class="choice" id="pickProd" data-channel="prod">
+        <span class="choice-name" data-i18n="welcome.prod"></span>
+        <span class="choice-desc" data-i18n="welcome.prodDesc"></span>
+        <span class="choice-ver" id="prodVer"></span>
+      </button>
+      <button class="choice" id="pickDev" data-channel="dev">
+        <span class="choice-name" data-i18n="welcome.dev"></span>
+        <span class="choice-desc" data-i18n="welcome.devDesc"></span>
+        <span class="choice-ver" id="devVer"></span>
+      </button>
+    </div>
+
+    <h3 class="choice-title" data-i18n="welcome.kindTitle"></h3>
+    <div class="choices" id="kindChoices">
+      <button class="choice" id="pickIso" data-kind="iso">
+        <span class="choice-name" data-i18n="welcome.iso"></span>
+        <span class="choice-desc" data-i18n="welcome.isoDesc"></span>
+      </button>
+      <button class="choice" id="pickUsb" data-kind="usb">
+        <span class="choice-name" data-i18n="welcome.usb"></span>
+        <span class="choice-desc" data-i18n="welcome.usbDesc"></span>
+      </button>
     </div>
 
     <div class="card release" id="releaseCard">
@@ -97,11 +125,16 @@
     <ol class="steps">
       <li data-i18n="boot.s1"></li>
       <li data-i18n="boot.s3"></li>
-      <li data-i18n="boot.s4"></li>
+      <li data-only="iso" data-i18n="boot.s4"></li>
+      <li data-only="usb" data-i18n="boot.s4Usb"></li>
     </ol>
-    <div class="card note">
+    <div class="card note" data-only="iso">
       <h3 data-i18n="boot.tryTitle"></h3>
       <p data-i18n="boot.try"></p>
+    </div>
+    <div class="card note" data-only="usb">
+      <h3 data-i18n="boot.keepTitle"></h3>
+      <p data-i18n="boot.keep"></p>
     </div>
     <div class="card note">
       <h3 data-i18n="boot.troubleTitle"></h3>
@@ -111,6 +144,19 @@
 
   <!-- 6 ── install on the mini PC ──────────────────────────────────────── -->
   <section class="screen" id="screenInstall">
+    <div data-only="usb">
+      <h1 data-i18n="setup.title"></h1>
+      <ol class="steps">
+        <li data-i18n="setup.s1"></li>
+        <li data-i18n="setup.s2"></li>
+        <li data-i18n="setup.s3"></li>
+      </ol>
+      <div class="card note">
+        <h3 data-i18n="setup.laterTitle"></h3>
+        <p data-i18n="setup.later"></p>
+      </div>
+    </div>
+    <div data-only="iso">
     <h1 data-i18n="install.title"></h1>
     <ol class="steps">
       <li data-i18n="install.s1"></li>
@@ -126,16 +172,27 @@
       <h3 data-i18n="install.phoneTitle"></h3>
       <p data-i18n="install.phone"></p>
     </div>
+    </div>
   </section>
 
   <!-- 7 ── finished ────────────────────────────────────────────────────── -->
   <section class="screen" id="screenFinish">
     <div class="result-ico">✅</div>
-    <h1 data-i18n="finish.title"></h1>
-    <p class="lead" data-i18n="finish.lead"></p>
-    <div class="card note">
-      <h3 data-i18n="finish.nextTitle"></h3>
-      <p data-i18n="finish.next"></p>
+    <div data-only="iso">
+      <h1 data-i18n="finish.title"></h1>
+      <p class="lead" data-i18n="finish.lead"></p>
+      <div class="card note">
+        <h3 data-i18n="finish.nextTitle"></h3>
+        <p data-i18n="finish.next"></p>
+      </div>
+    </div>
+    <div data-only="usb">
+      <h1 data-i18n="finishUsb.title"></h1>
+      <p class="lead" data-i18n="finishUsb.lead"></p>
+      <div class="card note">
+        <h3 data-i18n="finishUsb.nextTitle"></h3>
+        <p data-i18n="finishUsb.next"></p>
+      </div>
     </div>
     <button class="linkish" id="anotherStick" data-i18n="finish.another"></button>
   </section>

@@ -1,7 +1,13 @@
 'use strict';
 
 /**
- * Manifest lookup, resumable download and trust chain for the installer image.
+ * Manifest lookup, resumable download and trust chain for the images.
+ *
+ * Two channels, each with its own manifest next to the files: production
+ * (latest.json, stable) and development (latest-dev.json, the newest work).
+ * Each may carry two images: the installer ISO, which puts Osmium Sound on the
+ * PC's internal disk, and the ready-to-boot USB image (.img.xz), which runs
+ * Osmium Sound from the stick itself.
  *
  * The trust chain mirrors the one the appliance already uses for OS updates
  * (distro/config/includes.chroot/usr/local/sbin/hifi-os-update.sh): the small
@@ -14,17 +20,24 @@ const crypto = require('crypto');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
-const { Readable } = require('stream');
+const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 
 const MANIFEST_URL = 'https://file.osmiumsound.it/latest.json';
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024 * 1024; // runaway guard, the ISO is ~1 GB
+const MANIFEST_URLS = {
+  prod: MANIFEST_URL,
+  dev: 'https://file.osmiumsound.it/latest-dev.json',
+};
+// What each kind of image is called in a manifest.
+const KIND_SUFFIX = { iso: '.iso', usb: '.img.xz' };
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024 * 1024; // runaway guard, both images are ~1 GB
 const MAX_SIDECAR_BYTES = 4096;
 
 class ImageError extends Error {
-  constructor(code, message) {
+  constructor(code, message, status) {
     super(message);
     this.code = code;
+    if (status) this.status = status;
   }
 }
 
@@ -36,7 +49,7 @@ async function fetchOrThrow(url, options = {}) {
     throw new ImageError('ENET', `${url}: ${err.message}`);
   }
   if (!res.ok && res.status !== 206) {
-    throw new ImageError('EHTTP', `${url}: HTTP ${res.status}`);
+    throw new ImageError('EHTTP', `${url}: HTTP ${res.status}`, res.status);
   }
   return res;
 }
@@ -48,33 +61,77 @@ async function fetchText(url, limit = MAX_SIDECAR_BYTES) {
   return buf;
 }
 
-/** Reads latest.json — same shape as the OTA manifests (tag_name + assets[]). */
-async function fetchManifest(url = MANIFEST_URL) {
-  const res = await fetchOrThrow(url, { cache: 'no-store' });
-  let manifest;
-  try {
-    manifest = await res.json();
-  } catch (err) {
-    throw new ImageError('EMANIFEST', `malformed manifest: ${err.message}`);
-  }
+/**
+ * One image of a manifest, with its sidecars, or null when the manifest does
+ * not carry that kind. A listed image without its .sha256 is a broken
+ * manifest, not a missing image.
+ */
+function releaseOf(manifest, kind) {
   const assets = Array.isArray(manifest.assets) ? manifest.assets : [];
-  const iso = assets.find((a) => a.name && a.name.endsWith('.iso'));
-  if (!iso) throw new ImageError('EMANIFEST', 'manifest lists no .iso asset');
+  const file = assets.find((a) => a.name && a.name.endsWith(KIND_SUFFIX[kind]));
+  if (!file) return null;
 
-  const byName = (suffix) => assets.find((a) => a.name === iso.name + suffix);
+  const byName = (suffix) => assets.find((a) => a.name === file.name + suffix);
   const sha = byName('.sha256');
   const sig = byName('.sha256.sig');
-  if (!sha) throw new ImageError('EMANIFEST', 'manifest lists no .sha256 for the image');
+  if (!sha) throw new ImageError('EMANIFEST', `manifest lists no .sha256 for ${file.name}`);
 
   return {
+    kind,
     version: manifest.tag_name || manifest.name || 'unknown',
     notes: manifest.body || '',
-    name: iso.name,
-    url: iso.browser_download_url,
-    size: Number(iso.size) || 0,
+    name: file.name,
+    url: file.browser_download_url,
+    size: Number(file.size) || 0,
+    // The USB image is compressed: what has to fit on the stick is the disk
+    // it unpacks to. Absent from older manifests, so it may be 0.
+    rawSize: Number(file.raw_size) || 0,
     shaUrl: sha.browser_download_url,
     sigUrl: sig ? sig.browser_download_url : null,
   };
+}
+
+async function readManifest(url) {
+  const res = await fetchOrThrow(url, { cache: 'no-store' });
+  try {
+    return await res.json();
+  } catch (err) {
+    throw new ImageError('EMANIFEST', `malformed manifest: ${err.message}`);
+  }
+}
+
+/** Reads a manifest — same shape as the OTA manifests (tag_name + assets[]). */
+async function fetchManifest(url = MANIFEST_URL, kind = 'iso') {
+  const release = releaseOf(await readManifest(url), kind);
+  if (!release) throw new ImageError('EMANIFEST', `manifest lists no ${KIND_SUFFIX[kind]} asset`);
+  return release;
+}
+
+/**
+ * Both channels, each with whichever images it carries:
+ *   { prod: { ok, version, iso, usb }, dev: { ok, version, iso, usb } }
+ * A channel that cannot be read is { ok: false, code }; one whose manifest is
+ * not published at all (no development build out yet) answers ENOTYET rather
+ * than an error.
+ */
+async function fetchCatalog(urls = MANIFEST_URLS) {
+  const entries = await Promise.all(Object.entries(urls).map(async ([channel, url]) => {
+    try {
+      const manifest = await readManifest(url);
+      const iso = releaseOf(manifest, 'iso');
+      const usb = releaseOf(manifest, 'usb');
+      if (!iso && !usb) throw new ImageError('EMANIFEST', 'manifest lists no image');
+      return [channel, {
+        ok: true, version: manifest.tag_name || manifest.name || 'unknown', iso, usb,
+      }];
+    } catch (err) {
+      const missing = err.code === 'EHTTP' && (err.status === 404 || err.status === 403);
+      return [channel, {
+        ok: false, code: missing ? 'ENOTYET' : err.code || 'EUNKNOWN', message: err.message,
+      }];
+    }
+  }));
+  return Object.fromEntries(entries);
 }
 
 /**
@@ -181,6 +238,57 @@ async function download(release, cacheDir, { onProgress, signal } = {}) {
   return target;
 }
 
+/** Where an .img.xz is unpacked to: the same name without .xz. */
+function unpackedName(name) {
+  return name.replace(/\.xz$/i, '');
+}
+
+/**
+ * Unpacks a verified .img.xz next to itself and returns the raw image.
+ *
+ * Done here, before the write, and not by etcher-sdk while it writes: its
+ * on-the-fly XzSource put the system 16 MiB off its place on a slow
+ * destination (alpha27's image, 3.2 GB onto a file standing in for a stick:
+ * the stream itself hashed right, the device did not, and the verify pass
+ * refused it). Unpacked first, the USB image takes the same write path as the
+ * ISO, the one with the field record.
+ *
+ * xz carries its own CRC64 per block, so a damaged archive fails here; the
+ * archive itself was checked against the signed digest just before.
+ */
+async function unpack(xzFile, { onProgress, signal, total = 0 } = {}) {
+  // Loaded on demand: a native addon, only needed for the USB image.
+  const lzma = require('lzma-native');
+  const target = unpackedName(xzFile);
+  const part = target + '.part';
+  await fsp.rm(target, { force: true });
+
+  let done = 0;
+  const count = new Transform({
+    transform(chunk, _enc, cb) {
+      done += chunk.length;
+      if (onProgress) onProgress({ phase: 'unpacking', received: done, total });
+      cb(null, chunk);
+    },
+  });
+  try {
+    await pipeline(
+      fs.createReadStream(xzFile, { highWaterMark: 4 * 1024 * 1024 }),
+      lzma.createDecompressor(),
+      count,
+      fs.createWriteStream(part),
+      { signal },
+    );
+  } catch (err) {
+    await fsp.rm(part, { force: true });
+    if (signal && signal.aborted) throw new ImageError('ECANCELLED', 'cancelled');
+    if (err.code === 'ENOSPC') throw new ImageError('ENOSPACE', 'not enough free space to unpack the image');
+    throw new ImageError('EIMAGE', `the image could not be unpacked: ${err.message}`);
+  }
+  await fsp.rename(part, target);
+  return target;
+}
+
 /**
  * Drops every cached image except the one about to be used.
  *
@@ -196,7 +304,9 @@ async function pruneCache(cacheDir, keepName) {
   } catch (_) {
     return [];                       // nothing cached yet
   }
-  const keep = new Set([keepName, `${keepName}.part`]);
+  // An .img.xz comes with the raw image unpacked from it.
+  const raw = unpackedName(keepName);
+  const keep = new Set([keepName, `${keepName}.part`, raw, `${raw}.part`]);
   const removed = [];
   for (const name of entries) {
     if (keep.has(name)) continue;
@@ -212,7 +322,8 @@ async function pruneCache(cacheDir, keepName) {
 
 /**
  * Full prepare step: manifest → signed digest → download (or reuse cache) →
- * checksum. Throws with a `code` the UI maps to a translated message.
+ * checksum → for the USB image, unpack. Throws with a `code` the UI maps to a
+ * translated message.
  */
 async function prepare(release, cacheDir, publicKeyPath, { onProgress, signal } = {}) {
   const expected = await fetchVerifiedDigest(release, publicKeyPath);
@@ -231,15 +342,23 @@ async function prepare(release, cacheDir, publicKeyPath, { onProgress, signal } 
     await fsp.rm(file, { force: true });
     throw new ImageError('EBADSUM', 'the downloaded image is corrupt — it has been discarded');
   }
-  return { file, size, digest: actual };
+  if (!/\.xz$/i.test(release.name)) return { file, size, digest: actual };
+
+  // Unpacked every time rather than trusted from an earlier run: the archive
+  // is what the signature vouches for, not a file left lying in the cache.
+  const raw = await unpack(file, { onProgress, signal, total: release.rawSize || 0 });
+  return { file: raw, size: (await fsp.stat(raw)).size, digest: actual };
 }
 
 module.exports = {
   ImageError,
   MANIFEST_URL,
+  MANIFEST_URLS,
   fetchManifest,
+  fetchCatalog,
   fetchVerifiedDigest,
   pruneCache,
+  unpack,
   download,
   sha256File,
   prepare,

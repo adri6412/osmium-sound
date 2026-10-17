@@ -1,13 +1,18 @@
 name: Publish the installer ISO to file.osmiumsound.it
 
-# The ISO of a stable release goes where the site links it and where Osmium
-# Flasher looks for it: the root of the bucket behind file.osmiumsound.it,
-# with its sha256, its signature and latest.json, the flasher's manifest.
+# The ISO of a release goes where the site links it and where Osmium Flasher
+# looks for it: the root of the bucket behind file.osmiumsound.it, with its
+# sha256, its signature and the flasher's manifest -- and with the ready-to-boot
+# USB image (.img.xz) next to it when the release has one.
+#
+# Two channels, one manifest each, the two choices the flasher offers:
+#   vX.Y.Z         production   latest.json      every version stays in the bucket
+#   vX.Y.Z-dev.N   development  latest-dev.json  only the newest one is kept
+# An alpha (…-alphaN) stays on GitHub only.
 #
 # Called by build-iso.yml once the ISO is on the GitHub release; runnable by
 # hand for a release whose ISO is already there. Files reach the bucket this
 # way and no other: nothing is ever uploaded by hand.
-# A dev or alpha ISO stays on GitHub only: latest.json names the stable image.
 
 on:
   workflow_call:
@@ -28,9 +33,22 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: ${{ !contains(inputs.tag, '-') }}
+    if: ${{ !contains(inputs.tag, '-') || (contains(inputs.tag, '-dev.') && !contains(inputs.tag, '-alpha')) }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Channel
+        id: channel
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in
+            *-alpha*) echo "::error::$TAG is an alpha: it is not published"; exit 1 ;;
+            *-dev.*)  echo "manifest=latest-dev.json" >> "$GITHUB_OUTPUT" ;;
+            *-*)      echo "::error::$TAG is neither a stable nor a dev tag"; exit 1 ;;
+            *)        echo "manifest=latest.json" >> "$GITHUB_OUTPUT" ;;
+          esac
 
       - name: Fetch the ISO from the release and check it
         id: iso
@@ -82,11 +100,17 @@ jobs:
             || { echo "::error::the signature of $IMG does not verify against the shipped public key"; exit 1; }
           echo "img=$IMG" >> "$GITHUB_OUTPUT"
 
-      - name: Build latest.json
+      - name: Build the flasher manifest
+        env:
+          MANIFEST: ${{ steps.channel.outputs.manifest }}
+          IMG: ${{ steps.img.outputs.img }}
         run: |
           set -euo pipefail
-          python3 .github/scripts/make-iso-manifest.py "${{ inputs.tag }}" "iso/${{ steps.iso.outputs.iso }}"
-          cat manifest-out/latest.json
+          extra=()
+          [ -z "$IMG" ] || extra=(--img "img/$IMG")
+          python3 .github/scripts/make-iso-manifest.py "${{ inputs.tag }}" "iso/${{ steps.iso.outputs.iso }}" \
+            "${extra[@]}" --out "$MANIFEST"
+          cat "manifest-out/$MANIFEST"
 
       - name: Upload to the bucket and read it back
         env:
@@ -98,8 +122,16 @@ jobs:
           R2_BUCKET: osmium-sound-iso-beta
           ISO: ${{ steps.iso.outputs.iso }}
           IMG: ${{ steps.img.outputs.img }}
+          MANIFEST: ${{ steps.channel.outputs.manifest }}
         run: |
           set -euo pipefail
+          # What the channel's manifest named before this release: on the
+          # development channel those files go once the new manifest is in place.
+          old=()
+          if aws s3api get-object --bucket "$R2_BUCKET" --key "$MANIFEST" --endpoint-url "$R2_ENDPOINT" \
+               /tmp/previous.json >/dev/null 2>&1; then
+            mapfile -t old < <(python3 -c 'import json,sys; [print(a["name"]) for a in json.load(open(sys.argv[1])).get("assets", [])]' /tmp/previous.json)
+          fi
           put() {
             aws s3 cp "$1" "s3://$R2_BUCKET/$2" --endpoint-url "$R2_ENDPOINT" \
               --content-type "$3" --cache-control "$4" --only-show-errors
@@ -116,8 +148,8 @@ jobs:
             put "img/$IMG.sha256.sig" "$IMG.sha256.sig" application/octet-stream "public, max-age=31536000, immutable"
             check+=("img/$IMG" "img/$IMG.sha256" "img/$IMG.sha256.sig")
           fi
-          # the manifest changes with every stable release: never cached
-          put manifest-out/latest.json latest.json application/json no-cache
+          # the manifest changes with every release of its channel: never cached
+          put "manifest-out/$MANIFEST" "$MANIFEST" application/json no-cache
           for p in "${check[@]}"; do
             f=${p#*/}
             SIZE=$(aws s3api head-object --bucket "$R2_BUCKET" --key "$f" --endpoint-url "$R2_ENDPOINT" \
@@ -125,7 +157,21 @@ jobs:
             [ "$SIZE" = "$(stat -c %s "$p")" ] \
               || { echo "::error::$f: $SIZE bytes in the bucket, $(stat -c %s "$p") here"; exit 1; }
           done
-          aws s3api get-object --bucket "$R2_BUCKET" --key latest.json --endpoint-url "$R2_ENDPOINT" /tmp/latest.json >/dev/null
-          grep -q "\"tag_name\": \"${{ inputs.tag }}\"" /tmp/latest.json \
-            || { echo "::error::latest.json in the bucket does not name ${{ inputs.tag }}"; exit 1; }
-          echo "published $ISO, its sidecars and latest.json for ${{ inputs.tag }}"
+          aws s3api get-object --bucket "$R2_BUCKET" --key "$MANIFEST" --endpoint-url "$R2_ENDPOINT" /tmp/manifest.json >/dev/null
+          grep -q "\"tag_name\": \"${{ inputs.tag }}\"" /tmp/manifest.json \
+            || { echo "::error::$MANIFEST in the bucket does not name ${{ inputs.tag }}"; exit 1; }
+          echo "published $ISO${IMG:+ and $IMG}, their sidecars and $MANIFEST for ${{ inputs.tag }}"
+          # Development builds come often and weigh 2 GB a time: only the one
+          # the manifest names stays. Only files the previous manifest listed,
+          # and only our own image names, are ever removed. Production keeps
+          # every version (the site and old links point at them).
+          if [ "$MANIFEST" = latest-dev.json ]; then
+            keep=" $ISO $ISO.sha256 $ISO.sha256.sig "
+            [ -z "$IMG" ] || keep+="$IMG $IMG.sha256 $IMG.sha256.sig "
+            for f in "${old[@]}"; do
+              case "$f" in hifi-player-*) ;; *) continue ;; esac
+              case "$keep" in *" $f "*) continue ;; esac
+              aws s3 rm "s3://$R2_BUCKET/$f" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+              echo "removed the previous development file $f"
+            done
+          fi
