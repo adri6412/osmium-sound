@@ -480,11 +480,10 @@ fi
 # don't disturb the chroot we're about to reuse.
 if [ "$STAGE" != "binary" ]; then
     log "Configuring live-build (suite=$DEBIAN_SUITE arch=$ARCH)…"
-    # No debian-installer at all: this is a live-only ISO. Both boot menu
-    # entries ("Install Osmium Sound" and "Try Osmium Sound") boot the SAME
-    # live kernel/initrd/squashfs — they differ only by a kernel parameter
-    # (hifi.installer=1) that the on-screen interface reads at startup to
-    # decide whether to show the installer UI or the normal kiosk UI. The actual
+    # No debian-installer at all: this is a live-only ISO. Its one boot menu
+    # entry ("Install Osmium Sound") boots the live kernel/initrd/squashfs
+    # with an extra kernel parameter (hifi.installer=1) that the on-screen
+    # interface reads at startup to show the installer UI. The actual
     # disk installation (partition/format/copy/bootloader) is driven by
     # hifi-disk-install.sh from inside that live session, not by d-i.
     # See config/hooks/normal/0500-brand-boot.hook.binary for the boot menu

@@ -4,14 +4,17 @@
 # Runs during live-build's *binary* stage (cwd = binary/), AFTER isolinux and
 # grub menus have been generated.
 #
-# There is no debian-installer on this image — it's a live-only ISO. Both
-# boot menu entries below boot the SAME live kernel/initrd/squashfs; they
-# differ only by a kernel parameter (hifi.installer=1) that the Electron app
-# reads at startup (see src/App.jsx) to decide whether to show the installer
-# UI (disk picker → hifi-disk-install.sh) or the normal kiosk UI. The
-# actual live kernel/initrd path varies by live-build version/arch, so we
-# autodetect it rather than hardcoding (hardcoding it previously broke
-# booting with "vmlinuz not found").
+# There is no debian-installer on this image: the installer is the live
+# system itself, booted with an extra kernel parameter (hifi.installer=1)
+# that the on-screen interface and the web admin read to show the installer
+# (disk picker → hifi-disk-install.sh) instead of the player. The menu has
+# that one entry only: the "Try Osmium Sound (no install)" entry is gone.
+# The live system is the slot image, shaped for a disk with a data
+# partition, and a session in RAM could not even fit Lyrion; whoever wants to
+# run Osmium from a stick writes the .img.xz instead. The actual live
+# kernel/initrd path varies by live-build version/arch, so we autodetect it
+# rather than hardcoding (hardcoding it previously broke booting with
+# "vmlinuz not found").
 set -e
 
 echo "I: [hifi] branding boot menus (binary hook)"
@@ -32,7 +35,8 @@ LIVE_INITRD="$(printf '%s' "$LIPATH" | sed 's|^\.||')"
 echo "I: [hifi] live kernel=$LIVE_KERNEL initrd=$LIVE_INITRD"
 
 # NOTE: keep LIVE_APPEND in sync with --bootappend-live in build-distro.sh's
-# lb config call. INSTALL_APPEND is the same plus hifi.installer=1.
+# lb config call. INSTALL_APPEND is the same plus hifi.installer=1, and it is
+# what the one menu entry boots.
 LIVE_APPEND="boot=live components quiet splash loglevel=0 systemd.show_status=0 rd.systemd.show_status=0 vt.global_cursor_default=0 hostname=hifiplayer noautologin"
 INSTALL_APPEND="$LIVE_APPEND hifi.installer=1"
 
@@ -60,11 +64,6 @@ label install
     menu default
     kernel $LIVE_KERNEL
     append initrd=$LIVE_INITRD $INSTALL_APPEND
-
-label live
-    menu label ^Try Osmium Sound (no install)
-    kernel $LIVE_KERNEL
-    append initrd=$LIVE_INITRD $LIVE_APPEND
 EOF
 
     cat > isolinux/isolinux.cfg <<'EOF'
@@ -75,7 +74,7 @@ ui vesamenu.c32
 default install
 EOF
     # Some live-build layouts read stdmenu.cfg; neutralise it so only our
-    # two entries show.
+    # entry shows.
     : > isolinux/stdmenu.cfg 2>/dev/null || true
 fi
 
@@ -102,11 +101,6 @@ set default=0
 
 menuentry "Install Osmium Sound" {
     linux  $LIVE_KERNEL $INSTALL_APPEND
-    initrd $LIVE_INITRD
-}
-
-menuentry "Try Osmium Sound (no install)" {
-    linux  $LIVE_KERNEL $LIVE_APPEND
     initrd $LIVE_INITRD
 }
 EOF

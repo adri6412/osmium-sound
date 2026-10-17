@@ -27,10 +27,10 @@ How to install and start using Osmium Sound on your x86 mini-PC.
 > installer sets up GRUB for the firmware mode the machine booted in (UEFI is
 > the tested, recommended path; legacy BIOS is supported but less exercised).
 
-> **Try it live.** Pick **Try Osmium Sound (no install)** at the boot menu
-> to run the kiosk straight from the USB stick — nothing is written to
-> disk. If it doesn't log in automatically, use `hifi` / `hifi` at the
-> login screen.
+> **Run it from a stick instead.** The ISO only installs. To run Osmium
+> Sound without touching the PC's disk, write the `.img.xz` from the same
+> release onto a USB stick of 8 GB or more and boot from it: it is a
+> complete system, settings and updates included.
 
 **Note:** the ISO is only needed for the initial install. All subsequent
 updates (UI, system, OS, Lyrion) arrive automatically via **OTA** from the

@@ -1617,7 +1617,7 @@ still on the old layout".
 
 The ISO's live system **is** the image: with `single_squashfs` (the default in
 `build-iso.yml`), `--stage iso-image` builds one live-capable squashfs that
-serves both "Try Osmium Sound" and slot A, so the medium carries a single
+serves both the installer's live session and slot A, so the medium carries a single
 filesystem (CI fails an ISO above 2 GiB). With the switch off, the image
 travels as a second file, `osmium/rootfs.squashfs`. Either way the installer
 writes the A/B layout without network — see

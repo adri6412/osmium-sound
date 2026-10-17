@@ -68,7 +68,7 @@ Bit-perfect audio, streaming services, and signed OTA updates — one sleek dark
 
 Every later version — the system image and Lyrion — arrives over the air from the Settings screen (or the web admin, or the companion). It is written to the spare slot while the device keeps playing, and the reboot switches over; if the new version doesn't come up healthy, the device goes back to the previous one by itself. No reflashing required.
 
-> **Try it live.** Pick **Try Osmium Sound (no install)** at the boot menu to run the interface straight from the USB stick, nothing is written to disk.
+> **Run it from a stick instead.** The ISO only installs. To run Osmium Sound without touching the PC's disk, write the `.img.xz` from the same release onto a USB stick of 8 GB or more and boot from it: it is a complete system, settings and updates included.
 
 ## 📱 Android companion
 
