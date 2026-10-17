@@ -6,6 +6,10 @@
 // below is authored here — no value from the appliance or the network ever
 // reaches Icon.vue's v-html.
 export const icons = {
+  'lock':
+    '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  'speaker':
+    '<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M12 6h.01"/><circle cx="12" cy="14" r="4"/><path d="M12 14h.01"/>',
   'library':
     '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
   'share-2':

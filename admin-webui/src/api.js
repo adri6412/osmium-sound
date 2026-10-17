@@ -239,8 +239,10 @@ export const api = {
   filesList: (path = '') => req('/api/system/local/list?path=' + encodeURIComponent(path)),
   filesMkdir: (path, name) => req('/api/system/local/mkdir', { method: 'POST', body: { path, name } }),
   filesRename: (path, name) => req('/api/system/local/rename', { method: 'POST', body: { path, name } }),
-  filesCopy: (paths, dest) => req('/api/system/local/copy', { method: 'POST', body: { paths, dest } }),
-  filesMove: (paths, dest) => req('/api/system/local/move', { method: 'POST', body: { paths, dest } }),
+  // exists: what to do with a name already in `dest` -- 'keep' both (default),
+  // 'skip' it (folders merged) or 'replace' it (folders merged)
+  filesCopy: (paths, dest, exists = 'keep') => req('/api/system/local/copy', { method: 'POST', body: { paths, dest, exists } }),
+  filesMove: (paths, dest, exists = 'keep') => req('/api/system/local/move', { method: 'POST', body: { paths, dest, exists } }),
   filesDelete: (paths) => req('/api/system/local/delete', { method: 'POST', body: { paths } }),
   filesJob: (id) => req('/api/system/local/job?id=' + encodeURIComponent(id)),
 };

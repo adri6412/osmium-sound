@@ -7,7 +7,7 @@ import { useI18n } from '../i18n';
 import Toggle from '../components/Toggle.vue';
 import Icon from '../components/Icon.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
-import SourcesPanel from '../components/SourcesPanel.vue';
+import MusicSources from '../components/MusicSources.vue';
 import FolderPicker from '../components/FolderPicker.vue';
 import CdRipNow from '../components/CdRipNow.vue';
 import VuSkinPreview from '../components/VuSkinPreview.vue';
@@ -2297,7 +2297,7 @@ onUnmounted(() => {
 
     <!-- Sources (native — talks directly to sources_server.py through
          webui_server's session-gated /api/system/sources|usb|internal|apply
-         forwarders, see SourcesPanel.vue) -->
+         forwarders, see MusicSources.vue) -->
     <!-- CD ripping: see loadCd() / setCd() above -->
     <div class="card" v-if="open === 'cdRip'">
       <p class="sub">{{ t('settings.cdRip.hint') }}</p>
@@ -2402,9 +2402,9 @@ onUnmounted(() => {
       </template>
     </div>
 
+    <!-- Music sources, around the places the music lives in (MusicSources.vue) -->
     <div class="card wide" v-if="open === 'sources'">
-      <p class="sub">{{ t('settings.sources.hint') }}</p>
-      <SourcesPanel />
+      <MusicSources />
     </div>
 
     <!-- DSP -->
