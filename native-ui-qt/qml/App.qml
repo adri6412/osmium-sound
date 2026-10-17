@@ -447,6 +447,10 @@ Item {
 
     // per il canale di collaudo (eval): app.settings.openSection(n) ecc.
     readonly property var settings: Ui.settings
+    readonly property var sources: Ui.sources          // Music sources (dev channel)
+    readonly property var addMusicW: addMusic
+    readonly property var importW: importMusic
+    readonly property var navItem: Nav.item                // dev channel: where the remote's spotlight is
     readonly property var main: mainScreen
     readonly property var nowPlaying: np
     readonly property var dlg: dialogs
@@ -542,6 +546,9 @@ Item {
 
     // ─── strati sovrapposti ────────────────────────────────────────────────
     Wizard { id: wizard; anchors.fill: parent; devScale: app.devicePixelScale }
+    // Music sources: add music, and a USB stick (under the dialogs: login, confirm, format)
+    AddMusicWizard { id: addMusic }
+    ImportWizard { id: importMusic }
     Dialogs { id: dialogs; anchors.fill: parent }
     OtaOverlay { id: ota; anchors.fill: parent }
     // a disc that goes in is asked about over everything, but not over these

@@ -2905,6 +2905,9 @@ Item {
     Flickable {
         id: page
         anchors.fill: parent
+        // under the Music sources page the old rows must not exist at all:
+        // the remote would land on them, hidden, and the spotlight vanish
+        visible: !(root.active >= 0 && root.secs[root.active].id === "sources")
         contentHeight: body.height
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -2992,5 +2995,11 @@ Item {
             }
         }
         ScrollBar_ { flick: page; x: page.width - 3 }
+    }
+    // Music sources: the page of the places (SourcesPage.qml) over the rows
+    SourcesPage {
+        anchors.fill: parent
+        visible: root.active >= 0 && root.secs[root.active].id === "sources"
+        onBack: root.goBack()
     }
 }
