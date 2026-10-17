@@ -6263,7 +6263,7 @@ def _file_job_new(op):
             _FILE_JOBS.pop(k, None)
         _FILE_JOBS[jid] = {"id": jid, "op": op, "state": "running", "progress": 0,
                            "current": "", "total": 0, "done": 0, "code": "",
-                           "detail": "", "finished": 0.0}
+                           "detail": "", "finished": 0.0, "skipped": 0}
     return jid
 
 
@@ -6295,15 +6295,27 @@ def _copy_file_budgeted(src, dst, budget):
     shutil.copystat(src, dst)
 
 
-def _copy_tree(src, dst, bump, budget=None):
+def _copy_tree(src, dst, bump, budget=None, exists="keep", skipped=None):
     """Recursive copy that reports as it goes. shutil.copytree() would be
     shorter but gives no progress, and copying a 200 GB library with a frozen
-    bar looks exactly like a hang."""
+    bar looks exactly like a hang.
+
+    Folders that are already there are merged into. A file that is already
+    there is left alone with exists="skip" ("only what is missing": counted in
+    `skipped`, a list of one int) and overwritten otherwise."""
     if os.path.isdir(src) and not os.path.islink(src):
         os.makedirs(dst, exist_ok=True)
         _claim_for_share(dst)
         for name in sorted(os.listdir(src)):
-            _copy_tree(os.path.join(src, name), os.path.join(dst, name), bump, budget)
+            _copy_tree(os.path.join(src, name), os.path.join(dst, name), bump, budget, exists, skipped)
+        return
+    if exists == "skip" and os.path.lexists(dst):
+        if skipped is not None:
+            skipped[0] += 1
+        try:
+            bump(os.path.getsize(src), os.path.basename(dst))
+        except OSError:
+            bump(0, os.path.basename(dst))
         return
     if budget is not None and budget.active and os.path.isfile(src) and not os.path.islink(src):
         _copy_file_budgeted(src, dst, budget)
@@ -6316,10 +6328,45 @@ def _copy_tree(src, dst, bump, budget=None):
         bump(0, os.path.basename(dst))
 
 
-def _file_worker(jid, op, paths, dest):
+def _merge_move(src, dst, bump, budget, exists, skipped):
+    """Move `src` into an existing `dst`, file by file: what is not there yet
+    is moved, what is there already is left where it was (exists="skip") or
+    replaced; folders emptied on the way are removed."""
+    if os.path.isdir(src) and not os.path.islink(src):
+        os.makedirs(dst, exist_ok=True)
+        _claim_for_share(dst)
+        for name in sorted(os.listdir(src)):
+            _merge_move(os.path.join(src, name), os.path.join(dst, name), bump, budget, exists, skipped)
+        try:
+            os.rmdir(src)
+        except OSError:
+            pass                  # something was skipped and stays behind
+        return
+    if os.path.lexists(dst) and exists == "skip":
+        skipped[0] += 1
+        try:
+            bump(os.path.getsize(src), os.path.basename(dst))
+        except OSError:
+            bump(0, os.path.basename(dst))
+        return
+    try:
+        os.replace(src, dst)
+        _claim_for_share(dst)
+        bump(os.path.getsize(dst), os.path.basename(dst))
+    except OSError:
+        _copy_tree(src, dst, bump, budget, "replace")
+        os.remove(src)
+
+
+def _file_worker(jid, op, paths, dest, exists="keep"):
     """One copy/move/delete job. Runs in a thread because a move across
     filesystems (NAS -> internal disk) is a full copy, and the request would
-    otherwise time out long before it finished."""
+    otherwise time out long before it finished.
+
+    `exists` says what happens when the destination already has an entry with
+    the same name: "keep" both (the new one gets a free name), "skip" what is
+    already there (folders are merged, existing files left alone) or
+    "replace" it (folders merged, existing files overwritten)."""
     counted = op in ("copy", "move")
     sizes = {p: _tree_size(p) for p in paths} if counted else {}
     total = sum(sizes.values()) if counted else len(paths)
@@ -6347,19 +6394,24 @@ def _file_worker(jid, op, paths, dest):
                           reserve=e.reserve, finished=time.time())
             return
 
+    skipped = [0]
+
     def bump(n, name):
         state["done"] += n
-        _file_job_set(jid, done=state["done"], current=name,
+        _file_job_set(jid, done=state["done"], current=name, skipped=skipped[0],
                       progress=min(99, int(100 * state["done"] / total)) if total else 99)
 
     try:
         for p in paths:
             name = os.path.basename(p.rstrip("/"))
             target = os.path.join(dest, name) if dest else ""
-            if target and os.path.lexists(target):
+            merge = bool(target) and exists != "keep" and os.path.lexists(target)
+            if target and os.path.lexists(target) and not merge:
                 target = _unique_name(target)
             if op == "copy":
-                _copy_tree(p, target, bump, budget)
+                _copy_tree(p, target, bump, budget, exists, skipped)
+            elif op == "move" and merge:
+                _merge_move(p, target, bump, budget, exists, skipped)
             elif op == "move":
                 try:
                     os.rename(p, target)      # same filesystem: instant
@@ -6379,7 +6431,7 @@ def _file_worker(jid, op, paths, dest):
                 else:
                     os.remove(p)
                 bump(1, name)
-        _file_job_set(jid, state="done", progress=100, current="")
+        _file_job_set(jid, state="done", progress=100, current="", skipped=skipped[0])
     except hdg.NoRoom as e:
         # stopped at the reserve: the file half way is gone, the originals
         # of a move are still where they were
@@ -7093,8 +7145,9 @@ def _files_start(op):
         for p in paths:
             if not _writable(os.path.dirname(p)):
                 return _err("msg.fileReadOnly", 400)   # the original has to go too
+    exists = data.get("exists") if data.get("exists") in ("keep", "skip", "replace") else "keep"
     jid = _file_job_new(op)
-    threading.Thread(target=_file_worker, args=(jid, op, paths, dest), daemon=True).start()
+    threading.Thread(target=_file_worker, args=(jid, op, paths, dest, exists), daemon=True).start()
     return jsonify({"success": True, "job": jid}), 202
 
 

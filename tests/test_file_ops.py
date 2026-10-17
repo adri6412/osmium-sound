@@ -46,9 +46,9 @@ class FileOpsBase(unittest.TestCase):
         with ss.app.app_context():
             return ss._file_op_targets(data, need_dest=need_dest)
 
-    def run_job(self, op, paths, dest=None):
+    def run_job(self, op, paths, dest=None, exists="keep"):
         jid = ss._file_job_new(op)
-        ss._file_worker(jid, op, paths, dest)
+        ss._file_worker(jid, op, paths, dest, exists)
         return ss._FILE_JOBS[jid]
 
 
@@ -181,6 +181,53 @@ class CopyMoveDeleteTests(FileOpsBase):
         _p, _d, err = self.targets({"paths": [album], "dest": album + "/CD1"},
                                           need_dest=True)
         self.assertIsNotNone(err)
+
+
+class ExistsModeTests(FileOpsBase):
+    """`exists` on copy/move: what happens to a name the destination already
+    has -- keep both (default), skip it or replace it, folders merged."""
+
+    def setUp(self):
+        super().setUp()
+        # the destination already has this album, with an older 01.flac and
+        # without the cover
+        os.makedirs(os.path.join(self.root, "Dest", "Album", "CD1"))
+        with open(os.path.join(self.root, "Dest", "Album", "CD1", "01.flac"), "wb") as f:
+            f.write(b"old")
+
+    def read(self, *parts):
+        with open(os.path.join(self.root, *parts), "rb") as f:
+            return f.read()
+
+    def test_skip_merges_and_leaves_what_is_there(self):
+        job = self.run_job("copy", [os.path.join(self.root, "Album")], os.path.join(self.root, "Dest"), "skip")
+        self.assertEqual(job["state"], "done")
+        self.assertEqual(job["skipped"], 1)
+        self.assertEqual(self.read("Dest", "Album", "CD1", "01.flac"), b"old")
+        self.assertTrue(os.path.isfile(os.path.join(self.root, "Dest", "Album", "cover.jpg")))
+        self.assertFalse(os.path.exists(os.path.join(self.root, "Dest", "Album (2)")))
+
+    def test_replace_merges_and_overwrites(self):
+        job = self.run_job("copy", [os.path.join(self.root, "Album")], os.path.join(self.root, "Dest"), "replace")
+        self.assertEqual(job["state"], "done")
+        self.assertEqual(self.read("Dest", "Album", "CD1", "01.flac"), b"x" * 1024)
+        self.assertFalse(os.path.exists(os.path.join(self.root, "Dest", "Album (2)")))
+
+    def test_keep_is_still_the_default(self):
+        job = self.run_job("copy", [os.path.join(self.root, "Album")], os.path.join(self.root, "Dest"))
+        self.assertEqual(job["state"], "done")
+        self.assertTrue(os.path.isdir(os.path.join(self.root, "Dest", "Album (2)")))
+        self.assertEqual(self.read("Dest", "Album", "CD1", "01.flac"), b"old")
+
+    def test_move_with_skip_leaves_behind_only_what_was_skipped(self):
+        job = self.run_job("move", [os.path.join(self.root, "Album")], os.path.join(self.root, "Dest"), "skip")
+        self.assertEqual(job["state"], "done")
+        self.assertEqual(job["skipped"], 1)
+        self.assertEqual(self.read("Dest", "Album", "CD1", "01.flac"), b"old")
+        self.assertTrue(os.path.isfile(os.path.join(self.root, "Dest", "Album", "cover.jpg")))
+        # the skipped file stays where it was, the rest is gone from there
+        self.assertTrue(os.path.isfile(os.path.join(self.root, "Album", "CD1", "01.flac")))
+        self.assertFalse(os.path.exists(os.path.join(self.root, "Album", "cover.jpg")))
 
 
 class SymlinkEntryTests(FileOpsBase):
