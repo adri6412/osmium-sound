@@ -3360,6 +3360,7 @@ SUPPORT_CONFIG_FILES = [
     '/etc/hifi-sources.json',
     '/etc/hifi-player/display-mode',
     '/etc/hifi-player/ui-resolution',
+    '/etc/hifi-player/ui-screens',
     '/etc/hifi-player/ui-refresh',
     '/etc/hifi-player/ota-channel',
     '/etc/hifi-player/SYSTEM_VERSION',
@@ -4321,6 +4322,120 @@ def set_ui_resolution(mode):
     # the kiosk UI issuing the request is about to disappear and come back.
     return {'success': True, 'mode': mode,
             'message': _t('uiResolution.updated', _lang())}
+
+# ──────────────────────────────────────────────────────────────────
+#  More than one screen (Settings → Display): the same interface on every
+#  monitor ("mirror", the default) or on one of them only ("only:<output>").
+#  Never "extend": the interface is one window.
+#
+#  The kiosk does the work at its start (native-ui-qt/src/kmsmode.cpp): eglfs
+#  clones the first monitor onto the others, which needs one resolution they
+#  all have, and switches the unused ones off. So a change restarts it, like
+#  the resolution. Output names are Qt's (type + number, HDMI-A/HDMI-B ->
+#  HDMI, every DVI -> DVI), or the kiosk's configuration would not match.
+# ──────────────────────────────────────────────────────────────────
+UI_SCREENS_FILE = '/etc/hifi-player/ui-screens'
+DRM_CARD = 'card0'   # the one the kiosk opens (/dev/dri/card0)
+# kernel connector type name (drm_connector_enum_list) -> Qt's (qkmsdevice.cpp)
+_QT_CONNECTOR_TYPES = {
+    'VGA': 'VGA', 'DVI-I': 'DVI', 'DVI-D': 'DVI', 'DVI-A': 'DVI', 'Composite': 'Composite',
+    'SVIDEO': 'TV', 'LVDS': 'LVDS', 'Component': 'CTV', 'DIN': 'DIN', 'DP': 'DP',
+    'HDMI-A': 'HDMI', 'HDMI-B': 'HDMI', 'TV': 'TV', 'eDP': 'eDP', 'Virtual': 'Virtual', 'DSI': 'DSI',
+}
+_QT_OUTPUT_NAME = re.compile(r'^[A-Za-z]{2,10}[0-9]{1,3}$')
+
+
+def _edid_monitor_name(edid):
+    """The monitor's own name from its EDID (descriptor 0xFC), or ''."""
+    if len(edid) < 128 or edid[:8] != b'\x00\xff\xff\xff\xff\xff\xff\x00':
+        return ''
+    for off in (54, 72, 90, 108):
+        d = edid[off:off + 18]
+        if d[:3] == b'\x00\x00\x00' and d[3] == 0xFC:
+            return d[5:18].split(b'\n')[0].decode('ascii', 'replace').strip()
+    return ''
+
+
+def _connected_screens(sysfs=None):
+    """Monitors connected to the kiosk's card, in the order the kiosk sees
+    them (connector id: the first one is the source when mirroring)."""
+    root = sysfs or DRM_SYSFS_DIR
+    out = []
+    try:
+        entries = os.listdir(root)
+    except OSError:
+        return out
+    for e in entries:
+        if not e.startswith(DRM_CARD + '-'):
+            continue
+        conn = e[len(DRM_CARD) + 1:]
+        base = os.path.join(root, e)
+        try:
+            with open(os.path.join(base, 'status')) as f:
+                if f.read().strip() != 'connected':
+                    continue
+        except OSError:
+            continue
+        kind, _, num = conn.rpartition('-')
+        if not num.isdigit():
+            continue
+        name = _QT_CONNECTOR_TYPES.get(kind, 'UNKNOWN') + num
+        try:
+            with open(os.path.join(base, 'edid'), 'rb') as f:
+                label = _edid_monitor_name(f.read())
+        except OSError:
+            label = ''
+        try:
+            with open(os.path.join(base, 'connector_id')) as f:
+                cid = int(f.read().strip())
+        except (OSError, ValueError):
+            cid = 1 << 30
+        out.append({'name': name, 'connector': conn, 'label': label or conn, '_id': cid})
+    out.sort(key=lambda s: (s['_id'], s['connector']))
+    for s in out:
+        del s['_id']
+    return out
+
+
+def get_ui_screens():
+    """Return { mode: 'mirror'|'only', output, screens: [{name, connector, label}] }.
+    'mirror' when the file is absent or unreadable."""
+    mode, output = 'mirror', None
+    try:
+        with open(UI_SCREENS_FILE) as f:
+            val = f.read().strip()
+        if val.startswith('only:') and _QT_OUTPUT_NAME.match(val[5:]):
+            mode, output = 'only', val[5:]
+    except Exception:
+        pass
+    return {'mode': mode, 'output': output, 'screens': _connected_screens()}
+
+
+def set_ui_screens(mode, output=None):
+    """Persist what the monitors show and restart the interface so it takes
+    effect. 'only' needs a monitor that is connected now."""
+    cur = get_ui_screens()
+    def refuse(code):
+        return {'success': False, 'mode': cur['mode'], 'output': cur['output'],
+                'code': code, 'message': _t(code, _lang())}
+    if mode not in ('mirror', 'only'):
+        return refuse('uiScreens.invalid')
+    if mode == 'only' and output not in {s['name'] for s in cur['screens']}:
+        return refuse('uiScreens.notConnected')
+    if _update_in_progress():
+        return refuse('update.inProgressRetry')
+    value = 'mirror' if mode == 'mirror' else 'only:' + output
+    try:
+        tmp = UI_SCREENS_FILE + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(value + '\n')
+        os.replace(tmp, UI_SCREENS_FILE)
+    except OSError:
+        log.exception("set_ui_screens failed")
+        return refuse('uiScreens.changeFailed')
+    restart_kiosk_ui()
+    return {'success': True, 'mode': mode, 'output': output if mode == 'only' else None,
+            'message': _t('uiScreens.updated', _lang())}
 
 # ──────────────────────────────────────────────────────────────────
 #  Screen rotation (Settings → Display): degrees clockwise the picture is
@@ -10488,6 +10603,15 @@ def api_ui_resolution():
 def api_set_ui_resolution():
     data = request.get_json(silent=True) or {}
     return jsonify(set_ui_resolution((data.get('mode') or '').strip()))
+
+@app.route('/ui_screens', methods=['GET'])
+def api_ui_screens():
+    return jsonify(get_ui_screens())
+
+@app.route('/ui_screens', methods=['POST'])
+def api_set_ui_screens():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_ui_screens((data.get('mode') or '').strip(), (data.get('output') or '').strip() or None))
 
 @app.route('/ui_refresh', methods=['GET'])
 def api_ui_refresh():

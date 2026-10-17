@@ -20,6 +20,8 @@ docker run --rm -v "$PWD:/w" -w /w debian:trixie bash -eu -c '
   apt-get install -y --no-install-recommends \
     build-essential pkg-config qt6-base-dev qt6-declarative-dev libdrm-dev ffmpeg > /dev/null
   cd native-ui-qt && make -j"$(nproc)"
+  # what the interface tells eglfs for one or more monitors (kmsmode)
+  make test
 '
 ls -l native-ui-qt/hifi-qt
 

@@ -268,6 +268,7 @@ CATEGORIES = {
             ("file", "/etc/hifi-player/ota-channel"),
             ("file", "/etc/hifi-player/display-mode"),
             ("file", "/etc/hifi-player/ui-resolution"),
+            ("file", "/etc/hifi-player/ui-screens"),
             # Settings -> Display -> Rotation. A restore also turns the boot
             # splash again (sources_server._restore_apply_side_effects).
             ("file", "/etc/hifi-player/ui-rotation"),

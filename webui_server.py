@@ -1220,6 +1220,8 @@ _AUTH_ROUTES = {
     ('/api/system/player_enabled', 'POST'): '/player_enabled',
     ('/api/system/ui_resolution', 'GET'): '/ui_resolution',
     ('/api/system/ui_resolution', 'POST'): '/ui_resolution',
+    ('/api/system/ui_screens', 'GET'): '/ui_screens',
+    ('/api/system/ui_screens', 'POST'): '/ui_screens',
     ('/api/system/ui_rotation', 'GET'): '/ui_rotation',
     ('/api/system/ui_rotation', 'POST'): '/ui_rotation',
     ('/api/system/ui_refresh', 'GET'): '/ui_refresh',

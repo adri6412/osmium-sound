@@ -268,6 +268,14 @@ MESSAGES = {
     'uiResolution.updated': {'en': 'Resolution updated — the interface is restarting',
                              'it': "Risoluzione aggiornata — l'interfaccia si riavvia"},
 
+    # ── More than one screen ────────────────────────────────────────
+    'uiScreens.invalid': {'en': 'Invalid choice for the screens', 'it': 'Scelta non valida per gli schermi'},
+    'uiScreens.notConnected': {'en': 'That screen is not connected', 'it': 'Quello schermo non è collegato'},
+    'uiScreens.changeFailed': {'en': 'Could not change what the screens show',
+                               'it': 'Impossibile cambiare cosa mostrano gli schermi'},
+    'uiScreens.updated': {'en': 'Screens updated — the interface is restarting',
+                          'it': "Schermi aggiornati — l'interfaccia si riavvia"},
+
     # ── Panel refresh rate ──────────────────────────────────────────
     'uiRefresh.invalid': {'en': 'Invalid refresh rate', 'it': 'Frequenza di aggiornamento non valida'},
     'uiRefresh.unavailable': {'en': 'Feature not available on this system version',

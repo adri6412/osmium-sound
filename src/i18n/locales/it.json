@@ -587,6 +587,7 @@
       "ssh": "Accesso SSH",
       "pointer": "Puntatore mouse",
       "uiResolution": "Risoluzione interfaccia",
+      "uiScreens": "Più schermi",
       "uiRefresh": "Frequenza di aggiornamento",
       "displayMode": "Modalità schermo",
       "timezone": "Fuso orario",
@@ -984,6 +985,15 @@
       "disabled": "Puntatore mouse nascosto",
       "unavailable": "Controllo del puntatore non disponibile su questo dispositivo.",
       "failed": "Impossibile cambiare il puntatore."
+    },
+    "uiScreens": {
+      "help": "Con più monitor collegati, l'interfaccia può comparire su tutti, la stessa immagine ovunque, oppure su uno solo.",
+      "mirror": "Duplica su tutti gli schermi",
+      "mirrorHelp": "La stessa interfaccia su tutti, a una risoluzione che tutti supportano",
+      "only": "Solo su {name}",
+      "onlyHelp": "Gli altri schermi restano spenti",
+      "restartWarning": "L'interfaccia si chiude e si riapre dopo qualche secondo. La riproduzione non viene interrotta.",
+      "confirm": "Applica"
     },
     "uiResolution": {
       "help": "Sugli schermi grandi l'interfaccia viene disegnata alla risoluzione piena del pannello, e questo tiene il chip grafico molto impegnato. Disegnarla più in basso e lasciare che sia lo schermo a ingrandirla rende tutto molto più fluido, a costo di un po' di nitidezza.",

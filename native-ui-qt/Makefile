@@ -41,7 +41,15 @@ build/moc_%.o: build/moc_%.cpp
 build:
 	mkdir -p build
 
+# The pure parts that need no screen: what to tell eglfs for one or more
+# monitors (kmsmode). Linked with kmsmode alone.
+build/kmsplan_test: tests/kmsplan_test.cpp build/kmsmode.o | build
+	$(CXX) $(CXXFLAGS) -Isrc -o $@ $< build/kmsmode.o $(LDLIBS)
+
+test: build/kmsplan_test
+	build/kmsplan_test
+
 clean:
 	rm -rf build $(BIN)
 
-.PHONY: all clean
+.PHONY: all clean test

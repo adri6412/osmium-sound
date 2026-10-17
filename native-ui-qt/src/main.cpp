@@ -269,14 +269,19 @@ static void cmdfilePoll() {
 
 int main(int argc, char *argv[]) {
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "eglfs");
-    // Modo video da /etc/hifi-player/ui-resolution, prima che eglfs apra il DRM.
+    // Modo video da /etc/hifi-player/ui-resolution e, con piu' monitor, cosa
+    // mostra ciascuno da /etc/hifi-player/ui-screens (duplica di serie, o
+    // "only:<uscita>"): prima che eglfs apra il DRM.
     if (qEnvironmentVariable("QT_QPA_PLATFORM") == "eglfs" && qEnvironmentVariableIsEmpty("QT_QPA_EGLFS_KMS_CONFIG")) {
         QString cdir = qEnvironmentVariable("HIFI_CONFIG_DIR");
         if (cdir.isEmpty()) cdir = "/etc/hifi-player";
-        QFile rf(cdir + "/ui-resolution");
-        QString pref = "auto";
-        if (rf.open(QIODevice::ReadOnly)) pref = QString::fromUtf8(rf.readLine()).trimmed();
-        QString cfg = kmsConfigFor(pref.isEmpty() ? "auto" : pref);
+        auto firstLine = [&](const QString &name, const QString &fallback) {
+            QFile f(cdir + "/" + name);
+            QString v;
+            if (f.open(QIODevice::ReadOnly)) v = QString::fromUtf8(f.readLine()).trimmed();
+            return v.isEmpty() ? fallback : v;
+        };
+        QString cfg = kmsConfigFor(firstLine("ui-resolution", "auto"), firstLine("ui-screens", "mirror"));
         if (!cfg.isEmpty()) { qputenv("QT_QPA_EGLFS_KMS_CONFIG", cfg.toUtf8()); qputenv("QT_QPA_EGLFS_ALWAYS_SET_MODE", "1"); }
     }
     QGuiApplication app(argc, argv);

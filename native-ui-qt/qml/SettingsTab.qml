@@ -169,6 +169,8 @@ Item {
         { id: "ssh", icon: "terminal", key: "settings.sections.ssh" },
         { id: "pointer", icon: "mouse-pointer-2", key: "settings.sections.pointer" },
         { id: "uiResolution", icon: "gauge", key: "settings.sections.uiResolution" },
+        // only with two or more monitors connected (listedSecs)
+        { id: "uiScreens", icon: "monitor", key: "settings.sections.uiScreens" },
         { id: "uiRefresh", icon: "refresh-cw", key: "settings.sections.uiRefresh" },
         { id: "displayMode", icon: "monitor", key: "settings.sections.displayMode" },
         { id: "timezone", icon: "clock", key: "settings.sections.timezone" },
@@ -179,7 +181,7 @@ Item {
         // reached from System info and Updates, not listed on its own
         { id: "netCheck", icon: "network", key: "settings.sections.netCheck", hidden: true },
         { id: "remoteKeys", icon: "remote", key: "settings.remote.keysPage", hidden: true }]
-    readonly property var listedSecs: secs.filter(function(s) { return !s.hidden })
+    readonly property var listedSecs: secs.filter(function(s) { return !s.hidden && (s.id !== "uiScreens" || cfg.screens.length > 1) })
 
     Component.onCompleted: Ui.settings = root
 
@@ -196,6 +198,7 @@ Item {
         property bool pointerEnabled: true; property bool pointerAvailable: true
         property string shellUser: ""
         property string displayMode: "gui"; property string uiResolution: "auto"; property string uiRefresh: "native"; property bool uiRefreshSupported: false
+        property var screens: []; property string screensPref: "mirror"     // "mirror" | "only:<output>"
         property string timezone: ""
         property bool vuMeter: true; property int autoexpand: 0; property bool playerEnabled: true
         // Bluetooth speakers (api_server /bt_speakers). btSpeakers are the ones
@@ -406,6 +409,14 @@ Item {
             get(api("/nowplaying_autoexpand"), function(d) { autoexpand = Number(d.seconds || 0) })
             get(api("/display_mode"), function(d) { displayMode = str(d, "mode", "gui") })
             get(api("/ui_resolution"), function(d) { uiResolution = str(d, "mode", "auto") })
+            get(api("/ui_screens"), function(d) {
+                screens = d.screens || []
+                // "only" on a monitor that is not connected now: the kiosk is
+                // duplicating (kmsmode.cpp), so that is what is shown as chosen
+                var out = str(d, "output")
+                var here = screens.some(function(x) { return x.name === out })
+                screensPref = str(d, "mode", "mirror") === "only" && here ? "only:" + out : "mirror"
+            })
             get(api("/timezone"), function(d) { timezone = str(d, "timezone") })
             get(api("/shell_account"), function(d) { shellUser = str(d, "username") })
             get(api("/device_name"), function(d) { deviceName = str(d, "name") })
@@ -965,6 +976,7 @@ Item {
             case "ssh": secSsh(); break
             case "pointer": secPointer(); break
             case "uiResolution": secUires(); break
+            case "uiScreens": secUiscreens(); break
             case "uiRefresh": secUirefresh(); break
             case "displayMode": secDisplaymode(); break
             case "timezone": secTimezone(); break
@@ -1985,6 +1997,21 @@ Item {
         }
         if (pendAct === "uires") confirmRow(Tr.t("settings.uiResolution.restartWarning"), Tr.t("settings.uiResolution.confirm"), "uires_confirm")
     }
+    // More than one monitor: the same interface on all of them, or on one only.
+    // Never "extend": the interface is one window (kmsmode.cpp does the rest).
+    function secUiscreens() {
+        help("settings.uiScreens.help")
+        var m = option(Tr.t("settings.uiScreens.mirror"), Tr.t("settings.uiScreens.mirrorHelp"), "mirror", cfg.screensPref === "mirror", "uiscr")
+        m.style = "border"; m.hh = 62
+        for (var i = 0; i < cfg.screens.length; i++) {
+            var sc = cfg.screens[i]
+            var r = option(Tr.tf("settings.uiScreens.only", "name", sc.label || sc.name),
+                           (sc.label && sc.label !== sc.connector ? sc.connector + " · " : "") + Tr.t("settings.uiScreens.onlyHelp"),
+                           "only:" + sc.name, cfg.screensPref === "only:" + sc.name, "uiscr")
+            r.style = "border"; r.hh = 62
+        }
+        if (pendAct === "uiscr") confirmRow(Tr.t("settings.uiScreens.restartWarning"), Tr.t("settings.uiScreens.confirm"), "uiscr_confirm")
+    }
     function secUirefresh() {
         help("settings.uiRefresh.help")
         if (!cfg.uiRefreshSupported) { note(Tr.t("settings.uiRefresh.unsupported"), "dark"); return }
@@ -2290,6 +2317,12 @@ Item {
             if (cfg.uiResolution === arg) return
             pendAct = "uires"; pendArg = arg; break
         case "uires_confirm": post(A("/ui_resolution"), { mode: pendArg }); cfg.uiResolution = pendArg; pendAct = ""; break
+        case "uiscr":
+            if (cfg.screensPref === arg) return
+            pendAct = "uiscr"; pendArg = arg; break
+        case "uiscr_confirm":
+            post(A("/ui_screens"), pendArg === "mirror" ? { mode: "mirror" } : { mode: "only", output: pendArg.slice(5) })
+            cfg.screensPref = pendArg; pendAct = ""; break
         case "rot": {
             var deg = Number(arg)
             if (deg === Sys.rotation) return

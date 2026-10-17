@@ -996,6 +996,33 @@ async function setUiRes(m) {
   else say(bodyMsg(r, t('settings.display.resolutionFailed')), true);
 }
 
+// ── More than one screen ─────────────────────────────────────────
+// The same interface on every monitor ('mirror', the default) or on one only
+// ('only' + output). Never "extend". Shown only with two or more monitors
+// connected; applying restarts the device's interface, like the resolution.
+const uiScreens = ref({ mode: 'mirror', output: null, screens: [] });
+async function loadUiScreens() {
+  const r = await api.sys('ui_screens');
+  if (!r.ok) return;
+  const d = r.data || {};
+  const screens = Array.isArray(d.screens) ? d.screens : [];
+  // "only" on a monitor that is not connected now: the device is duplicating
+  const here = screens.some((x) => x.name === d.output);
+  uiScreens.value = { mode: d.mode === 'only' && here ? 'only' : 'mirror', output: here ? d.output : null, screens };
+}
+function screensChoiceIs(mode, output) {
+  return uiScreens.value.mode === mode && (mode === 'mirror' || uiScreens.value.output === output);
+}
+async function setUiScreens(mode, output) {
+  if (screensChoiceIs(mode, output)) return;
+  if (!confirm(t('settings.display.confirmScreens'))) return;
+  const r = await api.sysPost('ui_screens', mode === 'only' ? { mode, output } : { mode });
+  if (r.ok && r.data.success !== false) {
+    uiScreens.value = { ...uiScreens.value, mode, output: mode === 'only' ? output : null };
+    say(bodyMsg(r, t('settings.display.screensChanged')));
+  } else say(bodyMsg(r, t('settings.display.screensFailed')), true);
+}
+
 // ── Screen rotation ───────────────────────────────────────────────
 // Degrees clockwise (0/90/180/270). The device's screen turns at once (the
 // kiosk watches the setting); the boot splash turns from the next restart,
@@ -1822,7 +1849,7 @@ async function saveBackupScheduled(v) {
 
 onMounted(async () => {
   loadNet(); loadIpv4(); loadAudio(); loadDsp(); loadFir(); loadToggles(); loadShell(); loadLms(); loadLyrion(); loadSkin(); loadPlayback();
-  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiRefresh(); loadUiRotation(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadNpAnimation(); loadAnimStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
+  loadMode(); loadEngine(); loadPlayerEnabled(); loadUiRes(); loadUiScreens(); loadUiRefresh(); loadUiRotation(); loadPointer(); loadTimezone(); loadVuMeter(); loadVuStyle(); loadVuStore(false); loadNpAnimation(); loadAnimStore(false); loadAutoExpand(); loadChannel(); checkAll(); resumePlanIfRunning(); loadBackups(); loadTailscale();
   timezonePoll = setInterval(pollTimezone, 10000);
   // Tell the global UpdateProgressOverlay (mounted in App.vue) that this page
   // owns the OTA modal while it's open, so the two never render on top of
@@ -2719,6 +2746,20 @@ onUnmounted(() => {
             <button v-for="opt in ['auto', '720', '1080', 'native']" :key="opt"
                     :class="{ active: uiRes === opt }" @click="setUiRes(opt)">
               {{ t('settings.display.resolution.' + opt) }}
+            </button>
+          </span>
+        </div>
+
+        <div v-if="uiScreens.screens.length > 1" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <p class="sub">{{ t('settings.display.screensLabel') }}</p>
+          <p class="muted">{{ t('settings.display.screensHelp') }}</p>
+          <span class="seg">
+            <button :class="{ active: screensChoiceIs('mirror') }" @click="setUiScreens('mirror')">
+              {{ t('settings.display.screensMirror') }}
+            </button>
+            <button v-for="sc in uiScreens.screens" :key="sc.name" :title="sc.connector"
+                    :class="{ active: screensChoiceIs('only', sc.name) }" @click="setUiScreens('only', sc.name)">
+              {{ t('settings.display.screensOnly', { name: sc.label || sc.name }) }}
             </button>
           </span>
         </div>

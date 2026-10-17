@@ -587,6 +587,7 @@
       "ssh": "SSH Access",
       "pointer": "Mouse pointer",
       "uiResolution": "Interface resolution",
+      "uiScreens": "More than one screen",
       "uiRefresh": "Refresh rate",
       "displayMode": "Display mode",
       "timezone": "Timezone",
@@ -984,6 +985,15 @@
       "disabled": "Mouse pointer hidden",
       "unavailable": "Pointer control is not available on this device.",
       "failed": "Could not change the pointer."
+    },
+    "uiScreens": {
+      "help": "With more than one monitor connected, the interface can appear on all of them, the same picture everywhere, or on one only.",
+      "mirror": "Duplicate on every screen",
+      "mirrorHelp": "The same interface on all of them, at a resolution they all support",
+      "only": "Only on {name}",
+      "onlyHelp": "The other screens stay off",
+      "restartWarning": "The interface will close and reopen after a few seconds. Playback is not interrupted.",
+      "confirm": "Apply"
     },
     "uiResolution": {
       "help": "On large screens the interface is drawn at full panel resolution, which keeps the graphics chip busy. Rendering it lower and letting the screen enlarge it makes everything much smoother, at the cost of some sharpness.",
