@@ -263,6 +263,8 @@ jobs:
           bash tests/test-lyrion-ensure.sh
           echo "== live session state (shell) =="
           bash tests/test-live-state.sh
+          echo "== lyrion install progress (shell) =="
+          bash tests/test-lyrion-progress.sh
           echo "== streaming read-ahead (shell) =="
           bash tests/test-stream-tune.sh
           echo "== image bundle download (shell) =="
@@ -387,7 +389,7 @@ jobs:
             distro/config/includes.chroot/usr/local/sbin/hifi-boot-health.sh \
             distro/config/includes.chroot/usr/local/sbin/hifi-boot-watchdog.sh \
             tests/test-ota-ui-apply.sh tests/test-ab-convert-cleanup.sh \
-            tests/test-boot-health.sh tests/test-grub-selector.sh tests/test-lyrion-prune.sh
+            tests/test-boot-health.sh tests/test-grub-selector.sh tests/test-lyrion-prune.sh tests/test-lyrion-progress.sh
           echo "== idempotency (run apply.sh twice) =="
           export HIFI_OS_VERSION=ci-test
           export HIFI_PAYLOAD_DIR="$PWD/distro/os-update"

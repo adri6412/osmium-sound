@@ -32,6 +32,48 @@ fail() {
     exit 1
 }
 
+# The 60 -> 89 stretch of an image install: unpacking about ten thousand small
+# files, then getting them onto the disk. On an internal disk that is seconds;
+# on a USB stick small writes are the slowest thing it does, and it can take
+# many minutes. With a single status for all of it the bar sat at 60 % the
+# whole time and the install looked hung. These two keep it moving with what
+# is really happening; the state stays `applying`, which every interface
+# already shows in its own language.
+dirty_kb() {  # what the kernel still has to write out, in kB
+    awk '/^(Dirty|Writeback):/ { s += $2 } END { print s + 0 }' /proc/meminfo
+}
+
+extract_with_progress() {  # <deb> <dest> <entries in the deb>: 60 -> 80
+    dpkg-deb -x "$1" "$2" &
+    _ewp_pid=$!
+    _ewp_total=$3
+    [ "$_ewp_total" -gt 0 ] || _ewp_total=1
+    while kill -0 "$_ewp_pid" 2>/dev/null; do
+        _ewp_n=$(find "$2" 2>/dev/null | wc -l)
+        _ewp_p=$(( 60 + 20 * _ewp_n / _ewp_total ))
+        [ "$_ewp_p" -le 79 ] || _ewp_p=79
+        write_status applying "$_ewp_p" "Installazione in $2 ($_ewp_n/$3 file)…"
+        sleep 2
+    done
+    wait "$_ewp_pid"
+}
+
+flush_with_progress() {  # <path>: write its filesystem's data out, 80 -> 89
+    _fwp_d0=$(dirty_kb)
+    sync -f "$1" &
+    _fwp_pid=$!
+    while kill -0 "$_fwp_pid" 2>/dev/null; do
+        _fwp_d=$(dirty_kb)
+        _fwp_p=80
+        if [ "$_fwp_d0" -gt 0 ] && [ "$_fwp_d" -lt "$_fwp_d0" ]; then
+            _fwp_p=$(( 80 + 9 * (_fwp_d0 - _fwp_d) / _fwp_d0 ))
+        fi
+        write_status applying "$_fwp_p" "Scrittura su disco ($(( _fwp_d / 1024 )) MB ancora da scrivere)…"
+        sleep 2
+    done
+    wait "$_fwp_pid"
+}
+
 [ -n "$URL" ] || fail "URL di download mancante"
 
 # The package is installed as root (apt-get on a legacy root, extracted into
@@ -133,8 +175,12 @@ if [ -f /usr/lib/osmium/IMAGE_VERSION ]; then
     write_status applying 60 "Installazione in /data/lyrion/$ver…"
     dest="$LYR_ROOT/$ver"
     rm -rf "$dest.new"; mkdir -p "$dest.new"
-    dpkg-deb -x "$DEB" "$dest.new" || fail "Estrazione del .deb fallita"
+    entries=$(dpkg-deb -c "$DEB" | wc -l)
+    extract_with_progress "$DEB" "$dest.new" "$entries" || fail "Estrazione del .deb fallita"
     printf '%s\n' "$ver" > "$dest.new/VERSION"
+    # On the disk before `current` points at it, and with the bar moving
+    # while it gets there (the slow part on a USB stick).
+    flush_with_progress "$dest.new" || fail "Scrittura su disco fallita"
     rm -rf "$dest"; mv "$dest.new" "$dest"
     systemctl stop lyrionmusicserver 2>/dev/null || true
     ln -sfn "$ver" "$LYR_ROOT/current.new" && mv -T "$LYR_ROOT/current.new" "$LYR_ROOT/current"
