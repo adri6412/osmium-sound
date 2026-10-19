@@ -55,6 +55,8 @@ Item {
     readonly property real ledH: ledW * 175 / 897
     readonly property real artY: bodyY + (bodyH - (artSide + 32 + ledH)) / 2
     readonly property real rx: pad + leftW + 24
+    // bar panel: the album (cover and pill) sits on the right
+    readonly property real leftX: Theme.bar ? root.width - pad - leftW : pad
     readonly property real rw: Theme.npInfoW
     // The box under the info (VU / animation / lyrics); on a wide canvas it is the
     // third column, as tall as the body
@@ -62,10 +64,10 @@ Item {
     // Bar panel (440 points tall): not enough height to stack, so title and controls
     // keep a column of their own and the VU / animation / lyrics take the whole right side.
     readonly property real barColW: 440
-    // bar panel order: cover | VU / animation / lyrics | title and controls
-    readonly property real barColX: root.width - pad - barColW
-    readonly property real boxX: rx
-    readonly property real boxW: Theme.bar ? barColX - 24 - rx : rw
+    // bar panel order: title and controls | VU / animation / lyrics | album
+    readonly property real barColX: pad
+    readonly property real boxX: Theme.bar ? pad + barColW + 24 : rx
+    readonly property real boxW: Theme.bar ? leftX - 24 - boxX : rw
     readonly property real boxY: Theme.bar ? 60 : Theme.wide ? col.y + col.height + 8 : ctl.y + ctl.height
     readonly property real boxH: Theme.bar ? root.height - pad - boxY : Theme.wide ? ctl.y - boxY - 8 : root.height - pad - boxY
 
@@ -173,7 +175,7 @@ Item {
     // are one block, centred on the cover underneath (the cover and the LED
     // plate sit on the same axis). The lit one says what plays on screen.
     Row {
-        x: root.pad + (root.leftW - width) / 2
+        x: root.leftX + (root.leftW - width) / 2
         y: 31 - 18
         spacing: 10
         Rectangle {                               // l'orologio: tocco = salvaschermo
@@ -244,7 +246,7 @@ Item {
     // ─── copertina con ombra 0 20px 60px rgba(0,0,0,.7) e targa LED ────────
     Rectangle {
         id: artShadowSrc
-        x: root.pad + (root.leftW - root.artSide) / 2; y: root.artY + 20
+        x: root.leftX + (root.leftW - root.artSide) / 2; y: root.artY + 20
         width: root.artSide; height: root.artSide; radius: 16
         color: Qt.rgba(0, 0, 0, 0.7)
         visible: false
@@ -258,7 +260,7 @@ Item {
     }
     Cover {
         id: art
-        x: root.pad + (root.leftW - root.artSide) / 2; y: root.artY
+        x: root.leftX + (root.leftW - root.artSide) / 2; y: root.artY
         width: root.artSide; height: root.artSide
         source: Player.artworkUrl
         radius: 16; devScale: root.devScale
@@ -268,7 +270,7 @@ Item {
         border: "#e5e7eb"
     }
     LedBar {
-        x: root.pad + (root.leftW - root.ledW) / 2; y: root.artY + root.artSide + 32
+        x: root.leftX + (root.leftW - root.ledW) / 2; y: root.artY + root.artSide + 32
         width: root.ledW; devScale: root.devScale
         // BitPerfect / ReplayGain follow the player being driven, like the
         // format LEDs and the volume slider: the prefs behind ledMode are
@@ -281,7 +283,7 @@ Item {
     // ─── colonna di destra ─────────────────────────────────────────────────
     Column {
         id: col
-        x: Theme.bar ? root.barColX : root.rx; y: root.bodyY + 1
+        x: Theme.bar ? root.barColX : root.rx; y: root.bodyY + 1 + (Theme.bar ? 18 : 0)
         width: Theme.bar ? root.barColW : root.rw
         Text {
             id: titleText
