@@ -369,27 +369,31 @@ Item {
         Item { width: 1; height: 12 }
         Item {                                     // comandi
             id: controls
-            width: parent.width; height: 56
+            width: parent.width; height: Theme.bar ? 90 : 56
             readonly property real cy: 28
+            // bar panel: the transport group (about 303 wide, from -11) is centred and the volume gets its own centred row
+            readonly property real tx: Theme.bar ? (width - 303) / 2 + 11 : 0
+            readonly property real vx: Theme.bar ? (width - 180) / 2 : width - 180
+            readonly property real vy: Theme.bar ? 76 : cy
             // 🚨 i cinque comandi erano attaccati (centri a 9/42/94/146/179 punti,
             // come in Electron): su un touchscreen si toccava il vicino. Ora c'e'
             // un passo di respiro in piu' fra uno e l'altro.
             readonly property real g: 12
             Item {                                 // shuffle
-                x: 9 - 20; y: controls.cy - 20; width: 40; height: 40
+                x: controls.tx + 9 - 20; y: controls.cy - 20; width: 40; height: 40
                 Icon { anchors.centerIn: parent; name: "shuffle"; size: 18; scale: shTap.tapScale
                        color: Player.shuffle > 0 ? Theme.gold : Theme.silverA(0.6)
                        pressColor: Theme.white; press: Player.shuffle > 0 ? 0 : shTap.pressAnim }
                 Tap { id: shTap; tap: 0.88; onClicked: Player.cycleShuffle() }
             }
             Item {                                 // precedente (whileTap .9)
-                x: 30 + 12 - 22 + controls.g; y: controls.cy - 22; width: 44; height: 44
+                x: controls.tx + 30 + 12 - 22 + controls.g; y: controls.cy - 22; width: 44; height: 44
                 Icon { anchors.centerIn: parent; name: "skip-back"; size: 24; color: Theme.silver; scale: prevTap.tapScale }
                 Tap { id: prevTap; tap: 0.9; onClicked: Ui.app ? Ui.app.skipTrack(-1) : Player.prev() }
             }
             Item {                                 // play, con alone 0 0 24px oro/40
                 id: playBtn
-                x: 66 + 2 * controls.g; y: controls.cy - 28; width: 56; height: 56
+                x: controls.tx + 66 + 2 * controls.g; y: controls.cy - 28; width: 56; height: 56
                 Glow { anchors.centerIn: parent; radius: 28; blur: 24; color: Theme.goldA(0.4) }
                 Rectangle { anchors.fill: parent; radius: 28; color: Theme.gold; scale: playTap.tapScale }
                 // Due icone che si scambiano in dissolvenza: cambiare `name` di
@@ -410,12 +414,12 @@ Item {
                 Tap { id: playTap; tap: 0.95; grow: 4; onClicked: if (!(Ui.app && Ui.app.changerTakesPlay())) Player.togglePlay() }
             }
             Item {                                 // successivo
-                x: 134 + 12 - 22 + 3 * controls.g; y: controls.cy - 22; width: 44; height: 44
+                x: controls.tx + 134 + 12 - 22 + 3 * controls.g; y: controls.cy - 22; width: 44; height: 44
                 Icon { anchors.centerIn: parent; name: "skip-forward"; size: 24; color: Theme.silver; scale: nextTap.tapScale }
                 Tap { id: nextTap; tap: 0.9; onClicked: Ui.app ? Ui.app.skipTrack(1) : Player.next() }
             }
             Item {                                 // ripeti
-                x: 170 + 9 - 20 + 4 * controls.g; y: controls.cy - 20; width: 40; height: 40
+                x: controls.tx + 170 + 9 - 20 + 4 * controls.g; y: controls.cy - 20; width: 40; height: 40
                 Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 18; scale: rpTap.tapScale
                        color: Player.repeat > 0 ? Theme.gold : Theme.silverA(0.6)
                        pressColor: Theme.white; press: Player.repeat > 0 ? 0 : rpTap.pressAnim }
@@ -423,7 +427,7 @@ Item {
             }
             Item {                                 // preferito (Lyrion Favorites): cuore pieno e oro se il brano lo e'
                 id: favBox
-                x: 170 + 9 - 20 + 4 * controls.g + 45; y: controls.cy - 20; width: 40; height: 40   // same pitch as next -> repeat
+                x: controls.tx + 170 + 9 - 20 + 4 * controls.g + 45; y: controls.cy - 20; width: 40; height: 40   // same pitch as next -> repeat
                 visible: Player.favoritesAvailable && Player.trackUrl !== ""
                 // lo scoppio quando si AGGIUNGE: 0 -> 1 -> 0 in poco piu' di
                 // un quarto di secondo, e finisce li'
@@ -454,7 +458,7 @@ Item {
             }
             // volume, a destra: icona + barra 155 px
             Item {
-                x: parent.width - 180 + 8.5 - 18; y: controls.cy - 18; width: 36; height: 36
+                x: controls.vx + 8.5 - 18; y: controls.vy - 18; width: 36; height: 36
                 Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 17; scale: muteTap.tapScale
                        color: Player.volumeFixed ? Theme.silverA(0.21) : Theme.silverA(0.7)
                        pressColor: Theme.white; press: Player.volumeFixed ? 0 : muteTap.pressAnim }
@@ -462,7 +466,7 @@ Item {
             }
             Item {
                 id: volBar
-                x: parent.width - 180 + 25; y: controls.cy - 3; width: 155; height: 6
+                x: controls.vx + 25; y: controls.vy - 3; width: 155; height: 6
                 readonly property real frac: Math.max(0, Math.min(100, Player.volume)) / 100
                 // <input type=range> con appearance-none: traccia uniforme e pomello, NESSUNA parte riempita
                 Rectangle { anchors.fill: parent; radius: 3; color: Player.volumeFixed ? Theme.wa(0.05) : Theme.wa(0.10) }
