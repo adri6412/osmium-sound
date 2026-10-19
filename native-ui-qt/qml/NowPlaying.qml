@@ -175,7 +175,8 @@ Item {
     // are one block, centred on the cover underneath (the cover and the LED
     // plate sit on the same axis). The lit one says what plays on screen.
     Row {
-        x: root.leftX + (root.leftW - width) / 2
+        // bar panel: the album is on the right, under the buttons, so the clock goes next to the left ones
+        x: Theme.bar ? root.pad + 46 + 38 + 14 : root.leftX + (root.leftW - width) / 2
         y: 31 - 18
         spacing: 10
         Rectangle {                               // l'orologio: tocco = salvaschermo
