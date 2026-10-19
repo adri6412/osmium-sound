@@ -48,7 +48,7 @@ Item {
         { key: "npLeft", rect: function() { return [20 + leftW / 2 - 70, 6, 70 + 10 + 3 * 36 + 2 * 8 + 12, 50] }, screen: "np" },
         { key: "npRight", rect: function() { return [cw - 20 - 34 * 5 - 32 - 6, 6, 34 * 5 + 32 + 12, 50] }, screen: "np" },
         { key: "npInfo", rect: function() { return [npRx - 8, 46, cw - npRx - 20 + 16, 210] }, screen: "np" },
-        { key: "npPanel", rect: function() { return Theme.wide ? [npRx + Theme.npInfoW + 24 - 8, 52, cw - npRx - Theme.npInfoW - 24 - 20 + 16, ch - 52 - 12]
+        { key: "npPanel", rect: function() { return Theme.wide ? [npRx - 8, 150, cw - npRx - 20 + 16, ch - 150 - 150]
                                                                   : [npRx - 8, 300, cw - npRx - 20 + 16, ch - 300 - 12] }, screen: "np" },
         { key: "done", rect: null, screen: "home" }]
 

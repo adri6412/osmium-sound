@@ -72,9 +72,9 @@ QtObject {
     // Now Playing's columns (also read by the tour): the left one (cover + LED plate),
     // then the info column; on wide canvases the VU / animation / lyrics box goes in a
     // third column to the right of the info instead of under it.
-    readonly property real npLeftW: wide ? (ultra ? 480 : 400) : (canvasW - 40) * 0.44
+    readonly property real npLeftW: wide ? (ultra ? 440 : 400) : (canvasW - 40) * 0.44
     readonly property real npRx: 20 + npLeftW + 24
-    readonly property real npInfoW: wide ? Math.max(500, Math.min(560, (canvasW - npRx - 20) * 0.42)) : canvasW - npRx - 20
+    readonly property real npInfoW: canvasW - npRx - 20
 
     // Quanti pixel veri vale un punto della tela: 1 a 1024x600, 1,25 a 720p,
     // 1,875 a 1080p, 3,6 a 4K. La imposta Main.qml appena sa il modo video.

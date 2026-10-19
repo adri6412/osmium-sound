@@ -58,9 +58,11 @@ Item {
     readonly property real rw: Theme.npInfoW
     // The box under the info (VU / animation / lyrics); on a wide canvas it is the
     // third column, as tall as the body
-    readonly property real boxX: Theme.wide ? rx + rw + 24 : rx
-    readonly property real boxW: Theme.wide ? root.width - boxX - pad : rw
-    readonly property real boxY: Theme.wide ? bodyY + 1 : col.y + col.height
+    // (wide: header on top, the box in the middle, the controls along the bottom)
+    readonly property real boxX: rx
+    readonly property real boxW: rw
+    readonly property real boxY: Theme.wide ? col.y + col.height + 8 : ctl.y + ctl.height
+    readonly property real boxH: Theme.wide ? ctl.y - boxY - 8 : root.height - pad - boxY
 
     // ─── dal telecomando ───────────────────────────────────────────────────
     // Lo stesso che fanno i pulsanti dell'intestazione, per i tasti che
@@ -324,6 +326,12 @@ Item {
             // the signal path, as from the format lights under the cover
             Tap { id: chipTap; grow: 8; navRadius: 5; onClicked: root.openSignalPath() }
         }
+    }
+    // times, seek bar and controls: under the header on a normal canvas, along the bottom on a wide one
+    Column {
+        id: ctl
+        x: root.rx; y: Theme.wide ? root.height - root.pad - height : col.y + col.height
+        width: Theme.wide ? Math.min(root.rw, 760) : root.rw
         Item { width: 1; height: Player.chip !== "" ? 4 : 8 }
         Item {                                     // tempi
             width: parent.width; height: 16
@@ -467,21 +475,21 @@ Item {
 
     // ─── testi (nello strato: non si muovono da soli) ──────────────────────
     Lyrics {
-        x: root.boxX; y: root.boxY; width: root.boxW; height: root.height - root.pad - y
+        x: root.boxX; y: root.boxY; width: root.boxW; height: root.boxH
         visible: !root.effVu && !root.effAnim; active: root.shown && !root.effVu && !root.effAnim
     }
     }   // fine dello strato statico
 
     // ─── VU: fuori dallo strato, sono l'unica cosa che si muove ────────────
     VuPanel {
-        x: root.boxX; y: root.boxY; width: root.boxW; height: root.height - root.pad - y
+        x: root.boxX; y: root.boxY; width: root.boxW; height: root.boxH
         visible: root.effVu && !root.staged; devScale: root.devScale
     }
     // the animation in the same box, also outside the layer. Loaded while the
     // VU meters are off and one is chosen (so switching to the lyrics and back
     // does not reload the pictures); it runs only while visible on screen.
     NpAnimation {
-        x: root.boxX; y: root.boxY; width: root.boxW; height: root.height - root.pad - y
+        x: root.boxX; y: root.boxY; width: root.boxW; height: root.boxH
         // unloaded while the full-screen stage runs its own copy
         kind: Player.vuEnabled || root.staged ? "" : Player.npAnimation
         visible: root.effAnim && !root.staged
