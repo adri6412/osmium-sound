@@ -30,20 +30,26 @@ Item {
     function srcOf(it) { return it && it.art ? Api.lmsBase + "/music/" + it.art + "/cover?size=" + px : "" }
 
     // ─── geometry ──────────────────────────────────────────────────────────
-    readonly property real cs: Math.max(90, Math.min(Math.round(height * 0.36), Math.round(width * 0.2)))   // the front disc
-    readonly property real cx: width / 2
+    // Wide canvases: the row of discs takes the left part and the changer stands
+    // big on the right, instead of below the row where it is hardly seen.
+    readonly property bool sideBox: Theme.wide
+    readonly property real rowW: sideBox ? Math.round(width * 0.5) : width
+    readonly property real cs: sideBox ? Math.max(90, Math.min(Math.round((height - 70) / 1.1), Math.round(rowW * 0.3)))
+                                       : Math.max(90, Math.min(Math.round(height * 0.36), Math.round(width * 0.2)))   // the front disc
+    readonly property real cx: rowW / 2
     readonly property real discY: 16 + Math.round(cs * 0.08)        // room for a loaded disc to rise
     readonly property real maxAngle: 74
     readonly property real halfTurned: cs / 2 * Math.cos(maxAngle * Math.PI / 180)
     readonly property real off: cs / 2 + halfTurned + cs * 0.07    // the first turned disc's centre
     readonly property real gap: cs * 0.09                          // between turned discs: a file
-    readonly property int side: Math.max(0, Math.min(14, Math.ceil((width / 2 - off + halfTurned) / gap) + 1))
+    readonly property int side: Math.max(0, Math.min(14, Math.ceil((rowW / 2 - off + halfTurned) / gap) + 1))
     readonly property int slots: 2 * side + 1
     readonly property int px: Theme.coverPx(cs)
     readonly property real captionY: discY + cs + 8
     // the changer below the row, as large as the rest of the height allows
     readonly property real boxY: captionY + 46
-    readonly property rect box: Qt.rect(8, boxY, width - 16, Math.max(40, height - boxY - 6))
+    readonly property rect box: sideBox ? Qt.rect(rowW + 8, 8, width - rowW - 16, height - 16)
+                                        : Qt.rect(8, boxY, width - 16, Math.max(40, height - boxY - 6))
     // where its window is, for the discs flying in (AnimChanger: a 600 x 260
     // stage fitted and centred in its box, the window centred at 235.5, 106)
     readonly property real stageS: Math.min(box.width / 600, box.height / 260)
@@ -176,6 +182,7 @@ Item {
     }
     // its top fades into the dark, so the row of discs stands in front
     Rectangle {
+        visible: !root.sideBox
         x: 0; y: root.box.y - 1; width: root.width; height: root.box.height * 0.22
         gradient: Gradient {
             GradientStop { position: 0.0; color: Theme.dark }
@@ -298,7 +305,7 @@ Item {
     // ─── touch, mouse and the remote over the row ──────────────────────────
     MouseArea {
         id: area
-        x: 0; y: 0; width: root.width; height: root.captionY
+        x: 0; y: 0; width: root.rowW; height: root.captionY
         property real x0: 0
         property real pos0: 0
         property bool moved: false
@@ -375,7 +382,7 @@ Item {
             required property int index
             readonly property int dir: index === 0 ? -1 : 1
             readonly property bool can: root.count > 1 && (dir < 0 ? root.cur > 0 : root.cur < root.count - 1)
-            x: index === 0 ? 14 : root.width - 14 - width
+            x: index === 0 ? 14 : root.rowW - 14 - width
             y: root.discY + root.cs / 2 - height / 2
             width: 44; height: 44
             z: 200
@@ -403,7 +410,7 @@ Item {
     // ─── under the row: the album in front, what is loaded, Load ───────────
     Item {
         id: caption
-        x: 0; y: root.captionY; width: root.width; height: 40
+        x: 0; y: root.captionY; width: root.rowW; height: 40
         z: 150
         readonly property real sideW: Math.min(230, (width - 260) / 2)
         Text {

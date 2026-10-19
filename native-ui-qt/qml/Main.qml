@@ -42,7 +42,8 @@ Item {
     readonly property real fitAspect: Math.max(1.5, Math.min(6, aspect))
     // Bar panels (3:1 and wider, 600 px tall or less): a 600-point canvas would be
     // scaled down to about 0.7 and everything would turn tiny, so they get a 440-point one.
-    readonly property bool shortBar: aspect >= 3 && fh <= 600
+    // TEST-ONLY: /etc/hifi-player/ui-test-bar = 1 forces it (remove before any release)
+    readonly property bool shortBar: Sys.conf("ui-test-bar", "0") === "1" || (aspect >= 3 && fh <= 600)
     readonly property int baseH: shortBar ? 440 : 600
     Binding { target: Theme; property: "canvasW"; value: root.fitAspect >= 1024 / 600 ? Math.round(root.baseH * root.fitAspect) : 1024 }
     Binding { target: Theme; property: "canvasH"; value: root.fitAspect >= 1024 / 600 ? root.baseH : Math.round(1024 / root.fitAspect) }
