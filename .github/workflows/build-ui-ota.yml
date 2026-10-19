@@ -94,14 +94,20 @@ jobs:
           # notes listed only the two commits after the last alpha instead of
           # everything since v2.5.23). Never a companion-* release, and never
           # this tag itself (a rerun finds its own release already published).
+          # A plain dev (vX.Y.Z-dev.N) starts from the previous plain dev,
+          # never from an alpha: its own alphas are previews of the same
+          # commits, so counting from the last alpha left v2.5.26-dev.1 with
+          # "Minor fixes" instead of everything new since v2.5.25-dev.10.
           case "$CUR" in
-            *-*) ONLY_STABLE=false ;;
-            *)   ONLY_STABLE=true ;;
+            *-alpha*) KIND=any ;;
+            *-*)      KIND=dev ;;
+            *)        KIND=stable ;;
           esac
-          PREV="$(gh release list --repo "${{ github.repository }}" --limit 100 \
+          PREV="$(gh release list --repo "${{ github.repository }}" --limit 200 \
                     --json tagName,isPrerelease \
                     --jq "[.[] | select(.tagName | startswith(\"v\")) | select(.tagName != \"$CUR\")
-                            | select(($ONLY_STABLE | not) or (.isPrerelease | not))][0].tagName // empty" \
+                            | select(\"$KIND\" != \"stable\" or (.isPrerelease | not))
+                            | select(\"$KIND\" != \"dev\" or (.tagName | test(\"-dev\\\\.[0-9]+$\")))][0].tagName // empty" \
                     2>/dev/null || true)"
           if [ -n "$PREV" ] && git rev-parse -q --verify "refs/tags/$PREV" >/dev/null; then
             RANGE="refs/tags/$PREV..HEAD"
