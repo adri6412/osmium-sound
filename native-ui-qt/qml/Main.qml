@@ -35,7 +35,10 @@ Item {
     readonly property bool sideways: turn === 90 || turn === 270
     readonly property real fw: sideways ? height : width
     readonly property real fh: sideways ? width : height
-    readonly property real aspect: fh > 0 ? fw / fh : 1024 / 600
+    // TEST ONLY (remove before any release): /etc/hifi-player/ui-test-aspect = e.g. 2.4 pretends the
+    // screen has that shape, to look at the ultrawide arrangements on a 16:9 monitor (bars top and bottom).
+    readonly property real testAspect: parseFloat(Sys.conf("ui-test-aspect", "0")) || 0
+    readonly property real aspect: testAspect > 0 ? testAspect : fh > 0 ? fw / fh : 1024 / 600
     readonly property real fitAspect: Math.max(1.5, Math.min(6, aspect))
     Binding { target: Theme; property: "canvasW"; value: root.fitAspect >= 1024 / 600 ? Math.round(600 * root.fitAspect) : 1024 }
     Binding { target: Theme; property: "canvasH"; value: root.fitAspect >= 1024 / 600 ? 600 : Math.round(1024 / root.fitAspect) }
