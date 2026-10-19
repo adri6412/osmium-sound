@@ -59,10 +59,13 @@ Item {
     // The box under the info (VU / animation / lyrics); on a wide canvas it is the
     // third column, as tall as the body
     // (wide: header on top, the box in the middle, the controls along the bottom)
-    readonly property real boxX: rx
-    readonly property real boxW: rw
-    readonly property real boxY: Theme.wide ? col.y + col.height + 8 : ctl.y + ctl.height
-    readonly property real boxH: Theme.wide ? ctl.y - boxY - 8 : root.height - pad - boxY
+    // Bar panel (440 points tall): not enough height to stack, so title and controls
+    // keep a column of their own and the VU / animation / lyrics take the whole right side.
+    readonly property real barColW: 440
+    readonly property real boxX: Theme.bar ? rx + barColW + 24 : rx
+    readonly property real boxW: Theme.bar ? rw - barColW - 24 : rw
+    readonly property real boxY: Theme.bar ? 60 : Theme.wide ? col.y + col.height + 8 : ctl.y + ctl.height
+    readonly property real boxH: Theme.bar ? root.height - pad - boxY : Theme.wide ? ctl.y - boxY - 8 : root.height - pad - boxY
 
     // ─── dal telecomando ───────────────────────────────────────────────────
     // Lo stesso che fanno i pulsanti dell'intestazione, per i tasti che
@@ -331,7 +334,7 @@ Item {
     Column {
         id: ctl
         x: root.rx; y: Theme.wide ? root.height - root.pad - height : col.y + col.height
-        width: Theme.wide ? Math.min(root.rw, 760) : root.rw
+        width: Theme.bar ? root.barColW : Theme.wide ? Math.min(root.rw, 760) : root.rw
         Item { width: 1; height: Player.chip !== "" ? 4 : 8 }
         Item {                                     // tempi
             width: parent.width; height: 16

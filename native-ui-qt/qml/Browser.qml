@@ -60,7 +60,7 @@ Item {
     readonly property real homeTw: (width - 32 - 12 * (homeCols - 1)) / homeCols
     // 117 is the tile of the classic 3 rows; with fewer rows they share the height (up to 200)
     readonly property real homeTh: homeRows === 3 ? 117 + Math.max(0, height - 600) / 3
-                                                  : Math.min(200, (height - 62 - 24 - 12 * (homeRows - 1)) / homeRows)
+                                                  : Math.min(200, (height - 83 - 62 - 12 - 12 * (homeRows - 1)) / homeRows)
     readonly property var tiles: [
         { icon: "heart", key: "player.titles.favorites", view: LibraryModel.PluginItems },
         { icon: "user", key: "player.titles.artists", view: LibraryModel.Artists },

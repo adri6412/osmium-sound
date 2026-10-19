@@ -40,8 +40,12 @@ Item {
     readonly property real testAspect: parseFloat(Sys.conf("ui-test-aspect", "0")) || 0
     readonly property real aspect: testAspect > 0 ? testAspect : fh > 0 ? fw / fh : 1024 / 600
     readonly property real fitAspect: Math.max(1.5, Math.min(6, aspect))
-    Binding { target: Theme; property: "canvasW"; value: root.fitAspect >= 1024 / 600 ? Math.round(600 * root.fitAspect) : 1024 }
-    Binding { target: Theme; property: "canvasH"; value: root.fitAspect >= 1024 / 600 ? 600 : Math.round(1024 / root.fitAspect) }
+    // Bar panels (3:1 and wider, 600 px tall or less): a 600-point canvas would be
+    // scaled down to about 0.7 and everything would turn tiny, so they get a 440-point one.
+    readonly property bool shortBar: aspect >= 3 && fh <= 600
+    readonly property int baseH: shortBar ? 440 : 600
+    Binding { target: Theme; property: "canvasW"; value: root.fitAspect >= 1024 / 600 ? Math.round(root.baseH * root.fitAspect) : 1024 }
+    Binding { target: Theme; property: "canvasH"; value: root.fitAspect >= 1024 / 600 ? root.baseH : Math.round(1024 / root.fitAspect) }
     readonly property real s: Math.round(Math.min(fw / Theme.canvasW, fh / Theme.canvasH) * Theme.canvasW) / Theme.canvasW
     readonly property real ox: Math.floor((fw - Theme.canvasW * s) / 2)
     readonly property real oy: Math.floor((fh - Theme.canvasH * s) / 2)

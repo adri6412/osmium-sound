@@ -56,15 +56,17 @@ Item {
     // punti troppo in basso, invece di salire come in Electron)
     readonly property real infoH: info.height
     // 270 copertina (8+250+12) + blocco info (tempi e barra compresi) + 64 trasporto + 32 + 32
-    readonly property real total: 270 + infoH + 64 + 32 + 32
+    // cover side: 250, or smaller on a 440-point bar panel
+    readonly property real cov: Theme.bar ? 130 : 250
+    readonly property real total: cov + 20 + infoH + 64 + 32 + 32
     readonly property real y0: 40 + (root.height - 40 - total) / 2
 
     // copertina 250 con ombra 0 8px 40px rgba(0,0,0,.7)
-    Rectangle { id: shadowSrc; x: 45; y: root.y0 + 8 + 8; width: 250; height: 250; radius: 16; color: Qt.rgba(0, 0, 0, 0.7); visible: false; layer.enabled: true }
-    MultiEffect { source: shadowSrc; x: shadowSrc.x; y: shadowSrc.y; width: 250; height: 250; blurEnabled: true; blur: 1.0; blurMax: 40; autoPaddingEnabled: true }
+    Rectangle { id: shadowSrc; x: (340 - root.cov) / 2; y: root.y0 + 8 + 8; width: root.cov; height: root.cov; radius: 16; color: Qt.rgba(0, 0, 0, 0.7); visible: false; layer.enabled: true }
+    MultiEffect { source: shadowSrc; x: shadowSrc.x; y: shadowSrc.y; width: root.cov; height: root.cov; blurEnabled: true; blur: 1.0; blurMax: 40; autoPaddingEnabled: true }
     Cover {
         id: art
-        x: 45; y: root.y0 + 8; width: 250; height: 250
+        x: (340 - root.cov) / 2; y: root.y0 + 8; width: root.cov; height: root.cov
         source: Player.artworkUrl; radius: 16; devScale: root.devScale; border: Theme.wa(0.05)
         // 🚨 no scale here: the cover is big and carries a blurred shadow,
         // redrawing it every frame for 1.5 % is not worth it. A dark veil says
@@ -75,7 +77,7 @@ Item {
 
     Column {
         id: info
-        x: 16; y: root.y0 + 270; width: 308
+        x: 16; y: root.y0 + root.cov + 20; width: 308
         Text {
             id: titleText
             width: parent.width

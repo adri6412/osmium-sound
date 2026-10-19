@@ -69,6 +69,8 @@ QtObject {
     // Ultrawide arrangements: wide from about 2:1, ultra from about 3:1 (bar panels, 32:9)
     readonly property bool wide: canvasW >= 1250
     readonly property bool ultra: canvasW >= 1900
+    // bar panels: 440-point canvas (Main.qml shortBar)
+    readonly property bool bar: canvasH < 500
     // Now Playing's columns (also read by the tour): the left one (cover + LED plate),
     // then the info column; on wide canvases the VU / animation / lyrics box goes in a
     // third column to the right of the info instead of under it.
