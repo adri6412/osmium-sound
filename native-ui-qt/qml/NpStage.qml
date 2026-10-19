@@ -83,26 +83,17 @@ Item {
         id: vuPanel
         x: root.plate ? 12 : 40; y: root.plate ? 54 : 58
         width: root.plate ? parent.width - 24 : parent.width - 80
-        height: root.plate ? parent.height - 54 - 56 : parent.height - 192
+        height: root.plate ? parent.height - 54 - 50 : parent.height - 192
         visible: root.mode === "vu"; devScale: root.devScale
         stretch: Theme.wide
     }
-    Column {
+    // the track, small, in the header between the button and the corner
+    Text {
         visible: root.plate
-        width: Math.min(560, parent.width * 0.3); x: (parent.width - width) / 2
-        y: vuPanel.y + (vuPanel.height - height) / 2 - 8
-        Text {
-            width: parent.width; height: 36
-            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-            text: Player.title; elide: Text.ElideRight
-            color: Theme.white; font.family: Theme.font; font.pixelSize: 28; font.bold: true
-        }
-        Text {
-            width: parent.width; height: 26
-            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-            text: root.sub; elide: Text.ElideRight
-            color: Theme.gold; font.family: Theme.font; font.pixelSize: 18
-        }
+        x: 80; width: parent.width - 160; y: 12; height: 38
+        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+        text: [Player.title, root.sub].filter(function(x) { return !!x }).join("  ·  "); elide: Text.ElideRight
+        color: Theme.white; font.family: Theme.font; font.pixelSize: 17
     }
     // progress: outside the layer, it changes twice a second
     Item {
