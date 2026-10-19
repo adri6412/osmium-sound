@@ -290,6 +290,7 @@ Item {
             width: parent.width
             text: Player.title || Tr.t("player.noTrack")
             color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true
+            horizontalAlignment: Theme.bar ? Text.AlignHCenter : Text.AlignLeft
             wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
             lineHeight: 30; lineHeightMode: Text.FixedHeight
         }
@@ -300,17 +301,21 @@ Item {
         Item { width: 1; height: 6 }
         Text {
             width: parent.width; height: 28; verticalAlignment: Text.AlignVCenter
+            horizontalAlignment: Theme.bar ? Text.AlignHCenter : Text.AlignLeft
             text: Player.artist || (Player.stationName !== "" ? "" : Tr.t("player.unknownArtist"))   // a radio with no song yet: nothing
             color: npArtistTap.mix(Theme.gold, Theme.white); font.family: Theme.font; font.pixelSize: 18; elide: Text.ElideRight
             // the artist's page (library tracks only)
             Tap { id: npArtistTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
+                  x: Theme.bar ? (parent.width - width) / 2 : 0
                   enabled: Player.artistId !== ""; onClicked: Ui.app.openArtist(Player.artistId, Player.artist) }
         }
         Text {
             width: parent.width; height: 20; verticalAlignment: Text.AlignVCenter
+            horizontalAlignment: Theme.bar ? Text.AlignHCenter : Text.AlignLeft
             text: Player.album
             color: npAlbumTap.mix(Theme.silverA(0.7), Theme.white); font.family: Theme.font; font.pixelSize: 14; elide: Text.ElideRight
             Tap { id: npAlbumTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
+                  x: Theme.bar ? (parent.width - width) / 2 : 0
                   enabled: Player.albumId !== ""; onClicked: Ui.app.openAlbum(Player.albumId, Player.album) }
         }
         Item { width: 1; height: 6; visible: Player.chip !== "" }
@@ -319,6 +324,7 @@ Item {
             // labels: it opens the signal path. 4 px taller, so 4 px less
             // below it: the times, the bar and the controls stay where they were.
             visible: Player.chip !== ""
+            x: Theme.bar ? (parent.width - width) / 2 : 0
             width: chipRow.implicitWidth + 20; height: 26; radius: 5
             color: chipTap.mix(Theme.wa(0.05), Theme.wa(0.10)); border.width: 1; border.color: Theme.wa(0.08)
             Row {
@@ -371,8 +377,8 @@ Item {
             id: controls
             width: parent.width; height: Theme.bar ? 90 : 56
             readonly property real cy: 28
-            // bar panel: the transport group (about 303 wide, from -11) is centred and the volume gets its own centred row
-            readonly property real tx: Theme.bar ? (width - 303) / 2 + 11 : 0
+            // bar panel: the play button (centre at 118 in the group) sits under the middle of the column and the volume gets its own centred row
+            readonly property real tx: Theme.bar ? width / 2 - 118 : 0
             readonly property real vx: Theme.bar ? (width - 180) / 2 : width - 180
             readonly property real vy: Theme.bar ? 76 : cy
             // 🚨 i cinque comandi erano attaccati (centri a 9/42/94/146/179 punti,
