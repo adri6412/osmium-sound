@@ -76,20 +76,7 @@ Item {
     readonly property real ps: Math.min(width / sw, height / sh)
     readonly property real pw: sw * ps
     readonly property real ph: sh * ps
-    // Ultrawide full screen (NpStage): the panel keeps its height and grows in width. Three
-    // strips of plain plate (outside each meter, and between them) are stretched, so the
-    // panel gets longer like a real long amplifier front. spread = 0 groups the meters in
-    // the middle of a longer plate, 1 puts all the growth between them; in between the
-    // meters sit at 1/4 and 3/4 of the width.
-    property bool stretch: false
-    property string spread: "group"            // "group" | "quarter" | "apart"
-    readonly property real extra: stretch ? Math.max(0, width - pw) : 0
-    readonly property real px0: stretch ? 0 : (width - pw) / 2
-    readonly property real extL: stretch ? (spread === "group" ? extra / 2
-        : spread === "apart" ? 0
-        : Math.max(0, Math.min(extra / 2, width / 4 - skin.meters[0][0] * ps))) : 0
-    readonly property real extG: extra - 2 * extL
-    function mx(i, srcX) { return px0 + srcX * ps + (i === 1 ? extL + extG : extL) }
+    readonly property real px0: (width - pw) / 2
     readonly property real py0: (height - ph) / 2
     readonly property real a0: skin.angles[0]
     readonly property real a1: skin.angles[1]
@@ -169,7 +156,7 @@ Item {
         Timer { id: hold; interval: lamp.cfg.holdMs || 800; onTriggered: lamp.lit = false }
         readonly property real cw: (cfg.width || 0) * root.ps
         readonly property real ch: (cfg.height || 0) * root.ps
-        x: root.mx(index, cfg.at[index][0]) - cw / 2
+        x: root.px0 + cfg.at[index][0] * root.ps - cw / 2
         y: root.py0 + cfg.at[index][1] * root.ps - ch / 2
         width: cw; height: ch
         source: root.base + cfg.image
@@ -180,42 +167,15 @@ Item {
         Behavior on opacity { NumberAnimation { duration: lamp.lit ? 60 : 250 } }
     }
 
-    // a full-panel layer: one image, or seven slices when the panel is stretched
-    component Slab: Item {
-        id: slab
-        property string src
-        readonly property bool cut: root.stretch && root.extra > 0.5
-        // source columns: fixed | strip (outside the left meter) | fixed | strip (between) | fixed | strip | fixed
-        readonly property real e0: root.sw * 0.035
-        readonly property real e1: root.sw * 0.065
-        readonly property real c0: root.sw * 0.48
-        readonly property real c1: root.sw * 0.52
-        readonly property var from: [0, e0, e1, c0, c1, root.sw - e1, root.sw - e0]
-        readonly property var to: [e0, e1, c0, c1, root.sw - e1, root.sw - e0, root.sw]
-        readonly property var add: [0, root.extL, 0, root.extG, 0, root.extL, 0]
-        x: root.px0; y: root.py0; width: root.pw + root.extra; height: root.ph
-        Image {
-            anchors.fill: parent; visible: !slab.cut
-            source: slab.src; smooth: true; asynchronous: true
-            sourceSize.width: Math.round(root.pw * root.devScale); sourceSize.height: Math.round(root.ph * root.devScale)
-        }
-        Repeater {
-            model: slab.cut ? 7 : 0
-            Image {
-                required property int index
-                x: slab.from[index] * root.ps + (index > 0 ? slab.add[0] : 0) + (index > 1 ? slab.add[1] : 0) + (index > 2 ? slab.add[2] : 0)
-                   + (index > 3 ? slab.add[3] : 0) + (index > 4 ? slab.add[4] : 0) + (index > 5 ? slab.add[5] : 0)
-                width: (slab.to[index] - slab.from[index]) * root.ps + slab.add[index]; height: slab.height
-                source: slab.src; smooth: true; asynchronous: true
-                sourceClipRect: Qt.rect(slab.from[index], 0, slab.to[index] - slab.from[index], root.sh)
-            }
-        }
-    }
-
     // 🚨 no backdrop rectangle: the classic skin has transparent corners and
     // the Now Playing background must show through them (a skin with a panel
     // of its own, like the modulometer, carries it inside under.png).
-    Slab { src: root.base + root.skin.under }
+    Image {
+        x: root.px0; y: root.py0; width: root.pw; height: root.ph
+        source: root.base + root.skin.under
+        smooth: true; asynchronous: true
+        sourceSize.width: Math.round(root.pw * root.devScale); sourceSize.height: Math.round(root.ph * root.devScale)
+    }
     // backlight: one fade when playback starts or stops, nothing in between
     Image {
         id: backlight
@@ -237,7 +197,7 @@ Item {
         Item {
             id: meter
             required property int index
-            x: root.mx(index, root.skin.meters[index][0])
+            x: root.px0 + root.skin.meters[index][0] * root.ps
             y: root.py0 + root.skin.meters[index][1] * root.ps
             Needle {
                 visible: !!root.fx.peakNeedle
@@ -250,7 +210,12 @@ Item {
             }
         }
     }
-    Slab { src: root.base + root.skin.over }
+    Image {
+        x: root.px0; y: root.py0; width: root.pw; height: root.ph
+        source: root.base + root.skin.over
+        smooth: true; asynchronous: true
+        sourceSize.width: Math.round(root.pw * root.devScale); sourceSize.height: Math.round(root.ph * root.devScale)
+    }
     Repeater {
         model: root.fx.peakLamp && root.fx.peakLamp.layer === "over" ? 2 : 0
         Lamp {}

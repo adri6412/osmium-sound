@@ -29,9 +29,6 @@ Item {
         var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60
         return (h > 0 ? h + ":" + (m < 10 ? "0" : "") : "") + m + ":" + (s < 10 ? "0" : "") + s
     }
-    // Wide canvases: the meters get all the height (the plate runs the whole width) and the
-    // track information sits on the plate between them, like a display on an amplifier front
-    readonly property bool plate: Theme.wide && mode === "vu"
     readonly property string sub: [Player.artist, Player.album].filter(function(x) { return !!x }).join(" · ")
 
     Item {
@@ -50,14 +47,14 @@ Item {
         }
         // track information: large under the meters, one line under a scene
         Text {
-            visible: root.mode === "vu" && !root.plate
+            visible: root.mode === "vu"
             x: 80; width: parent.width - 160; y: parent.height - 122; height: 34
             horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
             text: Player.title; elide: Text.ElideRight
             color: Theme.white; font.family: Theme.font; font.pixelSize: 26; font.bold: true
         }
         Text {
-            visible: root.mode === "vu" && !root.plate
+            visible: root.mode === "vu"
             x: 80; width: parent.width - 160; y: parent.height - 86; height: 24
             horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
             text: root.sub; elide: Text.ElideRight
@@ -80,20 +77,8 @@ Item {
 
     // ── the VU meters ──────────────────────────────────────────────────────
     VuPanel {
-        id: vuPanel
-        x: root.plate ? 12 : 40; y: root.plate ? 54 : 58
-        width: root.plate ? parent.width - 24 : parent.width - 80
-        height: root.plate ? parent.height - 54 - 50 : parent.height - 192
+        x: 40; y: 58; width: parent.width - 80; height: parent.height - 192
         visible: root.mode === "vu"; devScale: root.devScale
-        stretch: Theme.wide
-    }
-    // the track, small, in the header between the button and the corner
-    Text {
-        visible: root.plate
-        x: 80; width: parent.width - 160; y: 12; height: 38
-        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-        text: [Player.title, root.sub].filter(function(x) { return !!x }).join("  ·  "); elide: Text.ElideRight
-        color: Theme.white; font.family: Theme.font; font.pixelSize: 17
     }
     // progress: outside the layer, it changes twice a second
     Item {
