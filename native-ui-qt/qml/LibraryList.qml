@@ -21,7 +21,9 @@ Item {
     readonly property bool search: view === LibraryModel.Search
     readonly property int pitch: view === LibraryModel.Tracks || view === LibraryModel.PlaylistTracks ? 50
                                : view === LibraryModel.Radios || view === LibraryModel.Apps ? 54 : 58
-    readonly property real cardW: (width - 24) / 3
+    // 3 columns up to a 1067 canvas; wider canvases add columns (~260 each)
+    readonly property int cols: Math.max(3, Math.round(width / 260))
+    readonly property real cardW: (width - 12 * (cols - 1)) / cols
     readonly property real cardH: cardW + 48
     readonly property real devScale: Ui.app ? Ui.app.devicePixelScale : 1
 

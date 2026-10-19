@@ -312,6 +312,8 @@ Item {
     // the owner chose (put back when the tour ends), and the long-press menu
     function tutorialAlbums(mode) { setExpanded(false); albumView = mode; mainScreen.browser.tutorialAlbums(mode) }
     function tutorialListRect() { return mainScreen.browser.tutorialListRect() }
+    // the home tile grid's height as the tour lights it (rows follow the canvas width)
+    function tutorialHomeTilesH() { var b = mainScreen.browser; return b.homeRows * (b.homeTh + 12) }
     function tutorialMenuRect() { return mainScreen.browser.tutorialMenuRect() }
     function tutorialRestore() { mainScreen.browser.closeMenu(); albumView = albumViewOf(Sys.conf("album-view", "grid")) }
     // the tour's home steps: the main screen, Music tab, at its home

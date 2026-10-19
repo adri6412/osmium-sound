@@ -54,6 +54,13 @@ Item {
         { icon: "music", key: "player.tabs.music" }, { icon: "radio", key: "player.tabs.radio" },
         { icon: "app-window", key: "player.tabs.apps" }, { icon: "compass", key: "player.tabs.discover" },
         { icon: "settings", key: "" }]
+    // Home tiles: 3 columns on a normal canvas, 5 on ultrawide, one row of 9 on a very long bar
+    readonly property int homeCols: width >= 2700 ? 9 : width >= 1500 ? 5 : 3
+    readonly property int homeRows: Math.ceil(9 / homeCols)
+    readonly property real homeTw: (width - 32 - 12 * (homeCols - 1)) / homeCols
+    // 117 is the tile of the classic 3 rows; with fewer rows they share the height (up to 200)
+    readonly property real homeTh: homeRows === 3 ? 117 + Math.max(0, height - 600) / 3
+                                                  : Math.min(200, (height - 62 - 24 - 12 * (homeRows - 1)) / homeRows)
     readonly property var tiles: [
         { icon: "heart", key: "player.titles.favorites", view: LibraryModel.PluginItems },
         { icon: "user", key: "player.titles.artists", view: LibraryModel.Artists },
@@ -767,12 +774,12 @@ Item {
                                 required property var modelData
                                 required property int index
                                 property alias navTap: tileTap
-                                readonly property real tw: (root.width - 32 - 24) / 3
+                                readonly property real tw: root.homeTw
                                 // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
                                 // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno).
                                 // A taller canvas (16:10: 640) shares its extra height among the rows.
-                                readonly property real th: 117 + Math.max(0, root.height - 600) / 3
-                                x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (th + 12)
+                                readonly property real th: root.homeTh
+                                x: 16 + (index % root.homeCols) * (tw + 12); y: 62 + Math.floor(index / root.homeCols) * (th + 12)
                                 width: tw; height: th; radius: 12
                                 color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
                                 Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }

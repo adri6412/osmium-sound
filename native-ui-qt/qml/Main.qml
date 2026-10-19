@@ -18,6 +18,8 @@ Item {
     // tall and wider on a 16:9 panel (1067 x 600), 1024 wide and taller on a
     // 16:10 one (1024 x 640). Outside that range (ultrawide, 4:3) it stops at
     // the nearest end and the rest is black bars, as before.
+    // (Ultrawide test: the upper end is 6:1, so 21:9, 32:9 and bar panels all
+    // fill the screen; Theme.wide / Theme.ultra switch the arrangement.)
     // Settings -> Display -> Rotation (Sys.rotation, degrees clockwise). eglfs
     // draws straight on the panel and has no way to turn a Qt Quick scene, so
     // the canvas is turned here: it sits in a frame the size of the screen,
@@ -34,7 +36,7 @@ Item {
     readonly property real fw: sideways ? height : width
     readonly property real fh: sideways ? width : height
     readonly property real aspect: fh > 0 ? fw / fh : 1024 / 600
-    readonly property real fitAspect: Math.max(1.5, Math.min(16 / 9, aspect))
+    readonly property real fitAspect: Math.max(1.5, Math.min(6, aspect))
     Binding { target: Theme; property: "canvasW"; value: root.fitAspect >= 1024 / 600 ? Math.round(600 * root.fitAspect) : 1024 }
     Binding { target: Theme; property: "canvasH"; value: root.fitAspect >= 1024 / 600 ? 600 : Math.round(1024 / root.fitAspect) }
     readonly property real s: Math.round(Math.min(fw / Theme.canvasW, fh / Theme.canvasH) * Theme.canvasW) / Theme.canvasW

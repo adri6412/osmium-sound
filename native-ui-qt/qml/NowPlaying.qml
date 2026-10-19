@@ -47,15 +47,20 @@ Item {
     signal openSettings()
 
     readonly property real pad: 20
-    readonly property real leftW: (root.width - pad * 2) * 0.44
+    readonly property real leftW: Theme.npLeftW
     readonly property real bodyY: 52
     readonly property real bodyH: root.height - bodyY - pad
-    readonly property real artSide: Math.min(leftW, 320)
+    readonly property real artSide: Math.min(leftW, Theme.wide ? Math.min(380, bodyH - 32 - ledH - 8) : 320)
     readonly property real ledW: Math.min(leftW, 368)
     readonly property real ledH: ledW * 175 / 897
     readonly property real artY: bodyY + (bodyH - (artSide + 32 + ledH)) / 2
     readonly property real rx: pad + leftW + 24
-    readonly property real rw: root.width - rx - pad
+    readonly property real rw: Theme.npInfoW
+    // The box under the info (VU / animation / lyrics); on a wide canvas it is the
+    // third column, as tall as the body
+    readonly property real boxX: Theme.wide ? rx + rw + 24 : rx
+    readonly property real boxW: Theme.wide ? root.width - boxX - pad : rw
+    readonly property real boxY: Theme.wide ? bodyY + 1 : col.y + col.height
 
     // ─── dal telecomando ───────────────────────────────────────────────────
     // Lo stesso che fanno i pulsanti dell'intestazione, per i tasti che
@@ -127,8 +132,10 @@ Item {
             source: bgSrc.status === Image.Ready ? bgSrc : bgPrev
             visible: Player.artworkUrl !== "" && (bgSrc.status === Image.Ready || bgPrev.status === Image.Ready)
             width: 400; height: 400
-            x: root.width / 2 - 640; y: root.height / 2 - 640
-            scale: 3.2
+            // wide enough to cover ultrawide canvases (3.2 = the old 1280 square)
+            readonly property real fillScale: Math.max(3.2, Math.max(root.width, root.height) / 400 * 1.02)
+            x: root.width / 2 - 200 * fillScale; y: root.height / 2 - 200 * fillScale
+            scale: fillScale
             transformOrigin: Item.TopLeft
             // blur-lg (16) e' applicato PRIMA di scale-125: 20 punti effettivi a schermo
             blurEnabled: true; blur: 0.41; blurMax: 16
@@ -460,21 +467,21 @@ Item {
 
     // ─── testi (nello strato: non si muovono da soli) ──────────────────────
     Lyrics {
-        x: root.rx; y: col.y + col.height; width: root.rw; height: root.height - root.pad - y
+        x: root.boxX; y: root.boxY; width: root.boxW; height: root.height - root.pad - y
         visible: !root.effVu && !root.effAnim; active: root.shown && !root.effVu && !root.effAnim
     }
     }   // fine dello strato statico
 
     // ─── VU: fuori dallo strato, sono l'unica cosa che si muove ────────────
     VuPanel {
-        x: root.rx; y: col.y + col.height; width: root.rw; height: root.height - root.pad - y
+        x: root.boxX; y: root.boxY; width: root.boxW; height: root.height - root.pad - y
         visible: root.effVu && !root.staged; devScale: root.devScale
     }
     // the animation in the same box, also outside the layer. Loaded while the
     // VU meters are off and one is chosen (so switching to the lyrics and back
     // does not reload the pictures); it runs only while visible on screen.
     NpAnimation {
-        x: root.rx; y: col.y + col.height; width: root.rw; height: root.height - root.pad - y
+        x: root.boxX; y: root.boxY; width: root.boxW; height: root.height - root.pad - y
         // unloaded while the full-screen stage runs its own copy
         kind: Player.vuEnabled || root.staged ? "" : Player.npAnimation
         visible: root.effAnim && !root.staged

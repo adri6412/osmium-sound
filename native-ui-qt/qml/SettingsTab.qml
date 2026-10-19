@@ -2915,12 +2915,15 @@ Item {
         Item {
             id: body
             width: page.width
+            // wide canvases: the content keeps a readable width, centred
+            readonly property real innerW: Math.min(width - 64, 1040)
+            readonly property real padX: (width - innerW) / 2
             height: 32 + (root.atRoot ? rootHead.height + 32 + secList.height : secHead.height + 32 + panel.height) + 32
             // elenco delle sezioni
             Column {
                 id: rootHead
                 visible: root.atRoot
-                x: 32; y: 32; width: parent.width - 64
+                x: body.padX; y: 32; width: body.innerW
                 Text { height: 40; verticalAlignment: Text.AlignVCenter; text: Tr.t("settings.title"); color: Theme.white; font.family: Theme.font; font.pixelSize: 36; font.bold: true }
                 Item { width: 1; height: 8 }
                 Text { height: 28; verticalAlignment: Text.AlignVCenter; text: Tr.t("settings.subtitle"); color: Theme.silver; font.family: Theme.font; font.pixelSize: 18 }
@@ -2934,7 +2937,7 @@ Item {
             Column {
                 id: secList
                 visible: root.atRoot
-                x: 32; y: rootHead.y + rootHead.height + 32; width: parent.width - 64; spacing: 8
+                x: body.padX; y: rootHead.y + rootHead.height + 32; width: body.innerW; spacing: 8
                 Repeater {
                     model: root.listedSecs
                     Item {
@@ -2963,7 +2966,7 @@ Item {
             Item {
                 id: secHead
                 visible: !root.atRoot
-                x: 32; y: 32; width: parent.width - 64; height: 36
+                x: body.padX; y: 32; width: body.innerW; height: 36
                 Item {
                     width: 44; height: 36
                     Icon { x: 0; anchors.verticalCenter: parent.verticalCenter; name: "chevron-left"; size: 32; color: Theme.gold }
@@ -2974,7 +2977,7 @@ Item {
             Rectangle {
                 id: panel
                 visible: !root.atRoot
-                x: 32; y: secHead.y + secHead.height + 32; width: parent.width - 64
+                x: body.padX; y: secHead.y + secHead.height + 32; width: body.innerW
                 height: panelRows.height + 48
                 radius: 16; color: Theme.gray; border.width: 1; border.color: Theme.accent
                 BoxShadow { z: -1; targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 20; offsetY: 4; color: Theme.blackA(0.5) }   // shadow-hifi

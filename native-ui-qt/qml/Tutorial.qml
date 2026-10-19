@@ -32,8 +32,8 @@ Item {
 
     readonly property real cw: width
     readonly property real ch: height
-    readonly property real leftW: (cw - 40) * 0.44                  // NowPlaying.leftW
-    readonly property real npRx: 20 + leftW + 24                    // NowPlaying.rx
+    readonly property real leftW: Theme.npLeftW                      // NowPlaying.leftW
+    readonly property real npRx: Theme.npRx                          // NowPlaying.rx
     // Each step: the string key, the lit rectangle (null: none), and what
     // the app must show for it. rect() runs at show time, on the canvas size.
     readonly property var steps: [
@@ -41,14 +41,15 @@ Item {
         { key: "miniPlayer", rect: function() { return [0, 40, 340, ch - 40] }, screen: "home" },
         { key: "expand", rect: function() { return [284 - 6, 0, 48 + 12, 40] }, screen: "home" },
         { key: "tabs", rect: function() { return [341, 0, cw - 341 - 48, 40] }, screen: "home" },
-        { key: "library", rect: function() { return [341 + 12, 83 + 8, cw - 341 - 24, 3 * (117 + Math.max(0, ch - 600) / 3 + 12) + 54] }, screen: "home" },
+        { key: "library", rect: function() { return [341 + 12, 83 + 8, cw - 341 - 24, Ui.app.tutorialHomeTilesH() + 54] }, screen: "home" },
         { key: "albumList", rect: function() { return Ui.app.tutorialListRect() }, screen: "albums:grid" },
         { key: "longPress", rect: function() { return Ui.app.tutorialMenuRect() }, screen: "albums:grid" },
         { key: "coverFlow", rect: function() { return Ui.app.tutorialListRect() }, screen: "albums:coverflow" },
         { key: "npLeft", rect: function() { return [20 + leftW / 2 - 70, 6, 70 + 10 + 3 * 36 + 2 * 8 + 12, 50] }, screen: "np" },
         { key: "npRight", rect: function() { return [cw - 20 - 34 * 5 - 32 - 6, 6, 34 * 5 + 32 + 12, 50] }, screen: "np" },
         { key: "npInfo", rect: function() { return [npRx - 8, 46, cw - npRx - 20 + 16, 210] }, screen: "np" },
-        { key: "npPanel", rect: function() { return [npRx - 8, 300, cw - npRx - 20 + 16, ch - 300 - 12] }, screen: "np" },
+        { key: "npPanel", rect: function() { return Theme.wide ? [npRx + Theme.npInfoW + 24 - 8, 52, cw - npRx - Theme.npInfoW - 24 - 20 + 16, ch - 52 - 12]
+                                                                  : [npRx - 8, 300, cw - npRx - 20 + 16, ch - 300 - 12] }, screen: "np" },
         { key: "done", rect: null, screen: "home" }]
 
     // the lit rectangle glides from one element to the next
