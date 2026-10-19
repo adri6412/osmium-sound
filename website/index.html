@@ -637,6 +637,19 @@
     }
     .dl-alt-head { margin: 0 0 0.7rem; font-size: 0.88rem; opacity: 0.7; }
 
+    /* Beta versions: a step further down still, closed until asked for. */
+    .dl-dev {
+      max-width: 720px; margin: 1.1rem auto 0;
+      padding: 0.9rem 1.1rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      text-align: left;
+    }
+    .dl-dev summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; }
+    .dl-dev summary small { font-weight: 400; opacity: 0.65; margin-left: 0.4rem; }
+    .dl-dev p { margin: 0.7rem 0 0; font-size: 0.88rem; opacity: 0.8; }
+    .dl-dev-btns { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
+
     .flasher-note pre.cmd {
       margin: 0.6rem 0 0.6rem 1.1rem;
       padding: 0.6rem 0.8rem;
@@ -1381,6 +1394,21 @@
         </a>
       </div>
     </div>
+
+    <details class="dl-dev" id="devDownloads">
+      <summary><span data-en="Beta version" data-it="Versione beta">Beta version</span><small>v2.5.26-dev.1</small></summary>
+      <p data-en="This is the next version, still in development. It has the newest features but may have rough edges, so keep the stable version above if the music matters more than the news. You can write it to a stick with Osmium Flasher or balenaEtcher, or install it from the ISO." data-it="È la versione che arriverà dopo, ancora in sviluppo. Ha le novità più recenti ma può avere qualche spigolo: se per te conta di più la musica che le novità, tieni la versione stabile qui sopra. La scrivi su una chiavetta con Osmium Flasher o balenaEtcher, oppure la installi dalla ISO.">This is the next version, still in development. It has the newest features but may have rough edges, so keep the stable version above if the music matters more than the news. You can write it to a stick with Osmium Flasher or balenaEtcher, or install it from the ISO.</p>
+      <div class="dl-dev-btns">
+        <a class="btn-secondary" id="devImgBtn" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.26-dev.1/hifi-player-v2.5.26-dev.1.img.xz">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="iso-badge"><span data-en="Download IMG.xz" data-it="Scarica IMG.xz">Download IMG.xz</span><small>v2.5.26-dev.1</small></span>
+        </a>
+        <a class="btn-secondary" id="devIsoBtn" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.26-dev.1/hifi-player-v2.5.26-dev.1.iso">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="iso-badge"><span data-en="Download ISO" data-it="Scarica ISO">Download ISO</span><small>v2.5.26-dev.1</small></span>
+        </a>
+      </div>
+    </details>
 
     <div class="quickstart">
       <div class="qs-step">
