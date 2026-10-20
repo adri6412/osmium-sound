@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.26-dev.2-alpha2",
-  "name": "v2.5.26-dev.2-alpha2",
-  "body": "## What's new in v2.5.26-dev.2-alpha2\n\n- kiosk settings: front page is a grid of square tiles (six macro sections, each opening a grid of its sections); interface resolution falls back to the biggest mode the monitor lists when none matches its aspect (21:9 panels)\n",
+  "tag_name": "v2.5.26-dev.2-alpha3",
+  "name": "v2.5.26-dev.2-alpha3",
+  "body": "## What's new in v2.5.26-dev.2-alpha3\n\n- kiosk: a real keyboard types into the on-screen keyboard (space, enter and backspace stay its own, #114); the breadcrumb trail stops short of the buttons and keeps its end in view (#113)\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.26-dev.2-alpha2.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-qtui-v2.5.26-dev.2-alpha2.tar.gz",
-      "size": 22825336
+      "name": "hifi-qtui-v2.5.26-dev.2-alpha3.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha3/hifi-qtui-v2.5.26-dev.2-alpha3.tar.gz",
+      "size": 22825073
     },
     {
-      "name": "hifi-qtui-v2.5.26-dev.2-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-qtui-v2.5.26-dev.2-alpha2.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.26-dev.2-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha3/hifi-qtui-v2.5.26-dev.2-alpha3.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.26-dev.2-alpha2.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-system-v2.5.26-dev.2-alpha2.tar.gz",
-      "size": 2125278
+      "name": "hifi-system-v2.5.26-dev.2-alpha3.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha3/hifi-system-v2.5.26-dev.2-alpha3.tar.gz",
+      "size": 2121983
     },
     {
-      "name": "hifi-system-v2.5.26-dev.2-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-system-v2.5.26-dev.2-alpha2.tar.gz.sha256",
+      "name": "hifi-system-v2.5.26-dev.2-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha3/hifi-system-v2.5.26-dev.2-alpha3.tar.gz.sha256",
       "size": 106
     },
     {
-      "name": "hifi-os-v2.5.26-dev.2-alpha2.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-os-v2.5.26-dev.2-alpha2.tar.gz",
-      "size": 131048
+      "name": "hifi-os-v2.5.26-dev.2-alpha3.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha3/hifi-os-v2.5.26-dev.2-alpha3.tar.gz",
+      "size": 132174
     },
     {
-      "name": "hifi-os-v2.5.26-dev.2-alpha2.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-os-v2.5.26-dev.2-alpha2.tar.gz.sha256",
+      "name": "hifi-os-v2.5.26-dev.2-alpha3.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha3/hifi-os-v2.5.26-dev.2-alpha3.tar.gz.sha256",
       "size": 102
     },
     {
-      "name": "hifi-os-v2.5.26-dev.2-alpha2.tar.gz.sha256.sig",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-os-v2.5.26-dev.2-alpha2.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.26-dev.2-alpha3.tar.gz.sha256.sig",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha3/hifi-os-v2.5.26-dev.2-alpha3.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.26-dev.2-alpha2.raucb",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-image-v2.5.26-dev.2-alpha2.raucb",
+      "name": "hifi-image-v2.5.26-dev.2-alpha3.raucb",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha3/hifi-image-v2.5.26-dev.2-alpha3.raucb",
       "size": 1029495459
     },
     {
-      "name": "hifi-image-v2.5.26-dev.2-alpha2.raucb.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-image-v2.5.26-dev.2-alpha2.raucb.sha256",
+      "name": "hifi-image-v2.5.26-dev.2-alpha3.raucb.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha3/hifi-image-v2.5.26-dev.2-alpha3.raucb.sha256",
       "size": 104
     }
   ]
