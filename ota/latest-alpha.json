@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.26-dev.2-alpha1",
-  "name": "v2.5.26-dev.2-alpha1",
-  "body": "## What's new in v2.5.26-dev.2-alpha1\n\n- kiosk: adapt the interface to ultrawide and bar screens (canvas up to 6:1, 440-point canvas for bar panels, wide Now Playing, home, albums, CD changer, settings); original VU panel kept\n- kiosk (ultrawide test): fullscreen VU plate grows in width in 7 slices, meters grouped, title in a header\n- WIP ultrawide: fullscreen VU = long plate (stretched middle), track info on the plate\n- WIP ultrawide: bar Now Playing clock next to the left buttons\n- WIP ultrawide: CD changer big on the right in wide canvases; test-only ui-test-bar\n- WIP ultrawide: bar player text centred, play button under the title\n- WIP ultrawide: bar player controls centred, volume on its own row\n- WIP ultrawide: bar Now Playing = player | VU | album\n- WIP ultrawide: bar Now Playing = cover | VU | title and controls\n- WIP ultrawide: 440-point canvas for bar panels (home, panel, albums, Now Playing)\n- WIP ultrawide: Now Playing stacked right column (header, big VU, bottom controls)\n- WIP ultrawide test: ui-test-aspect override\n- WIP ultrawide test: canvas up to 6:1, wide/ultra levels, 3-column Now Playing, home/album columns\n- ci: a dev's changelog starts from the previous dev, not from its last alpha\n- vu store: Blue Neon v2, the meter sits higher in Now Playing\n- vu store: Blue Neon, a backlit neon meter\n- ci: CodeQL once a night instead of on every push\n- ci: keep the A/B image artifact one day, not fourteen\n- website: the F-Droid index is not a download, only the APKs are counted\n- website: the same client fetching the same file within an hour counts once\n- companion: 1.0.14\n- companion: three crashes from the Play console fixed\n- ci: releases start the Cloudflare Pages deploy themselves\n- website: in line with main\n",
+  "tag_name": "v2.5.26-dev.2-alpha2",
+  "name": "v2.5.26-dev.2-alpha2",
+  "body": "## What's new in v2.5.26-dev.2-alpha2\n\n- kiosk settings: front page is a grid of square tiles (six macro sections, each opening a grid of its sections); interface resolution falls back to the biggest mode the monitor lists when none matches its aspect (21:9 panels)\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.26-dev.2-alpha1.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha1/hifi-qtui-v2.5.26-dev.2-alpha1.tar.gz",
-      "size": 22824358
+      "name": "hifi-qtui-v2.5.26-dev.2-alpha2.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-qtui-v2.5.26-dev.2-alpha2.tar.gz",
+      "size": 22825336
     },
     {
-      "name": "hifi-qtui-v2.5.26-dev.2-alpha1.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha1/hifi-qtui-v2.5.26-dev.2-alpha1.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.26-dev.2-alpha2.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-qtui-v2.5.26-dev.2-alpha2.tar.gz.sha256",
       "size": 104
     },
     {
-      "name": "hifi-system-v2.5.26-dev.2-alpha1.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha1/hifi-system-v2.5.26-dev.2-alpha1.tar.gz",
-      "size": 2125279
+      "name": "hifi-system-v2.5.26-dev.2-alpha2.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-system-v2.5.26-dev.2-alpha2.tar.gz",
+      "size": 2125278
     },
     {
-      "name": "hifi-system-v2.5.26-dev.2-alpha1.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha1/hifi-system-v2.5.26-dev.2-alpha1.tar.gz.sha256",
+      "name": "hifi-system-v2.5.26-dev.2-alpha2.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-system-v2.5.26-dev.2-alpha2.tar.gz.sha256",
       "size": 106
     },
     {
-      "name": "hifi-os-v2.5.26-dev.2-alpha1.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha1/hifi-os-v2.5.26-dev.2-alpha1.tar.gz",
-      "size": 131035
+      "name": "hifi-os-v2.5.26-dev.2-alpha2.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-os-v2.5.26-dev.2-alpha2.tar.gz",
+      "size": 131048
     },
     {
-      "name": "hifi-os-v2.5.26-dev.2-alpha1.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha1/hifi-os-v2.5.26-dev.2-alpha1.tar.gz.sha256",
+      "name": "hifi-os-v2.5.26-dev.2-alpha2.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-os-v2.5.26-dev.2-alpha2.tar.gz.sha256",
       "size": 102
     },
     {
-      "name": "hifi-os-v2.5.26-dev.2-alpha1.tar.gz.sha256.sig",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha1/hifi-os-v2.5.26-dev.2-alpha1.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.26-dev.2-alpha2.tar.gz.sha256.sig",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-os-v2.5.26-dev.2-alpha2.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.26-dev.2-alpha1.raucb",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha1/hifi-image-v2.5.26-dev.2-alpha1.raucb",
+      "name": "hifi-image-v2.5.26-dev.2-alpha2.raucb",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-image-v2.5.26-dev.2-alpha2.raucb",
       "size": 1029495459
     },
     {
-      "name": "hifi-image-v2.5.26-dev.2-alpha1.raucb.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha1/hifi-image-v2.5.26-dev.2-alpha1.raucb.sha256",
+      "name": "hifi-image-v2.5.26-dev.2-alpha2.raucb.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha2/hifi-image-v2.5.26-dev.2-alpha2.raucb.sha256",
       "size": 104
     }
   ]
