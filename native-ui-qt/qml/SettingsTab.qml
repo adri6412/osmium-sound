@@ -183,6 +183,35 @@ Item {
         { id: "remoteKeys", icon: "remote", key: "settings.remote.keysPage", hidden: true }]
     readonly property var listedSecs: secs.filter(function(s) { return !s.hidden && (s.id !== "uiScreens" || cfg.screens.length > 1) })
 
+    // Macro sections: the settings front page is a grid of tiles, one per group;
+    // a group opens a grid of its sections. A section knows its group by id.
+    property string grp: ""
+    readonly property var groups: [
+        { id: "music", icon: "library", secs: ["library", "sources", "cdRip", "playback", "multiroom", "alarm"] },
+        { id: "sound", icon: "volume-2", secs: ["audio", "audioAdvanced", "zones", "btSpeakers"] },
+        { id: "look", icon: "monitor", secs: ["language", "uiMotion", "vuMeters", "animations", "uiResolution", "uiScreens", "uiRefresh", "displayMode", "pointer"] },
+        { id: "control", icon: "remote", secs: ["remote", "webRemote", "webRemoteIos"] },
+        { id: "network", icon: "wifi", secs: ["network", "ssh"] },
+        { id: "system", icon: "info", secs: ["timezone", "systemInfo", "updates", "systemControls", "thirdPartyNotices"] }]
+    function groupOf(id) {
+        for (var i = 0; i < groups.length; i++) if (groups[i].secs.indexOf(id) >= 0) return groups[i].id
+        return ""
+    }
+    // sections of a group that are listed right now (uiScreens needs two monitors)
+    function groupSecs(gid) {
+        var out = []
+        for (var i = 0; i < groups.length; i++) if (groups[i].id === gid)
+            for (var k = 0; k < groups[i].secs.length; k++) {
+                var ix = secIndex(groups[i].secs[k])
+                if (ix >= 0 && listedSecs.indexOf(secs[ix]) >= 0) out.push(secs[ix])
+            }
+        return out
+    }
+    readonly property var tileModel: {
+        if (grp === "") return groups.map(function(g) { return { kind: "group", id: g.id, icon: g.icon, key: "settings.groups." + g.id } })
+        return groupSecs(grp).map(function(x) { return { kind: "sec", id: x.id, icon: x.icon, key: x.key } })
+    }
+
     Component.onCompleted: Ui.settings = root
 
     // ─── dati dai servizi (cfg.*) ────────────────────────────────────────────
@@ -597,7 +626,7 @@ Item {
     function fmtWhen(ts) { return Qt.formatDateTime(new Date(ts * 1000), I18n.lang === "it" ? "dd/MM/yyyy HH:mm" : "yyyy-MM-dd HH:mm") }
     function setPref(name, value) { Player.cmd(["playerpref", name, value]) }
 
-    function enter() { cfg.load(); goRoot() }
+    function enter() { cfg.load(); grp = ""; goRoot() }
     function say(text, err) { msg = text; msgErr = !!err; rebuild() }
     // Audio → Advanced: one call per row, the server answers with the whole
     // model and a message; post() reloads cfg afterwards, which rebuilds the
@@ -694,6 +723,7 @@ Item {
         if (i < 0 || i >= secs.length) return
         var id = secs[i].id
         active = i; msg = ""; pendAct = ""; countdown = 0; backTo = ""
+        if (groupOf(id) !== "") grp = groupOf(id)
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
         band = -1; bandAdd = -1; bandShare = -1; brId = ""; pickOwner = 0; pickNew = ""
         btBand = -1; btNameEdit = ""; btBusy = false; btScanning = false
@@ -2924,9 +2954,19 @@ Item {
                 id: rootHead
                 visible: root.atRoot
                 x: body.padX; y: 32; width: body.innerW
-                Text { height: 40; verticalAlignment: Text.AlignVCenter; text: Tr.t("settings.title"); color: Theme.white; font.family: Theme.font; font.pixelSize: 36; font.bold: true }
+                Item {
+                    visible: root.grp !== ""
+                    width: parent.width; height: 40
+                    Item {
+                        width: 44; height: 36
+                        Icon { x: 0; anchors.verticalCenter: parent.verticalCenter; name: "chevron-left"; size: 32; color: Theme.gold }
+                        Tap { grow: 8; onClicked: root.grp = "" }
+                    }
+                    Text { x: 44; width: parent.width - 44; height: 40; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; text: root.grp !== "" ? Tr.t("settings.groups." + root.grp) : ""; color: Theme.white; font.family: Theme.font; font.pixelSize: 30; font.bold: true }
+                }
+                Text { visible: root.grp === ""; height: root.grp === "" ? 40 : 0; verticalAlignment: Text.AlignVCenter; text: Tr.t("settings.title"); color: Theme.white; font.family: Theme.font; font.pixelSize: 36; font.bold: true }
                 Item { width: 1; height: 8 }
-                Text { height: 28; verticalAlignment: Text.AlignVCenter; text: Tr.t("settings.subtitle"); color: Theme.silver; font.family: Theme.font; font.pixelSize: 18 }
+                Text { visible: root.grp === ""; height: root.grp === "" ? 28 : 0; verticalAlignment: Text.AlignVCenter; text: Tr.t("settings.subtitle"); color: Theme.silver; font.family: Theme.font; font.pixelSize: 18 }
                 Row {
                     visible: !cfg.loaded || !cfg.apiOk
                     height: 20; spacing: 8
@@ -2934,31 +2974,39 @@ Item {
                     Text { anchors.verticalCenter: parent.verticalCenter; text: !cfg.loaded ? Tr.t("settings.loadingSystem") : Tr.t("settings.apiUnavailable"); color: !cfg.loaded ? Theme.gold : Theme.red300; font.family: Theme.font; font.pixelSize: 14 }
                 }
             }
-            Column {
+            // grid of square tiles: the groups, or the sections of the open group
+            Flow {
                 id: secList
                 visible: root.atRoot
-                x: body.padX; y: rootHead.y + rootHead.height + 32; width: body.innerW; spacing: 8
+                x: body.padX; y: rootHead.y + rootHead.height + 32; width: body.innerW; spacing: 16
+                readonly property int cols: root.grp === "" ? (width >= 760 ? 3 : 2) : (width >= 900 ? 4 : width >= 640 ? 3 : 2)
+                readonly property real tw: Math.floor((width - (cols - 1) * spacing) / cols)
+                readonly property real th: Math.round(Math.min(tw * (root.grp === "" ? 0.6 : 0.5), root.grp === "" ? 150 : 124))
                 Repeater {
-                    model: root.listedSecs
+                    model: root.tileModel
                     Item {
                         id: secRow
                         required property var modelData
-                        required property int index
-                        width: parent.width; height: 72
-                        // shadow-hifi: 0 4px 20px nero/50 + inset 0 1px 0 bianco/10
+                        width: secList.tw; height: secList.th
+                        readonly property bool big: modelData.kind === "group"
                         BoxShadow { targetX: 0; targetY: 0; targetW: parent.width; targetH: parent.height; radius: 16; blur: 20; offsetY: 4; color: Theme.blackA(0.5) }
                         Rectangle {
                             anchors.fill: parent; radius: 16
                             color: sTap.mix(Theme.gray, Theme.light); border.width: 1; border.color: Theme.accent
-                            Rectangle { x: 10; y: 1; width: parent.width - 20; height: 1; color: Theme.wa(0.1) }   // il riflesso a tutta larghezza, dentro gli angoli
-                            Rectangle { x: 16; y: 17; width: 38; height: 38; radius: 8; color: Theme.goldA(0.2)
-                                        Icon { anchors.centerIn: parent; name: secRow.modelData.id === "displayMode" && cfg.displayMode === "headless" ? "monitor-off" : secRow.modelData.icon; size: 22; color: Theme.gold } }
-                            Text { x: 66; width: parent.width - 66 - 46; anchors.verticalCenter: parent.verticalCenter; text: Tr.t(secRow.modelData.key); elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 18 }
-                            // news in the VU meter store: new skins or updates of downloaded ones
-                            Rectangle { visible: (secRow.modelData.id === "vuMeters" && cfg.vuStoreNew > 0) || (secRow.modelData.id === "animations" && cfg.animStoreNew > 0); x: parent.width - 16 - 22 - 20; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: Theme.gold }
-                            Icon { x: parent.width - 16 - 22; anchors.verticalCenter: parent.verticalCenter; name: "chevron-right"; size: 22; color: Theme.silver }
+                            Rectangle { x: 10; y: 1; width: parent.width - 20; height: 1; color: Theme.wa(0.1) }
+                            Rectangle {
+                                x: 16; y: 16; width: secRow.big ? 52 : 44; height: width; radius: 10; color: Theme.goldA(0.2)
+                                Icon { anchors.centerIn: parent; name: secRow.modelData.id === "displayMode" && cfg.displayMode === "headless" ? "monitor-off" : secRow.modelData.icon; size: secRow.big ? 30 : 26; color: Theme.gold }
+                            }
+                            // news in the VU meter / animation stores
+                            Rectangle { visible: (secRow.modelData.id === "vuMeters" && cfg.vuStoreNew > 0) || (secRow.modelData.id === "animations" && cfg.animStoreNew > 0) || (secRow.modelData.id === "look" && cfg.vuStoreNew + cfg.animStoreNew > 0); x: parent.width - 26; y: 16; width: 10; height: 10; radius: 5; color: Theme.gold }
+                            Text {
+                                x: 16; y: parent.height - (secRow.big ? 52 : 50); width: parent.width - 32; height: secRow.big ? 36 : 36
+                                verticalAlignment: Text.AlignBottom; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
+                                text: Tr.t(secRow.modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: secRow.big ? 19 : 15; font.bold: secRow.big
+                            }
                         }
-                        Tap { id: sTap; onClicked: root.openSection(secRow.modelData.id) }
+                        Tap { id: sTap; onClicked: { if (secRow.big) root.grp = secRow.modelData.id; else root.openSection(secRow.modelData.id) } }
                     }
                 }
             }

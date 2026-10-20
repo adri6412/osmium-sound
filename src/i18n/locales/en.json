@@ -567,6 +567,14 @@
     "subtitle": "Configure your Osmium Sound",
     "loadingSystem": "Loading system data...",
     "apiUnavailable": "⚠️ API server unavailable",
+    "groups": {
+      "music": "Music & library",
+      "sound": "Audio & outputs",
+      "look": "Look & screen",
+      "control": "Control & remotes",
+      "network": "Network & access",
+      "system": "System & updates"
+    },
     "sections": {
       "sources": "Music sources",
       "cdRip": "CD ripping",
