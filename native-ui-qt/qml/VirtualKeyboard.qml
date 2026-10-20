@@ -9,6 +9,8 @@ import Hifi.Ui
 Item {
     id: root
     property bool active: false
+    // read by the key filter in main.cpp: a real keyboard types into this keyboard
+    readonly property bool takesTyping: true
     property bool closing: false
     property bool shift: false
     property bool sym: false          // strato dei simboli
@@ -69,6 +71,7 @@ Item {
         if (e.key === Qt.Key_Escape) { close(false); e.accepted = true; return }
         if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { close(true); e.accepted = true; return }
         if (e.key === Qt.Key_Backspace) { backspace(); e.accepted = true; return }
+        if (e.key === Qt.Key_Space) { put(" "); e.accepted = true; return }
         if (e.text && e.text.length && e.text.charCodeAt(0) >= 32) { put(e.text); e.accepted = true }
     }
     onActiveChanged: if (active) forceActiveFocus()

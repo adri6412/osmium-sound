@@ -639,9 +639,16 @@ Item {
             Icon { anchors.centerIn: parent; name: "home"; size: 15; color: Theme.silverA(0.6) }
             Tap { onClicked: root.navHome() }
         }
-        Row {
-            x: 43; height: parent.height
+        // the trail stops short of the buttons on the right and keeps its end
+        // in view, so a long chain of pages never runs under "Back"
+        Item {
+            id: crumbClip
+            x: 43; height: parent.height; clip: true
+            width: Math.max(0, (viewPick.visible ? viewPick.x : backBtn.visible ? backBtn.x : parent.width) - 8 - 43)
             visible: root.nav.length > 1
+        Row {
+            id: crumbRow
+            x: Math.min(0, crumbClip.width - width); height: parent.height
             Repeater {
                 model: root.nav.length
                 Item {
@@ -660,6 +667,7 @@ Item {
                     Tap { enabled: !crumb.last; onClicked: root.navToCrumb(crumb.index) }
                 }
             }
+        }
         }
         Rectangle {                                     // "Indietro"
             id: backBtn

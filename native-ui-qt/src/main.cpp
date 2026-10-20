@@ -120,7 +120,11 @@ protected:
                 // esclusiva passano davvero da li'
                 if (m_sys->devMode())
                     qInfo("key Qt: 0x%x -> %s%s", k, act.isEmpty() ? "(niente)" : qPrintable(act), typing ? " (si sta scrivendo)" : "");
-                if (!act.isEmpty() && !typing) { m_remote->dispatch(act, ke->isAutoRepeat(), "qt"); return true; }
+                // The on-screen keyboard takes OK and Back as its own keys (space and
+                // enter, backspace) while a real keyboard types into it; the arrows
+                // still move the spotlight over its keys
+                const bool vkOwnsKey = f && f->property("takesTyping").toBool() && (act == "ok" || act == "back");
+                if (!act.isEmpty() && !typing && !vkOwnsKey) { m_remote->dispatch(act, ke->isAutoRepeat(), "qt"); return true; }
             }
             break;
         }
