@@ -130,4 +130,21 @@
     <string name="appliance_shutdown_title">Spegni Osmium Sound</string>
     <string name="appliance_shutdown_started">Osmium Sound si sta spegnendo.</string>
     <string name="appliance_shutdown_failed">Impossibile spegnere Osmium Sound</string>
+
+    <!-- Kiosk-style shell: tab bar -->
+    <string name="kiosk_tab_music">Musica</string>
+    <string name="kiosk_tab_radio">Radio</string>
+    <string name="kiosk_tab_apps">App</string>
+    <string name="kiosk_tab_settings">Impostazioni</string>
+
+    <!-- Kiosk-style home: library category tiles -->
+    <string name="kiosk_tile_favorites">Preferiti</string>
+    <string name="kiosk_tile_artists">Artisti</string>
+    <string name="kiosk_tile_albums">Album</string>
+    <string name="kiosk_tile_genres">Generi</string>
+    <string name="kiosk_tile_years">Anni</string>
+    <string name="kiosk_tile_composers">Compositori</string>
+    <string name="kiosk_tile_new_music">Novità</string>
+    <string name="kiosk_tile_folders">Cartelle</string>
+    <string name="kiosk_tile_playlists">Playlist</string>
 </resources>

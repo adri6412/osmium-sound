@@ -133,4 +133,21 @@
     <string name="appliance_shutdown_title">Turn off Osmium Sound</string>
     <string name="appliance_shutdown_started">Osmium Sound is shutting down.</string>
     <string name="appliance_shutdown_failed">Could not turn off Osmium Sound</string>
+
+    <!-- Kiosk-style shell: tab bar -->
+    <string name="kiosk_tab_music">Music</string>
+    <string name="kiosk_tab_radio">Radio</string>
+    <string name="kiosk_tab_apps">Apps</string>
+    <string name="kiosk_tab_settings">Settings</string>
+
+    <!-- Kiosk-style home: library category tiles -->
+    <string name="kiosk_tile_favorites">Favorites</string>
+    <string name="kiosk_tile_artists">Artists</string>
+    <string name="kiosk_tile_albums">Albums</string>
+    <string name="kiosk_tile_genres">Genres</string>
+    <string name="kiosk_tile_years">Years</string>
+    <string name="kiosk_tile_composers">Composers</string>
+    <string name="kiosk_tile_new_music">New Music</string>
+    <string name="kiosk_tile_folders">Folders</string>
+    <string name="kiosk_tile_playlists">Playlists</string>
 </resources>

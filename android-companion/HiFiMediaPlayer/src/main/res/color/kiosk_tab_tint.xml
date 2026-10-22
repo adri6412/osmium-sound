@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tab icon/text tint: gold when selected, silver otherwise - the kiosk's
+     tab bar, where only the active section is gold. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/osmium_gold" android:state_selected="true" />
+    <item android:color="@color/osmium_silver" />
+</selector>
