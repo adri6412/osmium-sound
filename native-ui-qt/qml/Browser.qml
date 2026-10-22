@@ -83,10 +83,19 @@ Item {
         }
         pageLoader.sourceComponent = null
         Library.request(cur.view, cur.p1, cur.p2, cur.input)
-        list.scrollTop()
+        // back to a list we had scrolled (cur.scroll, set in goView): restore
+        // it once the rows land (onLoaded below); a fresh view starts at the top
+        if (cur.scroll) pendingScroll = cur.scroll
+        else { pendingScroll = null; list.scrollTop() }
     }
+    // the scroll position of the list we are leaving, waiting to be put back
+    property var pendingScroll: null
     function goView(view, title, p1, p2, input, replace) {
         var n = nav.slice()
+        // remember where this list was before we dive into an album/artist, so
+        // Back lands us there instead of at the top (#…)
+        if (!replace && !isPage && view !== LibraryModel.Home && n.length && n[n.length - 1].view !== LibraryModel.Home)
+            n[n.length - 1].scroll = list.scrollAnchor()
         var e = { view: view, title: title || "…", p1: p1 || "", p2: p2 || "", input: input || "" }
         if (replace) n[n.length - 1] = e; else { if (n.length >= 16) return; n.push(e) }
         nav = n
@@ -124,6 +133,8 @@ Item {
         landNav(from)
     }
     function navBack() {
+        // in Settings the remote's Back steps up its own levels first
+        if (tab === 4 && settingsTab.backStep()) return
         if (nav.length <= 1) return
         var from = nav[nav.length - 1]
         var n = nav.slice(); n.pop(); nav = n
@@ -484,7 +495,11 @@ Item {
     // 🚨 appear() comes twice, once on the navigation and once when the data
     // lands: with the fade alone it did not show, with the slide it would be a
     // jolt. The second is dropped while the first is still running.
-    Connections { target: Library; function onLoaded() { if (!slideAnim.running && !paintGate.running) root.appear() } }
+    Connections { target: Library; function onLoaded() {
+        // the rows are in: put the list back where it was before we dived in
+        if (root.pendingScroll) { var a = root.pendingScroll; root.pendingScroll = null; list.restoreAnchor(a) }
+        if (!slideAnim.running && !paintGate.running) root.appear()
+    } }
 
     // ─── barra dei tab ─────────────────────────────────────────────────────
     Rectangle {

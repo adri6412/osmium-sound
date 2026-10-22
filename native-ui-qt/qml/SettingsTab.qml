@@ -186,6 +186,8 @@ Item {
     // Macro sections: the settings front page is a grid of tiles, one per group;
     // a group opens a grid of its sections. A section knows its group by id.
     property string grp: ""
+    property real gridY: 0                                  // the tile grid's scroll, kept across a section visit
+    onGrpChanged: page.contentY = 0                         // a different grid starts at its top
     readonly property var groups: [
         { id: "music", icon: "library", secs: ["library", "sources", "cdRip", "playback", "multiroom", "alarm"] },
         { id: "sound", icon: "volume-2", secs: ["audio", "audioAdvanced", "zones", "btSpeakers"] },
@@ -206,6 +208,19 @@ Item {
                 if (ix >= 0 && listedSecs.indexOf(secs[ix]) >= 0) out.push(secs[ix])
             }
         return out
+    }
+    // a one-line hint of what a group holds, built from its section names, so
+    // it reads right in every language without any extra strings
+    function groupPreview(gid) {
+        for (var i = 0; i < groups.length; i++) if (groups[i].id === gid) {
+            var out = []
+            for (var k = 0; k < groups[i].secs.length; k++) {
+                var ix = secIndex(groups[i].secs[k])
+                if (ix >= 0 && listedSecs.indexOf(secs[ix]) >= 0) out.push(Tr.t(secs[ix].key))
+            }
+            return out.join(" · ")
+        }
+        return ""
     }
     readonly property var tileModel: {
         if (grp === "") return groups.map(function(g) { return { kind: "group", id: g.id, icon: g.icon, key: "settings.groups." + g.id } })
@@ -626,7 +641,7 @@ Item {
     function fmtWhen(ts) { return Qt.formatDateTime(new Date(ts * 1000), I18n.lang === "it" ? "dd/MM/yyyy HH:mm" : "yyyy-MM-dd HH:mm") }
     function setPref(name, value) { Player.cmd(["playerpref", name, value]) }
 
-    function enter() { cfg.load(); grp = ""; goRoot() }
+    function enter() { cfg.load(); grp = ""; gridY = 0; goRoot() }
     function say(text, err) { msg = text; msgErr = !!err; rebuild() }
     // Audio → Advanced: one call per row, the server answers with the whole
     // model and a message; post() reloads cfg afterwards, which rebuilds the
@@ -716,12 +731,26 @@ Item {
             }, 60000)
         }, pre)
     }
-    function goRoot() { active = -1; msg = ""; pendAct = ""; backTo = ""; rows = []; remoteTestOff(); page.contentY = 0; appear() }
+    // returning to the tile grid: land where we left it, not at the top
+    function restoreGridY() {
+        page.contentY = Math.max(0, Math.min(gridY, page.contentHeight - page.height))
+        // the grid's contentHeight is only final once the tiles relayout
+        Qt.callLater(function() { page.contentY = Math.max(0, Math.min(root.gridY, page.contentHeight - page.height)) })
+    }
+    function goRoot() { active = -1; msg = ""; pendAct = ""; backTo = ""; rows = []; remoteTestOff(); restoreGridY(); appear() }
     function goBack() { if (backTo) openSection(backTo); else goRoot() }
+    // remote/keyboard Back: step up one level (section content → the group's
+    // grid → the groups). false at the top, so the browser handles it.
+    function backStep() {
+        if (active >= 0) { goBack(); return true }
+        if (grp !== "") { grp = ""; appear(); return true }
+        return false
+    }
     function openSection(i, mark) {
         if (typeof i === "string") i = secIndex(i)
         if (i < 0 || i >= secs.length) return
         var id = secs[i].id
+        if (active < 0) gridY = page.contentY        // leaving the tile grid: remember its scroll
         active = i; msg = ""; pendAct = ""; countdown = 0; backTo = ""
         if (groupOf(id) !== "") grp = groupOf(id)
         audioSel = ""; sshUser = ""; sshPass = ""; nameEdit = ""; hostEdit = ""
@@ -906,7 +935,7 @@ Item {
 
     function appear() { fadeAnim.restart() }
     NumberAnimation { id: fadeAnim; target: body; property: "opacity"; from: 0; to: 1; duration: Theme.dur(120); easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.easeOut }
-    Keys.onEscapePressed: if (active >= 0) goBack()
+    Keys.onEscapePressed: backStep()
 
     // ─── costruzione delle righe ───────────────────────────────────────────
     property var _stack: []
@@ -2979,9 +3008,10 @@ Item {
                 id: secList
                 visible: root.atRoot
                 x: body.padX; y: rootHead.y + rootHead.height + 32; width: body.innerW; spacing: 16
-                readonly property int cols: root.grp === "" ? (width >= 760 ? 3 : 2) : (width >= 900 ? 4 : width >= 640 ? 3 : 2)
+                readonly property int cols: root.grp === "" ? (width >= 560 ? 3 : 2) : (width >= 900 ? 4 : width >= 640 ? 3 : 2)
                 readonly property real tw: Math.floor((width - (cols - 1) * spacing) / cols)
-                readonly property real th: Math.round(Math.min(tw * (root.grp === "" ? 0.6 : 0.5), root.grp === "" ? 150 : 124))
+                // group tiles stay short so all six fit a 16:10 panel without scrolling
+                readonly property real th: Math.round(Math.min(tw * (root.grp === "" ? 0.42 : 0.5), root.grp === "" ? 128 : 124))
                 Repeater {
                     model: root.tileModel
                     Item {
@@ -2995,15 +3025,30 @@ Item {
                             color: sTap.mix(Theme.gray, Theme.light); border.width: 1; border.color: Theme.accent
                             Rectangle { x: 10; y: 1; width: parent.width - 20; height: 1; color: Theme.wa(0.1) }
                             Rectangle {
-                                x: 16; y: 16; width: secRow.big ? 52 : 44; height: width; radius: 10; color: Theme.goldA(0.2)
-                                Icon { anchors.centerIn: parent; name: secRow.modelData.id === "displayMode" && cfg.displayMode === "headless" ? "monitor-off" : secRow.modelData.icon; size: secRow.big ? 30 : 26; color: Theme.gold }
+                                x: 16; y: 16; width: secRow.big ? 48 : 44; height: width; radius: 10; color: Theme.goldA(0.2)
+                                Icon { anchors.centerIn: parent; name: secRow.modelData.id === "displayMode" && cfg.displayMode === "headless" ? "monitor-off" : secRow.modelData.icon; size: secRow.big ? 28 : 26; color: Theme.gold }
                             }
                             // news in the VU meter / animation stores
                             Rectangle { visible: (secRow.modelData.id === "vuMeters" && cfg.vuStoreNew > 0) || (secRow.modelData.id === "animations" && cfg.animStoreNew > 0) || (secRow.modelData.id === "look" && cfg.vuStoreNew + cfg.animStoreNew > 0); x: parent.width - 26; y: 16; width: 10; height: 10; radius: 5; color: Theme.gold }
+                            // group tile: title beside the icon, a preview of its sections under it
                             Text {
-                                x: 16; y: parent.height - (secRow.big ? 52 : 50); width: parent.width - 32; height: secRow.big ? 36 : 36
+                                visible: secRow.big
+                                x: 76; y: 16; width: parent.width - 76 - 16; height: 48
+                                verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                text: Tr.t(secRow.modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 19; font.bold: true
+                            }
+                            Text {
+                                visible: secRow.big
+                                x: 16; y: 72; width: parent.width - 32; height: parent.height - 72 - 12
+                                wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight; lineHeight: 1.1
+                                text: root.groupPreview(secRow.modelData.id); color: Theme.silver; font.family: Theme.font; font.pixelSize: 13
+                            }
+                            // section tile: the name along the bottom
+                            Text {
+                                visible: !secRow.big
+                                x: 16; y: parent.height - 50; width: parent.width - 32; height: 36
                                 verticalAlignment: Text.AlignBottom; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
-                                text: Tr.t(secRow.modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: secRow.big ? 19 : 15; font.bold: secRow.big
+                                text: Tr.t(secRow.modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 15
                             }
                         }
                         Tap { id: sTap; onClicked: { if (secRow.big) root.grp = secRow.modelData.id; else root.openSection(secRow.modelData.id) } }

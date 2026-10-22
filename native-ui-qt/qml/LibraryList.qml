@@ -47,6 +47,32 @@ Item {
         else listView.positionViewAtIndex(row, ListView.Beginning)
     }
     function scrollTop() { listView.contentY = 0; gridView.contentY = 0; flowView.scrollTop(); changerView.scrollTop() }
+    // Where the list is scrolled right now, so the browser can bring us back
+    // here after opening an album/artist and stepping back (Browser.goView /
+    // loadTop). Cover Flow and the changer keep a centred album; the plain
+    // list and the grid keep a pixel offset (same rows on return, so it lands
+    // exactly where it was).
+    function scrollAnchor() {
+        if (coverflow) return { kind: "flow", row: flowView.cur }
+        if (changer) return { kind: "changer", row: changerView.cur }
+        if (grid) return { kind: "grid", y: gridView.contentY }
+        return { kind: "list", y: listView.contentY }
+    }
+    function restoreAnchor(a) {
+        if (!a) return
+        if (a.kind === "flow") { if (coverflow) flowView.scrollToRow(a.row); return }
+        if (a.kind === "changer") { if (changer) changerView.scrollToRow(a.row); return }
+        // 🚨 forceLayout first: a model that was just reset (Library.request)
+        // repositions at the top on its next layout, which would wipe the
+        // contentY we set. Laying it out now consumes that reset, so the
+        // offset below is the one that stays.
+        if (a.kind === "grid") { if (grid && !coverflow && !changer) {
+                gridView.forceLayout()
+                gridView.contentY = Math.max(0, Math.min(a.y, Math.max(0, gridView.contentHeight - gridView.height))) } return }
+        if (a.kind === "list") { if (!grid) {
+                listView.forceLayout()
+                listView.contentY = Math.max(0, Math.min(a.y, Math.max(0, listView.contentHeight - listView.height))) } }
+    }
 
     // ─── Cover Flow of the albums ──────────────────────────────────────────
     CoverFlow {
