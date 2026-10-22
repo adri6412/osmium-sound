@@ -27,48 +27,74 @@ const { t, lang } = useI18n();
 
 // ── kiosk-like submenu navigation ────────────────────────────────
 const sections = computed(() => [
-  { key: 'network',   label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
-  { key: 'audio',     label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
+  { key: 'network',   icon: 'wifi',      label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
+  { key: 'audio',     icon: 'volume-2',  label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
   // DSD, PCM to DSD and the rest of squeezelite's options, out of Audio
-  { key: 'audioAdvanced', label: t('settings.sections.audioAdvanced.label'), desc: t('settings.sections.audioAdvanced.desc') },
+  { key: 'audioAdvanced', icon: 'settings', label: t('settings.sections.audioAdvanced.label'), desc: t('settings.sections.audioAdvanced.desc') },
   // One more Lyrion player per further DAC (api_server.py /zones)
-  { key: 'zones',     label: t('settings.sections.zones.label'),     desc: t('settings.sections.zones.desc') },
-  { key: 'btSpeakers', label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
-  { key: 'remote',    label: t('settings.sections.remote.label'),    desc: t('settings.sections.remote.desc') },
-  { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
+  { key: 'zones',     icon: 'usb',       label: t('settings.sections.zones.label'),     desc: t('settings.sections.zones.desc') },
+  { key: 'btSpeakers', icon: 'speaker',  label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
+  { key: 'remote',    icon: 'remote',    label: t('settings.sections.remote.label'),    desc: t('settings.sections.remote.desc') },
+  { key: 'sources',   icon: 'hard-drive', label: t('settings.sections.sources.label'),  desc: t('settings.sections.sources.desc') },
   // Daphile's CD Ripping page, field by field (sources_server /api/cd/settings)
-  { key: 'cdRip',     label: t('settings.sections.cdRip.label'),     desc: t('settings.sections.cdRip.desc') },
+  { key: 'cdRip',     icon: 'disc',      label: t('settings.sections.cdRip.label'),     desc: t('settings.sections.cdRip.desc') },
   // 'dsp' is deliberately NOT listed here — the feature (and its room-correction
   // sub-flow) is being held back for a future paid tier. The card markup below
   // (v-if="open === 'dsp'") and all its backing code/API endpoints are left
   // fully intact on purpose, just unreachable: normalizeSection() below also
   // strips a hand-typed ?open=dsp so there's no direct-URL bypass either.
-  { key: 'services',  label: t('settings.sections.services.label'),  desc: t('settings.sections.services.desc') },
-  { key: 'tailscale', label: t('settings.sections.tailscale.label'), desc: t('settings.sections.tailscale.desc') },
-  { key: 'lyrion',    label: t('settings.sections.lyrion.label'),    desc: t('settings.sections.lyrion.desc') },
-  { key: 'playback',  label: t('settings.sections.playback.label'),  desc: t('settings.sections.playback.desc') },
+  { key: 'services',  icon: 'settings',  label: t('settings.sections.services.label'),  desc: t('settings.sections.services.desc') },
+  { key: 'tailscale', icon: 'globe',     label: t('settings.sections.tailscale.label'), desc: t('settings.sections.tailscale.desc') },
+  { key: 'lyrion',    icon: 'speaker',   label: t('settings.sections.lyrion.label'),    desc: t('settings.sections.lyrion.desc') },
+  { key: 'playback',  icon: 'list-music', label: t('settings.sections.playback.label'), desc: t('settings.sections.playback.desc') },
   // A section of its own, like the kiosk's Settings → VU meter: the switch,
   // the styles with a preview each, and the store.
-  { key: 'vuMeters',  label: t('settings.sections.vuMeters.label'),  desc: t('settings.sections.vuMeters.desc') },
+  { key: 'vuMeters',  icon: 'layout-grid', label: t('settings.sections.vuMeters.label'), desc: t('settings.sections.vuMeters.desc') },
   // What the kiosk draws in place of the meters when they are off. Only the
   // choice lives here: the animations themselves exist on the device screen.
-  { key: 'animations', label: t('settings.sections.animations.label'), desc: t('settings.sections.animations.desc') },
-  { key: 'display',  label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
-  { key: 'timezone',  label: t('settings.sections.timezone.label'),  desc: t('settings.sections.timezone.desc') },
-  { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
-  { key: 'companion', label: t('settings.sections.companion.label'), desc: t('settings.sections.companion.desc') },
-  { key: 'companionIos', label: t('settings.sections.companionIos.label'), desc: t('settings.sections.companionIos.desc') },
-  { key: 'account',   label: t('settings.sections.account.label'),   desc: t('settings.sections.account.desc') },
-  { key: 'backup',    label: t('settings.sections.backup.label'),    desc: t('settings.sections.backup.desc') },
-  { key: 'language',  label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
-  { key: 'system',    label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
+  { key: 'animations', icon: 'sparkles', label: t('settings.sections.animations.label'), desc: t('settings.sections.animations.desc') },
+  { key: 'display',  icon: 'monitor',    label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
+  { key: 'timezone',  icon: 'history',   label: t('settings.sections.timezone.label'),  desc: t('settings.sections.timezone.desc') },
+  { key: 'updates',   icon: 'refresh-cw', label: t('settings.sections.updates.label'),  desc: t('settings.sections.updates.desc') },
+  { key: 'companion', icon: 'share-2',   label: t('settings.sections.companion.label'), desc: t('settings.sections.companion.desc') },
+  { key: 'companionIos', icon: 'link',   label: t('settings.sections.companionIos.label'), desc: t('settings.sections.companionIos.desc') },
+  { key: 'account',   icon: 'user',      label: t('settings.sections.account.label'),   desc: t('settings.sections.account.desc') },
+  { key: 'backup',    icon: 'copy',      label: t('settings.sections.backup.label'),    desc: t('settings.sections.backup.desc') },
+  { key: 'language',  icon: 'globe',     label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
+  { key: 'system',    icon: 'settings',  label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
   // What the device is made of and under which licenses: the project, Lyrion,
   // the third-party notices and every Debian package of the image.
-  { key: 'notices',   label: t('settings.sections.notices.label'),   desc: t('settings.sections.notices.desc') },
+  { key: 'notices',   icon: 'file',      label: t('settings.sections.notices.label'),   desc: t('settings.sections.notices.desc') },
   // Reached from System and Updates ("Check the network"), not listed itself.
-  { key: 'netCheck',  label: t('settings.sections.netCheck.label'),  desc: t('settings.sections.netCheck.desc'), hidden: true },
+  { key: 'netCheck',  icon: 'network',   label: t('settings.sections.netCheck.label'),  desc: t('settings.sections.netCheck.desc'), hidden: true },
 ]);
 const listedSections = computed(() => sections.value.filter(s => !s.hidden));
+
+// ── macro groups: the settings front page is a grid of square tiles, one per
+// group; a group opens a grid of its sections. Same scheme and names as the
+// kiosk (native-ui-qt/qml/SettingsTab.qml → groups). A section knows its
+// group by key; `grp` is the open group ('' = the front page of groups).
+const grp = ref('');
+const groups = [
+  { id: 'music',   icon: 'library',  secs: ['sources', 'cdRip', 'lyrion', 'playback'] },
+  { id: 'sound',   icon: 'volume-2', secs: ['audio', 'audioAdvanced', 'zones', 'btSpeakers'] },
+  { id: 'look',    icon: 'monitor',  secs: ['vuMeters', 'animations', 'display', 'language'] },
+  { id: 'control', icon: 'remote',   secs: ['remote', 'companion', 'companionIos'] },
+  { id: 'network', icon: 'wifi',     secs: ['network', 'tailscale', 'services', 'account'] },
+  { id: 'system',  icon: 'info',     secs: ['timezone', 'updates', 'backup', 'system', 'notices'] },
+];
+function groupOf(key) { const g = groups.find((x) => x.secs.includes(key)); return g ? g.id : ''; }
+// the sections of a group that are listed right now, in the group's order
+function groupSecs(gid) {
+  const g = groups.find((x) => x.id === gid); if (!g) return [];
+  return g.secs.map((k) => listedSections.value.find((s) => s.key === k)).filter(Boolean);
+}
+// what the tile grid shows: the groups, or the open group's sections
+const tileModel = computed(() => grp.value === ''
+  ? groups.map((g) => ({ kind: 'group', key: g.id, icon: g.icon, label: t('settings.groups.' + g.id) }))
+  : groupSecs(grp.value).map((s) => ({ kind: 'sec', key: s.key, icon: s.icon, label: s.label })));
+// a group's tile shows a "new" dot when any store section inside it has news
+function groupNew(gid) { return gid === 'look' && (vuStoreNew.value || animStoreNew.value); }
 // 'multiroom' was this section's key before it became "Lyrion Music Server";
 // keep old bookmarks and the kiosk's deep links working. 'dsp' is held back
 // (see the sections list above) — redirect a hand-typed ?open=dsp back to the
@@ -77,7 +103,13 @@ const listedSections = computed(() => sections.value.filter(s => !s.hidden));
 // static, so those switches never took effect.
 const normalizeSection = (k) => (k === 'multiroom' ? 'lyrion' : (k === 'dsp' || k === 'debug') ? '' : (k || ''));
 const open = ref(normalizeSection(route.query.open));
-watch(() => route.query.open, (v) => { open.value = normalizeSection(v); });
+// opening a section (menu tap or deep link) remembers its group, so the
+// section's back-link returns to that group's tile grid, not the groups page
+if (open.value) grp.value = groupOf(open.value) || grp.value;
+watch(() => route.query.open, (v) => {
+  open.value = normalizeSection(v);
+  if (open.value) grp.value = groupOf(open.value) || grp.value;
+});
 function goto(k) { router.replace({ query: k ? { open: k } : {} }); }
 // the network check's back link returns to the section it was opened from
 function goBack() { goto(open.value === 'netCheck' ? normalizeSection(route.query.from) : ''); }
@@ -1865,19 +1897,26 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- section menu (kiosk-like) -->
+  <!-- section menu (kiosk-like): a grid of square tiles — the six macro groups,
+       and tapping one opens a grid of its sections (SettingsTab.qml) -->
   <template v-if="!open">
-    <RouterLink class="backlink" to="/">← {{ t('dashboard.title') }}</RouterLink>
-    <h2 class="page">{{ t('settings.title') }}</h2>
+    <RouterLink v-if="!grp" class="backlink" to="/">← {{ t('dashboard.title') }}</RouterLink>
+    <a v-else class="backlink" href="#" @click.prevent="grp = ''">← {{ t('settings.title') }}</a>
+    <h2 class="page">{{ grp ? t('settings.groups.' + grp) : t('settings.title') }}</h2>
     <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
-    <div class="card" style="padding: 6px 16px;">
-      <div v-for="s in listedSections" :key="s.key" class="net between" @click="goto(s.key)">
-        <span>
-          <span style="display:block;">{{ s.label }}<span v-if="(s.key === 'vuMeters' && vuStoreNew) || (s.key === 'animations' && animStoreNew)" class="dot-new"></span></span>
-          <span class="muted">{{ s.desc }}</span>
-        </span>
-        <span class="silver" style="font-size: 18px;">›</span>
-      </div>
+    <div class="tile-grid">
+      <button
+        v-for="tl in tileModel" :key="tl.key" type="button" class="tile"
+        :class="{ group: tl.kind === 'group' }"
+        @click="tl.kind === 'group' ? (grp = tl.key) : goto(tl.key)"
+      >
+        <span class="tile-badge"><Icon :name="tl.icon" :size="tl.kind === 'group' ? 26 : 22" /></span>
+        <span
+          v-if="(tl.kind === 'sec' && tl.key === 'vuMeters' && vuStoreNew) || (tl.kind === 'sec' && tl.key === 'animations' && animStoreNew) || (tl.kind === 'group' && groupNew(tl.key))"
+          class="tile-dot"
+        ></span>
+        <span class="tile-label">{{ tl.label }}</span>
+      </button>
     </div>
   </template>
 
@@ -3129,3 +3168,58 @@ onUnmounted(() => {
     </div>
   </template>
 </template>
+
+<style scoped>
+/* Settings front page: a grid of square-ish tiles, mirroring the kiosk's
+   Flow of tiles (native-ui-qt/qml/SettingsTab.qml). Group tiles are a touch
+   bigger and bolder than section tiles. */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+}
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 108px;
+  padding: 14px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.15s, background 0.15s;
+}
+.tile.group { min-height: 124px; }
+.tile:hover { background: var(--light); border-color: var(--gold); }
+.tile-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--gold-dim);
+  color: var(--gold);
+}
+.tile.group .tile-badge { width: 52px; height: 52px; }
+.tile-label {
+  font-size: 15px;
+  line-height: 1.25;
+  color: var(--text);
+}
+.tile.group .tile-label { font-size: 18px; font-weight: 700; }
+.tile-dot {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+</style>

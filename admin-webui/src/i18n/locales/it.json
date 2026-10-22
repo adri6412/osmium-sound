@@ -188,6 +188,14 @@
   "settings": {
     "title": "Impostazioni",
     "backToSettings": "Impostazioni",
+    "groups": {
+      "music": "Musica e libreria",
+      "sound": "Audio e uscite",
+      "look": "Aspetto e schermo",
+      "control": "Controllo e telecomandi",
+      "network": "Rete e accesso",
+      "system": "Sistema e aggiornamenti"
+    },
     "sections": {
       "network": {
         "label": "Rete",
