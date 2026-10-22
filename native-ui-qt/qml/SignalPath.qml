@@ -78,7 +78,11 @@ Rectangle {
             if (s.bits) sv += (sv ? " · " : "") + s.bits + " bit"
             if (s.rate) sv += (sv ? " · " : "") + rate(s.rate)
         }
-        var sd = [{ text: s.lossy ? t("lossy") : t("lossless"), tone: s.lossy ? "idle" : "ok" }]
+        // lossless / lossy only when the codec is known; an unknown or empty
+        // type (some radios) says nothing rather than claim "lossless"
+        var sd = []
+        if (s.quality === "lossless") sd.push({ text: t("lossless"), tone: "ok" })
+        else if (s.quality === "lossy") sd.push({ text: t("lossy"), tone: "idle" })
         if (s.remote) sd.push({ text: t("stream"), tone: "idle" })
         out.push({ key: "source", icon: s.remote ? "radio" : "music", label: t("source"), value: sv || "—", details: sd })
 

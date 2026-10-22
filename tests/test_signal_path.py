@@ -94,6 +94,32 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(sp.card_info('default', t.root)['kind'], 'unknown')
 
 
+class QualityTest(unittest.TestCase):
+    def test_lossless_codecs(self):
+        for ty in ('flc', 'wav', 'aif', 'alc', 'wvp', 'ape', 'wmal', 'ogf'):
+            self.assertEqual(sp.source_quality(ty, False), 'lossless', ty)
+
+    def test_lossy_codecs(self):
+        for ty in ('mp3', 'aac', 'mp4', 'm4a', 'ogg', 'opus', 'wma', 'mpc'):
+            self.assertEqual(sp.source_quality(ty, False), 'lossy', ty)
+
+    def test_dsd_is_lossless(self):
+        self.assertEqual(sp.source_quality('dsf', True), 'lossless')
+
+    def test_unknown_or_empty_says_nothing(self):
+        # a radio whose codec Lyrion does not name plainly must NOT read lossless
+        for ty in ('', 'wmadrm', 'unknown', 'http'):
+            self.assertEqual(sp.source_quality(ty, False), '', ty)
+
+    def test_describe_passes_quality_through(self):
+        r = Tree(hw('S32_LE', 96000)).describe(FLAC_96)
+        self.assertEqual(r['source']['quality'], 'lossless')
+        r = Tree(hw('S16_LE', 44100)).describe({'type': 'aac', 'rate': '44100', 'bits': '16'})
+        self.assertEqual(r['source']['quality'], 'lossy')
+        r = Tree(hw('S16_LE', 44100)).describe({'type': '', 'rate': '44100', 'bits': '16', 'remote': True})
+        self.assertEqual(r['source']['quality'], '')
+
+
 class VerdictTest(unittest.TestCase):
     def test_bitperfect_pcm(self):
         r = Tree(hw('S32_LE', 96000)).describe(FLAC_96)

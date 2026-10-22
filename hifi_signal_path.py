@@ -24,11 +24,26 @@ import hifi_squeezelite as sq
 
 PROC_ASOUND = '/proc/asound'
 
-# Lossy codecs, as Lyrion names a track's `type`: not a change made on the
-# way, but worth saying next to a "bit-perfect" that would otherwise read as
-# "hi-fi".
-LOSSY_TYPES = ('mp3', 'aac', 'mp4', 'ogg', 'ops', 'opus', 'wma', 'mpc')
+# How to read a track's `type` as Lyrion names it. Lossy throws data away for
+# good (worth saying next to a "bit-perfect" that would otherwise read as
+# "hi-fi"); lossless keeps every sample. A `type` in neither list -- empty, or
+# one of the odd tokens some internet radios report -- stays unknown, and the
+# screen then says nothing about the quality rather than claim one it cannot
+# vouch for. 🚨 Do NOT guess lossless from the absence of a lossy tag: an AAC
+# radio stream whose type is not plainly "aac" would read as "lossless".
+LOSSY_TYPES = ('mp3', 'aac', 'mp4', 'm4a', 'ogg', 'ops', 'opus', 'wma', 'wmap', 'mpc', 'spt')
+LOSSLESS_TYPES = ('flc', 'ogf', 'wav', 'aif', 'aiff', 'pcm', 'l16', 'alc', 'alcx',
+                  'wvp', 'wvpx', 'ape', 'wmal', 'mlp', 'shn', 'tak')
 DSD_TYPES = ('dsf', 'dff', 'dsd')
+
+
+def source_quality(stype, is_dsd):
+    """'lossless' / 'lossy' / '' for a codec `type`; DSD counts as lossless."""
+    if is_dsd or stype in LOSSLESS_TYPES:
+        return 'lossless'
+    if stype in LOSSY_TYPES:
+        return 'lossy'
+    return ''
 
 # hw_params `format` → how many DSD bits one frame carries per channel.
 _DSD_BITS = {'DSD_U8': 8, 'DSD_U16_LE': 16, 'DSD_U16_BE': 16, 'DSD_U32_LE': 32, 'DSD_U32_BE': 32}
@@ -193,7 +208,7 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
     model, zone = find_player(player, main, zones)
     out = {
         'source': {'type': stype, 'rate': src_rate, 'bits': _as_int(source.get('bits')),
-                   'dsd': src_dsd, 'lossy': stype in LOSSY_TYPES, 'remote': bool(source.get('remote'))},
+                   'dsd': src_dsd, 'quality': source_quality(stype, src_dsd), 'remote': bool(source.get('remote'))},
         'local': model is not None,
         'zone': zone,
         'lyrion': {'local': sq.server_is_local(main.get('server')), 'server': main.get('server') or ''},
