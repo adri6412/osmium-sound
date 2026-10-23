@@ -548,6 +548,13 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
 
         ActionBar actionBar = mActivity.getSupportActionBar();
 
+        // The player dropdown lives in the host's action bar. The kiosk shell
+        // (MainActivity) has no action bar — it hosts this fragment only as the
+        // bottom mini player — so there is nothing to populate here.
+        if (actionBar == null) {
+            return;
+        }
+
         // If there are multiple players connected then show a spinner allowing the user to
         // choose between them.
         if (connectedPlayers.size() > 1) {
