@@ -108,6 +108,11 @@ public class HomeTilesFragment extends Fragment {
         for (int i = 0; i + 1 < tile.params.length; i += 2) {
             json.param(tile.params[i], tile.params[i + 1]);
         }
+        // Server-sent actions always carry a players array (JiveItem builds one
+        // even for non-player actions); isPlayerSpecific() reads players.length
+        // without a null check, so a forged action must set it or the active
+        // player observer NPEs and the app resets. Empty = not player-specific.
+        json.players = new String[0];
         Action action = new Action();
         action.action = json;
         // Build the header item through the record constructor so every field the
