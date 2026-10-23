@@ -33,7 +33,9 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.osmium.sound.companion.R;
 import com.osmium.sound.companion.itemlist.JiveItemListActivity;
@@ -108,8 +110,12 @@ public class HomeTilesFragment extends Fragment {
         }
         Action action = new Action();
         action.action = json;
-        JiveItem parent = new JiveItem();
-        parent.setName(getString(tile.label));
+        // Build the header item through the record constructor so every field the
+        // list header reads (choiceStrings, text2, ...) is initialised; the bare
+        // constructor leaves them null and updateHeader() then NPEs.
+        Map<String, Object> record = new HashMap<>();
+        record.put("name", getString(tile.label));
+        JiveItem parent = new JiveItem(record);
         JiveItemListActivity.show(activity, parent, action);
     }
 
