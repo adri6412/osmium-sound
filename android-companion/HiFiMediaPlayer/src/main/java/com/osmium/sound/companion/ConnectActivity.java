@@ -35,7 +35,7 @@ import java.lang.annotation.RetentionPolicy;
 
 import com.osmium.sound.companion.dialog.ServerAddressView;
 import com.osmium.sound.companion.framework.BaseActivity;
-import com.osmium.sound.companion.itemlist.HomeActivity;
+import com.osmium.sound.companion.kiosk.MainActivity;
 import com.osmium.sound.companion.service.ISqueezeService;
 import com.osmium.sound.companion.service.event.HandshakeComplete;
 import com.osmium.sound.companion.widget.ViewUtilities;
@@ -208,6 +208,6 @@ public class ConnectActivity extends BaseActivity {
         if (host != null) {
             Toast.makeText(this, getString(R.string.wizard_connected, host), Toast.LENGTH_SHORT).show();
         }
-        HomeActivity.show(this);
+        MainActivity.show(this);
     }
 }

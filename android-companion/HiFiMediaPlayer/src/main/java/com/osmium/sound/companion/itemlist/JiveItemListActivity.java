@@ -66,6 +66,7 @@ import com.osmium.sound.companion.framework.ItemAdapter;
 import com.osmium.sound.companion.framework.ItemListActivity;
 import com.osmium.sound.companion.framework.ItemViewHolder;
 import com.osmium.sound.companion.framework.ViewParamItemView;
+import com.osmium.sound.companion.kiosk.MainActivity;
 import com.osmium.sound.companion.itemlist.dialog.ArtworkDialog;
 import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
 import com.osmium.sound.companion.model.Action;
@@ -377,7 +378,7 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
             switch (nextWindow.nextWindow) {
                 case nowPlaying -> NowPlayingActivity.show(this);
                 case playlist -> CurrentPlaylistActivity.show(this);
-                case home -> HomeActivity.show(this);
+                case home -> MainActivity.show(this);
             }
             finish();
             return;
@@ -460,7 +461,7 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
                     // Do nothing as now playing is always available in Squeezer (maybe toast the action)
                 }
                 case playlist -> CurrentPlaylistActivity.show(this);
-                case home -> HomeActivity.show(this);
+                case home -> MainActivity.show(this);
                 case parentNoRefresh -> finish();
                 case grandparent -> {
                     setResult(Activity.RESULT_OK, new Intent(RELOAD_PARENT));

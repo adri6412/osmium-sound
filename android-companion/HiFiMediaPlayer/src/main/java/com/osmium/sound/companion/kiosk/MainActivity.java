@@ -16,6 +16,8 @@
 
 package com.osmium.sound.companion.kiosk;
 
+import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 
@@ -51,6 +53,21 @@ public class MainActivity extends BaseActivity {
     private TabLayout tabs;
     /** Guards programmatic tab selection so it does not re-trigger a launch. */
     private boolean switchingTab;
+
+    /**
+     * Brings the kiosk shell to the front, reusing the running instance. This is
+     * the app's home: the connect flow and every "go home" action land here, not
+     * on the old server-menu {@link HomeActivity}.
+     */
+    public static void show(Context context) {
+        Intent intent = new Intent(context, MainActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (!(context instanceof Activity)) {
+            intent = intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        context.startActivity(intent);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
