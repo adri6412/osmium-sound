@@ -29,14 +29,13 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.StringRes;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 
 import com.google.android.material.tabs.TabLayout;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Collections;
+import java.util.List;
 
 import com.osmium.sound.companion.R;
 import com.osmium.sound.companion.SettingsActivity;
@@ -47,6 +46,7 @@ import com.osmium.sound.companion.itemlist.JiveItemListFragment;
 import com.osmium.sound.companion.model.Action;
 import com.osmium.sound.companion.model.JiveItem;
 import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.event.HomeMenuEvent;
 
 /**
  * The app's kiosk-style shell: a tab bar (Music / Radio / Apps / Settings), the active section in
@@ -56,9 +56,11 @@ import com.osmium.sound.companion.service.ISqueezeService;
  *
  * <p>The Music tab is the kiosk home grid ({@link HomeTilesFragment}); drilling into a category
  * pushes a {@link JiveItemListFragment} into the same container ({@link #pushBrowse}), with a
- * breadcrumb strip replacing the old per-level toolbars. Radio and Apps show the server-driven home
- * menu ({@link HomeMenuFragment}) rooted at their home nodes, and drilling into a node pushes another
- * menu level ({@link #pushHomeMenu}). Settings opens the existing settings screens.
+ * breadcrumb strip replacing the old per-level toolbars. Radio and Apps open the server's home-menu
+ * item with that id ("radios" / "apps"), exactly as tapping it in the menu would: usually its
+ * children are fetched on demand through its goAction ({@link #showBrowseRoot}), and only when the
+ * server groups the section into a node do its children ride along in the sticky home menu
+ * ({@link #showHomeMenuRoot}). Settings opens the existing settings screens.
  */
 public class MainActivity extends BaseActivity implements JiveItemNavigator {
 
@@ -78,6 +80,10 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
     private int activeTab = TAB_MUSIC;
     /** Guards programmatic tab selection so it does not re-trigger a launch. */
     private boolean switchingTab;
+    /** The sticky server home menu (flat list of items); populated by {@link HomeMenuEvent}. */
+    private List<JiveItem> homeMenu = Collections.emptyList();
+    /** A Radio/Apps section waiting for its home-menu item to arrive, or null once opened. */
+    private String pendingSectionNode;
 
     /**
      * Brings the kiosk shell to the front, reusing the running instance. This is the app's home: the
@@ -156,28 +162,70 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
     /** Shows the root of a music-section tab, dropping any pushed levels. */
     private void showTabRoot(int tab) {
         switch (tab) {
-            case TAB_RADIO -> showHomeMenuRoot(NODE_RADIO, R.string.kiosk_tab_radio);
-            case TAB_APPS -> showHomeMenuRoot(NODE_APPS, R.string.kiosk_tab_apps);
+            case TAB_RADIO -> requestHomeSection(NODE_RADIO);
+            case TAB_APPS -> requestHomeSection(NODE_APPS);
             default -> showMusic();
         }
     }
 
     /** Resets the Music tab to its home grid, dropping any pushed browse levels. */
     private void showMusic() {
+        pendingSectionNode = null;
         resetBackStack();
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.kiosk_content, new HomeTilesFragment())
                 .commit();
     }
 
-    /** Shows the Radio or Apps root menu; its children arrive with the sticky home-menu event. */
-    private void showHomeMenuRoot(String node, @StringRes int label) {
+    /**
+     * Opens the Radio or Apps section. The section is the server's home-menu item with this id; we
+     * open it just as tapping it in the menu would. The item may not have arrived yet (the home menu
+     * lands after the handshake), so we remember the request and open it when {@link HomeMenuEvent}
+     * fires. See {@link #openPendingSection}.
+     */
+    private void requestHomeSection(String node) {
+        pendingSectionNode = node;
+        openPendingSection();
+    }
+
+    /** Opens the pending Radio/Apps section once its home-menu item is known; a no-op otherwise. */
+    private void openPendingSection() {
+        if (pendingSectionNode == null) return;
+        JiveItem container = findHomeItem(pendingSectionNode);
+        if (container == null) return; // wait for the sticky home-menu event
+        pendingSectionNode = null;
+        if (container.goAction != null) {
+            // The usual case: the section's children are fetched on demand (like the library),
+            // not carried in the sticky home menu, so browse them through its goAction.
+            showBrowseRoot(container, container.goAction);
+        } else {
+            // A grouped section: its children ride along in the sticky menu under this node.
+            showHomeMenuRoot(container);
+        }
+    }
+
+    /** The sticky home-menu item with this id, or null if it has not been delivered yet. */
+    @Nullable
+    private JiveItem findHomeItem(String id) {
+        for (JiveItem item : homeMenu) {
+            if (id.equals(item.getId())) return item;
+        }
+        return null;
+    }
+
+    /** Shows a browse of {@code parent}/{@code action} as a section root (no pushed level). */
+    private void showBrowseRoot(JiveItem parent, Action action) {
         resetBackStack();
-        Map<String, Object> record = new HashMap<>();
-        record.put("id", node);
-        record.put("name", getString(label));
         getSupportFragmentManager().beginTransaction()
-                .replace(R.id.kiosk_content, HomeMenuFragment.newInstance(new JiveItem(record)))
+                .replace(R.id.kiosk_content, JiveItemListFragment.newInstance(parent, action))
+                .commit();
+    }
+
+    /** Shows a grouped section whose children arrive with the sticky home-menu event. */
+    private void showHomeMenuRoot(JiveItem container) {
+        resetBackStack();
+        getSupportFragmentManager().beginTransaction()
+                .replace(R.id.kiosk_content, HomeMenuFragment.newInstance(container))
                 .commit();
     }
 
@@ -338,5 +386,13 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
     @Override
     protected void onServiceConnected(@NonNull ISqueezeService service) {
         super.onServiceConnected(service);
+        // The home menu is sticky: observing replays the current one at once, so a Radio/Apps tab
+        // tapped before the handshake opens as soon as the menu lands (see openPendingSection).
+        repository().observe(this, this::onHomeMenuEvent);
+    }
+
+    private void onHomeMenuEvent(HomeMenuEvent event) {
+        homeMenu = event.menuItems;
+        openPendingSection();
     }
 }
