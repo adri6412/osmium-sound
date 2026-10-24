@@ -57,6 +57,10 @@ class BtTestCase(unittest.TestCase):
 
         self.addCleanup(patch.object(api_server, '_bt_available', lambda: True).stop)
         patch.object(api_server, '_bt_available', lambda: True).start()
+        # The test box may have no radio at all; the enable path is about the
+        # state file and the supervisor, so stub the hardware probe too.
+        self.addCleanup(patch.object(api_server, '_bt_adapter_present', lambda: True).stop)
+        patch.object(api_server, '_bt_adapter_present', lambda: True).start()
         for target in ('subprocess.run',):
             p = patch.object(api_server.subprocess, 'run', self._fake_run)
             p.start()
@@ -179,6 +183,17 @@ class StateFileTests(BtTestCase):
         self._write_snapshot({'adapter': True, 'speakers': []})
         api_server.set_bt_enabled(True)
         self.assertEqual(self._argv('systemctl', 'enable'), [])
+
+    def test_enabling_refuses_at_once_when_there_is_no_radio(self):
+        """Issue #121: a box with no Bluetooth radio must not write the switch
+        on and wait out the supervisor's power-up loop."""
+        self._write_snapshot({'adapter': False, 'speakers': []})
+        with patch.object(api_server, '_bt_adapter_present', lambda: False):
+            out = api_server.set_bt_enabled(True)
+        self.assertFalse(out['success'])
+        self.assertEqual(out['code'], 'bluetooth.noAdapter')
+        self.assertFalse(os.path.exists(api_server.BT_STATE_FILE) and self._state()['enabled'])
+        self.assertEqual(self._argv('systemctl', 'kill', '-s', 'HUP', 'hifi-bt-out.service'), [])
 
     def test_turning_it_off_keeps_the_speakers(self):
         self._write_state({'enabled': True, 'speakers': [{'mac': MAC, 'name': 'Kitchen'}]})
