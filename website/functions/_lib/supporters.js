@@ -5,7 +5,9 @@
 export const MAX_NAMES = 30;
 const MAX_NAME_LENGTH = 40;
 const MAX_MESSAGE_LENGTH = 300;
-const KINDS = new Set(["Donation", "Subscription"]);
+// Ko-fi renamed one-off donations "Tip" in the webhook payload; "Donation"
+// is the old name, kept so a late retry of an old delivery still counts.
+const KINDS = new Set(["Tip", "Donation", "Subscription"]);
 
 // Ko-fi's "Send test" button posts this made-up supporter with the real
 // token. It proves the webhook works, and must not end up on the home page.
