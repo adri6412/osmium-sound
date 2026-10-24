@@ -147,4 +147,15 @@
     <string name="kiosk_tile_new_music">Novità</string>
     <string name="kiosk_tile_folders">Cartelle</string>
     <string name="kiosk_tile_playlists">Playlist</string>
+
+    <!-- Kiosk-style album page -->
+    <string name="kiosk_album_play">Riproduci</string>
+    <string name="kiosk_album_shuffle">Casuale</string>
+    <string name="kiosk_album_add">Aggiungi alla coda</string>
+    <string name="kiosk_album_play_next">Riproduci dopo</string>
+    <string name="kiosk_album_favorite">Preferito</string>
+    <string name="kiosk_album_tracks_one">%d brano</string>
+    <string name="kiosk_album_tracks_other">%d brani</string>
+    <string name="kiosk_album_disc">Disco %d</string>
+    <string name="kiosk_play_this">Riproduci</string>
 </resources>

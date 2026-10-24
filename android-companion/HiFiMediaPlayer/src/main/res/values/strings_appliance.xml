@@ -150,4 +150,15 @@
     <string name="kiosk_tile_new_music">New Music</string>
     <string name="kiosk_tile_folders">Folders</string>
     <string name="kiosk_tile_playlists">Playlists</string>
+
+    <!-- Kiosk-style album page -->
+    <string name="kiosk_album_play">Play</string>
+    <string name="kiosk_album_shuffle">Shuffle</string>
+    <string name="kiosk_album_add">Add to queue</string>
+    <string name="kiosk_album_play_next">Play next</string>
+    <string name="kiosk_album_favorite">Favourite</string>
+    <string name="kiosk_album_tracks_one">%d track</string>
+    <string name="kiosk_album_tracks_other">%d tracks</string>
+    <string name="kiosk_album_disc">Disc %d</string>
+    <string name="kiosk_play_this">Play</string>
 </resources>

@@ -34,4 +34,7 @@ public interface JiveItemNavigator {
 
     /** Pushes the server-driven home menu level under {@code node} onto the shell's back stack. */
     void pushHomeMenu(JiveItem node);
+
+    /** Pushes the bespoke kiosk-style album page for {@code album} onto the shell's back stack. */
+    void pushAlbum(JiveItem album);
 }

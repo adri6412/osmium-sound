@@ -115,6 +115,37 @@ public class JiveItemView extends ViewParamItemView<JiveItem> {
                 contextMenuRadio.setChecked(item.radio);
             }
         }
+
+        bindPlayButton(item);
+    }
+
+    /**
+     * One-tap play button on the row (Osmium kiosk parity, native-ui-qt LibraryList).
+     * Shown only when the item carries a play action; the tap plays it directly without
+     * opening the context menu. A short press-scale mirrors the kiosk's RowTap feedback.
+     */
+    private void bindPlayButton(JiveItem item) {
+        if (playButton == null) {
+            return;
+        }
+        if (item.playAction != null) {
+            playButton.setVisibility(View.VISIBLE);
+            playButton.setOnClickListener(v -> {
+                pressScale(v);
+                getActivity().action(item, item.playAction);
+            });
+        } else {
+            playButton.setVisibility(View.GONE);
+            playButton.setOnClickListener(null);
+        }
+    }
+
+    /** Brief 0.9 → 1.0 scale bounce, echoing the kiosk's spring press feedback. */
+    private static void pressScale(View v) {
+        v.animate().cancel();
+        v.setScaleX(0.9f);
+        v.setScaleY(0.9f);
+        v.animate().scaleX(1f).scaleY(1f).setDuration(160).start();
     }
 
     /**

@@ -75,6 +75,9 @@ public class ViewParamItemView<T extends Item> extends ItemViewHolder<T> {
     public final TextView text1;
     public final TextView text2;
 
+    /** Optional one-tap play button (Osmium kiosk rows). Null on layouts that lack it. */
+    public final ImageView playButton;
+
     public final View contextMenuButtonHolder;
     public Button contextMenuButton;
     protected CheckBox contextMenuCheckbox;
@@ -88,6 +91,7 @@ public class ViewParamItemView<T extends Item> extends ItemViewHolder<T> {
         text1 = view.findViewById(R.id.text1);
         text2 = view.findViewById(R.id.text2);
         icon = view.findViewById(R.id.icon);
+        playButton = view.findViewById(R.id.play_button);
         contextMenuButtonHolder = view.findViewById(R.id.context_menu);
         if (contextMenuButtonHolder!= null) {
             contextMenuButton = contextMenuButtonHolder.findViewById(R.id.context_menu_button);

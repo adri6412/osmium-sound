@@ -196,6 +196,8 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
         JiveItemListFragment fragment = JiveItemListFragment.newInstance(parent, action);
         String title = (parent != null && parent.getName() != null) ? parent.getName() : "";
         getSupportFragmentManager().beginTransaction()
+                .setCustomAnimations(R.anim.kiosk_page_enter, R.anim.kiosk_page_exit,
+                        R.anim.kiosk_page_enter, R.anim.kiosk_page_exit)
                 .replace(R.id.kiosk_content, fragment)
                 .addToBackStack(title)
                 .commit();
@@ -206,6 +208,20 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
         HomeMenuFragment fragment = HomeMenuFragment.newInstance(node);
         String title = (node != null && node.getName() != null) ? node.getName() : "";
         getSupportFragmentManager().beginTransaction()
+                .setCustomAnimations(R.anim.kiosk_page_enter, R.anim.kiosk_page_exit,
+                        R.anim.kiosk_page_enter, R.anim.kiosk_page_exit)
+                .replace(R.id.kiosk_content, fragment)
+                .addToBackStack(title)
+                .commit();
+    }
+
+    @Override
+    public void pushAlbum(JiveItem album) {
+        AlbumPageFragment fragment = AlbumPageFragment.newInstance(album);
+        String title = (album != null && album.getName() != null) ? album.getName() : "";
+        getSupportFragmentManager().beginTransaction()
+                .setCustomAnimations(R.anim.kiosk_page_enter, R.anim.kiosk_page_exit,
+                        R.anim.kiosk_page_enter, R.anim.kiosk_page_exit)
                 .replace(R.id.kiosk_content, fragment)
                 .addToBackStack(title)
                 .commit();

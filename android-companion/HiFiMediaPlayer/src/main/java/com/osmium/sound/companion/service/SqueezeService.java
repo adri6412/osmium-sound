@@ -1565,6 +1565,11 @@ public class SqueezeService extends Service implements LocalPlayerHost {
         }
 
         @Override
+        public <T> void requestItems(SlimCommand command, IServiceItemListCallback<T> callback) {
+            SqueezeService.this.requestItems(command, callback);
+        }
+
+        @Override
         public void action(JiveItem item, Action action) {
             if (!isConnected()) {
                 return;

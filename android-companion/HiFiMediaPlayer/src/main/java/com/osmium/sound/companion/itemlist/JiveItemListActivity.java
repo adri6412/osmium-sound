@@ -679,9 +679,14 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
             }
         }
         // Inside the kiosk shell, drill down into the single content container instead of stacking
-        // a new activity, so the breadcrumb, tabs and mini player stay put.
+        // a new activity, so the breadcrumb, tabs and mini player stay put. Album rows open the
+        // bespoke kiosk-style album page rather than the generic browse list.
         if (activity instanceof JiveItemNavigator navigator) {
-            navigator.pushBrowse(parent, action);
+            if (parent != null && parent.isAlbumRow()) {
+                navigator.pushAlbum(parent);
+            } else {
+                navigator.pushBrowse(parent, action);
+            }
             return;
         }
         final Intent intent = new Intent(activity, JiveItemListActivity.class);
