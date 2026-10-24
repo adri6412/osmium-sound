@@ -25,14 +25,13 @@
 # are still up at that point).
 set -eu
 
-# Capture wherever playback currently is (playing/paused/stopped, track,
-# position) so the next boot can restore it — see
-# hifi-capture-playback-state.py and api_server.py's
-# _resume_playback_after_boot for the read side. Must run BEFORE squeezelite
-# and LMS are stopped -- the unit's After= ordering puts this ahead of both --
-# while a live status is still there to query. Best-effort: a failure
-# here (LMS unreachable, nothing playing) just means no resume next boot,
-# same as before this existed — never worth delaying a shutdown over.
+# Pause every local player and clear Lyrion's power-on resume for it, so the
+# box comes back with all its players paused instead of blaring (issue #124)
+# — see hifi-capture-playback-state.py. Must run BEFORE squeezelite and LMS
+# are stopped -- the unit's After= ordering puts this ahead of both -- while
+# they are still there to answer. Best-effort: a failure here (LMS
+# unreachable, nothing playing) just leaves a player as it was — never worth
+# delaying a shutdown over.
 python3 /usr/local/sbin/hifi-capture-playback-state.py 2>/dev/null || true
 
 # Whatever feeds the DAC: squeezelite, or CamillaDSP / the player side's PCM
