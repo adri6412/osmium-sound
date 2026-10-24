@@ -423,6 +423,14 @@ Item {
                         }
                     }
                 }
+                Item { width: 1; height: 14 }
+                // Reminder for first installs off a USB stick: a stick left in
+                // boots the installer again (issue #115).
+                Text {
+                    width: parent.width; text: Tr.t("settings.controls.powerHint")
+                    color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 13
+                    wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter
+                }
                 Item { width: 1; height: 12 }
                 Rectangle {
                     width: parent.width; height: 48; radius: 8; color: pwcTap.mix(Theme.accent, Theme.dark)

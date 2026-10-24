@@ -1432,7 +1432,8 @@
       "shutdown": "Spegni Sistema",
       "powerTitle": "Spegnimento",
       "powerReboot": "Riavvia",
-      "powerShutdown": "Spegni"
+      "powerShutdown": "Spegni",
+      "powerHint": "Stai installando da una chiavetta USB? Toglila prima di riavviare, altrimenti riparte l'installazione."
     },
     "factory": {
       "help": "Cancella tutte le impostazioni e riporta il dispositivo allo stato iniziale (reti Wi-Fi, sorgenti musicali, DSP/room correction, Bluetooth, pairing companion e account interfaccia web vengono azzerati). Il dispositivo si riavvia nella configurazione guidata.",
