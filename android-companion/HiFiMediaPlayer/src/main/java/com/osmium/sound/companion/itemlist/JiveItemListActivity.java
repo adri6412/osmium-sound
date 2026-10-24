@@ -117,7 +117,12 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
 
     @Override
     protected ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> createItemListAdapter() {
-        return (isGrouped()) ? new GroupAdapter(this) : new JiveItemAdapter(this);
+        if (isGrouped()) {
+            return new GroupAdapter(this);
+        }
+        JiveItemAdapter adapter = new JiveItemAdapter(this);
+        adapter.setParent(parent);
+        return adapter;
     }
 
     private boolean isPlaylist() {

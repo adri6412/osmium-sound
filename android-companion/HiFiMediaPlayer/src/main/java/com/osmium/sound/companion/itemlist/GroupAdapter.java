@@ -61,6 +61,9 @@ class GroupAdapter extends ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> {
         for (int i = 0; i < items.size(); i++) {
             JiveItem item = items.get(i);
             ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> childAdapter = ("opml".equals(item.getType())) ? new GroupAdapter(getActivity()) : new JiveItemAdapter(getActivity());
+            if (childAdapter instanceof JiveItemAdapter jiveChildAdapter) {
+                jiveChildAdapter.setParent(getActivity().parent);
+            }
             ChildAdapterHolder childAdapterHolder = new ChildAdapterHolder(childAdapter, this, i);
             childAdapterHolders.add(childAdapterHolder);
             item.inputValue = getActivity().parent.inputValue;

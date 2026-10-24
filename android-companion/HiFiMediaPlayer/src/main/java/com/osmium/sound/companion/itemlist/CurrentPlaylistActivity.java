@@ -110,7 +110,7 @@ public class CurrentPlaylistActivity extends JiveItemListActivity implements Pla
             @Override
             public ItemViewHolder<JiveItem> createViewHolder(View view, int viewType) {
                 if (viewType == R.layout.list_item_pending) {
-                    return new JiveItemViewPending(getActivity(), view);
+                    return new JiveItemViewPending(getActivity(), view, true);
                 } else {
                     return new CurrentPlaylistItemView(CurrentPlaylistActivity.this, view);
                 }

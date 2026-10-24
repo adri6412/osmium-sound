@@ -24,6 +24,7 @@ import android.widget.ImageView;
 import androidx.annotation.NonNull;
 
 import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.BaseActivity;
 import com.osmium.sound.companion.framework.ItemViewHolder;
 import com.osmium.sound.companion.homescreenwidgets.TextDrawable;
 import com.osmium.sound.companion.model.JiveItem;
@@ -31,7 +32,7 @@ import com.osmium.sound.companion.model.Slider;
 
 public class SliderView extends ItemViewHolder<JiveItem> {
 
-    SliderView(@NonNull JiveItemListActivity activity, @NonNull View view) {
+    SliderView(@NonNull BaseActivity activity, @NonNull View view) {
         super(activity, view);
     }
 

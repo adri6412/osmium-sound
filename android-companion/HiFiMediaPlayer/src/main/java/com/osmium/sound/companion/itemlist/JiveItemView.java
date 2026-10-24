@@ -30,6 +30,7 @@ import java.util.EnumSet;
 import com.osmium.sound.companion.Preferences;
 import com.osmium.sound.companion.R;
 import com.osmium.sound.companion.HiFiMediaPlayer;
+import com.osmium.sound.companion.framework.BaseActivity;
 import com.osmium.sound.companion.framework.ContextMenu;
 import com.osmium.sound.companion.framework.ItemAdapter;
 import com.osmium.sound.companion.framework.ItemViewHolder;
@@ -49,7 +50,7 @@ public class JiveItemView extends ViewParamItemView<JiveItem> {
     final boolean isShortcutsActive = mPreferences.getCustomizeShortcutsMode() == Preferences.CustomizeShortcutsMode.ENABLED;
     final boolean isArchiveActive = mPreferences.getCustomizeHomeMenuMode() == Preferences.CustomizeHomeMenuMode.ARCHIVE;
 
-    JiveItemView(@NonNull JiveItemListActivity activity, Window.WindowStyle windowStyle, ArtworkListLayout listLayout, @NonNull View view) {
+    JiveItemView(@NonNull BaseActivity activity, Window.WindowStyle windowStyle, ArtworkListLayout listLayout, @NonNull View view) {
         super(activity, view);
         this.windowStyle = windowStyle;
 
@@ -68,16 +69,20 @@ public class JiveItemView extends ViewParamItemView<JiveItem> {
         view.setEllipsize(TextUtils.TruncateAt.END);
     }
 
-    @Override
-    public JiveItemListActivity getActivity() {
-        return (JiveItemListActivity) super.getActivity();
+    /**
+     * The adapter driving this row, which now owns the per-list state (parent, selected index)
+     * that used to live on {@link JiveItemListActivity}. Read from the binding adapter so the row
+     * stays host-agnostic (activity or kiosk-shell fragment).
+     */
+    private JiveItemAdapter adapter() {
+        return (JiveItemAdapter) getBindingAdapter();
     }
 
     @Override
     public void bindView(JiveItem item) {
         super.bindView(item);
         if (item.radio != null && item.radio) {
-            getActivity().setSelectedIndex(getBindingAdapterPosition());
+            adapter().setSelectedIndex(getBindingAdapterPosition());
         }
 
         setItemViewParams((viewParamIcon() | viewParamTwoLine(item) | viewParamContext(item)));
@@ -124,7 +129,7 @@ public class JiveItemView extends ViewParamItemView<JiveItem> {
             getActivity().showDisplayMessage(message);
         } else {
             if (isShortcutsActive) {
-                if (getActivity().requireService().addCustomShortcut(item, getActivity().parent, shortCutWeight)) {
+                if (getActivity().requireService().addCustomShortcut(item, adapter().getParent(), shortCutWeight)) {
                     getActivity().showDisplayMessage(R.string.ITEM_PUT_AS_SHORTCUT_ON_HOME_MENU);
                 } else {
                     getActivity().showDisplayMessage(R.string.ITEM_IS_ALREADY_A_SHORTCUT);
@@ -192,8 +197,9 @@ public class JiveItemView extends ViewParamItemView<JiveItem> {
         }
 
         if (item.radio != null) {
-            ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> itemAdapter = getActivity().getItemAdapter();
-            int prevIndex = getActivity().getSelectedIndex();
+            JiveItemAdapter adapter = adapter();
+            ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> itemAdapter = adapter;
+            int prevIndex = adapter.getSelectedIndex();
             if (prevIndex >= 0 && prevIndex < itemAdapter.getItemCount()) {
                 JiveItem prevItem = itemAdapter.getItem(prevIndex);
                 if (prevItem != null && prevItem.radio != null) {
@@ -203,7 +209,7 @@ public class JiveItemView extends ViewParamItemView<JiveItem> {
             }
 
             item.radio = true;
-            getActivity().setSelectedIndex(getBindingAdapterPosition());
+            adapter.setSelectedIndex(getBindingAdapterPosition());
             itemAdapter.notifyItemChanged(getBindingAdapterPosition());
         }
     }
