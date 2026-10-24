@@ -122,8 +122,16 @@ protected:
                     qInfo("key Qt: 0x%x -> %s%s", k, act.isEmpty() ? "(niente)" : qPrintable(act), typing ? " (si sta scrivendo)" : "");
                 // The on-screen keyboard takes OK and Back as its own keys (space and
                 // enter, backspace) while a real keyboard types into it; the arrows
-                // still move the spotlight over its keys
-                const bool vkOwnsKey = f && f->property("takesTyping").toBool() && (act == "ok" || act == "back");
+                // still move the spotlight over its keys.
+                // 🚨 takesTyping sits on the keyboard root, but spatial navigation
+                // gives the active focus to one of its key buttons -- so look up the
+                // whole ancestor chain, not just the focused item, or backspace/enter/
+                // space get dispatched as back/ok instead (issue #114: backspace closed
+                // the keyboard, enter and space activated the spotlit "1").
+                bool vkHost = false;
+                for (QQuickItem *i = f; i; i = i->parentItem())
+                    if (i->property("takesTyping").toBool()) { vkHost = true; break; }
+                const bool vkOwnsKey = vkHost && (act == "ok" || act == "back");
                 if (!act.isEmpty() && !typing && !vkOwnsKey) { m_remote->dispatch(act, ke->isAutoRepeat(), "qt"); return true; }
             }
             break;
