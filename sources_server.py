@@ -6158,9 +6158,9 @@ def _ownership_ours(path):
 # The top level of the file manager is the allowed roots themselves. Showing
 # them as raw paths ("/mnt/hifi-sources") is the sort of thing this whole
 # redesign is against, so the ones we own get a name in the owner's language.
-# The `kind` is what tells the two look-alikes apart on screen: "Music on this
-# player" is the appliance's OWN storage (a folder on the data partition, a
-# few gigabytes, the one shared over SMB), while "Internal disks" is only the
+# The `kind` is what tells the two look-alikes apart on screen: "System disk"
+# is the appliance's OWN storage (a folder on the data partition, a
+# few gigabytes, the one shared over SMB), while "Second disk" is only the
 # place extra disks get mounted -- so the first is answered with how much room
 # is left and the second with how many disks are actually there. Named
 # side by side with nothing else, they read as the same thing.
@@ -8923,9 +8923,9 @@ SOURCES_I18N = {
         "msg.unsafeFolderName": "This folder's name contains characters that cannot be used here (a line break, a backslash, or a % followed by a letter): rename the folder first.",
         "msg.fileOpFailed": "The operation did not finish: {detail}",
         "msg.jobNotFound": "This operation is no longer available.",
-        "files.rootMusic": "Music on this player",
+        "files.rootMusic": "System disk",
         "files.rootNetwork": "Network folders",
-        "files.rootInternal": "Internal disks",
+        "files.rootInternal": "Second disk",
         "files.rootUsb": "USB drives",
         "files.rootPlaylists": "Playlists",
         "files.rootHome": "Personal folders",
@@ -9104,9 +9104,9 @@ SOURCES_I18N = {
         "msg.unsafeFolderName": "Il nome di questa cartella contiene caratteri che qui non si possono usare (un a capo, una barra rovesciata o un % seguito da una lettera): rinomina prima la cartella.",
         "msg.fileOpFailed": "L'operazione non è stata completata: {detail}",
         "msg.jobNotFound": "Questa operazione non è più disponibile.",
-        "files.rootMusic": "Musica su questo apparecchio",
+        "files.rootMusic": "Disco di sistema",
         "files.rootNetwork": "Cartelle di rete",
-        "files.rootInternal": "Dischi interni",
+        "files.rootInternal": "Secondo disco",
         "files.rootUsb": "Chiavette USB",
         "files.rootPlaylists": "Playlist",
         "files.rootHome": "Cartelle personali",
