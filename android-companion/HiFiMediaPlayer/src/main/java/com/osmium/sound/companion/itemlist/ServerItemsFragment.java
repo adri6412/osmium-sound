@@ -111,10 +111,25 @@ public class ServerItemsFragment extends JiveItemListFragment {
             }
         }
         if (loop == null) return built;
+        // Rows in radioss_loop/appss_loop carry their icon as a server-relative path and, unlike
+        // item_loop rows, are not patched with urlPrefix by CometClient.patchUrlPrefix. Without it
+        // Util.getImageUrl cannot build an absolute URL and the icons come up blank; the top-level
+        // response does carry urlPrefix (CometClient patches `data` before onItemsReceived), so
+        // forward it into each row (and its window) ourselves.
+        Object urlPrefix = parameters.get("urlPrefix");
         for (Object entry : loop) {
             if (!(entry instanceof Map<?, ?> rowMap)) continue;
             @SuppressWarnings("unchecked")
-            JiveItem row = new JiveItem((Map<String, Object>) rowMap);
+            Map<String, Object> record = (Map<String, Object>) rowMap;
+            if (urlPrefix != null) {
+                record.putIfAbsent("urlPrefix", urlPrefix);
+                if (record.get("window") instanceof Map<?, ?> windowMap) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> window = (Map<String, Object>) windowMap;
+                    window.putIfAbsent("urlPrefix", urlPrefix);
+                }
+            }
+            JiveItem row = new JiveItem(record);
             // JiveItem(Map) reads cmd->id and name->text; the plugin command is the item id.
             if (row.getId() == null || row.getId().isEmpty()) continue;
             row.goAction = browseAction(new String[]{row.getId(), "items"});
