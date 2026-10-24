@@ -34,6 +34,7 @@ import com.osmium.sound.companion.HiFiMediaPlayer;
 import com.osmium.sound.companion.framework.ItemAdapter;
 import com.osmium.sound.companion.framework.ItemViewHolder;
 import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
+import com.osmium.sound.companion.kiosk.JiveItemNavigator;
 import com.osmium.sound.companion.model.JiveItem;
 import com.osmium.sound.companion.model.Window;
 import com.osmium.sound.companion.service.ISqueezeService;
@@ -119,6 +120,11 @@ public class HomeMenuActivity extends JiveItemListActivity {
     }
 
     public static void show(Activity activity, JiveItem item) {
+        // Inside the kiosk shell, drill down into the shell's content container.
+        if (activity instanceof JiveItemNavigator navigator) {
+            navigator.pushHomeMenu(item);
+            return;
+        }
         final Intent intent = new Intent(activity, HomeMenuActivity.class);
         intent.putExtra(JiveItem.class.getName(), item);
         activity.startActivity(intent);

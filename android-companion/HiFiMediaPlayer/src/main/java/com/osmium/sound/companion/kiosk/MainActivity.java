@@ -29,16 +29,20 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 
 import com.google.android.material.tabs.TabLayout;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import com.osmium.sound.companion.R;
 import com.osmium.sound.companion.SettingsActivity;
 import com.osmium.sound.companion.framework.BaseActivity;
 import com.osmium.sound.companion.itemlist.CurrentPlaylistActivity;
-import com.osmium.sound.companion.itemlist.HomeActivity;
+import com.osmium.sound.companion.itemlist.HomeMenuFragment;
 import com.osmium.sound.companion.itemlist.JiveItemListFragment;
 import com.osmium.sound.companion.model.Action;
 import com.osmium.sound.companion.model.JiveItem;
@@ -52,8 +56,9 @@ import com.osmium.sound.companion.service.ISqueezeService;
  *
  * <p>The Music tab is the kiosk home grid ({@link HomeTilesFragment}); drilling into a category
  * pushes a {@link JiveItemListFragment} into the same container ({@link #pushBrowse}), with a
- * breadcrumb strip replacing the old per-level toolbars. Radio and Apps still open the server-driven
- * menu ({@link HomeActivity}) for now; Settings opens the existing settings screens.
+ * breadcrumb strip replacing the old per-level toolbars. Radio and Apps show the server-driven home
+ * menu ({@link HomeMenuFragment}) rooted at their home nodes, and drilling into a node pushes another
+ * menu level ({@link #pushHomeMenu}). Settings opens the existing settings screens.
  */
 public class MainActivity extends BaseActivity implements JiveItemNavigator {
 
@@ -62,9 +67,15 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
     private static final int TAB_APPS = 2;
     private static final int TAB_SETTINGS = 3;
 
+    /** Server home-menu nodes behind the Radio and Apps tabs. */
+    private static final String NODE_RADIO = "radios";
+    private static final String NODE_APPS = "apps";
+
     private TabLayout tabs;
     private HorizontalScrollView breadcrumbScroll;
     private LinearLayout breadcrumb;
+    /** The last music-section tab (Music, Radio or Apps) the user chose; Settings never becomes it. */
+    private int activeTab = TAB_MUSIC;
     /** Guards programmatic tab selection so it does not re-trigger a launch. */
     private boolean switchingTab;
 
@@ -110,7 +121,8 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
 
             @Override
             public void onTabReselected(TabLayout.Tab tab) {
-                if (!switchingTab && tab.getPosition() == TAB_MUSIC) showMusic();
+                // Re-tapping the active section returns it to its root; Settings only launches.
+                if (!switchingTab && tab.getPosition() != TAB_SETTINGS) showTabRoot(tab.getPosition());
             }
         });
 
@@ -123,9 +135,9 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
     @Override
     public void onResume() {
         super.onResume();
-        // Coming back from a launched screen (Radio / Apps / Settings): the shell always rests on
-        // the Music home.
-        if (tabs != null && tabs.getSelectedTabPosition() != TAB_MUSIC) {
+        // Coming back from the launched Settings screen: the shell rests on the Music home.
+        if (tabs != null && tabs.getSelectedTabPosition() == TAB_SETTINGS) {
+            activeTab = TAB_MUSIC;
             selectMusicTab();
             showMusic();
         }
@@ -133,21 +145,47 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
 
     private void onTab(int position) {
         switch (position) {
-            case TAB_MUSIC -> showMusic();
-            case TAB_RADIO, TAB_APPS -> HomeActivity.show(this);
+            case TAB_MUSIC, TAB_RADIO, TAB_APPS -> {
+                activeTab = position;
+                showTabRoot(position);
+            }
             case TAB_SETTINGS -> startActivity(new Intent(this, SettingsActivity.class));
+        }
+    }
+
+    /** Shows the root of a music-section tab, dropping any pushed levels. */
+    private void showTabRoot(int tab) {
+        switch (tab) {
+            case TAB_RADIO -> showHomeMenuRoot(NODE_RADIO, R.string.kiosk_tab_radio);
+            case TAB_APPS -> showHomeMenuRoot(NODE_APPS, R.string.kiosk_tab_apps);
+            default -> showMusic();
         }
     }
 
     /** Resets the Music tab to its home grid, dropping any pushed browse levels. */
     private void showMusic() {
+        resetBackStack();
+        getSupportFragmentManager().beginTransaction()
+                .replace(R.id.kiosk_content, new HomeTilesFragment())
+                .commit();
+    }
+
+    /** Shows the Radio or Apps root menu; its children arrive with the sticky home-menu event. */
+    private void showHomeMenuRoot(String node, @StringRes int label) {
+        resetBackStack();
+        Map<String, Object> record = new HashMap<>();
+        record.put("id", node);
+        record.put("name", getString(label));
+        getSupportFragmentManager().beginTransaction()
+                .replace(R.id.kiosk_content, HomeMenuFragment.newInstance(new JiveItem(record)))
+                .commit();
+    }
+
+    private void resetBackStack() {
         FragmentManager fm = getSupportFragmentManager();
         if (fm.getBackStackEntryCount() > 0) {
             fm.popBackStack(fm.getBackStackEntryAt(0).getId(), FragmentManager.POP_BACK_STACK_INCLUSIVE);
         }
-        fm.beginTransaction()
-                .replace(R.id.kiosk_content, new HomeTilesFragment())
-                .commit();
     }
 
     private void selectMusicTab() {
@@ -169,6 +207,16 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
                 .commit();
     }
 
+    @Override
+    public void pushHomeMenu(JiveItem node) {
+        HomeMenuFragment fragment = HomeMenuFragment.newInstance(node);
+        String title = (node != null && node.getName() != null) ? node.getName() : "";
+        getSupportFragmentManager().beginTransaction()
+                .replace(R.id.kiosk_content, fragment)
+                .addToBackStack(title)
+                .commit();
+    }
+
     // --- Breadcrumb ------------------------------------------------------------------------------
 
     private void rebuildBreadcrumb() {
@@ -183,8 +231,13 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
         }
         breadcrumbScroll.setVisibility(View.VISIBLE);
 
-        // The home grid is always the root crumb; tapping it drops every pushed browse level.
-        addCrumb(getString(R.string.kiosk_tab_music), false, v -> showMusic());
+        // The active tab's root is always the first crumb; tapping it drops every pushed level.
+        int rootLabel = switch (activeTab) {
+            case TAB_RADIO -> R.string.kiosk_tab_radio;
+            case TAB_APPS -> R.string.kiosk_tab_apps;
+            default -> R.string.kiosk_tab_music;
+        };
+        addCrumb(getString(rootLabel), false, v -> showTabRoot(activeTab));
         for (int i = 0; i < levels; i++) {
             final FragmentManager.BackStackEntry entry = fm.getBackStackEntryAt(i);
             addSeparator();
@@ -256,7 +309,7 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
                 // Always available via the mini player; nothing to navigate.
             }
             case playlist -> CurrentPlaylistActivity.show(this);
-            case home -> showMusic();
+            case home -> showTabRoot(activeTab);
             case parent, parentNoRefresh, windowId -> fm.popBackStack();
             case grandparent -> {
                 fm.popBackStack();

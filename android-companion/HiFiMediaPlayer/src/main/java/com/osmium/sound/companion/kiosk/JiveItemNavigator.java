@@ -31,4 +31,7 @@ public interface JiveItemNavigator {
 
     /** Pushes a new browse level for {@code parent}/{@code action} onto the shell's back stack. */
     void pushBrowse(JiveItem parent, @Nullable Action action);
+
+    /** Pushes the server-driven home menu level under {@code node} onto the shell's back stack. */
+    void pushHomeMenu(JiveItem node);
 }
