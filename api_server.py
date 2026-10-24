@@ -2073,6 +2073,51 @@ def _sq_update(change):
     _, changed = sq.update(change, SQUEEZELITE_CONF, SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
     return changed
 
+PROC_ASOUND = '/proc/asound'
+
+
+def _alsa_cards(root):
+    """[(index, id)] from /proc/asound/cards — '0 [Audio   ]: ...' -> (0, 'Audio')."""
+    out = []
+    try:
+        with open(os.path.join(root, 'cards'), encoding='utf-8', errors='replace') as f:
+            text = f.read()
+    except OSError:
+        return out
+    for m in re.finditer(r'^\s*(\d+)\s+\[([^\]]+)\]', text, re.M):
+        out.append((int(m.group(1)), m.group(2).strip()))
+    return out
+
+
+def _alsa_pcm_name(root, idx, dev):
+    """The 'name:' line of /proc/asound/card<idx>/pcm<dev>p/info, or ''."""
+    try:
+        with open(os.path.join(root, f'card{idx}', f'pcm{dev}p', 'info'),
+                  encoding='utf-8', errors='replace') as f:
+            for line in f:
+                if line.startswith('name:'):
+                    return line.split(':', 1)[1].strip()
+    except OSError:
+        pass
+    return ''
+
+
+def _alsa_playback_devices(root):
+    """[(card_index, card_id, dev_index, name)] for every ALSA *playback* device,
+    read straight from /proc/asound so it does not depend on how `aplay -l`
+    formats its lines. The Loopback card is left out."""
+    out = []
+    for idx, cid in _alsa_cards(root):
+        if cid == 'Loopback':
+            continue
+        for p in sorted(glob.glob(os.path.join(root, f'card{idx}', 'pcm*p'))):
+            m = re.search(r'pcm(\d+)p$', p)
+            if m:
+                dev = int(m.group(1))
+                out.append((idx, cid, dev, _alsa_pcm_name(root, idx, dev)))
+    return out
+
+
 def list_audio_devices():
     """List ALSA playback devices (cards) usable as squeezelite output.
 
@@ -2109,6 +2154,26 @@ def list_audio_devices():
                     'dsd': 'native' if sq.is_native(dsd_fmt) else 'dop',
                     'dsd_format': dsd_fmt,
                 })
+        # aplay -l's device line varies by driver: some onboard codecs (Intel
+        # Cherry Trail cht-bsw-rt5645) print an empty [] description the regex
+        # above skips, so a card with real playback devices would vanish from
+        # the list. Backfill from /proc/asound so every usable output stays
+        # selectable, keeping the readable names aplay -l already gave.
+        have = {d['id'] for d in devices}
+        for idx, cid, dev, pname in _alsa_playback_devices(PROC_ASOUND):
+            dev_id = f'hw:CARD={cid},DEV={dev}'
+            if dev_id in have:
+                continue
+            dsd_fmt = sq.probe(dev_id)
+            devices.append({
+                'id': dev_id,
+                'name': pname or cid,
+                'card': idx,
+                'device': dev,
+                'dsd': 'native' if sq.is_native(dsd_fmt) else 'dop',
+                'dsd_format': dsd_fmt,
+            })
+        devices.sort(key=lambda d: (d['id'] != 'default', d.get('card') or 0, d.get('device') or 0))
     except Exception:
         log.exception("list_audio_devices failed")
         return {'devices': devices, 'current': _current_real_dac(),
@@ -3501,6 +3566,24 @@ def _support_audio_snapshot():
                 out += [f'== {path} ==', f.read().rstrip(), '']
         except OSError:
             continue
+    # The device list (Settings → Audio) is built from `aplay -l`; its exact
+    # output and the mixer state (is the onboard codec muted? which card is the
+    # real DAC vs HDMI?) are what a "no sound" report needs and the bundle used
+    # to miss -- an Intel Cherry Trail tablet reached us silent and neither was
+    # in the zip.
+    try:
+        r = subprocess.run(['aplay', '-l'], capture_output=True, text=True, timeout=10)
+        out += ['== aplay -l ==', (r.stdout or r.stderr or '').rstrip(), '']
+    except Exception as e:
+        out += [f'(aplay -l failed: {e})', '']
+    for _idx, cid in _alsa_cards(PROC_ASOUND):
+        if cid == 'Loopback':
+            continue
+        try:
+            r = subprocess.run(['amixer', '-c', cid, 'scontents'], capture_output=True, text=True, timeout=10)
+            out += [f'== amixer -c {cid} scontents ==', (r.stdout or r.stderr or '').rstrip(), '']
+        except Exception as e:
+            out += [f'(amixer -c {cid} failed: {e})', '']
     return '\n'.join(out) + '\n'
 
 
