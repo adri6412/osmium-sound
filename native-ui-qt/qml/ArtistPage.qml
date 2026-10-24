@@ -149,10 +149,17 @@ Item {
 
     function play(mode) {
         if (person) return
-        Player.cmd(["playlistcontrol", "cmd:" + mode, "artist_id:" + artistId])
-        // give the silent queue buttons a word back, like the album page (#120)
-        if (browser && mode === "add") browser.say("list-plus", "player.addedToQueue")
-        else if (browser && mode === "insert") browser.say("list-start", "player.playingNext")
+        var c = ["playlistcontrol", "cmd:" + mode, "artist_id:" + artistId]
+        if (mode !== "add" && mode !== "insert") { Player.cmd(c); return }
+        // same as the album page: the queue answer is what the toast reports (#120)
+        Player.query(c, function(ok) {
+            if (!root) return          // the page was closed meanwhile
+            Player.refresh()
+            if (!browser) return
+            if (!ok) browser.say("alert-triangle", "player.queueFailed")
+            else if (mode === "add") browser.say("list-plus", "player.addedToQueue")
+            else browser.say("list-start", "player.playingNext")
+        })
     }
     function openPerson(p) {
         var id = String(p.artist_id || p.id || "")

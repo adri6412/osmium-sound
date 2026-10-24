@@ -400,6 +400,7 @@
     "playNext": "Riproduci dopo",
     "addedToQueue": "Aggiunto alla coda",
     "playingNext": "In riproduzione dopo",
+    "queueFailed": "Impossibile cambiare la coda",
     "saveAsPlaylist": "Salva come playlist",
     "clearQueue": "Svuota",
     "playlistNamePlaceholder": "Nome playlist",

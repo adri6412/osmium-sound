@@ -136,11 +136,18 @@ Item {
     function play(mode, index) {
         var c = ["playlistcontrol", "cmd:" + mode, "album_id:" + albumId]
         if (index !== undefined && index >= 0) c.push("play_index:" + index)
-        Player.cmd(c)
-        // "add" and "insert" change the queue out of sight -- without a word
-        // back they look dead (issue #120). Load/play already moves the player.
-        if (browser && mode === "add") browser.say("list-plus", "player.addedToQueue")
-        else if (browser && mode === "insert") browser.say("list-start", "player.playingNext")
+        if (mode !== "add" && mode !== "insert") { Player.cmd(c); return }
+        // "add" and "insert" change the queue out of sight (issue #120): ask
+        // Lyrion for the answer, so the toast says what really happened and a
+        // refused command is said too, not left looking like a dead button.
+        Player.query(c, function(ok) {
+            if (!root) return          // the page was closed meanwhile
+            Player.refresh()
+            if (!browser) return
+            if (!ok) browser.say("alert-triangle", "player.queueFailed")
+            else if (mode === "add") browser.say("list-plus", "player.addedToQueue")
+            else browser.say("list-start", "player.playingNext")
+        })
     }
     function shuffle() { if (browser) browser.loadShuffled("album_id", albumId) }
     function trackMenu(i, x, y) {

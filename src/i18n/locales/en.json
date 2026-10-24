@@ -400,6 +400,7 @@
     "playNext": "Play next",
     "addedToQueue": "Added to the queue",
     "playingNext": "Playing next",
+    "queueFailed": "Could not change the queue",
     "saveAsPlaylist": "Save as playlist",
     "clearQueue": "Clear",
     "playlistNamePlaceholder": "Playlist name",
