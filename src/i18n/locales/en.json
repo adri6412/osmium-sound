@@ -398,6 +398,8 @@
     "backToOwn": "Back to this device",
     "addToQueue": "Add to queue",
     "playNext": "Play next",
+    "addedToQueue": "Added to the queue",
+    "playingNext": "Playing next",
     "saveAsPlaylist": "Save as playlist",
     "clearQueue": "Clear",
     "playlistNamePlaceholder": "Playlist name",

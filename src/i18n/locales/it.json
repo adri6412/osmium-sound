@@ -398,6 +398,8 @@
     "backToOwn": "Torna a questo apparecchio",
     "addToQueue": "Aggiungi a coda",
     "playNext": "Riproduci dopo",
+    "addedToQueue": "Aggiunto alla coda",
+    "playingNext": "In riproduzione dopo",
     "saveAsPlaylist": "Salva come playlist",
     "clearQueue": "Svuota",
     "playlistNamePlaceholder": "Nome playlist",

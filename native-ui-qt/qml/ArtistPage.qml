@@ -147,7 +147,13 @@ Item {
         })
     }
 
-    function play(mode) { if (!person) Player.cmd(["playlistcontrol", "cmd:" + mode, "artist_id:" + artistId]) }
+    function play(mode) {
+        if (person) return
+        Player.cmd(["playlistcontrol", "cmd:" + mode, "artist_id:" + artistId])
+        // give the silent queue buttons a word back, like the album page (#120)
+        if (browser && mode === "add") browser.say("list-plus", "player.addedToQueue")
+        else if (browser && mode === "insert") browser.say("list-start", "player.playingNext")
+    }
     function openPerson(p) {
         var id = String(p.artist_id || p.id || "")
         if (id && browser) browser.openArtist(id, String(p.name || ""))

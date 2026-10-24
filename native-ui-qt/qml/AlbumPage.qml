@@ -137,6 +137,10 @@ Item {
         var c = ["playlistcontrol", "cmd:" + mode, "album_id:" + albumId]
         if (index !== undefined && index >= 0) c.push("play_index:" + index)
         Player.cmd(c)
+        // "add" and "insert" change the queue out of sight -- without a word
+        // back they look dead (issue #120). Load/play already moves the player.
+        if (browser && mode === "add") browser.say("list-plus", "player.addedToQueue")
+        else if (browser && mode === "insert") browser.say("list-start", "player.playingNext")
     }
     function shuffle() { if (browser) browser.loadShuffled("album_id", albumId) }
     function trackMenu(i, x, y) {
