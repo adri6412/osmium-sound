@@ -658,8 +658,13 @@ Item {
         // in view, so a long chain of pages never runs under "Back"
         Item {
             id: crumbClip
-            x: 43; height: parent.height; clip: true
-            width: Math.max(0, (viewPick.visible ? viewPick.x : backBtn.visible ? backBtn.x : parent.width) - 8 - 43)
+            // anchor the right edge straight to whichever button sits on the
+            // right, so the trail is always clipped before it instead of
+            // running over "Back" (issue #113); x-arithmetic got this wrong.
+            anchors.left: parent.left; anchors.leftMargin: 43
+            anchors.right: viewPick.visible ? viewPick.left : backBtn.visible ? backBtn.left : parent.right
+            anchors.rightMargin: 8
+            height: parent.height; clip: true
             visible: root.nav.length > 1
         Row {
             id: crumbRow
@@ -687,7 +692,8 @@ Item {
         Rectangle {                                     // "Indietro"
             id: backBtn
             visible: root.nav.length > 1
-            x: parent.width - 12 - width; y: 21.5 - 11; width: backText.implicitWidth + 24; height: 22; radius: 8
+            anchors.right: parent.right; anchors.rightMargin: 12
+            y: 21.5 - 11; width: backText.implicitWidth + 24; height: 22; radius: 8
             color: backTap.mix(Theme.wa(0.05), Theme.wa(0.1))
             Text { id: backText; anchors.centerIn: parent; text: Tr.t("common.back"); color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
             Tap { id: backTap; onClicked: root.navBack() }
@@ -702,7 +708,9 @@ Item {
                                           { id: "coverflow", icon: "gallery-horizontal", label: "player.view.coverflow" },
                                           { id: "changer", icon: "disc-3", label: "player.view.changer" }]
             readonly property var cur: views[Math.max(0, ["grid", "coverflow", "changer"].indexOf(view))]
-            x: (backBtn.visible ? backBtn.x : parent.width - 12) - 8 - width; y: 21.5 - 11
+            anchors.right: backBtn.visible ? backBtn.left : parent.right
+            anchors.rightMargin: backBtn.visible ? 8 : 12
+            y: 21.5 - 11
             width: 8 + 13 + 6 + viewText.implicitWidth + 6 + 12 + 8; height: 22; radius: 8
             color: viewTap.mix(view !== "grid" ? Theme.goldA(0.15) : Theme.wa(0.05), Theme.wa(0.12))
             Icon { x: 8; anchors.verticalCenter: parent.verticalCenter; name: viewPick.cur.icon; size: 13; color: viewPick.view !== "grid" ? Theme.gold : Theme.silverA(0.7) }
