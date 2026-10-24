@@ -247,7 +247,7 @@ Item {
         property bool vuMeter: true; property int autoexpand: 0; property bool playerEnabled: true
         // Bluetooth speakers (api_server /bt_speakers). btSpeakers are the ones
         // set up as players, btFound whatever else the last search saw.
-        property bool btAvailable: false; property bool btEnabled: false; property bool btAdapter: false
+        property bool btAvailable: false; property bool btEnabled: false; property bool btAdapter: false; property bool btAdapterPresent: false
         property var btSpeakers: []
         property var btFound: []
         property var vuStyles: []                                   // [{id, name:{en,it}}]; the choice is Player.vuStyle
@@ -325,7 +325,7 @@ Item {
         function loadBt() {
             Api.get(api("/bt_speakers"), function(ok, d) {
                 if (ok && d && typeof d === "object") {
-                    btAvailable = !!d.available; btEnabled = !!d.enabled; btAdapter = !!d.adapter
+                    btAvailable = !!d.available; btEnabled = !!d.enabled; btAdapter = !!d.adapter; btAdapterPresent = !!d.adapterPresent
                     btSpeakers = d.speakers || []; btFound = d.found || []
                 }
                 root.btBusy = false; root.btScanning = false; root.rebuild()
@@ -1796,10 +1796,12 @@ Item {
         help("settings.btSpeakers.help")
         if (!cfg.btAvailable) { note(Tr.t("settings.btSpeakers.unavailable"), "dark", "info"); return }
         var sw = toggle(Tr.t("settings.btSpeakers.enable"), Tr.t("settings.btSpeakers.enableHint"), cfg.btEnabled, "bt_enable")
-        sw.dim = btBusy
+        // No radio in the box: grey the switch out and say so, whether or not
+        // Bluetooth is on, instead of letting it be turned on for nothing (#121).
+        sw.dim = btBusy || !cfg.btAdapterPresent
+        if (!cfg.btAdapterPresent) { note(Tr.t("settings.btSpeakers.noAdapter"), "red", "alert-triangle"); return }
         if (!cfg.btEnabled) return
         if (btBusy && !cfg.btSpeakers.length && !cfg.btFound.length) { helpText(Tr.t("common.loading"), 13); return }
-        if (!cfg.btAdapter) { note(Tr.t("settings.btSpeakers.noAdapter"), "red", "alert-triangle"); return }
 
         label("settings.btSpeakers.yours")
         if (!cfg.btSpeakers.length) helpText(Tr.t("settings.btSpeakers.none"), 13)
@@ -2338,7 +2340,7 @@ Item {
         btBusy = false; btScanning = false
         if (ok && d && typeof d === "object") {
             if (d.available !== undefined) {
-                cfg.btAvailable = !!d.available; cfg.btEnabled = !!d.enabled; cfg.btAdapter = !!d.adapter
+                cfg.btAvailable = !!d.available; cfg.btEnabled = !!d.enabled; cfg.btAdapter = !!d.adapter; cfg.btAdapterPresent = !!d.adapterPresent
                 cfg.btSpeakers = d.speakers || []; cfg.btFound = d.found || []
             }
             if (d.message) { say(String(d.message), d.success === false); return }

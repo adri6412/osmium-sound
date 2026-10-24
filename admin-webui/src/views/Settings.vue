@@ -576,12 +576,12 @@ async function saveShellAccount() {
 // the reconnecting), so everything here is: send a command, take the state
 // that comes back.
 const bt = reactive({
-  available: false, enabled: false, adapter: false, speakers: [], found: [],
+  available: false, enabled: false, adapter: false, adapterPresent: false, speakers: [], found: [],
   busy: false, scanning: false, open: '', name: '',
 });
 let btPoll = null;
 function applyBt(d) {
-  bt.available = !!d.available; bt.enabled = !!d.enabled; bt.adapter = !!d.adapter;
+  bt.available = !!d.available; bt.enabled = !!d.enabled; bt.adapter = !!d.adapter; bt.adapterPresent = !!d.adapterPresent;
   bt.speakers = d.speakers || []; bt.found = d.found || [];
 }
 async function loadBt() {
@@ -2166,12 +2166,13 @@ onUnmounted(() => {
           <span>{{ t('settings.btSpeakers.enable') }}
             <span class="muted">{{ t('settings.btSpeakers.enableHint') }}</span>
           </span>
-          <Toggle :model-value="bt.enabled" :disabled="bt.busy" @update:model-value="setBt" />
+          <Toggle :model-value="bt.enabled" :disabled="bt.busy || !bt.adapterPresent" @update:model-value="setBt" />
         </div>
 
-        <template v-if="bt.enabled">
-          <p class="sub" v-if="!bt.adapter">{{ t('settings.btSpeakers.noAdapter') }}</p>
-          <template v-else>
+        <!-- No radio in the box: say so and leave the switch greyed, on or off (#121) -->
+        <p class="sub" v-if="!bt.adapterPresent">{{ t('settings.btSpeakers.noAdapter') }}</p>
+        <template v-else-if="bt.enabled">
+          <template>
             <label>{{ t('settings.btSpeakers.yours') }}</label>
             <p class="sub" v-if="!bt.speakers.length">{{ t('settings.btSpeakers.none') }}</p>
             <template v-for="sp in bt.speakers" :key="sp.mac">

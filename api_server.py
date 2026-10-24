@@ -7164,6 +7164,18 @@ def _bt_available():
             and bool(glob.glob(BT_ALSA_PLUGIN_GLOB)))
 
 
+def _bt_adapter_present():
+    """True when a Bluetooth radio exists at all -- powered or not, Bluetooth
+    on or off. The kernel lists an hciN under /sys/class/bluetooth for every
+    adapter it knows, so this answers before anyone turns Bluetooth on, which
+    `adapter` (the powered state, known only while enabled) cannot. The screens
+    use it to grey the switch out on a box that simply has no Bluetooth."""
+    try:
+        return bool(glob.glob('/sys/class/bluetooth/hci*'))
+    except Exception:
+        return False
+
+
 def _bt_read_doc():
     """The whole state document. Kept in the file the sink design already
     used, so backup/restore ("bluetooth" category, which also carries
@@ -7344,10 +7356,12 @@ def get_bt_speakers():
 
         return {'available': _bt_available(), 'enabled': enabled,
                 'adapter': bool(snap.get('adapter')) if enabled else False,
+                'adapterPresent': _bt_adapter_present(),
                 'speakers': speakers, 'found': found}
     except Exception:
         log.exception("get_bt_speakers failed")
         return {'available': False, 'enabled': False, 'adapter': False,
+                'adapterPresent': _bt_adapter_present(),
                 'speakers': [], 'found': [],
                 'error': _t('bluetooth.statusUnavailable', _lang())}
 
@@ -7370,6 +7384,11 @@ def set_bt_enabled(enable):
     can't interleave with itself."""
     if enable and not _bt_available():
         return _bt_fail('bluetooth.unavailableUpdate', **get_bt_speakers())
+    if enable and not _bt_adapter_present():
+        # No radio in the box: refuse at once instead of writing the switch on
+        # and waiting out the 15 s below for an adapter that never appears --
+        # that wait was the "delay before the button turns yellow" (issue #121).
+        return _bt_fail('bluetooth.noAdapter', **get_bt_speakers())
     with _bt_apply_lock:
         doc = _bt_read_doc()
         doc['enabled'] = bool(enable)
