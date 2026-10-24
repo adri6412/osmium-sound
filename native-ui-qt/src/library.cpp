@@ -283,6 +283,12 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
             break;
         case Folders:
             o.id = str(it, "id"); o.text = str(it, "filename"); if (o.text.isEmpty()) o.text = str(it, "title");
+            // Lyrion's musicfolder does a Perl `$name || $fullpath` fallback, and
+            // Perl counts the string "0" as false -- so a folder named exactly
+            // "0" comes back as its full path, while every other name is fine. A
+            // folder's display name never holds a slash, so one means a path
+            // leaked in: keep only the last component.
+            if (o.text.contains('/')) { QString b = o.text.section('/', -1, -1, QString::SectionSkipEmpty); if (!b.isEmpty()) o.text = b; }
             o.isDir = str(it, "type") == "folder";
             break;
         case Playlists: o.id = str(it, "id"); o.text = str(it, "playlist"); o.url = str(it, "url"); o.favUrl = str(it, "favorites_url"); if (o.favUrl.isEmpty()) o.favUrl = o.url; break;
