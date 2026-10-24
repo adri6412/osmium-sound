@@ -6723,6 +6723,117 @@ def _lms_resume(playerid, resume_at=0.0):
     except Exception:
         log.exception('_lms_resume failed')
 
+# ──────────────────────────────────────────────────────────────────
+#  Resume playback across a reboot. hifi-quiesce-audio-shutdown.sh runs
+#  hifi-capture-playback-state.py before every shutdown/reboot (while LMS/
+#  squeezelite are still up) and writes PLAYBACK_STATE_FILE; this reads it
+#  back once at this process's own next startup. Not relying on LMS's native
+#  playingAtPowerOff/positionAtDisconnect prefs for the same reason
+#  _local_playing_player() above doesn't trust bare position-across-
+#  disconnect: found unreliable in practice, plus those prefs are only
+#  flushed to disk on a 10s debounced autosave that a fast power-off can miss
+#  entirely — this file is written synchronously, right before shutdown.
+# ──────────────────────────────────────────────────────────────────
+PLAYBACK_STATE_FILE = '/var/lib/hifi-player/playback-state.json'
+
+def _resume_playback_after_boot():
+    """Was playing -> jump to that track/position and resume playing. Was
+    paused -> load the same track at that position but leave it paused (the
+    kiosk shows the right "now playing" info without audio starting on its
+    own). Was stopped, or no state file (fresh install, or a normal restart
+    that never captured one) -> do nothing. Runs in a background thread from
+    __main__ so it never delays this API's own readiness; the kiosk UI works
+    normally regardless of how long squeezelite takes to reconnect.
+
+    LMS has its OWN native power-on-resume (playingAtPowerOff/
+    positionAtDisconnect, applied the moment squeezelite's slimproto socket
+    reconnects — before this function ever gets to run) — that's exactly the
+    unreliable mechanism this whole feature avoids relying on (see the module
+    comment above), and hifi-capture-playback-state.py already asks LMS to
+    clear it at capture time. But that clear is itself just a best-effort pref
+    write (same debounced-autosave risk), so it can't be trusted to have
+    stuck: if it didn't, native resume fires on reconnect with whatever STALE
+    track/position it last managed to persist (symptom seen in practice:
+    some unrelated older track starts playing). An explicit `stop` here,
+    before applying our own captured state, guarantees a clean slate either
+    way regardless of what native resume already did."""
+    log.info('resume-after-boot: state file %s', 'found' if os.path.exists(PLAYBACK_STATE_FILE) else 'absent')
+    try:
+        with open(PLAYBACK_STATE_FILE) as f:
+            state = json.load(f)
+    except Exception:
+        return
+    # Consume once: a later ordinary process restart (crash, manual restart)
+    # must not re-apply a now-stale capture.
+    try:
+        os.remove(PLAYBACK_STATE_FILE)
+    except OSError:
+        pass
+    mode = state.get('mode')
+    if mode not in ('play', 'pause'):
+        log.info('resume-after-boot: captured mode=%r, nothing to restore', mode)
+        return
+    try:
+        index = int(state.get('playlist_cur_index') or 0)
+        elapsed = float(state.get('time') or 0.0)
+    except (TypeError, ValueError):
+        return
+    # The player the capture was taken from (hifi-capture-playback-state.py
+    # records it): the queue and position belong to that one. Without it,
+    # this box's own squeezelite, found by its MAC (_own_player_ids).
+    saved = str(state.get('playerid') or '').strip()
+    playerid = None
+    try:
+        for _ in range(90):  # up to ~90s: LMS's own startup/library scan can
+                              # take a while, well past squeezelite's own
+                              # 5s systemd RestartSec reconnect attempts.
+            try:
+                result = _lms_request('-', ['serverstatus', 0, 999]) or {}
+                players = result.get('players_loop', [])
+                if saved:
+                    candidates = [p.get('playerid') for p in players
+                                  if str(p.get('playerid') or '').lower() == saved.lower()]
+                else:
+                    candidates = _own_player_ids(players)
+                for candidate in candidates[:1]:
+                    # A candidate can appear in players_loop just from
+                    # LMS's own bookkeeping before slimproto has actually
+                    # re-registered it — confirm it's really connected
+                    # (same check _lms_resume makes) before trusting it.
+                    st = _lms_request(candidate, ['status', '-', 1]) or {}
+                    if st.get('player_connected'):
+                        playerid = candidate
+            except Exception:
+                pass
+            if playerid:
+                break
+            time.sleep(1.0)
+        if not playerid:
+            log.warning('resume-after-boot: local player never reconnected, giving up')
+            return
+        log.info('resume-after-boot: restoring mode=%s index=%s time=%.1f on %s', mode, index, elapsed, playerid)
+        # Clean slate first: whatever LMS's own native power-on-resume already
+        # did on reconnect (see docstring) gets wiped out here, so what
+        # follows is the only thing that decides the end state.
+        _lms_request(playerid, ['stop'])
+        time.sleep(0.3)
+        # `playlist index` both jumps to and starts that queue position —
+        # there's no "load without playing" command — so a captured 'pause'
+        # still starts it here and gets paused right back below, just long
+        # enough to land on the right track/position first.
+        _lms_request(playerid, ['playlist', 'index', index])
+        if elapsed > 1.0:
+            time.sleep(0.5)
+            try:
+                _lms_request(playerid, ['time', round(elapsed, 1)])
+            except Exception:
+                pass
+        if mode == 'pause':
+            _lms_request(playerid, ['pause', '1'])
+        log.info('resume-after-boot: done')
+    except Exception:
+        log.exception('_resume_playback_after_boot failed')
+
 def _camilla_config_valid(cfg):
     """Write cfg to a scratch file and ask CamillaDSP itself to validate it,
     so a bad EQ/balance/FIR combination can never leave squeezelite pointed
@@ -11010,6 +11121,7 @@ if __name__ == '__main__':
     # threaded=True so a slow handler (apt/systemctl/network reconfig, or a
     # 15s OTA fetch) doesn't block the kiosk UI's other requests behind it.
     _startup_network_recovery()
+    threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
     threading.Thread(target=_reconcile_rotation_boot, daemon=True, name='rotation-boot').start()
     threading.Thread(target=_vu_store_background, daemon=True, name='vu-store').start()
     threading.Thread(target=_anim_store_background, daemon=True, name='anim-store').start()
