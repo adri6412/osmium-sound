@@ -516,4 +516,22 @@ Serve altro aiuto? Scrivi a support@osmiumsound.it]]></string>
     <string name="settings_remote_address_unset">Non impostato</string>
     <string name="settings_playback_open_title">Riproduzione</string>
     <string name="settings_playback_open_summary">Dissolvenza incrociata, guadagno di riproduzione e il resto, sul lettore in uso</string>
+
+    <!-- Impostazioni a riquadri: gruppi e sezioni delle Impostazioni del kiosk (stessi nomi). -->
+    <string name="settings_group_music">Musica e libreria</string>
+    <string name="settings_group_sound">Audio e uscite</string>
+    <string name="settings_group_look">Aspetto e schermo</string>
+    <string name="settings_group_control">Controllo e telecomandi</string>
+    <string name="settings_group_network">Rete e accesso</string>
+    <string name="settings_group_system">Sistema e aggiornamenti</string>
+    <string name="settings_tile_library">Libreria</string>
+    <string name="settings_tile_audio_output">Uscita audio (DAC)</string>
+    <string name="settings_tile_language_screen">Lingua e schermo</string>
+    <string name="settings_tile_display_mode">Modalità schermo</string>
+    <string name="settings_tile_interface">Interfaccia e scorciatoie</string>
+    <string name="settings_tile_network">Configurazione rete</string>
+    <string name="settings_tile_ssh">Accesso SSH</string>
+    <string name="settings_tile_system_controls">Controlli sistema</string>
+    <!-- Lista vuota dal server (nessuna app, nessun risultato di ricerca). -->
+    <string name="item_list_empty">Niente da mostrare.</string>
 </resources>

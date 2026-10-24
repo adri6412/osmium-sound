@@ -60,9 +60,21 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
 
     private final String TAG = "SettingsFragment";
 
-    private static final String KEY_OSMIUM_SOUND = "squeezer.osmium_sound";
-    private static final String KEY_APPLIANCE_CATEGORY = "squeezer.category.appliance";
     private static final String KEY_LYRION_SKIN = "squeezer.lyrion_skin.open";
+
+    // The Settings leaves, one per tile that opens a list of preferences. Each
+    // is a PreferenceScreen in res/xml/preferences.xml, opened by its key.
+    static final String SCREEN_LIBRARY = "squeezer.leaf.library";
+    static final String SCREEN_PLAYBACK = "squeezer.leaf.playback";
+    static final String SCREEN_DOWNLOAD = "squeezer.leaf.download";
+    static final String SCREEN_DISPLAY = "squeezer.leaf.display";
+    static final String SCREEN_NOW_PLAYING = "squeezer.leaf.nowplaying";
+    static final String SCREEN_INTERFACE = "squeezer.leaf.interface";
+    static final String SCREEN_LOCAL_PLAYER = "squeezer.leaf.localplayer";
+    static final String SCREEN_THIRD_PARTY = "squeezer.leaf.thirdparty";
+    static final String SCREEN_LYRPLAY = "squeezer.leaf.lyrplay";
+    static final String SCREEN_CONNECTION = "squeezer.leaf.connection";
+    static final String SCREEN_TIMEZONE = "squeezer.leaf.timezone";
 
     // Progress polling for the web-player skin change (see
     // fillLyrionSkinPreferences): 1.5s like the kiosk/webui, bounded so a
@@ -78,6 +90,7 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     private ISqueezeService service = null;
 
     private IntEditTextPreference fadeInPref;
+    private SharedPreferences listenedPreferences;
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
@@ -100,79 +113,49 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         getPreferenceManager().setSharedPreferencesName(Preferences.NAME);
         setPreferencesFromResource(R.xml.preferences, rootKey);
 
-        // Inside a submenu the bar must say which submenu it is. The activity
-        // sets it when navigating, but not when the fragment is rebuilt — after
-        // a rotation, or when the system restores the screen — and a page
-        // headed "Settings" is exactly the confusion this reorganisation is
-        // meant to remove.
-        if (rootKey != null && getPreferenceScreen() != null
-                && getPreferenceScreen().getTitle() != null) {
+        // The bar names the section; the activity also sets it when navigating,
+        // but not when the fragment is rebuilt (rotation, state restore).
+        if (getPreferenceScreen() != null && getPreferenceScreen().getTitle() != null) {
             requireActivity().setTitle(getPreferenceScreen().getTitle());
-        }
-
-        // The "Osmium Sound" screen is a nested PreferenceScreen: when opened,
-        // rootKey scopes findPreference() to just its own children, so only
-        // wire up the preferences that actually live under it.
-        if (KEY_OSMIUM_SOUND.equals(rootKey)) {
-            fillBackupPreferences();
-            fillAudioOutputPreferences();
-            fillUpdatesPreferences();
-            fillSystemAdminPreferences();
-            fillMultiroomPreferences();
-            fillApplianceScreenPreferences();
-            fillTimezonePreferences();
-            fillLyrPlayPreferences();
-            // The Lyrion entries moved in here: they act on the device's own
-            // server, so this is where someone looks for them.
-            fillLyrionRescanPreferences();
-            fillLyrionSkinPreferences();
-            return;
         }
 
         SharedPreferences sharedPreferences = getPreferenceManager().getSharedPreferences();
         sharedPreferences.registerOnSharedPreferenceChangeListener(this);
+        listenedPreferences = sharedPreferences;
         Preferences preferences = new Preferences(getActivity(), sharedPreferences);
-
-        fadeInPref = requirePreference(Preferences.KEY_FADE_IN_SECS);
-        fadeInPref.setOnPreferenceChangeListener(this);
-        updateFadeInSecondsSummary(preferences.getFadeInSecs());
-
-        fillIncomingCallPreferences(preferences);
-
-        fillDisplayPreferences(preferences);
-
-        fillNowPlayingPreferences(preferences);
-
-        fillUserInterfacePreferences(preferences);
-
-        fillScrobblePreferences(sharedPreferences);
-        fillLocalPlayerPreferences(preferences);
-        fillDevicePlayerPreferences(preferences);
-
-        fillDownloadPreferences(preferences);
-
-        fillPlaybackPreferences();
-        fillConnectionPreferences(preferences);
-
-        applyServerKind(preferences);
+        fillSection(rootKey, preferences, sharedPreferences);
     }
 
-    /**
-     * The appliance settings only mean anything against an Osmium Sound device:
-     * on a plain Lyrion server there is no appliance API behind them, so they
-     * are hidden rather than left to fail when tapped. Which server this is was
-     * decided in the connection wizard.
-     */
-    private void applyServerKind(Preferences preferences) {
-        boolean osmium = preferences.isOsmiumAppliance();
-        // Hide the heading too: a lone empty section headed "Your Osmium Sound
-        // device" on a plain Lyrion server is worse than no section at all.
-        Preference applianceCategory = requirePreference(KEY_APPLIANCE_CATEGORY);
-        if (applianceCategory != null) applianceCategory.setVisible(osmium);
-        Preference osmiumScreen = requirePreference(KEY_OSMIUM_SOUND);
-        if (osmiumScreen != null) osmiumScreen.setVisible(osmium);
+    /** Wires up the preferences of one Settings leaf; the screen is picked by its key. */
+    private void fillSection(String screenKey, Preferences preferences, SharedPreferences sharedPreferences) {
+        if (screenKey == null) return;
+        switch (screenKey) {
+            case SCREEN_LIBRARY -> {
+                fillLyrionRescanPreferences();
+                fillLyrionSkinPreferences();
+            }
+            case SCREEN_PLAYBACK -> {
+                fillAppliancePlaybackPreference(preferences);
+                fillPlaybackPreferences();
+                fillFadeInPreference(preferences);
+                fillIncomingCallPreferences(preferences);
+            }
+            case SCREEN_DOWNLOAD -> fillDownloadPreferences(preferences);
+            case SCREEN_DISPLAY -> fillDisplayPreferences(preferences);
+            case SCREEN_NOW_PLAYING -> fillNowPlayingPreferences(preferences);
+            case SCREEN_INTERFACE -> fillUserInterfacePreferences(preferences);
+            case SCREEN_LOCAL_PLAYER -> fillLocalPlayerPreferences(preferences);
+            case SCREEN_THIRD_PARTY -> {
+                fillScrobblePreferences(sharedPreferences);
+                fillDevicePlayerPreferences(preferences);
+            }
+            case SCREEN_LYRPLAY -> fillLyrPlayPreferences();
+            case SCREEN_CONNECTION -> fillConnectionPreferences(preferences);
+            case SCREEN_TIMEZONE -> fillTimezonePreferences();
+            default -> {
+            }
+        }
     }
-
     /**
      * The address the app connects to, and the one to use from outside the
      * house. The second is what makes Tailscale usable: the QR code can only
@@ -214,22 +197,6 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     // tier, same as the kiosk and admin-webui (see commit 1dd7868).
     // DspSettingsActivity stays intact and reachable by class name only.
 
-    private void fillBackupPreferences() {
-        Preference pref = requirePreference("squeezer.backup.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            BackupRestoreActivity.show(requireActivity());
-            return true;
-        });
-    }
-
-    private void fillAudioOutputPreferences() {
-        Preference pref = requirePreference("squeezer.audio_output.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            AudioOutputActivity.show(requireActivity());
-            return true;
-        });
-    }
-
     private void fillPlaybackPreferences() {
         Preference pref = requirePreference("squeezer.playback.open");
         pref.setOnPreferenceClickListener(preference -> {
@@ -238,6 +205,22 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
             }
             return true;
         });
+    }
+
+    /** Playback of the device itself: a screen of its own, only on an Osmium Sound device. */
+    private void fillAppliancePlaybackPreference(Preferences preferences) {
+        Preference pref = requirePreference("squeezer.appliance_playback.open");
+        pref.setVisible(preferences.isOsmiumAppliance());
+        pref.setOnPreferenceClickListener(preference -> {
+            AppliancePlaybackActivity.show(requireActivity());
+            return true;
+        });
+    }
+
+    private void fillFadeInPreference(Preferences preferences) {
+        fadeInPref = requirePreference(Preferences.KEY_FADE_IN_SECS);
+        fadeInPref.setOnPreferenceChangeListener(this);
+        updateFadeInSecondsSummary(preferences.getFadeInSecs());
     }
 
     private void fillLyrionRescanPreferences() {
@@ -385,50 +368,6 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
                 pollLyrionSkinStatus(pref);
             }
         }), SKIN_POLL_INTERVAL_MS);
-    }
-
-    private void fillUpdatesPreferences() {
-        Preference pref = requirePreference("squeezer.updates.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            UpdatesActivity.show(requireActivity());
-            return true;
-        });
-    }
-
-    private void fillSystemAdminPreferences() {
-        Preference pref = requirePreference("squeezer.system_admin.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            SystemAdminActivity.show(requireActivity());
-            return true;
-        });
-    }
-
-    private void fillMultiroomPreferences() {
-        Preference pref = requirePreference("squeezer.multiroom.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            MultiroomActivity.show(requireActivity());
-            return true;
-        });
-    }
-
-    /** Sections of the web admin's Settings that are a screen of their own here. */
-    private void fillApplianceScreenPreferences() {
-        requirePreference("squeezer.sources.open").setOnPreferenceClickListener(preference -> {
-            SourcesActivity.show(requireActivity());
-            return true;
-        });
-        requirePreference("squeezer.services.open").setOnPreferenceClickListener(preference -> {
-            ServicesActivity.show(requireActivity());
-            return true;
-        });
-        requirePreference("squeezer.appliance_playback.open").setOnPreferenceClickListener(preference -> {
-            AppliancePlaybackActivity.show(requireActivity());
-            return true;
-        });
-        requirePreference("squeezer.display.open").setOnPreferenceClickListener(preference -> {
-            DisplayActivity.show(requireActivity());
-            return true;
-        });
     }
 
     // ── Timezone ────────────────────────────────────────────────────────
@@ -811,6 +750,9 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     public void onDestroy() {
         super.onDestroy();
         skinPollHandler.removeCallbacksAndMessages(null);
+        if (listenedPreferences != null) {
+            listenedPreferences.unregisterOnSharedPreferenceChangeListener(this);
+        }
         getActivity().unbindService(serviceConnection);
     }
 
