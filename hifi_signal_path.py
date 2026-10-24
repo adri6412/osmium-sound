@@ -215,11 +215,12 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
     }
 
     if model is None:
-        # Another device's player: its volume and its DAC are out of sight.
-        if lyrion.get('digital_volume') and _as_int(lyrion.get('volume')) < 100:
-            changes.append('volume')
-        out['changes'] = changes
-        out['verdict'] = 'processed' if changes else 'unknown'
+        # Another device's player (a Wi-Fi speaker, someone else's box): the
+        # output lives on hardware we can't see, so there is nothing to trace.
+        # Don't guess at a volume change -- "processed" would light the path up
+        # orange over steps we never measured. Say plainly it can't be tracked.
+        out['changes'] = []
+        out['verdict'] = 'unknown'
         return out
 
     # ── this device's player ───────────────────────────────────────
