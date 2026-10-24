@@ -30,6 +30,15 @@ class JiveItemAdapter extends ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> im
         super(activity);
     }
 
+    /**
+     * Host-agnostic constructor used when the list is driven by a fragment in the kiosk shell: the
+     * {@code activity} is the shell that row views navigate through, while {@code orderer} is the
+     * fragment that fetches pages and receives the results.
+     */
+    public JiveItemAdapter(BaseActivity activity, ItemAdapter.PageOrderer orderer) {
+        super(activity, orderer);
+    }
+
     public JiveItem getParent() {
         return parent;
     }

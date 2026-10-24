@@ -66,6 +66,7 @@ import com.osmium.sound.companion.framework.ItemAdapter;
 import com.osmium.sound.companion.framework.ItemListActivity;
 import com.osmium.sound.companion.framework.ItemViewHolder;
 import com.osmium.sound.companion.framework.ViewParamItemView;
+import com.osmium.sound.companion.kiosk.JiveItemNavigator;
 import com.osmium.sound.companion.kiosk.MainActivity;
 import com.osmium.sound.companion.itemlist.dialog.ArtworkDialog;
 import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
@@ -677,6 +678,12 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
                 action.action.players = (player != null ? new String[]{player.getId()} : parentAction.action.players);
             }
         }
+        // Inside the kiosk shell, drill down into the single content container instead of stacking
+        // a new activity, so the breadcrumb, tabs and mini player stay put.
+        if (activity instanceof JiveItemNavigator navigator) {
+            navigator.pushBrowse(parent, action);
+            return;
+        }
         final Intent intent = new Intent(activity, JiveItemListActivity.class);
         intent.putExtra(JiveItem.class.getName(), parent);
         intent.putExtra(Action.class.getName(), action);
@@ -684,6 +691,10 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
     }
 
     public static void show(Activity activity, JiveItem item) {
+        if (activity instanceof JiveItemNavigator navigator) {
+            navigator.pushBrowse(item, null);
+            return;
+        }
         final Intent intent = new Intent(activity, JiveItemListActivity.class);
         intent.putExtra(JiveItem.class.getName(), item);
         activity.startActivityForResult(intent, GO);

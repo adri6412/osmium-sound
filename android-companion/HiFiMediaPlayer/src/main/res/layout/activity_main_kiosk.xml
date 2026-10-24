@@ -30,6 +30,26 @@
         app:tabSelectedTextColor="@color/osmium_gold"
         app:tabTextColor="@color/osmium_silver" />
 
+    <HorizontalScrollView
+        android:id="@+id/kiosk_breadcrumb_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/osmium_panel"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/kiosk_breadcrumb"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp" />
+
+    </HorizontalScrollView>
+
     <FrameLayout
         android:id="@+id/kiosk_content"
         android:layout_width="match_parent"
