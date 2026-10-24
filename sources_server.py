@@ -6373,9 +6373,14 @@ def _file_worker(jid, op, paths, dest, exists="keep"):
     _file_job_set(jid, total=total)
     state = {"done": 0}
     budget = hdg.Budget(dest) if counted and dest else None
-    if budget is not None and budget.active:
-        # What lands on the system disk: everything copied, and what a move
-        # brings from another disk (a move within it only renames).
+    if counted and dest:
+        # Make sure it fits before copying a byte. On the system disk this keeps
+        # the reserve free; on any other disk (the second disk, a USB stick) it
+        # is a plain free-space check -- without one, a copy too big for the
+        # second disk started and gave no warning at all (issue #118).
+        # What actually grows the destination disk: everything a copy writes,
+        # and what a move brings from another disk (a move within it only
+        # renames).
         try:
             dest_dev = os.stat(dest).st_dev
         except OSError:
@@ -6388,7 +6393,7 @@ def _file_worker(jid, op, paths, dest, exists="keep"):
             except OSError:
                 return True
         try:
-            hdg.check(dest, sum(n for p, n in sizes.items() if grows(p)))
+            hdg.check_any(dest, sum(n for p, n in sizes.items() if grows(p)))
         except hdg.NoRoom as e:
             _file_job_set(jid, state="error", code="disk.noRoom", need=e.need, room=e.room,
                           reserve=e.reserve, finished=time.time())

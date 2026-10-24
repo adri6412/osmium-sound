@@ -566,6 +566,14 @@ MESSAGES = {
         'it': 'Non c\'è abbastanza spazio sul disco di sistema: servono {need} GB e ne restano {room}, '
               'perché {reserve} GB restano sempre liberi per Lyrion e il sistema. '
               'Libera un po\' di spazio o usa un altro disco.'},
+    'disk.noRoomPlain': {
+        'en': 'Not enough room on this disk: this needs {need} GB and only {room} GB are free. '
+              'Free some space or use another disk.',
+        'it': 'Non c\'è abbastanza spazio su questo disco: servono {need} GB e ne sono liberi solo {room}. '
+              'Libera un po\' di spazio o usa un altro disco.'},
+    'disk.noRoomStoppedPlain': {
+        'en': 'Stopped: this disk is full. What was not finished has been removed.',
+        'it': 'Interrotto: questo disco è pieno. Quel che non era finito è stato tolto.'},
     'disk.noRoomInstall': {
         'en': 'Not enough room on the system disk to install Lyrion: it needs {need} GB free and there are {free}. Free some space and try again.',
         'it': 'Non c\'è abbastanza spazio sul disco di sistema per installare Lyrion: servono {need} GB liberi e ce ne sono {free}. Libera un po\' di spazio e riprova.'},

@@ -421,9 +421,21 @@ class SystemDiskReserveTests(FileOpsBase):
         self.assertTrue(os.path.exists(os.path.join(src, "CD1", "01.flac")))      # nothing lost
         self.assertFalse(os.path.exists(os.path.join(self.dest, "Album", "CD1", "01.flac")))   # no half file
 
-    def test_other_disks_unlimited(self):
-        ss.hdg.on_system_disk = lambda p: False
+    def test_other_disk_refused_when_full(self):
+        # A second disk / USB stick has no reserve of ours, but a copy must
+        # still fit in its free space, with the plain wording (issue #118).
+        ss.hdg.on_system_disk = lambda p, sys_dev=None: False
         ss.hdg._vfs = lambda p: (100 * self.GB, 0)
+        job = self.run_job("copy", [os.path.join(self.root, "Album")], self.dest)
+        self.assertEqual((job["state"], job["code"]), ("error", "disk.noRoom"))
+        self.assertEqual(job["reserve"], 0)
+        self.assertEqual(os.listdir(self.dest), [])
+        msg = ss.hdg.message(ss.hdg.NoRoom("", job["need"], job["room"], job["reserve"]), "en")
+        self.assertNotIn("Lyrion", msg)         # no reserve talk for a plain disk
+
+    def test_other_disk_allows_what_fits(self):
+        ss.hdg.on_system_disk = lambda p, sys_dev=None: False
+        ss.hdg._vfs = lambda p: (100 * self.GB, 100 * self.GB)
         job = self.run_job("copy", [os.path.join(self.root, "Album")], self.dest)
         self.assertEqual(job["state"], "done")
 
