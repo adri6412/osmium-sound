@@ -154,6 +154,13 @@ public class JiveItemListFragment extends ItemListFragment<ItemViewHolder<JiveIt
             return;
         }
 
+        // The Qt kiosk shows the album library as a cover grid. Some servers answer mode:albums
+        // without an icon_list window (so canChangeListLayout is false and the grid preference can
+        // never apply); force icon_list for album browses so getPreferredListLayout()'s grid takes.
+        if (isAlbumBrowse()) {
+            forceIconListWindow(parameters);
+        }
+
         final Window win = JiveItem.extractWindow(Util.getRecord(parameters, "window"), null);
         if (win != null) {
             // override server based icon_list style for playlist results
@@ -189,6 +196,11 @@ public class JiveItemListFragment extends ItemListFragment<ItemViewHolder<JiveIt
 
         if (win != null) {
             updateWindowStyle(win.windowStyle);
+        } else if (isAlbumBrowse()) {
+            // On return from the back stack onItemsReceived does not re-fire (items are cached) and
+            // the album header carries no window, so without this the album grid would fall back to
+            // TEXT_ONLY (a list). Keep it ICON_LIST so getPreferredListLayout()'s grid stays.
+            updateWindowStyle(Window.WindowStyle.ICON_LIST);
         } else if (isPlaylist()) {
             updateWindowStyle(Window.WindowStyle.PLAY_LIST);
         } else {
@@ -227,6 +239,40 @@ public class JiveItemListFragment extends ItemListFragment<ItemViewHolder<JiveIt
 
     public ArtworkListLayout getListLayout() {
         return JiveItemView.listLayout(getPreferredListLayout(), window.windowStyle);
+    }
+
+    /**
+     * The Qt kiosk shows the album library as a cover grid; match it. When this browse is an album
+     * list (the Albums and New music tiles, and an artist's album list, open
+     * {@code browselibrary items … mode:albums}) force the grid layout regardless of the saved
+     * list/grid preference. Every other browse keeps the user's preference.
+     */
+    @Override
+    public ArtworkListLayout getPreferredListLayout() {
+        if (isAlbumBrowse()) {
+            return ArtworkListLayout.grid;
+        }
+        return super.getPreferredListLayout();
+    }
+
+    protected boolean isAlbumBrowse() {
+        return action != null && action.action != null && action.action.params != null
+                && "albums".equals(action.action.params.get("mode"));
+    }
+
+    /**
+     * Sets the response window's {@code windowStyle} to {@code icon_list}, preserving any title/html
+     * the server sent, so the browse can be shown as a grid (see {@link #getPreferredListLayout()}).
+     */
+    @SuppressWarnings("unchecked")
+    private void forceIconListWindow(Map<String, Object> parameters) {
+        if (parameters == null) return;
+        Object existing = parameters.get("window");
+        Map<String, Object> window = existing instanceof Map
+                ? (Map<String, Object>) existing
+                : new java.util.HashMap<>();
+        window.put("windowStyle", "icon_list");
+        parameters.put("window", window);
     }
 
     private void setupListView(RecyclerView list, ArtworkListLayout listLayout) {

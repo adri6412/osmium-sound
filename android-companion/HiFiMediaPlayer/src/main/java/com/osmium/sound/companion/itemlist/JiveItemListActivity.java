@@ -246,6 +246,40 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
         itemTouchHelper.attachToRecyclerView(getListView());
     }
 
+    /**
+     * The Qt kiosk shows the album library as a cover grid. Match it: when this browse is an album
+     * list (the Albums and New music tiles open {@code browselibrary items … mode:albums}, as does
+     * an artist's album list), force the grid layout regardless of the saved list/grid preference so
+     * the companion looks like the appliance. Every other browse keeps the user's preference.
+     */
+    @Override
+    public ArtworkListLayout getPreferredListLayout() {
+        if (isAlbumBrowse()) {
+            return ArtworkListLayout.grid;
+        }
+        return super.getPreferredListLayout();
+    }
+
+    private boolean isAlbumBrowse() {
+        return action != null && action.action != null && action.action.params != null
+                && "albums".equals(action.action.params.get("mode"));
+    }
+
+    /**
+     * Sets the response window's {@code windowStyle} to {@code icon_list}, preserving any title/html
+     * the server sent, so the browse can be shown as a grid (see {@link #getPreferredListLayout()}).
+     */
+    @SuppressWarnings("unchecked")
+    private void forceIconListWindow(Map<String, Object> parameters) {
+        if (parameters == null) return;
+        Object existing = parameters.get("window");
+        Map<String, Object> window = existing instanceof Map
+                ? (Map<String, Object>) existing
+                : new java.util.HashMap<>();
+        window.put("windowStyle", "icon_list");
+        parameters.put("window", window);
+    }
+
     public void setupListView(RecyclerView list, ArtworkListLayout listLayout) {
         RecyclerView.LayoutManager layoutManager = list.getLayoutManager();
         if (listLayout == ArtworkListLayout.grid && !(layoutManager instanceof GridLayoutManager)) {
@@ -388,6 +422,13 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
             }
             finish();
             return;
+        }
+
+        // The Qt kiosk shows the album library as a cover grid. Some servers answer mode:albums
+        // without an icon_list window (so canChangeListLayout is false and the grid preference can
+        // never apply); force icon_list here so getPreferredListLayout()'s grid actually takes.
+        if (isAlbumBrowse()) {
+            forceIconListWindow(parameters);
         }
 
         final Window window = JiveItem.extractWindow(Util.getRecord(parameters, "window"), null);

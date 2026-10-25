@@ -18,7 +18,6 @@ package com.osmium.sound.companion.itemlist;
 
 import android.os.Bundle;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
@@ -83,6 +82,11 @@ public class ServerItemsFragment extends JiveItemListFragment {
     @Override
     public void onItemsReceived(int count, int start, Map<String, Object> parameters,
                                 List<JiveItem> items, Class<JiveItem> dataType) {
+        // radios/apps answer with windowStyle "text_list" (or none), which hides the whole icon
+        // column (JiveItemView.viewParamIcon returns 0 for TEXT_ONLY). The Qt kiosk shows these
+        // launcher lists with their icons, so force ICON_LIST before the base reads the window:
+        // Radio rows then load their server icon URL and App rows show their flat embedded icon.
+        forceIconListWindow(parameters);
         // Server honoured menu:1 and answered with a normal item_loop: use it as-is (the rows carry
         // the server's own go actions, so drill-in needs no forging).
         if (items != null && !items.isEmpty()) {
@@ -96,6 +100,32 @@ public class ServerItemsFragment extends JiveItemListFragment {
             return;
         }
         super.onItemsReceived(built.size(), 0, parameters, built, dataType);
+    }
+
+    /**
+     * ICON_LIST lets the layout follow the album grid/list preference; force a single-column list so
+     * these launcher lists stay a vertical list with the icon on the left (like the Qt kiosk Radio
+     * and Apps tabs), not a cover grid when the user prefers grid for albums.
+     */
+    @Override
+    public com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout getPreferredListLayout() {
+        return com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout.list;
+    }
+
+    /**
+     * Forces the response window to {@code icon_list} so {@link JiveItemListFragment} shows the icon
+     * column for these launcher lists. The server's own window title/html (if any) is preserved —
+     * only {@code windowStyle} is set.
+     */
+    @SuppressWarnings("unchecked")
+    private void forceIconListWindow(Map<String, Object> parameters) {
+        if (parameters == null) return;
+        Object existing = parameters.get("window");
+        Map<String, Object> window = existing instanceof Map
+                ? (Map<String, Object>) existing
+                : new HashMap<>();
+        window.put("windowStyle", "icon_list");
+        parameters.put("window", window);
     }
 
     /** Builds rows from radioss_loop/appss_loop (or the _loop fallback), each with a drill-in action. */
