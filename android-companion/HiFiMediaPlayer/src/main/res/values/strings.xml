@@ -427,22 +427,6 @@
     <string name="about_website" translatable="false"><a href="https://github.com/adri6412/osmium-sound">Website</a>\n<a href="https://kaaholst.github.io/android-squeezer/">Original Squeezer Website</a></string>
     <string name="about_issues" translatable="false"><a href="https://github.com/adri6412/osmium-sound/issues">Issues</a>\n<a href="https://github.com/kaaholst/android-squeezer/issues">Original Squeezer Issues</a></string>
     <string name="license" translatable="false"><a href="https://github.com/adri6412/osmium-sound/blob/main/LICENSE">License</a>\n<a href="https://kaaholst.github.io/android-squeezer/license">Original Squeezer License</a></string>
-    <string name="configure_select_player">Select player to control</string>
-    <string name="configure_select_button">Widget action</string>
-    <string name="remote_unknownDescription">Unknown</string>
-    <string name="remote_openPlayer">Open player in Squeezer</string>
-    <string name="remote_openNowPlaying">Open Now Playing for player</string>
-    <string name="remote_openCurrentPlaylist">Open current playlist for player</string>
-    <string name="remote_powerDescription">Power</string>
-    <string name="remote_pausePlayDescription">Pause/Play</string>
-    <string name="remote_nextDescription">Next song</string>
-    <string name="remote_previousDescription">Previous song</string>
-    <string name="remote_preset1Description">Preset 1</string>
-    <string name="remote_preset2Description">Preset 2</string>
-    <string name="remote_preset3Description">Preset 3</string>
-    <string name="remote_preset4Description">Preset 4</string>
-    <string name="remote_preset5Description">Preset 5</string>
-    <string name="remote_preset6Description">Preset 6</string>
     <string name="ARCHIVE_NODE">Archive</string>
     <string name="MENU_ITEM_MOVED">Menu item (un)archived</string>
     <string name="MENU_IS_SUBMENU_IN_ARCHIVE">You are already in Archive!</string>

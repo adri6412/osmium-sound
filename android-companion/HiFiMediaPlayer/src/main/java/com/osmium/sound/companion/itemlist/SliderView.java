@@ -26,9 +26,9 @@ import androidx.annotation.NonNull;
 import com.osmium.sound.companion.R;
 import com.osmium.sound.companion.framework.BaseActivity;
 import com.osmium.sound.companion.framework.ItemViewHolder;
-import com.osmium.sound.companion.homescreenwidgets.TextDrawable;
 import com.osmium.sound.companion.model.JiveItem;
 import com.osmium.sound.companion.model.Slider;
+import com.osmium.sound.companion.util.TextDrawable;
 
 public class SliderView extends ItemViewHolder<JiveItem> {
 

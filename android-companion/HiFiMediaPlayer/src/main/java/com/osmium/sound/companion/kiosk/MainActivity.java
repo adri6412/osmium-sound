@@ -78,8 +78,9 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
 
     /**
      * Brings the kiosk shell to the front, reusing the running instance. This is the app's home: the
-     * connect flow and every "go home" action land here, not on the old server-menu
-     * {@link HomeActivity}.
+     * connect flow and every "go home" action land here. The old server-menu home activity it
+     * replaced has been removed; node browse now runs inside this shell through
+     * {@link com.osmium.sound.companion.itemlist.HomeMenuFragment}.
      */
     public static void show(Context context) {
         Intent intent = new Intent(context, MainActivity.class)

@@ -43,8 +43,8 @@ import com.osmium.sound.companion.widget.ViewUtilities;
 /**
  * An activity for when the user is not connected to a slimserver.
  * <p>
- * Provide a UI for connecting to the configured server, launch HomeMenuActivity when the user
- * connects.
+ * Provide a UI for connecting to the configured server, launch the kiosk shell
+ * ({@link com.osmium.sound.companion.kiosk.MainActivity}) when the user connects.
  */
 public class ConnectActivity extends BaseActivity {
     @IntDef({MANUAL_DISCONNECT, CONNECTION_FAILED, LOGIN_FAILED, INVALID_URL})

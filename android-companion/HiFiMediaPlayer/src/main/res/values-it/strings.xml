@@ -406,22 +406,6 @@
     <string name="settings_language_summary">Lingua usata da questa app</string>
     <string name="settings_language_system">Predefinita di sistema</string>
 
-    <string name="configure_select_player">Scegli il player da controllare</string>
-    <string name="configure_select_button">Azione del widget</string>
-    <string name="remote_unknownDescription">Sconosciuto</string>
-    <string name="remote_openPlayer">Apri il player in Squeezer</string>
-    <string name="remote_openNowPlaying">Apri In riproduzione per il player</string>
-    <string name="remote_openCurrentPlaylist">Apri la playlist corrente del player</string>
-    <string name="remote_powerDescription">Accensione</string>
-    <string name="remote_pausePlayDescription">Pausa/Riproduci</string>
-    <string name="remote_nextDescription">Brano successivo</string>
-    <string name="remote_previousDescription">Brano precedente</string>
-    <string name="remote_preset1Description">Preset 1</string>
-    <string name="remote_preset2Description">Preset 2</string>
-    <string name="remote_preset3Description">Preset 3</string>
-    <string name="remote_preset4Description">Preset 4</string>
-    <string name="remote_preset5Description">Preset 5</string>
-    <string name="remote_preset6Description">Preset 6</string>
 
     <string name="ARCHIVE_NODE">Archivio</string>
     <string name="MENU_ITEM_MOVED">Voce di menu spostata nell\'archivio (o rimossa)</string>

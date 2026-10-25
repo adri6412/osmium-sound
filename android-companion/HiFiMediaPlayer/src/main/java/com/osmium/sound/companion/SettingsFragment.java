@@ -4,7 +4,6 @@ import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.media.MediaCodecList;
@@ -709,9 +708,11 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     }
 
     private boolean isLauncherEnabled() {
-        ComponentName componentName = new ComponentName(requireContext(), "com.osmium.sound.companion.HomeLauncherActivity");
-        int setting = requireContext().getPackageManager().getComponentEnabledSetting(componentName);
-        return setting == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+        // The Android home-launcher mode (the disabled HomeLauncherActivity alias it keyed off)
+        // was removed with the old server-menu home. The mode is not implemented in the kiosk app
+        // (see updateLauncherMode), so it always reads as off; querying the removed component here
+        // would throw "Unknown component".
+        return false;
     }
 
     private void updateLauncherMode(boolean enabled) {
