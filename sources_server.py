@@ -7095,7 +7095,7 @@ def api_files_list():
                     "entries": entries})
 
 
-def _file_op_targets(data, need_dest):
+def _file_op_targets(data, need_dest, op=None):
     """Validate one copy/move/delete request. Returns (paths, dest, error) --
     every path resolved and confined by _local_path_allowed(), nothing that is
     a source's own mountpoint, and a destination that can really be written."""
@@ -7104,7 +7104,11 @@ def _file_op_targets(data, need_dest):
         raw = [raw]
     if not isinstance(raw, list) or not raw or len(raw) > _FILE_MAX_ITEMS:
         return None, None, _err("msg.pathMissing", 400)
-    protected = _protected_paths()
+    # A copy reads the source and leaves it untouched, so copying a source's own
+    # mountpoint elsewhere is harmless and allowed; only the operations that
+    # would remove or rename the original (delete/move/rename) are refused on a
+    # protected path (issue #127).
+    protected = set() if op == "copy" else _protected_paths()
     paths = []
     for item in raw:
         p = _file_entry_allowed(item)
@@ -7143,7 +7147,7 @@ def _files_start(op):
     if denied:
         return denied
     data = request.get_json(silent=True) or {}
-    paths, dest, err = _file_op_targets(data, need_dest=op in ("copy", "move"))
+    paths, dest, err = _file_op_targets(data, need_dest=op in ("copy", "move"), op=op)
     if err:
         return err
     if op == "move":
