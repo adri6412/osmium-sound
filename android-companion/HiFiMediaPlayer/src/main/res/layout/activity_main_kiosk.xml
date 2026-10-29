@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ The kiosk-style shell: a tab bar on top (Music / Radio / Apps / Settings),
+ the active section in the middle, and a persistent mini player at the bottom
+ that expands into the full Now Playing. One container, like native-ui-qt's
+ MainScreen + MiniPlayer, instead of one activity per level.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/kiosk_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/osmium_dark"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/kiosk_tabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/osmium_panel"
+        app:tabGravity="fill"
+        app:tabIconTint="@color/kiosk_tab_tint"
+        app:tabIndicatorColor="@color/osmium_gold"
+        app:tabIndicatorFullWidth="false"
+        app:tabInlineLabel="false"
+        app:tabMode="fixed"
+        app:tabRippleColor="@color/osmium_ripple"
+        app:tabSelectedTextColor="@color/osmium_gold"
+        app:tabTextColor="@color/osmium_silver" />
+
+    <HorizontalScrollView
+        android:id="@+id/kiosk_breadcrumb_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/osmium_panel"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/kiosk_breadcrumb"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp" />
+
+    </HorizontalScrollView>
+
+    <FrameLayout
+        android:id="@+id/kiosk_content"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/now_playing_fragment"
+        android:name="com.osmium.sound.companion.NowPlayingFragment"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        tools:layout="@layout/now_playing_fragment_mini" />
+
+</LinearLayout>

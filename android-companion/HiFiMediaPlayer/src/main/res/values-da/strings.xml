@@ -238,22 +238,6 @@
     <string name="download_item">Hent %s</string>
     <string name="disable_downloads">Deaktivér hentning</string>
 
-    <string name="configure_select_player">Vælg afspiller</string>
-    <string name="configure_select_button">Widget handling</string>
-    <string name="remote_unknownDescription">Ukendt</string>
-    <string name="remote_openPlayer">Åben afspiller i Squeezer</string>
-    <string name="remote_openNowPlaying">Åben Nu Spiller</string>
-    <string name="remote_openCurrentPlaylist">Åben aktiv afspilningsliste</string>
-    <string name="remote_powerDescription">Tænd/Sluk</string>
-    <string name="remote_pausePlayDescription">Pause/Afspil</string>
-    <string name="remote_nextDescription">Næste sang</string>
-    <string name="remote_previousDescription">Forrige sang</string>
-    <string name="remote_preset1Description">Forudindstillet 1</string>
-    <string name="remote_preset2Description">Forudindstillet 2</string>
-    <string name="remote_preset3Description">Forudindstillet 3</string>
-    <string name="remote_preset4Description">Forudindstillet 4</string>
-    <string name="remote_preset5Description">Forudindstillet 5</string>
-    <string name="remote_preset6Description">Forudindstillet 6</string>
     <string name="pref_cat_third_party">Tredjepartsintegration</string>
     <string name="settings_download_use_server_path">Brug serversti og filnavn</string>
     <string name="ARCHIVE_NODE">Arkiv</string>

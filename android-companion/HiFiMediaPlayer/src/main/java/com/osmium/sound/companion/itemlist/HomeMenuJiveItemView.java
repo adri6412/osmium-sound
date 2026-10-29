@@ -82,7 +82,7 @@ public class HomeMenuJiveItemView extends JiveItemView {
     }
 
     private void removeShortcut(JiveItem item) {
-        getActivity().getItemAdapter().removeItem(getBindingAdapterPosition());
+        getAdapter().removeItem(getBindingAdapterPosition());
         getActivity().showDisplayMessage(R.string.CUSTOM_SHORTCUT_REMOVED);
         getActivity().requireService().removeCustomShortcut(item);
     }

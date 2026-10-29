@@ -35,7 +35,7 @@ import java.lang.annotation.RetentionPolicy;
 
 import com.osmium.sound.companion.dialog.ServerAddressView;
 import com.osmium.sound.companion.framework.BaseActivity;
-import com.osmium.sound.companion.itemlist.HomeActivity;
+import com.osmium.sound.companion.kiosk.MainActivity;
 import com.osmium.sound.companion.service.ISqueezeService;
 import com.osmium.sound.companion.service.event.HandshakeComplete;
 import com.osmium.sound.companion.widget.ViewUtilities;
@@ -43,8 +43,8 @@ import com.osmium.sound.companion.widget.ViewUtilities;
 /**
  * An activity for when the user is not connected to a slimserver.
  * <p>
- * Provide a UI for connecting to the configured server, launch HomeMenuActivity when the user
- * connects.
+ * Provide a UI for connecting to the configured server, launch the kiosk shell
+ * ({@link com.osmium.sound.companion.kiosk.MainActivity}) when the user connects.
  */
 public class ConnectActivity extends BaseActivity {
     @IntDef({MANUAL_DISCONNECT, CONNECTION_FAILED, LOGIN_FAILED, INVALID_URL})
@@ -208,6 +208,6 @@ public class ConnectActivity extends BaseActivity {
         if (host != null) {
             Toast.makeText(this, getString(R.string.wizard_connected, host), Toast.LENGTH_SHORT).show();
         }
-        HomeActivity.show(this);
+        MainActivity.show(this);
     }
 }

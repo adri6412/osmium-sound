@@ -66,6 +66,8 @@ import com.osmium.sound.companion.framework.ItemAdapter;
 import com.osmium.sound.companion.framework.ItemListActivity;
 import com.osmium.sound.companion.framework.ItemViewHolder;
 import com.osmium.sound.companion.framework.ViewParamItemView;
+import com.osmium.sound.companion.kiosk.JiveItemNavigator;
+import com.osmium.sound.companion.kiosk.MainActivity;
 import com.osmium.sound.companion.itemlist.dialog.ArtworkDialog;
 import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
 import com.osmium.sound.companion.model.Action;
@@ -116,7 +118,12 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
 
     @Override
     protected ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> createItemListAdapter() {
-        return (isGrouped()) ? new GroupAdapter(this) : new JiveItemAdapter(this);
+        if (isGrouped()) {
+            return new GroupAdapter(this);
+        }
+        JiveItemAdapter adapter = new JiveItemAdapter(this);
+        adapter.setParent(parent);
+        return adapter;
     }
 
     private boolean isPlaylist() {
@@ -237,6 +244,40 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
 
         ItemTouchHelper itemTouchHelper = new ItemTouchHelper(callback);
         itemTouchHelper.attachToRecyclerView(getListView());
+    }
+
+    /**
+     * The Qt kiosk shows the album library as a cover grid. Match it: when this browse is an album
+     * list (the Albums and New music tiles open {@code browselibrary items … mode:albums}, as does
+     * an artist's album list), force the grid layout regardless of the saved list/grid preference so
+     * the companion looks like the appliance. Every other browse keeps the user's preference.
+     */
+    @Override
+    public ArtworkListLayout getPreferredListLayout() {
+        if (isAlbumBrowse()) {
+            return ArtworkListLayout.grid;
+        }
+        return super.getPreferredListLayout();
+    }
+
+    private boolean isAlbumBrowse() {
+        return action != null && action.action != null && action.action.params != null
+                && "albums".equals(action.action.params.get("mode"));
+    }
+
+    /**
+     * Sets the response window's {@code windowStyle} to {@code icon_list}, preserving any title/html
+     * the server sent, so the browse can be shown as a grid (see {@link #getPreferredListLayout()}).
+     */
+    @SuppressWarnings("unchecked")
+    private void forceIconListWindow(Map<String, Object> parameters) {
+        if (parameters == null) return;
+        Object existing = parameters.get("window");
+        Map<String, Object> window = existing instanceof Map
+                ? (Map<String, Object>) existing
+                : new java.util.HashMap<>();
+        window.put("windowStyle", "icon_list");
+        parameters.put("window", window);
     }
 
     public void setupListView(RecyclerView list, ArtworkListLayout listLayout) {
@@ -377,10 +418,17 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
             switch (nextWindow.nextWindow) {
                 case nowPlaying -> NowPlayingActivity.show(this);
                 case playlist -> CurrentPlaylistActivity.show(this);
-                case home -> HomeActivity.show(this);
+                case home -> MainActivity.show(this);
             }
             finish();
             return;
+        }
+
+        // The Qt kiosk shows the album library as a cover grid. Some servers answer mode:albums
+        // without an icon_list window (so canChangeListLayout is false and the grid preference can
+        // never apply); force icon_list here so getPreferredListLayout()'s grid actually takes.
+        if (isAlbumBrowse()) {
+            forceIconListWindow(parameters);
         }
 
         final Window window = JiveItem.extractWindow(Util.getRecord(parameters, "window"), null);
@@ -460,7 +508,7 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
                     // Do nothing as now playing is always available in Squeezer (maybe toast the action)
                 }
                 case playlist -> CurrentPlaylistActivity.show(this);
-                case home -> HomeActivity.show(this);
+                case home -> MainActivity.show(this);
                 case parentNoRefresh -> finish();
                 case grandparent -> {
                     setResult(Activity.RESULT_OK, new Intent(RELOAD_PARENT));
@@ -671,6 +719,17 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
                 action.action.players = (player != null ? new String[]{player.getId()} : parentAction.action.players);
             }
         }
+        // Inside the kiosk shell, drill down into the single content container instead of stacking
+        // a new activity, so the breadcrumb, tabs and mini player stay put. Album rows open the
+        // bespoke kiosk-style album page rather than the generic browse list.
+        if (activity instanceof JiveItemNavigator navigator) {
+            if (parent != null && parent.isAlbumRow()) {
+                navigator.pushAlbum(parent);
+            } else {
+                navigator.pushBrowse(parent, action);
+            }
+            return;
+        }
         final Intent intent = new Intent(activity, JiveItemListActivity.class);
         intent.putExtra(JiveItem.class.getName(), parent);
         intent.putExtra(Action.class.getName(), action);
@@ -678,6 +737,10 @@ public class JiveItemListActivity extends ItemListActivity<ItemViewHolder<JiveIt
     }
 
     public static void show(Activity activity, JiveItem item) {
+        if (activity instanceof JiveItemNavigator navigator) {
+            navigator.pushBrowse(item, null);
+            return;
+        }
         final Intent intent = new Intent(activity, JiveItemListActivity.class);
         intent.putExtra(JiveItem.class.getName(), item);
         activity.startActivityForResult(intent, GO);
