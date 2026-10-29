@@ -3,9 +3,18 @@
 #
 # Measured on the x86 mini-PC after the initramfs shrink (0008):
 #   • The Bluetooth stack (btusb + bluetooth, a ~1 MB module plus an RTL
-#     firmware load) is brought up at boot but unused on this wired/Wi-Fi music
-#     appliance. Blacklisting btusb (the USB entry point) keeps the whole stack
-#     out of boot.
+#     firmware load) is brought up at boot but idle until the owner turns on a
+#     Bluetooth speaker or pairs a Bluetooth remote. Blacklisting keeps it off
+#     the boot path for the many devices that never use it.
+#     🚨 blacklist ONLY — no `install btusb /bin/true`. Bluetooth is now a
+#     supported feature (speakers AND remotes): hifi-bt-out.py loads the module
+#     on demand with an explicit `modprobe btusb`, and an `install … /bin/true`
+#     override would silently defeat that modprobe, leaving the adapter
+#     invisible (no /sys/class/bluetooth, bluetooth.service ConditionPath unmet)
+#     even when the owner asked for Bluetooth — issue #126. A plain blacklist
+#     only stops auto-load; an explicit modprobe still works.
+#     ensure_file_content rewrites the corrected file on the next OS OTA, so a
+#     legacy device that still carries the old override is healed automatically.
 #   • networking.service (ifupdown) only brings up loopback here — every real
 #     interface is managed by NetworkManager — so it is redundant boot work.
 #
@@ -13,10 +22,11 @@
 # at the next boot (nothing is stopped on the running system). Idempotent.
 
 ensure_file_content /etc/modprobe.d/hifi-no-bluetooth.conf 644 <<'EOF'
-# Bluetooth is unused on the appliance — keep it out of boot (faster startup).
+# Keep Bluetooth off the boot path (faster startup) — but only auto-load:
+# hifi-bt-out.py still loads btusb on demand for a speaker or a remote.
+# NO `install btusb /bin/true` here: it would defeat that modprobe (issue #126).
 blacklist btusb
 blacklist bluetooth
-install btusb /bin/true
 EOF
 
 # Mask (don't --now: avoid touching the running session) only if present and not
