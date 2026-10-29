@@ -191,6 +191,64 @@ Item {
     function openArtist(id, name) { if (!id) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, String(id)) }
     function openPerson(mbid, name) { if (!mbid) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, "", "mbid:" + mbid) }
     function openMenu(items, x, y) { ctx.open(items, x, y) }
+
+    // ── db: library favorites ─────────────────────────────────────────────
+    // Lyrion saves an album/artist/genre favorite as a `db:` query URL
+    // (e.g. db:album.title=X&contributor.name=Y), not a playable stream. The
+    // plain `favorites items`/`favorites playlist play` path drills into
+    // nothing and refuses to play it ("Cannot request non-HTTP URL db:…"); only
+    // menu mode would expand it, which is how Material shows it. Rather than
+    // teach the whole plugin browser menu mode, we resolve such a favorite back
+    // to the real library object and reuse the album/artist page and
+    // playlistcontrol, which work. (issue #125)
+    function dbFavField(url, key) {
+        var m = String(url).match(new RegExp("(?:^db:|&)" + key + "=([^&]*)"))
+        return m ? decodeURIComponent(m[1].replace(/\+/g, " ")) : ""
+    }
+    function dbFavKind(url) {
+        if (String(url).indexOf("db:") !== 0) return ""
+        if (dbFavField(url, "album\\.title")) return "album"
+        if (dbFavField(url, "contributor\\.name")) return "artist"
+        return ""                                   // genre/year/…: leave as is
+    }
+    // resolve the db: query to an id, then act: mode "open" navigates to the
+    // page, "load"/"add"/"insert" feed the queue through playlistcontrol.
+    function dbFavAct(it, mode) {
+        var url = it.url, kind = dbFavKind(url)
+        if (!kind) return false
+        var feed = function(type, id) {
+            if (!id) { say("alert-triangle", "player.queueFailed"); return }
+            if (mode === "open") { if (type === "album_id") openAlbum(id, it.text); else openArtist(id, it.text); return }
+            Player.query(["playlistcontrol", "cmd:" + mode, type + ":" + id], function(ok) {
+                Player.refresh()
+                if (!ok) say("alert-triangle", "player.queueFailed")
+                else if (mode === "add") say("list-plus", "player.addedToQueue")
+                else if (mode === "insert") say("list-start", "player.playingNext")
+            })
+        }
+        if (kind === "album") {
+            var at = dbFavField(url, "album\\.title"), aa = dbFavField(url, "contributor\\.name")
+            Player.query(["albums", "0", "20", "search:" + at, "tags:la"], function(ok, r) {
+                var loop = (ok && r) ? r.albums_loop : null, pick = ""
+                for (var i = 0; loop && i < loop.length; i++) {
+                    if (!pick) pick = String(loop[i].id)
+                    if (aa && String(loop[i].artist || "").toLowerCase() === aa.toLowerCase()) { pick = String(loop[i].id); break }
+                }
+                feed("album_id", pick)
+            })
+        } else {
+            var cn = dbFavField(url, "contributor\\.name")
+            Player.query(["artists", "0", "20", "search:" + cn], function(ok, r) {
+                var loop = (ok && r) ? r.artists_loop : null, pick = ""
+                for (var i = 0; loop && i < loop.length; i++) {
+                    if (!pick) pick = String(loop[i].id)
+                    if (String(loop[i].artist || "").toLowerCase() === cn.toLowerCase()) { pick = String(loop[i].id); break }
+                }
+                feed("artist_id", pick)
+            })
+        }
+        return true
+    }
     function closeMenu() { ctx.close() }
     readonly property bool menuOpen: ctx.visible
     // Il tasto "cerca" del telecomando: il campo di questa schermata se ce
@@ -302,7 +360,12 @@ Item {
         // piu' le voci che valgono solo qui (rinomina, sposta, togli)
         var isDir = it.hasItems && !it.isAudio
         if (it.isAudio || isDir) {
-            pluginQueueItems(L, "favorites", it.id)
+            // a db: library favorite is resolved to its object; the plugin's own
+            // `favorites playlist add` cannot queue a db: query (issue #125)
+            if (dbFavKind(it.url)) {
+                L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { dbFavAct(it, "add") } })
+                L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: function() { dbFavAct(it, "insert") } })
+            } else pluginQueueItems(L, "favorites", it.id)
             L.push({ icon: "pencil", label: Tr.t("player.rename"), cb: function() {
                 Ui.overlays.prompt(Tr.t("player.renameTitle"), it.text, function(name) {
                     if (!name || name === it.text) return
@@ -447,6 +510,8 @@ Item {
             if (onPlay && it.play && it.play.length) Player.cmd(it.play); else menuItemTap(it); break
         case LibraryModel.PluginItems: {
             var cmd = cur.p1
+            // a db: library favorite is resolved to its real object (issue #125)
+            if (cmd === "favorites" && dbFavKind(it.url) && dbFavAct(it, onPlay ? "load" : "open")) break
             if (!onPlay && it.hasInput) {          // nodo di ricerca del plugin: si chiede il testo
                 msearchOpen = true; msearch.text = ""
                 msearchTitle = it.text || Tr.t("player.titles.search")

@@ -26,6 +26,10 @@ Item {
     property int metaTries: 0
     property bool aboutOpen: false
     property bool byTrack: false
+    // the heart reflects the real state and toggles add/remove (issue #125):
+    // favIndex is the favourite's position, needed to delete it
+    property bool isFav: false
+    property string favIndex: ""
     readonly property int discs: Math.max(1, Number(album.disccount || 1))
     // the cover is on screen: the Cover Flow's flying copy can go (Browser)
     readonly property bool coverReady: state_ === 2 && cover.ready
@@ -41,6 +45,7 @@ Item {
             var a = ok && r && r.albums_loop && r.albums_loop.length ? r.albums_loop[0] : null
             if (!a) { root.state_ = 3; return }
             root.album = a
+            root.checkFav()
             if (root.browser) root.browser.setPageTitle(LibraryModel.AlbumPage, root.albumId, String(a.album || ""))
             Player.query(["titles", "0", "999", "album_id:" + albumId, "tags:dtiqASeoTIu", "sort:tracknum"], function(ok2, r2) {
                 if (!root) return          // the page was closed meanwhile
@@ -150,6 +155,33 @@ Item {
         })
     }
     function shuffle() { if (browser) browser.loadShuffled("album_id", albumId) }
+    // ── favourite heart (add / remove, with its real state) ───────────────
+    function checkFav() {
+        var url = String(album.favorites_url || "")
+        if (!url) { isFav = false; favIndex = ""; return }
+        Player.favoriteExists(url, function(ex, idx) {
+            if (!root) return
+            root.isFav = !!ex; root.favIndex = ex ? String(idx) : ""
+        })
+    }
+    function toggleFav() {
+        var url = String(album.favorites_url || "")
+        if (!url) return
+        if (isFav) {
+            if (!favIndex) return
+            Player.favoriteDelete(favIndex, function(ok) {
+                if (!root) return
+                if (ok) { root.isFav = false; root.favIndex = ""; if (root.browser) root.browser.say("heart", "player.removedFromFavorites") }
+                else if (root.browser) root.browser.say("alert-triangle", "player.favoriteError")
+            })
+        } else {
+            Player.favoriteAdd(url, String(album.album || ""), "playlist", "", function(ok) {
+                if (!root) return
+                if (ok) { root.isFav = true; favBtn.burst(); if (root.browser) root.browser.say("heart", "player.addedToFavorites"); root.checkFav() }
+                else if (root.browser) root.browser.say("alert-triangle", "player.favoriteError")
+            })
+        }
+    }
     function trackMenu(i, x, y) {
         var t = tracks[i]
         if (!t || !browser) return
@@ -249,7 +281,7 @@ Item {
                 PageButton { icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: root.shuffle() }
                 PageButton { icon: "list-plus"; onClicked: root.play("add") }
                 PageButton { icon: "list-start"; onClicked: root.play("insert") }
-                PageButton { id: favBtn; icon: "heart"; visible: !!root.album.favorites_url; onClicked: { burst(); if (root.browser) root.browser.addFavorite(String(root.album.favorites_url), String(root.album.album || ""), "playlist") } }
+                PageButton { id: favBtn; icon: "heart"; filled: root.isFav; visible: !!root.album.favorites_url; onClicked: root.toggleFav() }
             }
 
             // ── state of the online lookup ─────────────────────────────────

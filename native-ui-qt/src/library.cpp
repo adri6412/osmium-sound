@@ -207,6 +207,12 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
     case PluginItems: params = {s1, "items", "0", "9999"};
         if (!s2.isEmpty()) params << "item_id:" + s2;
         if (!input.isEmpty()) params << "search:" + input;
+        // A library favorite (album, artist, genre…) is stored as a `db:` query
+        // URL that `favorites items` cannot expand and `favorites playlist play`
+        // cannot stream. Without want_url the entry arrives with no url at all,
+        // so the kiosk cannot even tell it is a db: one -- ask for the url and
+        // resolve it back to the real object on tap/play (issue #125).
+        if (s1 == "favorites") params << "want_url:1";
         break;
     default:
         beginResetModel(); m_items.clear(); m_order.clear(); endResetModel();
