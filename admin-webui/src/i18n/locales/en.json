@@ -213,6 +213,10 @@
         "label": "Bluetooth speakers",
         "desc": "Play to a speaker or headphones"
       },
+      "extPlayers": {
+        "label": "External players",
+        "desc": "Convert for other players on this server"
+      },
       "remote": {
         "label": "Remote control",
         "desc": "USB or Bluetooth, and what each key does"
@@ -1310,6 +1314,34 @@
         "dsp": "Not available while sound processing is on.",
         "noDsd": "No DSD reaches this DAC: choose a DAC that accepts it (natively or as DoP) and a DSD mode other than \"Convert to PCM\"."
       }
+    },
+    "convert": {
+      "label": "Server-side conversion",
+      "pcm": "PCM upsampling",
+      "dsd": "DSD",
+      "help": "Convert every PCM track on its way to the player: raise its sample rate (PCM upsampling) or turn it into DSD. The two cannot be on at the same time.",
+      "extDsd": "On: this player receives everything as {rate}, as long as it can play it.",
+      "extPcm": "On: this player receives PCM upsampled {rate}, as long as it can play it."
+    },
+    "upsample": {
+      "label": "Upsampling",
+      "help": "Every PCM track is resampled to a higher rate of the same family (44.1 or 48 kHz) before it reaches the player: ×2, ×4, or as high as the DAC accepts. Lossless, done while it plays. DSD files and tracks already at the target rate are left as they are.",
+      "active": "On: PCM tracks are upsampled {rate}.",
+      "max": "Max",
+      "why": {
+        "noTools": "This device needs a system update before it can upsample.",
+        "remoteServer": "For a zone it only works when this device is its own Lyrion server: the music now comes from another one.",
+        "dsp": "Not available while sound processing is on."
+      }
+    },
+    "extPlayers": {
+      "help": "Any other player connected to this device's Lyrion server, such as a squeezelite on another computer, can have its music converted here too.",
+      "caveat": "The conversion runs on this device's processor, and the listener's own DAC decides whether it can play what it receives. Osmium cannot check the remote DAC: you choose, at your own risk.",
+      "noLyrion": "This works only when this device is its own Lyrion server. It is now following another one, so it has no players to list.",
+      "none": "No other players are connected to this server right now.",
+      "online": "connected",
+      "offline": "offline",
+      "clear": "Turn conversion off for this player"
     }
   },
   "files": {

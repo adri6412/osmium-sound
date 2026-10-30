@@ -48,6 +48,9 @@ Item {
     property string zoneNewOut: ""
     property string zoneNewName: ""
     property bool zoneBusy: false
+    // External players: which player's panel is open, and a write in flight.
+    property int extBand: -1
+    property bool extBusy: false
     property bool btBusy: false
     property bool btScanning: false
     // Telecomando: la prova dei tasti e il Bluetooth della sua sezione.
@@ -155,6 +158,7 @@ Item {
         { id: "audioAdvanced", icon: "option", key: "settings.sections.audioAdvanced" },
         { id: "zones", icon: "usb", key: "settings.sections.zones" },
         { id: "btSpeakers", icon: "bluetooth", key: "settings.sections.btSpeakers" },
+        { id: "extPlayers", icon: "speaker", key: "settings.sections.extPlayers" },
         { id: "remote", icon: "remote", key: "settings.sections.remote" },
         { id: "playback", icon: "sliders", key: "settings.sections.playback" },
         { id: "vuMeters", icon: "audio-lines", key: "settings.sections.vuMeters" },
@@ -190,7 +194,7 @@ Item {
     onGrpChanged: page.contentY = 0                         // a different grid starts at its top
     readonly property var groups: [
         { id: "music", icon: "library", secs: ["library", "sources", "cdRip", "playback", "multiroom", "alarm"] },
-        { id: "sound", icon: "volume-2", secs: ["audio", "audioAdvanced", "zones", "btSpeakers"] },
+        { id: "sound", icon: "volume-2", secs: ["audio", "audioAdvanced", "zones", "btSpeakers", "extPlayers"] },
         { id: "look", icon: "monitor", secs: ["language", "uiMotion", "vuMeters", "animations", "uiResolution", "uiScreens", "uiRefresh", "displayMode", "pointer"] },
         { id: "control", icon: "remote", secs: ["remote", "webRemote", "webRemoteIos"] },
         { id: "network", icon: "wifi", secs: ["network", "ssh"] },
@@ -276,6 +280,21 @@ Item {
             Api.get(api("/zones"), function(ok, d) {
                 if (ok && d && d.zones) setZones(d)
                 root.zoneBusy = false; root.rebuild()
+            }, 20000)
+        }
+        // External Lyrion players (api /external_convert): the players on this
+        // box's Lyrion that are not its own, each with its saved conversion
+        // choice. Read only while the section is open. lyrion=false when this
+        // box is following another server (no players to offer).
+        property var ext: ({ loaded: false, lyrion: false, players: [], info: ({ dsd: {}, upsample: {} }) })
+        function setExt(d) {
+            ext = { loaded: true, lyrion: d.lyrion !== false, players: d.players || [],
+                    info: d.info || { dsd: {}, upsample: {} } }
+        }
+        function loadExt() {
+            Api.get(api("/external_convert"), function(ok, d) {
+                if (ok && d) setExt(d)
+                root.extBusy = false; root.rebuild()
             }, 20000)
         }
         // Settings → CD ripping (sources_server /api/cd/settings, hifi_cdrip.py)
@@ -681,11 +700,58 @@ Item {
         if (patch.pcm2dsd !== undefined) say(Tr.t("settings.pcm2dsd.applying"))
         Api.post(cfg.api("/zones/update"), body, zoneApply, 90000)
     }
-    // "<zone id>|<value>" for a zone's row, "<value>" for the built-in player's
+    // "<zone id>|<value>" for a zone's row, "ext:<mac>|<value>" for an external
+    // player, "<value>" for the built-in player's. MACs use ':', not '|'.
     function splitZoneArg(arg) {
         var i = arg.indexOf("|")
         return i >= 0 ? { zid: arg.slice(0, i), v: arg.slice(i + 1) } : { zid: "", v: arg }
     }
+    // the conversion target behind a context token: built-in (""), a zone, or
+    // an external player ("ext:<mac>"). convConf reads its current conf; convApply
+    // routes a patch to the right endpoint.
+    function convConf(zid) {
+        if (zid.indexOf("ext:") === 0) { var er = extRow(zid.slice(4)); return er ? (er.conf || {}) : {} }
+        if (zid) { var zz = zoneById(zid); return zz ? (zz.conf || {}) : {} }
+        return cfg.sq.conf || {}
+    }
+    function convApply(zid, patch) {
+        if (zid.indexOf("ext:") === 0) extSet(zid.slice(4), patch)
+        else if (zid) zoneSet(zid, patch)
+        else sqSet(patch)
+    }
+    function firstDsdMode(zid) {
+        var modes
+        if (zid.indexOf("ext:") === 0) modes = ((cfg.ext.info.dsd || {}).modes) || []
+        else if (zid) modes = (cfg.zones.pcm2dsd || {}).modes || []
+        else modes = (cfg.sq.pcm2dsd || {}).modes || []
+        var m = modes.filter(function(x) { return x !== "off" })
+        return m.length ? m[0] : "dsd64"
+    }
+    // External Lyrion players (api /external_convert): the backend rebuilds each
+    // choice from defaults, so every write carries the whole conf, not a patch.
+    function extRow(mac) {
+        var ps = cfg.ext.players || []
+        for (var i = 0; i < ps.length; i++) if (ps[i].mac === mac) return ps[i]
+        return null
+    }
+    function extApply(ok, d) {
+        extBusy = false
+        if (ok && d && d.players !== undefined) cfg.setExt(d)
+        if (!ok || !d) { say(Tr.t("settings.audio.saveFailed"), true); return }
+        if (d.message) { say(String(d.message), d.success === false); return }
+        rebuild()
+    }
+    function extSet(mac, patch) {
+        var row = extRow(mac), c = row ? (row.conf || {}) : {}
+        var body = { mac: mac, name: row ? String(row.name || "") : "",
+                     pcm2dsd: String(c.pcm2dsd || "off"), pcm2dsd_filter: String(c.pcm2dsd_filter || "clans-8"),
+                     upsample: String(c.upsample || "off"), upsample_cap: c.upsample_cap || 0 }
+        for (var k in patch) body[k] = patch[k]
+        extBusy = true
+        say(Tr.t("settings.pcm2dsd.applying"))
+        Api.post(cfg.api("/external_convert/update"), body, extApply, 90000)
+    }
+    function extRemove(mac) { extBusy = true; Api.post(cfg.api("/external_convert/remove"), { mac: mac }, extApply, 90000) }
     function sqReset() { post(cfg.api("/squeezelite_conf/reset"), {}, sqDone) }
     // CD ripping: one call per row, the server answers with the whole
     // settings and a message; post() reloads cfg afterwards
@@ -765,6 +831,7 @@ Item {
         if (id === "multiroom") cfg.loadLibrary()
         if (id === "btSpeakers") { btBusy = true; cfg.loadBt() }
         if (id === "zones") { zoneBusy = true; cfg.loadZones() }
+        if (id === "extPlayers") { extBusy = true; extBand = -1; cfg.loadExt() }
         if (id === "remote") { remoteBusy = true; cfg.loadRemotes() }
         if (id === "vuMeters") cfg.loadStore(true)
         if (id === "animations") cfg.loadAnimStore(true)
@@ -1019,6 +1086,7 @@ Item {
             case "audio": secAudio(); break
             case "audioAdvanced": secAudioAdvanced(); break
             case "zones": secZones(); break
+            case "extPlayers": secExternal(); break
             case "playback": secPlayback(); break
             case "vuMeters": secVuMeters(); break
             case "animations": secAnimations(); break
@@ -1335,38 +1403,59 @@ Item {
         if (!cfg.sq.loaded) { helpText(Tr.t("common.loading"), 13); return }
         secSqueezelite()
     }
-    // "Convert to DSD" for one player: the built-in one (zid "") or a zone.
-    // This device's Lyrion converts every PCM track on its way there
-    // (hifi-pcm2dsd.py); with another Lyrion server the built-in player
-    // converts it itself (hifi-pcm2dsd-player.py). The rows say why it may
-    // not apply, and whether the digital volume still acts on the signal.
-    function secPcm2dsd(mode, filter, state, info, volume, zid) {
+    // Server-side conversion for one player: the built-in one (zid ""), a zone
+    // (zid "<id>"), or an external Lyrion player (zid "ext:<mac>", external).
+    // A single three-mode control — Off / PCM upsampling (×2·×4·max) / DSD
+    // (64·128·256 + noise shaping). This device's Lyrion converts every PCM
+    // track on its way to the player (hifi-upsample.py / hifi-pcm2dsd.py); the
+    // two conversions are mutually exclusive (the backend enforces it). The
+    // rows say why it may not apply, and — for DSD — whether the digital volume
+    // still acts on the signal.
+    function pcmLabel(m) { return m === "max" ? Tr.t("settings.upsample.max") : "×" + m.slice(1) }
+    function secConvert(mode, filter, upsample, state, ustate, info, volume, zid, external) {
         var pre = zid ? zid + "|" : "", i
-        label("settings.pcm2dsd.label", 14)
-        if (!info.available) { note(Tr.t("settings.pcm2dsd.why.noTools"), "dark", "info"); return }
-        // measured, and not even DSD64 fits: say so instead of a lone "Off"
-        if (info.measured && mode === "off" && (info.modes || []).length <= 1) { note(Tr.t("settings.pcm2dsd.tooSlow"), "dark", "info"); return }
-        help("settings.pcm2dsd.help", 12)
-        var modes = (info.modes || ["off"]).slice()
-        if (modes.indexOf(mode) < 0) modes.push(mode)        // chosen earlier, no longer offered
-        var mc = []
-        for (i = 0; i < modes.length; i++)
-            mc.push(cell(modes[i] === "off" ? Tr.t("settings.audio.off") : modes[i].toUpperCase(), pre + modes[i],
-                         mode === modes[i], "p2d_mode", { hh: 44 }))
-        grid(mc)
-        if (state === "player") helpText(Tr.tf("settings.pcm2dsd.player", "rate", mode.toUpperCase()), 12)
-        else if (state !== "off" && state !== "active") note(Tr.t("settings.pcm2dsd.why." + state), "red", "alert-triangle")
-        else if (state === "active") {
-            helpText(Tr.tf("settings.pcm2dsd.active", "rate", mode.toUpperCase()), 12)
-            if (volume !== "hardware") note(Tr.t("settings.pcm2dsd.volumeWarning"), "red", "volume-2")
+        var uinfo = info.upsample || {}
+        var dsdOk = !!info.available, pcmOk = !!uinfo.available
+        label("settings.convert.label", 14)
+        if (!dsdOk && !pcmOk) { note(Tr.t("settings.pcm2dsd.why.noTools"), "dark", "info"); return }
+        // measured, and not even DSD64 fits: offer PCM/Off, drop the DSD button
+        var tooSlow = info.measured && (info.modes || []).length <= 1 && mode === "off"
+        var top = mode !== "off" ? "dsd" : upsample !== "off" ? "pcm" : "off"
+        var tc = [cell(Tr.t("settings.audio.off"), pre + "off", top === "off", "conv_top", { hh: 44 })]
+        if (pcmOk) tc.push(cell(Tr.t("settings.convert.pcm"), pre + "pcm", top === "pcm", "conv_top", { hh: 44 }))
+        if (dsdOk && !tooSlow) tc.push(cell(Tr.t("settings.convert.dsd"), pre + "dsd", top === "dsd", "conv_top", { hh: 44 }))
+        grid(tc)
+        help("settings.convert.help", 12)
+        if (dsdOk && tooSlow && top !== "dsd") note(Tr.t("settings.pcm2dsd.tooSlow"), "dark", "info")
+
+        if (top === "pcm") {
+            label("settings.upsample.label", 14)
+            var um = (uinfo.modes || ["off"]).filter(function(m) { return m !== "off" }), umc = []
+            for (i = 0; i < um.length; i++) umc.push(cell(pcmLabel(um[i]), pre + um[i], upsample === um[i], "ups_mode", { hh: 44 }))
+            grid(umc)
+            help("settings.upsample.help", 12)
+            if (ustate !== "off" && ustate !== "active") note(Tr.t("settings.upsample.why." + ustate), "red", "alert-triangle")
+            else if (ustate === "active") helpText(Tr.tf(external ? "settings.convert.extPcm" : "settings.upsample.active", "rate", pcmLabel(upsample)), 12)
+        } else if (top === "dsd") {
+            var dmodes = (info.modes || ["off"]).filter(function(m) { return m !== "off" })
+            if (mode !== "off" && dmodes.indexOf(mode) < 0) dmodes.push(mode)   // chosen earlier, no longer offered
+            var dc = []
+            for (i = 0; i < dmodes.length; i++) dc.push(cell(dmodes[i].toUpperCase(), pre + dmodes[i], mode === dmodes[i], "p2d_mode", { hh: 44 }))
+            grid(dc)
+            if (external && state === "active") helpText(Tr.tf("settings.convert.extDsd", "rate", mode.toUpperCase()), 12)
+            else if (state === "player") helpText(Tr.tf("settings.pcm2dsd.player", "rate", mode.toUpperCase()), 12)
+            else if (state !== "off" && state !== "active") note(Tr.t("settings.pcm2dsd.why." + state), "red", "alert-triangle")
+            else if (state === "active") {
+                helpText(Tr.tf("settings.pcm2dsd.active", "rate", mode.toUpperCase()), 12)
+                if (!external && volume !== "hardware") note(Tr.t("settings.pcm2dsd.volumeWarning"), "red", "volume-2")
+            }
+            if (!external && !info.measured) helpText(Tr.t("settings.pcm2dsd.measuring"), 12)
+            label("settings.pcm2dsd.filterLabel", 14); help("settings.pcm2dsd.filterHelp", 12)
+            var fl = info.filters || [], fc = []
+            for (i = 0; i < fl.length; i++)
+                fc.push(cell(Tr.t("settings.pcm2dsd.filter." + fl[i]), pre + fl[i], filter === fl[i], "p2d_filter", { hh: 44 }))
+            grid(fc)
         }
-        if (!info.measured) helpText(Tr.t("settings.pcm2dsd.measuring"), 12)
-        if (mode === "off") return
-        label("settings.pcm2dsd.filterLabel", 14); help("settings.pcm2dsd.filterHelp", 12)
-        var fl = info.filters || [], fc = []
-        for (i = 0; i < fl.length; i++)
-            fc.push(cell(Tr.t("settings.pcm2dsd.filter." + fl[i]), pre + fl[i], filter === fl[i], "p2d_filter", { hh: 44 }))
-        grid(fc)
     }
     // Settings → Audio zones: every further DAC a Lyrion player of its own
     // (api /zones, hifi-zone@<id>), next to the built-in one.
@@ -1396,8 +1485,9 @@ Item {
             grid(dc)
             if (zn.mixers && zn.mixers.length) toggle(Tr.t("settings.audio.volumeHardware"), Tr.t("settings.audio.volumeHelp"), c.volume === "hardware", "zone_hwvol", zn.id)
             else note(Tr.t("settings.audio.volumeNoMixer"), "dark")
-            secPcm2dsd(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(zn.pcm2dsd_state || "off"),
-                       z.pcm2dsd || {}, String(c.volume || "software"), zn.id)
+            secConvert(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(c.upsample || "off"),
+                       String(zn.pcm2dsd_state || "off"), String(zn.upsample_state || "off"),
+                       z.pcm2dsd || {}, String(c.volume || "software"), zn.id, false)
             grid([acell(Tr.t("settings.zones.remove"), "zone_remove", "red", { hh: 40, arg: zn.id, icon: "trash-2" })])
             end()
         }
@@ -1417,6 +1507,39 @@ Item {
             }
         }
         var rf = action(Tr.t("settings.zones.refresh"), "zone_refresh", "dark"); rf.icon = "rotate-cw"; rf.hh = 44
+    }
+    // Settings → External players: any other squeezelite on this box's Lyrion
+    // server (api /external_convert) can be converted too. The list comes from
+    // Lyrion serverstatus (this box's own players filtered out); the DAC of the
+    // one who listens decides whether it can play what it receives.
+    function secExternal() {
+        help("settings.extPlayers.help")
+        var e = cfg.ext
+        if (!e.loaded) { helpText(Tr.t("common.loading"), 13); return }
+        if (!e.lyrion) { note(Tr.t("settings.extPlayers.noLyrion"), "red", "alert-triangle"); return }
+        note(Tr.t("settings.extPlayers.caveat"), "dark", "info")
+        var ps = e.players || []
+        if (!ps.length) { helpText(Tr.t("settings.extPlayers.none"), 13); return }
+        // the external info shape ({dsd, upsample}) adapted to what secConvert wants
+        var dinfo = e.info.dsd || {}
+        var cinfo = { modes: dinfo.modes, measured: dinfo.measured, filters: dinfo.filters,
+                      available: dinfo.available, upsample: e.info.upsample || {} }
+        for (var i = 0; i < ps.length; i++) {
+            var p = ps[i], c = p.conf || {}
+            var on = String(c.pcm2dsd || "off") !== "off" || String(c.upsample || "off") !== "off"
+            var st = p.connected ? Tr.t("settings.extPlayers.online") : Tr.t("settings.extPlayers.offline")
+            var sub = String(p.model || p.mac) + "   ·   " + st
+            var b = bandRow("speaker", String(p.name || p.mac), sub, extBand === i, "ext_band", String(i), false)
+            if (extBand !== i) continue
+            begin(b.children)
+            secConvert(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(c.upsample || "off"),
+                       String(c.pcm2dsd || "off") !== "off" ? "active" : "off",
+                       String(c.upsample || "off") !== "off" ? "active" : "off",
+                       cinfo, "hardware", "ext:" + p.mac, true)
+            if (on) grid([acell(Tr.t("settings.extPlayers.clear"), "ext_clear", "red", { hh: 40, arg: p.mac, icon: "trash-2" })])
+            end()
+        }
+        var rf = action(Tr.t("settings.zones.refresh"), "ext_refresh", "dark"); rf.icon = "rotate-cw"; rf.hh = 44; rf.dim = extBusy
     }
     // Settings → CD ripping: Daphile's page, field by field (sources_server
     // /api/cd/settings, hifi_cdrip.py). The destination is picked with the
@@ -1499,10 +1622,11 @@ Item {
         grid(mrc)
         if (s.mixers && s.mixers.length) toggle(Tr.t("settings.audio.volumeHardware"), Tr.t("settings.audio.volumeHelp"), c.volume === "hardware", "sq_hwvol")
         else note(Tr.t("settings.audio.volumeNoMixer"), "dark")
-        if (s.pcm2dsd && s.pcm2dsd.modes) {
+        if (s.pcm2dsd && (s.pcm2dsd.modes || (s.pcm2dsd.upsample && s.pcm2dsd.upsample.modes))) {
             sep()
-            secPcm2dsd(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(s.pcm2dsd.state || "off"),
-                       s.pcm2dsd, String(c.volume || "software"), "")
+            secConvert(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(c.upsample || "off"),
+                       String(s.pcm2dsd.state || "off"), String((s.pcm2dsd.upsample || {}).state || "off"),
+                       s.pcm2dsd, String(c.volume || "software"), "", false)
             sep()
         }
         toggle(Tr.t("settings.audio.alsaBufferLarge"), Tr.t("settings.audio.alsaBufferHelp"), c.alsa_buffer === "large", "sq_abuf")
@@ -2601,28 +2725,37 @@ Item {
         case "sq_rt": sqSet({ realtime: !row.on }); break
         case "sq_extra_apply": sqSet({ extra: sqExtraDirty ? sqExtraEdit : String((cfg.sq.conf || {}).extra || "") }); break
         case "sq_reset": sqReset(); break
-        case "p2d_mode": {
-            var pm = splitZoneArg(arg), pz = pm.zid ? zoneById(pm.zid) : null
-            var pconf = pm.zid ? (pz ? pz.conf || {} : {}) : (cfg.sq.conf || {})
-            var curMode = String(pconf.pcm2dsd || "off")
-            if (pm.v === curMode) return
-            var p2dApply = function() { if (pm.zid) zoneSet(pm.zid, { pcm2dsd: pm.v }); else sqSet({ pcm2dsd: pm.v }) }
-            // from PCM to DSD with the player's own volume: it stops working --
-            // except on the player's side (another server), where it converts after it
-            var playerSide = !pm.zid && (cfg.sq.pcm2dsd || {}).server_local === false
-            if (curMode === "off" && pm.v !== "off" && pconf.volume !== "hardware" && !playerSide) {
+        case "conv_top": {
+            // the three-mode switch: Off / PCM upsampling / DSD. Clears the other
+            // conversion (the backend enforces the xor too).
+            var ct = splitZoneArg(arg)
+            var ctExt = ct.zid.indexOf("ext:") === 0
+            var cconf = convConf(ct.zid)
+            var curTop = String(cconf.pcm2dsd || "off") !== "off" ? "dsd"
+                       : String(cconf.upsample || "off") !== "off" ? "pcm" : "off"
+            if (ct.v === curTop) return
+            var cpatch
+            if (ct.v === "off") cpatch = { pcm2dsd: "off", upsample: "off" }
+            else if (ct.v === "pcm") cpatch = { upsample: String(cconf.upsample || "off") !== "off" ? cconf.upsample : "x2", pcm2dsd: "off" }
+            else cpatch = { pcm2dsd: String(cconf.pcm2dsd || "off") !== "off" ? cconf.pcm2dsd : firstDsdMode(ct.zid), upsample: "off" }
+            // DSD with the player's own software volume stops it working -- except
+            // on the player's side (another server), where it converts after it,
+            // and for external players (that DAC's own volume is out of our hands)
+            var playerSide = !ct.zid && (cfg.sq.pcm2dsd || {}).server_local === false
+            if (ct.v === "dsd" && !ctExt && cconf.volume !== "hardware" && !playerSide) {
                 Ui.dialogs.confirm(Tr.t("settings.pcm2dsd.volumeConfirm"), Tr.t("settings.pcm2dsd.confirmOk"), true,
-                                   function(ok) { if (ok) p2dApply() })
+                                   function(ok) { if (ok) convApply(ct.zid, cpatch) })
                 return
             }
-            p2dApply()
+            convApply(ct.zid, cpatch)
             return
         }
-        case "p2d_filter": {
-            var pf = splitZoneArg(arg)
-            if (pf.zid) zoneSet(pf.zid, { pcm2dsd_filter: pf.v }); else sqSet({ pcm2dsd_filter: pf.v })
-            return
-        }
+        case "p2d_mode": { var pm = splitZoneArg(arg); convApply(pm.zid, { pcm2dsd: pm.v, upsample: "off" }); return }
+        case "p2d_filter": { var pf = splitZoneArg(arg); convApply(pf.zid, { pcm2dsd_filter: pf.v }); return }
+        case "ups_mode": { var um = splitZoneArg(arg); convApply(um.zid, { upsample: um.v, pcm2dsd: "off" }); return }
+        case "ext_band": { var ebi = Number(arg); extBand = (extBand === ebi) ? -1 : ebi; break }
+        case "ext_clear": extRemove(arg); return
+        case "ext_refresh": extBusy = true; cfg.loadExt(); return
         case "zone_band": {
             var zi = Number(arg)
             zoneBand = (zoneBand === zi) ? -1 : zi

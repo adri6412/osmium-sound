@@ -34,6 +34,7 @@ const sections = computed(() => [
   // One more Lyrion player per further DAC (api_server.py /zones)
   { key: 'zones',     icon: 'usb',       label: t('settings.sections.zones.label'),     desc: t('settings.sections.zones.desc') },
   { key: 'btSpeakers', icon: 'speaker',  label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
+  { key: 'extPlayers', icon: 'speaker',  label: t('settings.sections.extPlayers.label'), desc: t('settings.sections.extPlayers.desc') },
   { key: 'remote',    icon: 'remote',    label: t('settings.sections.remote.label'),    desc: t('settings.sections.remote.desc') },
   { key: 'sources',   icon: 'hard-drive', label: t('settings.sections.sources.label'),  desc: t('settings.sections.sources.desc') },
   // Daphile's CD Ripping page, field by field (sources_server /api/cd/settings)
@@ -77,7 +78,7 @@ const listedSections = computed(() => sections.value.filter(s => !s.hidden));
 const grp = ref('');
 const groups = [
   { id: 'music',   icon: 'library',  secs: ['sources', 'cdRip', 'lyrion', 'playback'] },
-  { id: 'sound',   icon: 'volume-2', secs: ['audio', 'audioAdvanced', 'zones', 'btSpeakers'] },
+  { id: 'sound',   icon: 'volume-2', secs: ['audio', 'audioAdvanced', 'zones', 'btSpeakers', 'extPlayers'] },
   { id: 'look',    icon: 'monitor',  secs: ['vuMeters', 'animations', 'display', 'language'] },
   { id: 'control', icon: 'remote',   secs: ['remote', 'companion', 'companionIos'] },
   { id: 'network', icon: 'wifi',     secs: ['network', 'tailscale', 'services', 'account'] },
@@ -336,6 +337,36 @@ function zoneState(z) {
   return z.running ? t('settings.zones.stateOn') : t('settings.zones.stateStarting');
 }
 watch(open, (v) => { if (v === 'zones') loadZones(); }, { immediate: true });
+
+// ── External Lyrion players: convert for squeezelites on this box's Lyrion ──
+// api_server.py get_external_convert / update_external_convert /
+// remove_external_convert. The list comes from Lyrion serverstatus (this box's
+// own players filtered out); each choice is persisted to external-convert.json
+// and applied by rewriting custom-convert.conf (Lyrion restart).
+const ext = ref(null); const extBusy = ref(false); const extOpen = ref('');
+// adapt the external info shape to what Pcm2Dsd expects (DSD fields at top level)
+const extInfo = computed(() => (ext.value && ext.value.info)
+  ? { ...ext.value.info.dsd, upsample: ext.value.info.upsample } : { upsample: {} });
+async function loadExt() {
+  const r = await api.sys('external_convert');
+  if (r.ok) ext.value = r.data;
+}
+watch(open, (v) => { if (v === 'extPlayers') loadExt(); });
+async function extCall(path, body, okMsg) {
+  extBusy.value = true;
+  try {
+    const r = await api.sysPost(path, body);
+    const ok = r.ok && r.data.success !== false;
+    if (ok && r.data.players !== undefined) ext.value = r.data;
+    say(bodyMsg(r, ok ? okMsg : t('settings.audio.saveFailed')), !ok);
+    return ok;
+  } finally { extBusy.value = false; }
+}
+const extSet = (p, patch) => extCall('external_convert/update',
+  { mac: p.mac, name: p.name, pcm2dsd: p.conf.pcm2dsd, pcm2dsd_filter: p.conf.pcm2dsd_filter,
+    upsample: p.conf.upsample, upsample_cap: p.conf.upsample_cap, ...patch },
+  t('settings.audio.sqSaved'));
+const extRemove = (p) => extCall('external_convert/remove', { mac: p.mac }, t('settings.audio.sqSaved'));
 
 // ── Licenses & credits ─────────────────────────────────────────────
 // api_server.py get_credits: the project, Lyrion, the hand-kept third-party
@@ -2063,7 +2094,8 @@ onUnmounted(() => {
         <!-- Every PCM track turned into DSD by Lyrion on its way to this player. -->
         <div v-if="sq.pcm2dsd" style="margin-top: 18px; padding: 16px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1);">
           <p class="sub">{{ t('settings.pcm2dsd.title') }}</p>
-          <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :state="sq.pcm2dsd.state"
+          <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :upsample="sq.conf.upsample"
+                   :state="sq.pcm2dsd.state" :upsample-state="sq.pcm2dsd.upsample.state"
                    :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
         </div>
 
@@ -2135,7 +2167,8 @@ onUnmounted(() => {
               <button :disabled="zBusy || !z.mixers.length" :class="{ active: z.conf.volume === 'hardware' }" @click="zoneSet(z, { volume: 'hardware' })">{{ t('settings.audio.volumeHardware') }}</button>
             </span>
             <p class="muted">{{ z.mixers.length ? t('settings.audio.volumeHelp') : t('settings.audio.volumeNoMixer') }}</p>
-            <Pcm2Dsd :mode="z.conf.pcm2dsd" :filter="z.conf.pcm2dsd_filter" :state="z.pcm2dsd_state"
+            <Pcm2Dsd :mode="z.conf.pcm2dsd" :filter="z.conf.pcm2dsd_filter" :upsample="z.conf.upsample"
+                     :state="z.pcm2dsd_state" :upsample-state="z.upsample_state"
                      :info="zones.pcm2dsd" :volume="z.conf.volume" :busy="zBusy" zone @set="(p) => zoneSet(z, p)" />
             <button class="danger" style="margin-top: 12px;" :disabled="zBusy" @click="zoneRemove(z)">{{ t('settings.zones.remove') }}</button>
           </div>
@@ -2153,6 +2186,38 @@ onUnmounted(() => {
           <p class="sub" v-else>{{ t('settings.zones.noFreeDac') }}</p>
         </template>
         <button class="secondary" style="margin-top: 8px;" :disabled="zBusy" @click="loadZones">{{ t('settings.zones.refresh') }}</button>
+      </template>
+    </div>
+
+    <!-- External Lyrion players: any squeezelite on this box's Lyrion server,
+         other than this box's own players, can be converted too. The listener's
+         own DAC decides whether it can play what it receives. -->
+    <div class="card" v-if="open === 'extPlayers'">
+      <p class="sub">{{ t('settings.extPlayers.help') }}</p>
+      <template v-if="ext && !ext.lyrion">
+        <p class="msg err">{{ t('settings.extPlayers.noLyrion') }}</p>
+      </template>
+      <template v-else-if="ext">
+        <p class="muted">{{ t('settings.extPlayers.caveat') }}</p>
+        <p class="sub" v-if="!ext.players.length">{{ t('settings.extPlayers.none') }}</p>
+        <template v-for="p in ext.players" :key="p.mac">
+          <div class="net between" @click="extOpen = extOpen === p.mac ? '' : p.mac">
+            <span>
+              <span style="display:block;">{{ p.name }}</span>
+              <span class="muted">{{ p.model || p.mac }} · {{ p.connected ? t('settings.extPlayers.online') : t('settings.extPlayers.offline') }}</span>
+            </span>
+            <span class="check">{{ extOpen === p.mac ? '▾' : '▸' }}</span>
+          </div>
+          <div v-if="extOpen === p.mac" style="padding: 0 4px 10px;">
+            <Pcm2Dsd :mode="p.conf.pcm2dsd" :filter="p.conf.pcm2dsd_filter" :upsample="p.conf.upsample"
+                     :state="p.conf.pcm2dsd === 'off' ? 'off' : 'active'"
+                     :upsample-state="p.conf.upsample === 'off' ? 'off' : 'active'"
+                     :info="extInfo" :busy="extBusy" external @set="(patch) => extSet(p, patch)" />
+            <button class="danger" style="margin-top: 12px;" v-if="p.conf.pcm2dsd !== 'off' || p.conf.upsample !== 'off'"
+                    :disabled="extBusy" @click="extRemove(p)">{{ t('settings.extPlayers.clear') }}</button>
+          </div>
+        </template>
+        <button class="secondary" style="margin-top: 8px;" :disabled="extBusy" @click="loadExt">{{ t('settings.zones.refresh') }}</button>
       </template>
     </div>
 

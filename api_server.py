@@ -2254,14 +2254,14 @@ def get_squeezelite_conf():
         'dsd_format': fmt,
         'mixers': sq.mixer_controls(model['output']),
         'choices': {'dsd': list(sq.DSD_MODES), 'dsd_delay_ms': list(sq.DSD_DELAYS),
-                    'max_rate': [0, 96000, 192000, 384000]},
+                    'max_rate': [0, 96000, 192000, 384000], 'upsample': list(sq.UPSAMPLE_MODES)},
         'defaults': {k: sq.DEFAULTS[k] for k in sq.TUNABLE},
         'pcm2dsd': _pcm2dsd_info(model, fmt),
     }
 
 def set_squeezelite_conf(changes):
     def change(model):
-        _check_pcm2dsd_mode(changes)
+        _check_convert_mode(changes)
         model = sq.set_fields(model, changes)
         if model['volume'] == 'hardware' and not model['mixer']:
             mixers = sq.mixer_controls(model['output'])
@@ -2310,6 +2310,8 @@ def _apply_squeezelite_conf(change, msg_key):
 # the wrapper reads them at every track.
 ZONES_CONF = sq.ZONES_CONF
 PCM2DSD_MAP = sq.PCM2DSD_MAP
+UPSAMPLE_MAP = sq.UPSAMPLE_MAP
+EXTERNAL_CONVERT = sq.EXTERNAL_CONVERT
 LMS_CONVERT = sq.LMS_CONVERT
 PCM2DSD_BENCH_FILE = '/var/lib/hifi-player/pcm2dsd-bench.json'
 # The share of real time a DSD rate may take on this CPU and still be offered:
@@ -2402,7 +2404,11 @@ def _pcm2dsd_modes():
     return ['off'] + ok, True
 
 
-def _check_pcm2dsd_mode(changes):
+def _check_convert_mode(changes):
+    """The server-side conversion a change asks for must be one this CPU can
+    sustain. Only DSD is gated on the measured CPU cost; PCM upsampling is far
+    lighter and always offered. The DSD-xor-upsample invariant is enforced in
+    sq.set_fields, which raises before this matters."""
     mode = (changes or {}).get('pcm2dsd')
     if mode in (None, 'off'):
         return
@@ -2411,11 +2417,15 @@ def _check_pcm2dsd_mode(changes):
 
 
 def _pcm2dsd_info(model, fmt):
-    """What Settings → Audio needs to show the choice for one player."""
+    """What Settings → Audio needs to show the three-mode conversion control
+    for one player: the DSD choice (gated on this CPU) and PCM upsampling."""
     modes, measured = _pcm2dsd_modes()
     return {'state': sq.pcm2dsd_state(model, fmt), 'modes': modes, 'measured': measured,
             'filters': list(sq.PCM2DSD_FILTERS), 'available': sq.tools_present(),
-            'server_local': sq.server_is_local(model['server'])}
+            'server_local': sq.server_is_local(model['server']),
+            'upsample': {'state': sq.upsample_state(model),
+                         'modes': list(sq.UPSAMPLE_MODES),
+                         'available': sq.upsample_tools_present()}}
 
 
 def _pcm2dsd_resync():
@@ -2423,7 +2433,8 @@ def _pcm2dsd_resync():
     and a running Lyrion was restarted to read them."""
     try:
         changed = sq.sync_pcm2dsd(SQUEEZELITE_CONF, ZONES_CONF, PCM2DSD_MAP, LMS_CONVERT,
-                                  SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
+                                  SQUEEZELITE_DEFAULT, DSP_TARGET_FILE,
+                                  external_path=EXTERNAL_CONVERT, upsample_map_path=UPSAMPLE_MAP)
     except Exception:
         log.exception("pcm2dsd: writing Lyrion's rules failed")
         return False
@@ -2441,12 +2452,158 @@ def _pcm2dsd_resync():
         return False
 
 
+# ── External players: server-side conversion for squeezelites elsewhere ──
+# Any squeezelite on the LAN can play from this box's Lyrion. The same
+# per-MAC custom-convert.conf rules that convert for the built-in player and
+# the zones can convert for those external players too, when the user picks
+# them from Settings → External players. Their choices live in
+# external-convert.json (sq.load_external), read when Lyrion's rules are built
+# — at boot before Lyrion starts, so nothing is queried live there. The
+# serverstatus query below is only to show the list in the UI.
+def _external_default():
+    return {'name': '', 'pcm2dsd': 'off', 'pcm2dsd_filter': sq.DEFAULTS['pcm2dsd_filter'],
+            'upsample': 'off', 'upsample_cap': 0}
+
+
+def _own_box_macs(players):
+    """The lower-case MACs of every player this box runs itself — the built-in
+    player, its zones, and its Bluetooth speakers — which must not appear in
+    the external-players list."""
+    mine = {str(pid).lower() for pid in _own_player_ids(players) if pid}
+    try:
+        for z in sq.load_zones(ZONES_CONF):
+            if z.get('mac'):
+                mine.add(str(z['mac']).lower())
+    except Exception:
+        log.exception("external_convert: reading zones")
+    try:
+        for s in (_bt_read_doc().get('speakers') or []):
+            if s.get('mac'):
+                mine.add(_bt_player_mac(str(s['mac'])).lower())
+    except Exception:
+        log.exception("external_convert: reading Bluetooth speakers")
+    return mine
+
+
+def _external_player_list():
+    """[{mac, name, connected, model}] of the players on this box's Lyrion that
+    are not this box's own squeezelites, or None when Lyrion is unreachable."""
+    try:
+        result = _lms_request('-', ['serverstatus', 0, 999]) or {}
+    except Exception:
+        return None
+    players = result.get('players_loop') or []
+    mine = _own_box_macs(players)
+    out = []
+    for p in players:
+        mac = str(p.get('playerid') or '').strip().lower()
+        if not mac or mac in mine or not sq._MAC_RE.match(mac):
+            continue
+        out.append({'mac': mac, 'name': str(p.get('name') or mac),
+                    'connected': bool(p.get('connected', 1)),
+                    'model': str(p.get('modelname') or p.get('model') or '')})
+    return out
+
+
+def _external_info():
+    modes, measured = _pcm2dsd_modes()
+    return {'dsd': {'modes': modes, 'measured': measured, 'filters': list(sq.PCM2DSD_FILTERS),
+                    'available': sq.tools_present()},
+            'upsample': {'modes': list(sq.UPSAMPLE_MODES), 'available': sq.upsample_tools_present()},
+            'caps': [0, 96000, 192000, 384000, 768000]}
+
+
+def get_external_convert():
+    """The external players the user may convert, each with its saved choice.
+    Players saved but not currently connected are still listed, flagged
+    offline, so the user can see and clear them."""
+    saved = sq.load_external(EXTERNAL_CONVERT)
+    players = _external_player_list()
+    info = _external_info()
+    if players is None:
+        return {'success': False, 'code': 'lms.unreachable', 'message': _t('lms.unreachable', _lang()),
+                'players': [], 'info': info, 'lyrion': False}
+    seen, rows = set(), []
+    for p in players:
+        seen.add(p['mac'])
+        rows.append({**p, 'conf': saved.get(p['mac']) or _external_default()})
+    for mac, conv in saved.items():
+        if mac not in seen:
+            rows.append({'mac': mac, 'name': conv.get('name') or mac,
+                         'connected': False, 'model': '', 'conf': conv})
+    return {'success': True, 'players': rows, 'info': info, 'lyrion': True}
+
+
+def _write_external(saved):
+    os.makedirs(os.path.dirname(EXTERNAL_CONVERT), exist_ok=True)
+    _write_file_atomic(EXTERNAL_CONVERT, json.dumps(saved, indent=2, sort_keys=True) + '\n')
+
+
+def _external_ok(result):
+    """Finish an external-convert write: resync Lyrion's rules, then return the
+    refreshed list with the right message."""
+    out = {'success': True, 'message': _t('squeezelite.saved', _lang())}
+    if _pcm2dsd_resync():
+        out['message'] = _t('squeezelite.savedLyrionRestart', _lang())
+        out['lyrion_restarted'] = True
+    refreshed = get_external_convert()
+    refreshed['message'] = out['message']
+    refreshed.update({k: out[k] for k in ('lyrion_restarted',) if k in out})
+    return refreshed
+
+
+def update_external_convert(changes):
+    changes = changes if isinstance(changes, dict) else {}
+    mac = str(changes.get('mac') or '').strip().lower()
+    if not sq._MAC_RE.match(mac):
+        return {'success': False, 'code': 'squeezelite.invalidValue',
+                'message': _t('squeezelite.invalidValue', _lang(), field='mac', detail=mac)}
+    fields = {k: changes[k] for k in ('pcm2dsd', 'pcm2dsd_filter', 'upsample', 'upsample_cap')
+              if k in changes}
+    try:
+        _check_convert_mode(fields)
+        model = sq.set_fields(sq.normalize({}), fields)
+    except sq.InvalidField as e:
+        return {'success': False, 'code': e.code,
+                'message': _t(e.code, _lang(), field=e.field, detail=e.detail)}
+    name = ' '.join(str(changes.get('name') or '').split())[:40]
+    saved = sq.load_external(EXTERNAL_CONVERT)
+    if model['pcm2dsd'] == 'off' and model['upsample'] == 'off':
+        saved.pop(mac, None)                       # nothing to convert: drop the row
+    else:
+        saved[mac] = {'name': name, 'pcm2dsd': model['pcm2dsd'],
+                      'pcm2dsd_filter': model['pcm2dsd_filter'],
+                      'upsample': model['upsample'], 'upsample_cap': model['upsample_cap']}
+    try:
+        _write_external(saved)
+    except Exception:
+        log.exception("external_convert: write failed")
+        return {'success': False, 'code': 'audio.writeConfigFailed',
+                'message': _t('audio.writeConfigFailed', _lang())}
+    return _external_ok(None)
+
+
+def remove_external_convert(changes):
+    mac = str((changes or {}).get('mac') or '').strip().lower()
+    saved = sq.load_external(EXTERNAL_CONVERT)
+    if mac in saved:
+        saved.pop(mac, None)
+        try:
+            _write_external(saved)
+        except Exception:
+            log.exception("external_convert: write failed")
+            return {'success': False, 'code': 'audio.writeConfigFailed',
+                    'message': _t('audio.writeConfigFailed', _lang())}
+    return _external_ok(None)
+
+
 # ── Audio zones: one more player per DAC ────────────────────────────
 # Each further DAC can be a Lyrion player of its own (hifi_squeezelite's
 # zones, run by hifi-zone@<id>.service). The built-in player keeps its DAC;
 # a DAC is either the built-in player's or one zone's, never both.
 ZONE_TUNABLE = ('dsd', 'dsd_delay_ms', 'max_rate', 'volume', 'mixer', 'alsa_buffer',
-                'stream_buffer', 'realtime', 'pcm2dsd', 'pcm2dsd_filter')
+                'stream_buffer', 'realtime', 'pcm2dsd', 'pcm2dsd_filter',
+                'upsample', 'upsample_cap')
 
 
 def _zones_fail(code, **kw):
@@ -2497,13 +2654,16 @@ def get_zones():
             'dsd_detected': 'native' if sq.is_native(fmt) else ('pcm' if fmt == sq.PCM_ONLY else 'dop'),
             'mixers': sq.mixer_controls(z['output']),
             'pcm2dsd_state': sq.pcm2dsd_state(with_server, fmt),
+            'upsample_state': sq.upsample_state(with_server, zone=True),
         })
     free = [{'id': d['id'], 'name': d['name'], 'dsd': d.get('dsd')} for d in devices
             if d['id'] not in used and sq.zone_id(d['id'])]
     return {'success': True, 'zones': out, 'free': free, 'max': sq.MAX_ZONES,
             'main_output': main['output'], 'main_output_name': names.get(main['output'], main['output']),
             'pcm2dsd': {'modes': modes, 'measured': measured, 'filters': list(sq.PCM2DSD_FILTERS),
-                        'available': sq.tools_present(), 'server_local': sq.server_is_local(main['server'])},
+                        'available': sq.tools_present(), 'server_local': sq.server_is_local(main['server']),
+                        'upsample': {'modes': list(sq.UPSAMPLE_MODES),
+                                     'available': sq.upsample_tools_present()}},
             'choices': {'dsd': list(sq.DSD_MODES)}}
 
 
@@ -2545,7 +2705,7 @@ def zone_update(zid, changes):
     if unknown:
         return _zones_fail('squeezelite.unknownField', field=unknown[0], detail='')
     try:
-        _check_pcm2dsd_mode(changes)
+        _check_convert_mode(changes)
     except sq.InvalidField as e:
         return _zones_fail(e.code, field=e.field, detail=e.detail)
     name = None
@@ -2795,7 +2955,8 @@ def set_lms_role(mode, host):
     # the choice, written before that Lyrion is started or stopped below.
     try:
         sq.sync_pcm2dsd(SQUEEZELITE_CONF, ZONES_CONF, PCM2DSD_MAP, LMS_CONVERT,
-                        SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
+                        SQUEEZELITE_DEFAULT, DSP_TARGET_FILE,
+                        external_path=EXTERNAL_CONVERT, upsample_map_path=UPSAMPLE_MAP)
     except Exception:
         log.exception("set_lms_role: PCM to DSD rules")
     # Before the player restart below, so squeezelite comes back up with the
@@ -10985,6 +11146,20 @@ def api_zone_update():
 def api_zone_remove():
     data = request.get_json(silent=True) or {}
     return jsonify(zone_remove(str(data.get('id') or '')))
+
+@app.route('/external_convert', methods=['GET'])
+def api_external_convert():
+    return jsonify(get_external_convert())
+
+@app.route('/external_convert/update', methods=['POST'])
+def api_external_convert_update():
+    data = request.get_json(silent=True) or {}
+    return jsonify(update_external_convert(data))
+
+@app.route('/external_convert/remove', methods=['POST'])
+def api_external_convert_remove():
+    data = request.get_json(silent=True) or {}
+    return jsonify(remove_external_convert(data))
 
 @app.route('/lms_role', methods=['GET'])
 def api_lms_role():

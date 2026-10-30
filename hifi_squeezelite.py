@@ -91,6 +91,13 @@ ZONES_CONF = '/etc/hifi-player/zones.json'
 # What the PCM → DSD wrapper reads to know each player's rate and filter. Not
 # the models themselves: it runs as Lyrion's user, for every track.
 PCM2DSD_MAP = '/etc/hifi-player/pcm2dsd.json'
+# What the PCM upsampling wrapper reads: {mac: {mult, cap}}, same idea.
+UPSAMPLE_MAP = '/etc/hifi-player/upsample.json'
+# Players on another Lyrion that the user chose to convert through this box's
+# Lyrion (server-side, like C-3PO). {mac: {name, pcm2dsd, pcm2dsd_filter,
+# upsample, upsample_cap}}. Read at boot; never probed (the remote DAC is
+# unknown), so the user's choice is trusted.
+EXTERNAL_CONVERT = '/etc/hifi-player/external-convert.json'
 # Lyrion reads custom-convert.conf next to its convert.conf, and only at start.
 # /etc/squeezeboxserver points into the Lyrion version in use, so a Lyrion
 # update leaves a fresh directory: the rules are written again at every boot
@@ -98,6 +105,7 @@ PCM2DSD_MAP = '/etc/hifi-player/pcm2dsd.json'
 LMS_CONVERT = '/etc/squeezeboxserver/custom-convert.conf'
 SOX_NG = '/usr/local/bin/sox_ng'
 PCM2DSD_WRAPPER = '/usr/local/sbin/hifi-pcm2dsd.py'
+UPSAMPLE_WRAPPER = '/usr/local/sbin/hifi-upsample.py'
 SQUEEZELITE_BIN = '/usr/bin/squeezelite'
 DSP_RATE = 48000
 # PCM → DSD after another Lyrion server: squeezelite plays every track into
@@ -133,12 +141,14 @@ DEFAULTS = {
     'extra': '',
     'pcm2dsd': 'off',
     'pcm2dsd_filter': 'clans-8',
+    'upsample': 'off',
+    'upsample_cap': 0,
     'dsp': {'enabled': False},
 }
 # What Settings → Audio may change and "Back to defaults" resets.
 TUNABLE = ('dsd', 'dsd_delay_ms', 'max_rate', 'volume', 'mixer',
            'alsa_buffer', 'stream_buffer', 'realtime', 'extra',
-           'pcm2dsd', 'pcm2dsd_filter')
+           'pcm2dsd', 'pcm2dsd_filter', 'upsample', 'upsample_cap')
 
 DSD_MODES = ('auto', 'dop', 'native', 'off')
 RATES = (0, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000)
@@ -154,6 +164,17 @@ MANAGED_FLAGS = ('-o', '-n', '-s', '-m', '-M', '-D', '-r', '-V', '-a', '-b', '-p
 PCM2DSD_MODES = ('off', 'dsd64', 'dsd128', 'dsd256')
 PCM2DSD_RATES = {'dsd64': 2822400, 'dsd128': 5644800, 'dsd256': 11289600}
 PCM2DSD_FILTERS = ('clans-8', 'sdm-8')
+
+# PCM upsampling: integer multiples kept inside the source's rate family
+# (44.1 kHz → 88.2/176.4/352.8/705.6, 48 kHz → 96/192/384/768), never mixing
+# the two families. `max` is the largest family multiple at or below the cap
+# (the DAC's top rate for the built-in player and zones, the player's announced
+# top rate for an external one; 0 → the universal ceiling). Mutually exclusive
+# with pcm2dsd: a player either upsamples PCM or makes DSD, never both.
+UPSAMPLE_MODES = ('off', 'x2', 'x4', 'max')
+UPSAMPLE_MULT = {'x2': 2, 'x4': 4}
+PCM_FAMILY_BASE = (44100, 48000)
+UPSAMPLE_CEILING = 768000
 
 _NAME_RE = re.compile(r'^[A-Za-z0-9_.\-]{1,24}$')
 _HOST_RE = re.compile(r'^[A-Za-z0-9.\-:\[\]]{1,253}$')
@@ -383,6 +404,17 @@ def normalize(model):
     m['pcm2dsd'] = p2d if p2d in PCM2DSD_MODES else 'off'
     flt = str(src.get('pcm2dsd_filter') or '').strip().lower()
     m['pcm2dsd_filter'] = flt if flt in PCM2DSD_FILTERS else DEFAULTS['pcm2dsd_filter']
+    ups = str(src.get('upsample') or '').strip().lower()
+    m['upsample'] = ups if ups in UPSAMPLE_MODES else 'off'
+    try:
+        cap = int(src.get('upsample_cap') or 0)
+    except (TypeError, ValueError):
+        cap = 0
+    m['upsample_cap'] = cap if cap in RATES else 0
+    # DSD and PCM upsampling are mutually exclusive; DSD wins if a hand edit
+    # set both, so a leftover upsample can never silence the DSD choice.
+    if m['pcm2dsd'] != 'off':
+        m['upsample'] = 'off'
     dsp = src.get('dsp') if isinstance(src.get('dsp'), dict) else {}
     m['dsp'] = {'enabled': bool(dsp.get('enabled'))}
     return m
@@ -433,6 +465,12 @@ def set_fields(model, changes):
         elif key == 'pcm2dsd_filter':
             if value not in PCM2DSD_FILTERS:
                 raise InvalidField('squeezelite.invalidValue', key, str(value))
+        elif key == 'upsample':
+            if value not in UPSAMPLE_MODES:
+                raise InvalidField('squeezelite.invalidValue', key, str(value))
+        elif key == 'upsample_cap':
+            if not isinstance(value, int) or isinstance(value, bool) or value not in RATES:
+                raise InvalidField('squeezelite.invalidValue', key, str(value))
         elif key == 'extra':
             clean, bad, managed = check_extra(str(value or ''))
             if managed:
@@ -441,6 +479,15 @@ def set_fields(model, changes):
                 raise InvalidField('squeezelite.extraInvalid', key, ' '.join(bad))
             value = clean
         m[key] = value
+    # DSD and PCM upsampling cannot be on at once: turning one on turns the
+    # other off in the same save, so a client only ever has to send the field
+    # it is changing.
+    if changes.get('pcm2dsd') not in (None, 'off') and m['upsample'] != 'off':
+        m['upsample'] = 'off'
+    elif changes.get('upsample') not in (None, 'off') and m['pcm2dsd'] != 'off':
+        m['pcm2dsd'] = 'off'
+    if m['pcm2dsd'] != 'off' and m['upsample'] != 'off':
+        raise InvalidField('squeezelite.convertConflict', 'upsample', m['upsample'])
     return m
 
 
@@ -572,6 +619,44 @@ def tools_present():
     return os.path.exists(SOX_NG) and os.path.exists(PCM2DSD_WRAPPER)
 
 
+def upsample_tools_present():
+    """sox_ng and the upsampling wrapper Lyrion runs for PCM upsampling."""
+    return os.path.exists(SOX_NG) and os.path.exists(UPSAMPLE_WRAPPER)
+
+
+def family_base(src_rate):
+    """The base of `src_rate`'s PCM family: 44100 for the 44.1 kHz family
+    (44.1/88.2/…), 48000 for the 48 kHz one. 48 kHz is the default for
+    anything that fits neither cleanly."""
+    r = int(src_rate or 0)
+    for base in PCM_FAMILY_BASE:
+        if r and r % base == 0:
+            return base
+    return 48000
+
+
+def upsample_target(mode, cap, src_rate):
+    """The output rate PCM upsampling aims for, kept inside `src_rate`'s family.
+    `x2`/`x4` are that multiple of the source; `max` is the largest family
+    multiple at or below `cap` (or the universal ceiling when cap is 0). Never
+    below the source rate; 0 (no change) when nothing larger fits."""
+    src = int(src_rate or 0)
+    if src <= 0 or mode == 'off':
+        return 0
+    base = family_base(src)
+    ceiling = cap if cap and cap > 0 else UPSAMPLE_CEILING
+    if mode in UPSAMPLE_MULT:
+        target = src * UPSAMPLE_MULT[mode]
+        return target if src < target <= ceiling else 0
+    # max: climb the family (base, 2·base, 4·base, …) to the top rate that fits
+    target, best = base, 0
+    while target <= ceiling:
+        if target > src:
+            best = target
+        target *= 2
+    return best
+
+
 def server_is_local(server):
     return str(server or '').strip() in ('127.0.0.1', 'localhost', '::1')
 
@@ -616,6 +701,24 @@ def pcm2dsd_state(model, fmt, zone=False):
     if not player_side_present():
         return 'noTools'
     return 'player'
+
+
+def upsample_state(model, zone=False):
+    """Why PCM upsampling of `model` does or does not apply: 'off'; 'active'
+    (this device's Lyrion upsamples, server-side); 'noTools' (an image without
+    sox_ng or the wrapper); 'dsp' (the CamillaDSP path owns the samplerate);
+    'remoteServer' (the music is on another Lyrion, which this box cannot write
+    rules into). PCM reaches any DAC, so there is no 'noDsd' here."""
+    m = normalize(model)
+    if m['upsample'] == 'off':
+        return 'off'
+    if not upsample_tools_present():
+        return 'noTools'
+    if m['dsp']['enabled']:
+        return 'dsp'
+    if server_is_local(m['server']):
+        return 'active'
+    return 'remoteServer'
 
 
 def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False):
@@ -1026,55 +1129,154 @@ _LMS_TYPES = (('flc', _DECODE_FLAC),) + tuple(
 _SPOTTY = ('# RT:{START=--start-position %s}',
            '[spotty] -n Squeezebox -c "$CACHE$" --single-track $URL$ --bitrate 320 '
            '--disable-discovery --disable-audio-cache $START$')
-RULES_BEGIN = '# BEGIN Osmium PCM to DSD -- generated by hifi_squeezelite.py, do not edit'
-RULES_END = '# END Osmium PCM to DSD'
+RULES_BEGIN = '# BEGIN Osmium PCM conversion -- generated by hifi_squeezelite.py, do not edit'
+RULES_END = '# END Osmium PCM conversion'
+# Older images wrote a DSD-only block under a different marker; strip it too on
+# upgrade so a renamed block is never left orphaned next to the new one.
+_LEGACY_MARKERS = (
+    ('# BEGIN Osmium PCM to DSD -- generated by hifi_squeezelite.py, do not edit',
+     '# END Osmium PCM to DSD'),
+)
 
 
-def pcm2dsd_players(main, zones, probe_fn=None):
-    """{mac: {'mode', 'filter', 'name'}} for every player of this device whose
-    PCM → DSD applies right now. Zones only when switched on."""
+def _convert_entry(m, fmt, zone):
+    """The conversion a probed player of this box gets right now, or None.
+    DSD wins over upsampling (the model keeps them mutually exclusive)."""
+    if m['pcm2dsd'] != 'off' and pcm2dsd_state(m, fmt, zone) == 'active':
+        return {'kind': 'dsd', 'mode': m['pcm2dsd'], 'filter': m['pcm2dsd_filter']}
+    if m['upsample'] != 'off' and upsample_state(m, zone) == 'active':
+        # No explicit cap? Never go past the rate the player already caps the
+        # DAC at (max_rate, 0 = the family ceiling).
+        return {'kind': 'pcm', 'mult': m['upsample'], 'cap': m['upsample_cap'] or m['max_rate']}
+    return None
+
+
+def _external_entry(e):
+    """The conversion an external player gets. It always plays from this box's
+    Lyrion, so there is nothing to probe — only the tools must be present."""
+    if e.get('pcm2dsd', 'off') != 'off' and tools_present():
+        return {'kind': 'dsd', 'mode': e['pcm2dsd'], 'filter': e['pcm2dsd_filter']}
+    if e.get('upsample', 'off') != 'off' and upsample_tools_present():
+        return {'kind': 'pcm', 'mult': e['upsample'], 'cap': e['upsample_cap']}
+    return None
+
+
+def convert_players(main, zones, external=None, probe_fn=None):
+    """{mac: entry} for every player converted server-side right now by this
+    box's Lyrion. Each entry has 'kind' ('dsd' or 'pcm') and its settings.
+    `main` and the enabled `zones` are probed; `external` players (chosen by
+    MAC on another device) are trusted without probing. A player of this box
+    always wins over an external row with the same MAC."""
     probe_fn = probe_fn or probe
     out = {}
-    candidates = [(main, False)] + [(dict(z, server=main['server']), True) for z in zones if z.get('enabled')]
+    candidates = [(main, False)] + [(dict(z, server=main['server']), True)
+                                    for z in zones if z.get('enabled')]
     for m, zone in candidates:
         m = normalize(m)
         if not m['mac']:
             continue
-        if pcm2dsd_state(m, probe_fn(m['output']), zone) == 'active':
-            out[m['mac']] = {'mode': m['pcm2dsd'], 'filter': m['pcm2dsd_filter']}
+        entry = _convert_entry(m, probe_fn(m['output']), zone)
+        if entry:
+            out[m['mac']] = entry
+    for mac, e in (external or {}).items():
+        if mac in out:
+            continue
+        entry = _external_entry(e)
+        if entry:
+            out[mac] = entry
     return out
 
 
+# Backwards-compatible alias: some callers still speak of "the DSD players".
+def pcm2dsd_players(main, zones, probe_fn=None):
+    """Only the players converted to DSD right now ({mac: {'mode', 'filter'}}).
+    Kept for callers that predate PCM upsampling; new code uses
+    convert_players()."""
+    return dsd_map(convert_players(main, zones, None, probe_fn))
+
+
+def dsd_map(players):
+    """The PCM → DSD wrapper's map ({mac: {mode, filter}}) from convert_players()."""
+    return {mac: {'mode': e['mode'], 'filter': e['filter']}
+            for mac, e in players.items() if e['kind'] == 'dsd'}
+
+
+def pcm_map(players):
+    """The upsampling wrapper's map ({mac: {mult, cap}}) from convert_players()."""
+    return {mac: {'mult': e['mult'], 'cap': e['cap']}
+            for mac, e in players.items() if e['kind'] == 'pcm'}
+
+
 def lms_rules(players):
-    """The block of custom-convert.conf for `players` (pcm2dsd_players())."""
+    """The block of custom-convert.conf for `players` (convert_players()).
+    DSD players decode to the PCM → DSD wrapper and come out as DSF; PCM
+    upsampling players go through the upsampling wrapper and come out as FLAC,
+    self-describing so the player reads the new rate from the stream."""
     if not players:
         return ''
     lines = [RULES_BEGIN]
     for mac in sorted(players):
+        if players[mac]['kind'] == 'dsd':
+            dst, wrapper = 'dsf', PCM2DSD_WRAPPER
+        else:
+            dst, wrapper = 'flc', UPSAMPLE_WRAPPER
         for typ, (caps, decode) in _LMS_TYPES:
-            lines += [f'{typ} dsf * {mac}', f'\t{caps}', f'\t{decode} | {PCM2DSD_WRAPPER} $CLIENTID$ wav']
+            lines += [f'{typ} {dst} * {mac}', f'\t{caps}', f'\t{decode} | {wrapper} $CLIENTID$ wav']
         caps, decode = _SPOTTY
-        lines += [f'spt dsf * {mac}', f'\t{caps}', f'\t{decode} | {PCM2DSD_WRAPPER} $CLIENTID$ raw']
+        lines += [f'spt {dst} * {mac}', f'\t{caps}', f'\t{decode} | {wrapper} $CLIENTID$ raw']
     lines.append(RULES_END)
     return '\n'.join(lines) + '\n'
 
 
+def _strip_block(text, begin, end):
+    start = text.find(begin)
+    if start < 0:
+        return text
+    stop = text.find(end, start)
+    stop = len(text) if stop < 0 else stop + len(end)
+    if stop < len(text) and text[stop] == '\n':
+        stop += 1
+    return text[:start] + text[stop:]
+
+
 def merge_rules(existing, block):
     """`existing` custom-convert.conf with our block replaced by `block`
-    (removed when empty). Whatever else the owner put there stays."""
+    (removed when empty). Whatever else the owner put there stays; any legacy
+    block from an older image is stripped too."""
     text = existing or ''
-    start = text.find(RULES_BEGIN)
-    if start >= 0:
-        end = text.find(RULES_END, start)
-        end = len(text) if end < 0 else end + len(RULES_END)
-        if end < len(text) and text[end] == '\n':
-            end += 1
-        text = text[:start] + text[end:]
+    for begin, end in _LEGACY_MARKERS:
+        text = _strip_block(text, begin, end)
+    text = _strip_block(text, RULES_BEGIN, RULES_END)
     if block:
         if text and not text.endswith('\n'):
             text += '\n'
         text += block
     return text
+
+
+def load_external(path=None):
+    """{mac: {name, pcm2dsd, pcm2dsd_filter, upsample, upsample_cap}} for the
+    external players the user chose to convert through this box's Lyrion. Lenient
+    like load(): this is a file api_server writes but a hand edit may touch."""
+    path = path or EXTERNAL_CONVERT
+    try:
+        with open(path, encoding='utf-8') as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    if not isinstance(raw, dict):
+        return out
+    for mac, entry in raw.items():
+        mac = str(mac or '').strip().lower()
+        if not _MAC_RE.match(mac) or not isinstance(entry, dict):
+            continue
+        m = normalize(entry)
+        name = ' '.join(str(entry.get('name') or '').split())[:40]
+        out[mac] = {'name': name, 'pcm2dsd': m['pcm2dsd'],
+                    'pcm2dsd_filter': m['pcm2dsd_filter'],
+                    'upsample': m['upsample'], 'upsample_cap': m['upsample_cap']}
+    return out
 
 
 def _write_if_changed(path, text, mode=0o644):
@@ -1135,21 +1337,28 @@ def sync_player(model, probe_fn=None, conf_path=None, systemctl=None, modprobe=N
 
 def sync_pcm2dsd(conf_path=CONF, zones_path=None, map_path=None, rules_path=None,
                  default_path=DEFAULT, dsp_target_path=DSP_TARGET_FILE, probe_fn=None,
-                 player_conf_path=None):
-    """Write the map the wrapper reads and Lyrion's rules for what the models
+                 player_conf_path=None, external_path=None, upsample_map_path=None):
+    """Write the maps the wrappers read and Lyrion's rules for what the models
     say now, and bring the player side's conversion in line (sync_player()).
-    Returns True when the rules changed: Lyrion only reads them at start, so
-    the caller restarts it. A Lyrion that is not installed (no
+    Covers the internal player, enabled zones and the external players chosen in
+    external-convert.json. Returns True when the rules changed: Lyrion only reads
+    them at start, so the caller restarts it. A Lyrion that is not installed (no
     /etc/squeezeboxserver) is left alone."""
     main, _ = load(conf_path, default_path, dsp_target_path)
     try:
         sync_player(main, probe_fn, player_conf_path)
     except Exception as e:
         print(f'hifi_squeezelite: PCM to DSD on the player side: {e}', file=sys.stderr)
-    players = pcm2dsd_players(main, load_zones(zones_path), probe_fn)
+    players = convert_players(main, load_zones(zones_path),
+                              load_external(external_path), probe_fn)
     map_path = map_path or PCM2DSD_MAP
-    if players or os.path.exists(map_path):
-        _write_if_changed(map_path, json.dumps(players, indent=2, sort_keys=True) + '\n')
+    dmap = dsd_map(players)
+    if dmap or os.path.exists(map_path):
+        _write_if_changed(map_path, json.dumps(dmap, indent=2, sort_keys=True) + '\n')
+    upsample_map_path = upsample_map_path or UPSAMPLE_MAP
+    pmap = pcm_map(players)
+    if pmap or os.path.exists(upsample_map_path):
+        _write_if_changed(upsample_map_path, json.dumps(pmap, indent=2, sort_keys=True) + '\n')
     rules_path = rules_path or LMS_CONVERT
     if not os.path.isdir(os.path.dirname(rules_path)):
         return False

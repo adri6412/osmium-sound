@@ -82,10 +82,12 @@ MESSAGES = {
     'squeezelite.noMixer': {'en': 'This output has no hardware volume control',
                             'it': 'Questa uscita non ha un controllo di volume hardware'},
     'squeezelite.restartWarn': {'en': 'Saved; squeezelite restart: {err}', 'it': 'Salvato; riavvio di squeezelite: {err}'},
-    'squeezelite.savedLyrionRestart': {'en': 'Saved. Lyrion is restarting to apply the DSD conversion: music is back in a few seconds',
-                                       'it': 'Salvato. Lyrion si riavvia per applicare la conversione in DSD: la musica torna fra pochi secondi'},
+    'squeezelite.savedLyrionRestart': {'en': 'Saved. Lyrion is restarting to apply the conversion: music is back in a few seconds',
+                                       'it': 'Salvato. Lyrion si riavvia per applicare la conversione: la musica torna fra pochi secondi'},
     'squeezelite.pcm2dsdTooHeavy': {'en': 'This processor is not fast enough to convert to {detail} while playing',
                                     'it': 'Questo processore non è abbastanza veloce per convertire in {detail} durante l\'ascolto'},
+    'squeezelite.convertConflict': {'en': 'DSD conversion and PCM upsampling cannot be on at the same time',
+                                    'it': 'Conversione in DSD e upsampling PCM non possono essere attivi insieme'},
 
     # ── Audio zones: one more player per DAC ────────────────────────
     'zones.added': {'en': '"{name}" added: it is now a player of its own in Lyrion',
@@ -112,6 +114,8 @@ MESSAGES = {
                        'it': '{host} è questo stesso dispositivo. Per usare il suo server musicale scegli il server interno invece di uno esterno'},
     'lms.invalidMode': {'en': 'Invalid mode: {mode}', 'it': 'Modalità non valida: {mode}'},
     'lms.sqConfigMissing': {'en': 'squeezelite configuration not found', 'it': 'Configurazione squeezelite non trovata'},
+    'lms.unreachable': {'en': 'Cannot reach the music server to list its players',
+                        'it': 'Server musicale non raggiungibile per elencare i suoi player'},
     'lms.serverSetRestartWarn': {'en': 'Server set ({target}); squeezelite restart: {err}',
                                  'it': 'Server impostato ({target}); riavvio squeezelite: {err}'},
     'lms.serverSetRestartFailed': {'en': 'Server set ({target}); restart failed',

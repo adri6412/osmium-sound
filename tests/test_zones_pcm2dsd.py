@@ -48,10 +48,13 @@ class ToolsSandbox(Sandbox):
         super().__init__()
         self.sox = os.path.join(self.dir, 'sox_ng')
         self.wrapper = os.path.join(self.dir, 'hifi-pcm2dsd.py')
+        self.upsample_wrapper = os.path.join(self.dir, 'hifi-upsample.py')
         self.player = os.path.join(self.dir, 'hifi-pcm2dsd-player.py')
-        for path in (self.sox, self.wrapper, self.player):
+        for path in (self.sox, self.wrapper, self.upsample_wrapper, self.player):
             with open(path, 'w') as f:
                 f.write('#!/bin/sh\n')
+        self.external = os.path.join(self.dir, 'hifi-player', 'external-convert.json')
+        self.upsample_map = os.path.join(self.dir, 'hifi-player', 'upsample.json')
         self.aloop = os.path.join(self.dir, 'sys', 'snd_aloop')
         os.makedirs(self.aloop)
         # the running kernel has snd-aloop to load
@@ -69,8 +72,8 @@ class ToolsSandbox(Sandbox):
 
 
 class ToolsMixin:
-    PATCHED = ('SOX_NG', 'PCM2DSD_WRAPPER', 'PROC_ASOUND', 'P2D_PLAYER', 'SYS_ALOOP', 'LIB_MODULES',
-               'P2D_PLAYER_CONF', '_systemctl', '_modprobe_aloop')
+    PATCHED = ('SOX_NG', 'PCM2DSD_WRAPPER', 'UPSAMPLE_WRAPPER', 'PROC_ASOUND', 'P2D_PLAYER',
+               'SYS_ALOOP', 'LIB_MODULES', 'P2D_PLAYER_CONF', '_systemctl', '_modprobe_aloop')
 
     def setUp(self):
         self.sb = ToolsSandbox()
@@ -79,6 +82,7 @@ class ToolsMixin:
         self._sq = {k: getattr(sq, k) for k in self.PATCHED}
         self.systemctl, self.modprobed = [], []
         sq.SOX_NG, sq.PCM2DSD_WRAPPER, sq.PROC_ASOUND = self.sb.sox, self.sb.wrapper, self.sb.asound
+        sq.UPSAMPLE_WRAPPER = self.sb.upsample_wrapper
         sq.P2D_PLAYER, sq.SYS_ALOOP, sq.P2D_PLAYER_CONF = self.sb.player, self.sb.aloop, self.sb.player_conf
         sq.LIB_MODULES = self.sb.modules
         sq._systemctl = lambda *a: self.systemctl.append(a) or subprocess.CompletedProcess(a, 0, '', '')
@@ -236,10 +240,11 @@ class TestLyrionRules(ToolsMixin, unittest.TestCase):
 
     def sync(self):
         return sq.sync_pcm2dsd(self.sb.conf, self.sb.zones, self.sb.map, self.sb.rules,
-                               self.sb.default, self.sb.dsp_target, self.sb.probe)
+                               self.sb.default, self.sb.dsp_target, self.sb.probe,
+                               external_path=self.sb.external, upsample_map_path=self.sb.upsample_map)
 
     def test_rules_text(self):
-        text = sq.lms_rules({MAC: {'mode': 'dsd64', 'filter': 'clans-8'}})
+        text = sq.lms_rules({MAC: {'kind': 'dsd', 'mode': 'dsd64', 'filter': 'clans-8'}})
         self.assertTrue(text.startswith(sq.RULES_BEGIN))
         self.assertIn(f'flc dsf * {MAC}\n\t# IFT:', text)
         self.assertIn(f'mp3 dsf * {MAC}\n', text)
@@ -248,9 +253,18 @@ class TestLyrionRules(ToolsMixin, unittest.TestCase):
         self.assertNotIn('* *\n', text)            # never for every player of the server
         self.assertEqual(sq.lms_rules({}), '')
 
+    def test_rules_text_pcm_upsample(self):
+        text = sq.lms_rules({MAC: {'kind': 'pcm', 'mult': 'x4', 'cap': 0}})
+        self.assertTrue(text.startswith(sq.RULES_BEGIN))
+        self.assertIn(f'flc flc * {MAC}\n\t# IFT:', text)   # FLAC in, FLAC out
+        self.assertIn(f'spt flc * {MAC}\n', text)
+        self.assertIn(f'| {sq.UPSAMPLE_WRAPPER} $CLIENTID$ raw', text)
+        self.assertNotIn('dsf', text)              # no DSD for a PCM upsampling player
+        self.assertNotIn('* *\n', text)
+
     def test_merge_keeps_the_owners_rules(self):
         mine = 'ape flc * *\n\t[mac] $FILE$ - -d\n'
-        block = sq.lms_rules({MAC: {}})
+        block = sq.lms_rules({MAC: {'kind': 'dsd', 'mode': 'dsd64', 'filter': 'clans-8'}})
         merged = sq.merge_rules(mine, block)
         self.assertTrue(merged.startswith(mine))
         self.assertEqual(sq.merge_rules(merged, block), merged)
@@ -580,9 +594,13 @@ class TestApi(unittest.TestCase):
                                {'id': 'hw:CARD=Gen,DEV=0', 'name': 'Generic — USB Audio', 'dsd': 'dop'}]}
         p('list_audio_devices', lambda: devices)
         self.sq_calls = []
-        self._sq = {k: getattr(sq, k) for k in ('SOX_NG', 'PCM2DSD_WRAPPER', 'PROC_ASOUND', 'MACHINE_ID',
+        p('UPSAMPLE_MAP', self.sb.upsample_map)
+        p('EXTERNAL_CONVERT', self.sb.external)
+        self._sq = {k: getattr(sq, k) for k in ('SOX_NG', 'PCM2DSD_WRAPPER', 'UPSAMPLE_WRAPPER',
+                                                 'PROC_ASOUND', 'MACHINE_ID',
                                                  'mixer_controls', '_systemctl', 'running_zone_units')}
         sq.SOX_NG, sq.PCM2DSD_WRAPPER, sq.PROC_ASOUND = self.sb.sox, self.sb.wrapper, self.sb.asound
+        sq.UPSAMPLE_WRAPPER = self.sb.upsample_wrapper
         sq.MACHINE_ID = self.sb.machine_id
         sq.mixer_controls = lambda device, run=None: ['PCM'] if 'D50s' in device else []
         sq._systemctl = lambda *a: self.sq_calls.append(a) or subprocess.CompletedProcess(a, 0, '', '')
@@ -649,6 +667,28 @@ class TestApi(unittest.TestCase):
         self.assertNotIn('-c dsd', self.sb.args())
         self.assertNotIn('flc dsf', slurp(self.sb.rules))
 
+    def test_conf_pcm_upsampling(self):
+        g = self.api.get_squeezelite_conf()
+        self.assertEqual(g['pcm2dsd']['upsample']['state'], 'off')
+        self.assertIn('max', g['pcm2dsd']['upsample']['modes'])
+        r = self.api.set_squeezelite_conf({'upsample': 'x4'})
+        self.assertTrue(r['success'], r)
+        self.assertTrue(r['lyrion_restarted'])
+        self.assertEqual(r['pcm2dsd']['upsample']['state'], 'active')
+        # server-side only: the PCM rule goes in, the DSD one does not
+        self.assertIn('flc flc * 02:ab:cd:ef:01:23', slurp(self.sb.rules))
+        self.assertNotIn('flc dsf', slurp(self.sb.rules))
+        with open(self.sb.upsample_map) as f:
+            self.assertEqual(json.load(f)['02:ab:cd:ef:01:23']['mult'], 'x4')
+        # DSD and upsampling are mutually exclusive: turning DSD on clears it
+        r = self.api.set_squeezelite_conf({'pcm2dsd': 'dsd64'})
+        self.assertTrue(r['success'], r)
+        self.assertEqual(r['conf']['upsample'], 'off')
+        self.assertIn('flc dsf * 02:ab:cd:ef:01:23', slurp(self.sb.rules))
+        self.assertNotIn('flc flc', slurp(self.sb.rules))
+        r = self.api.set_squeezelite_conf({'upsample': 'off', 'pcm2dsd': 'off'})
+        self.assertNotIn('flc flc', slurp(self.sb.rules))
+
     def test_zone_lifecycle(self):
         g = self.api.get_zones()
         self.assertEqual(g['zones'], [])
@@ -702,6 +742,94 @@ class TestApi(unittest.TestCase):
         self._patch('_set_local_lyrion_enabled', lambda on: None)
         self.api.set_lms_role('local', None)
         self.assertIn(('restart', '--no-block', 'hifi-zone@Gen-0.service'), self.sq_calls)
+
+
+class TestExternalConvert(TestApi):
+    """api_server.py's /external_convert: the list of external players, their
+    saved conversion choice, update and remove. Reuses TestApi's sandbox."""
+
+    EXT = '00:11:22:33:44:55'
+
+    def own(self):
+        return self.api._own_player_mac()
+
+    def serverstatus(self, players):
+        self._patch('_lms_request', lambda pid, cmd, timeout=5: {'players_loop': players})
+
+    def with_own(self, *extra):
+        own = {'playerid': self.own(), 'name': 'Osmium', 'ip': '127.0.0.1:40000', 'connected': 1}
+        self.serverstatus([own, *extra])
+
+    def ext_player(self, **kw):
+        return dict({'playerid': self.EXT, 'name': 'Studio', 'ip': '192.168.1.9:3483',
+                     'connected': 1, 'modelname': 'squeezelite'}, **kw)
+
+    def test_list_excludes_this_boxs_own_players(self):
+        self.with_own(self.ext_player())
+        g = self.api.get_external_convert()
+        self.assertTrue(g['lyrion'])
+        macs = [p['mac'] for p in g['players']]
+        self.assertEqual(macs, [self.EXT])
+        self.assertNotIn(self.own(), macs)
+        self.assertEqual(g['players'][0]['conf']['upsample'], 'off')
+        self.assertIn('max', g['info']['upsample']['modes'])
+
+    def test_unreachable_server(self):
+        def boom(*a, **k):
+            raise OSError('down')
+        self._patch('_lms_request', boom)
+        g = self.api.get_external_convert()
+        self.assertFalse(g['success'])
+        self.assertEqual(g['code'], 'lms.unreachable')
+        self.assertFalse(g['lyrion'])
+        self.assertEqual(g['players'], [])
+
+    def test_update_persists_and_restarts_lyrion(self):
+        self.with_own(self.ext_player())
+        r = self.api.update_external_convert({'mac': self.EXT, 'name': 'Studio', 'upsample': 'x2'})
+        self.assertTrue(r['success'], r)
+        self.assertTrue(r.get('lyrion_restarted'))
+        self.assertIn(f'flc flc * {self.EXT}', slurp(self.sb.rules))
+        with open(self.sb.upsample_map) as f:
+            self.assertEqual(json.load(f)[self.EXT]['mult'], 'x2')
+        row = [p for p in r['players'] if p['mac'] == self.EXT][0]
+        self.assertEqual(row['conf']['upsample'], 'x2')
+        # the same player, now to DSD: the PCM rule gives way to the DSD one
+        r = self.api.update_external_convert({'mac': self.EXT, 'pcm2dsd': 'dsd64'})
+        self.assertTrue(r['success'], r)
+        self.assertIn(f'flc dsf * {self.EXT}', slurp(self.sb.rules))
+        self.assertNotIn('flc flc', slurp(self.sb.rules))
+
+    def test_update_rejects_bad_mac(self):
+        self.with_own(self.ext_player())
+        self.assertFalse(self.api.update_external_convert({'mac': 'nope', 'upsample': 'x2'})['success'])
+
+    def test_update_with_both_prefers_dsd(self):
+        # DSD and upsampling cannot both be on: asking for both keeps DSD (as
+        # set_fields does for every player), never a conflict error.
+        self.with_own(self.ext_player())
+        r = self.api.update_external_convert({'mac': self.EXT, 'pcm2dsd': 'dsd64', 'upsample': 'x2'})
+        self.assertTrue(r['success'], r)
+        self.assertIn(f'flc dsf * {self.EXT}', slurp(self.sb.rules))
+        self.assertNotIn('flc flc', slurp(self.sb.rules))
+
+    def test_remove_clears_the_rule(self):
+        self.with_own(self.ext_player())
+        self.api.update_external_convert({'mac': self.EXT, 'upsample': 'x2'})
+        self.assertIn(self.EXT, slurp(self.sb.rules))
+        r = self.api.remove_external_convert({'mac': self.EXT})
+        self.assertTrue(r['success'])
+        self.assertNotIn(self.EXT, slurp(self.sb.rules))
+
+    def test_saved_player_stays_listed_when_offline(self):
+        self.with_own(self.ext_player())
+        self.api.update_external_convert({'mac': self.EXT, 'name': 'Studio', 'upsample': 'x2'})
+        self.with_own()                                   # the external player disconnects
+        g = self.api.get_external_convert()
+        row = [p for p in g['players'] if p['mac'] == self.EXT]
+        self.assertEqual(len(row), 1)
+        self.assertFalse(row[0]['connected'])
+        self.assertEqual(row[0]['conf']['upsample'], 'x2')
 
 
 if __name__ == '__main__':

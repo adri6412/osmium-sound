@@ -213,6 +213,10 @@
         "label": "Altoparlanti Bluetooth",
         "desc": "Suona su un altoparlante o in cuffia"
       },
+      "extPlayers": {
+        "label": "Player esterni",
+        "desc": "Converti per gli altri player di questo server"
+      },
       "remote": {
         "label": "Telecomando",
         "desc": "USB o Bluetooth, e cosa fa ogni tasto"
@@ -1310,6 +1314,34 @@
         "dsp": "Non disponibile mentre l'elaborazione del suono è accesa.",
         "noDsd": "A questo DAC non arriva DSD: scegli un DAC che lo accetti (nativo o DoP) e una modalità DSD diversa da \"Converti in PCM\"."
       }
+    },
+    "convert": {
+      "label": "Conversione lato server",
+      "pcm": "Upsampling PCM",
+      "dsd": "DSD",
+      "help": "Converti ogni traccia PCM mentre arriva al player: alza la frequenza di campionamento (upsampling PCM) oppure trasformala in DSD. Le due cose non possono essere attive insieme.",
+      "extDsd": "Attivo: a questo player arriva tutto come {rate}, se è in grado di riprodurlo.",
+      "extPcm": "Attivo: a questo player arriva il PCM sovracampionato {rate}, se è in grado di riprodurlo."
+    },
+    "upsample": {
+      "label": "Upsampling",
+      "help": "Ogni traccia PCM viene ricampionata a una frequenza più alta della stessa famiglia (44,1 o 48 kHz) prima di arrivare al player: ×2, ×4 o fino al massimo che il DAC accetta. Senza perdita, mentre suona. I file DSD e le tracce già alla frequenza di arrivo restano come sono.",
+      "active": "Attivo: le tracce PCM sono sovracampionate {rate}.",
+      "max": "Max",
+      "why": {
+        "noTools": "Questo dispositivo ha bisogno di un aggiornamento di sistema prima di poter sovracampionare.",
+        "remoteServer": "Per una zona funziona solo quando questo dispositivo è il proprio server Lyrion: ora la musica arriva da un altro.",
+        "dsp": "Non disponibile mentre l'elaborazione del suono è attiva."
+      }
+    },
+    "extPlayers": {
+      "help": "Qualsiasi altro player collegato al server Lyrion di questo dispositivo, per esempio uno squeezelite su un altro computer, può avere la sua musica convertita qui.",
+      "caveat": "La conversione gira sul processore di questo dispositivo, ed è il DAC di chi ascolta a decidere se riesce a riprodurre quello che riceve. Osmium non può controllare il DAC remoto: scegli tu, a tuo rischio.",
+      "noLyrion": "Funziona solo quando questo dispositivo è il proprio server Lyrion. Ora ne segue un altro, quindi non ha player da elencare.",
+      "none": "Al momento non ci sono altri player collegati a questo server.",
+      "online": "collegato",
+      "offline": "non in linea",
+      "clear": "Disattiva la conversione per questo player"
     }
   },
   "files": {

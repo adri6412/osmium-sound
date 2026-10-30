@@ -21,12 +21,17 @@ STATE = {
     "bt_remotes": {"available": True, "supported": True, "adapter": True, "remotes": [], "found": []},
     # Settings → Audio (squeezelite model) and Audio zones; MOCK_ZONES=0 starts with none
     "sq": {"dsd": "auto", "dsd_delay_ms": 0, "max_rate": 0, "volume": "software", "mixer": "", "alsa_buffer": "auto",
-           "stream_buffer": "auto", "realtime": False, "extra": "", "pcm2dsd": "off", "pcm2dsd_filter": "clans-8"},
+           "stream_buffer": "auto", "realtime": False, "extra": "", "pcm2dsd": "off", "pcm2dsd_filter": "clans-8",
+           "upsample": "off", "upsample_cap": 0},
     "zones": [] if os.environ.get("MOCK_ZONES") == "0" else [
         {"id": "D50s-0", "name": "Studio", "output": "hw:CARD=D50s,DEV=0", "output_name": "Topping D50s — USB Audio",
          "enabled": True, "connected": True, "running": True, "dsd_detected": "native", "mixers": [], "pcm2dsd_state": "off",
+         "upsample_state": "off",
          "conf": {"dsd": "auto", "dsd_delay_ms": 0, "max_rate": 0, "volume": "software", "mixer": "", "alsa_buffer": "auto",
-                  "stream_buffer": "auto", "realtime": False, "pcm2dsd": "off", "pcm2dsd_filter": "clans-8"}}],
+                  "stream_buffer": "auto", "realtime": False, "pcm2dsd": "off", "pcm2dsd_filter": "clans-8",
+                  "upsample": "off", "upsample_cap": 0}}],
+    # Settings → External players: the saved conversion choices (api /external_convert)
+    "external": {},
     # the top-bar connectivity icon: internet | lan | offline, wired | wireless | none
     "net": os.environ.get("MOCK_NET", "internet"), "net_type": os.environ.get("MOCK_NET_TYPE", "wired"),
     # Ricerca dei dispositivi in rete: uno con nome mDNS, uno che chiede la
@@ -464,7 +469,8 @@ def rpc(player, params):
 # ── Settings → Audio: the squeezelite model, PCM to DSD and the zones ──
 # MOCK_P2D_SLOW=1: a CPU that cannot even do DSD64
 MOCK_P2D = {"modes": ["off"] if os.environ.get("MOCK_P2D_SLOW") else ["off", "dsd64", "dsd128"], "measured": True, "filters": ["clans-8", "sdm-8"],
-            "available": True, "server_local": True}
+            "available": True, "server_local": True,
+            "upsample": {"modes": ["off", "x2", "x4", "max"], "available": True}}
 MOCK_FREE = [{"id": "hw:CARD=Kitchen,DEV=0", "name": "iFi Zen DAC — USB Audio", "dsd": "native"}]
 
 
@@ -474,7 +480,8 @@ def mock_sq():
             "args": "-o " + STATE["audio"] + " -D :u32be -v -C 5 -s 127.0.0.1 -n Osmium -M Osmium" + (" -b 16384:8192 -c dsd" if c["pcm2dsd"] != "off" else ""),
             "dsd_detected": "native", "dsd_format": "u32be", "mixers": ["PCM"],
             "choices": {"dsd": ["auto", "dop", "native", "off"], "dsd_delay_ms": [0, 100, 250, 500], "max_rate": [0, 96000, 192000, 384000]},
-            "defaults": {}, "pcm2dsd": dict(MOCK_P2D, state="active" if c["pcm2dsd"] != "off" else "off")}
+            "defaults": {}, "pcm2dsd": dict(MOCK_P2D, state="active" if c["pcm2dsd"] != "off" else "off",
+                                            upsample=dict(MOCK_P2D["upsample"], state="active" if c.get("upsample", "off") != "off" else "off"))}
 
 
 def mock_zones(message=None, success=True):
@@ -485,6 +492,41 @@ def mock_zones(message=None, success=True):
     if message:
         out["message"] = message
     return out
+
+# the DSD-xor-upsample invariant the backend enforces (set_fields: DSD wins).
+# Resolve it the same way after a conf update, driven by which field changed.
+def _xor_convert(conf, data):
+    if data.get("pcm2dsd", "off") != "off":
+        conf["upsample"] = "off"
+    elif data.get("upsample", "off") != "off":
+        conf["pcm2dsd"] = "off"
+
+
+# Settings → External players (api /external_convert). MOCK_LMS_FOLLOW=1: this
+# box follows another server, so it has no players of its own to offer.
+MOCK_EXT_PLAYERS = [{"mac": "aa:bb:cc:11:22:33", "name": "Soggiorno", "connected": True, "model": "piCorePlayer"},
+                    {"mac": "dd:ee:ff:44:55:66", "name": "Studio Mac", "connected": True, "model": "squeezelite"}]
+
+
+def mock_external(message=None):
+    info = {"dsd": dict(MOCK_P2D), "upsample": dict(MOCK_P2D["upsample"]),
+            "caps": [0, 96000, 192000, 384000, 768000]}
+    if os.environ.get("MOCK_LMS_FOLLOW"):
+        r = {"success": False, "code": "lms.unreachable", "players": [], "info": info, "lyrion": False}
+        if message: r["message"] = message
+        return r
+    seen, rows = set(), []
+    for p in MOCK_EXT_PLAYERS:
+        seen.add(p["mac"])
+        rows.append(dict(p, conf=STATE["external"].get(p["mac"]) or
+                         {"name": "", "pcm2dsd": "off", "pcm2dsd_filter": "clans-8", "upsample": "off", "upsample_cap": 0}))
+    for mac, conv in STATE["external"].items():
+        if mac not in seen:
+            rows.append({"mac": mac, "name": conv.get("name") or mac, "connected": False, "model": "", "conf": conv})
+    r = {"success": True, "players": rows, "info": info, "lyrion": True}
+    if message: r["message"] = message
+    return r
+
 
 def mock_signal_path(q):
     """Now Playing's signal path through the real hifi_signal_path.describe(),
@@ -598,6 +640,7 @@ class H(BaseHTTPRequestHandler):
             }
             if u.path == "/squeezelite_conf": return self._json(mock_sq())
             if u.path == "/zones": return self._json(mock_zones())
+            if u.path == "/external_convert": return self._json(mock_external())
             if u.path == "/signal_path": return self._json(mock_signal_path(parse_qs(u.query)))
             if u.path == "/system_disk":           # MOCK_DISK=warn|full: the system disk filling up
                 lv = os.environ.get("MOCK_DISK", "ok"); tot = 64 * 10**9; res = int(tot * 0.05)
@@ -699,8 +742,9 @@ class H(BaseHTTPRequestHandler):
                 r["remotes"] = [d for d in r["remotes"] if d["mac"] != mac]
                 return self._json(dict(r, success=True, message="Telecomando dimenticato"))
         if port == 8000 and u.path in ("/squeezelite_conf", "/squeezelite_conf/reset"):
-            if "pcm2dsd" in data: time.sleep(1.5)        # Lyrion restarting
+            if "pcm2dsd" in data or "upsample" in data: time.sleep(1.5)   # Lyrion restarting
             STATE["sq"].update({k: v for k, v in data.items() if k in STATE["sq"]})
+            _xor_convert(STATE["sq"], data)
             r = mock_sq(); r["message"] = "Salvato, player riavviato"
             return self._json(r)
         if port == 8000 and u.path.startswith("/zones/"):
@@ -717,13 +761,30 @@ class H(BaseHTTPRequestHandler):
             if z is None: return self._json(mock_zones("Questa zona non esiste più", False))
             if u.path == "/zones/remove":
                 STATE["zones"].remove(z); return self._json(mock_zones("Zona tolta"))
-            if "pcm2dsd" in data: time.sleep(1.5)
+            if "pcm2dsd" in data or "upsample" in data: time.sleep(1.5)
             for k, v in data.items():
                 if k == "name": z["name"] = v
                 elif k == "enabled": z["enabled"] = bool(v); z["running"] = bool(v)
                 elif k in z["conf"]: z["conf"][k] = v
+            _xor_convert(z["conf"], data)
             z["pcm2dsd_state"] = "active" if z["conf"]["pcm2dsd"] != "off" else "off"
+            z["upsample_state"] = "active" if z["conf"].get("upsample", "off") != "off" else "off"
             return self._json(mock_zones("Salvato, zona riavviata"))
+        if port == 8000 and u.path.startswith("/external_convert"):
+            mac = str(data.get("mac") or "").strip().lower()
+            if u.path == "/external_convert/remove":
+                STATE["external"].pop(mac, None)
+                return self._json(mock_external("Conversione tolta"))
+            time.sleep(1.5)                              # Lyrion restarting
+            conf = {"name": str(data.get("name") or ""), "pcm2dsd": data.get("pcm2dsd", "off"),
+                    "pcm2dsd_filter": data.get("pcm2dsd_filter", "clans-8"),
+                    "upsample": data.get("upsample", "off"), "upsample_cap": data.get("upsample_cap", 0)}
+            _xor_convert(conf, data)
+            if conf["pcm2dsd"] == "off" and conf["upsample"] == "off":
+                STATE["external"].pop(mac, None)
+            else:
+                STATE["external"][mac] = conf
+            return self._json(mock_external("Salvato, player riavviato"))
         if port == 8000:
             if u.path == "/wifi_forget":
                 ssid = str(data.get("ssid") or "")
