@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension>
+	<name>PLUGIN_OSMIUMCONVERT</name>
+	<module>Plugins::OsmiumConvert::Plugin</module>
+	<version>0.1.0</version>
+	<description>PLUGIN_OSMIUMCONVERT_DESC</description>
+	<creator>Osmium Sound</creator>
+	<email>support@osmium.audio</email>
+	<defaultState>enabled</defaultState>
+	<targetApplication>
+		<id>SlimServer</id>
+		<minVersion>7.9</minVersion>
+		<maxVersion>9.*</maxVersion>
+	</targetApplication>
+</extension>

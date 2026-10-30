@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""Osmium Convert — the portable SoX helper the Osmium Convert LMS plugin runs
+as the last step of Lyrion's transcoding pipe.
+
+Unlike the appliance's /usr/local/sbin/hifi-pcm2dsd.py and hifi-upsample.py —
+which look their settings up by MAC in /etc/hifi-player/*.json — this helper
+takes its settings on the command line, so it carries no appliance paths and
+runs on any Lyrion server that has SoX (and, for DSD, the sox_ng fork with the
+`sdm` modulator). The plugin bakes the per-player settings into each
+custom-convert.conf rule, so there is nothing to look up here.
+
+    osmium-convert dsd <mode> <filter> <wav|raw>
+        PCM on stdin -> a DSF stream on stdout, via sox_ng:
+            channels 2 -> gain -6 -> rate (to the DSD rate) -> sdm (1-bit)
+        <mode>   dsd64 | dsd128 | dsd256
+        <filter> clans-8 | sdm-8
+        -6 dB is DSD's reference level (a full-scale PCM sine is 50 %
+        modulation); at 0 dB the modulator overloads loud masters into noise.
+
+    osmium-convert pcm <mult> <cap> <wav|raw>
+        PCM on stdin -> a FLAC stream on stdout (lossless, self-describing, so
+        the player reads the new rate from the stream), via sox:
+            channels 2 -> rate (to the target, inside the source rate family)
+        <mult> x2 | x4 | max       <cap> ceiling in Hz, 0 = none
+        The target stays inside the source's family (44.1 or 48 kHz); "max" is
+        the top family multiple that fits the cap (or 768 kHz).
+
+`wav` reads an --ignore-length WAV header on stdin (flac/ffmpeg); `raw` is
+Spotty's 16-bit 44.1 kHz stereo. Runs as Lyrion's user; it only execs SoX.
+
+`osmium-convert --probe` prints JSON describing the SoX this server has
+(`{"sox": path|null, "sox_ng": path|null, "sdm": bool}`), so the plugin can
+report to the appliance whether DSD (needs sox_ng + sdm) is available here.
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+RATES = {'dsd64': 2822400, 'dsd128': 5644800, 'dsd256': 11289600}
+FILTERS = ('clans-8', 'sdm-8')
+MULTS = {'x2': 2, 'x4': 4}
+FAMILY_BASE = (44100, 48000)
+CEILING = 768000
+RAW_RATE = 44100
+
+# sox_ng first: on the appliance it lives in /usr/local/bin; on a third-party
+# server it may be only in PATH, or only plain sox (PCM upsampling, no DSD).
+_SOX_NG = ('sox_ng', '/usr/local/bin/sox_ng', '/usr/bin/sox_ng')
+_SOX = ('sox', '/usr/bin/sox', '/usr/local/bin/sox')
+
+
+def _find(cands):
+    for c in cands:
+        p = shutil.which(c) if os.path.basename(c) == c else (c if os.access(c, os.X_OK) else None)
+        if p:
+            return p
+    return None
+
+
+def find_sox_ng():
+    return _find(_SOX_NG)
+
+
+def find_sox():
+    """Any SoX good enough for PCM upsampling — sox_ng counts too."""
+    return find_sox_ng() or _find(_SOX)
+
+
+def has_sdm(sox_ng):
+    """True when this sox_ng knows the `sdm` effect (the DSD modulator)."""
+    if not sox_ng:
+        return False
+    try:
+        r = subprocess.run([sox_ng, '--help-effect', 'sdm'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+        return r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def probe():
+    sox_ng = find_sox_ng()
+    return {'sox': find_sox(), 'sox_ng': sox_ng, 'sdm': has_sdm(sox_ng)}
+
+
+def _source(kind):
+    if kind == 'raw':
+        return ['-t', 'raw', '-r', str(RAW_RATE), '-e', 'signed', '-b', '16', '-c', '2', '-']
+    # flac and ffmpeg write the WAV header before they know the length
+    return ['--ignore-length', '-t', 'wav', '-']
+
+
+def dsd_argv(kind, mode, flt, sox):
+    return [sox, '-q', '--multi-threaded', *_source(kind), '-t', 'dsf', '-',
+            'channels', '2', 'gain', '-6', 'rate', '-v', str(RATES[mode]), 'sdm', '-f', flt]
+
+
+def family_base(src_rate):
+    r = int(src_rate or 0)
+    for base in FAMILY_BASE:
+        if r and r % base == 0:
+            return base
+    return 48000
+
+
+def target_rate(mult, cap, src_rate):
+    """Output rate to aim for, inside src_rate's family. 0 = leave as is."""
+    src = int(src_rate or 0)
+    if src <= 0:
+        return 0
+    ceiling = cap if cap and cap > 0 else CEILING
+    if mult in MULTS:
+        target = src * MULTS[mult]
+        return target if src < target <= ceiling else 0
+    base, best, rate = family_base(src), 0, family_base(src)
+    while rate <= ceiling:
+        if rate > src:
+            best = rate
+        rate *= 2
+    return best
+
+
+def read_wav_rate(stream):
+    """(sample rate, bytes already read) for a WAV stream on `stream`, or
+    (None, bytes) when it is not WAV. Only the header up to `fmt ` is consumed;
+    those bytes are returned so the caller can forward them to sox."""
+    buf = bytearray()
+
+    def need(n):
+        while len(buf) < n:
+            chunk = stream.read(n - len(buf))
+            if not chunk:
+                return False
+            buf.extend(chunk)
+        return True
+
+    if not need(12) or buf[0:4] != b'RIFF' or buf[8:12] != b'WAVE':
+        return None, bytes(buf)
+    pos = 12
+    while need(pos + 8):
+        cid = bytes(buf[pos:pos + 8][:4])
+        size = int.from_bytes(buf[pos + 4:pos + 8], 'little')
+        if cid == b'fmt ':
+            if not need(pos + 8 + size):
+                return None, bytes(buf)
+            fmt = buf[pos + 8:pos + 8 + size]
+            return int.from_bytes(fmt[4:8], 'little'), bytes(buf)
+        pos += 8 + size + (size & 1)        # chunks are word-aligned
+    return None, bytes(buf)
+
+
+def pcm_argv(kind, target, sox):
+    argv = [sox, '-q', '--multi-threaded', *_source(kind), '-t', 'flac', '-', 'channels', '2']
+    if target:
+        argv += ['rate', '-v', str(target)]
+    return argv
+
+
+def run_dsd(kind, mode, flt):
+    sox = find_sox_ng()
+    if not sox or not has_sdm(sox):
+        print('osmium-convert: DSD needs sox_ng with the sdm effect', file=sys.stderr)
+        return 3
+    if mode not in RATES or flt not in FILTERS:
+        print('osmium-convert: bad DSD mode/filter', file=sys.stderr)
+        return 2
+    os.execv(sox, dsd_argv(kind, mode, flt, sox))
+    return 1
+
+
+def run_pcm(kind, mult, cap):
+    sox = find_sox()
+    if not sox:
+        print('osmium-convert: PCM upsampling needs sox', file=sys.stderr)
+        return 3
+    if kind == 'raw':
+        src, head = RAW_RATE, b''
+    else:
+        src, head = read_wav_rate(sys.stdin.buffer)
+    target = target_rate(mult, cap, src)
+    proc = subprocess.Popen(pcm_argv(kind, target, sox), stdin=subprocess.PIPE)
+    try:
+        if head:
+            proc.stdin.write(head)
+        shutil.copyfileobj(sys.stdin.buffer, proc.stdin, length=1 << 16)
+    except BrokenPipeError:
+        pass
+    finally:
+        try:
+            proc.stdin.close()
+        except BrokenPipeError:
+            pass
+    return proc.wait()
+
+
+def main(argv):
+    if len(argv) == 2 and argv[1] == '--probe':
+        print(json.dumps(probe()))
+        return 0
+    if len(argv) == 5 and argv[1] == 'dsd' and argv[4] in ('wav', 'raw'):
+        return run_dsd(argv[4], argv[2], argv[3])
+    if len(argv) == 5 and argv[1] == 'pcm' and argv[4] in ('wav', 'raw'):
+        cap = int(argv[3]) if argv[3].lstrip('-').isdigit() else 0
+        return run_pcm(argv[4], argv[2], cap)
+    print('usage: osmium-convert dsd <mode> <filter> wav|raw\n'
+          '       osmium-convert pcm <mult> <cap> wav|raw\n'
+          '       osmium-convert --probe', file=sys.stderr)
+    return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
