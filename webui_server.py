@@ -1192,6 +1192,11 @@ _AUTH_ROUTES = {
     ('/api/system/zones/add', 'POST'): '/zones/add',
     ('/api/system/zones/update', 'POST'): '/zones/update',
     ('/api/system/zones/remove', 'POST'): '/zones/remove',
+    # Settings → Audio: per-player conversion (Off / PCM upsample / DSD) for
+    # external Lyrion players chosen from the server's player list.
+    ('/api/system/external_convert', 'GET'): '/external_convert',
+    ('/api/system/external_convert/update', 'POST'): '/external_convert/update',
+    ('/api/system/external_convert/remove', 'POST'): '/external_convert/remove',
     # Settings → Licenses & credits: the project, Lyrion, the third-party
     # notices and every Debian package of the image with its license.
     ('/api/system/credits', 'GET'): '/credits',
