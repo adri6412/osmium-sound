@@ -591,6 +591,17 @@ class TestExternalConvert(TestApi):
         self.assertIn('max', g['info']['upsample']['modes'])
         self.assertEqual(g['info']['convert']['plugin'], True)
 
+    def test_list_excludes_other_osmium_devices(self):
+        # another Osmium player (modelname 'Osmium') following this Lyrion is
+        # not a third-party client: it configures conversion from its own UI, so
+        # it must not show in the external-players list.
+        other = {'playerid': '02:aa:aa:aa:aa:aa', 'name': 'cameretta',
+                 'ip': '192.168.0.105:3483', 'connected': 1, 'modelname': 'Osmium'}
+        self.with_own(other, self.ext_player())
+        g = self.api.get_external_convert()
+        macs = [p['mac'] for p in g['players']]
+        self.assertEqual(macs, [self.EXT])
+
     def test_unreachable_server(self):
         def boom(*a, **k):
             raise OSError('down')

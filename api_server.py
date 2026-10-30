@@ -2462,9 +2462,20 @@ def _own_box_macs(players):
     return mine
 
 
+def _is_osmium_player(p):
+    """True for another Osmium device following this Lyrion (squeezelite started
+    with `-M Osmium`). It has its own Osmium UI (Settings -> Audio) to set
+    conversion, so it does not belong in the external-players list, which is for
+    third-party squeezelite clients that have no Osmium settings screen."""
+    name = str(p.get('modelname') or '').strip().lower()
+    return name == 'osmium' or name.startswith('osmium ')
+
+
 def _external_player_list():
-    """[{mac, name, connected, model}] of the players on this box's Lyrion that
-    are not this box's own squeezelites, or None when Lyrion is unreachable."""
+    """[{mac, name, connected, model}] of the third-party players on this box's
+    Lyrion -- not this box's own squeezelites and not other Osmium devices (they
+    configure conversion from their own UI) -- or None when Lyrion is
+    unreachable."""
     try:
         result = _lms_request('-', ['serverstatus', 0, 999]) or {}
     except Exception:
@@ -2474,7 +2485,7 @@ def _external_player_list():
     out = []
     for p in players:
         mac = str(p.get('playerid') or '').strip().lower()
-        if not mac or mac in mine or not sq._MAC_RE.match(mac):
+        if not mac or mac in mine or not sq._MAC_RE.match(mac) or _is_osmium_player(p):
             continue
         out.append({'mac': mac, 'name': str(p.get('name') or mac),
                     'connected': bool(p.get('connected', 1)),
