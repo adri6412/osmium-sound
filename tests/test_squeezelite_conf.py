@@ -274,7 +274,14 @@ class TestRender(unittest.TestCase):
         self.sb = Sandbox()
         self.sb.card('D50s', STREAM_NATIVE_BE)
         self.sb.card('Gen', STREAM_PCM_ONLY)
+        # render()'s output fallback reads card presence from the global
+        # PROC_ASOUND; point it at the sandbox so chosen cards count as present.
+        self._saved_proc = sq.PROC_ASOUND
+        sq.PROC_ASOUND = self.sb.asound
         self.base = sq.normalize({'output': 'hw:CARD=D50s,DEV=0'})
+
+    def tearDown(self):
+        sq.PROC_ASOUND = self._saved_proc
 
     def r(self, **changes):
         m = dict(self.base)
@@ -339,6 +346,12 @@ class TestDsdAuto(unittest.TestCase):
         self.sb.card('Gen', STREAM_PCM_ONLY)
         self.sb.hda('PCH', 0, {0: 'ALC269VC Analog', 3: 'HDMI 0', 7: 'HDMI 1', 8: 'HDMI 2'})
         self.sb.hda('NVidia', 1, {3: 'HDMI 0'})
+        # The output fallback reads card presence from the global PROC_ASOUND.
+        self._saved_proc = sq.PROC_ASOUND
+        sq.PROC_ASOUND = self.sb.asound
+
+    def tearDown(self):
+        sq.PROC_ASOUND = self._saved_proc
 
     def r(self, output, dsd='auto'):
         return sq.render(sq.normalize({'output': output, 'dsd': dsd}), self.sb.probe)
@@ -387,8 +400,66 @@ class TestDsdAuto(unittest.TestCase):
         self.assertEqual(args, '-o hw:CARD=PCH,DEV=3 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium')
 
 
+class TestOutputFallback(unittest.TestCase):
+    """The built-in player falls back to `default` when its chosen card is gone,
+    so a USB DAC unplugged after it was selected does not leave squeezelite
+    crash-looping on a missing device (field bundle 2026-10-30: 4000+ restarts
+    on hw:CARD=Lite,DEV=0 after the DAC was unplugged)."""
+
+    def setUp(self):
+        self.sb = Sandbox()
+        self.sb.card('D50s', STREAM_NATIVE_BE)
+        self._saved_proc = sq.PROC_ASOUND
+        sq.PROC_ASOUND = self.sb.asound
+
+    def tearDown(self):
+        sq.PROC_ASOUND = self._saved_proc
+
+    def test_available_output(self):
+        self.assertEqual(sq.available_output('hw:CARD=D50s,DEV=0'), 'hw:CARD=D50s,DEV=0')
+        self.assertEqual(sq.available_output('default'), 'default')     # not a hw: card
+        self.assertEqual(sq.available_output('hw:CARD=Lite,DEV=0'), 'default')   # card gone
+
+    def test_present_card_is_kept(self):
+        line = sq.render(sq.normalize({'output': 'hw:CARD=D50s,DEV=0'}), self.sb.probe)
+        self.assertIn('-o hw:CARD=D50s,DEV=0 ', line)
+
+    def test_missing_card_falls_back_to_default(self):
+        line = sq.render(sq.normalize({'output': 'hw:CARD=Lite,DEV=0'}), self.sb.probe)
+        self.assertTrue(line.startswith('-o default '), line)
+        self.assertNotIn('Lite', line)
+
+    def test_fallback_drops_the_hardware_mixer(self):
+        # -V names a control on the chosen card, which is gone on fallback.
+        present = sq.render(sq.normalize(
+            {'output': 'hw:CARD=D50s,DEV=0', 'volume': 'hardware', 'mixer': 'PCM'}), self.sb.probe)
+        self.assertIn('-V PCM', present)
+        gone = sq.render(sq.normalize(
+            {'output': 'hw:CARD=Lite,DEV=0', 'volume': 'hardware', 'mixer': 'PCM'}), self.sb.probe)
+        self.assertNotIn('-V', gone)
+
+    def test_stored_choice_is_not_rewritten(self):
+        # The fallback is only in the rendered line; the JSON keeps the DAC so it
+        # is used again when the card returns.
+        self.sb.write_default('-o hw:CARD=Lite,DEV=0 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium')
+        model, args, _ = sq.apply(self.sb.conf, self.sb.default, self.sb.dsp_target, self.sb.probe,
+                                  None, os.path.join(self.sb.dir, 'no-machine-id'))
+        self.assertEqual(model['output'], 'hw:CARD=Lite,DEV=0')
+        self.assertEqual(self.sb.conf_json()['output'], 'hw:CARD=Lite,DEV=0')
+        self.assertTrue(args.startswith('-o default '), args)
+
+    def test_a_zone_keeps_its_output(self):
+        # A zone does not fall back: run_zone() waits for the card, and a zone on
+        # `default` would collide with the built-in player.
+        argv = sq.render_argv(sq.normalize({'output': 'hw:CARD=Lite,DEV=0'}),
+                              self.sb.probe, visualizer=False, zone=True)
+        self.assertIn('hw:CARD=Lite,DEV=0', argv)
+        self.assertNotIn('default', argv)
+
+
 def _append_token(conf, default, asound, token, count):
     """One writer of TestConcurrency: `count` updates, each adding a token."""
+    sq.PROC_ASOUND = asound   # a forked child does not inherit the parent's patch
     probe = lambda d: sq.probe(d, asound)   # noqa: E731
     for i in range(count):
         sq.update(lambda m: m.update(extra=(m['extra'] + f' {token}{i}').strip()),
@@ -397,6 +468,7 @@ def _append_token(conf, default, asound, token, count):
 
 def _apply_loop(conf, default, asound, count):
     """The ExecStartPre of a crash-looping squeezelite, sped up."""
+    sq.PROC_ASOUND = asound   # a forked child does not inherit the parent's patch
     for _ in range(count):
         sq.apply(conf, default, os.path.join(os.path.dirname(conf), 'no-dsp-target'),
                  lambda d: sq.probe(d, asound), None, '/nonexistent-machine-id')
@@ -410,6 +482,13 @@ class TestConcurrency(unittest.TestCase):
         self.sb = Sandbox()
         self.sb.card('D50s', STREAM_NATIVE_BE)
         self.sb.write_default(LEGACY)
+        # render()'s output fallback reads card presence from the global
+        # PROC_ASOUND; point it at the sandbox so D50s counts as present.
+        self._saved_proc = sq.PROC_ASOUND
+        sq.PROC_ASOUND = self.sb.asound
+
+    def tearDown(self):
+        sq.PROC_ASOUND = self._saved_proc
 
     def tokens(self):
         return set(self.sb.conf_json()['extra'].split())
@@ -487,6 +566,13 @@ class TestFiles(unittest.TestCase):
     def setUp(self):
         self.sb = Sandbox()
         self.sb.card('D50s', STREAM_NATIVE_BE)
+        # render()'s output fallback reads card presence from the global
+        # PROC_ASOUND; point it at the sandbox so D50s counts as present.
+        self._saved_proc = sq.PROC_ASOUND
+        sq.PROC_ASOUND = self.sb.asound
+
+    def tearDown(self):
+        sq.PROC_ASOUND = self._saved_proc
 
     def apply(self, out=None, machine_id=None):
         return sq.apply(self.sb.conf, self.sb.default, self.sb.dsp_target, self.sb.probe, out,

@@ -701,24 +701,33 @@ def upsample_state(model, zone=False):
     return 'active'
 
 
-def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False):
+def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, proc_asound=None):
     """squeezelite's arguments for a model, as a list. `probe_fn(device)`
     tells what the DAC declares for DSD (defaults to reading /proc/asound).
     `visualizer`: `-v`, the VU meters' shared memory -- the built-in player
     only. `name`: a zone's, which may have spaces (it goes through execv,
-    not through the ARGS line). `zone`: the model is a zone's."""
+    not through the ARGS line). `zone`: the model is a zone's. `proc_asound`:
+    where card presence is read for the built-in player's fallback (defaults to
+    /proc/asound, like probe)."""
     m = normalize(model)
     if name:
         m['name'] = name
     probe_fn = probe_fn or probe
     dsp = m['dsp']['enabled']
-    fmt = None if dsp else probe_fn(m['output'])
+    # The built-in player falls back to `default` when its chosen card is gone,
+    # so a USB DAC unplugged after setup does not leave squeezelite crash-looping
+    # on a missing device (it would exit 1 and systemd restart it every 5 s).
+    # A zone keeps its own output: run_zone() waits for the card instead, and a
+    # zone on `default` would collide with the built-in player.
+    output = m['output'] if (dsp or zone) else available_output(m['output'], proc_asound)
+    fell_back = not dsp and not zone and output != m['output']
+    fmt = None if dsp else probe_fn(output)
     state = None if dsp else pcm2dsd_state(m, fmt, zone)
     pcm_only = dsp
     out = []
     if m['mac']:
         out += ['-m', m['mac']]
-    out += ['-o', LOOPBACK if dsp else m['output']]
+    out += ['-o', LOOPBACK if dsp else output]
     if not pcm_only:
         tok = dsd_token(m, fmt)
         if tok:
@@ -731,8 +740,10 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False):
     elif m['max_rate']:
         out += ['-r', str(m['max_rate'])]
     # the Loopback has no volume control of its own: squeezelite's volume
-    # acts on the PCM, before the conversion
-    if not pcm_only and m['volume'] == 'hardware' and m['mixer']:
+    # acts on the PCM, before the conversion. A hardware mixer control belongs
+    # to the chosen card, so drop it when we fell back to `default`: that card
+    # is gone and `-V` on a missing control would only warn.
+    if not pcm_only and m['volume'] == 'hardware' and m['mixer'] and not fell_back:
         out += ['-V', m['mixer']]
     if m['alsa_buffer'] == 'large':
         out += ['-a', ALSA_LARGE]
@@ -752,9 +763,9 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False):
     return out
 
 
-def render(model, probe_fn=None):
+def render(model, probe_fn=None, proc_asound=None):
     """The ARGS line for the built-in player's model."""
-    return ' '.join(render_argv(model, probe_fn))
+    return ' '.join(render_argv(model, probe_fn, proc_asound=proc_asound))
 
 
 # ── Files ───────────────────────────────────────────────────────────
@@ -952,6 +963,11 @@ def _apply(conf_path, default_path, dsp_target_path, probe_fn, out, machine_id_p
         except OSError as e:
             if out is not None:
                 print(f'hifi_squeezelite: could not save {conf_path}: {e}', file=out)
+    if out is not None and not model['dsp']['enabled']:
+        eff = available_output(model['output'])
+        if eff != model['output']:
+            print(f'hifi_squeezelite: output {model["output"]} not present, '
+                  f'falling back to {eff}', file=out)
     args = render(model, probe_fn)
     changed = write_default(args, default_path)
     if out is not None and changed:
@@ -1072,6 +1088,20 @@ def card_present(output, proc_asound=None):
         return False
     root = os.path.realpath(proc_asound or PROC_ASOUND)
     return _card_dir(root, card) is not None
+
+
+def available_output(output, proc_asound=None):
+    """The output to actually hand the built-in player: the configured one when
+    its card is present (or it is `default` / not a hw: card), else `default`
+    so squeezelite still starts instead of crash-looping on a DAC that was
+    unplugged after it was chosen. The stored choice in the model is left
+    untouched — when the card comes back the next render picks it again, and
+    62-hifi-audio-hotplug.rules restarts the player on a USB card add/remove so
+    that happens at once rather than at the next crash cycle."""
+    card, _ = parse_device(output)
+    if card is None or card_present(output, proc_asound):
+        return output
+    return 'default'
 
 
 # ── PCM → DSD: Lyrion's side ──────────────────────────────────────────

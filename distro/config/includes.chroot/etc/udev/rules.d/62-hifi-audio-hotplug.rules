@@ -1,0 +1,19 @@
+# Osmium Sound — follow a USB DAC that is plugged in or out at runtime.
+#
+# squeezelite's output device is chosen only when the service starts
+# (hifi_squeezelite.py apply, the ExecStartPre of squeezelite.service): it does
+# not follow a live hotplug. Without this rule, plugging a USB DAC after boot
+# leaves the player on the onboard jack, and unplugging the DAC it was using
+# leaves it crash-looping on a device that is no longer there (hifi_squeezelite
+# now falls back to `default`, but only at its next render).
+#
+# Restart the player on a USB sound card add/remove so the output is
+# re-evaluated at once: a DAC that just appeared is picked up, a DAC that
+# vanished falls back to `default`. Scoped to USB (SUBSYSTEMS=="usb") on
+# purpose — the onboard HDA codec, HDMI/DisplayPort and the snd-aloop Loopback
+# never hotplug, and matching them would restart the player for nothing during
+# boot coldplug. card[0-9]* fires once per card, not for every control/pcm
+# node; --no-block so udev does not wait on systemd; try-restart so a player
+# that is stopped stays stopped.
+ACTION=="add|remove", SUBSYSTEM=="sound", KERNEL=="card[0-9]*", SUBSYSTEMS=="usb", \
+    RUN+="/usr/bin/systemctl --no-block try-restart squeezelite.service"
