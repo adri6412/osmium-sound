@@ -20,7 +20,17 @@ set -u
 
 SRC_DIR="${HIFI_LMS_PLUGINS_SRC:-/usr/local/share/osmium/lms-plugins}"
 CACHE_DIR="${HIFI_LMS_CACHE:-/var/lib/squeezeboxserver/cache}"
-DST_DIR="$CACHE_DIR/InstalledPlugins/Plugins"
+# /var/lib/squeezeboxserver/Plugins — the stock Debian vendor plugin dir. On the
+# appliance /usr/share/squeezeboxserver/Plugins is a symlink to it (writable,
+# persistent /var), and Slim::Utils::OS::Debian already puts that path on the
+# plugin scan path and /usr/share/squeezeboxserver on @INC, so a plugin dropped
+# here is discovered and loadable with no Custom.pm change. Crucially it is
+# OUTSIDE cache/InstalledPlugins: the extension installer owns InstalledPlugins
+# and prunes any plugin there that came from no repo (marks it needs-uninstall,
+# rmtree on the next server restart), which is why a bundled plugin must NOT go
+# there — it would vanish on a UI-triggered restart. The uninstall logic never
+# touches this dir.
+DST_DIR="${HIFI_LMS_PLUGINS_DST:-$(dirname "$CACHE_DIR")/Plugins}"
 LYRION_CURRENT="${HIFI_LYRION_CURRENT:-/data/lyrion/current}"
 OWNER="${HIFI_LMS_USER:-squeezeboxserver}"
 CMDLINE="${HIFI_CMDLINE:-/proc/cmdline}"
