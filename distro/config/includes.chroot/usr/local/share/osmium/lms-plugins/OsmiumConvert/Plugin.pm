@@ -265,8 +265,11 @@ sub setCommand {
 sub clearCommand {
 	my $request = shift;
 
+	# Unlike set, clear does not require the player to be connected: a box
+	# cleaning up a rule for a player that has since gone away (moved server,
+	# removed) must be able to drop the stale rule from any server.
 	my $mac = _macOf($request);
-	unless ($mac && _connected($mac)) {
+	unless ($mac) {
 		return $request->setStatusBadParams();
 	}
 

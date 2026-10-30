@@ -1415,8 +1415,15 @@ Item {
     function secConvert(mode, filter, upsample, state, ustate, info, volume, zid, external) {
         var pre = zid ? zid + "|" : "", i
         var uinfo = info.upsample || {}
-        var dsdOk = !!info.available, pcmOk = !!uinfo.available
+        // The Lyrion this player follows converts, through its Osmium Convert
+        // plugin: its capabilities gate the control. A third-party server with
+        // no plugin cannot convert at all (noPlugin); one with a plain sox but
+        // no sox_ng/sdm can upsample PCM but not make DSD (noServerTools).
+        var caps = info.convert || {}
+        var dsdOk = !!info.available && caps.dsd !== false
+        var pcmOk = !!uinfo.available && caps.upsample !== false
         label("settings.convert.label", 14)
+        if (caps.plugin === false) { note(Tr.t("settings.pcm2dsd.why.noPlugin"), "red", "alert-triangle"); return }
         if (!dsdOk && !pcmOk) { note(Tr.t("settings.pcm2dsd.why.noTools"), "dark", "info"); return }
         // measured, and not even DSD64 fits: offer PCM/Off, drop the DSD button
         var tooSlow = info.measured && (info.modes || []).length <= 1 && mode === "off"
@@ -1427,6 +1434,7 @@ Item {
         grid(tc)
         help("settings.convert.help", 12)
         if (dsdOk && tooSlow && top !== "dsd") note(Tr.t("settings.pcm2dsd.tooSlow"), "dark", "info")
+        else if (!dsdOk && caps.why === "noServerTools" && top !== "dsd") note(Tr.t("settings.pcm2dsd.why.noServerTools"), "dark", "info")
 
         if (top === "pcm") {
             label("settings.upsample.label", 14)
@@ -1443,7 +1451,6 @@ Item {
             for (i = 0; i < dmodes.length; i++) dc.push(cell(dmodes[i].toUpperCase(), pre + dmodes[i], mode === dmodes[i], "p2d_mode", { hh: 44 }))
             grid(dc)
             if (external && state === "active") helpText(Tr.tf("settings.convert.extDsd", "rate", mode.toUpperCase()), 12)
-            else if (state === "player") helpText(Tr.tf("settings.pcm2dsd.player", "rate", mode.toUpperCase()), 12)
             else if (state !== "off" && state !== "active") note(Tr.t("settings.pcm2dsd.why." + state), "red", "alert-triangle")
             else if (state === "active") {
                 helpText(Tr.tf("settings.pcm2dsd.active", "rate", mode.toUpperCase()), 12)
@@ -1523,7 +1530,7 @@ Item {
         // the external info shape ({dsd, upsample}) adapted to what secConvert wants
         var dinfo = e.info.dsd || {}
         var cinfo = { modes: dinfo.modes, measured: dinfo.measured, filters: dinfo.filters,
-                      available: dinfo.available, upsample: e.info.upsample || {} }
+                      available: dinfo.available, convert: e.info.convert || {}, upsample: e.info.upsample || {} }
         for (var i = 0; i < ps.length; i++) {
             var p = ps[i], c = p.conf || {}
             var on = String(c.pcm2dsd || "off") !== "off" || String(c.upsample || "off") !== "off"
@@ -2738,11 +2745,10 @@ Item {
             if (ct.v === "off") cpatch = { pcm2dsd: "off", upsample: "off" }
             else if (ct.v === "pcm") cpatch = { upsample: String(cconf.upsample || "off") !== "off" ? cconf.upsample : "x2", pcm2dsd: "off" }
             else cpatch = { pcm2dsd: String(cconf.pcm2dsd || "off") !== "off" ? cconf.pcm2dsd : firstDsdMode(ct.zid), upsample: "off" }
-            // DSD with the player's own software volume stops it working -- except
-            // on the player's side (another server), where it converts after it,
-            // and for external players (that DAC's own volume is out of our hands)
-            var playerSide = !ct.zid && (cfg.sq.pcm2dsd || {}).server_local === false
-            if (ct.v === "dsd" && !ctExt && cconf.volume !== "hardware" && !playerSide) {
+            // DSD with the player's own software volume stops it working -- the
+            // server streams DSD and the player cannot attenuate it. External
+            // players are exempt (that DAC's own volume is out of our hands).
+            if (ct.v === "dsd" && !ctExt && cconf.volume !== "hardware") {
                 Ui.dialogs.confirm(Tr.t("settings.pcm2dsd.volumeConfirm"), Tr.t("settings.pcm2dsd.confirmOk"), true,
                                    function(ok) { if (ok) convApply(ct.zid, cpatch) })
                 return

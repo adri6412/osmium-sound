@@ -20,7 +20,7 @@ Description=HiFi Player - save the playback position and quiesce audio before sh
 # that leftover link turns the shutdown into a start job for an already-active
 # unit -- which systemd keeps over the stop, so ExecStop= never ran. Seen on a
 # real device; under this name nothing old points at it.
-After=lyrionmusicserver.service squeezelite.service camilladsp.service hifi-pcm2dsd-player.service
+After=lyrionmusicserver.service squeezelite.service camilladsp.service
 
 [Service]
 Type=oneshot

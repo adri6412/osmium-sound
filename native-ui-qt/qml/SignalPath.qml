@@ -91,12 +91,11 @@ Rectangle {
         if (has("replaygain")) ld.push({ text: t("replaygain"), tone: "warn" })
         if (has("crossfade")) ld.push({ text: t("crossfade"), tone: "warn" })
         if (has("resampled")) ld.push({ text: sub(t("resampled"), { rate: rate(r.hw ? r.hw.rate : r.player.max_rate) }), tone: "warn" })
-        // PCM to DSD: in Lyrion when this device is the server; after the
-        // player (its own step below) when the music comes from another one
+        // PCM to DSD always happens in Lyrion -- the server this player follows
+        // converts (its Osmium Convert plugin), local or remote alike
         var p2d = r.player ? r.player.pcm2dsd : null
         var p2dText = p2d ? sub(t("pcmToDsd"), { dsd: p2d.mode.toUpperCase(), filter: p2d.filter.toUpperCase() }) : ""
-        var p2dAfter = has("pcmToDsd") && p2d && p2d.state === "player"
-        if (has("pcmToDsd") && !p2dAfter) ld.push({ text: p2dText, tone: "conv" })
+        if (has("pcmToDsd")) ld.push({ text: p2dText, tone: "conv" })
         if (!ld.length) ld.push({ text: t("asIs"), tone: "ok" })
         ld.push({ text: r.lyrion.local ? t("lyrionHere") : sub(t("lyrionOn"), { host: r.lyrion.server }), tone: "idle" })
         out.push({ key: "lyrion", icon: "library", label: "Lyrion", value: "Lyrion Music Server", details: ld })
@@ -116,9 +115,6 @@ Rectangle {
         if (p.realtime) pd.push({ text: t("realtime"), tone: "ok" })
         out.push({ key: "player", icon: "audio-lines", label: r.zone ? sub(t("zone"), { name: r.zone }) : t("player"),
                    value: "squeezelite · " + p.name, details: pd })
-        if (p2dAfter)
-            out.push({ key: "convert", icon: "sparkles", label: t("conversion"), value: p2d.mode.toUpperCase(),
-                       details: [{ text: p2dText, tone: "conv" }, { text: t("convertHere"), tone: "idle" }] })
 
         // DAC
         var h = r.hw, dd = [], dv = r.dac.name || r.dac.card || t("unknownDac")

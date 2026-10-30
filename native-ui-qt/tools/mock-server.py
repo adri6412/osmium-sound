@@ -467,9 +467,21 @@ def rpc(player, params):
 
 
 # ── Settings → Audio: the squeezelite model, PCM to DSD and the zones ──
-# MOCK_P2D_SLOW=1: a CPU that cannot even do DSD64
+# MOCK_P2D_SLOW=1: a CPU that cannot even do DSD64.
+# MOCK_CONVERT: the capability the following Lyrion's Osmium Convert plugin
+# reports — "" healthy (local or remote with sox_ng), "noserver" plugin but no
+# DSD tools, "noplugin" a third-party server without the plugin.
+def _mock_convert():
+    m = os.environ.get("MOCK_CONVERT", "")
+    if m == "noplugin":
+        return {"plugin": False, "dsd": False, "upsample": False, "why": "noPlugin"}
+    if m == "noserver":
+        return {"plugin": True, "dsd": False, "upsample": True, "why": "noServerTools"}
+    return {"plugin": True, "dsd": True, "upsample": True, "why": None}
+
+
 MOCK_P2D = {"modes": ["off"] if os.environ.get("MOCK_P2D_SLOW") else ["off", "dsd64", "dsd128"], "measured": True, "filters": ["clans-8", "sdm-8"],
-            "available": True, "server_local": True,
+            "available": True, "server_local": True, "convert": _mock_convert(),
             "upsample": {"modes": ["off", "x2", "x4", "max"], "available": True}}
 MOCK_FREE = [{"id": "hw:CARD=Kitchen,DEV=0", "name": "iFi Zen DAC — USB Audio", "dsd": "native"}]
 
@@ -510,7 +522,7 @@ MOCK_EXT_PLAYERS = [{"mac": "aa:bb:cc:11:22:33", "name": "Soggiorno", "connected
 
 def mock_external(message=None):
     info = {"dsd": dict(MOCK_P2D), "upsample": dict(MOCK_P2D["upsample"]),
-            "caps": [0, 96000, 192000, 384000, 768000]}
+            "convert": _mock_convert(), "caps": [0, 96000, 192000, 384000, 768000]}
     if os.environ.get("MOCK_LMS_FOLLOW"):
         r = {"success": False, "code": "lms.unreachable", "players": [], "info": info, "lyrion": False}
         if message: r["message"] = message

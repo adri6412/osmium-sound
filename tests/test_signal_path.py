@@ -178,23 +178,18 @@ class VerdictTest(unittest.TestCase):
         self.assertEqual(r['changes'], ['pcmToDsd'])
         self.assertEqual(r['player']['pcm2dsd']['state'], 'active')
 
-    def test_pcm_to_dsd_on_the_player_side(self):
-        # another Lyrion: the player converts after its own volume, and a DSD
-        # track goes through PCM on the way
-        orig = (sq.tools_present, sq.player_side_present)
-        sq.tools_present = sq.player_side_present = lambda: True
+    def test_pcm_to_dsd_on_a_remote_server(self):
+        # another Lyrion: its Osmium Convert plugin converts server-side, same
+        # as the local server would. The signal path attributes it to Lyrion.
+        orig = sq.tools_present
+        sq.tools_present = lambda: True
         try:
-            t = Tree(hw('DSD_U32_BE', 88200))
-            main = {'pcm2dsd': 'dsd64', 'server': '192.168.1.9', 'volume': 'hardware', 'mixer': 'PCM'}
-            r = t.describe(FLAC_96, {'digital_volume': True, 'volume': '100'}, main=main)
+            main = {'pcm2dsd': 'dsd64', 'server': '192.168.1.9'}
+            r = Tree(hw('DSD_U32_BE', 88200)).describe(FLAC_96, main=main)
             self.assertEqual((r['verdict'], r['changes']), ('converted', ['pcmToDsd']))
-            self.assertEqual((r['player']['pcm2dsd']['state'], r['player']['volume']), ('player', 'software'))
-            r = t.describe(FLAC_96, {'digital_volume': True, 'volume': '40'}, main=main)
-            self.assertEqual((r['verdict'], r['changes']), ('processed', ['pcmToDsd', 'volume']))
-            r = t.describe(DSF_64, main=main)
-            self.assertEqual((r['verdict'], r['changes']), ('processed', ['dsdToPcm', 'pcmToDsd']))
+            self.assertEqual(r['player']['pcm2dsd']['state'], 'active')
         finally:
-            sq.tools_present, sq.player_side_present = orig
+            sq.tools_present = orig
 
     def test_idle(self):
         r = Tree().describe(FLAC_96)

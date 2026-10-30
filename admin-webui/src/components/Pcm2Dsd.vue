@@ -5,9 +5,10 @@
 // of three modes: Off, PCM upsampling (×2 / ×4 / max, within the source's rate
 // family), or DSD (64 / 128 / 256 + noise shaping). The two conversions are
 // mutually exclusive (the backend enforces it: DSD wins). See api_server.py
-// _pcm2dsd_info / hifi_squeezelite.{pcm2dsd,upsample}_state. With another Lyrion
-// server the built-in player converts to DSD itself; upsampling needs this
-// device's own Lyrion, so there it is not available.
+// _pcm2dsd_info / hifi_squeezelite.{pcm2dsd,upsample}_state. The conversion runs
+// on the Lyrion server this player follows (its Osmium Convert plugin), local or
+// remote alike; `info.convert` says whether that server can convert and why not
+// (noPlugin / noServerTools).
 import { computed } from 'vue';
 import { useI18n } from '../i18n';
 
@@ -15,9 +16,9 @@ const props = defineProps({
   mode: { type: String, default: 'off' },        // pcm2dsd: off | dsd64 | dsd128 | dsd256
   filter: { type: String, default: 'clans-8' },
   upsample: { type: String, default: 'off' },     // off | x2 | x4 | max
-  state: { type: String, default: 'off' },        // DSD state: off | active | player | noTools | remoteServer | dsp | noDsd
-  upsampleState: { type: String, default: 'off' },// off | active | noTools | remoteServer | dsp
-  info: { type: Object, required: true },         // { modes, measured, filters, available, server_local, upsample:{ modes, available } }
+  state: { type: String, default: 'off' },        // DSD state: off | active | noTools | dsp | noDsd
+  upsampleState: { type: String, default: 'off' },// off | active | noTools | dsp
+  info: { type: Object, required: true },         // { modes, measured, filters, available, convert:{plugin,dsd,upsample,why}, upsample:{ modes, available } }
   zone: { type: Boolean, default: false },
   external: { type: Boolean, default: false },    // an external Lyrion player: no CPU/volume messaging, user's responsibility
   volume: { type: String, default: 'software' },
@@ -28,8 +29,12 @@ const { t } = useI18n();
 
 // ── which of the three top modes is live ─────────────────────────────────
 const top = computed(() => (props.mode !== 'off' ? 'dsd' : props.upsample !== 'off' ? 'pcm' : 'off'));
-const dsdOk = computed(() => !!props.info.available);
-const pcmOk = computed(() => !!(props.info.upsample && props.info.upsample.available));
+// the following server's plugin gates the control: no plugin at all → nothing;
+// plugin without sox_ng → PCM upsampling but no DSD
+const caps = computed(() => props.info.convert || {});
+const noPlugin = computed(() => caps.value.plugin === false);
+const dsdOk = computed(() => !!props.info.available && caps.value.dsd !== false);
+const pcmOk = computed(() => !!(props.info.upsample && props.info.upsample.available) && caps.value.upsample !== false);
 
 // ── DSD sub-panel ─────────────────────────────────────────────────────────
 const dsdLabel = (m) => (m === 'off' ? t('settings.audio.off') : m.toUpperCase());
@@ -41,9 +46,7 @@ const dsdModes = computed(() => {
 });
 // measured, and not even DSD64 fits: say so instead of offering the button
 const tooSlow = computed(() => props.info.measured && (props.info.modes || []).length <= 1 && props.mode === 'off');
-const dsdWhy = computed(() => (['off', 'active', 'player'].includes(props.state) ? '' : t('settings.pcm2dsd.why.' + props.state)));
-// another server: the built-in player converts to DSD after its own volume
-const playerSide = computed(() => !props.zone && props.info.server_local === false);
+const dsdWhy = computed(() => (['off', 'active'].includes(props.state) ? '' : t('settings.pcm2dsd.why.' + props.state)));
 
 // ── PCM upsampling sub-panel ────────────────────────────────────────────────
 const pcmLabel = (m) => (m === 'max' ? t('settings.upsample.max') : '×' + m.slice(1));
@@ -60,7 +63,7 @@ function toPcm() {
 }
 function toDsd() {
   if (top.value === 'dsd') return;
-  if (!props.external && props.volume !== 'hardware' && !playerSide.value && !confirm(t('settings.pcm2dsd.volumeConfirm'))) return;
+  if (!props.external && props.volume !== 'hardware' && !confirm(t('settings.pcm2dsd.volumeConfirm'))) return;
   emit('set', { pcm2dsd: props.mode !== 'off' ? props.mode : dsdModes.value[0], upsample: 'off' });
 }
 </script>
@@ -68,7 +71,8 @@ function toDsd() {
 <template>
   <div class="pcm2dsd">
     <label>{{ t('settings.convert.label') }}</label>
-    <template v-if="dsdOk || pcmOk">
+    <p class="msg err" v-if="noPlugin">{{ t('settings.pcm2dsd.why.noPlugin') }}</p>
+    <template v-else-if="dsdOk || pcmOk">
       <span class="seg">
         <button :disabled="busy" :class="{ active: top === 'off' }" @click="toOff">{{ t('settings.audio.off') }}</button>
         <button v-if="pcmOk" :disabled="busy" :class="{ active: top === 'pcm' }" @click="toPcm">{{ t('settings.convert.pcm') }}</button>
@@ -76,6 +80,7 @@ function toDsd() {
       </span>
       <p class="muted">{{ t('settings.convert.help') }}</p>
       <p class="muted" v-if="dsdOk && tooSlow && top !== 'dsd'">{{ t('settings.pcm2dsd.tooSlow') }}</p>
+      <p class="muted" v-else-if="!dsdOk && caps.why === 'noServerTools' && top !== 'dsd'">{{ t('settings.pcm2dsd.why.noServerTools') }}</p>
 
       <!-- PCM upsampling -->
       <template v-if="top === 'pcm'">
@@ -102,7 +107,6 @@ function toDsd() {
           <p class="muted">{{ t('settings.pcm2dsd.active', { rate: mode.toUpperCase() }) }}</p>
           <p class="msg err" v-if="volume !== 'hardware'">{{ t('settings.pcm2dsd.volumeWarning') }}</p>
         </template>
-        <p class="muted" v-else-if="state === 'player'">{{ t('settings.pcm2dsd.player', { rate: mode.toUpperCase() }) }}</p>
         <p class="muted" v-if="!external && !info.measured">{{ t('settings.pcm2dsd.measuring') }}</p>
         <label>{{ t('settings.pcm2dsd.filterLabel') }}</label>
         <span class="seg">

@@ -2226,7 +2226,7 @@ def set_audio_device(device):
         log.exception("set_audio_device: write config failed")
         return {'success': False, 'code': 'audio.writeConfigFailed',
                 'message': _t('audio.writeConfigFailed', _lang())}
-    _pcm2dsd_resync()
+    _convert_resync()
 
     try:
         r = _restart_squeezelite_if_enabled()
@@ -2287,9 +2287,7 @@ def _apply_squeezelite_conf(change, msg_key):
         return {'success': False, 'code': 'audio.writeConfigFailed',
                 'message': _t('audio.writeConfigFailed', _lang())}
     result = {'success': True, 'message': _t(msg_key, _lang())}
-    if _pcm2dsd_resync():
-        result['lyrion_restarted'] = True
-        result['message'] = _t('squeezelite.savedLyrionRestart', _lang())
+    _convert_resync()
     if changed:
         try:
             r = _restart_squeezelite_if_enabled()
@@ -2301,13 +2299,12 @@ def _apply_squeezelite_conf(change, msg_key):
     result.update(get_squeezelite_conf())
     return result
 
-# ── PCM → DSD ──────────────────────────────────────────────────────
-# Lyrion converts every PCM track for a player whose model asks for it (see
-# hifi_squeezelite.pcm2dsd_state and hifi-pcm2dsd.py). Its rules are read
-# only when Lyrion starts, so turning the conversion on or off for a player —
-# or anything that makes it stop applying, like another DAC or another Lyrion
-# server — rewrites them and restarts Lyrion. A new rate or filter does not:
-# the wrapper reads them at every track.
+# ── PCM → DSD and PCM upsampling ────────────────────────────────────
+# The Lyrion a player follows converts every PCM track for it when the model
+# asks (see hifi_squeezelite.pcm2dsd_state / upsample_state). The box drives
+# this through the Osmium Convert plugin (_convert_resync above): it sets or
+# clears the per-player rule on that Lyrion and the plugin reloads the tables
+# with no restart. A new rate or filter is just another `set`.
 ZONES_CONF = sq.ZONES_CONF
 PCM2DSD_MAP = sq.PCM2DSD_MAP
 UPSAMPLE_MAP = sq.UPSAMPLE_MAP
@@ -2420,36 +2417,16 @@ def _pcm2dsd_info(model, fmt):
     """What Settings → Audio needs to show the three-mode conversion control
     for one player: the DSD choice (gated on this CPU) and PCM upsampling."""
     modes, measured = _pcm2dsd_modes()
+    # The Lyrion this player follows (local or remote) is what actually
+    # converts, through its Osmium Convert plugin. Its capabilities tell the
+    # UI whether DSD is possible there, and why not (noPlugin / noServerTools).
+    caps = _convert_caps(model['server'])
     return {'state': sq.pcm2dsd_state(model, fmt), 'modes': modes, 'measured': measured,
             'filters': list(sq.PCM2DSD_FILTERS), 'available': sq.tools_present(),
-            'server_local': sq.server_is_local(model['server']),
+            'server_local': sq.server_is_local(model['server']), 'convert': caps,
             'upsample': {'state': sq.upsample_state(model),
                          'modes': list(sq.UPSAMPLE_MODES),
                          'available': sq.upsample_tools_present()}}
-
-
-def _pcm2dsd_resync():
-    """Bring Lyrion's rules in line with the models. True when they changed
-    and a running Lyrion was restarted to read them."""
-    try:
-        changed = sq.sync_pcm2dsd(SQUEEZELITE_CONF, ZONES_CONF, PCM2DSD_MAP, LMS_CONVERT,
-                                  SQUEEZELITE_DEFAULT, DSP_TARGET_FILE,
-                                  external_path=EXTERNAL_CONVERT, upsample_map_path=UPSAMPLE_MAP)
-    except Exception:
-        log.exception("pcm2dsd: writing Lyrion's rules failed")
-        return False
-    if not changed:
-        return False
-    try:
-        if _run(['systemctl', 'is-active', '--quiet', 'lyrionmusicserver'], timeout=10).returncode != 0:
-            return False
-        log.info("pcm2dsd: rules changed, restarting Lyrion")
-        _run(['systemctl', 'reset-failed', 'lyrionmusicserver'], timeout=15)
-        _run(['systemctl', 'restart', 'lyrionmusicserver'], timeout=60)
-        return True
-    except Exception:
-        log.exception("pcm2dsd: Lyrion restart failed")
-        return False
 
 
 # ── External players: server-side conversion for squeezelites elsewhere ──
@@ -2507,9 +2484,13 @@ def _external_player_list():
 
 def _external_info():
     modes, measured = _pcm2dsd_modes()
+    # External players convert on this box's own Lyrion (127.0.0.1), which
+    # always has the plugin and the SoX tools; `convert` reports it anyway so
+    # the UI reads capability the same way as for the built-in player.
     return {'dsd': {'modes': modes, 'measured': measured, 'filters': list(sq.PCM2DSD_FILTERS),
                     'available': sq.tools_present()},
             'upsample': {'modes': list(sq.UPSAMPLE_MODES), 'available': sq.upsample_tools_present()},
+            'convert': _convert_caps('127.0.0.1'),
             'caps': [0, 96000, 192000, 384000, 768000]}
 
 
@@ -2540,15 +2521,11 @@ def _write_external(saved):
 
 
 def _external_ok(result):
-    """Finish an external-convert write: resync Lyrion's rules, then return the
-    refreshed list with the right message."""
-    out = {'success': True, 'message': _t('squeezelite.saved', _lang())}
-    if _pcm2dsd_resync():
-        out['message'] = _t('squeezelite.savedLyrionRestart', _lang())
-        out['lyrion_restarted'] = True
+    """Finish an external-convert write: push the rules to the plugin, then
+    return the refreshed list with the right message."""
+    _convert_resync()
     refreshed = get_external_convert()
-    refreshed['message'] = out['message']
-    refreshed.update({k: out[k] for k in ('lyrion_restarted',) if k in out})
+    refreshed['message'] = _t('squeezelite.saved', _lang())
     return refreshed
 
 
@@ -2594,6 +2571,12 @@ def remove_external_convert(changes):
             log.exception("external_convert: write failed")
             return {'success': False, 'code': 'audio.writeConfigFailed',
                     'message': _t('audio.writeConfigFailed', _lang())}
+        # The row is gone, so _convert_resync no longer owns this MAC and would
+        # not touch it: clear its rule on the local Lyrion explicitly.
+        try:
+            _push_convert('127.0.0.1', {mac}, {})
+        except Exception:
+            log.exception("external_convert: clearing %s", mac)
     return _external_ok(None)
 
 
@@ -2620,14 +2603,13 @@ def _zones_ok(code, **kw):
 
 
 def _zones_apply(restart=()):
-    """Rules first (a zone that converts to DSD needs them in Lyrion before it
-    asks for its first track), then the units. True when Lyrion restarted."""
-    restarted = _pcm2dsd_resync()
+    """Push the plugin rules first (a zone that converts to DSD needs its rule
+    on Lyrion before it asks for its first track), then the units."""
+    _convert_resync()
     try:
         sq.sync_zones(ZONES_CONF, restart=restart)
     except Exception:
         log.exception("zones: applying the units failed")
-    return restarted
 
 
 def get_zones():
@@ -2748,12 +2730,11 @@ def zone_update(zid, changes):
     except Exception:
         log.exception("zones: update failed")
         return _zones_fail('zones.saveFailed')
-    # a new DSD rate or filter only changes what Lyrion sends: the zone's own
-    # command line is the same, and the music it is playing need not stop
-    restarted = _zones_apply(restart={zid} if argv.get('before') != argv.get('after') else set())
-    out = _zones_ok('squeezelite.savedLyrionRestart' if restarted else 'zones.saved')
-    out['lyrion_restarted'] = restarted
-    return out
+    # a new DSD rate or filter only changes what the plugin tells Lyrion to
+    # send: the zone's own command line is the same, and the music it is
+    # playing need not stop
+    _zones_apply(restart={zid} if argv.get('before') != argv.get('after') else set())
+    return _zones_ok('zones.saved')
 
 
 def zone_remove(zid):
@@ -2945,18 +2926,29 @@ def set_lms_role(mode, host):
         return {'success': False, 'code': 'lms.invalidMode',
                 'message': _t('lms.invalidMode', _lang(), mode=mode)}
 
+    # The server the internal player and the zones followed until now: its
+    # Osmium Convert plugin still holds their rules and must be cleared, since
+    # after the move those players convert on the new server instead.
+    old_host = _current_lms_host()
     try:
         _sq_update(lambda model: model.update(server=target))
     except Exception:
         log.exception("set_lms_role: write config failed")
         return {'success': False, 'code': 'lms.sqConfigMissing',
                 'message': _t('lms.sqConfigMissing', _lang())}
-    # PCM → DSD only converts on this device's own Lyrion: its rules follow
-    # the choice, written before that Lyrion is started or stopped below.
+    # Conversion is driven by the Osmium Convert plugin on whichever Lyrion the
+    # player follows. Clear the box's rules on the server it is leaving, then
+    # resync against the one it now follows.
     try:
-        sq.sync_pcm2dsd(SQUEEZELITE_CONF, ZONES_CONF, PCM2DSD_MAP, LMS_CONVERT,
-                        SQUEEZELITE_DEFAULT, DSP_TARGET_FILE,
-                        external_path=EXTERNAL_CONVERT, upsample_map_path=UPSAMPLE_MAP)
+        if old_host and old_host != target:
+            zones = sq.load_zones(ZONES_CONF)
+            box_macs = ({main_mac} if (main_mac := _own_player_mac()) else set()) \
+                | {z['mac'] for z in zones if z.get('mac')}
+            _push_convert(old_host, box_macs, {})
+    except Exception:
+        log.exception("set_lms_role: clearing convert rules on the old server")
+    try:
+        _convert_resync()
     except Exception:
         log.exception("set_lms_role: PCM to DSD rules")
     # Before the player restart below, so squeezelite comes back up with the
@@ -6870,11 +6862,100 @@ def _current_real_dac():
 # companion app) triggered the change.
 LMS_RPC_URL = 'http://127.0.0.1:9000/jsonrpc.js'
 
-def _lms_request(playerid, command, timeout=5):
+def _lms_rpc(host, playerid, command, timeout=5):
+    """A jsonrpc.js slim.request to the Lyrion on `host` (port 9000). `host`
+    is the server a player follows -- 127.0.0.1 for the local Lyrion, or a
+    remote Osmium / third-party server for the built-in player when it is set
+    to follow one. Raises on a transport error; the caller decides what that
+    means."""
+    url = f'http://{host}:9000/jsonrpc.js'
     payload = json.dumps({'id': 1, 'method': 'slim.request', 'params': [playerid, command]}).encode()
-    req = urllib.request.Request(LMS_RPC_URL, data=payload, headers={'Content-Type': 'application/json'})
+    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read()).get('result')
+
+def _lms_request(playerid, command, timeout=5):
+    return _lms_rpc('127.0.0.1', playerid, command, timeout)
+
+# ── Osmium Convert plugin: the single mechanism for per-player conversion ──
+# The box no longer writes custom-convert.conf. It tells the Osmium Convert
+# plugin, over the CLI on the Lyrion each player follows, what that player's
+# conversion is; the plugin keeps the rule and reloads the tables with no
+# restart. The box sets or clears ONLY the MACs it owns (its built-in player,
+# its zones, its chosen external players), never a rule another box put on a
+# shared server.
+def _osmium_set(host, mac, entry, timeout=5):
+    if entry.get('kind') == 'dsd':
+        cmd = ['osmiumconvert', 'set', mac, 'dsd', entry['mode'], entry['filter']]
+    else:
+        cmd = ['osmiumconvert', 'set', mac, 'pcm', entry['mult'], str(entry.get('cap') or 0)]
+    return _lms_rpc(host, '-', cmd, timeout)
+
+def _osmium_clear(host, mac, timeout=5):
+    return _lms_rpc(host, '-', ['osmiumconvert', 'clear', mac], timeout)
+
+def _osmium_status(host, timeout=4):
+    return _lms_rpc(host, '-', ['osmiumconvert', 'status'], timeout)
+
+def _convert_caps(host):
+    """What the Osmium Convert plugin on `host` can do, for the UI to gate the
+    conversion control: `plugin` (does it answer at all), `dsd` (sox_ng + sdm
+    present), `upsample` (any sox present), and `why` — 'noPlugin' when the
+    server does not run the plugin, 'noServerTools' when it runs it but cannot
+    do DSD. A local Osmium always has the tools; a third-party server may not."""
+    try:
+        st = _osmium_status(host)
+    except Exception:
+        st = None
+    if not isinstance(st, dict):
+        return {'plugin': False, 'dsd': False, 'upsample': False, 'why': 'noPlugin'}
+    dsd = bool(st.get('dsd'))
+    return {'plugin': True, 'dsd': dsd, 'upsample': bool(st.get('upsample')),
+            'why': None if dsd else 'noServerTools'}
+
+def _push_convert(host, macs, desired):
+    """For every MAC the box owns on `host`, set its conversion (when it has
+    one now) or clear it (when it does not). Best-effort per MAC: a server that
+    is down, or lacks the plugin, just means that player is not converted."""
+    desired = {str(k).lower(): v for k, v in (desired or {}).items()}
+    for mac in sorted({str(m).lower() for m in macs}):
+        try:
+            entry = desired.get(mac)
+            if entry:
+                _osmium_set(host, mac, entry)
+            else:
+                _osmium_clear(host, mac)
+        except Exception:
+            log.debug("convert: %s on %s failed", mac, host, exc_info=True)
+
+def _convert_resync():
+    """Bring the Osmium Convert plugin(s) in line with the models. The internal
+    player and the zones follow the box's chosen server (`_current_lms_host`,
+    local or remote); the external players follow the local Lyrion."""
+    try:
+        main = _sq_load()
+    except Exception:
+        log.exception("convert: loading the player model")
+        return
+    try:
+        zones = sq.load_zones(ZONES_CONF)
+    except Exception:
+        zones = []
+    try:
+        desired_box = sq.convert_players(main, zones, external=None)
+    except Exception:
+        log.exception("convert: computing the box players")
+        desired_box = {}
+    box_macs = set()
+    if main.get('mac'):
+        box_macs.add(main['mac'])
+    box_macs |= {z['mac'] for z in zones if z.get('mac')}
+    _push_convert(_current_lms_host(), box_macs, desired_box)
+    try:
+        external = sq.load_external(EXTERNAL_CONVERT)
+    except Exception:
+        external = {}
+    _push_convert('127.0.0.1', set(external), sq.external_players(external))
 
 def _own_player_mac():
     """The player MAC this box's squeezelite runs with (`-m`, kept in
@@ -7135,7 +7216,7 @@ def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balanc
             model['output'] = playback_dev
         model['dsp']['enabled'] = True
     dsp_changed = _sq_update(dsp_on)
-    _pcm2dsd_resync()      # the DSP path plays PCM: no DSD conversion on it
+    _convert_resync()      # the DSP path plays PCM: no DSD conversion on it
     if dsp_changed:
         # squeezelite must release the real DAC (by restarting onto the
         # loopback) BEFORE CamillaDSP tries to open that same hw: device —
@@ -7168,7 +7249,7 @@ def _apply_dsp_off():
             model['output'] = dac or model['output'] or 'default'
             model['dsp']['enabled'] = False
         _sq_update(dsp_off)
-        _pcm2dsd_resync()
+        _convert_resync()
         subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
                        capture_output=True, text=True, timeout=30)
         _restart_squeezelite_if_enabled()

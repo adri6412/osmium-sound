@@ -341,12 +341,12 @@ watch(open, (v) => { if (v === 'zones') loadZones(); }, { immediate: true });
 // ── External Lyrion players: convert for squeezelites on this box's Lyrion ──
 // api_server.py get_external_convert / update_external_convert /
 // remove_external_convert. The list comes from Lyrion serverstatus (this box's
-// own players filtered out); each choice is persisted to external-convert.json
-// and applied by rewriting custom-convert.conf (Lyrion restart).
+// own players filtered out); each choice is sent to the Osmium Convert plugin
+// on this box's own Lyrion (no restart).
 const ext = ref(null); const extBusy = ref(false); const extOpen = ref('');
 // adapt the external info shape to what Pcm2Dsd expects (DSD fields at top level)
 const extInfo = computed(() => (ext.value && ext.value.info)
-  ? { ...ext.value.info.dsd, upsample: ext.value.info.upsample } : { upsample: {} });
+  ? { ...ext.value.info.dsd, convert: ext.value.info.convert, upsample: ext.value.info.upsample } : { upsample: {} });
 async function loadExt() {
   const r = await api.sys('external_convert');
   if (r.ok) ext.value = r.data;

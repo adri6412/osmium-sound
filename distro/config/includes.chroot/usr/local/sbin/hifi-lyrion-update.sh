@@ -205,9 +205,9 @@ if [ -f /usr/lib/osmium/IMAGE_VERSION ]; then
     # A deliberate start must not be refused by the unit's crash-loop limit
     # (five starts in five minutes), which also counts the stops and starts
     # the first-run setup does around this install.
-    # The new version's /etc/squeezeboxserver is fresh: put the PCM to DSD
-    # rules of this device's players back before Lyrion reads it.
-    python3 /usr/local/bin/hifi_squeezelite.py lms-rules 2>/dev/null || true
+    # Per-player conversion rules live in the Osmium Convert plugin's own prefs
+    # now, not in /etc/squeezeboxserver, so a fresh config needs nothing here:
+    # the plugin re-applies them at init.
     systemctl reset-failed lyrionmusicserver 2>/dev/null || true
     systemctl start lyrionmusicserver 2>/dev/null || true
     rm -rf "$WORKDIR"
@@ -241,9 +241,9 @@ fi
     || echo "W: [hifi-lyrion] apt ha restituito $apt_rc ma dpkg riporta il pacchetto installato e configurato — proseguo" >&2
 
 write_status restarting 90 "Riavvio Lyrion…"
-# The new version's /etc/squeezeboxserver is fresh: put the PCM to DSD
-# rules of this device's players back before Lyrion reads it.
-python3 /usr/local/bin/hifi_squeezelite.py lms-rules 2>/dev/null || true
+# Per-player conversion rules live in the Osmium Convert plugin's own prefs now,
+# not in /etc/squeezeboxserver, so a fresh config needs nothing here: the plugin
+# re-applies them at init.
 systemctl reset-failed lyrionmusicserver 2>/dev/null || true
 systemctl restart lyrionmusicserver 2>/dev/null || true
 

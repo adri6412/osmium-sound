@@ -1295,9 +1295,8 @@
     "pcm2dsd": {
       "title": "Conversion to DSD",
       "label": "Convert to DSD",
-      "help": "Every track that is not DSD already (CD rips, high-resolution files, radio, streaming services) reaches the DAC as DSD, converted while it plays. DSD files are left as they are: they reach the DAC native or as DoP, as set under \"DSD files\". Only when the music comes from another Lyrion server and the conversion is on do they go through it too.",
+      "help": "Every track that is not DSD already (CD rips, high-resolution files, radio, streaming services) reaches the DAC as DSD, converted while it plays. DSD files are left as they are: they reach the DAC native or as DoP, as set under \"DSD files\". The conversion runs on the Lyrion server this player follows, so the player receives the music already as DSD.",
       "active": "On: everything reaches the DAC as {rate}.",
-      "player": "On: the music comes from another Lyrion server, so this device converts it to {rate} itself. While it is on, DSD files go through it too: read as PCM and converted again to {rate}. Turn it off and they reach the DAC as they are again, native or DoP as set under \"DSD files\". Osmium's volume keeps working.",
       "volumeWarning": "The digital volume has no effect on DSD: use the volume of the DAC or of the amplifier. Turn it down before you start.",
       "volumeConfirm": "Mind the volume. With DSD conversion on, Osmium's volume control no longer does anything: the music always plays at full level, and the volume can only be set on the DAC or the amplifier. Turn the amplifier down before you switch it on. If your DAC has a volume control of its own, you can use it by choosing \"DAC mixer\" under Volume control.\n\nTurn the conversion on?",
       "measuring": "Measuring what this processor can do: DSD256 shows up here if it is fast enough.",
@@ -1310,7 +1309,8 @@
       },
       "why": {
         "noTools": "This device needs a system update before it can convert to DSD.",
-        "remoteServer": "For a zone it only works when this device is its own Lyrion server: the music now comes from another one.",
+        "noPlugin": "The other Lyrion server does not have the Osmium Convert plugin, so it cannot convert for this player. Install it there, or point the player at this device's own server.",
+        "noServerTools": "The other Lyrion server can upsample PCM but cannot make DSD (it lacks sox_ng). PCM upsampling is available; DSD is not.",
         "dsp": "Not available while sound processing is on.",
         "noDsd": "No DSD reaches this DAC: choose a DAC that accepts it (natively or as DoP) and a DSD mode other than \"Convert to PCM\"."
       }
@@ -1330,7 +1330,6 @@
       "max": "Max",
       "why": {
         "noTools": "This device needs a system update before it can upsample.",
-        "remoteServer": "For a zone it only works when this device is its own Lyrion server: the music now comes from another one.",
         "dsp": "Not available while sound processing is on."
       }
     },
