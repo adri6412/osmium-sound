@@ -158,4 +158,11 @@
     <string name="kiosk_album_tracks_other">%d brani</string>
     <string name="kiosk_album_disc">Disco %d</string>
     <string name="kiosk_play_this">Riproduci</string>
+
+    <!-- Tessere Impostazioni che rispecchiano le sezioni del kiosk. -->
+    <string name="settings_tile_vu_meters">VU meter</string>
+    <string name="settings_tile_ui_resolution">Risoluzione interfaccia</string>
+    <string name="settings_tile_pointer">Puntatore mouse</string>
+    <string name="settings_tile_system_info">Informazioni Sistema</string>
+    <string name="settings_tile_alarm">Sveglia</string>
 </resources>

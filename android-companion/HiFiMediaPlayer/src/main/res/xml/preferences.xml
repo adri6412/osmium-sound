@@ -29,25 +29,9 @@
     android:key="first_preferencescreen">
 
     <!-- Music & library ................................................ -->
-
-    <PreferenceScreen
-        android:key="squeezer.leaf.library"
-        android:title="@string/settings_tile_library">
-
-        <Preference
-            android:key="squeezer.lyrion_rescan.open"
-            android:title="@string/settings_lyrion_rescan_title"
-            android:summary="@string/settings_lyrion_rescan_summary"/>
-
-        <!-- Which look Lyrion's web player serves (Osmium / Material). Talks
-             to sources_server's /api/lms_skin directly; hidden at runtime when
-             the appliance can't answer (older bundle, not paired yet, or no
-             local Lyrion to skin). -->
-        <Preference
-            android:key="squeezer.lyrion_skin.open"
-            android:title="@string/settings_lyrion_skin_title"
-            android:summary="@string/settings_lyrion_skin_summary"/>
-    </PreferenceScreen>
+    <!-- Library rescan and the Lyrion web-player skin moved into the
+         Lyrion Music Server screen (MultiroomActivity), to match the kiosk's
+         own grouping. -->
 
     <PreferenceScreen
         android:key="squeezer.leaf.playback"

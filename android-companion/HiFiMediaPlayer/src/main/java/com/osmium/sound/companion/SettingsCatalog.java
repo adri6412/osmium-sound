@@ -1,10 +1,13 @@
 package com.osmium.sound.companion;
 
+import android.app.Activity;
 import android.content.Context;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
+
+import com.osmium.sound.companion.itemlist.AlarmsActivity;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -97,12 +100,12 @@ final class SettingsCatalog {
             new Group("music", R.drawable.library_music, R.string.settings_group_music, List.of(
                     screen("sources", R.drawable.ic_archive, R.string.appliance_section_sources, true,
                             SourcesActivity::show),
-                    leaf("library", R.drawable.library_music, R.string.settings_tile_library, true,
-                            SettingsFragment.SCREEN_LIBRARY),
                     leaf("playback", R.drawable.ic_action_play, R.string.appliance_section_playback, false,
                             SettingsFragment.SCREEN_PLAYBACK),
                     screen("multiroom", R.drawable.ic_speaker, R.string.settings_multiroom_title, true,
                             MultiroomActivity::show),
+                    screen("alarm", R.drawable.alarm_clock, R.string.settings_tile_alarm, false,
+                            ctx -> AlarmsActivity.show((Activity) ctx)),
                     leaf("download", R.drawable.ic_download, R.string.settings_category_download, false,
                             SettingsFragment.SCREEN_DOWNLOAD))),
             new Group("sound", R.drawable.ic_action_volume, R.string.settings_group_sound, List.of(
@@ -111,8 +114,16 @@ final class SettingsCatalog {
             new Group("look", R.drawable.ic_action_view_as_grid, R.string.settings_group_look, List.of(
                     leaf("language", R.drawable.ic_translate, R.string.settings_tile_language_screen, false,
                             SettingsFragment.SCREEN_DISPLAY),
+                    screen("vuMeters", R.drawable.nowplaying, R.string.settings_tile_vu_meters, true,
+                            VuMetersActivity::show),
+                    screen("resolution", R.drawable.ic_action_view_as_grid, R.string.settings_tile_ui_resolution, true,
+                            ResolutionActivity::show),
+                    screen("refresh", R.drawable.ic_refresh, R.string.settings_ui_refresh_title, true,
+                            RefreshRateActivity::show),
                     screen("displayMode", R.drawable.ic_action_view_as_grid, R.string.settings_tile_display_mode, true,
                             DisplayActivity::show),
+                    screen("pointer", R.drawable.ic_settings, R.string.settings_tile_pointer, true,
+                            PointerActivity::show),
                     leaf("nowplaying", R.drawable.nowplaying, R.string.settings_category_nowplaying_trackinfo, false,
                             SettingsFragment.SCREEN_NOW_PLAYING),
                     leaf("interface", R.drawable.ic_settings, R.string.settings_tile_interface, false,
@@ -132,6 +143,8 @@ final class SettingsCatalog {
             new Group("system", R.drawable.ic_info, R.string.settings_group_system, List.of(
                     leaf("timezone", R.drawable.ic_globe, R.string.appliance_section_timezone, true,
                             SettingsFragment.SCREEN_TIMEZONE),
+                    screen("systemInfo", R.drawable.ic_info, R.string.settings_tile_system_info, true,
+                            SystemInfoActivity::show),
                     screen("updates", R.drawable.ic_download, R.string.settings_updates_title, true,
                             UpdatesActivity::show),
                     screen("systemControls", R.drawable.ic_action_power_settings_new,

@@ -3,27 +3,24 @@ package com.osmium.sound.companion;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.widget.TextView;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 /**
- * Read-only system info plus reboot/shutdown — the web admin's Settings →
+ * Reboot/shutdown — the system-controls part of the web admin's Settings →
  * System card, minus factory reset and the support bundle, which stay on the
  * appliance's screen and the web admin (a pairing token is all that
- * authenticates this app). SSH moved to ServicesActivity and the screen
- * settings to DisplayActivity, matching the web admin's sections. All calls go
- * through ApplianceHttpClient's /api/system/* proxy routes on sources_server.py.
+ * authenticates this app). Read-only system info moved to SystemInfoActivity,
+ * SSH to ServicesActivity and the screen settings to DisplayActivity, matching
+ * the kiosk's sections. All calls go through ApplianceHttpClient's /api/system/*
+ * proxy routes on sources_server.py.
  */
 public class SystemAdminActivity extends ApplianceSettingsActivity {
-    private TextView systemInfoText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setUpScreen(R.string.settings_system_admin_title, R.layout.activity_system_admin);
-
-        systemInfoText = findViewById(R.id.system_info_text);
+        setUpScreen(R.string.settings_tile_system_controls, R.layout.activity_system_admin);
 
         findViewById(R.id.button_reboot).setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.settings_reboot_button)
@@ -38,18 +35,6 @@ public class SystemAdminActivity extends ApplianceSettingsActivity {
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(R.string.settings_shutdown_button, (d, w) -> postAndReport("/api/system/shutdown"))
                 .show());
-
-        loadSystemInfo();
-    }
-
-    private void loadSystemInfo() {
-        load("/api/system/info", null, body -> {
-            String text = getString(R.string.settings_system_info_hostname) + ": " + body.optString("hostname", "-") + "\n"
-                    + getString(R.string.settings_system_info_ip) + ": " + body.optString("local_ip", "-") + "\n"
-                    + getString(R.string.settings_system_info_platform) + ": " + body.optString("platform", "-")
-                    + " (" + body.optString("arch", "-") + ")";
-            systemInfoText.setText(text);
-        }, () -> systemInfoText.setText(R.string.settings_system_admin_failed));
     }
 
     private void postAndReport(String path) {

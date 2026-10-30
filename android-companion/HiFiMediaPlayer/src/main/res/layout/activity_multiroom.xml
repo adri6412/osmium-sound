@@ -197,6 +197,71 @@
                     android:text="@string/settings_multiroom_role_apply" />
             </LinearLayout>
 
+            <!-- Lyrion web player skin — hidden when there is no local Lyrion to
+                 skin (external server) or the appliance predates the route.
+                 Moved here from the old Library tile, to match the kiosk's
+                 Lyrion Music Server section. -->
+            <LinearLayout
+                android:id="@+id/lyrion_skin_section"
+                android:orientation="vertical"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:visibility="gone">
+
+                <View style="@style/ApplianceDivider" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_lyrion_skin_title"
+                    android:textColor="@android:color/white"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:id="@+id/lyrion_skin_summary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/hifiSilver"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/button_lyrion_skin"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_lyrion_skin_title" />
+            </LinearLayout>
+
+            <!-- Library rescan — moved here from the old Library tile, to match
+                 the kiosk's Lyrion Music Server section. -->
+            <View
+                style="@style/ApplianceDivider"
+                android:layout_marginTop="24dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_lyrion_rescan_title"
+                android:textColor="@android:color/white"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_lyrion_rescan_summary"
+                android:textColor="@color/hifiSilver"
+                android:layout_marginBottom="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/button_rescan"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_lyrion_rescan_title" />
+
             <ProgressBar
                 android:id="@+id/multiroom_progress"
                 android:layout_width="wrap_content"

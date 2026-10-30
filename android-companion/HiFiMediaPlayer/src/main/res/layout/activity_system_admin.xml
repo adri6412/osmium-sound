@@ -5,15 +5,6 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
-    <TextView style="@style/ApplianceTitle" android:text="@string/settings_system_info_title" />
-
-    <TextView
-        android:id="@+id/system_info_text"
-        style="@style/ApplianceHelp"
-        android:textIsSelectable="true" />
-
-    <View style="@style/ApplianceDivider" />
-
     <TextView style="@style/ApplianceTitle" android:text="@string/settings_system_controls_title" />
 
     <com.google.android.material.button.MaterialButton

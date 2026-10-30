@@ -157,6 +157,36 @@
         </activity>
 
         <activity
+            android:name=".VuMetersActivity"
+            android:label="@string/settings_tile_vu_meters"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
+            android:name=".ResolutionActivity"
+            android:label="@string/settings_tile_ui_resolution"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
+            android:name=".RefreshRateActivity"
+            android:label="@string/settings_ui_refresh_title"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
+            android:name=".PointerActivity"
+            android:label="@string/settings_tile_pointer"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
+            android:name=".SystemInfoActivity"
+            android:label="@string/settings_tile_system_info"
+            android:parentActivityName=".SettingsActivity">
+        </activity>
+
+        <activity
             android:name=".ConnectActivity"
             android:label="@string/disconnected_text"
             android:parentActivityName=".kiosk.MainActivity">

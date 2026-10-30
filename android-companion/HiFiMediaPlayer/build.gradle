@@ -85,8 +85,8 @@ android {
         minSdkVersion rootProject.minSdkVersion
         targetSdkVersion rootProject.targetSdkVersion
 
-        versionCode 39
-        versionName "1.0.15"
+        versionCode 40
+        versionName "1.0.17"
 
         vectorDrawables.useSupportLibrary = true
         multiDexEnabled true
@@ -147,6 +147,13 @@ android {
             proguardFile "proguard-guava.cfg"
             proguardFile "proguard-cometd.cfg"
             proguardFile "proguard-squeezer.cfg"
+            // Bundle native debug symbols into the AAB so the Play Console can
+            // symbolicate native crash/ANR stack traces. SYMBOL_TABLE keeps the
+            // bundle small while giving readable traces; use 'FULL' for line
+            // numbers. Without this the console warns about missing symbols.
+            ndk {
+                debugSymbolLevel 'SYMBOL_TABLE'
+            }
         }
     }
     lint {
