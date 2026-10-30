@@ -27,6 +27,7 @@ from hifi_i18n import t as _t
 from hifi_i18n import MESSAGES as _I18N_MESSAGES
 import hifi_squeezelite as sq
 import hifi_signal_path
+import hifi_system_tweaks as stw
 import hifi_diskguard
 
 app = Flask(__name__)
@@ -2288,6 +2289,15 @@ def _apply_squeezelite_conf(change, msg_key):
                 'message': _t('audio.writeConfigFailed', _lang())}
     result = {'success': True, 'message': _t(msg_key, _lang())}
     _convert_resync()
+    # Keep the player-side converter (hifi-pcm2dsd-player) in step with the
+    # model on every change, not only when squeezelite's ARGS line changes:
+    # a new DSD rate or filter leaves the Loopback ARGS untouched, so no
+    # restart fires and ExecStartPre's apply never runs. Idempotent, and a
+    # no-op (stops the unit) whenever convert_where is not 'player'.
+    try:
+        sq.sync_player(_sq_load())
+    except Exception:
+        log.exception("player-side convert: sync failed")
     if changed:
         try:
             r = _restart_squeezelite_if_enabled()
@@ -2297,6 +2307,48 @@ def _apply_squeezelite_conf(change, msg_key):
             log.exception("squeezelite conf: restart failed")
             result['message'] = _t('squeezelite.restartWarn', _lang(), err='restart failed')
     result.update(get_squeezelite_conf())
+    return result
+
+# ── Settings → System tweaks (CPU governor / security / hyper-threading) ──
+# Three OS-level knobs a listener can opt into to push a server-side PCM→DSD
+# converter harder (Daphile's "Power" section does the same). Defaults stay
+# low-power/secure; hifi_system_tweaks owns the model and the /sys side.
+def get_system_tweaks():
+    model = stw.load()
+    return {
+        'conf': model,
+        'governors_available': stw.available_governors(),
+        'governor_live': stw.governor_live(),
+        'smt_available': stw.smt_available(),
+        'smt_live': stw.smt_live(),
+        # mitigations is a command-line change: it is live only after a reboot.
+        'needs_reboot': stw.needs_reboot(model),
+        'defaults': {k: stw.DEFAULTS[k] for k in stw.TUNABLE},
+    }
+
+def set_system_tweaks(changes):
+    try:
+        model = stw.update(lambda m: stw.set_fields(m, changes))
+    except stw.InvalidField as e:
+        return {'success': False, 'code': e.code,
+                'message': _t(e.code, _lang(), field=e.field, detail=e.detail)}
+    except Exception:
+        log.exception("system tweaks: write failed")
+        return {'success': False, 'code': 'systemTweaks.writeFailed',
+                'message': _t('systemTweaks.writeFailed', _lang())}
+    # Governor + SMT take effect at once; mitigations only on reboot.
+    try:
+        stw.apply_runtime(model)
+    except Exception:
+        log.exception("system tweaks: runtime apply failed")
+    try:
+        _apply_system_tweaks_to_boot()
+    except Exception:
+        log.exception("system tweaks: boot command line not updated")
+    result = get_system_tweaks()
+    result['success'] = True
+    key = 'systemTweaks.reboot' if result['needs_reboot'] else 'systemTweaks.saved'
+    result['message'] = _t(key, _lang())
     return result
 
 # ── PCM → DSD and PCM upsampling ────────────────────────────────────
@@ -2393,12 +2445,9 @@ def _pcm2dsd_bench():
 def _pcm2dsd_modes():
     """(the choices this CPU can sustain, measured?). Until it is measured,
     DSD64 and DSD128 — what even a 1.5 GHz Celeron does — and not DSD256."""
-    bench = _pcm2dsd_bench()
-    if bench is None:
-        return ['off', 'dsd64', 'dsd128'], False
-    ok = [m for m in ('dsd64', 'dsd128', 'dsd256')
-          if isinstance(bench.get(m), (int, float)) and bench[m] <= PCM2DSD_MAX_LOAD]
-    return ['off'] + ok, True
+    # TRIAL (.133/.105): CPU gating disabled by request — every DSD mode,
+    # up to DSD512/DSD1024, is always offered regardless of measured cost.
+    return list(sq.PCM2DSD_MODES), True
 
 
 def _check_convert_mode(changes):
@@ -2424,6 +2473,10 @@ def _pcm2dsd_info(model, fmt):
     return {'state': sq.pcm2dsd_state(model, fmt), 'modes': modes, 'measured': measured,
             'filters': list(sq.PCM2DSD_FILTERS), 'available': sq.tools_present(),
             'server_local': sq.server_is_local(model['server']), 'convert': caps,
+            # Where the conversion runs ('server'|'player') and whether this box
+            # can run it on the player side at all (converter daemon + Loopback).
+            'convert_where': model.get('convert_where', 'server'),
+            'player_available': sq.player_side_present(),
             'upsample': {'state': sq.upsample_state(model),
                          'modes': list(sq.UPSAMPLE_MODES),
                          'available': sq.upsample_tools_present()}}
@@ -4720,6 +4773,12 @@ UI_ROTATION_FILE = '/etc/hifi-player/ui-rotation'
 UI_ROTATIONS = (0, 90, 180, 270)
 _PANEL_ORIENTATION = {90: 'right_side_up', 180: 'upside_down', 270: 'left_side_up'}
 _ROTATION_TOKEN_RE = re.compile(r'^(video=[^:=\s]+:panel_orientation=|hifi\.rotate=)')
+# Every kernel-cmdline token Osmium manages on hifi_cmdline: the rotation ones
+# plus System tweaks' mitigations=off. Both categories share the single
+# hifi_cmdline value, so a write for one must preserve the other's tokens — the
+# legacy path strips by this combined regex before re-adding the full set.
+_MANAGED_TOKEN_RE = re.compile(
+    r'^(video=[^:=\s]+:panel_orientation=|hifi\.rotate=|mitigations=)')
 DRM_SYSFS_DIR = '/sys/class/drm'
 BOOT_CMDLINE_ENV = '/boot/efi/EFI/debian/hifi-cmdline.env'
 
@@ -4762,12 +4821,18 @@ def _boot_rotation_env_value():
             return line.split('=', 1)[1]
     return ''
 
-def _apply_rotation_to_boot(deg):
-    """Put the rotation on the kernel command line for the boot splash.
-    True when the next boot will have it."""
-    tokens = _rotation_boot_tokens(deg)
-    if deg and not tokens:
-        return False                       # no display connector at all
+def _system_tweaks_boot_tokens():
+    """System tweaks' kernel-cmdline tokens (mitigations=off, or none).
+    Best-effort: a missing/bad config leaves the command line untouched."""
+    try:
+        return stw.boot_tokens(stw.load())
+    except Exception:
+        return []
+
+def _write_hifi_cmdline(tokens):
+    """Write the full managed token set to the one hifi_cmdline value this boot
+    reads (ESP env file on an A/B image, GRUB_CMDLINE_LINUX_DEFAULT on a legacy
+    root). True when the next boot will have exactly these tokens."""
     if _image_mode():
         if not os.path.isdir(os.path.dirname(BOOT_CMDLINE_ENV)):
             return False                   # ESP not mounted
@@ -4784,8 +4849,24 @@ def _apply_rotation_to_boot(deg):
     if _is_live_boot():
         return False                       # nothing on a live session survives the boot
     before = _grub_cmdline_default().split()
-    after = [t for t in before if not _ROTATION_TOKEN_RE.match(t)] + tokens
+    after = [t for t in before if not _MANAGED_TOKEN_RE.match(t)] + tokens
     return after == before or _set_grub_cmdline_default(after)
+
+def _apply_rotation_to_boot(deg):
+    """Put the rotation on the kernel command line for the boot splash,
+    preserving the System-tweaks tokens already there. True when the next boot
+    will have the rotation."""
+    rot = _rotation_boot_tokens(deg)
+    if deg and not rot:
+        return False                       # no display connector at all
+    return _write_hifi_cmdline(rot + _system_tweaks_boot_tokens())
+
+def _apply_system_tweaks_to_boot():
+    """Put (or clear) System tweaks' mitigations token on the kernel command
+    line, preserving the rotation tokens already there. True when the next boot
+    will carry the current System-tweaks choice."""
+    rot = _rotation_boot_tokens(get_ui_rotation()['rotation'])
+    return _write_hifi_cmdline(rot + _system_tweaks_boot_tokens())
 
 def set_ui_rotation(deg):
     """Save the rotation: the kiosk turns as soon as the file changes, the
@@ -6958,8 +7039,15 @@ def _convert_resync():
         log.exception("convert: computing the box players")
         desired_box = {}
     box_macs = set()
-    if main.get('mac'):
-        box_macs.add(main['mac'])
+    main_n = sq.normalize(main)
+    if main_n.get('mac'):
+        box_macs.add(main_n['mac'])
+        # When the built-in player converts on its own side, the followed Lyrion
+        # must NOT also convert for its MAC (that would be a double conversion):
+        # drop it from the desired set so _push_convert clears its server rule.
+        # The local conversion itself is driven by sync_player in the apply path.
+        if main_n.get('convert_where') == 'player':
+            desired_box.pop(main_n['mac'], None)
     box_macs |= {z['mac'] for z in zones if z.get('mac')}
     _push_convert(_current_lms_host(), box_macs, desired_box)
     try:
@@ -11179,6 +11267,15 @@ def api_set_squeezelite_conf():
 @app.route('/squeezelite_conf/reset', methods=['POST'])
 def api_reset_squeezelite_conf():
     return jsonify(reset_squeezelite_conf())
+
+@app.route('/system_tweaks', methods=['GET'])
+def api_system_tweaks():
+    return jsonify(get_system_tweaks())
+
+@app.route('/system_tweaks', methods=['POST'])
+def api_set_system_tweaks():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_system_tweaks(data if isinstance(data, dict) else {}))
 
 # Now Playing → signal path: the kiosk passes what Lyrion says of the track
 # and of the player's prefs, this device adds what its DAC is really fed.

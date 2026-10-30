@@ -58,6 +58,10 @@ systemctl enable hifi-firstboot.service || true
 echo "I: [hifi] enabling audio quiesce before any shutdown/reboot (DMA panic workaround)"
 systemctl enable hifi-playback-quiesce.service || true
 
+echo "I: [hifi] enabling System tweaks apply at boot (CPU governor + hyper-threading to /sys;"
+echo "          off by default, the choice is /etc/hifi-player/system-tweaks.json)"
+systemctl enable hifi-system-tweaks.service || true
+
 echo "I: [hifi] enabling OTA stage-resume (finishes a download interrupted by a reboot;"
 echo "          no-op on every boot without a pending stage plan)"
 systemctl enable hifi-update-stage-resume.service || true

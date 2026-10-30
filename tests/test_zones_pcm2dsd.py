@@ -54,9 +54,11 @@ class ToolsSandbox(Sandbox):
         self.sox = os.path.join(self.dir, 'sox_ng')
         self.wrapper = os.path.join(self.dir, 'hifi-pcm2dsd.py')
         self.upsample_wrapper = os.path.join(self.dir, 'hifi-upsample.py')
-        for path in (self.sox, self.wrapper, self.upsample_wrapper):
+        self.flac = os.path.join(self.dir, 'flac')
+        for path in (self.sox, self.wrapper, self.upsample_wrapper, self.flac):
             with open(path, 'w') as f:
                 f.write('#!/bin/sh\n')
+            os.chmod(path, 0o755)
         self.external = os.path.join(self.dir, 'hifi-player', 'external-convert.json')
         self.upsample_map = os.path.join(self.dir, 'hifi-player', 'upsample.json')
         self.zones = os.path.join(self.dir, 'hifi-player', 'zones.json')
@@ -68,7 +70,7 @@ class ToolsSandbox(Sandbox):
 
 
 class ToolsMixin:
-    PATCHED = ('SOX_NG', 'PCM2DSD_WRAPPER', 'UPSAMPLE_WRAPPER', 'PROC_ASOUND', '_systemctl')
+    PATCHED = ('SOX_NG', 'PCM2DSD_WRAPPER', 'UPSAMPLE_WRAPPER', 'FLAC_BIN', 'PROC_ASOUND', '_systemctl')
 
     def setUp(self):
         self.sb = ToolsSandbox()
@@ -78,6 +80,7 @@ class ToolsMixin:
         self.systemctl = []
         sq.SOX_NG, sq.PCM2DSD_WRAPPER, sq.PROC_ASOUND = self.sb.sox, self.sb.wrapper, self.sb.asound
         sq.UPSAMPLE_WRAPPER = self.sb.upsample_wrapper
+        sq.FLAC_BIN = self.sb.flac
         sq._systemctl = lambda *a: self.systemctl.append(a) or subprocess.CompletedProcess(a, 0, '', '')
 
     def tearDown(self):
@@ -106,7 +109,7 @@ class TestModel(ToolsMixin, unittest.TestCase):
         self.assertEqual(sq.set_fields(sq.normalize({'dsd': 'off'}), {'pcm2dsd': 'dsd64'})['dsd'], 'auto')
         self.assertEqual(sq.set_fields(sq.normalize({'dsd': 'dop'}), {'pcm2dsd': 'dsd64'})['dsd'], 'dop')
         self.assertEqual(sq.normalize({'pcm2dsd': 'dsd64', 'dsd': 'off'})['dsd'], 'auto')
-        for bad in ({'pcm2dsd': 'dsd512'}, {'pcm2dsd_filter': 'clans-3'}, {'pcm2dsd': True}):
+        for bad in ({'pcm2dsd': 'dsd1024'}, {'pcm2dsd_filter': 'clans-3'}, {'pcm2dsd': True}):
             with self.assertRaises(sq.InvalidField):
                 sq.set_fields(sq.normalize({}), bad)
         # -c belongs to the model now: refused in the extra arguments
@@ -163,6 +166,80 @@ class TestModel(ToolsMixin, unittest.TestCase):
         self.assertIn('-D :u32be', forced)
         # the legacy line is unchanged by the refactor
         self.assertEqual(sq.render(sq.parse_args(LEGACY), lambda d: 'dop'), LEGACY)
+
+
+class TestPlayerSideConvert(ToolsMixin, unittest.TestCase):
+    """convert_where == 'player': the built-in player converts on its own
+    squeezelite (PCM into the Loopback, hifi-pcm2dsd-player.py to the DAC)
+    instead of letting the followed Lyrion do it."""
+
+    PATCHED = ToolsMixin.PATCHED + ('P2D_PLAYER', 'SYS_ALOOP')
+
+    def setUp(self):
+        super().setUp()
+        # the converter daemon "is installed" and the Loopback "is loadable"
+        sq.P2D_PLAYER, sq.SYS_ALOOP = self.sb.wrapper, self.sb.dir
+
+    def test_normalize_and_set_fields(self):
+        self.assertEqual(sq.normalize({})['convert_where'], 'server')
+        self.assertEqual(sq.normalize({'convert_where': 'PLAYER'})['convert_where'], 'player')
+        self.assertEqual(sq.normalize({'convert_where': 'nonsense'})['convert_where'], 'server')
+        m = sq.set_fields(sq.normalize({}), {'convert_where': 'player'})
+        self.assertEqual(m['convert_where'], 'player')
+        with self.assertRaises(sq.InvalidField):
+            sq.set_fields(sq.normalize({}), {'convert_where': 'cloud'})
+
+    def test_state_gates_on_player_side(self):
+        probe = self.sb.probe
+        fmt = probe('hw:CARD=D50s,DEV=0')
+        base = self.model(pcm2dsd='dsd128', convert_where='player')
+        self.assertEqual(sq.pcm2dsd_state(base, fmt), 'active')
+        # no converter daemon on this box: the player side cannot run
+        sq.P2D_PLAYER = os.path.join(self.sb.dir, 'absent')
+        self.assertEqual(sq.pcm2dsd_state(base, fmt), 'noTools')
+        # the server side is unaffected by the missing daemon
+        self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd128'), fmt), 'active')
+        # a zone always converts server-side, so the daemon is irrelevant
+        self.assertEqual(sq.pcm2dsd_state(base, fmt, zone=True), 'active')
+
+    def test_render_routes_to_loopback(self):
+        args = sq.render(self.model(pcm2dsd='dsd128', convert_where='player'), self.sb.probe)
+        self.assertIn('-o ' + sq.P2D_PLAYBACK, args)
+        self.assertIn(f'-r {sq.P2D_RATE} -R', args)
+        self.assertNotIn('-c dsd', args)   # ordinary PCM, converted here
+        self.assertNotIn('-D', args)
+        self.assertNotIn(sq.STREAM_LARGE, args)
+        # server-side (default) still sends DSD and the larger stream buffer
+        srv = sq.render(self.model(pcm2dsd='dsd128'), self.sb.probe)
+        self.assertIn('-c dsd', srv)
+        self.assertIn('-o hw:CARD=D50s,DEV=0', srv)
+
+    def test_player_conf(self):
+        probe = self.sb.probe
+        fmt = probe('hw:CARD=D50s,DEV=0')
+        self.assertIsNone(sq.player_conf(self.model(pcm2dsd='dsd128'), fmt))
+        self.assertIsNone(sq.player_conf(self.model(convert_where='player'), fmt))
+        c = sq.player_conf(self.model(pcm2dsd='dsd128', convert_where='player'), fmt)
+        self.assertEqual((c['mode'], c['filter'], c['rate']), ('dsd128', 'clans-8', sq.P2D_RATE))
+        self.assertEqual(c['carrier'], fmt)        # D50s declares native DSD
+        self.assertEqual(c['dac'], 'hw:CARD=D50s,DEV=0')
+
+    def test_sync_player_starts_and_stops(self):
+        conf = os.path.join(self.sb.dir, 'player.json')
+        calls = []
+        sc = lambda *a: calls.append(a)
+        mp = lambda: calls.append(('modprobe',))
+        # player side on: conf written, the unit started
+        self.assertTrue(sq.sync_player(self.model(pcm2dsd='dsd128', convert_where='player'),
+                                       self.sb.probe, conf, systemctl=sc, modprobe=mp))
+        self.assertTrue(os.path.exists(conf))
+        self.assertIn(('start', '--no-block', sq.P2D_PLAYER_UNIT), calls)
+        # back to server-side: conf removed, the unit stopped
+        calls.clear()
+        self.assertFalse(sq.sync_player(self.model(pcm2dsd='dsd128'),
+                                        self.sb.probe, conf, systemctl=sc, modprobe=mp))
+        self.assertFalse(os.path.exists(conf))
+        self.assertIn(('stop', sq.P2D_PLAYER_UNIT), calls)
 
 
 class TestZones(ToolsMixin, unittest.TestCase):
@@ -371,10 +448,11 @@ class TestApi(unittest.TestCase):
         p('UPSAMPLE_MAP', self.sb.upsample_map)
         p('EXTERNAL_CONVERT', self.sb.external)
         self._sq = {k: getattr(sq, k) for k in ('SOX_NG', 'PCM2DSD_WRAPPER', 'UPSAMPLE_WRAPPER',
-                                                 'PROC_ASOUND', 'MACHINE_ID',
+                                                 'FLAC_BIN', 'PROC_ASOUND', 'MACHINE_ID',
                                                  'mixer_controls', '_systemctl', 'running_zone_units')}
         sq.SOX_NG, sq.PCM2DSD_WRAPPER, sq.PROC_ASOUND = self.sb.sox, self.sb.wrapper, self.sb.asound
         sq.UPSAMPLE_WRAPPER = self.sb.upsample_wrapper
+        sq.FLAC_BIN = self.sb.flac
         sq.MACHINE_ID = self.sb.machine_id
         sq.mixer_controls = lambda device, run=None: ['PCM'] if 'D50s' in device else []
         sq._systemctl = lambda *a: self.sq_calls.append(a) or subprocess.CompletedProcess(a, 0, '', '')
@@ -423,25 +501,27 @@ class TestApi(unittest.TestCase):
         with open(self.api.PCM2DSD_BENCH_FILE, 'w') as f:
             json.dump({'v': self.api.PCM2DSD_BENCH_VERSION, 'cpu': 'Test CPU x4', 'result': result}, f)
 
-    def test_modes_follow_the_cpu(self):
-        self.assertEqual(self.api._pcm2dsd_modes(), (['off', 'dsd64', 'dsd128'], True))
+    def test_modes_ignore_cpu_during_trial(self):
+        # TRIAL (.133/.105): CPU gating is disabled by request — every DSD mode
+        # up to the DSD512 ceiling is always offered, regardless of the measured
+        # cost or whether sox_ng is present to measure it.
+        full = ['off', 'dsd64', 'dsd128', 'dsd256', 'dsd512']
+        self.assertEqual(self.api._pcm2dsd_modes(), (full, True))
         self.bench({'dsd64': 0.1, 'dsd128': 0.2, 'dsd256': 0.4})
-        self.assertEqual(self.api._pcm2dsd_modes()[0], ['off', 'dsd64', 'dsd128', 'dsd256'])
-        # a measurement of the old kind is not trusted: taken again
-        with open(self.api.PCM2DSD_BENCH_FILE, 'w') as f:
-            json.dump({'cpu': 'Test CPU x4', 'result': {'dsd64': 0.97}}, f)
-        os.unlink(self.sb.sox)                      # no sox_ng: nothing measured, no thread
-        self.assertEqual(self.api._pcm2dsd_modes(), (['off', 'dsd64', 'dsd128'], False))
+        self.assertEqual(self.api._pcm2dsd_modes(), (full, True))
+        os.unlink(self.sb.sox)                      # no sox_ng: still the full set
+        self.assertEqual(self.api._pcm2dsd_modes(), (full, True))
         os.unlink(self.api.PCM2DSD_BENCH_FILE)
-        self.assertEqual(self.api._pcm2dsd_modes(), (['off', 'dsd64', 'dsd128'], False))
+        self.assertEqual(self.api._pcm2dsd_modes(), (full, True))
 
     def test_conf_turns_conversion_on_and_off(self):
         g = self.api.get_squeezelite_conf()
         self.assertEqual(g['pcm2dsd']['state'], 'off')
-        self.assertEqual(g['pcm2dsd']['modes'], ['off', 'dsd64', 'dsd128'])
+        self.assertEqual(g['pcm2dsd']['modes'], ['off', 'dsd64', 'dsd128', 'dsd256', 'dsd512'])
         mac = self.api._own_player_mac()
         self.assertTrue(mac)
-        r = self.api.set_squeezelite_conf({'pcm2dsd': 'dsd256'})
+        # a mode past the DSD512 ceiling is refused (not an offered mode)
+        r = self.api.set_squeezelite_conf({'pcm2dsd': 'dsd1024'})
         self.assertFalse(r['success'])
         self.assertEqual(r['code'], 'squeezelite.pcm2dsdTooHeavy')
         # on: the box tells the local plugin to convert this MAC to DSD
@@ -531,7 +611,7 @@ class TestApi(unittest.TestCase):
         self.assertNotIn(('restart', '--no-block', 'hifi-zone@Gen-0.service'), self.sq_calls)
         self.assertEqual(self.last_for(zmac),
                          ('127.0.0.1', ['osmiumconvert', 'set', zmac, 'dsd', 'dsd128', 'clans-8']))
-        for bad in ({'nope': 1}, {'pcm2dsd': 'dsd256'}, {'name': ''}, {'volume': 'hardware'}):
+        for bad in ({'nope': 1}, {'pcm2dsd': 'dsd1024'}, {'name': ''}, {'volume': 'hardware'}):
             self.assertFalse(self.api.zone_update('Gen-0', bad)['success'], bad)
         self.assertFalse(self.api.zone_update('Nope-0', {'enabled': False})['success'])
         # disabled: the unit stops and the rule is cleared

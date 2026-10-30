@@ -191,6 +191,30 @@ class VerdictTest(unittest.TestCase):
         finally:
             sq.tools_present = orig
 
+    def test_pcm_to_dsd_where_defaults_to_server(self):
+        orig = sq.tools_present
+        sq.tools_present = lambda: True
+        try:
+            r = Tree(hw('DSD_U32_BE', 88200)).describe(FLAC_96, main={'pcm2dsd': 'dsd64'})
+        finally:
+            sq.tools_present = orig
+        self.assertEqual(r['player']['pcm2dsd']['where'], 'server')
+
+    def test_pcm_to_dsd_on_the_player_side(self):
+        # the built-in player converts here (convert_where == 'player'): the
+        # signal path attributes it to the player, not Lyrion.
+        orig_t, orig_p = sq.tools_present, sq.player_side_present
+        sq.tools_present = lambda: True
+        sq.player_side_present = lambda: True
+        try:
+            main = {'pcm2dsd': 'dsd64', 'convert_where': 'player'}
+            r = Tree(hw('DSD_U32_BE', 88200)).describe(FLAC_96, main=main)
+        finally:
+            sq.tools_present, sq.player_side_present = orig_t, orig_p
+        self.assertEqual((r['verdict'], r['changes']), ('converted', ['pcmToDsd']))
+        self.assertEqual(r['player']['pcm2dsd']['state'], 'active')
+        self.assertEqual(r['player']['pcm2dsd']['where'], 'player')
+
     def test_idle(self):
         r = Tree().describe(FLAC_96)
         self.assertEqual(r['verdict'], 'idle')

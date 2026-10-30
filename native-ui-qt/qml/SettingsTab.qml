@@ -181,6 +181,7 @@ Item {
         { id: "systemInfo", icon: "info", key: "settings.sections.systemInfo" },
         { id: "updates", icon: "download", key: "settings.sections.updates" },
         { id: "systemControls", icon: "power", key: "settings.sections.systemControls" },
+        { id: "systemTweaks", icon: "gauge", key: "settings.sections.systemTweaks" },
         { id: "thirdPartyNotices", icon: "scroll-text", key: "settings.sections.thirdPartyNotices" },
         // reached from System info and Updates, not listed on its own
         { id: "netCheck", icon: "network", key: "settings.sections.netCheck", hidden: true },
@@ -198,7 +199,7 @@ Item {
         { id: "look", icon: "monitor", secs: ["language", "uiMotion", "vuMeters", "animations", "uiResolution", "uiScreens", "uiRefresh", "displayMode", "pointer"] },
         { id: "control", icon: "remote", secs: ["remote", "webRemote", "webRemoteIos"] },
         { id: "network", icon: "wifi", secs: ["network", "ssh"] },
-        { id: "system", icon: "info", secs: ["timezone", "systemInfo", "updates", "systemControls", "thirdPartyNotices"] }]
+        { id: "system", icon: "info", secs: ["timezone", "systemInfo", "updates", "systemControls", "systemTweaks", "thirdPartyNotices"] }]
     function groupOf(id) {
         for (var i = 0; i < groups.length; i++) if (groups[i].secs.indexOf(id) >= 0) return groups[i].id
         return ""
@@ -269,6 +270,10 @@ Item {
         property string audioCur: ""; property var audio: []          // [{id,name,dsd}]
         // the rest of squeezelite's command line (api /squeezelite_conf)
         property var sq: ({ loaded: false, conf: {}, args: "", dsd_detected: "dop", mixers: [], choices: {}, pcm2dsd: {} })
+        // System tweaks (api /system_tweaks): OS-level CPU knobs, off by default.
+        // governors_available / smt_available gate the controls; needs_reboot is
+        // true while the chosen CPU-security (mitigations) change awaits a reboot.
+        property var tweaks: ({ loaded: false, conf: {}, governors_available: [], smt_available: false, needs_reboot: false })
         // Audio zones (api /zones): one more Lyrion player per further DAC.
         // Read only while the section is open, like the Bluetooth speakers.
         property var zones: ({ loaded: false, zones: [], free: [], max: 8, pcm2dsd: {}, choices: {}, main_output_name: "" })
@@ -495,6 +500,10 @@ Item {
             get(api("/squeezelite_conf"), function(d) {
                 sq = { loaded: !!d.conf, conf: d.conf || {}, args: String(d.args || ""), dsd_detected: String(d.dsd_detected || "dop"),
                        mixers: d.mixers || [], choices: d.choices || {}, pcm2dsd: d.pcm2dsd || {} }
+            })
+            get(api("/system_tweaks"), function(d) {
+                tweaks = { loaded: !!d.conf, conf: d.conf || {}, governors_available: d.governors_available || [],
+                           smt_available: !!d.smt_available, needs_reboot: !!d.needs_reboot }
             })
             get(api("/lms_role"), function(d) { lmsMode = str(d, "mode", "local"); lmsHost = str(d, "host") })
             get(api("/player_name"), function(d) { playerName = str(d, "name") })
@@ -1110,6 +1119,7 @@ Item {
             case "systemInfo": secSysinfo(); break
             case "updates": secUpdates(); break
             case "systemControls": secSysctl(); break
+            case "systemTweaks": secSystemTweaks(); break
             case "thirdPartyNotices": secThirdparty(); break
             case "netCheck": secNetcheck(); break
             }
@@ -1412,7 +1422,7 @@ Item {
     // rows say why it may not apply, and — for DSD — whether the digital volume
     // still acts on the signal.
     function pcmLabel(m) { return m === "max" ? Tr.t("settings.upsample.max") : "×" + m.slice(1) }
-    function secConvert(mode, filter, upsample, state, ustate, info, volume, zid, external) {
+    function secConvert(mode, filter, upsample, state, ustate, info, volume, zid, external, where) {
         var pre = zid ? zid + "|" : "", i
         var uinfo = info.upsample || {}
         // The Lyrion this player follows converts, through its Osmium Convert
@@ -1433,6 +1443,17 @@ Item {
         if (dsdOk && !tooSlow) tc.push(cell(Tr.t("settings.convert.dsd"), pre + "dsd", top === "dsd", "conv_top", { hh: 44 }))
         grid(tc)
         help("settings.convert.help", 12)
+        // The built-in player can run the conversion on its own squeezelite
+        // instead of the followed Lyrion. Zones/externals are server-only; the
+        // choice only matters once a conversion is on and this box has the
+        // player-side path (converter daemon + Loopback: info.player_available).
+        if (!zid && !external && top !== "off" && info.player_available) {
+            var cw = where === "player" ? "player" : "server"
+            label("settings.convert.whereLabel", 14)
+            grid([cell(Tr.t("settings.convert.whereServer"), "server", cw === "server", "conv_where", { hh: 44 }),
+                  cell(Tr.t("settings.convert.wherePlayer"), "player", cw === "player", "conv_where", { hh: 44 })])
+            help(cw === "player" ? "settings.convert.wherePlayerHelp" : "settings.convert.whereServerHelp", 12)
+        }
         if (dsdOk && tooSlow && top !== "dsd") note(Tr.t("settings.pcm2dsd.tooSlow"), "dark", "info")
         else if (!dsdOk && caps.why === "noServerTools" && top !== "dsd") note(Tr.t("settings.pcm2dsd.why.noServerTools"), "dark", "info")
 
@@ -1633,7 +1654,7 @@ Item {
             sep()
             secConvert(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(c.upsample || "off"),
                        String(s.pcm2dsd.state || "off"), String((s.pcm2dsd.upsample || {}).state || "off"),
-                       s.pcm2dsd, String(c.volume || "software"), "", false)
+                       s.pcm2dsd, String(c.volume || "software"), "", false, String(c.convert_where || "server"))
             sep()
         }
         toggle(Tr.t("settings.audio.alsaBufferLarge"), Tr.t("settings.audio.alsaBufferHelp"), c.alsa_buffer === "large", "sq_abuf")
@@ -2299,6 +2320,43 @@ Item {
         help("settings.factory.help", 12)
         var fr = action(Tr.t("settings.factory.button"), "factory_reset", "darkred"); fr.icon = "alert-triangle"; fr.bold = true; fr.hh = 56
     }
+    // ─── System tweaks: OS-level CPU knobs for more server-side PCM->DSD
+    //     headroom. Off by default. Governor + hyper-threading apply at once;
+    //     CPU security (mitigations) is a kernel command-line change that only
+    //     takes effect on the next boot (needs_reboot). SMT control is shown only
+    //     where the CPU exposes it (smt_available). See twSet() for the POSTs. ──
+    function secSystemTweaks() {
+        help("settings.systemTweaks.intro")
+        if (!cfg.tweaks.loaded) { helpText(Tr.t("common.loading"), 13); return }
+        var t = cfg.tweaks, c = t.conf || {}, i
+        if (t.needs_reboot) note(Tr.t("settings.systemTweaks.rebootPending"), "amber", "rotate-cw", 12)
+        label("settings.systemTweaks.governorLabel", 14)
+        var govs = t.governors_available || []
+        if (govs.length) {
+            var gc = []
+            for (i = 0; i < govs.length; i++) gc.push(cell(govs[i], govs[i], c.cpu_governor === govs[i], "tw_gov", { hh: 44 }))
+            grid(gc)
+            help("settings.systemTweaks.governorHelp", 12)
+        } else {
+            note(Tr.t("settings.systemTweaks.governorNone"), "dark", "info", 12)
+        }
+        label("settings.systemTweaks.mitigationsLabel", 14)
+        grid([cell(Tr.t("settings.systemTweaks.secure"), "on", c.cpu_mitigations === "on", "tw_mit", { hh: 44 }),
+              cell(Tr.t("settings.systemTweaks.fast"), "off", c.cpu_mitigations === "off", "tw_mit", { hh: 44 })])
+        help("settings.systemTweaks.mitigationsHelp", 12)
+        if (t.smt_available) {
+            toggle(Tr.t("settings.systemTweaks.smtToggle"), "", c.hyperthreading === "on", "tw_smt")
+            help("settings.systemTweaks.smtHelp", 12)
+        }
+    }
+    function twSet(body) {
+        Api.post(cfg.api("/system_tweaks"), body, function(ok, d) {
+            var good = ok && !(d && d.success === false)
+            say(good ? ((d && d.message) || Tr.t("settings.systemTweaks.saved"))
+                     : ((d && d.message) || Tr.t("settings.systemTweaks.saveFailed")), !good)
+            cfg.load()
+        }, 12000)
+    }
     // ─── network check ─────────────────────────────────────────────────────
     function netCheckEntry(prominent) {
         var b = action(Tr.t("settings.netCheck.open"), "netcheck_open", prominent ? "accent" : "dark"); b.icon = "network"; b.hh = 48
@@ -2505,6 +2563,9 @@ Item {
             break
         case "ssh": post(A("/ssh_set"), { enable: !row.on }); cfg.sshEnabled = !row.on; break
         case "pointer": post(A("/pointer_set"), { enable: !row.on }); cfg.pointerEnabled = !row.on; Sys.pointerEnabled = cfg.pointerEnabled; break
+        case "tw_gov": if ((cfg.tweaks.conf || {}).cpu_governor !== arg) twSet({ cpu_governor: arg }); break
+        case "tw_mit": if ((cfg.tweaks.conf || {}).cpu_mitigations !== arg) twSet({ cpu_mitigations: arg }); break
+        case "tw_smt": twSet({ hyperthreading: row.on ? "off" : "on" }); break
         case "uires":
             if (cfg.uiResolution === arg) return
             pendAct = "uires"; pendArg = arg; break
@@ -2756,6 +2817,7 @@ Item {
             convApply(ct.zid, cpatch)
             return
         }
+        case "conv_where": { var cw = splitZoneArg(arg); convApply(cw.zid, { convert_where: cw.v }); return }
         case "p2d_mode": { var pm = splitZoneArg(arg); convApply(pm.zid, { pcm2dsd: pm.v, upsample: "off" }); return }
         case "p2d_filter": { var pf = splitZoneArg(arg); convApply(pf.zid, { pcm2dsd_filter: pf.v }); return }
         case "ups_mode": { var um = splitZoneArg(arg); convApply(um.zid, { upsample: um.v, pcm2dsd: "off" }); return }

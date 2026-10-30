@@ -13,14 +13,15 @@ import { computed } from 'vue';
 import { useI18n } from '../i18n';
 
 const props = defineProps({
-  mode: { type: String, default: 'off' },        // pcm2dsd: off | dsd64 | dsd128 | dsd256
+  mode: { type: String, default: 'off' },        // pcm2dsd: off | dsd64 | dsd128 | dsd256 | dsd512
   filter: { type: String, default: 'clans-8' },
   upsample: { type: String, default: 'off' },     // off | x2 | x4 | max
   state: { type: String, default: 'off' },        // DSD state: off | active | noTools | dsp | noDsd
   upsampleState: { type: String, default: 'off' },// off | active | noTools | dsp
-  info: { type: Object, required: true },         // { modes, measured, filters, available, convert:{plugin,dsd,upsample,why}, upsample:{ modes, available } }
+  info: { type: Object, required: true },         // { modes, measured, filters, available, convert:{plugin,dsd,upsample,why}, convert_where, player_available, upsample:{ modes, available } }
   zone: { type: Boolean, default: false },
   external: { type: Boolean, default: false },    // an external Lyrion player: no CPU/volume messaging, user's responsibility
+  where: { type: String, default: 'server' },     // built-in player only: server | player
   volume: { type: String, default: 'software' },
   busy: { type: Boolean, default: false },
 });
@@ -29,6 +30,14 @@ const { t } = useI18n();
 
 // ── which of the three top modes is live ─────────────────────────────────
 const top = computed(() => (props.mode !== 'off' ? 'dsd' : props.upsample !== 'off' ? 'pcm' : 'off'));
+// where the conversion runs — the built-in player may run it on its own
+// squeezelite instead of the followed Lyrion. Zones/externals are server-only,
+// and the choice only matters once a conversion is on; player-side needs the
+// converter daemon + Loopback on this box (info.player_available).
+const showWhere = computed(() => !props.zone && !props.external && top.value !== 'off' && !!props.info.player_available);
+function setWhere(w) {
+  if (props.where !== w) emit('set', { convert_where: w });
+}
 // the following server's plugin gates the control: no plugin at all → nothing;
 // plugin without sox_ng → PCM upsampling but no DSD
 const caps = computed(() => props.info.convert || {});
@@ -79,6 +88,17 @@ function toDsd() {
         <button v-if="dsdOk && !tooSlow" :disabled="busy" :class="{ active: top === 'dsd' }" @click="toDsd">{{ t('settings.convert.dsd') }}</button>
       </span>
       <p class="muted">{{ t('settings.convert.help') }}</p>
+
+      <!-- built-in player: run the conversion on the followed Lyrion or here -->
+      <template v-if="showWhere">
+        <label>{{ t('settings.convert.whereLabel') }}</label>
+        <span class="seg">
+          <button :disabled="busy" :class="{ active: where === 'server' }" @click="setWhere('server')">{{ t('settings.convert.whereServer') }}</button>
+          <button :disabled="busy" :class="{ active: where === 'player' }" @click="setWhere('player')">{{ t('settings.convert.wherePlayer') }}</button>
+        </span>
+        <p class="muted">{{ where === 'player' ? t('settings.convert.wherePlayerHelp') : t('settings.convert.whereServerHelp') }}</p>
+      </template>
+
       <p class="muted" v-if="dsdOk && tooSlow && top !== 'dsd'">{{ t('settings.pcm2dsd.tooSlow') }}</p>
       <p class="muted" v-else-if="!dsdOk && caps.why === 'noServerTools' && top !== 'dsd'">{{ t('settings.pcm2dsd.why.noServerTools') }}</p>
 

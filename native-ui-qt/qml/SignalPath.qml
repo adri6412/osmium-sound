@@ -90,12 +90,17 @@ Rectangle {
         var ld = []
         if (has("replaygain")) ld.push({ text: t("replaygain"), tone: "warn" })
         if (has("crossfade")) ld.push({ text: t("crossfade"), tone: "warn" })
-        if (has("resampled")) ld.push({ text: sub(t("resampled"), { rate: rate(r.hw ? r.hw.rate : r.player.max_rate) }), tone: "warn" })
-        // PCM to DSD always happens in Lyrion -- the server this player follows
-        // converts (its Osmium Convert plugin), local or remote alike
+        // PCM to DSD / upsampling runs on the server this player follows (its
+        // Osmium Convert plugin) unless the built-in player converts on its own
+        // squeezelite (pcm2dsd.where === "player"); then it belongs on the
+        // player stage, and is collected here to push there below.
         var p2d = r.player ? r.player.pcm2dsd : null
+        var convHere = !!(p2d && p2d.where === "player")
+        var convDetails = []
+        if (has("resampled")) convDetails.push({ text: sub(t("resampled"), { rate: rate(r.hw ? r.hw.rate : r.player.max_rate) }), tone: "warn" })
         var p2dText = p2d ? sub(t("pcmToDsd"), { dsd: p2d.mode.toUpperCase(), filter: p2d.filter.toUpperCase() }) : ""
-        if (has("pcmToDsd")) ld.push({ text: p2dText, tone: "conv" })
+        if (has("pcmToDsd")) convDetails.push({ text: p2dText, tone: "conv" })
+        if (!convHere) for (var ci = 0; ci < convDetails.length; ci++) ld.push(convDetails[ci])
         if (!ld.length) ld.push({ text: t("asIs"), tone: "ok" })
         ld.push({ text: r.lyrion.local ? t("lyrionHere") : sub(t("lyrionOn"), { host: r.lyrion.server }), tone: "idle" })
         out.push({ key: "lyrion", icon: "library", label: "Lyrion", value: "Lyrion Music Server", details: ld })
@@ -107,6 +112,8 @@ Rectangle {
             return out
         }
         var p = r.player, pd = []
+        // the built-in player converts here when pcm2dsd.where === "player"
+        if (convHere) for (var pi = 0; pi < convDetails.length; pi++) pd.push(convDetails[pi])
         if (has("volume")) pd.push({ text: sub(t("volumeDigital"), { n: Player.volume }), tone: "warn" })
         else if (p.volume === "hardware") pd.push({ text: t("volumeDac"), tone: "ok" })
         else if (p.dsd_out && Player.prefDigitalVol === "1" && Player.volume < 100) pd.push({ text: t("volumeDsd"), tone: "ok" })

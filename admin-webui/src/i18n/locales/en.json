@@ -293,6 +293,10 @@
         "label": "System",
         "desc": "Reboot, shutdown, factory reset"
       },
+      "systemTweaks": {
+        "label": "System tweaks",
+        "desc": "CPU governor, security, hyper-threading"
+      },
       "notices": {
         "label": "Licenses & credits",
         "desc": "What the device is made of, and under which licenses"
@@ -1185,6 +1189,22 @@
       "factoryStarted": "Factory reset started — the device will restart",
       "factoryFailed": "Reset failed"
     },
+    "systemTweaks": {
+      "intro": "A few CPU knobs for more headroom when the server converts PCM to DSD or upsamples. They raise power draw, heat and — for CPU security — risk, so they are off by default; turn them up only when you need the extra performance.",
+      "governorLabel": "CPU frequency",
+      "governorHelp": "\"performance\" pins the cores at their top speed (steadier for heavy conversion); the others let the CPU scale down to save power. Applies immediately.",
+      "governorNone": "This machine exposes no CPU frequency control.",
+      "mitigationsLabel": "CPU security",
+      "mitigationsHelp": "The kernel's CPU-vulnerability mitigations. Turning them off frees some CPU for conversion but lowers security — leave them on unless you know you need the headroom. Takes effect after a restart.",
+      "secure": "Secure (recommended)",
+      "fast": "Faster (less secure)",
+      "smtLabel": "Hyper-threading",
+      "smtToggle": "Hyper-threading (SMT)",
+      "smtHelp": "Every CPU core seen as two logical cores. On usually helps; some find playback steadier with it off. Applies immediately.",
+      "rebootPending": "Restart the player to apply the CPU security change.",
+      "saved": "Saved",
+      "saveFailed": "Could not save"
+    },
     "netCheck": {
       "open": "Check the network",
       "openHelp": "Finds where the connection stops: cable or Wi-Fi, router, internet or the update server.",
@@ -1316,10 +1336,15 @@
       }
     },
     "convert": {
-      "label": "Server-side conversion",
+      "label": "Conversion",
       "pcm": "PCM upsampling",
       "dsd": "DSD",
       "help": "Convert every PCM track on its way to the player: raise its sample rate (PCM upsampling) or turn it into DSD. The two cannot be on at the same time.",
+      "whereLabel": "Convert on",
+      "whereServer": "Lyrion",
+      "wherePlayer": "This player",
+      "whereServerHelp": "The Lyrion this player follows does the conversion and sends it already converted.",
+      "wherePlayerHelp": "This player converts it itself: Lyrion streams the original track and the box turns it into DSD here. Lighter on the network, and it works with a Lyrion that has no conversion tools.",
       "extDsd": "On: this player receives everything as {rate}, as long as it can play it.",
       "extPcm": "On: this player receives PCM upsampled {rate}, as long as it can play it."
     },

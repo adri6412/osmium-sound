@@ -29,8 +29,9 @@ custom-convert.conf rule, so there is nothing to look up here.
 Spotty's 16-bit 44.1 kHz stereo. Runs as Lyrion's user; it only execs SoX.
 
 `osmium-convert --probe` prints JSON describing the SoX this server has
-(`{"sox": path|null, "sox_ng": path|null, "sdm": bool}`), so the plugin can
-report to the appliance whether DSD (needs sox_ng + sdm) is available here.
+(`{"sox": path|null, "sox_ng": path|null, "sdm": bool, "flac": bool}`), so the
+plugin can report to the appliance whether DSD (needs sox_ng + sdm) and PCM
+upsampling (needs a FLAC encoder) are available here.
 """
 import json
 import os
@@ -38,7 +39,8 @@ import shutil
 import subprocess
 import sys
 
-RATES = {'dsd64': 2822400, 'dsd128': 5644800, 'dsd256': 11289600}
+RATES = {'dsd64': 2822400, 'dsd128': 5644800, 'dsd256': 11289600,
+         'dsd512': 22579200}
 FILTERS = ('clans-8', 'sdm-8')
 MULTS = {'x2': 2, 'x4': 4}
 FAMILY_BASE = (44100, 48000)
@@ -80,9 +82,41 @@ def has_sdm(sox_ng):
         return False
 
 
+def sox_has_format(sox, fmt):
+    """True when this SoX can read/write `fmt` (e.g. 'flac'). `sox --help`
+    lists what is compiled in under "AUDIO FILE FORMATS"; the project's sox_ng
+    fork carries the `sdm` effect but is built without the FLAC handler."""
+    if not sox:
+        return False
+    try:
+        r = subprocess.run([sox, '--help'], stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    for line in r.stdout.decode('utf-8', 'replace').splitlines():
+        if 'AUDIO FILE FORMATS' in line:
+            return fmt in line.split()
+    return False
+
+
+def find_flac():
+    """A standalone FLAC encoder CLI, used when the resampling SoX cannot write
+    FLAC itself (the appliance's sox_ng)."""
+    return shutil.which('flac')
+
+
+def flac_available():
+    """True when a FLAC stream can be produced here: a SoX that writes FLAC, or
+    a resampling SoX plus a `flac` CLI to encode its output."""
+    if sox_has_format(find_sox(), 'flac'):
+        return True
+    return bool(find_sox() and find_flac())
+
+
 def probe():
     sox_ng = find_sox_ng()
-    return {'sox': find_sox(), 'sox_ng': sox_ng, 'sdm': has_sdm(sox_ng)}
+    return {'sox': find_sox(), 'sox_ng': sox_ng, 'sdm': has_sdm(sox_ng),
+            'flac': flac_available()}
 
 
 def _source(kind):
@@ -151,8 +185,8 @@ def read_wav_rate(stream):
     return None, bytes(buf)
 
 
-def pcm_argv(kind, target, sox):
-    argv = [sox, '-q', '--multi-threaded', *_source(kind), '-t', 'flac', '-', 'channels', '2']
+def pcm_argv(kind, target, sox, out_type='flac'):
+    argv = [sox, '-q', '--multi-threaded', *_source(kind), '-t', out_type, '-', 'channels', '2']
     if target:
         argv += ['rate', '-v', str(target)]
     return argv
@@ -175,24 +209,49 @@ def run_pcm(kind, mult, cap):
     if not sox:
         print('osmium-convert: PCM upsampling needs sox', file=sys.stderr)
         return 3
+    # The output is FLAC (the rule's dst), but the appliance's sox_ng is built
+    # without a FLAC handler. Encode FLAC with the sox itself only when it can;
+    # otherwise resample to WAV and pipe through the standalone `flac` encoder.
+    sox_flac = sox_has_format(sox, 'flac')
+    flac = None if sox_flac else find_flac()
+    if not sox_flac and not flac:
+        print('osmium-convert: PCM upsampling needs a FLAC encoder '
+              '(a SoX built with FLAC, or the `flac` CLI)', file=sys.stderr)
+        return 3
     if kind == 'raw':
         src, head = RAW_RATE, b''
     else:
         src, head = read_wav_rate(sys.stdin.buffer)
     target = target_rate(mult, cap, src)
-    proc = subprocess.Popen(pcm_argv(kind, target, sox), stdin=subprocess.PIPE)
+    out_type = 'flac' if sox_flac else 'wav'
+    encoder = None
+    if sox_flac:
+        proc = subprocess.Popen(pcm_argv(kind, target, sox, out_type), stdin=subprocess.PIPE)
+        sink = proc.stdin
+    else:
+        # sox_ng (WAV) -> flac (FLAC on stdout). sox cannot seek on a pipe, so
+        # its WAV header length is a placeholder; flac reads to EOF regardless.
+        encoder = subprocess.Popen([flac, '--silent', '--stdout', '-'], stdin=subprocess.PIPE)
+        proc = subprocess.Popen(pcm_argv(kind, target, sox, out_type),
+                                stdin=subprocess.PIPE, stdout=encoder.stdin)
+        encoder.stdin.close()   # only sox writes to the encoder
+        sink = proc.stdin
     try:
         if head:
-            proc.stdin.write(head)
-        shutil.copyfileobj(sys.stdin.buffer, proc.stdin, length=1 << 16)
+            sink.write(head)
+        shutil.copyfileobj(sys.stdin.buffer, sink, length=1 << 16)
     except BrokenPipeError:
         pass
     finally:
         try:
-            proc.stdin.close()
+            sink.close()
         except BrokenPipeError:
             pass
-    return proc.wait()
+    rc = proc.wait()
+    if encoder is not None:
+        erc = encoder.wait()
+        rc = rc or erc
+    return rc
 
 
 def main(argv):

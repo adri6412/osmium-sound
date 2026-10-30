@@ -604,6 +604,7 @@
       "systemInfo": "Informazioni Sistema",
       "updates": "Aggiornamenti",
       "systemControls": "Controlli Sistema",
+      "systemTweaks": "Ottimizzazioni di sistema",
       "language": "Lingua",
       "thirdPartyNotices": "Componenti di terze parti",
       "netCheck": "Diagnosi rete",
@@ -1278,10 +1279,15 @@
       }
     },
     "convert": {
-      "label": "Conversione lato server",
+      "label": "Conversione",
       "pcm": "Upsampling PCM",
       "dsd": "DSD",
       "help": "Converti ogni traccia PCM mentre arriva al player: alza la frequenza di campionamento (upsampling PCM) oppure trasformala in DSD. Le due cose non possono essere attive insieme.",
+      "whereLabel": "Converti su",
+      "whereServer": "Lyrion",
+      "wherePlayer": "Questo player",
+      "whereServerHelp": "La conversione la fa il Lyrion che questo player segue, e la invia già convertita.",
+      "wherePlayerHelp": "La conversione la fa questo player: Lyrion trasmette la traccia originale e il box la trasforma in DSD qui. Più leggero per la rete e funziona anche con un Lyrion privo degli strumenti di conversione.",
       "extDsd": "Attivo: a questo player arriva tutto come {rate}, se è in grado di riprodurlo.",
       "extPcm": "Attivo: a questo player arriva il PCM sovracampionato {rate}, se è in grado di riprodurlo."
     },
@@ -1474,6 +1480,22 @@
       "confirm": "Azzera l'account amministratore web, che potrà essere ricreato al prossimo accesso web. Le altre impostazioni non vengono toccate. Continuare?",
       "done": "Credenziali interfaccia web azzerate.",
       "failed": "Impossibile azzerare le credenziali dell'interfaccia web."
+    },
+    "systemTweaks": {
+      "intro": "Alcune manopole della CPU per avere più margine quando il server converte il PCM in DSD o fa upsampling. Aumentano consumo, calore e — per la sicurezza CPU — il rischio, perciò sono disattivate di default: alzale solo quando ti serve più prestazione.",
+      "governorLabel": "Frequenza CPU",
+      "governorHelp": "\"performance\" tiene i core alla massima velocità (più stabile nelle conversioni pesanti); le altre lasciano scendere la CPU per risparmiare energia. Si applica subito.",
+      "governorNone": "Questa macchina non espone il controllo della frequenza CPU.",
+      "mitigationsLabel": "Sicurezza CPU",
+      "mitigationsHelp": "Le mitigazioni del kernel per le vulnerabilità della CPU. Disattivarle libera un po' di CPU per la conversione ma riduce la sicurezza: lasciale attive se non ti serve davvero il margine. Ha effetto dopo un riavvio.",
+      "secure": "Sicura",
+      "fast": "Più veloce",
+      "smtLabel": "Hyper-threading",
+      "smtToggle": "Hyper-threading (SMT)",
+      "smtHelp": "Ogni core della CPU visto come due core logici. Attivo di solito aiuta; alcuni trovano la riproduzione più stabile con l'opzione disattivata. Si applica subito.",
+      "rebootPending": "Riavvia il player per applicare la modifica alla sicurezza CPU.",
+      "saved": "Salvato",
+      "saveFailed": "Impossibile salvare"
     },
     "about": {
       "builtWith": "Realizzato con Electron, React e Tailwind CSS",

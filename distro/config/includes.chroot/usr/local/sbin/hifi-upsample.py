@@ -8,13 +8,16 @@ custom-convert.conf, keyed by the player's MAC):
     <decoder> … | hifi-upsample.py $CLIENTID$ wav|raw
 
 It reads PCM on stdin — a WAV stream from flac/ffmpeg, or Spotty's raw 16-bit
-44.1 kHz stereo — and becomes sox_ng writing a FLAC stream on stdout:
+44.1 kHz stereo — resamples it with sox_ng and writes a FLAC stream on stdout:
 
-    channels 2 → rate -v (to the target rate)
+    channels 2 → rate -v (to the target rate) → FLAC
 
 The output is FLAC, so it is lossless and self-describing: the player reads the
 new rate from the stream itself, no capability token needed. FLAC also
 compresses, which keeps a high-rate stream lighter on the LAN than raw PCM.
+The project's sox_ng is built with the `sdm` DSD effect but WITHOUT a FLAC
+handler, so sox_ng resamples to WAV and the standalone `flac` CLI encodes it
+(a SoX that does carry FLAC would encode in one process).
 
 The target rate stays inside the source's rate family — 44.1 kHz
 (44.1/88.2/176.4/352.8/705.6) or 48 kHz (48/96/192/384/768) — never mixing the
@@ -27,7 +30,7 @@ MAC at every track, so changing them needs no Lyrion restart. Unlike DSD, the
 source rate matters here, so the WAV header is read to learn it before sox runs;
 Spotty's raw input is always 44.1 kHz.
 
-Runs as Lyrion's user; it only reads that map and runs sox_ng.
+Runs as Lyrion's user; it only reads that map and runs sox_ng and flac.
 
 `hifi-upsample.py --bench` times the conversion of a few seconds of audio at a
 few target rates on this CPU and prints the share of real time each one needs
@@ -41,6 +44,7 @@ import sys
 import time
 
 SOX_NG = '/usr/local/bin/sox_ng'
+FLAC_BIN = '/usr/bin/flac'
 MAP = '/etc/hifi-player/upsample.json'
 MULTS = {'x2': 2, 'x4': 4}
 FAMILY_BASE = (44100, 48000)
@@ -127,30 +131,67 @@ def read_wav_rate(stream):
     return None, bytes(buf)
 
 
-def sox_argv(kind, target, sox=SOX_NG):
-    """sox_ng reading PCM (`kind` wav|raw) on stdin, writing FLAC on stdout.
-    `target` 0 means re-encode to FLAC without changing the rate."""
+def sox_has_flac(sox):
+    """True when this SoX has the FLAC handler compiled in. The project's sox_ng
+    fork carries the `sdm` effect for DSD but is built without FLAC."""
+    if not sox:
+        return False
+    try:
+        r = subprocess.run([sox, '--help'], stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    for line in r.stdout.decode('utf-8', 'replace').splitlines():
+        if 'AUDIO FILE FORMATS' in line:
+            return 'flac' in line.split()
+    return False
+
+
+def find_flac():
+    """The standalone FLAC encoder, used because sox_ng has no FLAC handler."""
+    return FLAC_BIN if os.access(FLAC_BIN, os.X_OK) else shutil.which('flac')
+
+
+def sox_argv(kind, target, sox=SOX_NG, out_type='flac'):
+    """sox_ng reading PCM (`kind` wav|raw) on stdin, writing `out_type` on
+    stdout. `target` 0 means re-encode without changing the rate."""
     if kind == 'raw':
         source = ['-t', 'raw', '-r', str(RAW_RATE), '-e', 'signed', '-b', '16', '-c', '2', '-']
     else:
         # flac and ffmpeg write the WAV header before they know the length
         source = ['--ignore-length', '-t', 'wav', '-']
-    argv = [sox, '-q', '--multi-threaded', *source, '-t', 'flac', '-', 'channels', '2']
+    argv = [sox, '-q', '--multi-threaded', *source, '-t', out_type, '-', 'channels', '2']
     if target:
         argv += ['rate', '-v', str(target)]
     return argv
 
 
 def run(kind, mult, cap, stdin=None, sox=SOX_NG):
-    """Learn the source rate, then stream stdin through sox_ng. Returns sox's
-    exit code. Kept separate from main() so it is easy to test."""
+    """Learn the source rate, then stream stdin through the upsampler. The output
+    is FLAC; sox_ng has no FLAC handler, so it resamples to WAV and the `flac`
+    CLI encodes. Returns the pipeline's exit code. Kept separate from main() so
+    it is easy to test."""
     stdin = stdin if stdin is not None else sys.stdin.buffer
+    sox_flac = sox_has_flac(sox)
+    flac = None if sox_flac else find_flac()
+    if not sox_flac and not flac:
+        print('hifi-upsample: no FLAC encoder (need a SoX with FLAC or the '
+              '`flac` CLI)', file=sys.stderr)
+        return 3
     if kind == 'raw':
         src, head = RAW_RATE, b''
     else:
         src, head = read_wav_rate(stdin)
     target = target_rate(mult, cap, src)
-    proc = subprocess.Popen(sox_argv(kind, target, sox), stdin=subprocess.PIPE)
+    out_type = 'flac' if sox_flac else 'wav'
+    encoder = None
+    if sox_flac:
+        proc = subprocess.Popen(sox_argv(kind, target, sox, out_type), stdin=subprocess.PIPE)
+    else:
+        encoder = subprocess.Popen([flac, '--silent', '--stdout', '-'], stdin=subprocess.PIPE)
+        proc = subprocess.Popen(sox_argv(kind, target, sox, out_type),
+                                stdin=subprocess.PIPE, stdout=encoder.stdin)
+        encoder.stdin.close()   # only sox writes to the encoder
     try:
         if head:
             proc.stdin.write(head)
@@ -162,7 +203,10 @@ def run(kind, mult, cap, stdin=None, sox=SOX_NG):
             proc.stdin.close()
         except BrokenPipeError:
             pass
-    return proc.wait()
+    rc = proc.wait()
+    if encoder is not None:
+        rc = rc or encoder.wait()
+    return rc
 
 
 def bench(sox=SOX_NG, seconds=BENCH_SECONDS, tries=2):
@@ -179,9 +223,12 @@ def bench(sox=SOX_NG, seconds=BENCH_SECONDS, tries=2):
                         'synth', str(seconds), 'pinknoise', 'gain', '-10'],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=60)
         for label, target in targets.items():
-            argv = sox_argv('wav', target, sox)
-            argv[argv.index('-', argv.index('wav'))] = wav     # the input, stdin in a real run
-            argv[argv.index('flac') + 1] = '/dev/null'         # the output, stdout in a real run
+            # Time the resample alone (FLAC encoding is light); out to a WAV
+            # file. The two bare '-' tokens are the input and output streams.
+            argv = sox_argv('wav', target, sox, out_type='wav')
+            i_in = argv.index('-')
+            argv[i_in] = wav                                   # the input, stdin in a real run
+            argv[argv.index('-', i_in + 1)] = '/dev/null'      # the output, stdout in a real run
             best = None
             for _ in range(tries):
                 t0 = time.monotonic()

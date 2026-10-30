@@ -134,6 +134,99 @@ class TestReadWavRate(unittest.TestCase):
         self.assertIsNone(rate)
 
 
+def _fake_exec(path, body):
+    """Write an executable shell stub at `path`."""
+    with open(path, 'w') as f:
+        f.write('#!/bin/sh\n' + body)
+    os.chmod(path, 0o755)
+
+
+# A fake sox whose `--help` does NOT list flac (like the project's sox_ng): it
+# echoes a marker then copies stdin, so the stream is recognisable downstream.
+_FAKE_SOX_NO_FLAC = (
+    'if [ "$1" = "--help" ]; then\n'
+    '  echo "AUDIO FILE FORMATS: 8svx aif aiff au dsf raw wav"\n'
+    '  exit 0\n'
+    'fi\n'
+    'printf SOXWAV; cat\n'
+)
+# A fake sox that DOES carry the flac handler and, on a real run, emits a FLAC
+# magic header itself (single-process fast path, no external encoder).
+_FAKE_SOX_WITH_FLAC = (
+    'if [ "$1" = "--help" ]; then\n'
+    '  echo "AUDIO FILE FORMATS: 8svx aif flac wav"\n'
+    '  exit 0\n'
+    'fi\n'
+    'printf fLaC; cat\n'
+)
+# A fake standalone flac CLI: prepends the FLAC magic to whatever sox piped in.
+_FAKE_FLAC = 'printf fLaC; cat\n'
+
+
+class TestEncoderSelection(unittest.TestCase):
+    """sox_ng cannot write FLAC, so run() must resample with sox and encode the
+    FLAC output with the `flac` CLI; a FLAC-capable sox takes a single-process
+    fast path instead. Both must yield a FLAC stream (magic 'fLaC')."""
+
+    def setUp(self):
+        self.w = load_wrapper()
+        self.dir = tempfile.mkdtemp(prefix='ups-enc-')
+        self.wav = wav_header(44100) + b'\x00' * 32
+
+    def _run_capture(self, sox):
+        r, wr = os.pipe()
+        saved = os.dup(1)
+        os.dup2(wr, 1)
+        os.close(wr)
+        try:
+            rc = self.w.run('wav', 'x2', 0, stdin=io.BytesIO(self.wav), sox=sox)
+        finally:
+            os.dup2(saved, 1)
+            os.close(saved)
+        out = b''
+        while True:
+            chunk = os.read(r, 1 << 16)
+            if not chunk:
+                break
+            out += chunk
+        os.close(r)
+        return rc, out
+
+    def test_sox_without_flac_uses_flac_cli(self):
+        sox = os.path.join(self.dir, 'sox_ng')
+        flac = os.path.join(self.dir, 'flac')
+        _fake_exec(sox, _FAKE_SOX_NO_FLAC)
+        _fake_exec(flac, _FAKE_FLAC)
+        self.w.FLAC_BIN = flac                       # make find_flac() pick the fake
+        self.assertFalse(self.w.sox_has_flac(sox))
+        rc, out = self._run_capture(sox)
+        self.assertEqual(rc, 0)
+        self.assertTrue(out.startswith(b'fLaC'), out[:16])
+        self.assertIn(b'SOXWAV', out)                # sox ran before the encoder
+
+    def test_sox_with_flac_single_process(self):
+        sox = os.path.join(self.dir, 'sox')
+        _fake_exec(sox, _FAKE_SOX_WITH_FLAC)
+        self.w.FLAC_BIN = os.path.join(self.dir, 'nonexistent-flac')
+        self.assertTrue(self.w.sox_has_flac(sox))
+        rc, out = self._run_capture(sox)
+        self.assertEqual(rc, 0)
+        self.assertTrue(out.startswith(b'fLaC'), out[:16])
+        self.assertNotIn(b'SOXWAV', out)             # the fast-path sox, not the no-flac one
+
+    def test_no_encoder_at_all_errors(self):
+        sox = os.path.join(self.dir, 'sox_ng')
+        _fake_exec(sox, _FAKE_SOX_NO_FLAC)
+        self.w.FLAC_BIN = os.path.join(self.dir, 'nonexistent-flac')
+        orig = self.w.shutil.which
+        self.w.shutil.which = lambda _n: None        # no flac CLI on PATH either
+        try:
+            rc = self.w.run('wav', 'x2', 0, stdin=io.BytesIO(self.wav), sox=sox)
+        finally:
+            self.w.shutil.which = orig
+        self.assertEqual(rc, 3)
+
+
 @unittest.skipUnless(shutil.which('sox') or os.path.exists('/usr/local/bin/sox_ng'),
                      'no SoX to run end to end')
 class TestRunEndToEnd(unittest.TestCase):

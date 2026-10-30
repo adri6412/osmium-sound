@@ -89,6 +89,16 @@ MESSAGES = {
     'squeezelite.convertConflict': {'en': 'DSD conversion and PCM upsampling cannot be on at the same time',
                                     'it': 'Conversione in DSD e upsampling PCM non possono essere attivi insieme'},
 
+    # ── Settings → System tweaks (CPU governor / security / hyper-threading) ──
+    'systemTweaks.saved': {'en': 'Saved', 'it': 'Salvato'},
+    'systemTweaks.reboot': {'en': 'Saved — restart the player to apply the CPU security change',
+                            'it': 'Salvato — riavvia il player per applicare la modifica alla sicurezza CPU'},
+    'systemTweaks.writeFailed': {'en': 'Could not save the system tweaks',
+                                 'it': 'Impossibile salvare le ottimizzazioni di sistema'},
+    'systemTweaks.unknownField': {'en': 'Unknown setting: {field}', 'it': 'Impostazione sconosciuta: {field}'},
+    'systemTweaks.invalidValue': {'en': 'Invalid value for {field}: {detail}',
+                                  'it': 'Valore non valido per {field}: {detail}'},
+
     # ── Audio zones: one more player per DAC ────────────────────────
     'zones.added': {'en': '"{name}" added: it is now a player of its own in Lyrion',
                     'it': '"{name}" aggiunta: ora è un player a sé in Lyrion'},

@@ -235,7 +235,8 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
         'name': model['name'], 'volume': 'hardware' if hardware_volume else 'software',
         'realtime': model['realtime'], 'max_rate': model['max_rate'],
         'dsd': carrier or 'pcm',
-        'pcm2dsd': {'state': p2d or 'off', 'mode': model['pcm2dsd'], 'filter': model['pcm2dsd_filter']},
+        'pcm2dsd': {'state': p2d or 'off', 'mode': model['pcm2dsd'], 'filter': model['pcm2dsd_filter'],
+                    'where': 'player' if (not zone and model['convert_where'] == 'player') else 'server'},
     }
     out['dac'] = card_fn(model['output'])
     out['hw'] = hw

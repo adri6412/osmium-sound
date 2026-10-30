@@ -63,6 +63,9 @@ const sections = computed(() => [
   { key: 'backup',    icon: 'copy',      label: t('settings.sections.backup.label'),    desc: t('settings.sections.backup.desc') },
   { key: 'language',  icon: 'globe',     label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
   { key: 'system',    icon: 'settings',  label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
+  // OS-level knobs (CPU governor / security mitigations / hyper-threading) a
+  // listener can opt into to push server-side PCM->DSD harder. Off by default.
+  { key: 'systemTweaks', icon: 'settings', label: t('settings.sections.systemTweaks.label'), desc: t('settings.sections.systemTweaks.desc') },
   // What the device is made of and under which licenses: the project, Lyrion,
   // the third-party notices and every Debian package of the image.
   { key: 'notices',   icon: 'file',      label: t('settings.sections.notices.label'),   desc: t('settings.sections.notices.desc') },
@@ -82,7 +85,7 @@ const groups = [
   { id: 'look',    icon: 'monitor',  secs: ['vuMeters', 'animations', 'display', 'language'] },
   { id: 'control', icon: 'remote',   secs: ['remote', 'companion', 'companionIos'] },
   { id: 'network', icon: 'wifi',     secs: ['network', 'tailscale', 'services', 'account'] },
-  { id: 'system',  icon: 'info',     secs: ['timezone', 'updates', 'backup', 'system', 'notices'] },
+  { id: 'system',  icon: 'info',     secs: ['timezone', 'updates', 'backup', 'system', 'systemTweaks', 'notices'] },
 ];
 function groupOf(key) { const g = groups.find((x) => x.secs.includes(key)); return g ? g.id : ''; }
 // the sections of a group that are listed right now, in the group's order
@@ -293,6 +296,26 @@ async function sqCall(path, body, okMsg) {
 }
 const setSq = (patch) => sqCall('squeezelite_conf', patch, t('settings.audio.sqSaved'));
 const resetSq = () => sqCall('squeezelite_conf/reset', {}, t('settings.audio.sqReset'));
+
+// ── System tweaks: OS-level knobs (CPU governor / security / SMT) ─
+// api_server.py /system_tweaks. Governor + hyper-threading apply at once to
+// /sys; CPU security (mitigations) is a kernel command-line change that only
+// takes effect after a reboot — the backend flags that with needs_reboot.
+const tw = ref(null); const twBusy = ref(false);
+async function loadTw() {
+  const r = await api.sys('system_tweaks');
+  if (r.ok && r.data.conf) tw.value = r.data;
+}
+watch(open, (v) => { if (v === 'systemTweaks') loadTw(); });
+async function setTw(patch) {
+  twBusy.value = true;
+  try {
+    const r = await api.sysPost('system_tweaks', patch);
+    const ok = r.ok && r.data.success !== false;
+    if (ok && r.data.conf) tw.value = r.data;
+    say(bodyMsg(r, ok ? t('settings.systemTweaks.saved') : t('settings.systemTweaks.saveFailed')), !ok);
+  } finally { twBusy.value = false; }
+}
 
 // ── Audio zones: one more player per further DAC ─────────────────
 // api_server.py get_zones / zone_add / zone_update / zone_remove. Each zone
@@ -2096,7 +2119,7 @@ onUnmounted(() => {
           <p class="sub">{{ t('settings.pcm2dsd.title') }}</p>
           <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :upsample="sq.conf.upsample"
                    :state="sq.pcm2dsd.state" :upsample-state="sq.pcm2dsd.upsample.state"
-                   :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
+                   :info="sq.pcm2dsd" :where="sq.conf.convert_where" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
         </div>
 
         <label>{{ t('settings.audio.alsaBufferLabel') }}</label>
@@ -3178,6 +3201,45 @@ onUnmounted(() => {
         <label>{{ t('settings.system.adminPassword') }}</label><input v-model="resetPw" type="password" />
         <div style="margin-top: 12px;"><button class="danger" @click="factoryReset">{{ t('settings.system.factoryReset') }}</button></div>
       </div>
+    </div>
+
+    <!-- System tweaks: OS-level knobs for more server-side PCM->DSD headroom.
+         Off by default; governor + SMT apply at once, CPU security needs a
+         reboot (the backend returns needs_reboot). SMT control is hidden where
+         the CPU exposes no SMT toggle (smt_available). See loadTw()/setTw(). -->
+    <div class="card" v-if="open === 'systemTweaks'">
+      <p class="sub">{{ t('settings.systemTweaks.intro') }}</p>
+      <p class="muted" v-if="!tw">{{ t('common.loading') }}</p>
+      <template v-if="tw">
+        <div v-if="tw.needs_reboot" class="net" style="border-color: rgba(224,180,90,0.4); margin-bottom: 14px;">
+          <span class="muted">{{ t('settings.systemTweaks.rebootPending') }}</span>
+        </div>
+
+        <label>{{ t('settings.systemTweaks.governorLabel') }}</label>
+        <span class="seg" v-if="tw.governors_available.length">
+          <button v-for="g in tw.governors_available" :key="g" :disabled="twBusy"
+                  :class="{ active: tw.conf.cpu_governor === g }" @click="setTw({ cpu_governor: g })">{{ g }}</button>
+        </span>
+        <p class="muted" v-else>{{ t('settings.systemTweaks.governorNone') }}</p>
+        <p class="muted">{{ t('settings.systemTweaks.governorHelp') }}</p>
+
+        <label>{{ t('settings.systemTweaks.mitigationsLabel') }}</label>
+        <span class="seg">
+          <button :disabled="twBusy" :class="{ active: tw.conf.cpu_mitigations === 'on' }" @click="setTw({ cpu_mitigations: 'on' })">{{ t('settings.systemTweaks.secure') }}</button>
+          <button :disabled="twBusy" :class="{ active: tw.conf.cpu_mitigations === 'off' }" @click="setTw({ cpu_mitigations: 'off' })">{{ t('settings.systemTweaks.fast') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.systemTweaks.mitigationsHelp') }}</p>
+
+        <template v-if="tw.smt_available">
+          <label>{{ t('settings.systemTweaks.smtLabel') }}</label>
+          <div class="between item">
+            <span>{{ t('settings.systemTweaks.smtToggle') }}</span>
+            <Toggle :model-value="tw.conf.hyperthreading === 'on'" :disabled="twBusy"
+                    @update:model-value="(v) => setTw({ hyperthreading: v ? 'on' : 'off' })" />
+          </div>
+          <p class="muted">{{ t('settings.systemTweaks.smtHelp') }}</p>
+        </template>
+      </template>
     </div>
 
     <!-- Debug: boot / kernel-panic troubleshooting flags -->
