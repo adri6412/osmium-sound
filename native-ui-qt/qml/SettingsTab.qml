@@ -3143,10 +3143,10 @@ Item {
                 id: secList
                 visible: root.atRoot
                 x: body.padX; y: rootHead.y + rootHead.height + 32; width: body.innerW; spacing: 16
-                readonly property int cols: root.grp === "" ? (width >= 560 ? 3 : 2) : (width >= 900 ? 4 : width >= 640 ? 3 : 2)
+                // group tiles and section tiles share the same grid: same columns and same height
+                readonly property int cols: width >= 900 ? 4 : width >= 640 ? 3 : 2
                 readonly property real tw: Math.floor((width - (cols - 1) * spacing) / cols)
-                // group tiles stay short so all six fit a 16:10 panel without scrolling
-                readonly property real th: Math.round(Math.min(tw * (root.grp === "" ? 0.42 : 0.5), root.grp === "" ? 128 : 124))
+                readonly property real th: Math.round(Math.min(tw * 0.5, 124))
                 Repeater {
                     model: root.tileModel
                     Item {
