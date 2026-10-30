@@ -1197,6 +1197,10 @@ _AUTH_ROUTES = {
     ('/api/system/external_convert', 'GET'): '/external_convert',
     ('/api/system/external_convert/update', 'POST'): '/external_convert/update',
     ('/api/system/external_convert/remove', 'POST'): '/external_convert/remove',
+    # Settings → System tweaks: CPU governor / mitigations / SMT for CPU
+    # headroom on server-side DSD.
+    ('/api/system/system_tweaks', 'GET'): '/system_tweaks',
+    ('/api/system/system_tweaks', 'POST'): '/system_tweaks',
     # Settings → Licenses & credits: the project, Lyrion, the third-party
     # notices and every Debian package of the image with its license.
     ('/api/system/credits', 'GET'): '/credits',
