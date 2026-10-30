@@ -101,6 +101,11 @@ class TestModel(ToolsMixin, unittest.TestCase):
     def test_set_fields(self):
         m = sq.set_fields(sq.normalize({}), {'pcm2dsd': 'dsd64', 'pcm2dsd_filter': 'sdm-8'})
         self.assertEqual((m['pcm2dsd'], m['pcm2dsd_filter']), ('dsd64', 'sdm-8'))
+        # enabling the conversion forces the DSD mode to auto (off would make the
+        # DAC re-decode the converted DSF to PCM); an explicit dop/native stays
+        self.assertEqual(sq.set_fields(sq.normalize({'dsd': 'off'}), {'pcm2dsd': 'dsd64'})['dsd'], 'auto')
+        self.assertEqual(sq.set_fields(sq.normalize({'dsd': 'dop'}), {'pcm2dsd': 'dsd64'})['dsd'], 'dop')
+        self.assertEqual(sq.normalize({'pcm2dsd': 'dsd64', 'dsd': 'off'})['dsd'], 'auto')
         for bad in ({'pcm2dsd': 'dsd512'}, {'pcm2dsd_filter': 'clans-3'}, {'pcm2dsd': True}):
             with self.assertRaises(sq.InvalidField):
                 sq.set_fields(sq.normalize({}), bad)
@@ -120,7 +125,9 @@ class TestModel(ToolsMixin, unittest.TestCase):
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', server='192.168.1.9'), 'u32be', zone=True),
                          'active')
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', dsp={'enabled': True}), 'u32be'), 'dsp')
-        self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', dsd='off'), 'u32be'), 'noDsd')
+        # enabling the conversion forces the DSD mode to auto, so a stale dsd=off
+        # can no longer silence it; only a DAC with no DSD at all stays noDsd
+        self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', dsd='off'), 'u32be'), 'active')
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64'), sq.PCM_ONLY), 'noDsd')
         # a USB DAC without native DSD gets DoP: still DSD
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', output='hw:CARD=Gen,DEV=0'),
@@ -147,9 +154,13 @@ class TestModel(ToolsMixin, unittest.TestCase):
         self.assertTrue(args.endswith('-c dsd -W'), args)
         # a remote server converts too now: -c dsd there as well
         self.assertIn('-c dsd', sq.render(self.model(pcm2dsd='dsd64', server='nas.local'), self.sb.probe))
-        # not active: nothing changes
-        for m in (self.model(), self.model(pcm2dsd='dsd64', dsd='off')):
-            self.assertNotIn('-c dsd', sq.render(m, self.sb.probe))
+        # off: nothing changes
+        self.assertNotIn('-c dsd', sq.render(self.model(), self.sb.probe))
+        # enabling the conversion forces the DSD mode to auto even if dsd=off was
+        # stored, so the player still passes DSD (-D) and converts (-c dsd)
+        forced = sq.render(self.model(pcm2dsd='dsd64', dsd='off'), self.sb.probe)
+        self.assertIn('-c dsd', forced)
+        self.assertIn('-D :u32be', forced)
         # the legacy line is unchanged by the refactor
         self.assertEqual(sq.render(sq.parse_args(LEGACY), lambda d: 'dop'), LEGACY)
 

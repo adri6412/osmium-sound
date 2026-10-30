@@ -402,6 +402,12 @@ def normalize(model):
     # set both, so a leftover upsample can never silence the DSD choice.
     if m['pcm2dsd'] != 'off':
         m['upsample'] = 'off'
+        # PCM→DSD only reaches the DAC as DSD when squeezelite runs with -D; with
+        # the DSD mode off the converted DSF is re-decoded to PCM, defeating the
+        # conversion. So a player that converts to DSD must pass DSD: auto is the
+        # safe choice (native when the DAC has it, no noise otherwise).
+        if m['dsd'] == 'off':
+            m['dsd'] = 'auto'
     dsp = src.get('dsp') if isinstance(src.get('dsp'), dict) else {}
     m['dsp'] = {'enabled': bool(dsp.get('enabled'))}
     return m
@@ -475,6 +481,11 @@ def set_fields(model, changes):
         m['pcm2dsd'] = 'off'
     if m['pcm2dsd'] != 'off' and m['upsample'] != 'off':
         raise InvalidField('squeezelite.convertConflict', 'upsample', m['upsample'])
+    # Converting to DSD requires the player to pass DSD (-D); with the DSD mode
+    # off the converted DSF is re-decoded to PCM. Force auto so enabling the
+    # conversion is enough — the client need not also flip the DSD mode.
+    if m['pcm2dsd'] != 'off' and m['dsd'] == 'off':
+        m['dsd'] = 'auto'
     return m
 
 
@@ -653,8 +664,9 @@ def pcm2dsd_state(model, fmt, zone=False):
     probe() says of its output: 'off'; 'active' (the Lyrion this player follows
     converts it — the Osmium Convert plugin, local or remote); or the reason it
     cannot — 'noTools' (an image without sox_ng or its wrapper), 'dsp' (the DSP
-    path plays PCM into the Loopback), 'noDsd' (no DSD reaches the DAC: DSD mode
-    off, or an output that is no DSD DAC).
+    path plays PCM into the Loopback), 'noDsd' (no DSD reaches the DAC: an output
+    that is no DSD DAC — the DSD mode itself can no longer be off here, enabling
+    the conversion forces it to auto).
 
     The conversion is always the server's now (the player-side loopback path is
     gone), so a remote server is 'active' too: the box sends the plugin a rule
