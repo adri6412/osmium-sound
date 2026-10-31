@@ -153,7 +153,8 @@ TUNABLE = ('dsd', 'dsd_delay_ms', 'max_rate', 'volume', 'mixer',
            'pcm2dsd', 'pcm2dsd_filter', 'convert_where', 'upsample', 'upsample_cap')
 
 DSD_MODES = ('auto', 'dop', 'native', 'off')
-RATES = (0, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000)
+RATES = (0, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000,
+         1411200, 1536000)
 DSD_DELAYS = (0, 100, 250, 500)
 ALSA_LARGE = '200:8'
 STREAM_LARGE = '16384:8192'
@@ -248,6 +249,25 @@ def native_format_from_stream(text):
     return None
 
 
+def playback_rates(text):
+    """Every sample rate the *playback* side of a /proc/asound stream file
+    lists, as a set of ints. A `Rates:` line is either a comma list
+    (`44100, 48000, …`) or a range (`44100 - 768000`); both are read as the
+    bare numbers on the line, which is all a max/supported lookup needs."""
+    rates, section = set(), None
+    for line in (text or '').splitlines():
+        s = line.strip()
+        if s.startswith('Playback:'):
+            section = 'playback'
+            continue
+        if s.startswith('Capture:'):
+            section = 'capture'
+            continue
+        if section == 'playback' and s.startswith('Rates:'):
+            rates.update(int(n) for n in re.findall(r'\d+', s[len('Rates:'):]))
+    return rates
+
+
 # What probe() answers for an output that is not a USB audio device.
 PCM_ONLY = 'pcm'
 
@@ -291,6 +311,102 @@ def dop_bits(device, proc_asound=None):
     lists S24_3LE and not S32_LE, as some USB DACs do."""
     formats = playback_formats(_stream_text(device, proc_asound))
     return 24 if 'S24_3LE' in formats and 'S32_LE' not in formats else 32
+
+
+def dac_max_pcm_rate(device, proc_asound=None):
+    """The top PCM sample rate `device` declares in its /proc/asound stream
+    file, among the rates this renderer knows (RATES); 0 when it cannot be read
+    (`default`, a non-USB card, an unreadable stream). Player-side upsampling
+    uses it to cap the rate squeezelite is forced to, so the DAC is never asked
+    for one it would refuse."""
+    known = [r for r in playback_rates(_stream_text(device, proc_asound)) if r in RATES]
+    return max(known) if known else 0
+
+
+# Bits per word of each native DSD carrier, for turning a DSD bitrate into the
+# PCM-style carrier rate the DAC's stream file declares: DSD_U32 packs 32 DSD
+# bits into each frame, so DSD512 (22.5792 Mbit/s) rides a 705600 Hz carrier.
+_NATIVE_BITS = {'u32be': 32, 'u32le': 32, 'u16be': 16, 'u16le': 16, 'u8': 8}
+
+
+def _playback_altsets(text):
+    """(formats, rates) for each playback altset block of a /proc/asound stream
+    file: the ALSA format tokens and the int sample rates that one block
+    declares. A USB DAC lists one block per interface/altset, so a native-DSD
+    altset's own rate range can be read apart from the PCM altsets' — a DAC that
+    does S32_LE PCM to 768000 may still stop its DSD_U32_BE altset lower."""
+    blocks, section, formats, rates = [], None, [], set()
+
+    def flush():
+        if formats or rates:
+            blocks.append((formats, rates))
+
+    for line in (text or '').splitlines():
+        s = line.strip()
+        if s.startswith('Playback:'):
+            section = 'playback'
+            continue
+        if s.startswith('Capture:'):
+            flush()
+            section, formats, rates = 'capture', [], set()
+            continue
+        if section != 'playback':
+            continue
+        if s.startswith('Interface '):          # each endpoint repeats this line
+            flush()
+            formats, rates = [], set()
+        elif s.startswith('Format:'):
+            formats.extend(s[len('Format:'):].split())
+        elif s.startswith('Rates:'):
+            rates.update(int(n) for n in re.findall(r'\d+', s[len('Rates:'):]))
+    flush()
+    return blocks
+
+
+def dac_dsd_ceiling(device, fmt, proc_asound=None):
+    """The highest PCM-to-DSD mode `device` can actually take, given how DSD
+    reaches it (`fmt` from probe()): the top PCM2DSD mode whose carrier rate the
+    DAC still declares — its native-DSD altset's own rates when it decodes DSD
+    natively, its PCM rates over DoP. Falls back to the ceiling mode ('dsd512',
+    no clamp) whenever the stream cannot be read or parsed, so a DAC whose file
+    we do not understand is never limited by a guess. The Topping D50s declares
+    DSD_U32_BE up to 768000, so its 705600 DSD512 carrier fits; an RME that
+    stops its native-DSD altset at 352800 caps at DSD256, matching the field
+    report that DSD512 fails on it."""
+    modes = [m for m in PCM2DSD_MODES if m != 'off']
+    top = modes[-1]
+    text = _stream_text(device, proc_asound)
+    if not text:
+        return top
+    if fmt in _NATIVE_BITS:
+        bits = _NATIVE_BITS[fmt]
+        alsa = next((a for a, sq in _NATIVE_FORMATS if sq == fmt), None)
+        rates = set()
+        for formats, rs in _playback_altsets(text):
+            if alsa in formats:
+                rates |= rs
+        max_rate = max(rates) if rates else 0
+    elif fmt == 'dop':
+        # DoP wraps DSD into 16-bits-per-word PCM frames, so the DAC's PCM rate
+        # ceiling bounds it: DoP DSD64 = 176400, DSD128 = 352800, DSD256 = 705600.
+        bits = 16
+        max_rate = dac_max_pcm_rate(device, proc_asound)
+    else:
+        return top        # PCM only: nothing reaches this DAC as DSD to cap
+    if not max_rate:
+        return top
+    fits = [m for m in modes if PCM2DSD_RATES[m] // bits <= max_rate]
+    return fits[-1] if fits else modes[0]
+
+
+def clamp_pcm2dsd(mode, device, fmt, proc_asound=None):
+    """`mode` lowered to what the DAC can take (dac_dsd_ceiling), never raised.
+    A saved dsd512 becomes dsd256 on a DAC that stops there, so the converter
+    never generates a DSD rate the DAC would refuse track after track."""
+    if mode == 'off':
+        return mode
+    ceiling = dac_dsd_ceiling(device, fmt, proc_asound)
+    return mode if PCM2DSD_MODES.index(mode) <= PCM2DSD_MODES.index(ceiling) else ceiling
 
 
 def probe(device, proc_asound=None):
@@ -693,6 +809,27 @@ def upsample_target(mode, cap, src_rate):
     return best
 
 
+def player_upsample_rate(model, device, proc_asound=None):
+    """The one rate squeezelite resamples every track to for player-side PCM
+    upsampling (`-r <rate> -R`), or 0 when none fits. Unlike the server side,
+    squeezelite has no per-track source rate to key x2/x4 on — it sees a single
+    static rate — so the player side raises everything to the top rate that
+    fits: the cap when the user set one, otherwise the DAC's own ceiling, never
+    past the universal one. Capped at what the DAC declares so squeezelite is
+    never forced to a rate it would refuse."""
+    m = normalize(model)
+    cap = m['upsample_cap'] if m['upsample_cap'] in RATES and m['upsample_cap'] else 0
+    dac_max = dac_max_pcm_rate(device, proc_asound)
+    # Force a rate only with evidence it is safe: a USB DAC's declared ceiling,
+    # or a cap the user set. On `default`/HDA (rates unknown, no cap) leave it to
+    # squeezelite rather than risk forcing a rate the device would refuse.
+    if not dac_max and not cap:
+        return 0
+    ceiling = min(cap or UPSAMPLE_CEILING, dac_max or UPSAMPLE_CEILING)
+    fits = [r for r in RATES if 0 < r <= ceiling and (not dac_max or r <= dac_max)]
+    return max(fits) if fits else 0
+
+
 def server_is_local(server):
     return str(server or '').strip() in ('127.0.0.1', 'localhost', '::1')
 
@@ -784,6 +921,19 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
     # Loopback at one fixed rate, like the DSP path, and hifi-pcm2dsd-player.py
     # (sync_player()) turns it into DSD for the DAC. The built-in player only.
     player = state == 'active' and not dsp and not zone and m['convert_where'] == 'player'
+    # PCM upsampling always runs on the player's own side -- for the built-in
+    # player AND for zones, regardless of convert_where. squeezelite resamples
+    # straight to the DAC (-r <rate> -R); ordinary PCM reaches any DAC, so there
+    # is no Loopback or daemon here, unlike the player-side DSD path above.
+    # (Server-side PCM upsampling via LMS cannot actually raise the DAC rate:
+    # LMS direct-streams the original FLAC or uses its native flc->pcm decoder
+    # and ignores the flc->wav rule, so it only ever stalled the VU meters.
+    # The followed Lyrion's upsample rule for this MAC is cleared accordingly --
+    # see _convert_resync in api_server.) A DSD conversion (state == 'active',
+    # player- or server-side) owns the samplerate, so upsampling steps aside --
+    # the model keeps the two mutually exclusive anyway.
+    up_player = (not dsp and state != 'active' and upsample_state(m, zone) == 'active')
+    up_rate = player_upsample_rate(m, output, proc_asound) if up_player else 0
     pcm_only = dsp or player
     out = []
     if m['mac']:
@@ -800,6 +950,8 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
         out += ['-r', str(DSP_RATE), '-R']
     elif player:
         out += ['-r', str(P2D_RATE), '-R']
+    elif up_player and up_rate:
+        out += ['-r', str(up_rate), '-R']
     elif m['max_rate']:
         out += ['-r', str(m['max_rate'])]
     # the Loopback has no volume control of its own: squeezelite's volume
@@ -814,6 +966,16 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
     # already converted. Player-side conversion streams ordinary PCM, so it
     # needs neither `-c dsd` nor the larger DSD stream buffer.
     server_dsd = state == 'active' and not player
+    # Server-side PCM upsampling is a safety net only: box players (built-in and
+    # zones) always take the player side (up_player above), so this never fires
+    # for them. It stays as defence in case a box player is ever forced back
+    # onto the server path -- advertising PCM alone makes LMS run the flc->wav
+    # rule instead of direct-streaming the original FLAC, which would stall
+    # playback and freeze the VU needles on the last frame. (The external
+    # players, which cannot resample locally, keep the real server-side path,
+    # but they do not go through render_argv.)
+    server_upsample = (not dsp and not player and not up_player and not server_dsd
+                       and upsample_state(m, zone) == 'active')
     # A DSD stream is 1.4 MB/s at DSD128: squeezelite's default 2 MB stream
     # buffer would hold little more than a second of it.
     if m['stream_buffer'] == 'large' or server_dsd:
@@ -824,6 +986,9 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
         # DSD is all the player admits to, so every PCM track has to go
         # through one of the dsf rules the plugin wrote for its MAC.
         out += ['-c', 'dsd']
+    elif server_upsample:
+        # PCM alone: force every FLAC track through the flc->wav upsample rule.
+        out += ['-c', 'pcm']
     if m['extra']:
         out += m['extra'].split()
     return out
@@ -1215,7 +1380,8 @@ def _convert_entry(m, fmt, zone):
     """The conversion a probed player of this box gets right now, or None.
     DSD wins over upsampling (the model keeps them mutually exclusive)."""
     if m['pcm2dsd'] != 'off' and pcm2dsd_state(m, fmt, zone) == 'active':
-        return {'kind': 'dsd', 'mode': m['pcm2dsd'], 'filter': m['pcm2dsd_filter']}
+        mode = clamp_pcm2dsd(m['pcm2dsd'], m['output'], fmt)
+        return {'kind': 'dsd', 'mode': mode, 'filter': m['pcm2dsd_filter']}
     if m['upsample'] != 'off' and upsample_state(m, zone) == 'active':
         # No explicit cap? Never go past the rate the player already caps the
         # DAC at (max_rate, 0 = the family ceiling).
@@ -1296,8 +1462,11 @@ def pcm_map(players):
 def lms_rules(players):
     """The block of custom-convert.conf for `players` (convert_players()).
     DSD players decode to the PCM → DSD wrapper and come out as DSF; PCM
-    upsampling players go through the upsampling wrapper and come out as FLAC,
-    self-describing so the player reads the new rate from the stream."""
+    upsampling players go through the upsampling wrapper and come out as WAV.
+    The destination must differ from the FLAC source so LMS actually runs the
+    rule instead of direct-streaming the original FLAC (which would bypass the
+    upsample and leave playback stalled); the wrapper emits a WAV header that
+    carries the new rate."""
     if not players:
         return ''
     lines = [RULES_BEGIN]
@@ -1305,7 +1474,7 @@ def lms_rules(players):
         if players[mac]['kind'] == 'dsd':
             dst, wrapper = 'dsf', PCM2DSD_WRAPPER
         else:
-            dst, wrapper = 'flc', UPSAMPLE_WRAPPER
+            dst, wrapper = 'wav', UPSAMPLE_WRAPPER
         for typ, (caps, decode) in _LMS_TYPES:
             lines += [f'{typ} {dst} * {mac}', f'\t{caps}', f'\t{decode} | {wrapper} $CLIENTID$ wav']
         caps, decode = _SPOTTY
@@ -1388,7 +1557,8 @@ def player_conf(model, fmt, proc_asound=None):
     if m['convert_where'] != 'player' or pcm2dsd_state(m, fmt) != 'active':
         return None
     native = fmt if m['dsd'] in ('auto', 'native') and is_native(fmt) else None
-    return {'mode': m['pcm2dsd'], 'filter': m['pcm2dsd_filter'], 'carrier': native or 'dop',
+    mode = clamp_pcm2dsd(m['pcm2dsd'], m['output'], fmt, proc_asound)
+    return {'mode': mode, 'filter': m['pcm2dsd_filter'], 'carrier': native or 'dop',
             'dop_bits': dop_bits(m['output'], proc_asound), 'rate': P2D_RATE,
             'capture': P2D_CAPTURE, 'dac': m['output']}
 

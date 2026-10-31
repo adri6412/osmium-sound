@@ -491,7 +491,7 @@ def mock_sq():
     return {"success": True, "conf": dict(c, output=STATE["audio"], name="Osmium", server="127.0.0.1"),
             "args": "-o " + STATE["audio"] + " -D :u32be -v -C 5 -s 127.0.0.1 -n Osmium -M Osmium" + (" -b 16384:8192 -c dsd" if c["pcm2dsd"] != "off" else ""),
             "dsd_detected": "native", "dsd_format": "u32be", "mixers": ["PCM"],
-            "choices": {"dsd": ["auto", "dop", "native", "off"], "dsd_delay_ms": [0, 100, 250, 500], "max_rate": [0, 96000, 192000, 384000]},
+            "choices": {"dsd": ["auto", "dop", "native", "off"], "dsd_delay_ms": [0, 100, 250, 500], "max_rate": [0, 96000, 192000, 384000, 768000, 1536000]},
             "defaults": {}, "pcm2dsd": dict(MOCK_P2D, state="active" if c["pcm2dsd"] != "off" else "off",
                                             upsample=dict(MOCK_P2D["upsample"], state="active" if c.get("upsample", "off") != "off" else "off"))}
 

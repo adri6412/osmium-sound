@@ -1645,7 +1645,7 @@ Item {
         for (i = 0; i < dd.length; i++) ddc.push(cell(dd[i] ? dd[i] + " ms" : Tr.t("settings.audio.off"), String(dd[i]), c.dsd_delay_ms === dd[i], "sq_delay", { hh: 44 }))
         grid(ddc)
         label("settings.audio.maxRateLabel", 14); help("settings.audio.maxRateHelp", 12)
-        var mr = ch.max_rate || [0, 96000, 192000, 384000], mrc = []
+        var mr = ch.max_rate || [0, 96000, 192000, 384000, 768000, 1536000], mrc = []
         for (i = 0; i < mr.length; i++) mrc.push(cell(mr[i] ? (mr[i] / 1000) + " kHz" : Tr.t("settings.audio.auto"), String(mr[i]), c.max_rate === mr[i], "sq_rate", { hh: 44 }))
         grid(mrc)
         if (s.mixers && s.mixers.length) toggle(Tr.t("settings.audio.volumeHardware"), Tr.t("settings.audio.volumeHelp"), c.volume === "hardware", "sq_hwvol")

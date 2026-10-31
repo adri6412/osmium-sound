@@ -38,6 +38,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 RATES = {'dsd64': 2822400, 'dsd128': 5644800, 'dsd256': 11289600,
          'dsd512': 22579200}
@@ -83,20 +84,23 @@ def has_sdm(sox_ng):
 
 
 def sox_has_format(sox, fmt):
-    """True when this SoX can read/write `fmt` (e.g. 'flac'). `sox --help`
-    lists what is compiled in under "AUDIO FILE FORMATS"; the project's sox_ng
-    fork carries the `sdm` effect but is built without the FLAC handler."""
+    """True only when this SoX can actually read/write `fmt` (e.g. 'flac').
+    `sox --help` lists `fmt` under "AUDIO FILE FORMATS" even when the handler is
+    absent -- the project's sox_ng fork carries the `sdm` effect but is built
+    without the FLAC handler, yet still lists `flac` -- so parsing --help gives
+    a false positive and sox_ng then fails every track with "no handler for
+    given file type `flac'". Probe it for real: encode a short tone to a `fmt`
+    file; a build without the handler fails at once."""
     if not sox:
         return False
     try:
-        r = subprocess.run([sox, '--help'], stdout=subprocess.PIPE,
-                           stderr=subprocess.STDOUT, timeout=15)
+        with tempfile.NamedTemporaryFile(suffix='.' + fmt) as tf:
+            r = subprocess.run([sox, '-q', '-n', '-r', '44100', '-b', '16', '-c', '2',
+                                '-t', fmt, tf.name, 'synth', '0.05', 'sine', '440'],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+            return r.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
-    for line in r.stdout.decode('utf-8', 'replace').splitlines():
-        if 'AUDIO FILE FORMATS' in line:
-            return fmt in line.split()
-    return False
 
 
 def find_flac():

@@ -141,22 +141,27 @@ def _fake_exec(path, body):
     os.chmod(path, 0o755)
 
 
-# A fake sox whose `--help` does NOT list flac (like the project's sox_ng): it
-# echoes a marker then copies stdin, so the stream is recognisable downstream.
+# A fake sox like the project's sox_ng: it lists `flac` under `--help` (a false
+# positive) but has no real FLAC handler, so sox_has_flac now probes it for real
+# by encoding a short `synth` tone to a .flac file -- which this fake fails. On
+# an ordinary run it echoes a marker then copies stdin, recognisable downstream.
 _FAKE_SOX_NO_FLAC = (
     'if [ "$1" = "--help" ]; then\n'
-    '  echo "AUDIO FILE FORMATS: 8svx aif aiff au dsf raw wav"\n'
+    '  echo "AUDIO FILE FORMATS: 8svx aif aiff au dsf flac raw wav"\n'
     '  exit 0\n'
     'fi\n'
+    'case "$*" in *synth*) exit 1 ;; esac\n'   # the functional FLAC probe: no handler
     'printf SOXWAV; cat\n'
 )
-# A fake sox that DOES carry the flac handler and, on a real run, emits a FLAC
-# magic header itself (single-process fast path, no external encoder).
+# A fake sox that DOES carry the flac handler: the functional probe (a `synth`
+# tone to .flac) succeeds, and on a real run it emits a FLAC magic header itself
+# (single-process fast path, no external encoder).
 _FAKE_SOX_WITH_FLAC = (
     'if [ "$1" = "--help" ]; then\n'
     '  echo "AUDIO FILE FORMATS: 8svx aif flac wav"\n'
     '  exit 0\n'
     'fi\n'
+    'case "$*" in *synth*) exit 0 ;; esac\n'   # the functional FLAC probe: handler present
     'printf fLaC; cat\n'
 )
 # A fake standalone flac CLI: prepends the FLAC magic to whatever sox piped in.

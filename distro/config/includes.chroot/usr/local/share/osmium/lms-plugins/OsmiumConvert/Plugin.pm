@@ -45,7 +45,9 @@ my $prefs = preferences('plugin.osmiumconvert');
 
 # ── The rule template, kept byte-for-byte in step with hifi_squeezelite.py's
 #    lms_rules(): same types, same decoders, same capability lines. DSD players
-#    come out as DSF, PCM-upsampling players as FLAC (self-describing rate).
+#    come out as DSF, PCM-upsampling players as WAV. The destination must differ
+#    from the FLAC source, or LMS direct-streams the original FLAC instead of
+#    running the rule (upsample skipped, playback stalls, VU needles freeze).
 my $DECODE_FLAC_CAPS   = '# IFT:{START=--skip=%t}U:{END=--until=%v}';
 my $DECODE_FLAC_CMD    = '[flac] -dcs $START$ $END$ -- $FILE$';
 my $DECODE_FFMPEG_CAPS = '# IFT:{START=-ss %s}U:{END=-to %u}';
@@ -121,7 +123,7 @@ sub _ruleBlock {
 			$args = "dsd $r->{a} $r->{b}";
 		}
 		else {
-			$dst  = 'flc';
+			$dst  = 'wav';
 			$args = "pcm $r->{a} $r->{b}";
 		}
 		my $wav = _helperCmd("$args wav");

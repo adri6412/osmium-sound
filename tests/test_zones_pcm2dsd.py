@@ -167,6 +167,33 @@ class TestModel(ToolsMixin, unittest.TestCase):
         # the legacy line is unchanged by the refactor
         self.assertEqual(sq.render(sq.parse_args(LEGACY), lambda d: 'dop'), LEGACY)
 
+    def test_render_pcm_upsample_is_player_side(self):
+        # PCM upsampling always runs player-side (squeezelite soxr, -r <rate> -R),
+        # regardless of convert_where. It never advertises PCM to the server
+        # (-c pcm): that server-side path could not raise the DAC rate through
+        # LMS and only ever stalled the VU meters. D50s tops PCM at 384 kHz.
+        args = sq.render(self.model(upsample='x4'), self.sb.probe)
+        self.assertIn('-r 384000 -R', args)
+        self.assertNotIn('-c pcm', args)
+        self.assertNotIn('-c dsd', args)
+        # following a remote server: still player-side, still no -c pcm
+        remote = sq.render(self.model(upsample='max', server='nas.local'), self.sb.probe)
+        self.assertIn('-r 384000 -R', remote)
+        self.assertNotIn('-c pcm', remote)
+        # convert_where no longer changes anything for PCM upsampling
+        forced = sq.render(self.model(upsample='x4', convert_where='player'), self.sb.probe)
+        self.assertIn('-r 384000 -R', forced)
+        self.assertNotIn('-c pcm', forced)
+        # off: nothing changes
+        off = sq.render(self.model(), self.sb.probe)
+        self.assertNotIn('-c pcm', off)
+        self.assertNotIn('-r 384000', off)
+        # DSD conversion owns the rate: -c dsd, no player-side upsample -r
+        both = sq.render(self.model(pcm2dsd='dsd64', upsample='x4'), self.sb.probe)
+        self.assertIn('-c dsd', both)
+        self.assertNotIn('-c pcm', both)
+        self.assertNotIn('-r 384000 -R', both)
+
 
 class TestPlayerSideConvert(ToolsMixin, unittest.TestCase):
     """convert_where == 'player': the built-in player converts on its own
@@ -296,6 +323,17 @@ class TestZones(ToolsMixin, unittest.TestCase):
         self.assertEqual(argv[argv.index('-s') + 1], '192.168.1.50')
         self.assertEqual(argv[-2:], ['-c', 'dsd'])
 
+    def test_argv_upsample_is_player_side(self):
+        # A zone upsamples PCM on its own side too (soxr, -r <rate> -R): every
+        # zone is its own squeezelite with its own DAC, no shared Loopback in the
+        # way. It never advertises PCM to the server (-c pcm). D50s tops at 384k.
+        z = sq.normalize_zone({'output': 'hw:CARD=D50s,DEV=0', 'name': 'Kitchen', 'mac': MAC,
+                               'upsample': 'max'})
+        argv = sq.zone_argv(z, '192.168.1.50', self.sb.probe)
+        self.assertEqual(argv[argv.index('-r') + 1], '384000')
+        self.assertIn('-R', argv)
+        self.assertNotIn('pcm', argv)
+
     def test_card_present(self):
         self.assertTrue(sq.card_present('hw:CARD=D50s,DEV=0', self.sb.asound))
         self.assertFalse(sq.card_present('hw:CARD=Gone,DEV=0', self.sb.asound))
@@ -360,8 +398,8 @@ class TestConvertPlayers(ToolsMixin, unittest.TestCase):
     def test_rules_text_pcm_upsample(self):
         text = sq.lms_rules({MAC: {'kind': 'pcm', 'mult': 'x4', 'cap': 0}})
         self.assertTrue(text.startswith(sq.RULES_BEGIN))
-        self.assertIn(f'flc flc * {MAC}\n\t# IFT:', text)   # FLAC in, FLAC out
-        self.assertIn(f'spt flc * {MAC}\n', text)
+        self.assertIn(f'flc wav * {MAC}\n\t# IFT:', text)   # FLAC in, WAV out (dst != src forces the rule)
+        self.assertIn(f'spt wav * {MAC}\n', text)
         self.assertIn(f'| {sq.UPSAMPLE_WRAPPER} $CLIENTID$ raw', text)
         self.assertNotIn('dsf', text)              # no DSD for a PCM upsampling player
         self.assertNotIn('* *\n', text)
@@ -554,11 +592,12 @@ class TestApi(unittest.TestCase):
         r = self.api.set_squeezelite_conf({'upsample': 'x4'})
         self.assertTrue(r['success'], r)
         self.assertEqual(r['pcm2dsd']['upsample']['state'], 'active')
-        host, cmd = self.last_for(mac)
-        self.assertEqual(host, '127.0.0.1')
-        self.assertEqual(cmd[:5], ['osmiumconvert', 'set', mac, 'pcm', 'x4'])
+        # PCM upsampling for the box's own player runs player-side now
+        # (squeezelite soxr): no server-side rule is pushed for its MAC, it is
+        # cleared instead. (External players keep the server path -- see below.)
+        self.assertEqual(self.last_for(mac), ('127.0.0.1', ['osmiumconvert', 'clear', mac]))
         # DSD and upsampling are mutually exclusive: turning DSD on switches the
-        # rule to a DSD one
+        # rule to a DSD one (DSD stays server-side)
         self.rpc.clear()
         r = self.api.set_squeezelite_conf({'pcm2dsd': 'dsd64'})
         self.assertTrue(r['success'], r)
@@ -602,15 +641,17 @@ class TestApi(unittest.TestCase):
         self.assertIn(('restart', '--no-block', 'hifi-zone@Gen-0.service'), self.sq_calls)
         self.assertEqual(self.last_for(zmac),
                          ('127.0.0.1', ['osmiumconvert', 'set', zmac, 'dsd', 'dsd64', 'clans-8']))
-        # a new rate: the zone keeps playing (same command line), the plugin
-        # just gets the new rule
+        # a new rate: the zone keeps playing (same command line), no restart.
+        # Gen is PCM-only, so DSD reaches it over DoP capped at 176400 Hz =
+        # DSD64: the requested dsd128 is kept in the conf but the pushed rule is
+        # clamped to what the DAC can take (dac_dsd_ceiling).
         self.sq_calls.clear()
         self.rpc.clear()
         r = self.api.zone_update('Gen-0', {'pcm2dsd': 'dsd128'})
         self.assertEqual(r['zones'][0]['conf']['pcm2dsd'], 'dsd128')
         self.assertNotIn(('restart', '--no-block', 'hifi-zone@Gen-0.service'), self.sq_calls)
         self.assertEqual(self.last_for(zmac),
-                         ('127.0.0.1', ['osmiumconvert', 'set', zmac, 'dsd', 'dsd128', 'clans-8']))
+                         ('127.0.0.1', ['osmiumconvert', 'set', zmac, 'dsd', 'dsd64', 'clans-8']))
         for bad in ({'nope': 1}, {'pcm2dsd': 'dsd1024'}, {'name': ''}, {'volume': 'hardware'}):
             self.assertFalse(self.api.zone_update('Gen-0', bad)['success'], bad)
         self.assertFalse(self.api.zone_update('Nope-0', {'enabled': False})['success'])
@@ -625,6 +666,20 @@ class TestApi(unittest.TestCase):
         self.assertTrue(r['success'])
         self.assertEqual(r['zones'], [])
         self.assertFalse(self.api.zone_remove('Gen-0')['success'])
+
+    def test_zone_pcm_upsample_is_player_side(self):
+        # A zone upsamples PCM on its own side (soxr), like the built-in player:
+        # no server-side rule is pushed for its MAC, it is cleared instead.
+        r = self.api.zone_add('hw:CARD=Gen,DEV=0')
+        self.assertTrue(r['success'], r)
+        zmac = sq.load_zones(self.sb.zones)[0]['mac']
+        sq.running_zone_units = lambda: {'Gen-0'}
+        self.rpc.clear()
+        r = self.api.zone_update('Gen-0', {'upsample': 'x4'})
+        self.assertTrue(r['success'], r)
+        self.assertEqual(r['zones'][0]['conf']['upsample'], 'x4')
+        self.assertEqual(r['zones'][0]['upsample_state'], 'active')
+        self.assertEqual(self.last_for(zmac), ('127.0.0.1', ['osmiumconvert', 'clear', zmac]))
 
     def test_follow_mode_restarts_the_zones(self):
         self.api.zone_add('hw:CARD=Gen,DEV=0')

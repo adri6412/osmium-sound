@@ -132,19 +132,24 @@ def read_wav_rate(stream):
 
 
 def sox_has_flac(sox):
-    """True when this SoX has the FLAC handler compiled in. The project's sox_ng
-    fork carries the `sdm` effect for DSD but is built without FLAC."""
+    """True only when this SoX can actually *write* a FLAC stream. The project's
+    sox_ng fork carries the `sdm` effect for DSD but is built without a FLAC
+    handler -- yet it still lists `flac` under "AUDIO FILE FORMATS" in `sox
+    --help`, so parsing that line gives a false positive and sox_ng then fails
+    every track with "no handler for given file type `flac'". Probe it for real
+    instead: encode a short tone to a FLAC file; a build without the handler
+    fails at once."""
     if not sox:
         return False
+    import tempfile
     try:
-        r = subprocess.run([sox, '--help'], stdout=subprocess.PIPE,
-                           stderr=subprocess.STDOUT, timeout=15)
+        with tempfile.NamedTemporaryFile(suffix='.flac') as tf:
+            r = subprocess.run([sox, '-q', '-n', '-r', '44100', '-b', '16', '-c', '2',
+                                '-t', 'flac', tf.name, 'synth', '0.05', 'sine', '440'],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+            return r.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
-    for line in r.stdout.decode('utf-8', 'replace').splitlines():
-        if 'AUDIO FILE FORMATS' in line:
-            return 'flac' in line.split()
-    return False
 
 
 def find_flac():

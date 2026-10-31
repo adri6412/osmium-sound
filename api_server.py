@@ -2255,7 +2255,8 @@ def get_squeezelite_conf():
         'dsd_format': fmt,
         'mixers': sq.mixer_controls(model['output']),
         'choices': {'dsd': list(sq.DSD_MODES), 'dsd_delay_ms': list(sq.DSD_DELAYS),
-                    'max_rate': [0, 96000, 192000, 384000], 'upsample': list(sq.UPSAMPLE_MODES)},
+                    'max_rate': [0, 96000, 192000, 384000, 768000, 1536000],
+                    'upsample': list(sq.UPSAMPLE_MODES)},
         'defaults': {k: sq.DEFAULTS[k] for k in sq.TUNABLE},
         'pcm2dsd': _pcm2dsd_info(model, fmt),
     }
@@ -2470,7 +2471,12 @@ def _pcm2dsd_info(model, fmt):
     # converts, through its Osmium Convert plugin. Its capabilities tell the
     # UI whether DSD is possible there, and why not (noPlugin / noServerTools).
     caps = _convert_caps(model['server'])
+    # The top DSD mode the built-in player's own DAC can take (dsd512 = no cap),
+    # so the UI can grey out a higher choice: a DAC that stops at DSD256 should
+    # not offer DSD512, which would fail track after track.
+    dac_ceiling = sq.dac_dsd_ceiling(model['output'], fmt)
     return {'state': sq.pcm2dsd_state(model, fmt), 'modes': modes, 'measured': measured,
+            'dac_ceiling': dac_ceiling,
             'filters': list(sq.PCM2DSD_FILTERS), 'available': sq.tools_present(),
             'server_local': sq.server_is_local(model['server']), 'convert': caps,
             # Where the conversion runs ('server'|'player') and whether this box
@@ -7042,13 +7048,19 @@ def _convert_resync():
     main_n = sq.normalize(main)
     if main_n.get('mac'):
         box_macs.add(main_n['mac'])
-        # When the built-in player converts on its own side, the followed Lyrion
-        # must NOT also convert for its MAC (that would be a double conversion):
-        # drop it from the desired set so _push_convert clears its server rule.
-        # The local conversion itself is driven by sync_player in the apply path.
+        # When the built-in player converts to DSD on its own side, the followed
+        # Lyrion must NOT also convert for its MAC (that would be a double
+        # conversion): drop it so _push_convert clears its server rule. The local
+        # conversion itself is driven by sync_player in the apply path.
         if main_n.get('convert_where') == 'player':
             desired_box.pop(main_n['mac'], None)
     box_macs |= {z['mac'] for z in zones if z.get('mac')}
+    # PCM upsampling for every box player (built-in and zones) always runs on the
+    # player's own side (squeezelite soxr), never server-side -- LMS cannot raise
+    # the DAC rate for it anyway. Drop every 'pcm' entry so no upsample rule is
+    # pushed for a box MAC; the player-side -r/-R is set in render_argv. DSD
+    # entries stay. (External players, pushed separately below, keep server-side.)
+    desired_box = {mac: e for mac, e in desired_box.items() if e.get('kind') != 'pcm'}
     _push_convert(_current_lms_host(), box_macs, desired_box)
     try:
         external = sq.load_external(EXTERNAL_CONVERT)
