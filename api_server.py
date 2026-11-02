@@ -2486,6 +2486,9 @@ def _pcm2dsd_info(model, fmt):
             'player_available': sq.player_side_present(),
             'upsample': {'state': sq.upsample_state(model),
                          'modes': list(sq.UPSAMPLE_MODES),
+                         # Player-side: the UI picks an absolute target rate
+                         # (caps), not a x2/x4 multiple. See sq.UPSAMPLE_CAPS.
+                         'caps': list(sq.UPSAMPLE_CAPS),
                          'available': sq.upsample_tools_present()}}
 
 
@@ -2562,7 +2565,7 @@ def _external_info():
                     'available': sq.tools_present()},
             'upsample': {'modes': list(sq.UPSAMPLE_MODES), 'available': sq.upsample_tools_present()},
             'convert': _convert_caps('127.0.0.1'),
-            'caps': [0, 96000, 192000, 384000, 768000]}
+            'caps': list(sq.UPSAMPLE_CAPS)}
 
 
 def get_external_convert():
@@ -2725,6 +2728,7 @@ def get_zones():
             'pcm2dsd': {'modes': modes, 'measured': measured, 'filters': list(sq.PCM2DSD_FILTERS),
                         'available': sq.tools_present(), 'server_local': sq.server_is_local(main['server']),
                         'upsample': {'modes': list(sq.UPSAMPLE_MODES),
+                                     'caps': list(sq.UPSAMPLE_CAPS),
                                      'available': sq.upsample_tools_present()}},
             'choices': {'dsd': list(sq.DSD_MODES)}}
 

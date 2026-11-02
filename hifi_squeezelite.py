@@ -202,6 +202,12 @@ UPSAMPLE_MODES = ('off', 'x2', 'x4', 'max')
 UPSAMPLE_MULT = {'x2': 2, 'x4': 4}
 PCM_FAMILY_BASE = (44100, 48000)
 UPSAMPLE_CEILING = 768000
+# Absolute target rates offered for player-side PCM upsampling (the box's own
+# players, where squeezelite resamples to one fixed `-r` rate and has no
+# per-track source rate to key x2/x4 on). 0 = Auto: climb to the DAC's own
+# ceiling. The list tops at UPSAMPLE_CEILING; player_upsample_rate clamps each
+# choice to what the DAC actually declares.
+UPSAMPLE_CAPS = (0, 96000, 192000, 384000, 768000)
 
 _NAME_RE = re.compile(r'^[A-Za-z0-9_.\-]{1,24}$')
 _HOST_RE = re.compile(r'^[A-Za-z0-9.\-:\[\]]{1,253}$')

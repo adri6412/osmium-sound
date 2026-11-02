@@ -1345,8 +1345,9 @@
     },
     "upsample": {
       "label": "Upsampling",
-      "help": "Every PCM track is resampled to a higher rate of the same family (44.1 or 48 kHz) before it reaches the player: ×2, ×4, or as high as the DAC accepts. Lossless, done while it plays. DSD files and tracks already at the target rate are left as they are.",
-      "active": "On: PCM tracks are upsampled {rate}.",
+      "help": "Every PCM track is resampled to a higher rate before it reaches the player — lossless, done while it plays. Pick the target rate; Auto goes as high as the DAC accepts. DSD files and tracks already at or above the target are left as they are.",
+      "active": "On: PCM tracks are upsampled to {rate}.",
+      "auto": "Auto",
       "max": "Max",
       "why": {
         "noTools": "This device needs a system update before it can upsample.",

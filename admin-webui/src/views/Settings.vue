@@ -2118,6 +2118,7 @@ onUnmounted(() => {
         <div v-if="sq.pcm2dsd" style="margin-top: 18px; padding: 16px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1);">
           <p class="sub">{{ t('settings.pcm2dsd.title') }}</p>
           <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :upsample="sq.conf.upsample"
+                   :upsample-cap="sq.conf.upsample_cap"
                    :state="sq.pcm2dsd.state" :upsample-state="sq.pcm2dsd.upsample.state"
                    :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
         </div>
@@ -2191,6 +2192,7 @@ onUnmounted(() => {
             </span>
             <p class="muted">{{ z.mixers.length ? t('settings.audio.volumeHelp') : t('settings.audio.volumeNoMixer') }}</p>
             <Pcm2Dsd :mode="z.conf.pcm2dsd" :filter="z.conf.pcm2dsd_filter" :upsample="z.conf.upsample"
+                     :upsample-cap="z.conf.upsample_cap"
                      :state="z.pcm2dsd_state" :upsample-state="z.upsample_state"
                      :info="zones.pcm2dsd" :volume="z.conf.volume" :busy="zBusy" zone @set="(p) => zoneSet(z, p)" />
             <button class="danger" style="margin-top: 12px;" :disabled="zBusy" @click="zoneRemove(z)">{{ t('settings.zones.remove') }}</button>

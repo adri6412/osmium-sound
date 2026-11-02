@@ -819,5 +819,55 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(self.api._current_audio_device(), 'hw:CARD=D50s,DEV=0')
 
 
+STREAM_PCM_768 = """Fancy USB DAC at usb-0000:00:14.0-5, super speed : USB Audio
+
+Playback:
+  Status: Stop
+  Interface 1
+    Altset 1
+    Format: S32_LE
+    Channels: 2
+    Rates: 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000
+"""
+
+
+class TestPlayerUpsampleRate(unittest.TestCase):
+    """Player-side upsampling (`squeezelite -r <rate> -R`): squeezelite has one
+    static rate, so the chosen absolute cap wins; 0 (Auto) climbs to the DAC's
+    own ceiling; the DAC's declared max always clamps the result."""
+
+    def setUp(self):
+        self.sb = Sandbox()
+        self.sb.card('X768', STREAM_PCM_768)   # declares PCM up to 768000
+        self.sb.card('D50s', STREAM_NATIVE_BE)  # declares PCM up to 384000
+
+    def rate(self, device, cap):
+        model = {'output': device, 'upsample': 'max', 'upsample_cap': cap}
+        return sq.player_upsample_rate(model, device, proc_asound=self.sb.asound)
+
+    def test_cap_wins_below_dac_ceiling(self):
+        # 768k-capable DAC, user picks 192k → exactly 192k, not the DAC max.
+        self.assertEqual(self.rate('hw:CARD=X768,DEV=0', 192000), 192000)
+
+    def test_auto_climbs_to_dac_ceiling(self):
+        # Auto (cap 0) → the DAC's declared ceiling (768k here).
+        self.assertEqual(self.rate('hw:CARD=X768,DEV=0', 0), 768000)
+
+    def test_dac_max_clamps_a_higher_cap(self):
+        # D50s tops at 384k; asking 768k is clamped down to 384k.
+        self.assertEqual(self.rate('hw:CARD=D50s,DEV=0', 768000), 384000)
+
+    def test_auto_on_d50s_is_384(self):
+        self.assertEqual(self.rate('hw:CARD=D50s,DEV=0', 0), 384000)
+
+    def test_cap_at_or_below_dac_is_honored(self):
+        self.assertEqual(self.rate('hw:CARD=D50s,DEV=0', 96000), 96000)
+        self.assertEqual(self.rate('hw:CARD=D50s,DEV=0', 384000), 384000)
+
+    def test_no_evidence_leaves_it_to_squeezelite(self):
+        # 'default' (unknown rates) and no cap → force nothing (return 0).
+        self.assertEqual(self.rate('default', 0), 0)
+
+
 if __name__ == '__main__':
     unittest.main()

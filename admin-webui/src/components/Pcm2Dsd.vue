@@ -19,7 +19,8 @@ import { useI18n } from '../i18n';
 const props = defineProps({
   mode: { type: String, default: 'off' },        // pcm2dsd: off | dsd64 | dsd128 | dsd256 | dsd512
   filter: { type: String, default: 'clans-8' },
-  upsample: { type: String, default: 'off' },     // off | x2 | x4 | max
+  upsample: { type: String, default: 'off' },     // off | x2 | x4 | max (the on/off flag)
+  upsampleCap: { type: Number, default: 0 },       // box players: absolute target rate, 0 = Auto (DAC max)
   state: { type: String, default: 'off' },        // DSD state: off | active | noTools | dsp | noDsd
   upsampleState: { type: String, default: 'off' },// off | active | noTools | dsp
   info: { type: Object, required: true },         // { modes, measured, filters, available, player_available, upsample:{ modes, available }, [convert:{plugin,dsd,upsample,why}] (external only) }
@@ -55,8 +56,15 @@ const tooSlow = computed(() => props.info.measured && (props.info.modes || []).l
 const dsdWhy = computed(() => (['off', 'active'].includes(props.state) ? '' : t('settings.pcm2dsd.why.' + props.state)));
 
 // ── PCM upsampling sub-panel ────────────────────────────────────────────────
+// A box player (built-in or zone) upsamples on its own squeezelite, which has a
+// single fixed output rate: the user picks an absolute target rate (caps), not a
+// x2/x4 multiple. An external player converts server-side, per track, so it keeps
+// the x2/x4/max modes.
 const pcmLabel = (m) => (m === 'max' ? t('settings.upsample.max') : '×' + m.slice(1));
+const capLabel = (r) => (r ? r / 1000 + ' kHz' : t('settings.upsample.auto'));
 const pcmModes = computed(() => (props.info.upsample.modes || ['off']).filter((m) => m !== 'off'));
+const pcmCaps = computed(() => props.info.upsample.caps || [0, 96000, 192000, 384000, 768000]);
+const pcmActiveRate = computed(() => (props.external ? pcmLabel(props.upsample) : capLabel(props.upsampleCap)));
 const pcmWhy = computed(() => (['off', 'active'].includes(props.upsampleState) ? '' : t('settings.upsample.why.' + props.upsampleState)));
 
 // ── switching the top mode (clears the other conversion; backend also does) ──
@@ -65,7 +73,12 @@ function toOff() {
 }
 function toPcm() {
   if (top.value === 'pcm') return;
-  emit('set', { upsample: props.upsample !== 'off' ? props.upsample : 'x2', pcm2dsd: 'off' });
+  if (props.external) {
+    emit('set', { upsample: props.upsample !== 'off' ? props.upsample : 'x2', pcm2dsd: 'off' });
+  } else {
+    // box player: 'max' is just the on flag; the rate comes from upsample_cap.
+    emit('set', { upsample: 'max', upsample_cap: props.upsampleCap || 0, pcm2dsd: 'off' });
+  }
 }
 function toDsd() {
   if (top.value === 'dsd') return;
@@ -92,13 +105,16 @@ function toDsd() {
       <!-- PCM upsampling -->
       <template v-if="top === 'pcm'">
         <label>{{ t('settings.upsample.label') }}</label>
-        <span class="seg">
+        <span class="seg" v-if="external">
           <button v-for="m in pcmModes" :key="m" :disabled="busy" :class="{ active: upsample === m }" @click="emit('set', { upsample: m })">{{ pcmLabel(m) }}</button>
+        </span>
+        <span class="seg" v-else>
+          <button v-for="r in pcmCaps" :key="r" :disabled="busy" :class="{ active: upsampleCap === r }" @click="emit('set', { upsample: 'max', upsample_cap: r })">{{ capLabel(r) }}</button>
         </span>
         <p class="muted">{{ t('settings.upsample.help') }}</p>
         <p class="msg err" v-if="pcmWhy">{{ pcmWhy }}</p>
-        <p class="muted" v-else-if="external && upsampleState === 'active'">{{ t('settings.convert.extPcm', { rate: pcmLabel(upsample) }) }}</p>
-        <p class="muted" v-else-if="upsampleState === 'active'">{{ t('settings.upsample.active', { rate: pcmLabel(upsample) }) }}</p>
+        <p class="muted" v-else-if="external && upsampleState === 'active'">{{ t('settings.convert.extPcm', { rate: pcmActiveRate }) }}</p>
+        <p class="muted" v-else-if="upsampleState === 'active'">{{ t('settings.upsample.active', { rate: pcmActiveRate }) }}</p>
       </template>
 
       <!-- DSD -->

@@ -1345,8 +1345,9 @@
     },
     "upsample": {
       "label": "Upsampling",
-      "help": "Ogni traccia PCM viene ricampionata a una frequenza più alta della stessa famiglia (44,1 o 48 kHz) prima di arrivare al player: ×2, ×4 o fino al massimo che il DAC accetta. Senza perdita, mentre suona. I file DSD e le tracce già alla frequenza di arrivo restano come sono.",
-      "active": "Attivo: le tracce PCM sono sovracampionate {rate}.",
+      "help": "Ogni traccia PCM viene ricampionata a una frequenza più alta prima di arrivare al player — senza perdita, mentre suona. Scegli la frequenza di destinazione; Auto sale fino al massimo che il DAC accetta. I file DSD e le tracce già pari o superiori alla destinazione restano come sono.",
+      "active": "Attivo: le tracce PCM sono sovracampionate a {rate}.",
+      "auto": "Auto",
       "max": "Max",
       "why": {
         "noTools": "Questo dispositivo ha bisogno di un aggiornamento di sistema prima di poter sovracampionare.",

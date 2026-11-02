@@ -1422,7 +1422,8 @@ Item {
     // rows say why it may not apply, and — for DSD — whether the digital volume
     // still acts on the signal.
     function pcmLabel(m) { return m === "max" ? Tr.t("settings.upsample.max") : "×" + m.slice(1) }
-    function secConvert(mode, filter, upsample, state, ustate, info, volume, zid, external) {
+    function capLabel(r) { return r ? (r / 1000) + " kHz" : Tr.t("settings.upsample.auto") }
+    function secConvert(mode, filter, upsample, state, ustate, info, volume, zid, external, ucap) {
         var pre = zid ? zid + "|" : "", i
         var uinfo = info.upsample || {}
         // A box player (built-in or zone) converts on its own player side, so it
@@ -1450,12 +1451,21 @@ Item {
 
         if (top === "pcm") {
             label("settings.upsample.label", 14)
-            var um = (uinfo.modes || ["off"]).filter(function(m) { return m !== "off" }), umc = []
-            for (i = 0; i < um.length; i++) umc.push(cell(pcmLabel(um[i]), pre + um[i], upsample === um[i], "ups_mode", { hh: 44 }))
-            grid(umc)
+            // External: server-side, per track -> x2/x4/max. Box player: one fixed
+            // squeezelite rate -> an absolute target rate (caps), 0 = Auto.
+            var upc = []
+            if (external) {
+                var um = (uinfo.modes || ["off"]).filter(function(m) { return m !== "off" })
+                for (i = 0; i < um.length; i++) upc.push(cell(pcmLabel(um[i]), pre + um[i], upsample === um[i], "ups_mode", { hh: 44 }))
+            } else {
+                var uc = uinfo.caps || [0, 96000, 192000, 384000, 768000]
+                for (i = 0; i < uc.length; i++) upc.push(cell(capLabel(uc[i]), pre + uc[i], ucap === uc[i], "ups_cap", { hh: 44 }))
+            }
+            grid(upc)
             help("settings.upsample.help", 12)
+            var urate = external ? pcmLabel(upsample) : capLabel(ucap)
             if (ustate !== "off" && ustate !== "active") note(Tr.t("settings.upsample.why." + ustate), "red", "alert-triangle")
-            else if (ustate === "active") helpText(Tr.tf(external ? "settings.convert.extPcm" : "settings.upsample.active", "rate", pcmLabel(upsample)), 12)
+            else if (ustate === "active") helpText(Tr.tf(external ? "settings.convert.extPcm" : "settings.upsample.active", "rate", urate), 12)
         } else if (top === "dsd") {
             var dmodes = (info.modes || ["off"]).filter(function(m) { return m !== "off" })
             if (mode !== "off" && dmodes.indexOf(mode) < 0) dmodes.push(mode)   // chosen earlier, no longer offered
@@ -1506,7 +1516,7 @@ Item {
             else note(Tr.t("settings.audio.volumeNoMixer"), "dark")
             secConvert(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(c.upsample || "off"),
                        String(zn.pcm2dsd_state || "off"), String(zn.upsample_state || "off"),
-                       z.pcm2dsd || {}, String(c.volume || "software"), zn.id, false)
+                       z.pcm2dsd || {}, String(c.volume || "software"), zn.id, false, Number(c.upsample_cap || 0))
             grid([acell(Tr.t("settings.zones.remove"), "zone_remove", "red", { hh: 40, arg: zn.id, icon: "trash-2" })])
             end()
         }
@@ -1554,7 +1564,7 @@ Item {
             secConvert(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(c.upsample || "off"),
                        String(c.pcm2dsd || "off") !== "off" ? "active" : "off",
                        String(c.upsample || "off") !== "off" ? "active" : "off",
-                       cinfo, "hardware", "ext:" + p.mac, true)
+                       cinfo, "hardware", "ext:" + p.mac, true, Number(c.upsample_cap || 0))
             if (on) grid([acell(Tr.t("settings.extPlayers.clear"), "ext_clear", "red", { hh: 40, arg: p.mac, icon: "trash-2" })])
             end()
         }
@@ -1645,7 +1655,7 @@ Item {
             sep()
             secConvert(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(c.upsample || "off"),
                        String(s.pcm2dsd.state || "off"), String((s.pcm2dsd.upsample || {}).state || "off"),
-                       s.pcm2dsd, String(c.volume || "software"), "", false)
+                       s.pcm2dsd, String(c.volume || "software"), "", false, Number(c.upsample_cap || 0))
             sep()
         }
         toggle(Tr.t("settings.audio.alsaBufferLarge"), Tr.t("settings.audio.alsaBufferHelp"), c.alsa_buffer === "large", "sq_abuf")
@@ -2795,7 +2805,12 @@ Item {
             if (ct.v === curTop) return
             var cpatch
             if (ct.v === "off") cpatch = { pcm2dsd: "off", upsample: "off" }
-            else if (ct.v === "pcm") cpatch = { upsample: String(cconf.upsample || "off") !== "off" ? cconf.upsample : "x2", pcm2dsd: "off" }
+            else if (ct.v === "pcm") {
+                // External keeps the x2/x4/max mode; a box player uses 'max' as the
+                // on flag and an absolute upsample_cap rate (0 = Auto).
+                if (ctExt) cpatch = { upsample: String(cconf.upsample || "off") !== "off" ? cconf.upsample : "x2", pcm2dsd: "off" }
+                else cpatch = { upsample: "max", upsample_cap: Number(cconf.upsample_cap || 0), pcm2dsd: "off" }
+            }
             else cpatch = { pcm2dsd: String(cconf.pcm2dsd || "off") !== "off" ? cconf.pcm2dsd : firstDsdMode(ct.zid), upsample: "off" }
             // DSD with the player's own software volume stops it working -- the
             // server streams DSD and the player cannot attenuate it. External
@@ -2811,6 +2826,7 @@ Item {
         case "p2d_mode": { var pm = splitZoneArg(arg); convApply(pm.zid, { pcm2dsd: pm.v, upsample: "off" }); return }
         case "p2d_filter": { var pf = splitZoneArg(arg); convApply(pf.zid, { pcm2dsd_filter: pf.v }); return }
         case "ups_mode": { var um = splitZoneArg(arg); convApply(um.zid, { upsample: um.v, pcm2dsd: "off" }); return }
+        case "ups_cap": { var uca = splitZoneArg(arg); convApply(uca.zid, { upsample: "max", upsample_cap: parseInt(uca.v), pcm2dsd: "off" }); return }
         case "ext_band": { var ebi = Number(arg); extBand = (extBand === ebi) ? -1 : ebi; break }
         case "ext_clear": extRemove(arg); return
         case "ext_refresh": extBusy = true; cfg.loadExt(); return
