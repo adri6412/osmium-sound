@@ -1,0 +1,18 @@
+[Unit]
+Description=Osmium Sound — relax the CD Player plugin's drive status check for USB drives
+ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
+ConditionKernelCommandLine=!boot=live
+ConditionPathExists=!/etc/hifi-player/provisioning-pending
+# Before the server scans its plugins, and after the bundled-plugin ensure job
+# (which (re)asserts our own plugins in the writable tree). Purely local
+# filesystem work on /var: no network ordering needed.
+Before=lyrionmusicserver.service
+After=hifi-lyrion-plugins-ensure.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-cdplayer-tolerate.sh
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

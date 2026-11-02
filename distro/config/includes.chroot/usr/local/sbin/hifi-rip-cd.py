@@ -129,6 +129,19 @@ def run(cmd, timeout):
     return subprocess.CompletedProcess(cmd, rc, out, err)
 
 
+def release_device(device):
+    """Drop any spurious automount of the disc before reading it. A mixed-mode
+    or Enhanced CD's data track can get auto-mounted (udisks on a desktop, a
+    stray mount unit elsewhere), and then cdparanoia fails with "Device or
+    resource busy". Best effort and silent: normally nothing is mounted."""
+    for dev in {device, os.path.realpath(device)}:
+        try:
+            subprocess.run(["umount", dev], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=15)
+        except Exception:
+            pass
+
+
 def extra_tags(pairs):
     """`--tag=` options for (NAME, value) pairs from the plan: Vorbis comment
     names are printable ASCII without '=', and a value never spans lines.
@@ -439,6 +452,7 @@ def main():
             sys.exit(0)
 
     write_status("ripping", 0, total, 0, msg("cdrip.readingToc"))
+    release_device(device)
     toc = read_toc(device)
     drive = hifi_cdrip.drive_info(device)
     cancelled()
