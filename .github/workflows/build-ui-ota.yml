@@ -401,10 +401,22 @@ jobs:
           export HIFI_PAYLOAD_DIR="$PWD/distro/os-update"
           export HIFI_OS_NO_APT=1
           rm -f "$HIFI_PAYLOAD_DIR/REBOOT"
+          # Pass the env THROUGH sudo explicitly: newer runner images reject
+          # `sudo -E` ("preserving the entire environment is not supported"),
+          # which silently dropped HIFI_OS_NO_APT and made the test start
+          # installing packages for real — surfacing bugs the trixie product
+          # never hits. `sudo env VAR=...` works regardless of the sudo policy.
+          SUDO_ENV="HIFI_OS_VERSION=$HIFI_OS_VERSION HIFI_PAYLOAD_DIR=$HIFI_PAYLOAD_DIR HIFI_OS_NO_APT=$HIFI_OS_NO_APT"
           echo "--- first run (applies) ---"
-          sudo -E sh "$HIFI_PAYLOAD_DIR/apply.sh"
+          # shellcheck disable=SC2086
+          sudo env $SUDO_ENV sh "$HIFI_PAYLOAD_DIR/apply.sh"
+          # Clear the marker the first run may legitimately have set: this gate
+          # checks that the SECOND (no-op) run asks for no reboot, so a reboot
+          # the first apply correctly requested must not count against it.
+          sudo rm -f "$HIFI_PAYLOAD_DIR/REBOOT"
           echo "--- second run (must be a clean no-op) ---"
-          OUT2="$(sudo -E sh "$HIFI_PAYLOAD_DIR/apply.sh")"
+          # shellcheck disable=SC2086
+          OUT2="$(sudo env $SUDO_ENV sh "$HIFI_PAYLOAD_DIR/apply.sh")"
           echo "$OUT2"
           echo "$OUT2" | grep -q 'SUMMARY: changed=0 failed=0 ' \
             || { echo "FAIL: second run reported changes/failures (not idempotent)"; exit 1; }
