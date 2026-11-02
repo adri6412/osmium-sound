@@ -2294,7 +2294,7 @@ def _apply_squeezelite_conf(change, msg_key):
     # model on every change, not only when squeezelite's ARGS line changes:
     # a new DSD rate or filter leaves the Loopback ARGS untouched, so no
     # restart fires and ExecStartPre's apply never runs. Idempotent, and a
-    # no-op (stops the unit) whenever convert_where is not 'player'.
+    # no-op (stops the unit) whenever the built-in player does not convert.
     try:
         sq.sync_player(_sq_load())
     except Exception:
@@ -2467,10 +2467,11 @@ def _pcm2dsd_info(model, fmt):
     """What Settings → Audio needs to show the three-mode conversion control
     for one player: the DSD choice (gated on this CPU) and PCM upsampling."""
     modes, measured = _pcm2dsd_modes()
-    # The Lyrion this player follows (local or remote) is what actually
-    # converts, through its Osmium Convert plugin. Its capabilities tell the
-    # UI whether DSD is possible there, and why not (noPlugin / noServerTools).
-    caps = _convert_caps(model['server'])
+    # The built-in player converts on its own side now (PCM upsampling via
+    # squeezelite soxr, PCM → DSD via the Loopback + hifi-pcm2dsd-player), so the
+    # followed Lyrion's Osmium Convert plugin is not consulted here: DSD is gated
+    # on this box's local tools (`available`) and the measured CPU (`modes`), not
+    # on a server plugin. (Only external players still convert server-side.)
     # The top DSD mode the built-in player's own DAC can take (dsd512 = no cap),
     # so the UI can grey out a higher choice: a DAC that stops at DSD256 should
     # not offer DSD512, which would fail track after track.
@@ -2478,10 +2479,10 @@ def _pcm2dsd_info(model, fmt):
     return {'state': sq.pcm2dsd_state(model, fmt), 'modes': modes, 'measured': measured,
             'dac_ceiling': dac_ceiling,
             'filters': list(sq.PCM2DSD_FILTERS), 'available': sq.tools_present(),
-            'server_local': sq.server_is_local(model['server']), 'convert': caps,
-            # Where the conversion runs ('server'|'player') and whether this box
-            # can run it on the player side at all (converter daemon + Loopback).
-            'convert_where': model.get('convert_where', 'server'),
+            'server_local': sq.server_is_local(model['server']),
+            # Whether this box can convert PCM → DSD on the player side at all
+            # (converter daemon + Loopback). PCM → DSD for a player of this box
+            # always runs player-side now, so there is no server/player choice.
             'player_available': sq.player_side_present(),
             'upsample': {'state': sq.upsample_state(model),
                          'modes': list(sq.UPSAMPLE_MODES),
@@ -2673,13 +2674,22 @@ def _zones_ok(code, **kw):
 
 
 def _zones_apply(restart=()):
-    """Push the plugin rules first (a zone that converts to DSD needs its rule
-    on Lyrion before it asks for its first track), then the units."""
+    """Clear the box's plugin rules first (every box player converts player-side
+    now, so none keeps a server rule), then start/stop/restart the units."""
     _convert_resync()
     try:
         sq.sync_zones(ZONES_CONF, restart=restart)
     except Exception:
         log.exception("zones: applying the units failed")
+
+
+def _all_zone_ids():
+    """Every configured zone id -- used to restart them all when adding or
+    removing a zone reindexes the Loopback subdevices (see sq.zone_subdev)."""
+    try:
+        return {z['id'] for z in sq.load_zones(ZONES_CONF)}
+    except Exception:
+        return set()
 
 
 def get_zones():
@@ -2747,7 +2757,11 @@ def zone_add(output, name=''):
     except Exception:
         log.exception("zones: add failed")
         return _zones_fail('zones.saveFailed')
-    _zones_apply(restart={sq.zone_id(output)})
+    # Adding a zone reindexes the Loopback subdevices of the zones that convert
+    # player-side (sq.zone_subdev is an index over all zones sorted by id), so
+    # restart them all, not just the new one, to keep each one's squeezelite
+    # output and its converter instance on the same subdevice.
+    _zones_apply(restart=_all_zone_ids())
     return _zones_ok('zones.added', name=clean)
 
 
@@ -2776,7 +2790,8 @@ def zone_update(zid, changes):
         z = sq.find_zone(zones, zid)
         if z is None:
             raise KeyError(zid)
-        argv['before'] = sq.zone_argv(z, server)
+        sub = sq.zone_subdev(zones, zid)
+        argv['before'] = sq.zone_argv(z, server, p2d_subdev=sub)
         if tunables:
             new = sq.set_fields(z, tunables)
             if new['volume'] == 'hardware' and not new['mixer']:
@@ -2790,7 +2805,7 @@ def zone_update(zid, changes):
             z['name'] = name
         if 'enabled' in changes:
             z['enabled'] = bool(changes['enabled'])
-        argv['after'] = sq.zone_argv(z, server)
+        argv['after'] = sq.zone_argv(z, server, p2d_subdev=sub)
     try:
         sq.update_zones(change, ZONES_CONF)
     except KeyError:
@@ -2819,7 +2834,9 @@ def zone_remove(zid):
     except Exception:
         log.exception("zones: remove failed")
         return _zones_fail('zones.saveFailed')
-    _zones_apply()
+    # Removing a zone reindexes the remaining zones' Loopback subdevices, so
+    # restart the survivors (see zone_add) to keep each converter on its subdev.
+    _zones_apply(restart=_all_zone_ids())
     return _zones_ok('zones.removed')
 
 
@@ -7027,9 +7044,13 @@ def _push_convert(host, macs, desired):
             log.debug("convert: %s on %s failed", mac, host, exc_info=True)
 
 def _convert_resync():
-    """Bring the Osmium Convert plugin(s) in line with the models. The internal
-    player and the zones follow the box's chosen server (`_current_lms_host`,
-    local or remote); the external players follow the local Lyrion."""
+    """Bring the Osmium Convert plugin(s) in line with the models. Every box
+    player -- the internal one and the zones -- converts on its own player side
+    now (PCM upsampling via squeezelite soxr, PCM->DSD via the Loopback +
+    hifi-pcm2dsd-player), so the followed Lyrion (`_current_lms_host`, local or
+    remote) must NOT convert for any box MAC: we clear them all. Only the
+    external players, which follow the local Lyrion, keep server-side plugin
+    conversion."""
     try:
         main = _sq_load()
     except Exception:
@@ -7039,29 +7060,15 @@ def _convert_resync():
         zones = sq.load_zones(ZONES_CONF)
     except Exception:
         zones = []
-    try:
-        desired_box = sq.convert_players(main, zones, external=None)
-    except Exception:
-        log.exception("convert: computing the box players")
-        desired_box = {}
+    # Clear every box MAC server-side: the box never converts on the server now.
+    # (The player-side conversion is driven by sync_player / sync_zone_player in
+    # the apply path and by render_argv's -r/-R and Loopback output.)
     box_macs = set()
     main_n = sq.normalize(main)
     if main_n.get('mac'):
         box_macs.add(main_n['mac'])
-        # When the built-in player converts to DSD on its own side, the followed
-        # Lyrion must NOT also convert for its MAC (that would be a double
-        # conversion): drop it so _push_convert clears its server rule. The local
-        # conversion itself is driven by sync_player in the apply path.
-        if main_n.get('convert_where') == 'player':
-            desired_box.pop(main_n['mac'], None)
     box_macs |= {z['mac'] for z in zones if z.get('mac')}
-    # PCM upsampling for every box player (built-in and zones) always runs on the
-    # player's own side (squeezelite soxr), never server-side -- LMS cannot raise
-    # the DAC rate for it anyway. Drop every 'pcm' entry so no upsample rule is
-    # pushed for a box MAC; the player-side -r/-R is set in render_argv. DSD
-    # entries stay. (External players, pushed separately below, keep server-side.)
-    desired_box = {mac: e for mac, e in desired_box.items() if e.get('kind') != 'pcm'}
-    _push_convert(_current_lms_host(), box_macs, desired_box)
+    _push_convert(_current_lms_host(), box_macs, {})
     try:
         external = sq.load_external(EXTERNAL_CONVERT)
     except Exception:

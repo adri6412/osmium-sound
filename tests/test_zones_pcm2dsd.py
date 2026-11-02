@@ -3,11 +3,14 @@ conversion: hifi_squeezelite.py's model, renderer, zones file and the pure
 rule helpers, the wrapper the Osmium Convert plugin runs (hifi-pcm2dsd.py),
 and api_server.py's /zones and Settings → Audio wiring.
 
-Conversion is driven by the Osmium Convert LMS plugin now: the box sends it
-`osmiumconvert set|clear <mac> ...` over jsonrpc.js on whichever Lyrion the
-player follows, and the plugin writes the rules and reloads the tables with no
-restart. The box no longer writes custom-convert.conf itself, so the API tests
-assert on the plugin commands (a fake `_lms_rpc`) rather than on a rules file.
+Every player of this box -- the built-in one and the zones -- converts on its
+own player side now: PCM upsampling via squeezelite soxr, PCM -> DSD via the
+ALSA Loopback + hifi-pcm2dsd-player. So the box tells whichever Lyrion it
+follows NOT to convert any box MAC: it `osmiumconvert clear <mac>`s them all.
+Only external players (squeezelites elsewhere on the LAN) still convert
+server-side, through the Osmium Convert LMS plugin on this box's own Lyrion
+(`osmiumconvert set|clear <mac> ...` over jsonrpc.js). The API tests assert on
+the plugin commands (a fake `_lms_rpc`) rather than on a rules file.
 
 Hermetic: every file lives in a temporary directory; systemctl, amixer, the
 CPU measurement and the plugin RPC are fakes.
@@ -70,7 +73,11 @@ class ToolsSandbox(Sandbox):
 
 
 class ToolsMixin:
-    PATCHED = ('SOX_NG', 'PCM2DSD_WRAPPER', 'UPSAMPLE_WRAPPER', 'FLAC_BIN', 'PROC_ASOUND', '_systemctl')
+    # Every player of this box converts PCM -> DSD on its own side now, so the
+    # converter daemon (P2D_PLAYER) and the Loopback (SYS_ALOOP) are part of the
+    # baseline the image ships: faked present here like sox_ng and the wrappers.
+    PATCHED = ('SOX_NG', 'PCM2DSD_WRAPPER', 'UPSAMPLE_WRAPPER', 'FLAC_BIN', 'PROC_ASOUND',
+               'P2D_PLAYER', 'SYS_ALOOP', '_systemctl')
 
     def setUp(self):
         self.sb = ToolsSandbox()
@@ -81,6 +88,8 @@ class ToolsMixin:
         sq.SOX_NG, sq.PCM2DSD_WRAPPER, sq.PROC_ASOUND = self.sb.sox, self.sb.wrapper, self.sb.asound
         sq.UPSAMPLE_WRAPPER = self.sb.upsample_wrapper
         sq.FLAC_BIN = self.sb.flac
+        # the converter daemon "is installed" and the Loopback "is loadable"
+        sq.P2D_PLAYER, sq.SYS_ALOOP = self.sb.wrapper, self.sb.dir
         sq._systemctl = lambda *a: self.systemctl.append(a) or subprocess.CompletedProcess(a, 0, '', '')
 
     def tearDown(self):
@@ -122,8 +131,8 @@ class TestModel(ToolsMixin, unittest.TestCase):
         probe = self.sb.probe
         self.assertEqual(sq.pcm2dsd_state(self.model(), 'u32be'), 'off')
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64'), probe('hw:CARD=D50s,DEV=0')), 'active')
-        # a remote server converts server-side too now (its Osmium Convert
-        # plugin), for the built-in player and for a zone alike
+        # the player converts on its own side regardless of which Lyrion it
+        # follows (local or remote), for the built-in player and for a zone alike
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', server='192.168.1.9'), 'u32be'), 'active')
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', server='192.168.1.9'), 'u32be', zone=True),
                          'active')
@@ -135,6 +144,7 @@ class TestModel(ToolsMixin, unittest.TestCase):
         # a USB DAC without native DSD gets DoP: still DSD
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64', output='hw:CARD=Gen,DEV=0'),
                                           probe('hw:CARD=Gen,DEV=0')), 'active')
+        # no sox_ng: the conversion cannot run at all
         os.unlink(self.sb.sox)
         self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd64'), 'u32be'), 'noTools')
 
@@ -148,30 +158,40 @@ class TestModel(ToolsMixin, unittest.TestCase):
         self.assertEqual(sq.upsample_state(self.model(upsample='x4')), 'noTools')
 
     def test_render(self):
+        # PCM -> DSD runs on the player side now: squeezelite plays ordinary PCM
+        # into the Loopback at P2D_RATE (-r <rate> -R) and the converter daemon
+        # makes the DSD for the DAC. No -c dsd, no -D, no DSD stream buffer here.
         args = sq.render(self.model(pcm2dsd='dsd128'), self.sb.probe)
-        self.assertIn('-D :u32be', args)
-        self.assertTrue(args.endswith('-b 16384:8192 -c dsd'), args)
-        self.assertEqual(args.count('-b '), 1)
+        self.assertIn('-o ' + sq.P2D_PLAYBACK, args)
+        self.assertIn(f'-r {sq.P2D_RATE} -R', args)
+        self.assertNotIn('-c dsd', args)
+        self.assertNotIn('-D', args)
+        # a plain stream-buffer request is still honoured; -c dsd never appears
         args = sq.render(self.model(pcm2dsd='dsd128', stream_buffer='large', extra='-W'), self.sb.probe)
-        self.assertEqual(args.count('-b '), 1)
-        self.assertTrue(args.endswith('-c dsd -W'), args)
-        # a remote server converts too now: -c dsd there as well
-        self.assertIn('-c dsd', sq.render(self.model(pcm2dsd='dsd64', server='nas.local'), self.sb.probe))
-        # off: nothing changes
-        self.assertNotIn('-c dsd', sq.render(self.model(), self.sb.probe))
+        self.assertIn('-b ' + sq.STREAM_LARGE, args)
+        self.assertNotIn('-c dsd', args)
+        self.assertTrue(args.endswith('-W'), args)
+        # following a remote server changes nothing: still player-side
+        remote = sq.render(self.model(pcm2dsd='dsd64', server='nas.local'), self.sb.probe)
+        self.assertIn('-o ' + sq.P2D_PLAYBACK, remote)
+        self.assertNotIn('-c dsd', remote)
+        # off: straight to the DAC, no Loopback
+        off = sq.render(self.model(), self.sb.probe)
+        self.assertNotIn('-c dsd', off)
+        self.assertNotIn(sq.P2D_PLAYBACK, off)
         # enabling the conversion forces the DSD mode to auto even if dsd=off was
-        # stored, so the player still passes DSD (-D) and converts (-c dsd)
+        # stored, so the conversion still runs (the player plays into the Loopback)
         forced = sq.render(self.model(pcm2dsd='dsd64', dsd='off'), self.sb.probe)
-        self.assertIn('-c dsd', forced)
-        self.assertIn('-D :u32be', forced)
+        self.assertIn('-o ' + sq.P2D_PLAYBACK, forced)
+        self.assertNotIn('-c dsd', forced)
         # the legacy line is unchanged by the refactor
         self.assertEqual(sq.render(sq.parse_args(LEGACY), lambda d: 'dop'), LEGACY)
 
     def test_render_pcm_upsample_is_player_side(self):
-        # PCM upsampling always runs player-side (squeezelite soxr, -r <rate> -R),
-        # regardless of convert_where. It never advertises PCM to the server
-        # (-c pcm): that server-side path could not raise the DAC rate through
-        # LMS and only ever stalled the VU meters. D50s tops PCM at 384 kHz.
+        # PCM upsampling always runs player-side (squeezelite soxr, -r <rate> -R).
+        # It never advertises PCM to the server (-c pcm): that server-side path
+        # could not raise the DAC rate through LMS and only ever stalled the VU
+        # meters. D50s tops PCM at 384 kHz.
         args = sq.render(self.model(upsample='x4'), self.sb.probe)
         self.assertIn('-r 384000 -R', args)
         self.assertNotIn('-c pcm', args)
@@ -180,90 +200,74 @@ class TestModel(ToolsMixin, unittest.TestCase):
         remote = sq.render(self.model(upsample='max', server='nas.local'), self.sb.probe)
         self.assertIn('-r 384000 -R', remote)
         self.assertNotIn('-c pcm', remote)
-        # convert_where no longer changes anything for PCM upsampling
-        forced = sq.render(self.model(upsample='x4', convert_where='player'), self.sb.probe)
-        self.assertIn('-r 384000 -R', forced)
-        self.assertNotIn('-c pcm', forced)
         # off: nothing changes
         off = sq.render(self.model(), self.sb.probe)
         self.assertNotIn('-c pcm', off)
         self.assertNotIn('-r 384000', off)
-        # DSD conversion owns the rate: -c dsd, no player-side upsample -r
+        # DSD conversion owns the rate and the Loopback: it fixes the rate at
+        # P2D_RATE and there is no separate player-side upsample
         both = sq.render(self.model(pcm2dsd='dsd64', upsample='x4'), self.sb.probe)
-        self.assertIn('-c dsd', both)
+        self.assertIn('-o ' + sq.P2D_PLAYBACK, both)
+        self.assertIn(f'-r {sq.P2D_RATE} -R', both)
         self.assertNotIn('-c pcm', both)
+        self.assertNotIn('-c dsd', both)
         self.assertNotIn('-r 384000 -R', both)
 
 
 class TestPlayerSideConvert(ToolsMixin, unittest.TestCase):
-    """convert_where == 'player': the built-in player converts on its own
-    squeezelite (PCM into the Loopback, hifi-pcm2dsd-player.py to the DAC)
-    instead of letting the followed Lyrion do it."""
-
-    PATCHED = ToolsMixin.PATCHED + ('P2D_PLAYER', 'SYS_ALOOP')
-
-    def setUp(self):
-        super().setUp()
-        # the converter daemon "is installed" and the Loopback "is loadable"
-        sq.P2D_PLAYER, sq.SYS_ALOOP = self.sb.wrapper, self.sb.dir
-
-    def test_normalize_and_set_fields(self):
-        self.assertEqual(sq.normalize({})['convert_where'], 'server')
-        self.assertEqual(sq.normalize({'convert_where': 'PLAYER'})['convert_where'], 'player')
-        self.assertEqual(sq.normalize({'convert_where': 'nonsense'})['convert_where'], 'server')
-        m = sq.set_fields(sq.normalize({}), {'convert_where': 'player'})
-        self.assertEqual(m['convert_where'], 'player')
-        with self.assertRaises(sq.InvalidField):
-            sq.set_fields(sq.normalize({}), {'convert_where': 'cloud'})
+    """PCM -> DSD on the built-in player's own squeezelite: it plays PCM into the
+    Loopback and hifi-pcm2dsd-player.py makes the DSD for the DAC. This is the
+    only PCM -> DSD path for a player of this box now."""
 
     def test_state_gates_on_player_side(self):
         probe = self.sb.probe
         fmt = probe('hw:CARD=D50s,DEV=0')
-        base = self.model(pcm2dsd='dsd128', convert_where='player')
+        base = self.model(pcm2dsd='dsd128')
         self.assertEqual(sq.pcm2dsd_state(base, fmt), 'active')
-        # no converter daemon on this box: the player side cannot run
+        # no converter daemon on this box: the conversion cannot run at all,
+        # for the built-in player and for a zone alike
         sq.P2D_PLAYER = os.path.join(self.sb.dir, 'absent')
         self.assertEqual(sq.pcm2dsd_state(base, fmt), 'noTools')
-        # the server side is unaffected by the missing daemon
-        self.assertEqual(sq.pcm2dsd_state(self.model(pcm2dsd='dsd128'), fmt), 'active')
-        # a zone always converts server-side, so the daemon is irrelevant
-        self.assertEqual(sq.pcm2dsd_state(base, fmt, zone=True), 'active')
+        self.assertEqual(sq.pcm2dsd_state(base, fmt, zone=True), 'noTools')
 
     def test_render_routes_to_loopback(self):
-        args = sq.render(self.model(pcm2dsd='dsd128', convert_where='player'), self.sb.probe)
+        args = sq.render(self.model(pcm2dsd='dsd128'), self.sb.probe)
         self.assertIn('-o ' + sq.P2D_PLAYBACK, args)
         self.assertIn(f'-r {sq.P2D_RATE} -R', args)
         self.assertNotIn('-c dsd', args)   # ordinary PCM, converted here
         self.assertNotIn('-D', args)
-        self.assertNotIn(sq.STREAM_LARGE, args)
-        # server-side (default) still sends DSD and the larger stream buffer
-        srv = sq.render(self.model(pcm2dsd='dsd128'), self.sb.probe)
-        self.assertIn('-c dsd', srv)
-        self.assertIn('-o hw:CARD=D50s,DEV=0', srv)
+        # off: straight to the DAC, not through the Loopback
+        off = sq.render(self.model(), self.sb.probe)
+        self.assertNotIn(sq.P2D_PLAYBACK, off)
+        self.assertIn('-o hw:CARD=D50s,DEV=0', off)
 
     def test_player_conf(self):
         probe = self.sb.probe
         fmt = probe('hw:CARD=D50s,DEV=0')
-        self.assertIsNone(sq.player_conf(self.model(pcm2dsd='dsd128'), fmt))
-        self.assertIsNone(sq.player_conf(self.model(convert_where='player'), fmt))
-        c = sq.player_conf(self.model(pcm2dsd='dsd128', convert_where='player'), fmt)
+        # no conversion asked: nothing for the daemon to do
+        self.assertIsNone(sq.player_conf(self.model(), fmt))
+        c = sq.player_conf(self.model(pcm2dsd='dsd128'), fmt)
         self.assertEqual((c['mode'], c['filter'], c['rate']), ('dsd128', 'clans-8', sq.P2D_RATE))
         self.assertEqual(c['carrier'], fmt)        # D50s declares native DSD
         self.assertEqual(c['dac'], 'hw:CARD=D50s,DEV=0')
+        self.assertEqual(c['capture'], sq.P2D_CAPTURE)
+        # a zone's conf reads its own Loopback subdevice
+        c2 = sq.player_conf(self.model(pcm2dsd='dsd128'), fmt, sub=3)
+        self.assertEqual(c2['capture'], sq.p2d_capture(3))
 
     def test_sync_player_starts_and_stops(self):
         conf = os.path.join(self.sb.dir, 'player.json')
         calls = []
         sc = lambda *a: calls.append(a)
         mp = lambda: calls.append(('modprobe',))
-        # player side on: conf written, the unit started
-        self.assertTrue(sq.sync_player(self.model(pcm2dsd='dsd128', convert_where='player'),
+        # converting: conf written, the unit started
+        self.assertTrue(sq.sync_player(self.model(pcm2dsd='dsd128'),
                                        self.sb.probe, conf, systemctl=sc, modprobe=mp))
         self.assertTrue(os.path.exists(conf))
         self.assertIn(('start', '--no-block', sq.P2D_PLAYER_UNIT), calls)
-        # back to server-side: conf removed, the unit stopped
+        # conversion off: conf removed, the unit stopped
         calls.clear()
-        self.assertFalse(sq.sync_player(self.model(pcm2dsd='dsd128'),
+        self.assertFalse(sq.sync_player(self.model(),
                                         self.sb.probe, conf, systemctl=sc, modprobe=mp))
         self.assertFalse(os.path.exists(conf))
         self.assertIn(('stop', sq.P2D_PLAYER_UNIT), calls)
@@ -310,18 +314,24 @@ class TestZones(ToolsMixin, unittest.TestCase):
     def test_argv(self):
         z = sq.normalize_zone({'output': 'hw:CARD=D50s,DEV=0', 'name': 'Living room', 'mac': MAC,
                                'server': 'ignored', 'pcm2dsd': 'dsd64'})
+        # no subdevice allocated: the zone plays straight to its DAC (no -c dsd,
+        # no Loopback) -- the conversion only runs once a subdevice is given.
         argv = sq.zone_argv(z, '127.0.0.1', self.sb.probe)
         self.assertEqual(argv[0], sq.SQUEEZELITE_BIN)
         self.assertEqual(argv[argv.index('-n') + 1], 'Living room')    # one argument, spaces and all
         self.assertEqual(argv[argv.index('-s') + 1], '127.0.0.1')
         self.assertEqual(argv[argv.index('-m') + 1], MAC)
         self.assertNotIn('-v', argv)                                    # the VU meters are the built-in player's
-        self.assertEqual(argv[-2:], ['-c', 'dsd'])
-        # following another Lyrion: the zone goes there too, and that server
-        # converts for it (its Osmium Convert plugin), so -c dsd stays
-        argv = sq.zone_argv(z, '192.168.1.50', self.sb.probe)
+        self.assertNotIn('-c', argv)
+        self.assertEqual(argv[argv.index('-o') + 1], 'hw:CARD=D50s,DEV=0')
+        # with a subdevice: the zone converts on its own side, playing PCM into
+        # its Loopback subdevice (-r P2D_RATE -R), no -c dsd. The server it
+        # follows does not change this.
+        argv = sq.zone_argv(z, '192.168.1.50', self.sb.probe, p2d_subdev=3)
         self.assertEqual(argv[argv.index('-s') + 1], '192.168.1.50')
-        self.assertEqual(argv[-2:], ['-c', 'dsd'])
+        self.assertEqual(argv[argv.index('-o') + 1], sq.p2d_playback(3))
+        self.assertIn(f'-r {sq.P2D_RATE} -R', ' '.join(argv))
+        self.assertNotIn('-c', argv)
 
     def test_argv_upsample_is_player_side(self):
         # A zone upsamples PCM on its own side too (soxr, -r <rate> -R): every
@@ -487,10 +497,14 @@ class TestApi(unittest.TestCase):
         p('EXTERNAL_CONVERT', self.sb.external)
         self._sq = {k: getattr(sq, k) for k in ('SOX_NG', 'PCM2DSD_WRAPPER', 'UPSAMPLE_WRAPPER',
                                                  'FLAC_BIN', 'PROC_ASOUND', 'MACHINE_ID',
+                                                 'P2D_PLAYER', 'SYS_ALOOP',
                                                  'mixer_controls', '_systemctl', 'running_zone_units')}
         sq.SOX_NG, sq.PCM2DSD_WRAPPER, sq.PROC_ASOUND = self.sb.sox, self.sb.wrapper, self.sb.asound
         sq.UPSAMPLE_WRAPPER = self.sb.upsample_wrapper
         sq.FLAC_BIN = self.sb.flac
+        # the converter daemon "is installed" and the Loopback "is loadable", so
+        # a box player can convert PCM -> DSD on its own side (player_side_present)
+        sq.P2D_PLAYER, sq.SYS_ALOOP = self.sb.wrapper, self.sb.dir
         sq.MACHINE_ID = self.sb.machine_id
         sq.mixer_controls = lambda device, run=None: ['PCM'] if 'D50s' in device else []
         sq._systemctl = lambda *a: self.sq_calls.append(a) or subprocess.CompletedProcess(a, 0, '', '')
@@ -562,25 +576,29 @@ class TestApi(unittest.TestCase):
         r = self.api.set_squeezelite_conf({'pcm2dsd': 'dsd1024'})
         self.assertFalse(r['success'])
         self.assertEqual(r['code'], 'squeezelite.pcm2dsdTooHeavy')
-        # on: the box tells the local plugin to convert this MAC to DSD
+        # on: the box converts PCM -> DSD on its own side -- squeezelite streams
+        # PCM into the Loopback (no `-c dsd`), hifi-pcm2dsd-player emits the DSD
+        # carrier to the DAC -- so the followed Lyrion is told NOT to convert this
+        # MAC (cleared), not to convert it server-side.
         self.rpc.clear()
         r = self.api.set_squeezelite_conf({'pcm2dsd': 'dsd128'})
         self.assertTrue(r['success'], r)
         self.assertEqual(r['pcm2dsd']['state'], 'active')
-        self.assertIn('-c dsd', self.sb.args())
-        self.assertEqual(self.last_for(mac),
-                         ('127.0.0.1', ['osmiumconvert', 'set', mac, 'dsd', 'dsd128', 'clans-8']))
-        # a new filter: another set with the new rule
+        self.assertNotIn('-c dsd', self.sb.args())
+        self.assertIn('-o hw:CARD=Loopback,DEV=0,SUBDEV=0', self.sb.args())
+        self.assertEqual(self.last_for(mac), ('127.0.0.1', ['osmiumconvert', 'clear', mac]))
+        # a new filter: still player-side, still cleared server-side
         self.rpc.clear()
         r = self.api.set_squeezelite_conf({'pcm2dsd_filter': 'sdm-8'})
         self.assertTrue(r['success'], r)
-        self.assertEqual(self.last_for(mac),
-                         ('127.0.0.1', ['osmiumconvert', 'set', mac, 'dsd', 'dsd128', 'sdm-8']))
-        # off: the rule is cleared
+        self.assertEqual(r['conf']['pcm2dsd_filter'], 'sdm-8')
+        self.assertEqual(self.last_for(mac), ('127.0.0.1', ['osmiumconvert', 'clear', mac]))
+        # off: squeezelite feeds the DAC directly again, rule still cleared
         self.rpc.clear()
         r = self.api.set_squeezelite_conf({'pcm2dsd': 'off'})
         self.assertTrue(r['success'], r)
         self.assertNotIn('-c dsd', self.sb.args())
+        self.assertNotIn('-o hw:CARD=Loopback,DEV=0,SUBDEV=0', self.sb.args())
         self.assertEqual(self.last_for(mac), ('127.0.0.1', ['osmiumconvert', 'clear', mac]))
 
     def test_conf_pcm_upsampling(self):
@@ -596,22 +614,27 @@ class TestApi(unittest.TestCase):
         # (squeezelite soxr): no server-side rule is pushed for its MAC, it is
         # cleared instead. (External players keep the server path -- see below.)
         self.assertEqual(self.last_for(mac), ('127.0.0.1', ['osmiumconvert', 'clear', mac]))
-        # DSD and upsampling are mutually exclusive: turning DSD on switches the
-        # rule to a DSD one (DSD stays server-side)
+        # DSD and upsampling are mutually exclusive: turning DSD on drops the
+        # upsampling. DSD also runs player-side now (Loopback + daemon), so the
+        # MAC stays cleared on the server rather than switching to a DSD rule.
         self.rpc.clear()
         r = self.api.set_squeezelite_conf({'pcm2dsd': 'dsd64'})
         self.assertTrue(r['success'], r)
         self.assertEqual(r['conf']['upsample'], 'off')
-        self.assertEqual(self.last_for(mac),
-                         ('127.0.0.1', ['osmiumconvert', 'set', mac, 'dsd', 'dsd64', 'clans-8']))
+        self.assertEqual(self.last_for(mac), ('127.0.0.1', ['osmiumconvert', 'clear', mac]))
         self.rpc.clear()
         r = self.api.set_squeezelite_conf({'upsample': 'off', 'pcm2dsd': 'off'})
         self.assertEqual(self.last_for(mac), ('127.0.0.1', ['osmiumconvert', 'clear', mac]))
 
-    def test_conf_exposes_server_capabilities(self):
+    def test_conf_exposes_player_side_capability(self):
+        # The built-in player converts on its own side, so its conf reports the
+        # local-tools gating -- not a server plugin `convert` capabilities dict,
+        # which only external players carry now.
         g = self.api.get_squeezelite_conf()
-        self.assertEqual(g['pcm2dsd']['convert'],
-                         {'plugin': True, 'dsd': True, 'upsample': True, 'why': None})
+        self.assertNotIn('convert', g['pcm2dsd'])
+        self.assertTrue(g['pcm2dsd']['available'])          # sox_ng + wrapper
+        self.assertTrue(g['pcm2dsd']['player_available'])   # daemon + Loopback
+        self.assertTrue(g['pcm2dsd']['upsample']['available'])
 
     def test_zone_lifecycle(self):
         g = self.api.get_zones()
@@ -630,7 +653,10 @@ class TestApi(unittest.TestCase):
         r2 = self.api.set_audio_device('hw:CARD=Gen,DEV=0')
         self.assertEqual(r2['code'], 'zones.dacInUse')
         zmac = sq.load_zones(self.sb.zones)[0]['mac']
-        # rename + a DSD conversion: the zone unit restarts, the plugin is told
+        # rename + a DSD conversion: the zone unit restarts (its own converter
+        # instance comes up on its Loopback subdevice), and -- since the zone
+        # converts player-side like the built-in player -- its MAC is cleared on
+        # the server, not set to a DSD rule.
         sq.running_zone_units = lambda: {'Gen-0'}
         self.rpc.clear()
         r = self.api.zone_update('Gen-0', {'name': 'Kitchen', 'pcm2dsd': 'dsd64'})
@@ -639,19 +665,15 @@ class TestApi(unittest.TestCase):
         z = r['zones'][0]
         self.assertEqual((z['name'], z['conf']['pcm2dsd'], z['pcm2dsd_state']), ('Kitchen', 'dsd64', 'active'))
         self.assertIn(('restart', '--no-block', 'hifi-zone@Gen-0.service'), self.sq_calls)
-        self.assertEqual(self.last_for(zmac),
-                         ('127.0.0.1', ['osmiumconvert', 'set', zmac, 'dsd', 'dsd64', 'clans-8']))
-        # a new rate: the zone keeps playing (same command line), no restart.
-        # Gen is PCM-only, so DSD reaches it over DoP capped at 176400 Hz =
-        # DSD64: the requested dsd128 is kept in the conf but the pushed rule is
-        # clamped to what the DAC can take (dac_dsd_ceiling).
+        self.assertEqual(self.last_for(zmac), ('127.0.0.1', ['osmiumconvert', 'clear', zmac]))
+        # a new rate kept in the conf; the zone keeps playing (no restart) and
+        # stays cleared on the server.
         self.sq_calls.clear()
         self.rpc.clear()
         r = self.api.zone_update('Gen-0', {'pcm2dsd': 'dsd128'})
         self.assertEqual(r['zones'][0]['conf']['pcm2dsd'], 'dsd128')
         self.assertNotIn(('restart', '--no-block', 'hifi-zone@Gen-0.service'), self.sq_calls)
-        self.assertEqual(self.last_for(zmac),
-                         ('127.0.0.1', ['osmiumconvert', 'set', zmac, 'dsd', 'dsd64', 'clans-8']))
+        self.assertEqual(self.last_for(zmac), ('127.0.0.1', ['osmiumconvert', 'clear', zmac]))
         for bad in ({'nope': 1}, {'pcm2dsd': 'dsd1024'}, {'name': ''}, {'volume': 'hardware'}):
             self.assertFalse(self.api.zone_update('Gen-0', bad)['success'], bad)
         self.assertFalse(self.api.zone_update('Nope-0', {'enabled': False})['success'])
@@ -688,9 +710,10 @@ class TestApi(unittest.TestCase):
         self.api.set_lms_role('local', None)
         self.assertIn(('restart', '--no-block', 'hifi-zone@Gen-0.service'), self.sq_calls)
 
-    def test_follow_remote_clears_rules_on_the_old_server(self):
-        # Moving the player to a remote Lyrion clears the box's rules on the
-        # server it is leaving (127.0.0.1) and resyncs on the new one.
+    def test_follow_remote_clears_rules_on_both_servers(self):
+        # The box converts PCM -> DSD on its own side, so no Lyrion ever converts
+        # for a box MAC. Moving the player to a remote Lyrion clears its rules on
+        # the server it is leaving (127.0.0.1) AND on the new one it follows.
         self.api.set_squeezelite_conf({'pcm2dsd': 'dsd64'})
         mac = self.api._own_player_mac()
         self._patch('_set_local_lyrion_enabled', lambda on: None)
@@ -703,7 +726,7 @@ class TestApi(unittest.TestCase):
         self.assertTrue(r['success'], r)
         cmds = self.convert_cmds()
         self.assertIn(('127.0.0.1', ['osmiumconvert', 'clear', mac]), cmds)
-        self.assertIn(('192.168.1.50', ['osmiumconvert', 'set', mac, 'dsd', 'dsd64', 'clans-8']), cmds)
+        self.assertIn(('192.168.1.50', ['osmiumconvert', 'clear', mac]), cmds)
 
 
 class TestExternalConvert(TestApi):

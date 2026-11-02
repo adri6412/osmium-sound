@@ -2119,7 +2119,7 @@ onUnmounted(() => {
           <p class="sub">{{ t('settings.pcm2dsd.title') }}</p>
           <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :upsample="sq.conf.upsample"
                    :state="sq.pcm2dsd.state" :upsample-state="sq.pcm2dsd.upsample.state"
-                   :info="sq.pcm2dsd" :where="sq.conf.convert_where" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
+                   :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
         </div>
 
         <label>{{ t('settings.audio.alsaBufferLabel') }}</label>

@@ -1,14 +1,18 @@
 <script setup>
-// Server-side conversion for one player — the built-in one (Settings → Audio),
-// a zone (Settings → Audio zones), or an external Lyrion player. This device's
-// Lyrion converts every PCM track on its way to the player; the user picks one
-// of three modes: Off, PCM upsampling (×2 / ×4 / max, within the source's rate
+// PCM conversion for one player — the built-in one (Settings → Audio), a zone
+// (Settings → Audio zones), or an external Lyrion player. The user picks one of
+// three modes: Off, PCM upsampling (×2 / ×4 / max, within the source's rate
 // family), or DSD (64 / 128 / 256 + noise shaping). The two conversions are
 // mutually exclusive (the backend enforces it: DSD wins). See api_server.py
-// _pcm2dsd_info / hifi_squeezelite.{pcm2dsd,upsample}_state. The conversion runs
-// on the Lyrion server this player follows (its Osmium Convert plugin), local or
-// remote alike; `info.convert` says whether that server can convert and why not
-// (noPlugin / noServerTools).
+// _pcm2dsd_info / hifi_squeezelite.{pcm2dsd,upsample}_state.
+//
+// A player of this box (built-in or zone) converts on its OWN player side —
+// squeezelite soxr for PCM upsampling, the Loopback + hifi-pcm2dsd-player for
+// PCM → DSD — so its controls are gated on this box's local tools, not on any
+// server plugin, and `info.convert` is absent. Only an external player (on
+// another Lyrion) still converts server-side through the Osmium Convert plugin;
+// for it `info.convert` says whether that server can convert and why not
+// (noPlugin / noServerTools), and the caps gating below applies.
 import { computed } from 'vue';
 import { useI18n } from '../i18n';
 
@@ -18,10 +22,9 @@ const props = defineProps({
   upsample: { type: String, default: 'off' },     // off | x2 | x4 | max
   state: { type: String, default: 'off' },        // DSD state: off | active | noTools | dsp | noDsd
   upsampleState: { type: String, default: 'off' },// off | active | noTools | dsp
-  info: { type: Object, required: true },         // { modes, measured, filters, available, convert:{plugin,dsd,upsample,why}, convert_where, player_available, upsample:{ modes, available } }
+  info: { type: Object, required: true },         // { modes, measured, filters, available, player_available, upsample:{ modes, available }, [convert:{plugin,dsd,upsample,why}] (external only) }
   zone: { type: Boolean, default: false },
   external: { type: Boolean, default: false },    // an external Lyrion player: no CPU/volume messaging, user's responsibility
-  where: { type: String, default: 'server' },     // built-in player only: server | player
   volume: { type: String, default: 'software' },
   busy: { type: Boolean, default: false },
 });
@@ -30,16 +33,10 @@ const { t } = useI18n();
 
 // ── which of the three top modes is live ─────────────────────────────────
 const top = computed(() => (props.mode !== 'off' ? 'dsd' : props.upsample !== 'off' ? 'pcm' : 'off'));
-// where the conversion runs — the built-in player may run it on its own
-// squeezelite instead of the followed Lyrion. Zones/externals are server-only,
-// and the choice only matters once a conversion is on; player-side needs the
-// converter daemon + Loopback on this box (info.player_available).
-const showWhere = computed(() => !props.zone && !props.external && top.value !== 'off' && !!props.info.player_available);
-function setWhere(w) {
-  if (props.where !== w) emit('set', { convert_where: w });
-}
-// the following server's plugin gates the control: no plugin at all → nothing;
-// plugin without sox_ng → PCM upsampling but no DSD
+// For an external player the following server's plugin gates the control: no
+// plugin at all → nothing; plugin without sox_ng → PCM upsampling but no DSD.
+// A box player (built-in or zone) sends no `info.convert`, so caps is empty and
+// the gating falls through to this box's local tools (info.available).
 const caps = computed(() => props.info.convert || {});
 const noPlugin = computed(() => caps.value.plugin === false);
 const dsdOk = computed(() => !!props.info.available && caps.value.dsd !== false);
@@ -88,16 +85,6 @@ function toDsd() {
         <button v-if="dsdOk && !tooSlow" :disabled="busy" :class="{ active: top === 'dsd' }" @click="toDsd">{{ t('settings.convert.dsd') }}</button>
       </span>
       <p class="muted">{{ t('settings.convert.help') }}</p>
-
-      <!-- built-in player: run the conversion on the followed Lyrion or here -->
-      <template v-if="showWhere">
-        <label>{{ t('settings.convert.whereLabel') }}</label>
-        <span class="seg">
-          <button :disabled="busy" :class="{ active: where === 'server' }" @click="setWhere('server')">{{ t('settings.convert.whereServer') }}</button>
-          <button :disabled="busy" :class="{ active: where === 'player' }" @click="setWhere('player')">{{ t('settings.convert.wherePlayer') }}</button>
-        </span>
-        <p class="muted">{{ where === 'player' ? t('settings.convert.wherePlayerHelp') : t('settings.convert.whereServerHelp') }}</p>
-      </template>
 
       <p class="muted" v-if="dsdOk && tooSlow && top !== 'dsd'">{{ t('settings.pcm2dsd.tooSlow') }}</p>
       <p class="muted" v-else-if="!dsdOk && caps.why === 'noServerTools' && top !== 'dsd'">{{ t('settings.pcm2dsd.why.noServerTools') }}</p>

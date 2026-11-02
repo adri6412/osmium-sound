@@ -235,14 +235,17 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
         'name': model['name'], 'volume': 'hardware' if hardware_volume else 'software',
         'realtime': model['realtime'], 'max_rate': model['max_rate'],
         'dsd': carrier or 'pcm',
+        # A box player (built-in or zone) converts PCM on its own player side now
+        # (squeezelite soxr for upsampling, the Loopback + hifi-pcm2dsd-player for
+        # PCM -> DSD), so the conversion always belongs on the player stage.
         'pcm2dsd': {'state': p2d or 'off', 'mode': model['pcm2dsd'], 'filter': model['pcm2dsd_filter'],
-                    'where': 'player' if (not zone and model['convert_where'] == 'player') else 'server'},
+                    'where': 'player'},
     }
     out['dac'] = card_fn(model['output'])
     out['hw'] = hw
 
-    # The server (the Lyrion this player follows, local or remote) converts
-    # every PCM track to DSD for a player whose model asks for it.
+    # A box player converts every PCM track to DSD on its own side (the Loopback
+    # + hifi-pcm2dsd-player) when its model asks for it.
     converted = False
     if not src_dsd and p2d == 'active':
         converted = True

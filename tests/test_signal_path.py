@@ -168,52 +168,49 @@ class VerdictTest(unittest.TestCase):
         self.assertEqual(r['hw']['kind'], 'pcm')
 
     def test_pcm_to_dsd_is_converted(self):
-        orig = sq.tools_present
-        sq.tools_present = lambda: True
-        try:
-            r = Tree(hw('DSD_U32_BE', 88200)).describe(FLAC_96, main={'pcm2dsd': 'dsd64'})
-        finally:
-            sq.tools_present = orig
-        self.assertEqual(r['verdict'], 'converted')
-        self.assertEqual(r['changes'], ['pcmToDsd'])
-        self.assertEqual(r['player']['pcm2dsd']['state'], 'active')
-
-    def test_pcm_to_dsd_on_a_remote_server(self):
-        # another Lyrion: its Osmium Convert plugin converts server-side, same
-        # as the local server would. The signal path attributes it to Lyrion.
-        orig = sq.tools_present
-        sq.tools_present = lambda: True
-        try:
-            main = {'pcm2dsd': 'dsd64', 'server': '192.168.1.9'}
-            r = Tree(hw('DSD_U32_BE', 88200)).describe(FLAC_96, main=main)
-            self.assertEqual((r['verdict'], r['changes']), ('converted', ['pcmToDsd']))
-            self.assertEqual(r['player']['pcm2dsd']['state'], 'active')
-        finally:
-            sq.tools_present = orig
-
-    def test_pcm_to_dsd_where_defaults_to_server(self):
-        orig = sq.tools_present
-        sq.tools_present = lambda: True
-        try:
-            r = Tree(hw('DSD_U32_BE', 88200)).describe(FLAC_96, main={'pcm2dsd': 'dsd64'})
-        finally:
-            sq.tools_present = orig
-        self.assertEqual(r['player']['pcm2dsd']['where'], 'server')
-
-    def test_pcm_to_dsd_on_the_player_side(self):
-        # the built-in player converts here (convert_where == 'player'): the
-        # signal path attributes it to the player, not Lyrion.
+        # A box player converts PCM -> DSD on its own side now (the Loopback +
+        # hifi-pcm2dsd-player), so pcm2dsd_state needs both sets of tools.
         orig_t, orig_p = sq.tools_present, sq.player_side_present
         sq.tools_present = lambda: True
         sq.player_side_present = lambda: True
         try:
-            main = {'pcm2dsd': 'dsd64', 'convert_where': 'player'}
+            r = Tree(hw('DSD_U32_BE', 88200)).describe(FLAC_96, main={'pcm2dsd': 'dsd64'})
+        finally:
+            sq.tools_present, sq.player_side_present = orig_t, orig_p
+        self.assertEqual(r['verdict'], 'converted')
+        self.assertEqual(r['changes'], ['pcmToDsd'])
+        self.assertEqual(r['player']['pcm2dsd']['state'], 'active')
+        # always attributed to the player stage: the box converts on its own side
+        self.assertEqual(r['player']['pcm2dsd']['where'], 'player')
+
+    def test_pcm_to_dsd_follows_server_but_converts_on_the_player(self):
+        # The player may follow another Lyrion, but PCM -> DSD still runs on the
+        # box's own side: the signal path attributes it to the player, not Lyrion.
+        orig_t, orig_p = sq.tools_present, sq.player_side_present
+        sq.tools_present = lambda: True
+        sq.player_side_present = lambda: True
+        try:
+            main = {'pcm2dsd': 'dsd64', 'server': '192.168.1.9'}
             r = Tree(hw('DSD_U32_BE', 88200)).describe(FLAC_96, main=main)
         finally:
             sq.tools_present, sq.player_side_present = orig_t, orig_p
         self.assertEqual((r['verdict'], r['changes']), ('converted', ['pcmToDsd']))
         self.assertEqual(r['player']['pcm2dsd']['state'], 'active')
         self.assertEqual(r['player']['pcm2dsd']['where'], 'player')
+
+    def test_pcm_to_dsd_without_the_player_side_is_not_active(self):
+        # The tools for a server-side conversion are there, but the converter
+        # daemon / Loopback are not: a box player cannot convert, so it stays
+        # bit-perfect rather than claiming a conversion that cannot run.
+        orig_t, orig_p = sq.tools_present, sq.player_side_present
+        sq.tools_present = lambda: True
+        sq.player_side_present = lambda: False
+        try:
+            r = Tree(hw('DSD_U32_BE', 88200)).describe(FLAC_96, main={'pcm2dsd': 'dsd64'})
+        finally:
+            sq.tools_present, sq.player_side_present = orig_t, orig_p
+        self.assertEqual(r['player']['pcm2dsd']['state'], 'noTools')
+        self.assertNotIn('pcmToDsd', r['changes'])
 
     def test_idle(self):
         r = Tree().describe(FLAC_96)

@@ -1340,11 +1340,6 @@
       "pcm": "Upsampling PCM",
       "dsd": "DSD",
       "help": "Converti ogni traccia PCM mentre arriva al player: alza la frequenza di campionamento (upsampling PCM) oppure trasformala in DSD. Le due cose non possono essere attive insieme.",
-      "whereLabel": "Converti su",
-      "whereServer": "Lyrion",
-      "wherePlayer": "Questo player",
-      "whereServerHelp": "La conversione la fa il Lyrion che questo player segue, e la invia già convertita.",
-      "wherePlayerHelp": "La conversione la fa questo player: Lyrion trasmette la traccia originale e il box la trasforma in DSD qui. Più leggero per la rete e funziona anche con un Lyrion privo degli strumenti di conversione.",
       "extDsd": "Attivo: a questo player arriva tutto come {rate}, se è in grado di riprodurlo.",
       "extPcm": "Attivo: a questo player arriva il PCM sovracampionato {rate}, se è in grado di riprodurlo."
     },

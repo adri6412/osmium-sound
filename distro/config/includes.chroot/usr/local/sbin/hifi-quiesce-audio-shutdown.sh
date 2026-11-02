@@ -37,13 +37,20 @@ set -eu
 python3 /usr/local/sbin/hifi-capture-playback-state.py 2>/dev/null || true
 
 # Whatever feeds the DAC: squeezelite, or CamillaDSP / the player side's PCM
-# to DSD conversion behind the Loopback.
+# to DSD conversion behind the Loopback -- including each audio zone's own
+# squeezelite (hifi-zone@<id>) and its player-side converter instance
+# (hifi-pcm2dsd-player@<id>).
 # --no-block: during a shutdown they already have a stop job queued behind
 # this unit's, and a blocking `systemctl stop` would wait on it -- for this
 # very script to finish -- until TimeoutStopSec. Queued (or merged with the
 # job already there) it runs right after this exits, long before
 # device_shutdown() reaches the DMA controller.
 AUDIO_UNITS="camilladsp.service hifi-pcm2dsd-player.service squeezelite.service"
+# The zone and converter instances come and go, so resolve the active ones now.
+INSTANCES="$(systemctl list-units --plain --no-legend --state=active \
+    'hifi-zone@*.service' 'hifi-pcm2dsd-player@*.service' 2>/dev/null \
+    | awk '{print $1}')"
+AUDIO_UNITS="$AUDIO_UNITS $INSTANCES"
 for unit in $AUDIO_UNITS; do
     if [ "$(systemctl is-active "$unit" 2>/dev/null)" = "active" ]; then
         # shellcheck disable=SC2086

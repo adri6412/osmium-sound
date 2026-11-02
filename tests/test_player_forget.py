@@ -94,7 +94,7 @@ class RunZoneTest(unittest.TestCase):
                 mock.patch.object(sq, 'load_zones', lambda path=None: [zone]), \
                 mock.patch.object(sq, 'load', lambda path=None: (sq.normalize({}), False)), \
                 mock.patch.object(sq, 'card_present', card_present), \
-                mock.patch.object(sq, 'zone_argv', lambda z, server: [sys.executable, '-c', 'import time; time.sleep(30)']), \
+                mock.patch.object(sq, 'zone_argv', lambda z, server, p2d_subdev=None: [sys.executable, '-c', 'import time; time.sleep(30)']), \
                 mock.patch.object(sq, 'PLAYERS_RUN_DIR', run), \
                 mock.patch.object(sq, 'forget_player', lambda s, m: forgotten.append(m) or True), \
                 mock.patch('signal.signal'):
@@ -108,7 +108,7 @@ class RunZoneTest(unittest.TestCase):
                 mock.patch.object(sq, 'load_zones', lambda path=None: [zone]), \
                 mock.patch.object(sq, 'load', lambda path=None: (sq.normalize({}), False)), \
                 mock.patch.object(sq, 'card_present', lambda o: True), \
-                mock.patch.object(sq, 'zone_argv', lambda z, server: [sys.executable, '-c', 'raise SystemExit(3)']), \
+                mock.patch.object(sq, 'zone_argv', lambda z, server, p2d_subdev=None: [sys.executable, '-c', 'raise SystemExit(3)']), \
                 mock.patch.object(sq, 'PLAYERS_RUN_DIR', run), \
                 mock.patch('signal.signal'):
             self.assertEqual(sq.run_zone('D50s-0', poll=0.05), 3)

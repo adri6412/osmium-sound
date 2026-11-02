@@ -585,20 +585,30 @@ def _mtime(path):
 
 
 def main(argv):
-    if len(argv) > 1:
-        print('usage: hifi-pcm2dsd-player.py', file=sys.stderr)
+    if len(argv) > 2:
+        print('usage: hifi-pcm2dsd-player.py [CONF]', file=sys.stderr)
         return 2
+    # No argument: the built-in player (the default conf). A conf path argument
+    # is a zone instance (hifi-pcm2dsd-player@<id>, conf /run/hifi-pcm2dsd/
+    # zone-<id>.json), one per converting zone on its own Loopback subdevice.
+    conf_path = argv[1] if len(argv) == 2 else CONF
+    # The built-in player publishes its DAC-side latency where vu_meter_daemon.py
+    # reads it (/run/hifi-pcm2dsd/latency); a zone keeps its own latency file next
+    # to its conf (zone-<id>.latency), so it never overwrites the built-in one
+    # (the VU meters follow the built-in player only).
+    latency_path = LATENCY if conf_path == CONF else os.path.splitext(conf_path)[0] + '.latency'
+
     def on_term(signum, frame):
         raise SystemExit(0)             # Player.run's `finally` lets go of the DAC
 
     signal.signal(signal.SIGTERM, on_term)
     signal.signal(signal.SIGINT, on_term)
     while True:
-        conf = read_conf()
+        conf = read_conf(conf_path)
         if conf is None:
-            log(f'{CONF}: nothing to do')
+            log(f'{conf_path}: nothing to do')
             return 0
-        if Player(conf).run() != 'reload':
+        if Player(conf, conf_path=conf_path, latency_path=latency_path).run() != 'reload':
             log('the Loopback stopped giving sound')
             return 1
 

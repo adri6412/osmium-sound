@@ -90,10 +90,9 @@ Rectangle {
         var ld = []
         if (has("replaygain")) ld.push({ text: t("replaygain"), tone: "warn" })
         if (has("crossfade")) ld.push({ text: t("crossfade"), tone: "warn" })
-        // PCM to DSD / upsampling runs on the server this player follows (its
-        // Osmium Convert plugin) unless the built-in player converts on its own
-        // squeezelite (pcm2dsd.where === "player"); then it belongs on the
-        // player stage, and is collected here to push there below.
+        // PCM to DSD / upsampling runs on this box's own player side now
+        // (pcm2dsd.where === "player" for every box player), so it belongs on the
+        // player stage: collect it here and push it there below.
         var p2d = r.player ? r.player.pcm2dsd : null
         var convHere = !!(p2d && p2d.where === "player")
         var convDetails = []
@@ -112,7 +111,7 @@ Rectangle {
             return out
         }
         var p = r.player, pd = []
-        // the built-in player converts here when pcm2dsd.where === "player"
+        // a box player converts on its own side (pcm2dsd.where === "player")
         if (convHere) for (var pi = 0; pi < convDetails.length; pi++) pd.push(convDetails[pi])
         if (has("volume")) pd.push({ text: sub(t("volumeDigital"), { n: Player.volume }), tone: "warn" })
         else if (p.volume === "hardware") pd.push({ text: t("volumeDac"), tone: "ok" })

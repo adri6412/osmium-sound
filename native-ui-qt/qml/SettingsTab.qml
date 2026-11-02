@@ -1422,13 +1422,15 @@ Item {
     // rows say why it may not apply, and — for DSD — whether the digital volume
     // still acts on the signal.
     function pcmLabel(m) { return m === "max" ? Tr.t("settings.upsample.max") : "×" + m.slice(1) }
-    function secConvert(mode, filter, upsample, state, ustate, info, volume, zid, external, where) {
+    function secConvert(mode, filter, upsample, state, ustate, info, volume, zid, external) {
         var pre = zid ? zid + "|" : "", i
         var uinfo = info.upsample || {}
-        // The Lyrion this player follows converts, through its Osmium Convert
-        // plugin: its capabilities gate the control. A third-party server with
-        // no plugin cannot convert at all (noPlugin); one with a plain sox but
-        // no sox_ng/sdm can upsample PCM but not make DSD (noServerTools).
+        // A box player (built-in or zone) converts on its own player side, so it
+        // sends no info.convert and the gating falls through to this box's local
+        // tools (info.available). Only an external player still converts on the
+        // Lyrion it follows: that server's plugin caps gate the control -- no
+        // plugin at all cannot convert (noPlugin); a plain sox without sox_ng/sdm
+        // can upsample PCM but not make DSD (noServerTools).
         var caps = info.convert || {}
         var dsdOk = !!info.available && caps.dsd !== false
         var pcmOk = !!uinfo.available && caps.upsample !== false
@@ -1443,17 +1445,6 @@ Item {
         if (dsdOk && !tooSlow) tc.push(cell(Tr.t("settings.convert.dsd"), pre + "dsd", top === "dsd", "conv_top", { hh: 44 }))
         grid(tc)
         help("settings.convert.help", 12)
-        // The built-in player can run the conversion on its own squeezelite
-        // instead of the followed Lyrion. Zones/externals are server-only; the
-        // choice only matters once a conversion is on and this box has the
-        // player-side path (converter daemon + Loopback: info.player_available).
-        if (!zid && !external && top !== "off" && info.player_available) {
-            var cw = where === "player" ? "player" : "server"
-            label("settings.convert.whereLabel", 14)
-            grid([cell(Tr.t("settings.convert.whereServer"), "server", cw === "server", "conv_where", { hh: 44 }),
-                  cell(Tr.t("settings.convert.wherePlayer"), "player", cw === "player", "conv_where", { hh: 44 })])
-            help(cw === "player" ? "settings.convert.wherePlayerHelp" : "settings.convert.whereServerHelp", 12)
-        }
         if (dsdOk && tooSlow && top !== "dsd") note(Tr.t("settings.pcm2dsd.tooSlow"), "dark", "info")
         else if (!dsdOk && caps.why === "noServerTools" && top !== "dsd") note(Tr.t("settings.pcm2dsd.why.noServerTools"), "dark", "info")
 
@@ -1654,7 +1645,7 @@ Item {
             sep()
             secConvert(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(c.upsample || "off"),
                        String(s.pcm2dsd.state || "off"), String((s.pcm2dsd.upsample || {}).state || "off"),
-                       s.pcm2dsd, String(c.volume || "software"), "", false, String(c.convert_where || "server"))
+                       s.pcm2dsd, String(c.volume || "software"), "", false)
             sep()
         }
         toggle(Tr.t("settings.audio.alsaBufferLarge"), Tr.t("settings.audio.alsaBufferHelp"), c.alsa_buffer === "large", "sq_abuf")
@@ -2817,7 +2808,6 @@ Item {
             convApply(ct.zid, cpatch)
             return
         }
-        case "conv_where": { var cw = splitZoneArg(arg); convApply(cw.zid, { convert_where: cw.v }); return }
         case "p2d_mode": { var pm = splitZoneArg(arg); convApply(pm.zid, { pcm2dsd: pm.v, upsample: "off" }); return }
         case "p2d_filter": { var pf = splitZoneArg(arg); convApply(pf.zid, { pcm2dsd_filter: pf.v }); return }
         case "ups_mode": { var um = splitZoneArg(arg); convApply(um.zid, { upsample: um.v, pcm2dsd: "off" }); return }

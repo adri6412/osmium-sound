@@ -1,0 +1,28 @@
+[Unit]
+# PCM to DSD on this device for one audio zone (hifi-pcm2dsd-player.py <conf>):
+# the zone's squeezelite plays into its own Loopback subdevice, this turns what
+# comes out of it into DSD for the zone's DAC. One instance per converting zone,
+# keyed by the zone id (%i); the conf names the Loopback subdevice. Not enabled:
+# hifi_squeezelite.py (sync_zone_player / run_zone) starts it when the zone
+# converts player-side and stops it when it no longer does (conf gone).
+Description=Osmium PCM to DSD (player side) for zone %i
+After=sound.target
+ConditionPathExists=/run/hifi-pcm2dsd/zone-%i.json
+
+[Service]
+Type=simple
+ExecStartPre=-/sbin/modprobe snd-aloop
+ExecStart=/usr/bin/python3 /usr/local/sbin/hifi-pcm2dsd-player.py /run/hifi-pcm2dsd/zone-%i.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+
+# It feeds a DAC: same standing as squeezelite.service (see the comments there
+# on why the cgroup weights are what actually counts).
+Nice=-10
+IOSchedulingClass=realtime
+IOSchedulingPriority=0
+CPUAccounting=yes
+CPUWeight=1000
+ManagedOOMPreference=avoid
+OOMScoreAdjust=-900
