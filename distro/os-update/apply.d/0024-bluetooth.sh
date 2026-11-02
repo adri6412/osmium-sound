@@ -76,8 +76,18 @@ if [ -f /etc/systemd/system/hifi-bt-out.service ]; then
     fi
 fi
 
-# 0009-faster-boot-2.sh blacklists btusb and masks bluetooth.service on every
-# run, which is the right default for a device whose owner never asked for
-# Bluetooth. It is NOT undone here: hifi-bt-out.py unmasks the unit and loads
-# the module itself, but only when the choice is actually on — so a device
-# with Bluetooth off keeps 0009's faster boot exactly as before.
+# ── Keep bluetooth.service off the boot path ─────────────────────────
+# Masked HERE, not in 0009-faster-boot-2.sh, because bluez is installed by this
+# migration (above): on the resolute base the unit does not exist yet when the
+# earlier 0009 runs, so 0009 would skip it on a fresh device and only mask it on
+# the next OTA — a change on the second apply, which trips the idempotency gate.
+# Masking it right after the package lands keeps the second run a clean no-op.
+# This is only about auto-start at boot, which is the right default for a device
+# whose owner never asked for Bluetooth: hifi-bt-out.py unmasks the unit and
+# loads btusb itself when the choice is actually on, so a device with Bluetooth
+# off keeps 0009's faster boot exactly as before. 0009 still blacklists the
+# module. Guarded by is-enabled so a device already masked reports no change.
+state=$(systemctl is-enabled bluetooth.service 2>/dev/null) || state=""
+if [ -n "$state" ] && [ "$state" != "masked" ]; then
+    systemctl mask bluetooth.service >/dev/null 2>&1 && mark_changed "masked bluetooth.service"
+fi

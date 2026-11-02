@@ -42,5 +42,9 @@ mask_unit() {
     fi
 }
 
+# bluetooth.service is masked by 0024-bluetooth.sh, not here: on the resolute
+# base bluez is installed by that later migration, so the unit does not exist
+# yet when this one runs — masking it here would be skipped on a fresh device
+# and only take on the next OTA, breaking the idempotency gate. The btusb/
+# bluetooth module blacklist above still keeps auto-load off the boot path.
 mask_unit networking.service
-mask_unit bluetooth.service
