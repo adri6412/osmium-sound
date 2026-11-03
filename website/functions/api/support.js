@@ -12,8 +12,8 @@
 //   - the .zip, if any, goes to R2 (binding SUPPORT_BUCKET) under support/<id>.zip;
 //   - the fields go to D1 (binding DB, the same osmium-downloads database), table
 //     support_requests (website/analytics/04_support.sql);
-//   - a short notice is emailed to support@osmiumsound.it via Email Routing
-//     (binding SEND_EMAIL), best-effort — if the binding is missing or the send
+//   - a short notice is emailed to support@osmiumsound.it via Resend
+//     (secret RESEND_API_KEY), best-effort — if the key is missing or the send
 //     fails, the report is already stored, so the request still succeeds.
 // No IP address or user-agent is stored, to match the site's aggregate-only
 // analytics.
@@ -23,9 +23,13 @@
 //   - R2 bucket binding SUPPORT_BUCKET → bucket osmium-support
 //       (npx wrangler r2 bucket create osmium-support);
 //   - D1 binding DB → osmium-downloads (already present);
-//   - Email binding SEND_EMAIL (send_email). osmiumsound.it must be onboarded
-//     to Email Sending and support@osmiumsound.it must be a verified
-//     destination. Without this binding the form still works (no email).
+//   - Resend for the notice (keeps the mailbox on Zimbra, no MX change):
+//       verify osmiumsound.it in Resend — its DNS records sit on the "send."
+//       subdomain and on resend._domainkey, so the apex MX (Zimbra) is left
+//       alone — then set the secret RESEND_API_KEY (a sending key scoped to
+//       the domain) on the Pages project. Without it the form still works
+//       (no email). The notice is sent from NOTIFY_FROM; the reporter's address
+//       is the Reply-To and the display name, so a plain reply reaches them.
 
 const MAX_ZIP = 10 * 1024 * 1024;        // 10 MB, matches the client cap
 const MAX_BODY = MAX_ZIP + 256 * 1024;   // zip + room for the text fields
@@ -84,7 +88,7 @@ async function looksLikeZip(file) {
 }
 
 async function notify(env, rec, hasZip) {
-  if (!env.SEND_EMAIL) return false;
+  if (!env.RESEND_API_KEY) return false;
   const line = (k, v) => `${k}: ${v}`;
   const text = [
     line("Reference", rec.id),
@@ -95,21 +99,32 @@ async function notify(env, rec, hasZip) {
     "Problem:",
     rec.problem,
   ].join("\n");
+  // Send from our own domain (NOTIFY_FROM); the reporter's address is the
+  // display name and the Reply-To, so the support inbox reads as if they wrote
+  // and a plain reply reaches them. Resend needs the `from` domain verified.
+  const fromName = rec.email.replace(/["\\\r\n]/g, "");
   try {
-    // Cloudflare refuses a `from` outside an onboarded domain, so the sender
-    // address stays on ours; the reporter's address goes in the display name
-    // and in Reply-To, so the support inbox reads as if they wrote, and a
-    // plain reply reaches them.
-    await env.SEND_EMAIL.send({
-      from: { email: NOTIFY_FROM, name: rec.email },
-      to: NOTIFY_TO,
-      replyTo: rec.email,
-      subject: `Support report ${rec.id} — ${rec.model}`.slice(0, 180),
-      text,
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        from: `"${fromName}" <${NOTIFY_FROM}>`,
+        to: [NOTIFY_TO],
+        reply_to: rec.email,
+        subject: `Support report ${rec.id} — ${rec.model}`.slice(0, 180),
+        text,
+      }),
     });
+    if (!resp.ok) {
+      console.error("support notify:", resp.status, (await resp.text()).slice(0, 200));
+      return false;
+    }
     return true;
   } catch (err) {
-    console.error("support notify:", err?.code || err?.message || err);
+    console.error("support notify:", err?.message || err);
     return false;
   }
 }
