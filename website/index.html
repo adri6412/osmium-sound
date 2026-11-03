@@ -830,6 +830,35 @@
     }
     .alt-contact a { color: var(--accent); text-decoration: none; font-weight: 600; }
     .alt-contact a:hover { text-decoration: underline; }
+    .support-form { text-align: left; display: flex; flex-direction: column; gap: 0.9rem; margin: 0.25rem 0 0; max-width: none; }
+    .support-form .field { display: flex; flex-direction: column; gap: 0.35rem; }
+    .support-form label { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+    .support-form .req { color: var(--accent); font-style: normal; }
+    .support-form .opt { color: var(--muted); font-weight: 400; }
+    .support-form input[type="text"],
+    .support-form input[type="email"],
+    .support-form textarea {
+      width: 100%; box-sizing: border-box; font: inherit; color: var(--text);
+      background: var(--bg-card2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 0.6rem 0.75rem;
+    }
+    .support-form textarea { resize: vertical; min-height: 120px; }
+    .support-form input:focus, .support-form textarea:focus {
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(245,184,32,0.2);
+    }
+    .support-form input[type="file"] { font-size: 0.85rem; color: var(--muted); }
+    .support-form input[type="file"]::file-selector-button {
+      font: inherit; font-weight: 600; margin-right: 0.6rem; padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card);
+      color: var(--text); cursor: pointer;
+    }
+    .support-form .hint { color: var(--muted); font-size: 0.78rem; }
+    .support-form .btn-primary { align-self: flex-start; margin-top: 0.25rem; }
+    .support-form .btn-primary[disabled] { opacity: 0.6; cursor: default; }
+    .support-form .hp { position: absolute !important; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    .sf-msg { margin: 0.4rem 0 0; font-size: 0.9rem; font-weight: 600; }
+    .sf-msg.ok { color: #35c26b; }
+    .sf-msg.err { color: #ff6b6b; }
     @media (max-width: 760px) { .quickstart { grid-template-columns: 1fr; } }
     .code-block {
       background: #060606;
@@ -1759,12 +1788,37 @@
   <div class="support-grid">
     <div class="manual-card">
       <div class="manual-icon">✉️</div>
-      <h2 data-en="Need help? Email support" data-it="Serve aiuto? Scrivi al supporto">Need help? Email support</h2>
-      <p data-en="Write to &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt;. Say what happened, what you expected, and the details that save a round of questions: the version and update channel, whether the device runs with a screen, headless or server-only, and the exact message you saw." data-it="Scrivi a &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt;. Racconta cosa è successo, cosa ti aspettavi e i dettagli che fanno risparmiare un giro di domande: versione e canale di aggiornamento, se l'apparecchio è con schermo, headless o solo server, e il messaggio esatto che hai visto.">Write to <strong>support@osmiumsound.it</strong>. Say what happened, what you expected, and the details that save a round of questions: the version and update channel, whether the device runs with a screen, headless or server-only, and the exact message you saw.</p>
-      <a class="btn-primary" href="mailto:support@osmiumsound.it">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" fill="none"/><path d="M22 6 12 13 2 6"/><path d="M2 6h20v12H2z"/></svg>
-        <span data-en="Email support@osmiumsound.it" data-it="Scrivi a support@osmiumsound.it">Email support@osmiumsound.it</span>
-      </a>
+      <h2 data-en="Need help? Send a report" data-it="Serve aiuto? Invia una segnalazione">Need help? Send a report</h2>
+      <p data-en="Tell us what happens and on which machine. The more precise the model and the description, the fewer round-trips before a fix." data-it="Raccontaci cosa succede e su quale macchina. Più sono precisi il modello e la descrizione, meno giri di domande servono prima di risolvere.">Tell us what happens and on which machine. The more precise the model and the description, the fewer round-trips before a fix.</p>
+      <form id="supportForm" class="support-form" novalidate>
+        <div class="field">
+          <label for="sfModel"><span data-en="PC model" data-it="Modello del PC">PC model</span> <em class="req" title="required">*</em></label>
+          <input type="text" id="sfModel" name="model" required maxlength="120" autocomplete="off"
+                 data-ph-en="e.g. Dell OptiPlex 7050" data-ph-it="es. Dell OptiPlex 7050" placeholder="e.g. Dell OptiPlex 7050">
+        </div>
+        <div class="field">
+          <label for="sfProblem"><span data-en="What's wrong" data-it="Qual è il problema">What's wrong</span> <em class="req" title="required">*</em></label>
+          <textarea id="sfProblem" name="problem" required maxlength="4000" rows="5"
+                    data-ph-en="What happened, what you expected, the exact message, the version and update channel…" data-ph-it="Cosa è successo, cosa ti aspettavi, il messaggio esatto, la versione e il canale di aggiornamento…" placeholder="What happened, what you expected, the exact message, the version and update channel…"></textarea>
+        </div>
+        <div class="field">
+          <label for="sfEmail"><span data-en="Your email" data-it="La tua email">Your email</span> <em class="req" title="required">*</em></label>
+          <input type="email" id="sfEmail" name="email" required maxlength="200" autocomplete="email"
+                 data-ph-en="you@example.com — this is where we reply" data-ph-it="tu@esempio.it — qui ti rispondiamo" placeholder="you@example.com — this is where we reply">
+        </div>
+        <div class="field">
+          <label for="sfFile"><span data-en="Support bundle (.zip)" data-it="Archivio di supporto (.zip)">Support bundle (.zip)</span> <span class="opt" data-en="(optional)" data-it="(facoltativo)">(optional)</span></label>
+          <input type="file" id="sfFile" name="file" accept=".zip,application/zip,application/x-zip-compressed">
+          <small class="hint" data-en="A diagnostics .zip from the device, up to 10 MB." data-it="Un .zip di diagnostica dell'apparecchio, fino a 10 MB.">A diagnostics .zip from the device, up to 10 MB.</small>
+        </div>
+        <!-- honeypot: off-screen, real people leave it empty -->
+        <div class="hp" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+        <button type="submit" class="btn-primary" id="sfSubmit">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg>
+          <span data-en="Send the report" data-it="Invia la segnalazione">Send the report</span>
+        </button>
+        <p class="sf-msg" id="sfMsg" role="status" aria-live="polite" hidden></p>
+      </form>
       <p class="alt-contact" data-en="Not a bug or a request to track? For general enquiries write to &lt;a href=&quot;mailto:info@osmiumsound.it&quot;&gt;info@osmiumsound.it&lt;/a&gt; instead." data-it="Non &egrave; un problema da segnalare? Per comunicazioni generiche scrivi invece a &lt;a href=&quot;mailto:info@osmiumsound.it&quot;&gt;info@osmiumsound.it&lt;/a&gt;.">Not a bug or a request to track? For general enquiries write to <a href="mailto:info@osmiumsound.it">info@osmiumsound.it</a> instead.</p>
     </div>
     <div class="manual-card">
@@ -1868,6 +1922,8 @@
     const suffix = lang === 'it' ? 'It' : 'En';
     document.querySelectorAll('[data-src-en]').forEach(el => { el.src = el.dataset['src' + suffix]; });
     document.querySelectorAll('[data-href-en]').forEach(el => { el.href = el.dataset['href' + suffix]; });
+    // Placeholders: applyLang only touches innerHTML, so translate them here.
+    document.querySelectorAll('[data-ph-en]').forEach(el => { el.placeholder = el.dataset['ph' + suffix]; });
     document.querySelectorAll('.lang-switch button').forEach(b => {
       b.classList.toggle('active', b.dataset.lang === lang);
     });
@@ -2220,6 +2276,74 @@
   const wrap = document.querySelector('.carousel-wrap');
   wrap.addEventListener('mouseenter', stopAuto);
   wrap.addEventListener('mouseleave', startAuto);
+
+  // Support form: POST the report to /api/support (functions/api/support.js).
+  // The PC model and the description are required; the .zip is optional and
+  // capped at 10 MB client-side so an oversized file is caught before upload.
+  (function () {
+    const form = document.getElementById('supportForm');
+    if (!form) return;
+    const btn = document.getElementById('sfSubmit');
+    const msg = document.getElementById('sfMsg');
+    const fileInput = document.getElementById('sfFile');
+    const MAX_ZIP = 10 * 1024 * 1024;
+
+    function say(kind, en, it) {
+      msg.className = 'sf-msg ' + kind;
+      msg.dataset.en = en;
+      msg.dataset.it = it;
+      msg.innerHTML = (lang === 'it') ? it : en;
+      msg.hidden = false;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const model = form.model.value.trim();
+      const problem = form.problem.value.trim();
+      const email = form.email.value.trim();
+      if (!model || !problem || !email) {
+        say('err', 'Please fill in the PC model, the description and your email.',
+                   'Compila il modello del PC, la descrizione e la tua email.');
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        say('err', 'That email address doesn’t look right.',
+                   'L’indirizzo email non sembra valido.');
+        return;
+      }
+      const file = fileInput.files[0];
+      if (file && (!/\.zip$/i.test(file.name) || file.size > MAX_ZIP)) {
+        say('err', 'The attachment must be a .zip of at most 10 MB.',
+                   'L’allegato deve essere un .zip di massimo 10 MB.');
+        return;
+      }
+
+      btn.disabled = true;
+      say('', 'Sending…', 'Invio in corso…');
+      try {
+        const res = await fetch('/api/support', { method: 'POST', body: new FormData(form) });
+        let data = {};
+        try { data = await res.json(); } catch (_) {}
+        if (res.ok && data.ok) {
+          form.reset();
+          const ref = data.id ? ' (' + data.id + ')' : '';
+          say('ok', 'Thanks — your report has reached us' + ref + '. We’ll be in touch if you left an email.',
+                    'Grazie — la tua segnalazione ci è arrivata' + ref + '. Ti scriveremo se hai lasciato un’email.');
+        } else if (res.status === 413) {
+          say('err', 'The attachment is too large (max 10 MB).',
+                     'L’allegato è troppo grande (max 10 MB).');
+        } else {
+          say('err', 'Something went wrong. Please try again, or email support@osmiumsound.it.',
+                     'Qualcosa è andato storto. Riprova, oppure scrivi a support@osmiumsound.it.');
+        }
+      } catch (_) {
+        say('err', 'Could not send. Check your connection and try again.',
+                   'Invio non riuscito. Controlla la connessione e riprova.');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  })();
 </script>
 </body>
 </html>
