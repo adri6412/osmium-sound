@@ -1139,6 +1139,7 @@ Item {
         var cur = I18n.lang
         var r = option("English", "", "en", cur === "en", "lang"); r.hh = 52; r.icon = "check"
         r = option("Italiano", "", "it", cur === "it", "lang"); r.hh = 52; r.icon = "check"
+        r = option("Deutsch", "", "de", cur === "de", "lang"); r.hh = 52; r.icon = "check"
     }
     // Every folder is picked in FolderChooser.qml (the File page's look): the
     // row here only opens it, with what to do with the folder decided by

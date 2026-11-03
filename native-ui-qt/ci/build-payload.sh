@@ -72,7 +72,7 @@ done
 cp native-ui-qt/assets/ledbar/*.png "$QT/assets/"
 test -s "$QT/assets/led-bar-base.png" || { echo "::error::status plate artwork missing"; exit 1; }
 # (no start clip any more: the screen opens on the interface itself)
-cp src/i18n/locales/en.json src/i18n/locales/it.json "$QT/locales/"
+cp src/i18n/locales/en.json src/i18n/locales/it.json src/i18n/locales/de.json "$QT/locales/"
 # le note di terze parti sono un array JS: lo stesso elenco che
 # Settings.jsx rende in Electron, riusato senza duplicarlo
 QT="$QT" node -e '
