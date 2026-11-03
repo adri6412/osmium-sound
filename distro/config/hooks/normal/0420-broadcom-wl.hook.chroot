@@ -1,5 +1,6 @@
 #!/bin/sh
-# HiFi Player appliance — Broadcom BCM4360/BCM4352 Wi-Fi (802.11ac).
+# HiFi Player appliance — Broadcom Wi-Fi chips with no in-kernel driver
+# (BCM4360/4352/4350 802.11ac, BCM43142 802.11n).
 #
 # No in-kernel driver handles these chips (b43 has no AC PHY, brcmfmac does not
 # cover them): the only one is Broadcom's proprietary `wl`, shipped by Debian as
@@ -23,8 +24,12 @@
 # no UEFI Secure Boot, so this only matters for PCIe cards in a PC.
 set -e
 
-# 14e4:43a0 BCM4360, 14e4:43a1 / 43a2 BCM4360 variants, 14e4:43b1 BCM4352
-WL_IDS="0x43a0|0x43a1|0x43a2|0x43b1"
+# Broadcom chips with NO usable in-kernel driver (only broadcom-sta/wl drives
+# them), so binding wl here cannot steal a card the kernel handles by itself:
+#   14e4:43a0 BCM4360, 14e4:43a1 / 43a2 BCM4360 variants, 14e4:43b1 BCM4352,
+#   14e4:43a3 BCM4350 (802.11ac), 14e4:4365 BCM43142 (802.11n, common on
+#   2013-2015 Asus/Dell/HP laptops — brcmsmac does not support it).
+WL_IDS="0x43a0|0x43a1|0x43a2|0x43b1|0x43a3|0x4365"
 
 KVERS=$(ls /lib/modules)
 [ -n "$KVERS" ] || { echo "E: [hifi] no kernel in /lib/modules" >&2; exit 1; }
@@ -70,7 +75,7 @@ rm -rf "$keep"
 
 cat > /etc/modprobe.d/hifi-broadcom-wl.conf <<'EOF'
 # Osmium Sound — the proprietary Broadcom `wl` driver loads ONLY for the
-# BCM4360/BCM4352 IDs listed in /etc/udev/rules.d/70-hifi-broadcom-wl.rules.
+# PCI IDs listed in /etc/udev/rules.d/70-hifi-broadcom-wl.rules.
 # Its alias table claims every Broadcom wireless chip, so without this it
 # would race brcmsmac/brcmfmac/b43 on the cards the kernel drives by itself.
 # (A blacklist only stops alias autoloading; `modprobe wl` by name still works.)
@@ -78,7 +83,7 @@ blacklist wl
 EOF
 
 cat > /etc/udev/rules.d/70-hifi-broadcom-wl.rules <<EOF
-# Osmium Sound — Broadcom 802.11ac chips with no in-kernel driver: bind them to
+# Osmium Sound — Broadcom chips with no in-kernel driver: bind them to
 # the proprietary wl (built into the image by hook 0420-broadcom-wl).
 # driver_override is set before 80-drivers.rules loads bcma, which would
 # otherwise claim 14e4:43b1 and keep wl from binding.
