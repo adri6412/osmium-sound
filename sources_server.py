@@ -1293,7 +1293,10 @@ def _samba_share_block(share, path, group):
 
 def regen_samba_shares():
     """Rewrite the included shares file and start/stop smbd accordingly."""
-    disks = _adopted_disk_sources()
+    # `shared: false` opts an adopted disk out of SMB while it stays a normal,
+    # mounted music source (and CD-rip destination). The key is absent on every
+    # source adopted before this existed, so the default is unchanged: shared.
+    disks = [s for s in _adopted_disk_sources() if s.get("shared") is not False]
     group = _share_group_name()
     lines = []
     seen = set()
@@ -6501,6 +6504,8 @@ def api_list():
         elif t in ("internal", "usb"):
             item["mounted"] = _mount_depth(s.get("mountpoint", ""), table) > 0
             item["share"] = s.get("share")
+            # Absent means shared (disks adopted before the opt-out existed).
+            item["shared"] = s.get("shared") is not False
         else:
             item["exists"] = bool(_fs_probe(os.path.isdir, s.get("path", ""), False, table))
         if item.get("mounted") or item.get("exists"):
@@ -7258,6 +7263,34 @@ def api_set_smb_rw(sid):
     return jsonify({"success": True, "message": _m("msg.rebootRequired")})
 
 
+@app.route("/api/sources/<sid>/share", methods=["POST"])
+def api_set_disk_share(sid):
+    """Turn the SMB network share of an adopted internal/USB disk on or off.
+    The disk stays mounted as a local music source (and CD-rip destination)
+    either way; only its Samba export changes. Unlike the CIFS read-write flag
+    this is live: adding or dropping a share section and reloading smbd needs
+    no reboot. `shared: false` is persisted and honoured by
+    regen_samba_shares(); its absence means shared, so disks adopted before
+    this feature keep their share."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    shared = bool(data.get("shared"))
+    with _lock:
+        state = load_state()
+        src = next((s for s in state["sources"]
+                    if s.get("id") == sid and s.get("type") in ("internal", "usb")), None)
+        if not src:
+            return _err("msg.sourceNotFound", 404)
+        if (src.get("shared") is not False) == shared:
+            return jsonify({"success": True, "message": _m("msg.noChange")})
+        src["shared"] = shared
+        save_state(state)
+        regen_samba_shares()
+    return jsonify({"success": True, "shared": shared})
+
+
 @app.route("/api/sources/<sid>/subpath", methods=["POST"])
 def api_set_subpath(sid):
     """Set (or clear, with an empty subpath) the subfolder under a
@@ -7445,6 +7478,10 @@ def api_internal_adopt():
         return denied
     data = request.get_json(silent=True) or {}
     device = (data.get("device") or "").strip()
+    # Share over SMB by default (unchanged behaviour); `shared: false` adopts
+    # the disk as a plain local music source without a network share.
+    shared = data.get("shared")
+    shared = True if shared is None else bool(shared)
     if not _path_ok(device):
         return _err("msg.badDevice", 400)
 
@@ -7495,6 +7532,7 @@ def api_internal_adopt():
         "model": model,
         "mountpoint": mountpoint,
         "share": share,
+        "shared": shared,
     }
     ok, msg = mount_internal(src)
     if not ok:
@@ -7510,7 +7548,8 @@ def api_internal_adopt():
     # lyrionmusicserver, which would cut off whatever is playing — exactly
     # what adopting a second disk should not do.
     _lyrion_push_live(add_paths=[src["mountpoint"]])
-    return jsonify({"success": True, "source_id": src["id"], "share": share})
+    return jsonify({"success": True, "source_id": src["id"], "share": share,
+                    "shared": shared})
 
 
 def _adopt_usb_partition(part):
@@ -8672,6 +8711,8 @@ def api_internal_smb():
             pass
     shares = []
     for s in _adopted_disk_sources():
+        if s.get("shared") is False:
+            continue
         shares.append({
             "name": s.get("share") or "Musica",
             "mountpoint": s.get("mountpoint") or s.get("path"),
