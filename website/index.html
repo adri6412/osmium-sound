@@ -826,9 +826,12 @@
     .manual-card p { color: var(--muted); font-size: 0.95rem; max-width: 480px; margin: 0 auto 1.5rem; line-height: 1.65; }
     .support-grid .manual-card p { flex-grow: 1; }
     .support-grid .manual-card p.alt-contact {
-      flex-grow: 0; margin: 1.1rem auto 0; font-size: 0.85rem; line-height: 1.5;
+      flex-grow: 0; margin: 1.25rem auto 0; font-size: 0.95rem; line-height: 1.55;
+      max-width: none; color: var(--text); font-weight: 500;
+      background: rgba(245,184,32,0.1); border: 1px solid rgba(245,184,32,0.4);
+      border-radius: var(--radius); padding: 0.85rem 1.1rem;
     }
-    .alt-contact a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .alt-contact a { color: var(--accent); text-decoration: underline; font-weight: 700; }
     .alt-contact a:hover { text-decoration: underline; }
     .support-form { text-align: left; display: flex; flex-direction: column; gap: 0.9rem; margin: 0.25rem 0 0; max-width: none; }
     .support-form .field { display: flex; flex-direction: column; gap: 0.35rem; }
