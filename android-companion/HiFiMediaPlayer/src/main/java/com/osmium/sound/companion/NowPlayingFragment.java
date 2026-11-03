@@ -1101,6 +1101,18 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
         topBarSearch.input.initialText = initialText;
     }
 
+    /**
+     * Opens the same global / My-Music search the top-bar magnifier opens, so the kiosk shell's
+     * search FAB and the classic toolbar share one entry point. Returns {@code false} when the
+     * server has not yet advertised a search home-menu item (nothing to open yet).
+     */
+    public boolean launchTopBarSearch() {
+        if (topBarSearch == null) return false;
+        setTopBarSearchDefaultText("");
+        JiveItemListActivity.show(mActivity, topBarSearch, topBarSearch.goAction);
+        return true;
+    }
+
     public void startVisibleConnection(boolean autoConnect) {
         Log.v(TAG, "startVisibleConnection");
 

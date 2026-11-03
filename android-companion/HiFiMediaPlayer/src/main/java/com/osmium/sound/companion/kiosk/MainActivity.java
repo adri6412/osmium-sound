@@ -26,14 +26,17 @@ import android.view.View;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.tabs.TabLayout;
 
+import com.osmium.sound.companion.NowPlayingFragment;
 import com.osmium.sound.companion.R;
 import com.osmium.sound.companion.SettingsActivity;
 import com.osmium.sound.companion.framework.BaseActivity;
@@ -71,6 +74,8 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
     private TabLayout tabs;
     private HorizontalScrollView breadcrumbScroll;
     private LinearLayout breadcrumb;
+    /** Gold search shortcut, shown only while the Music section is active. */
+    private FloatingActionButton searchFab;
     /** The last music-section tab (Music, Radio or Apps) the user chose; Settings never becomes it. */
     private int activeTab = TAB_MUSIC;
     /** Guards programmatic tab selection so it does not re-trigger a launch. */
@@ -124,10 +129,29 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
             }
         });
 
+        searchFab = findViewById(R.id.kiosk_search_fab);
+        searchFab.setOnClickListener(v -> launchSearch());
+
         getSupportFragmentManager().addOnBackStackChangedListener(this::rebuildBreadcrumb);
 
         if (savedInstanceState == null) showMusic();
         rebuildBreadcrumb();
+        updateSearchFab();
+    }
+
+    /** The search FAB belongs to the Music section only; Radio, Apps and Settings hide it. */
+    private void updateSearchFab() {
+        if (searchFab != null) searchFab.setVisibility(activeTab == TAB_MUSIC ? View.VISIBLE : View.GONE);
+    }
+
+    /**
+     * Opens search through the persistent mini player, which already resolves the server's
+     * global / My-Music search item (the same one the classic top-bar magnifier uses).
+     */
+    private void launchSearch() {
+        Fragment miniPlayer = getSupportFragmentManager().findFragmentById(R.id.now_playing_fragment);
+        if (miniPlayer instanceof NowPlayingFragment np && np.launchTopBarSearch()) return;
+        Toast.makeText(this, R.string.kiosk_search, Toast.LENGTH_SHORT).show();
     }
 
     @Override
@@ -139,6 +163,7 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
             selectMusicTab();
             showMusic();
         }
+        updateSearchFab();
     }
 
     private void onTab(int position) {
@@ -146,6 +171,7 @@ public class MainActivity extends BaseActivity implements JiveItemNavigator {
             case TAB_MUSIC, TAB_RADIO, TAB_APPS -> {
                 activeTab = position;
                 showTabRoot(position);
+                updateSearchFab();
             }
             case TAB_SETTINGS -> startActivity(new Intent(this, SettingsActivity.class));
         }
