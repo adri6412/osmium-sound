@@ -499,7 +499,8 @@ Item {
             })
             get(api("/squeezelite_conf"), function(d) {
                 sq = { loaded: !!d.conf, conf: d.conf || {}, args: String(d.args || ""), dsd_detected: String(d.dsd_detected || "dop"),
-                       mixers: d.mixers || [], choices: d.choices || {}, pcm2dsd: d.pcm2dsd || {} }
+                       mixers: d.mixers || [], switches: d.switches || [], output_rate: Number(d.output_rate || 0),
+                       choices: d.choices || {}, pcm2dsd: d.pcm2dsd || {} }
             })
             get(api("/system_tweaks"), function(d) {
                 tweaks = { loaded: !!d.conf, conf: d.conf || {}, governors_available: d.governors_available || [],
@@ -1424,6 +1425,10 @@ Item {
     // still acts on the signal.
     function pcmLabel(m) { return m === "max" ? Tr.t("settings.upsample.max") : "×" + m.slice(1) }
     function capLabel(r) { return r ? (r / 1000) + " kHz" : Tr.t("settings.upsample.auto") }
+    // On the button a cap reads "≤ 768 kHz": the ≤ says at a glance it is a
+    // ceiling, not the literal rate (the synchronous rate lands on the track's
+    // 2^n family — 768 -> 705.6k for 44.1k material). Auto stays plain.
+    function capBtn(r) { return r ? "≤ " + (r / 1000) + " kHz" : Tr.t("settings.upsample.auto") }
     function secConvert(mode, filter, upsample, state, ustate, info, volume, zid, external, ucap) {
         var pre = zid ? zid + "|" : "", i
         var uinfo = info.upsample || {}
@@ -1460,13 +1465,22 @@ Item {
                 for (i = 0; i < um.length; i++) upc.push(cell(pcmLabel(um[i]), pre + um[i], upsample === um[i], "ups_mode", { hh: 44 }))
             } else {
                 var uc = uinfo.caps || [0, 96000, 192000, 384000, 768000]
-                for (i = 0; i < uc.length; i++) upc.push(cell(capLabel(uc[i]), pre + uc[i], ucap === uc[i], "ups_cap", { hh: 44 }))
+                for (i = 0; i < uc.length; i++) upc.push(cell(capBtn(uc[i]), pre + uc[i], ucap === uc[i], "ups_cap", { hh: 44 }))
             }
             grid(upc)
             help("settings.upsample.help", 12)
-            var urate = external ? pcmLabel(upsample) : capLabel(ucap)
             if (ustate !== "off" && ustate !== "active") note(Tr.t("settings.upsample.why." + ustate), "red", "alert-triangle")
-            else if (ustate === "active") helpText(Tr.tf(external ? "settings.convert.extPcm" : "settings.upsample.active", "rate", urate), 12)
+            else if (ustate === "active") {
+                // External keeps the x2/x4/max phrasing. A box player's cap is a
+                // ceiling (the ≤ on the button already says so); when a track is
+                // playing, show the REAL rate the DAC gets in a gold pill, so it
+                // is glanceable that it is not the button's literal number.
+                if (external) helpText(Tr.tf("settings.convert.extPcm", "rate", pcmLabel(upsample)), 12)
+                else {
+                    var real = Number((cfg.sq || {}).output_rate || 0)
+                    if (real > 0) note(Tr.tf("settings.upsample.atDacNow", "rate", (real / 1000) + " kHz"), "gold", "volume-2")
+                }
+            }
         } else if (top === "dsd") {
             var dmodes = (info.modes || ["off"]).filter(function(m) { return m !== "off" })
             if (mode !== "off" && dmodes.indexOf(mode) < 0) dmodes.push(mode)   // chosen earlier, no longer offered
@@ -1652,6 +1666,13 @@ Item {
         grid(mrc)
         if (s.mixers && s.mixers.length) toggle(Tr.t("settings.audio.volumeHardware"), Tr.t("settings.audio.volumeHelp"), c.volume === "hardware", "sq_hwvol")
         else note(Tr.t("settings.audio.volumeNoMixer"), "dark")
+        // Card playback switches: the onboard digital (S/PDIF/IEC958) output
+        // boots muted on a clean ALSA state, so give it a toggle here.
+        if (s.switches && s.switches.length) {
+            label("settings.audio.switchesLabel", 14); help("settings.audio.switchesHelp", 12)
+            for (i = 0; i < s.switches.length; i++)
+                toggle(s.switches[i].name, "", !!s.switches[i].on, "sq_switch", s.switches[i].name)
+        }
         if (s.pcm2dsd && (s.pcm2dsd.modes || (s.pcm2dsd.upsample && s.pcm2dsd.upsample.modes))) {
             sep()
             secConvert(String(c.pcm2dsd || "off"), String(c.pcm2dsd_filter || "clans-8"), String(c.upsample || "off"),
@@ -2790,6 +2811,9 @@ Item {
         case "sq_delay": sqSet({ dsd_delay_ms: parseInt(arg) }); break
         case "sq_rate": sqSet({ max_rate: parseInt(arg) }); break
         case "sq_hwvol": sqSet({ volume: row.on ? "software" : "hardware" }); break
+        // Card playback switches (e.g. the onboard S/PDIF/IEC958 mute): its own
+        // endpoint, which answers with the fresh switches; post() reloads cfg.
+        case "sq_switch": post(A("/set_mixer_switch"), { name: arg, on: !row.on }, sqDone); break
         case "sq_abuf": sqSet({ alsa_buffer: row.on ? "auto" : "large" }); break
         case "sq_sbuf": sqSet({ stream_buffer: row.on ? "auto" : "large" }); break
         case "sq_rt": sqSet({ realtime: !row.on }); break

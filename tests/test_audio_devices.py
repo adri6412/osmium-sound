@@ -130,5 +130,102 @@ class AudioSnapshotTests(unittest.TestCase):
         self.assertNotIn('Loopback scontents', txt)
 
 
+# An onboard codec with its S/PDIF transmitter muted: the usual Daphile → clean
+# ALSA state gotcha the digital-switch helpers exist to fix.
+SCONTENTS = (
+    "Simple mixer control 'Master',0\n"
+    "  Capabilities: pvolume pswitch pswitch-joined\n"
+    "  Playback channels: Front Left - Front Right\n"
+    "  Front Left: Playback 87 [100%] [0.00dB] [on]\n"
+    "  Front Right: Playback 87 [100%] [0.00dB] [on]\n"
+    "Simple mixer control 'IEC958',0\n"
+    "  Capabilities: pswitch pswitch-joined\n"
+    "  Playback channels: Mono\n"
+    "  Mono: Playback [off]\n"
+    "Simple mixer control 'Capture',0\n"
+    "  Capabilities: cvolume cswitch\n"
+    "  Capture channels: Front Left - Front Right\n"
+    "  Front Left: Capture 31 [100%] [on]\n"
+)
+
+
+class MixerSwitchTests(unittest.TestCase):
+    """Playback switches of a card: list them, toggle them, and auto-unmute the
+    digital (S/PDIF/IEC958) ones when they boot muted."""
+
+    def _run(self):
+        calls = []
+
+        def run(cmd):
+            calls.append(cmd)
+            return SCONTENTS
+        return run, calls
+
+    def test_parse_keeps_only_playback_switches(self):
+        self.assertEqual(sq.parse_mixer_switches(SCONTENTS),
+                         [('Master', True), ('IEC958', False)])
+
+    def test_mixer_switches_shape(self):
+        run, _ = self._run()
+        self.assertEqual(sq.mixer_switches('hw:CARD=PCH,DEV=1', run=run),
+                         [{'name': 'Master', 'on': True}, {'name': 'IEC958', 'on': False}])
+
+    def test_not_a_card_has_no_switches(self):
+        self.assertEqual(sq.mixer_switches('default'), [])
+        self.assertEqual(sq.mixer_switches('hw:CARD=Loopback,DEV=0'), [])
+        self.assertIsNone(sq.set_mixer_switch('default', 'IEC958', True))
+
+    def test_unmute_only_touches_the_muted_digital_switch(self):
+        run, calls = self._run()
+        self.assertEqual(sq.unmute_digital_output('hw:CARD=PCH,DEV=1', run=run), ['IEC958'])
+        ssets = [c for c in calls if 'sset' in c]
+        self.assertEqual(ssets, [['amixer', '-q', '-c', 'PCH', 'sset', 'IEC958', 'unmute']])
+
+    def test_set_mixer_switch_mutes_and_unmutes(self):
+        run, calls = self._run()
+        sq.set_mixer_switch('hw:CARD=PCH,DEV=0', 'Master', False, run=run)
+        self.assertIn(['amixer', '-q', '-c', 'PCH', 'sset', 'Master', 'mute'], calls)
+        run, calls = self._run()
+        sq.set_mixer_switch('hw:CARD=PCH,DEV=0', 'IEC958', True, run=run)
+        self.assertIn(['amixer', '-q', '-c', 'PCH', 'sset', 'IEC958', 'unmute'], calls)
+
+
+class CurrentOutputRateTests(unittest.TestCase):
+    """The rate the DAC is getting now, read from the open PCM's hw_params."""
+
+    # hw_params as the kernel prints it for an open USB DAC playing 44.1k that a
+    # 768 kHz cap upsampled synchronously to 705600 (16 x 44100).
+    HW_PARAMS = ("access: MMAP_INTERLEAVED\nformat: S32_LE\nsubformat: STD\n"
+                 "channels: 2\nrate: 705600 (705600/1)\nperiod_size: 7056\n"
+                 "buffer_size: 28224\n")
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.hw = os.path.join(self.tmp.name, 'D50s', 'pcm0p', 'sub0', 'hw_params')
+        os.makedirs(os.path.dirname(self.hw))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _write(self, text):
+        with open(self.hw, 'w') as f:
+            f.write(text)
+
+    def test_reads_the_open_rate(self):
+        self._write(self.HW_PARAMS)
+        self.assertEqual(
+            sq.current_output_rate('hw:CARD=D50s,DEV=0', proc_asound=self.tmp.name), 705600)
+
+    def test_closed_stream_is_zero(self):
+        self._write('closed\n')
+        self.assertEqual(
+            sq.current_output_rate('hw:CARD=D50s,DEV=0', proc_asound=self.tmp.name), 0)
+
+    def test_no_card_is_zero(self):
+        self.assertEqual(sq.current_output_rate('default'), 0)
+        self.assertEqual(
+            sq.current_output_rate('hw:CARD=Nope,DEV=0', proc_asound=self.tmp.name), 0)
+
+
 if __name__ == '__main__':
     unittest.main()

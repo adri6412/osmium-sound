@@ -2227,6 +2227,14 @@ def set_audio_device(device):
         log.exception("set_audio_device: write config failed")
         return {'success': False, 'code': 'audio.writeConfigFailed',
                 'message': _t('audio.writeConfigFailed', _lang())}
+    # An onboard coax/optical (S/PDIF) output boots with its IEC958 transmitter
+    # muted on a clean ALSA state: squeezelite would open the card and play into
+    # silence. Unmute the digital switch(es) of the chosen card so it is audible
+    # straight away (a USB DAC has no such switch, so this is a no-op there).
+    try:
+        sq.unmute_digital_output(device)
+    except Exception:
+        log.exception("set_audio_device: unmute digital output failed")
     _convert_resync()
 
     try:
@@ -2238,6 +2246,24 @@ def set_audio_device(device):
         log.exception("set_audio_device: squeezelite restart failed")
         return {'success': True, 'message': _t('audio.deviceSetRestartFailed', _lang(), device=device)}
     return {'success': True, 'message': _t('audio.outputSet', _lang(), device=device)}
+
+def set_mixer_switch(name, on):
+    """Toggle one ALSA playback switch of the current output card -- the onboard
+    S/PDIF (IEC958) transmitter above all, which boots muted. `name` is checked
+    against the card's actual switches so only real controls are driven."""
+    device = _sq_load().get('output')
+    valid = {s['name'] for s in sq.mixer_switches(device)}
+    if name not in valid:
+        return {'success': False, 'code': 'audio.invalidMixerSwitch',
+                'message': _t('audio.invalidMixerSwitch', _lang(), name=name)}
+    try:
+        switches = sq.set_mixer_switch(device, name, bool(on))
+    except Exception:
+        log.exception("set_mixer_switch failed")
+        return {'success': False, 'code': 'audio.mixerSwitchFailed',
+                'message': _t('audio.mixerSwitchFailed', _lang())}
+    return {'success': True, 'switches': switches or [],
+            'message': _t('audio.mixerSwitchSet', _lang())}
 
 # ── Settings → Audio: the rest of the squeezelite model ────────────
 # The fields in hifi_squeezelite.TUNABLE (DSD mode, switching pause, rate
@@ -2254,6 +2280,14 @@ def get_squeezelite_conf():
         'dsd_detected': 'native' if sq.is_native(fmt) else ('pcm' if fmt == sq.PCM_ONLY else 'dop'),
         'dsd_format': fmt,
         'mixers': sq.mixer_controls(model['output']),
+        # Playback switches of the chosen card (IEC958/S/PDIF, Master, …) the UI
+        # can toggle -- the onboard digital output is muted by default, see
+        # set_mixer_switch() and sq.unmute_digital_output().
+        'switches': sq.mixer_switches(model['output']),
+        # The rate the DAC is receiving right now (0 when nothing is playing);
+        # player-side upsampling lands on a synchronous rate under the cap, so
+        # the UI reports this, not the cap. See sq.current_output_rate().
+        'output_rate': sq.current_output_rate(model['output']),
         'choices': {'dsd': list(sq.DSD_MODES), 'dsd_delay_ms': list(sq.DSD_DELAYS),
                     'max_rate': [0, 96000, 192000, 384000, 768000, 1536000],
                     'upsample': list(sq.UPSAMPLE_MODES)},
@@ -11277,6 +11311,11 @@ def api_audio_devices():
 def api_set_audio_device():
     data = request.get_json(silent=True) or {}
     return jsonify(set_audio_device(data.get('device')))
+
+@app.route('/set_mixer_switch', methods=['POST'])
+def api_set_mixer_switch():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_mixer_switch(data.get('name'), data.get('on')))
 
 @app.route('/squeezelite_conf', methods=['GET'])
 def api_squeezelite_conf():

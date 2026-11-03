@@ -297,6 +297,19 @@ async function sqCall(path, body, okMsg) {
 const setSq = (patch) => sqCall('squeezelite_conf', patch, t('settings.audio.sqSaved'));
 const resetSq = () => sqCall('squeezelite_conf/reset', {}, t('settings.audio.sqReset'));
 
+// Toggle an ALSA playback switch of the output card (e.g. the onboard S/PDIF
+// IEC958 transmitter, muted by default). The backend returns the fresh switch
+// states, so we patch sq.switches in place without reloading the whole model.
+async function setSwitch(name, on) {
+  sqBusy.value = true;
+  try {
+    const r = await api.sysPost('mixer_switch', { name, on });
+    const ok = r.ok && r.data.success !== false;
+    if (ok && r.data.switches && sq.value) sq.value = { ...sq.value, switches: r.data.switches };
+    say(bodyMsg(r, ok ? t('settings.audio.sqSaved') : t('settings.audio.saveFailed')), !ok);
+  } finally { sqBusy.value = false; }
+}
+
 // ── System tweaks: OS-level knobs (CPU governor / security / SMT) ─
 // api_server.py /system_tweaks. Governor + hyper-threading apply at once to
 // /sys; CPU security (mitigations) is a kernel command-line change that only
@@ -2114,11 +2127,26 @@ onUnmounted(() => {
           </select>
         </template>
 
+        <!-- Playback switches of the output card: the onboard coax/optical
+             (S/PDIF, IEC958) transmitter is muted by default, so the digital
+             output stays silent until it is switched on. -->
+        <template v-if="sq.switches && sq.switches.length">
+          <label>{{ t('settings.audio.switchesLabel') }}</label>
+          <div v-for="s in sq.switches" :key="s.name" class="mixer-switch">
+            <span class="mixer-switch-name">{{ s.name }}</span>
+            <span class="seg">
+              <button :disabled="sqBusy" :class="{ active: s.on }" @click="setSwitch(s.name, true)">{{ t('settings.audio.on') }}</button>
+              <button :disabled="sqBusy" :class="{ active: !s.on }" @click="setSwitch(s.name, false)">{{ t('settings.audio.off') }}</button>
+            </span>
+          </div>
+          <p class="muted">{{ t('settings.audio.switchesHelp') }}</p>
+        </template>
+
         <!-- Every PCM track turned into DSD by Lyrion on its way to this player. -->
         <div v-if="sq.pcm2dsd" style="margin-top: 18px; padding: 16px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1);">
           <p class="sub">{{ t('settings.pcm2dsd.title') }}</p>
           <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :upsample="sq.conf.upsample"
-                   :upsample-cap="sq.conf.upsample_cap"
+                   :upsample-cap="sq.conf.upsample_cap" :output-rate="sq.output_rate"
                    :state="sq.pcm2dsd.state" :upsample-state="sq.pcm2dsd.upsample.state"
                    :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
         </div>
@@ -3300,6 +3328,20 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* One playback switch row (Settings → Audio → Advanced): control name on the
+   left, the On/Off segmented toggle on the right. */
+.mixer-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0;
+}
+.mixer-switch-name {
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+
 /* Settings front page: a grid of square-ish tiles, mirroring the kiosk's
    Flow of tiles (native-ui-qt/qml/SettingsTab.qml). Group tiles are a touch
    bigger and bolder than section tiles. */

@@ -1288,8 +1288,9 @@
     },
     "upsample": {
       "label": "Upsampling",
-      "help": "Jeder PCM-Titel wird auf eine höhere Rate resampelt, bevor er den Player erreicht – verlustfrei, während der Wiedergabe. Wähle die Zielrate; Automatisch geht so hoch, wie der DAC es annimmt. DSD-Dateien und Titel, die bereits auf oder über der Zielrate liegen, bleiben unverändert.",
+      "help": "Jeder PCM-Titel wird vor dem Player auf eine höhere Rate gebracht – verlustfrei, während der Wiedergabe. Der gewählte Wert ist ein Maximum: die tatsächliche Rate bleibt in der Familie des Titels, ein exaktes Vielfaches (bei 44.1-kHz-Material ergibt der 768-Tap 705.6 kHz, bei 48 kHz ergibt er 768 kHz). Automatisch geht so hoch, wie der DAC es annimmt. DSD-Dateien und Titel, die bereits auf oder über der Zielrate liegen, bleiben unverändert.",
       "active": "Ein: PCM-Titel werden auf {rate} upgesampelt.",
+      "atDacNow": "An den DAC: {rate}",
       "auto": "Automatisch",
       "max": "Max.",
       "why": {
@@ -1332,6 +1333,8 @@
       "volumeHardware": "Lautstärkeregler des DAC-Mixers",
       "volumeHelp": "Lyrion steuert die Lautstärkeregelung des DAC direkt an, wobei die Bits unverändert bleiben. „Aus“ bedeutet: Software-Lautstärkeregelung – bei 100 % ist die Wiedergabe bitgenau.",
       "volumeNoMixer": "Dieser Ausgang verfügt über keine hardwareseitige Lautstärkeregelung.",
+      "switchesLabel": "Digitalausgang",
+      "switchesHelp": "Ein Digitalausgang (S/PDIF/Koaxial/optisch) kann stummgeschaltet starten. Hier einschalten, wenn der angeschlossene Verstärker stumm bleibt.",
       "alsaBufferLarge": "Großer ALSA-Puffer",
       "alsaBufferHelp": "Für DACs, bei denen es zu Aussetzern oder Knistern kommt.",
       "streamBufferLarge": "Großer Stream-Puffer",

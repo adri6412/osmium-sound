@@ -1182,6 +1182,8 @@ _AUTH_ROUTES = {
     ('/api/system/ota_channel', 'POST'): '/ota_channel',
     ('/api/system/audio_devices', 'GET'): '/audio_devices',
     ('/api/system/audio_device', 'POST'): '/set_audio_device',
+    # Toggle an ALSA playback switch of the output card (onboard S/PDIF/IEC958).
+    ('/api/system/mixer_switch', 'POST'): '/set_mixer_switch',
     # The rest of the squeezelite command line (DSD mode, rate limit, hardware
     # volume, buffers, extra arguments): Settings → Audio → Advanced.
     ('/api/system/squeezelite_conf', 'GET'): '/squeezelite_conf',

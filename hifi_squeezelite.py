@@ -344,6 +344,28 @@ def dac_max_pcm_rate(device, proc_asound=None):
     return max(known) if known else 0
 
 
+def current_output_rate(device, proc_asound=None):
+    """The sample rate the DAC is receiving *right now*, from the open PCM's
+    hw_params, or 0 when the stream is closed / unreadable / not a real card.
+    Player-side upsampling picks a synchronous rate (2^n of the track's family)
+    under the user cap, so this real rate is what the UI should report, not the
+    cap itself (a 768 kHz cap feeds a 44.1 kHz track at 705600, not 768000)."""
+    card, dev = parse_device(device)
+    if card is None:
+        return 0
+    card_dir = _card_dir(os.path.realpath(proc_asound or PROC_ASOUND), card)
+    if card_dir is None:
+        return 0
+    try:
+        with open(os.path.join(card_dir, f'pcm{dev}p', 'sub0', 'hw_params'),
+                  encoding='utf-8', errors='replace') as f:
+            text = f.read()
+    except OSError:
+        return 0
+    m = re.search(r'^rate:\s*(\d+)', text, re.M)
+    return int(m.group(1)) if m else 0
+
+
 # Bits per word of each native DSD carrier, for turning a DSD bitrate into the
 # PCM-style carrier rate the DAC's stream file declares: DSD_U32 packs 32 DSD
 # bits into each frame, so DSD512 (22.5792 Mbit/s) rides a 705600 Hz carrier.
@@ -488,6 +510,95 @@ def mixer_controls(device, run=None):
         return parse_mixer_controls(run(['amixer', '-c', card, 'scontents']))
     except Exception:
         return []
+
+
+# ── Playback switches: mute/unmute, e.g. the onboard S/PDIF (IEC958) ─
+# A playback *switch* (pswitch) toggles a path on or off; unlike mixer_controls
+# above it carries no volume, so it never drives squeezelite's `-V`. The usual
+# case is the onboard codec's digital transmitter (IEC958 / S/PDIF / Digital):
+# Daphile and the like leave it unmuted, but on a clean ALSA state it boots
+# muted, so squeezelite opens the hw card and plays while no bits leave the
+# coax/optical jack. We surface these switches so the web UI can toggle them
+# (set_mixer_switch) and unmute the digital ones on their own when the card is
+# chosen as the output (unmute_digital_output). Names here may contain spaces:
+# they go straight to amixer as one argv element, never onto the ARGS line, so
+# the _MIXER_RE restriction mixer_controls applies does not apply to them.
+_DIGITAL_SWITCH_RE = re.compile(r'iec958|s/?pdif|digital', re.I)
+_ON_OFF_RE = re.compile(r'\[(on|off)\]')
+
+
+def parse_mixer_switches(scontents):
+    """[(name, on)] for every simple control that has a playback switch
+    (pswitch), from `amixer -c N scontents`. `on` is True when any channel of
+    the control reads [on]."""
+    out, name, is_switch, states = [], None, False, []
+
+    def flush():
+        if name is not None and is_switch:
+            out.append((name, any(states)))
+
+    for line in (scontents or '').splitlines():
+        s = line.strip()
+        m = re.match(r"Simple mixer control '(.*)',\d+$", s)
+        if m:
+            flush()
+            name, is_switch, states = m.group(1), False, []
+            continue
+        if name is None:
+            continue
+        if s.startswith('Capabilities:'):
+            is_switch = 'pswitch' in s.split(':', 1)[1].split()
+        elif 'Playback' in s:
+            states += [tok == 'on' for tok in _ON_OFF_RE.findall(s)]
+    flush()
+    return out
+
+
+def mixer_switches(device, run=None):
+    """[{'name', 'on'}] playback switches of the card behind `device` (empty for
+    `default`, the Loopback and anything that is not a hw: card)."""
+    card, _ = parse_device(device)
+    if card is None or card == 'Loopback':
+        return []
+    run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout)
+    try:
+        return [{'name': n, 'on': on}
+                for n, on in parse_mixer_switches(run(['amixer', '-c', card, 'scontents']))]
+    except Exception:
+        return []
+
+
+def set_mixer_switch(device, name, on, run=None):
+    """Mute/unmute one playback switch of the card behind `device`. `name` must
+    be one the card actually has (checked by the caller). Returns the switches
+    afterwards, or None when `device` has no card."""
+    card, _ = parse_device(device)
+    if card is None or card == 'Loopback':
+        return None
+    run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout)
+    run(['amixer', '-q', '-c', card, 'sset', name, 'unmute' if on else 'mute'])
+    return [{'name': n, 'on': s}
+            for n, s in parse_mixer_switches(run(['amixer', '-c', card, 'scontents']))]
+
+
+def unmute_digital_output(device, run=None):
+    """Unmute the card's digital playback switches (IEC958 / S/PDIF / Digital)
+    that are currently off, so a freshly chosen onboard coax/optical output is
+    not silent. Returns the names it unmuted (empty when there was nothing to
+    do, no such card, or amixer failed)."""
+    card, _ = parse_device(device)
+    if card is None or card == 'Loopback':
+        return []
+    run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout)
+    done = []
+    try:
+        for name, on in parse_mixer_switches(run(['amixer', '-c', card, 'scontents'])):
+            if not on and _DIGITAL_SWITCH_RE.search(name):
+                run(['amixer', '-q', '-c', card, 'sset', name, 'unmute'])
+                done.append(name)
+    except Exception:
+        pass
+    return done
 
 
 # ── Model ───────────────────────────────────────────────────────────

@@ -69,6 +69,9 @@ MESSAGES = {
     'audio.deviceSetRestartFailed': {'en': 'Device set ({device}); restart failed',
                                      'it': 'Device impostato ({device}); riavvio non riuscito'},
     'audio.outputSet': {'en': 'Audio output set to {device}', 'it': 'Uscita audio impostata su {device}'},
+    'audio.invalidMixerSwitch': {'en': 'Unknown mixer switch: {name}', 'it': 'Interruttore mixer sconosciuto: {name}'},
+    'audio.mixerSwitchFailed': {'en': 'Could not change the mixer switch', 'it': 'Impossibile cambiare l’interruttore del mixer'},
+    'audio.mixerSwitchSet': {'en': 'Done', 'it': 'Fatto'},
     'audio.defaultDeviceName': {'en': 'System default', 'it': 'Predefinito di sistema'},
     # Settings → Audio, the squeezelite model (hifi_squeezelite.py)
     'squeezelite.saved': {'en': 'Saved, player restarted', 'it': 'Salvato, player riavviato'},

@@ -1288,8 +1288,9 @@
     },
     "upsample": {
       "label": "Upsampling",
-      "help": "Ogni traccia PCM viene ricampionata a una frequenza più alta prima di arrivare al player — senza perdita, mentre suona. Scegli la frequenza di destinazione; Auto sale fino al massimo che il DAC accetta. I file DSD e le tracce già pari o superiori alla destinazione restano come sono.",
+      "help": "Ogni traccia PCM viene portata a una frequenza più alta prima di arrivare al player — senza perdita, mentre suona. Il valore scelto è il massimo: la frequenza reale resta nella famiglia del brano, cioè un multiplo esatto (per materiale a 44.1 kHz il tap 768 dà 705.6 kHz, per il 48 kHz dà 768 kHz). Auto sale fino al massimo che il DAC accetta. I file DSD e le tracce già pari o superiori alla destinazione restano come sono.",
       "active": "Attivo: le tracce PCM sono sovracampionate a {rate}.",
+      "atDacNow": "Al DAC: {rate}",
       "auto": "Auto",
       "max": "Max",
       "why": {
@@ -1327,6 +1328,8 @@
       "volumeHardware": "Volume dal mixer del DAC",
       "volumeHelp": "Il volume in Lyrion muove il controllo del DAC e i bit restano intatti. Off: volume software, bit-perfect al 100%.",
       "volumeNoMixer": "Questa uscita non ha un controllo di volume hardware.",
+      "switchesLabel": "Uscita digitale",
+      "switchesHelp": "Un'uscita digitale (S/PDIF/coassiale/ottica) può avviarsi disattivata. Attivala qui se il suo amplificatore resta muto.",
       "alsaBufferLarge": "Buffer ALSA grande",
       "alsaBufferHelp": "Per i DAC che si interrompono o gracchiano.",
       "streamBufferLarge": "Buffer di flusso grande",

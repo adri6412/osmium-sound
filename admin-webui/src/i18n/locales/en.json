@@ -367,7 +367,12 @@
       "off": "Off",
       "on": "On",
       "dsdLabel": "DSD files",
-      "dsd": { "auto": "Automatic", "dop": "DoP", "native": "Native", "off": "Convert to PCM" },
+      "dsd": {
+        "auto": "Automatic",
+        "dop": "DoP",
+        "native": "Native",
+        "off": "Convert to PCM"
+      },
       "dsdDetectedNative": "This DAC declares native DSD.",
       "dsdDetectedDop": "This DAC does not declare native DSD, so Automatic uses DoP.",
       "dsdDetectedPcm": "This output is not a USB DAC (HDMI or the built-in audio), so Automatic converts DSD to PCM.",
@@ -400,7 +405,9 @@
       "changed": "Output device changed",
       "changeFailed": "Could not change the output device",
       "nameSaved": "Name saved",
-      "saveFailed": "Could not save"
+      "saveFailed": "Could not save",
+      "switchesLabel": "Digital output switches",
+      "switchesHelp": "Turns a card output on or off. An onboard coax/optical (S/PDIF) output is muted by default — switch IEC958 on to hear it. A USB DAC has none of these."
     },
     "notices": {
       "intro": "What this device is made of, and under which licenses. The same record is kept in THIRD-PARTY-NOTICES.md in the project repository.",
@@ -1345,8 +1352,9 @@
     },
     "upsample": {
       "label": "Upsampling",
-      "help": "Every PCM track is resampled to a higher rate before it reaches the player — lossless, done while it plays. Pick the target rate; Auto goes as high as the DAC accepts. DSD files and tracks already at or above the target are left as they are.",
+      "help": "Every PCM track is raised to a higher rate before it reaches the player — lossless, done while it plays. The value you pick is a maximum: the real rate stays in the track's family, an exact multiple (for 44.1 kHz material the 768 tap gives 705.6 kHz, for 48 kHz it gives 768 kHz). Auto goes as high as the DAC accepts. DSD files and tracks already at or above the target are left as they are.",
       "active": "On: PCM tracks are upsampled to {rate}.",
+      "atDacNow": "To the DAC: {rate}",
       "auto": "Auto",
       "max": "Max",
       "why": {

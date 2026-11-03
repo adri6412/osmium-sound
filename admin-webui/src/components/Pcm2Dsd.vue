@@ -21,6 +21,7 @@ const props = defineProps({
   filter: { type: String, default: 'clans-8' },
   upsample: { type: String, default: 'off' },     // off | x2 | x4 | max (the on/off flag)
   upsampleCap: { type: Number, default: 0 },       // box players: absolute target rate, 0 = Auto (DAC max)
+  outputRate: { type: Number, default: 0 },        // box players: the rate the DAC gets right now (0 = idle/unknown)
   state: { type: String, default: 'off' },        // DSD state: off | active | noTools | dsp | noDsd
   upsampleState: { type: String, default: 'off' },// off | active | noTools | dsp
   info: { type: Object, required: true },         // { modes, measured, filters, available, player_available, upsample:{ modes, available }, [convert:{plugin,dsd,upsample,why}] (external only) }
@@ -62,9 +63,19 @@ const dsdWhy = computed(() => (['off', 'active'].includes(props.state) ? '' : t(
 // the x2/x4/max modes.
 const pcmLabel = (m) => (m === 'max' ? t('settings.upsample.max') : '×' + m.slice(1));
 const capLabel = (r) => (r ? r / 1000 + ' kHz' : t('settings.upsample.auto'));
+// On the button a cap reads "≤ 768 kHz": the ≤ says at a glance it is a ceiling,
+// not the literal rate (the synchronous rate lands on the track's 2^n family —
+// 768 → 705.6k for 44.1k material). Auto stays plain.
+const capBtn = (r) => (r ? '≤ ' + r / 1000 + ' kHz' : t('settings.upsample.auto'));
 const pcmModes = computed(() => (props.info.upsample.modes || ['off']).filter((m) => m !== 'off'));
 const pcmCaps = computed(() => props.info.upsample.caps || [0, 96000, 192000, 384000, 768000]);
 const pcmActiveRate = computed(() => (props.external ? pcmLabel(props.upsample) : capLabel(props.upsampleCap)));
+// A box player's cap is a ceiling (the ≤ on the button says so). When a track is
+// playing, the real rate the DAC gets lands on the track's 2^n family (768 cap →
+// 705.6 kHz for 44.1 kHz material); show it in a gold pill so it is glanceable
+// that it is not the button's literal number.
+const atDacNow = computed(() =>
+  t('settings.upsample.atDacNow', { rate: props.outputRate / 1000 + ' kHz' }));
 const pcmWhy = computed(() => (['off', 'active'].includes(props.upsampleState) ? '' : t('settings.upsample.why.' + props.upsampleState)));
 
 // ── switching the top mode (clears the other conversion; backend also does) ──
@@ -109,12 +120,12 @@ function toDsd() {
           <button v-for="m in pcmModes" :key="m" :disabled="busy" :class="{ active: upsample === m }" @click="emit('set', { upsample: m })">{{ pcmLabel(m) }}</button>
         </span>
         <span class="seg" v-else>
-          <button v-for="r in pcmCaps" :key="r" :disabled="busy" :class="{ active: upsampleCap === r }" @click="emit('set', { upsample: 'max', upsample_cap: r })">{{ capLabel(r) }}</button>
+          <button v-for="r in pcmCaps" :key="r" :disabled="busy" :class="{ active: upsampleCap === r }" @click="emit('set', { upsample: 'max', upsample_cap: r })">{{ capBtn(r) }}</button>
         </span>
         <p class="muted">{{ t('settings.upsample.help') }}</p>
         <p class="msg err" v-if="pcmWhy">{{ pcmWhy }}</p>
         <p class="muted" v-else-if="external && upsampleState === 'active'">{{ t('settings.convert.extPcm', { rate: pcmActiveRate }) }}</p>
-        <p class="muted" v-else-if="upsampleState === 'active'">{{ t('settings.upsample.active', { rate: pcmActiveRate }) }}</p>
+        <p v-else-if="upsampleState === 'active' && outputRate > 0"><span class="pill gold">{{ atDacNow }}</span></p>
       </template>
 
       <!-- DSD -->

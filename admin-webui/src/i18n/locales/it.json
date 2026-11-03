@@ -367,7 +367,12 @@
       "off": "Off",
       "on": "On",
       "dsdLabel": "File DSD",
-      "dsd": { "auto": "Automatico", "dop": "DoP", "native": "Nativo", "off": "Converti in PCM" },
+      "dsd": {
+        "auto": "Automatico",
+        "dop": "DoP",
+        "native": "Nativo",
+        "off": "Converti in PCM"
+      },
       "dsdDetectedNative": "Questo DAC dichiara il DSD nativo.",
       "dsdDetectedDop": "Questo DAC non dichiara il DSD nativo, quindi Automatico usa il DoP.",
       "dsdDetectedPcm": "Questa uscita non è un DAC USB (HDMI o l'audio integrato), quindi Automatico converte il DSD in PCM.",
@@ -400,7 +405,9 @@
       "changed": "Uscita audio cambiata",
       "changeFailed": "Cambio uscita fallito",
       "nameSaved": "Nome salvato",
-      "saveFailed": "Salvataggio fallito"
+      "saveFailed": "Salvataggio fallito",
+      "switchesLabel": "Interruttori uscita digitale",
+      "switchesHelp": "Accende o spegne un’uscita della scheda. L’uscita coassiale/ottica (S/PDIF) integrata è mutata di default: accendi IEC958 per sentirla. Un DAC USB non ne ha."
     },
     "notices": {
       "intro": "Di cosa è fatto questo apparecchio, e con quali licenze. Lo stesso elenco è mantenuto in THIRD-PARTY-NOTICES.md nel repository del progetto.",
@@ -1345,8 +1352,9 @@
     },
     "upsample": {
       "label": "Upsampling",
-      "help": "Ogni traccia PCM viene ricampionata a una frequenza più alta prima di arrivare al player — senza perdita, mentre suona. Scegli la frequenza di destinazione; Auto sale fino al massimo che il DAC accetta. I file DSD e le tracce già pari o superiori alla destinazione restano come sono.",
+      "help": "Ogni traccia PCM viene portata a una frequenza più alta prima di arrivare al player — senza perdita, mentre suona. Il valore scelto è il massimo: la frequenza reale resta nella famiglia del brano, cioè un multiplo esatto (per materiale a 44.1 kHz il tap 768 dà 705.6 kHz, per il 48 kHz dà 768 kHz). Auto sale fino al massimo che il DAC accetta. I file DSD e le tracce già pari o superiori alla destinazione restano come sono.",
       "active": "Attivo: le tracce PCM sono sovracampionate a {rate}.",
+      "atDacNow": "Al DAC: {rate}",
       "auto": "Auto",
       "max": "Max",
       "why": {
