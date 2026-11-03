@@ -1807,9 +1807,9 @@
                  data-ph-en="you@example.com — this is where we reply" data-ph-it="tu@esempio.it — qui ti rispondiamo" placeholder="you@example.com — this is where we reply">
         </div>
         <div class="field">
-          <label for="sfFile"><span data-en="Support bundle (.zip)" data-it="Archivio di supporto (.zip)">Support bundle (.zip)</span> <span class="opt" data-en="(optional)" data-it="(facoltativo)">(optional)</span></label>
-          <input type="file" id="sfFile" name="file" accept=".zip,application/zip,application/x-zip-compressed">
-          <small class="hint" data-en="A diagnostics .zip from the device, up to 10 MB." data-it="Un .zip di diagnostica dell'apparecchio, fino a 10 MB.">A diagnostics .zip from the device, up to 10 MB.</small>
+          <label for="sfFile"><span data-en="Screenshots or files" data-it="Screenshot o file">Screenshots or files</span> <span class="opt" data-en="(optional)" data-it="(facoltativo)">(optional)</span></label>
+          <input type="file" id="sfFile" name="files" multiple accept=".zip,.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.log,.json,.csv,image/*,application/zip,application/pdf">
+          <small class="hint" data-en="Screenshots, a diagnostics .zip, logs… up to 5 MB in total." data-it="Screenshot, uno .zip di diagnostica, log… fino a 5 MB in tutto.">Screenshots, a diagnostics .zip, logs… up to 5 MB in total.</small>
         </div>
         <!-- honeypot: off-screen, real people leave it empty -->
         <div class="hp" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
@@ -2286,7 +2286,9 @@
     const btn = document.getElementById('sfSubmit');
     const msg = document.getElementById('sfMsg');
     const fileInput = document.getElementById('sfFile');
-    const MAX_ZIP = 10 * 1024 * 1024;
+    const MAX_TOTAL = 5 * 1024 * 1024;
+    const MAX_FILES = 8;
+    const ALLOWED_EXT = ['zip','png','jpg','jpeg','gif','webp','pdf','txt','log','json','csv'];
 
     function say(kind, en, it) {
       msg.className = 'sf-msg ' + kind;
@@ -2311,10 +2313,25 @@
                    'L’indirizzo email non sembra valido.');
         return;
       }
-      const file = fileInput.files[0];
-      if (file && (!/\.zip$/i.test(file.name) || file.size > MAX_ZIP)) {
-        say('err', 'The attachment must be a .zip of at most 10 MB.',
-                   'L’allegato deve essere un .zip di massimo 10 MB.');
+      const files = Array.from(fileInput.files);
+      if (files.length > MAX_FILES) {
+        say('err', 'Please attach at most ' + MAX_FILES + ' files.',
+                   'Allega al massimo ' + MAX_FILES + ' file.');
+        return;
+      }
+      let totalSize = 0;
+      for (const f of files) {
+        const ext = (f.name.split('.').pop() || '').toLowerCase();
+        if (!ALLOWED_EXT.includes(ext)) {
+          say('err', 'This file type is not allowed: ' + f.name + '.',
+                     'Questo tipo di file non è ammesso: ' + f.name + '.');
+          return;
+        }
+        totalSize += f.size;
+      }
+      if (totalSize > MAX_TOTAL) {
+        say('err', 'The attachments are too large (max 5 MB in total).',
+                   'Gli allegati sono troppo grandi (max 5 MB in tutto).');
         return;
       }
 
@@ -2330,8 +2347,8 @@
           say('ok', 'Thanks — your report has reached us' + ref + '. We’ll be in touch if you left an email.',
                     'Grazie — la tua segnalazione ci è arrivata' + ref + '. Ti scriveremo se hai lasciato un’email.');
         } else if (res.status === 413) {
-          say('err', 'The attachment is too large (max 10 MB).',
-                     'L’allegato è troppo grande (max 10 MB).');
+          say('err', 'The attachments are too large (max 5 MB in total).',
+                     'Gli allegati sono troppo grandi (max 5 MB in tutto).');
         } else {
           say('err', 'Something went wrong. Please try again, or email support@osmiumsound.it.',
                      'Qualcosa è andato storto. Riprova, oppure scrivi a support@osmiumsound.it.');

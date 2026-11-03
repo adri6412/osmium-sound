@@ -4,12 +4,14 @@
 //   - model    (required) the PC the device runs on;
 //   - problem  (required) what is wrong;
 //   - email    (required) where to reply;
-//   - file     (optional) a diagnostics .zip, up to 10 MB.
+//   - files    (optional) screenshots or files (images, a diagnostics .zip,
+//              logs…), up to 5 MB in total.
 // A hidden "website" field is a honeypot: a filled one is a bot, answered 200
 // and dropped.
 //
 // What happens to a report:
-//   - the .zip, if any, goes to R2 (binding SUPPORT_BUCKET) under support/<id>.zip;
+//   - any uploaded files go to R2 (binding SUPPORT_BUCKET) under
+//     support/<id>/<n>-<name>;
 //   - the fields go to D1 (binding DB, the same osmium-downloads database), table
 //     support_requests (website/analytics/04_support.sql);
 //   - a short notice is emailed to support@osmiumsound.it via Resend
@@ -31,8 +33,18 @@
 //       (no email). The notice is sent from NOTIFY_FROM; the reporter's address
 //       is the Reply-To and the display name, so a plain reply reaches them.
 
-const MAX_ZIP = 10 * 1024 * 1024;        // 10 MB, matches the client cap
-const MAX_BODY = MAX_ZIP + 256 * 1024;   // zip + room for the text fields
+const MAX_TOTAL = 5 * 1024 * 1024;       // 5 MB of attachments in total, matches the client
+const MAX_BODY = MAX_TOTAL + 256 * 1024; // attachments + room for the text fields
+const MAX_FILES = 8;                     // at most this many attachments per report
+// Attachment types we accept (extension allowlist, mirrored on the client).
+const ALLOWED_EXT = new Set([
+  "zip", "png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "log", "json", "csv",
+]);
+const CONTENT_TYPE = {
+  zip: "application/zip", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  gif: "image/gif", webp: "image/webp", pdf: "application/pdf", txt: "text/plain",
+  log: "text/plain", json: "application/json", csv: "text/csv",
+};
 const MAX_MODEL = 120;
 const MAX_PROBLEM = 4000;
 const MAX_EMAIL = 200;
@@ -47,7 +59,8 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS support_requests (
   email      TEXT NOT NULL DEFAULT '',
   r2_key     TEXT NOT NULL DEFAULT '',
   size       INTEGER NOT NULL DEFAULT 0,
-  notified   INTEGER NOT NULL DEFAULT 0
+  notified   INTEGER NOT NULL DEFAULT 0,
+  files      TEXT NOT NULL DEFAULT '[]'
 )`;
 
 function json(status, obj) {
@@ -79,22 +92,30 @@ function newId() {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-async function looksLikeZip(file) {
-  // ZIP local-file or empty-archive signature: "PK\x03\x04" / "PK\x05\x06".
-  const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
-  return head[0] === 0x50 && head[1] === 0x4b &&
-         (head[2] === 0x03 || head[2] === 0x05) &&
-         (head[3] === 0x04 || head[3] === 0x06);
+function extOf(name) {
+  const m = /\.([a-z0-9]+)$/i.exec(name || "");
+  return m ? m[1].toLowerCase() : "";
 }
 
-async function notify(env, rec, hasZip) {
+// Keep the basename, drop anything but safe characters, cap the length.
+function safeName(name) {
+  const base = String(name || "file").split(/[\\/]/).pop();
+  const cleaned = base.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
+  return cleaned.slice(0, 80) || "file";
+}
+
+async function notify(env, rec) {
   if (!env.RESEND_API_KEY) return false;
   const line = (k, v) => `${k}: ${v}`;
+  const files = rec.files || [];
+  const attachLine = files.length
+    ? `${files.length} — ` + files.map((f) => `${f.key} (${f.size} B)`).join(", ")
+    : "none";
   const text = [
     line("Reference", rec.id),
     line("PC model", rec.model),
     line("Reply to", rec.email || "(not given)"),
-    line("Attachment", hasZip ? `yes — R2 ${rec.r2_key} (${rec.size} bytes)` : "none"),
+    line("Attachments", attachLine),
     "",
     "Problem:",
     rec.problem,
@@ -153,42 +174,53 @@ export async function onRequestPost(context) {
   if (!EMAIL_RE.test(email)) return json(400, { ok: false, error: "bad email" });
 
   const id = newId();
-  let r2_key = "";
-  let size = 0;
 
-  const file = form.get("file");
-  if (file && typeof file === "object" && file.size > 0) {
-    if (file.size > MAX_ZIP) return json(413, { ok: false, error: "attachment too large" });
-    if (!/\.zip$/i.test(file.name || "") || !(await looksLikeZip(file))) {
-      return json(400, { ok: false, error: "attachment must be a .zip" });
-    }
-    r2_key = `support/${id}.zip`;
-    size = file.size;
+  // The attachments come from a `multiple` file input named "files".
+  const uploads = form.getAll("files").filter((f) => f && typeof f === "object" && f.size > 0);
+  if (uploads.length > MAX_FILES) return json(400, { ok: false, error: "too many files" });
+  let totalSize = 0;
+  for (const f of uploads) {
+    if (!ALLOWED_EXT.has(extOf(f.name))) return json(400, { ok: false, error: "file type not allowed" });
+    totalSize += f.size;
+  }
+  if (totalSize > MAX_TOTAL) return json(413, { ok: false, error: "attachments too large" });
+
+  const prefix = uploads.length ? `support/${id}/` : "";
+  const stored = [];
+  for (let i = 0; i < uploads.length; i++) {
+    const f = uploads[i];
+    const name = safeName(f.name);
+    const key = `${prefix}${i + 1}-${name}`;
     try {
-      await env.SUPPORT_BUCKET.put(r2_key, file.stream(), {
-        httpMetadata: { contentType: "application/zip" },
-        customMetadata: { id, model: model.slice(0, 256) },
+      await env.SUPPORT_BUCKET.put(key, f.stream(), {
+        httpMetadata: { contentType: CONTENT_TYPE[extOf(name)] || "application/octet-stream" },
+        customMetadata: { id },
       });
     } catch (err) {
       console.error("support r2 put:", err?.message || err);
       return json(500, { ok: false, error: "storage" });
     }
+    stored.push({ name, key, size: f.size });
   }
 
-  const rec = { id, model, problem, email, r2_key, size };
-  const notified = await notify(env, rec, !!r2_key);
+  const rec = { id, model, problem, email, files: stored };
+  const notified = await notify(env, rec);
+
+  // Create the table, and add the `files` column on databases made before it
+  // existed; both throw harmlessly when already up to date.
+  try { await env.DB.prepare(SCHEMA).run(); } catch (_) { /* table exists */ }
+  try {
+    await env.DB.prepare(`ALTER TABLE support_requests ADD COLUMN files TEXT NOT NULL DEFAULT '[]'`).run();
+  } catch (_) { /* column exists */ }
 
   try {
-    await env.DB.batch([
-      env.DB.prepare(SCHEMA),
-      env.DB.prepare(
-        `INSERT INTO support_requests (id, created_at, model, problem, email, r2_key, size, notified)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, Date.now(), model, problem, email, r2_key, size, notified ? 1 : 0),
-    ]);
+    await env.DB.prepare(
+      `INSERT INTO support_requests (id, created_at, model, problem, email, r2_key, size, notified, files)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, Date.now(), model, problem, email, prefix, totalSize, notified ? 1 : 0, JSON.stringify(stored)).run();
   } catch (err) {
     console.error("support d1 insert:", err?.message || err);
-    // The zip (if any) is already in R2 and, if configured, the notice was
+    // The files (if any) are already in R2 and, if configured, the notice was
     // emailed — so the report is not lost. Report success to the visitor.
     return json(200, { ok: true, id });
   }
