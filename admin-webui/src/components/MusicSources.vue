@@ -78,6 +78,14 @@ function removeLocal(s) {
   run(api.sourcesRemove(s.id));
 }
 function adopt(d) { run(api.internalAdopt(d.parts.length === 1 ? d.parts[0].path : d.path), lt('Preparo il disco…', 'Setting the disk up…')); }
+// An adopted internal/USB disk can have its network share toggled on/off; the
+// system disk and local folders are shared through the folder picker instead.
+function isDiskPlace(p) { return !!(p.src && (p.src.type === 'internal' || p.src.type === 'usb')); }
+function toggleShare(p) {
+  run(api.sourcesSetShare(p.src.id, !p.shared),
+      p.shared ? lt('Non più condivisa in rete', 'No longer shared on the network')
+               : lt('Condivisa in rete', 'Shared on the network'));
+}
 function format(d) {
   const word = window.prompt(lt(`Preparare «${d.model || d.path}» da capo CANCELLA TUTTO quello che c'è sopra.\nPer confermare scrivi: ${d.confirm}`,
                                 `Setting «${d.model || d.path}» up from scratch ERASES EVERYTHING on it.\nTo confirm, type: ${d.confirm}`), '');
@@ -213,7 +221,8 @@ function openImport(p) { adding.value = false; importing.value = p; }
           <span v-else>{{ lt('Dal computer non la vedi.', 'A computer does not see it.') }}</span>
         </div>
         <button v-if="cur.shared" class="ghost2 sm" @click="showPw = !showPw">{{ showPw ? lt('Nascondi', 'Hide') : lt('Mostra password', 'Show password') }}</button>
-        <button v-else-if="!cur.src" class="ghost2 sm" :disabled="!cur.ok" @click="addFolderHere(cur, true)">{{ lt('Condividi una cartella…', 'Share a folder…') }}</button>
+        <button v-if="isDiskPlace(cur)" class="ghost2 sm" @click="toggleShare(cur)">{{ cur.shared ? lt('Non condividere', 'Stop sharing') : lt('Condividi in rete', 'Share on the network') }}</button>
+        <button v-else-if="!cur.src && !cur.shared" class="ghost2 sm" :disabled="!cur.ok" @click="addFolderHere(cur, true)">{{ lt('Condividi una cartella…', 'Share a folder…') }}</button>
       </div>
       <div class="ms-row" :class="{ on: cur.playlist }">
         <span class="ug"><Icon name="list-music" :size="15" /></span>

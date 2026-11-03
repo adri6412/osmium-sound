@@ -205,6 +205,27 @@ Rectangle {
         var dev = d.parts.length === 1 ? d.parts[0].path : d.path
         post("/api/internal/adopt", { device: dev }, lt("Preparo il disco…", "Setting the disk up…"))
     }
+    // An adopted internal/USB disk can be used without exposing it on the
+    // network: its share toggles live, unlike a folder share (which is added
+    // or removed through the folder picker). The system disk and plain local
+    // folders keep the old behaviour (reveal the password / share a folder).
+    function isDiskPlace(p) { return !!p.src && (p.src.type === "internal" || p.src.type === "usb") }
+    function shareAction(p) {
+        if (isDiskPlace(p)) return p.shared ? lt("Non condividere", "Stop sharing")
+                                            : lt("Condividi in rete", "Share on the network")
+        return p.shared ? (showPw ? lt("Nascondi", "Hide") : lt("Mostra password", "Show password"))
+                        : lt("Condividi una cartella…", "Share a folder…")
+    }
+    function shareAct(p) {
+        if (isDiskPlace(p)) {
+            post("/api/sources/" + p.src.id + "/share", { shared: !p.shared },
+                 p.shared ? lt("Non più condivisa in rete", "No longer shared on the network")
+                          : lt("Condivisa in rete", "Shared on the network"))
+            return
+        }
+        if (p.shared) showPw = !showPw
+        else addFolderHere(p, true)
+    }
     function formatDisk(d) {
         Ui.dialogs.format(d.path, d.model, d.size, d.confirm, function(device, fs, lbl) {
             Api.post(su("/api/internal/format"), { device: device, fs: fs, label: lbl, confirm: d.confirm }, function() { fmtWatch.start() }, 12000)
@@ -441,9 +462,8 @@ Rectangle {
                 title: placeCol.p.shared ? root.lt("Condivisa in rete", "Shared on the network") : root.lt("Non condivisa", "Not shared")
                 hint: placeCol.p.shared ? "\\\\" + (root.smbIp || root.smbHost) + root.lt("  · utente ", "  · user ") + root.smbUser + root.lt(" · password ", " · password ") + (root.showPw ? root.smbPass : "••••••")
                                         : root.lt("Dal computer non la vedi.", "A computer does not see it.")
-                action: placeCol.p.shared ? (root.showPw ? root.lt("Nascondi", "Hide") : root.lt("Mostra password", "Show password"))
-                                          : (placeCol.p.src ? "" : root.lt("Condividi una cartella…", "Share a folder…"))
-                onAct: { if (placeCol.p.shared) root.showPw = !root.showPw; else root.addFolderHere(placeCol.p, true) }
+                action: root.shareAction(placeCol.p)
+                onAct: root.shareAct(placeCol.p)
             }
             UseRow {
                 glyph: "list-music"; on: placeCol.p.playlist

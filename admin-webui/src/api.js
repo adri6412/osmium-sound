@@ -215,6 +215,8 @@ export const api = {
   smbTest: ({ server, share, username, password }) =>
     req('/api/system/sources/smb/test', { method: 'POST', body: { server, share, username, password } }),
   sourcesSetRw: (id, rw) => req('/api/system/sources/' + id + '/rw', { method: 'POST', body: { rw } }),
+  // Turn an adopted internal/USB disk's SMB network share on or off (live).
+  sourcesSetShare: (id, shared) => req('/api/system/sources/' + id + '/share', { method: 'POST', body: { shared } }),
   sourcesSetSubpath: (id, subpath) => req('/api/system/sources/' + id + '/subpath', { method: 'POST', body: { subpath } }),
   sourcesBrowse: (id, path = '') => req('/api/system/sources/' + id + '/browse?path=' + encodeURIComponent(path)),
   sourcesRemove: (id) => req('/api/system/sources/' + id, { method: 'DELETE' }),
