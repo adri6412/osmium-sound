@@ -139,6 +139,7 @@
     <string name="kiosk_tab_radio">Radio</string>
     <string name="kiosk_tab_apps">Apps</string>
     <string name="kiosk_tab_settings">Settings</string>
+    <string name="kiosk_search">Search</string>
 
     <!-- Kiosk-style home: library category tiles -->
     <string name="kiosk_tile_favorites">Favorites</string>
