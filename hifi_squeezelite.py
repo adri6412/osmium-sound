@@ -1038,11 +1038,12 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
         m['name'] = name
     probe_fn = probe_fn or probe
     dsp = m['dsp']['enabled']
-    # The built-in player falls back to `default` when its chosen card is gone,
-    # so a USB DAC unplugged after setup does not leave squeezelite crash-looping
-    # on a missing device (it would exit 1 and systemd restart it every 5 s).
-    # A zone keeps its own output: run_zone() waits for the card instead, and a
-    # zone on `default` would collide with the built-in player.
+    # The built-in player falls back to the silent `null` device when its chosen
+    # card is gone, so a USB DAC unplugged after setup does not leave squeezelite
+    # crash-looping on a missing device (it would exit 1 and systemd restart it
+    # every 5 s) and nothing leaks to the onboard analog output; follow_dac_state()
+    # (ExecStartPost) then pauses the player on Lyrion. A zone keeps its own
+    # output: run_zone() waits for the card instead.
     output = m['output'] if (dsp or zone) else available_output(m['output'], proc_asound)
     fell_back = not dsp and not zone and output != m['output']
     fmt = None if dsp else probe_fn(output)
@@ -1086,7 +1087,7 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
         out += ['-r', str(m['max_rate'])]
     # the Loopback has no volume control of its own: squeezelite's volume
     # acts on the PCM, before the conversion. A hardware mixer control belongs
-    # to the chosen card, so drop it when we fell back to `default`: that card
+    # to the chosen card, so drop it when we fell back to `null`: that card
     # is gone and `-V` on a missing control would only warn.
     if not pcm_only and m['volume'] == 'hardware' and m['mixer'] and not fell_back:
         out += ['-V', m['mixer']]
@@ -1313,7 +1314,7 @@ def _apply(conf_path, default_path, dsp_target_path, probe_fn, out, machine_id_p
         eff = available_output(model['output'])
         if eff != model['output']:
             print(f'hifi_squeezelite: output {model["output"]} not present, '
-                  f'falling back to {eff}', file=out)
+                  f'falling back to {eff} (silent; player paused on Lyrion)', file=out)
     args = render(model, probe_fn)
     changed = write_default(args, default_path)
     if out is not None and changed:
@@ -1449,16 +1450,22 @@ def card_present(output, proc_asound=None):
 
 def available_output(output, proc_asound=None):
     """The output to actually hand the built-in player: the configured one when
-    its card is present (or it is `default` / not a hw: card), else `default`
-    so squeezelite still starts instead of crash-looping on a DAC that was
-    unplugged after it was chosen. The stored choice in the model is left
-    untouched — when the card comes back the next render picks it again, and
-    62-hifi-audio-hotplug.rules restarts the player on a USB card add/remove so
-    that happens at once rather than at the next crash cycle."""
+    its card is present (or it is `null` / `default` / not a hw: card), else the
+    silent ALSA `null` device so squeezelite still starts instead of
+    crash-looping on a DAC that was unplugged after it was chosen. `null` (not
+    `default`) on purpose: `default` is the onboard analog codec on most boxes,
+    so falling back there plays the music out of the built-in speaker/jack —
+    the field saw a Dell 5070 switch to its analog output when the USB DAC was
+    turned off. `null` makes no sound at all; follow_dac_state() then pauses the
+    player on Lyrion so playback actually stops and holds its place. The stored
+    choice in the model is left untouched — when the card comes back the next
+    render picks it again, and 62-hifi-audio-hotplug.rules restarts the player
+    on a USB card add/remove so that happens at once rather than at the next
+    crash cycle."""
     card, _ = parse_device(output)
     if card is None or card_present(output, proc_asound):
         return output
-    return 'default'
+    return 'null'
 
 
 # ── PCM → DSD: Lyrion's side ──────────────────────────────────────────
@@ -1858,21 +1865,99 @@ def _lms_host(server):
     return s
 
 
-def forget_player(server, mac, timeout=5.0, opener=None):
-    """Ask Lyrion to drop a disconnected player from its list. True when it
-    answered; never raises (Lyrion may be down, or on another device)."""
+def _player_request(server, mac, cmd, timeout=5.0, opener=None):
+    """Send a Lyrion CLI command to a player by MAC over JSON-RPC and return the
+    reply's `result` object (a dict, possibly empty), or None when Lyrion did
+    not answer (it may be down, or on another device). Never raises."""
     if not mac:
-        return False
+        return None
     url = f'http://{_lms_host(server)}:{LMS_HTTP_PORT}/jsonrpc.js'
-    body = json.dumps({'id': 1, 'method': 'slim.request', 'params': [mac, ['client', 'forget']]}).encode()
+    body = json.dumps({'id': 1, 'method': 'slim.request', 'params': [mac, list(cmd)]}).encode()
     try:
         req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
         with (opener or urllib.request.urlopen)(req, timeout=timeout) as resp:
-            resp.read()
-        return True
+            data = resp.read()
+        reply = json.loads((data or b'').decode() or '{}')
+        return reply.get('result') if isinstance(reply.get('result'), dict) else {}
     except Exception as e:
-        print(f'hifi_squeezelite: Lyrion did not forget {mac}: {e}', file=sys.stderr)
-        return False
+        print(f'hifi_squeezelite: Lyrion request {list(cmd)} to {mac} failed: {e}', file=sys.stderr)
+        return None
+
+
+def forget_player(server, mac, timeout=5.0, opener=None):
+    """Ask Lyrion to drop a disconnected player from its list. True when it
+    answered; never raises (Lyrion may be down, or on another device)."""
+    return _player_request(server, mac, ['client', 'forget'], timeout, opener) is not None
+
+
+def player_mode(server, mac, timeout=5.0, opener=None):
+    """Lyrion's playback mode for the player ('play', 'pause' or 'stop'), or ''
+    when Lyrion did not answer or does not know the player yet."""
+    res = _player_request(server, mac, ['mode', '?'], timeout, opener)
+    return str((res or {}).get('_mode', '')) if res is not None else ''
+
+
+# The built-in player's chosen USB DAC was unplugged, so render fell back to the
+# silent `null` device and we paused the player on Lyrion. This marker (holding
+# the MAC we paused) records that, so when the DAC comes back we resume only the
+# player we paused — never a player the owner had stopped or paused themselves.
+# In /run (tmpfs): it lives for the boot, cleared on reboot like the DAC state.
+def _dac_pause_marker(run_dir=None):
+    return os.path.join(run_dir or PLAYERS_RUN_DIR, 'dac-paused')
+
+
+def _wait_for_player(server, mac, opener, timeout, poll):
+    """Poll Lyrion until it knows the just-(re)started player, returning its
+    mode; '' if it never answered within `timeout`."""
+    deadline = time.monotonic() + timeout
+    while True:
+        mode = player_mode(server, mac, opener=opener)
+        if mode or time.monotonic() >= deadline:
+            return mode
+        time.sleep(poll)
+
+
+def follow_dac_state(model, proc_asound=None, run_dir=None, opener=None,
+                     connect_timeout=6.0, poll=0.5, out=None):
+    """ExecStartPost of squeezelite.service. When the built-in player's chosen
+    USB DAC is gone, render falls back to the silent `null` device (see
+    available_output) so nothing leaks to the onboard analog output — and here
+    we pause the player on Lyrion so playback actually stops and holds its place
+    instead of running on into silence. When the DAC is back (the hotplug udev
+    rule restarts the service, the card is present again) we resume the player
+    we had paused. Keyed on the player's MAC; never raises."""
+    m = normalize(model)
+    mac, server = m['mac'], m['server']
+    if not mac or m['dsp']['enabled']:
+        return
+    card, _ = parse_device(m['output'])
+    if card is None:        # `default`/`null`/not a hw: card — nothing to follow
+        return
+    marker = _dac_pause_marker(run_dir)
+    if not card_present(m['output'], proc_asound):
+        # DAC gone: squeezelite is now on `null`. Pause only if it is playing,
+        # and remember we did so, so we can resume it when the DAC returns.
+        if _wait_for_player(server, mac, opener, connect_timeout, poll) == 'play':
+            if _player_request(server, mac, ['pause', '1'], opener=opener) is not None:
+                with contextlib.suppress(OSError):
+                    _write_atomic(marker, mac + '\n')
+                if out is not None:
+                    print(f'hifi_squeezelite: DAC {m["output"]} gone — paused {mac} on Lyrion', file=out)
+        return
+    # DAC present: resume the player if it is the one we paused for a gone DAC.
+    try:
+        with open(marker, encoding='utf-8') as f:
+            paused_mac = f.read().strip()
+    except OSError:
+        paused_mac = ''
+    if paused_mac == mac:
+        _wait_for_player(server, mac, opener, connect_timeout, poll)
+        _player_request(server, mac, ['pause', '0'], opener=opener)
+        if out is not None:
+            print(f'hifi_squeezelite: DAC {m["output"]} back — resumed {mac} on Lyrion', file=out)
+    if paused_mac:
+        with contextlib.suppress(OSError):
+            os.remove(marker)
 
 
 def forget_unit(unit, run_dir=None, forget=None):
@@ -2003,6 +2088,12 @@ def main(argv):
     if cmd == 'forget-unit' and len(argv) == 3:
         forget_unit(argv[2])
         return 0
+    if cmd == 'dac-check' and len(argv) == 2:
+        # ExecStartPost: pause the built-in player on Lyrion when its USB DAC is
+        # gone (render fell back to the silent `null`), resume it when it is back.
+        model, _ = load()
+        follow_dac_state(model, out=sys.stdout)
+        return 0
     if cmd == 'lms-rules' and len(argv) == 2:
         # Legacy no-op. The box no longer writes custom-convert.conf: the
         # Osmium Convert plugin is the single mechanism and keeps its own rules
@@ -2017,7 +2108,7 @@ def main(argv):
         sync_zones()
         return 0
     print('usage: hifi_squeezelite.py apply | show | probe <hw:CARD=…,DEV=n> | run-zone <id> '
-          '| forget-unit <unit> | lms-rules | zones-sync', file=sys.stderr)
+          '| forget-unit <unit> | dac-check | lms-rules | zones-sync', file=sys.stderr)
     return 2
 
 

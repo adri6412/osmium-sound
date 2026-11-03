@@ -418,16 +418,18 @@ class TestOutputFallback(unittest.TestCase):
     def test_available_output(self):
         self.assertEqual(sq.available_output('hw:CARD=D50s,DEV=0'), 'hw:CARD=D50s,DEV=0')
         self.assertEqual(sq.available_output('default'), 'default')     # not a hw: card
-        self.assertEqual(sq.available_output('hw:CARD=Lite,DEV=0'), 'default')   # card gone
+        self.assertEqual(sq.available_output('null'), 'null')           # not a hw: card
+        self.assertEqual(sq.available_output('hw:CARD=Lite,DEV=0'), 'null')   # card gone: silent
 
     def test_present_card_is_kept(self):
         line = sq.render(sq.normalize({'output': 'hw:CARD=D50s,DEV=0'}), self.sb.probe)
         self.assertIn('-o hw:CARD=D50s,DEV=0 ', line)
 
-    def test_missing_card_falls_back_to_default(self):
+    def test_missing_card_falls_back_to_null(self):
         line = sq.render(sq.normalize({'output': 'hw:CARD=Lite,DEV=0'}), self.sb.probe)
-        self.assertTrue(line.startswith('-o default '), line)
+        self.assertTrue(line.startswith('-o null '), line)
         self.assertNotIn('Lite', line)
+        self.assertNotIn('default', line)
 
     def test_fallback_drops_the_hardware_mixer(self):
         # -V names a control on the chosen card, which is gone on fallback.
@@ -446,7 +448,7 @@ class TestOutputFallback(unittest.TestCase):
                                   None, os.path.join(self.sb.dir, 'no-machine-id'))
         self.assertEqual(model['output'], 'hw:CARD=Lite,DEV=0')
         self.assertEqual(self.sb.conf_json()['output'], 'hw:CARD=Lite,DEV=0')
-        self.assertTrue(args.startswith('-o default '), args)
+        self.assertTrue(args.startswith('-o null '), args)
 
     def test_a_zone_keeps_its_output(self):
         # A zone does not fall back: run_zone() waits for the card, and a zone on
