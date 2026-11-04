@@ -1918,7 +1918,8 @@ def _wait_for_player(server, mac, opener, timeout, poll):
 
 
 def follow_dac_state(model, proc_asound=None, run_dir=None, opener=None,
-                     connect_timeout=6.0, poll=0.5, out=None):
+                     connect_timeout=6.0, poll=0.5, settle_tries=6, settle_wait=0.5,
+                     out=None):
     """ExecStartPost of squeezelite.service. When the built-in player's chosen
     USB DAC is gone, render falls back to the silent `null` device (see
     available_output) so nothing leaks to the onboard analog output — and here
@@ -1937,12 +1938,28 @@ def follow_dac_state(model, proc_asound=None, run_dir=None, opener=None,
     if not card_present(m['output'], proc_asound):
         # DAC gone: squeezelite is now on `null`. Pause only if it is playing,
         # and remember we did so, so we can resume it when the DAC returns.
-        if _wait_for_player(server, mac, opener, connect_timeout, poll) == 'play':
+        #
+        # The hotplug udev rule restarts the service, so squeezelite has just
+        # reconnected to Lyrion — and Lyrion resumes a player that reconnects
+        # while it was playing. A single `pause 1` races that resume and can
+        # lose: it may land before the reconnect settles and be played over,
+        # leaving the player running on into `null` (no sound, but the VU
+        # meters keep moving). So pause, confirm it stuck, and pause again if
+        # Lyrion resumed it, over a short settle window.
+        if _wait_for_player(server, mac, opener, connect_timeout, poll) != 'play':
+            return
+        paused = False
+        for _ in range(max(1, settle_tries)):
             if _player_request(server, mac, ['pause', '1'], opener=opener) is not None:
-                with contextlib.suppress(OSError):
-                    _write_atomic(marker, mac + '\n')
-                if out is not None:
-                    print(f'hifi_squeezelite: DAC {m["output"]} gone — paused {mac} on Lyrion', file=out)
+                paused = True
+            time.sleep(settle_wait)
+            if player_mode(server, mac, opener=opener) != 'play':
+                break          # the pause held — Lyrion did not resume it
+        if paused:
+            with contextlib.suppress(OSError):
+                _write_atomic(marker, mac + '\n')
+            if out is not None:
+                print(f'hifi_squeezelite: DAC {m["output"]} gone — paused {mac} on Lyrion', file=out)
         return
     # DAC present: resume the player if it is the one we paused for a gone DAC.
     try:

@@ -133,6 +133,11 @@ class FollowDacStateTest(unittest.TestCase):
 
     @staticmethod
     def _opener(mode, log):
+        # `mode` is the reply to every `mode ?`, or a list of replies consumed
+        # one per query (the last value repeats) to model Lyrion's state
+        # changing across the settle window.
+        modes = list(mode) if isinstance(mode, (list, tuple)) else None
+
         class Resp:
             def __init__(self, payload):
                 self.payload = payload
@@ -146,11 +151,16 @@ class FollowDacStateTest(unittest.TestCase):
             def read(self):
                 return self.payload
 
+        def next_mode():
+            if modes is None:
+                return mode
+            return modes.pop(0) if len(modes) > 1 else modes[0]
+
         def opener(req, timeout):
             cmd = json.loads(req.data)['params'][1]
             log.append(cmd)
             if cmd == ['mode', '?']:
-                return Resp(json.dumps({'result': {'_mode': mode}}).encode())
+                return Resp(json.dumps({'result': {'_mode': next_mode()}}).encode())
             return Resp(b'{"result":{}}')
         return opener
 
@@ -161,7 +171,7 @@ class FollowDacStateTest(unittest.TestCase):
                 f.write(marker_mac + '\n')
         with mock.patch.object(sq, 'card_present', lambda o, p=None: present):
             sq.follow_dac_state(self.model, run_dir=self.run, opener=self._opener(mode, log),
-                                connect_timeout=0.2, poll=0.01)
+                                connect_timeout=0.2, poll=0.01, settle_wait=0.0)
 
     def _marker(self):
         try:
@@ -174,6 +184,16 @@ class FollowDacStateTest(unittest.TestCase):
         log = []
         self._run(present=False, mode='play', log=log)
         self.assertIn(['pause', '1'], log)
+        self.assertEqual(self._marker(), self.mac)
+
+    def test_gone_pause_is_retried_until_it_sticks(self):
+        # Lyrion resumes the player when squeezelite reconnects after the
+        # service restart, so the first `pause 1` is played over (mode is still
+        # `play` right after it). follow_dac_state must pause again until it
+        # holds, otherwise the player runs on into `null` with the VU moving.
+        log = []
+        self._run(present=False, mode=['play', 'play', 'pause'], log=log)
+        self.assertEqual(log.count(['pause', '1']), 2)
         self.assertEqual(self._marker(), self.mac)
 
     def test_gone_while_stopped_does_not_pause(self):
