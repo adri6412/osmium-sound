@@ -7,16 +7,20 @@ import Hifi.Ui
 Item {
     id: root
     property real devScale: 1
-    property int tab: 0                       // 0 musica 1 radio 2 app 3 scopri 4 impostazioni
-    property var nav: [{ view: LibraryModel.Home, title: Tr.t("player.titles.home"), p1: "", p2: "", input: "" }]
+    property int tab: 0                       // 0 musica 1 app 2 scopri 3 impostazioni
+    // Pseudo-view (not in LibraryModel's C++ enum): the root of the Music tab,
+    // the tiles of the music sources (Qobuz/Tidal/Spotify/Radio/Local library).
+    // A large number so it never collides with a real LibraryModel.View value.
+    readonly property int sourcesRoot: 1000
+    property var nav: [{ view: sourcesRoot, title: Tr.t("player.titles.sources"), p1: "", p2: "", input: "" }]
     readonly property var cur: nav[nav.length - 1]
     readonly property int view: cur.view
-    readonly property bool hasCrumbs: tab !== 4 && tab !== 3
+    readonly property bool hasCrumbs: tab !== 3 && tab !== 2
     readonly property real contentTop: hasCrumbs ? 83 : 40
     readonly property bool hasSearch: tab === 0 && (view === LibraryModel.Artists || view === LibraryModel.Albums || view === LibraryModel.Composers)
     readonly property bool hasAz: hasSearch
     readonly property bool azShown: hasAz && !list.coverflow && !list.changer   // Cover Flow has its own slider, the changer its file
-    readonly property bool browsing: tab === 0 && view !== LibraryModel.Home
+    readonly property bool browsing: tab === 0 && view !== LibraryModel.Home && view !== sourcesRoot
     // the album and artist pages load their own data (AlbumPage.qml, ArtistPage.qml)
     readonly property bool isPage: view === LibraryModel.AlbumPage || view === LibraryModel.ArtistPage
     property bool msearchOpen: false
@@ -51,7 +55,7 @@ Item {
     Timer { interval: 15 * 60 * 1000; repeat: true; triggeredOnStart: true; running: true; onTriggered: root.checkUpdates() }
 
     readonly property var tabs: [
-        { icon: "music", key: "player.tabs.music" }, { icon: "radio", key: "player.tabs.radio" },
+        { icon: "music", key: "player.tabs.music" },
         { icon: "app-window", key: "player.tabs.apps" }, { icon: "compass", key: "player.tabs.discover" },
         { icon: "settings", key: "" }]
     // Home tiles: 3 columns on a normal canvas, 5 on ultrawide, one row of 9 on a very long bar
@@ -72,9 +76,57 @@ Item {
         { icon: "folder", key: "player.titles.folders", view: LibraryModel.Folders },
         { icon: "list-music", key: "player.titles.playlists", view: LibraryModel.Playlists }]
 
+    // ─── tessere delle sorgenti (radice del tab Musica) ─────────────────────
+    // "Libreria locale" (le tessere qui sopra) e "Radio" sono sempre presenti;
+    // i servizi di streaming (Qobuz/Tidal/Spotify) compaiono solo se il plugin
+    // e' installato, scoperti dalla lista `apps` di Lyrion. Ogni tessera porta:
+    //  - library → la home della libreria (le 9 tessere);
+    //  - radio   → l'elenco delle stazioni;
+    //  - app     → la radice del servizio (PluginItems con il suo `cmd`).
+    property var sourceTiles: []
+    property bool sourcesProbed: false
+    // the streaming services we promote to a tile, matched case-insensitively
+    // on the app's name (Spotty is the Spotify bridge plugin)
+    readonly property var sourceServices: [
+        { label: "Qobuz", match: ["qobuz"], icon: "disc" },
+        { label: "Tidal", match: ["tidal", "wimp"], icon: "waves" },
+        { label: "Spotify", match: ["spotify", "spotty"], icon: "music" }]
+    function rebuildSources(apps) {
+        var out = []
+        // streaming services first, in the order declared, only if available
+        for (var s = 0; s < sourceServices.length; s++) {
+            var svc = sourceServices[s]
+            for (var i = 0; i < apps.length; i++) {
+                var nm = String(apps[i].name || "").toLowerCase()
+                var hit = false
+                for (var m = 0; m < svc.match.length; m++) if (nm.indexOf(svc.match[m]) >= 0) { hit = true; break }
+                if (hit) { out.push({ kind: "app", label: apps[i].name || svc.label, icon: svc.icon, srvIcon: apps[i].icon || "", cmd: apps[i].id }); break }
+            }
+        }
+        out.push({ kind: "radio", label: Tr.t("player.titles.radio"), icon: "radio", srvIcon: "", cmd: "" })
+        out.push({ kind: "library", label: Tr.t("player.titles.localLibrary"), icon: "library", srvIcon: "", cmd: "" })
+        sourceTiles = out
+    }
+    function loadSources() {
+        if (!Player.connected) return
+        sourcesProbed = true
+        Player.query(["apps", "0", "9999"], function(ok, r) {
+            var apps = []
+            if (ok && r) {
+                var loop = r.appss_loop || r.apps_loop || r.item_loop || []
+                for (var i = 0; i < loop.length; i++) apps.push({ name: loop[i].name, id: loop[i].cmd, icon: loop[i].icon })
+            }
+            root.rebuildSources(apps)
+        })
+    }
+    Component.onCompleted: { rebuildSources([]); if (Player.connected) loadSources() }
+    Connections { target: Player; function onConnectedChanged() { if (Player.connected) root.loadSources() } }
+    // a new Lyrion (multiroom follow / external server) has its own apps
+    Connections { target: Api; function onLmsBaseChanged() { root.sourcesProbed = false; root.loadSources() } }
+
     // ─── navigazione ───────────────────────────────────────────────────────
     function loadTop() {
-        if (cur.view === LibraryModel.Home) return
+        if (cur.view === LibraryModel.Home || cur.view === root.sourcesRoot) return
         if (cur.view === LibraryModel.AlbumPage || cur.view === LibraryModel.ArtistPage) {
             // a fresh page every time, also from one album page to another
             pageLoader.sourceComponent = null
@@ -111,8 +163,9 @@ Item {
     // (Nav.land): the content, never the bars above it. `from` is the entry
     // one came back from, so the home lights the tile that had been opened.
     function landing(from) {
-        if (tab === 4) return { box: settingsTab, pick: null }
-        if (tab === 3) return { box: discoverTab, pick: null }
+        if (tab === 3) return { box: settingsTab, pick: null }
+        if (tab === 2) return { box: discoverTab, pick: null }
+        if (view === root.sourcesRoot) return { box: sourcesBox, pick: function() { return sourcesBox.tileFor(from) } }
         if (view === LibraryModel.Home) return { box: tilesBox, pick: function() { return tilesBox.tileFor(from) } }
         if (isPage) return { box: pageLoader, pick: function() { return pageLoader.item ? pageLoader.item.navFirst : null } }
         return { box: list, pick: null }
@@ -120,12 +173,24 @@ Item {
     function landNav(from) { var l = landing(from); Nav.land(l.box, l.pick) }
     // 🚨 Se l'apparecchio passa a un altro Lyrion (multiroom "segui", o server
     // esterno), quello che si sta guardando e' l'elenco del server di prima:
-    // si riparte dalla home di quello nuovo.
-    Connections { target: Api; function onLmsBaseChanged() { root.navHome() } }
+    // si riparte dalla radice delle sorgenti del nuovo.
+    Connections { target: Api; function onLmsBaseChanged() { root.navSources() } }
 
+    // the Music tab's root: the source tiles, above the library home
+    function navSources() {
+        nav = [{ view: root.sourcesRoot, title: Tr.t("player.titles.sources"), p1: "", p2: "", input: "" }]
+        navDir = -1
+        msearchOpen = false; ctx.close(); search.text = ""
+        pageLoader.sourceComponent = null
+        appear()
+        landNav(null)
+    }
+    // the library home (the 9 tiles), one level under the sources root so Back
+    // from it returns to the tiles
     function navHome() {
-        var from = nav.length > 1 ? nav[1] : null
-        nav = [{ view: LibraryModel.Home, title: Tr.t("player.titles.home"), p1: "", p2: "", input: "" }]
+        var from = nav.length > 2 ? nav[2] : null
+        nav = [{ view: root.sourcesRoot, title: Tr.t("player.titles.sources"), p1: "", p2: "", input: "" },
+               { view: LibraryModel.Home, title: Tr.t("player.titles.localLibrary"), p1: "", p2: "", input: "" }]
         navDir = -1
         msearchOpen = false; ctx.close(); search.text = ""
         pageLoader.sourceComponent = null
@@ -134,7 +199,7 @@ Item {
     }
     function navBack() {
         // in Settings the remote's Back steps up its own levels first
-        if (tab === 4 && settingsTab.backStep()) return
+        if (tab === 3 && settingsTab.backStep()) return
         if (nav.length <= 1) return
         var from = nav[nav.length - 1]
         var n = nav.slice(); n.pop(); nav = n
@@ -155,16 +220,22 @@ Item {
     function openTab(i) {
         navDir = i > tab ? 1 : i < tab ? -1 : 0
         tab = i; ctx.close()
-        if (i === 1) { navHome(); goView(LibraryModel.Radios, Tr.t("player.titles.radio")) }
-        else if (i === 2) { navHome(); goView(LibraryModel.MenuHome, Tr.t("player.titles.apps")) }
+        if (i === 1) {
+            // "Apps · CD": the Jive home menu stands as its own root
+            nav = [{ view: LibraryModel.MenuHome, title: Tr.t("player.titles.apps"), p1: "", p2: "", input: "" }]
+            navDir = -1; msearchOpen = false; search.text = ""; pageLoader.sourceComponent = null
+            loadTop()
+        }
         else if (i === 0) {
+            // back to Music: keep a library view in place, otherwise show the
+            // sources root (never land on a service/apps plugin view)
             var v = view
-            if (!(v === LibraryModel.Home || v === LibraryModel.Artists || v === LibraryModel.Albums || v === LibraryModel.Tracks ||
+            if (!(v === root.sourcesRoot || v === LibraryModel.Home || v === LibraryModel.Artists || v === LibraryModel.Albums || v === LibraryModel.Tracks ||
                   v === LibraryModel.Folders || v === LibraryModel.Playlists || v === LibraryModel.PlaylistTracks ||
                   v === LibraryModel.Genres || v === LibraryModel.Years || v === LibraryModel.Composers ||
-                  v === LibraryModel.NewMusic || v === LibraryModel.Search || v === LibraryModel.AlbumPage || v === LibraryModel.ArtistPage)) navHome()
-        } else if (i === 4) settingsTab.enter()
-        else if (i === 3) discoverTab.enter()
+                  v === LibraryModel.NewMusic || v === LibraryModel.Search || v === LibraryModel.AlbumPage || v === LibraryModel.ArtistPage)) navSources()
+        } else if (i === 3) settingsTab.enter()
+        else if (i === 2) discoverTab.enter()
         appear()
         landNav(null)
     }
@@ -717,7 +788,7 @@ Item {
         Item {
             x: 12; y: 8; width: 27; height: 27
             Icon { anchors.centerIn: parent; name: "home"; size: 15; color: Theme.silverA(0.6) }
-            Tap { onClicked: root.navHome() }
+            Tap { onClicked: root.tab === 1 ? root.openTab(1) : root.navSources() }
         }
         // the trail stops short of the buttons on the right and keeps its end
         // in view, so a long chain of pages never runs under "Back"
@@ -767,7 +838,7 @@ Item {
         // Settings → Library): the view on screen, a tap drops the list down
         Rectangle {
             id: viewPick
-            visible: list.grid && !root.isPage
+            visible: list.albumGrid && !root.isPage
             readonly property string view: Ui.app ? Ui.app.albumView : "grid"
             readonly property var views: [{ id: "grid", icon: "layout-grid", label: "player.view.grid" },
                                           { id: "coverflow", icon: "gallery-horizontal", label: "player.view.coverflow" },
@@ -804,13 +875,13 @@ Item {
         Item {
             id: pane
             anchors.fill: parent
-            SettingsTab { id: settingsTab; anchors.fill: parent; visible: root.tab === 4; devScale: root.devScale }
-            DiscoverTab { id: discoverTab; anchors.fill: parent; visible: root.tab === 3; devScale: root.devScale }
+            SettingsTab { id: settingsTab; anchors.fill: parent; visible: root.tab === 3; devScale: root.devScale }
+            DiscoverTab { id: discoverTab; anchors.fill: parent; visible: root.tab === 2; devScale: root.devScale }
 
             Item {
                 id: libArea
                 anchors.fill: parent
-                visible: root.tab !== 4 && root.tab !== 3
+                visible: root.tab !== 3 && root.tab !== 2
 
                 // non ancora collegati a Lyrion (LyrionServer.jsx:1267)
                 Column {
@@ -829,6 +900,61 @@ Item {
 
                 // fascia "CD rilevato" in cima alla scheda Musica
                 CdBanner { id: cdBanner; visible: root.tab === 0 && Ui.cdrip && Ui.cdrip.bannerVisible; width: parent.width }
+                // la radice delle sorgenti: le tessere dei servizi, della radio e
+                // della libreria locale (dove si atterra aprendo il tab Musica)
+                Item {
+                    anchors.fill: parent
+                    anchors.topMargin: cdBanner.visible ? 48 : 0
+                    visible: root.view === root.sourcesRoot && Player.connected
+                    Item {
+                        id: sourcesBox
+                        anchors.fill: parent
+                        // the tile the spotlight returns to, coming back from `e`
+                        function tileFor(e) {
+                            if (!e) return null
+                            for (var i = 0; i < children.length; i++) {
+                                var c = children[i]; var m = c.modelData
+                                if (!m) continue
+                                if (m.kind === "library" && e.view === LibraryModel.Home) return c.navTap
+                                if (m.kind === "radio" && e.view === LibraryModel.Radios) return c.navTap
+                                if (m.kind === "app" && e.view === LibraryModel.PluginItems && String(e.p1) === String(m.cmd)) return c.navTap
+                            }
+                            return null
+                        }
+                        Repeater {
+                            model: root.sourceTiles
+                            Rectangle {
+                                required property var modelData
+                                required property int index
+                                property alias navTap: srcTap
+                                readonly property real tw: root.homeTw
+                                readonly property real th: root.homeTh
+                                x: 16 + (index % root.homeCols) * (tw + 12); y: 62 + Math.floor(index / root.homeCols) * (th + 12)
+                                width: tw; height: th; radius: 12
+                                color: srcTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
+                                // the server's own icon for a streaming service, else a glyph
+                                Image {
+                                    id: srcImg
+                                    visible: status === Image.Ready
+                                    anchors.horizontalCenter: parent.horizontalCenter; y: 24 + (parent.th - 117) / 2
+                                    width: 40; height: 40; fillMode: Image.PreserveAspectFit
+                                    asynchronous: true; cache: true; smooth: true
+                                    source: modelData.srvIcon ? list.iconUrl(modelData.srvIcon) : ""
+                                }
+                                Icon { visible: !srcImg.visible; anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (parent.th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
+                                Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (parent.th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: modelData.label; color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                                Tap {
+                                    id: srcTap
+                                    onClicked: {
+                                        if (modelData.kind === "library") root.goView(LibraryModel.Home, Tr.t("player.titles.localLibrary"))
+                                        else if (modelData.kind === "radio") root.goView(LibraryModel.Radios, Tr.t("player.titles.radio"))
+                                        else root.goView(LibraryModel.PluginItems, modelData.label, modelData.cmd)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 // la home: ricerca in tutta la libreria, poi le tessere
                 Item {
                     anchors.fill: parent
@@ -896,7 +1022,7 @@ Item {
                 Item {
                     anchors.fill: parent
                     anchors.topMargin: cdBanner.visible ? 48 : 0
-                    visible: root.view !== LibraryModel.Home && Player.connected
+                    visible: root.view !== LibraryModel.Home && root.view !== root.sourcesRoot && Player.connected
                     property real y0: 0
                     // ricerca dei menu Jive (Cerca…)
                     Rectangle {

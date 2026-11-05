@@ -444,7 +444,7 @@ Item {
         if (overlays.busy) overlays.close()
         setExpanded(false)
         mainScreen.browser.showMusicTab()
-        mainScreen.browser.navHome()                      // and the spotlight on the first tile
+        mainScreen.browser.navSources()                   // the sources root, as just turned on
     }
 
     // per il canale di collaudo (eval): app.settings.openSection(n) ecc.
@@ -470,7 +470,7 @@ Item {
     // the signal path)
     function openPlaybackSetting(which) {
         app.setExpanded(false)
-        mainScreen.browser.openTab(4)
+        mainScreen.browser.openTab(3)
         Ui.settings.openSection("playback", which)
     }
 
@@ -500,7 +500,7 @@ Item {
         onStartScreensaver: screensaver.show(true)
         onToggleView: { app.viewVu = !app.viewVu; Sys.setConf("nowplaying-view", app.viewVu ? "vu" : "lyrics") }
         // the ReplayGain light and the signal path open Settings → Playback on that setting
-        onOpenSettings: { app.setExpanded(false); mainScreen.browser.openTab(4) }
+        onOpenSettings: { app.setExpanded(false); mainScreen.browser.openTab(3) }
         onOpenPlaybackSetting: (which) => app.openPlaybackSetting(which)
         onOpenSignalPath: overlays.openSignalPath()
     }

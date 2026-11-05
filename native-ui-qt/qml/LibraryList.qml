@@ -12,12 +12,20 @@ Item {
     signal rowTap(int row, bool onPlay)
     signal rowLongPress(int row, real x, real y)
     signal expandAlbum(int row, real x, real y, real size, string src)   // Cover Flow: the front cover opens
+    // Album e novità a griglia come sempre; i menu di app/servizi (radio, app,
+    // voci di plugin, menu Jive) ora anch'essi a tessere quadrate.
     readonly property bool grid: view === LibraryModel.Albums || view === LibraryModel.NewMusic
+                               || view === LibraryModel.Radios || view === LibraryModel.Apps
+                               || view === LibraryModel.PluginItems
+                               || view === LibraryModel.MenuHome || view === LibraryModel.Menu
+    // solo la libreria album/novità può diventare Cover Flow o caricatore CD;
+    // i menu di app/servizi restano sempre a tessere quadrate
+    readonly property bool albumGrid: view === LibraryModel.Albums || view === LibraryModel.NewMusic
     // the albums as Cover Flow instead of the grid (Settings → Library, or
     // the button in the crumb bar)
-    readonly property bool coverflow: grid && !!Ui.app && Ui.app.albumView === "coverflow"
+    readonly property bool coverflow: albumGrid && !!Ui.app && Ui.app.albumView === "coverflow"
     // ...or as the discs of the CD changer, to load and play (ChangerView)
-    readonly property bool changer: grid && !!Ui.app && Ui.app.albumView === "changer"
+    readonly property bool changer: albumGrid && !!Ui.app && Ui.app.albumView === "changer"
     readonly property bool search: view === LibraryModel.Search
     readonly property int pitch: view === LibraryModel.Tracks || view === LibraryModel.PlaylistTracks ? 50
                                : view === LibraryModel.Radios || view === LibraryModel.Apps ? 54 : 58
@@ -266,6 +274,21 @@ Item {
             required property string text
             required property string sub
             required property string art
+            required property string icon
+            required property bool isAudio
+            required property bool hasItems
+            required property bool hasInput
+            required property var play
+            required property var go
+            readonly property int v: root.view
+            // le tessere di app/servizi (radio, app, voci di plugin, menu Jive)
+            // usano l'icona del server invece della copertina album
+            readonly property bool plugin: v >= LibraryModel.Radios
+            // il pulsante play sulla scheda: sempre per gli album, e per le
+            // voci di servizio solo quando sono riproducibili
+            readonly property bool playBtn: v === LibraryModel.Albums || v === LibraryModel.NewMusic
+                || ((v === LibraryModel.MenuHome || v === LibraryModel.Menu) && play && play.length > 0)
+                || (v === LibraryModel.PluginItems && isAudio)
             width: root.cardW; height: root.cardH
             // 🚨 the play circle has no touch area of its own: the card's
             // covers it and would take the press anyway (it already did, and
@@ -284,7 +307,12 @@ Item {
                     id: artBox
                     width: root.cardW; height: root.cardW
                     DiagonalFallback { anchors.fill: parent; radius: 12; visible: artImg.status !== Image.Ready
-                                Icon { anchors.centerIn: parent; name: "disc"; size: 40; color: Theme.silverA(0.2) } }
+                                Icon { anchors.centerIn: parent; size: 40; color: Theme.silverA(0.2)
+                                    name: !card.plugin ? "disc"
+                                        : card.v === LibraryModel.Radios ? "radio"
+                                        : card.v === LibraryModel.Apps ? "app-window"
+                                        : card.v === LibraryModel.PluginItems ? (card.hasInput ? "search" : card.hasItems ? "folder" : "music")
+                                        : ((card.go && card.go.length) ? "app-window" : "music") } }
                     Image {
                         id: artImg; anchors.fill: parent; visible: false
                         // 🚨 stessa forma di indirizzo del kiosk Electron (`cover?size=`):
@@ -292,7 +320,8 @@ Item {
                         // perche' Lyrion non sa sempre produrre quella variante.
                         // La misura segue lo schermo: 300 sulla tela 1 a 1, fino a 1200 a 4K.
                         readonly property int px: Theme.coverPx(root.cardW)
-                        source: card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px : ""
+                        source: card.plugin ? root.iconUrl(card.icon)
+                              : card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px : ""
                         asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
                         smooth: true
                         // 🚨 Si decodifica ESATTAMENTE alla misura che Lyrion serve
@@ -318,6 +347,7 @@ Item {
                     BoxShadow { targetX: parent.width - 36; targetY: parent.height - 36; targetW: 30; targetH: 30; radius: 15; blur: 15; spread: -3; offsetY: 10; color: Theme.blackA(0.1) }
                     BoxShadow { targetX: parent.width - 36; targetY: parent.height - 36; targetW: 30; targetH: 30; radius: 15; blur: 6; spread: -4; offsetY: 4; color: Theme.blackA(0.1) }
                     Rectangle {
+                        visible: card.playBtn
                         x: parent.width - 6 - 30; y: parent.height - 6 - 30; width: 30; height: 30; radius: 15
                         color: Theme.mix(Theme.blackA(0.6), Theme.gold, card.playF)      // active:bg-hifi-gold active:text-black
                         Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 14; color: Theme.white; pressColor: Theme.black; press: card.playF }
@@ -329,12 +359,13 @@ Item {
             RowTap {
                 id: cardTap
                 flick: gridView; tap: 0.98; holdRing: true
-                onClicked: (m) => root.rowTap(card.index, Math.abs(m.x - card.playCx) <= 18 && Math.abs(m.y - card.playCx) <= 18)
+                onClicked: (m) => root.rowTap(card.index, card.playBtn && Math.abs(m.x - card.playCx) <= 18 && Math.abs(m.y - card.playCx) <= 18)
                 onLongPress: (x, y) => root.rowLongPress(card.index, card.mapToItem(root, x, y).x, card.mapToItem(root, x, y).y)
             }
             // the card's play button as a remote stop, like the rows'
             Item {
                 property bool navigable: true
+                visible: card.playBtn
                 x: card.playCx - 18; y: card.playCx - 18; width: 36; height: 36
                 NavRing { radius: 18 }
             }

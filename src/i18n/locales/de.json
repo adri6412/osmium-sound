@@ -333,6 +333,8 @@
     },
     "titles": {
       "home": "Home",
+      "sources": "Musik",
+      "localLibrary": "Lokale Bibliothek",
       "artists": "Künstler",
       "albums": "Alben",
       "folders": "Ordner",
@@ -1953,8 +1955,8 @@
       "body": "Dieser Pfeil öffnet die vollständige „Aktuelle Wiedergabe“-Ansicht, die VU-Anzeigen oder eine Animation enthält. Wische nach unten oder tippe auf den Pfeil oben links, um zurückzukehren."
     },
     "tabs": {
-      "title": "Music, Radio, Apps, Entdecken, Einstellungen",
-      "body": "Die Reiter am oberen Rand: Bibliothek, Internetradios, die Lyrion-Apps, Musik zum Entdecken sowie die Geräteeinstellungen. In der Ecke befindet sich die Ein-/Aus-Taste, daneben das Netzwerksymbol – tippe darauf, um zu prüfen, ob eine Internetverbindung besteht."
+      "title": "Musik, Apps, Entdecken, Einstellungen",
+      "body": "Die Reiter am oberen Rand: Musik öffnet deine Quellen als Kacheln – die vorhandenen Streaming-Dienste, Internetradios und die lokale Bibliothek; dann die Lyrion-Apps, Musik zum Entdecken sowie die Geräteeinstellungen. In der Ecke befindet sich die Ein-/Aus-Taste, daneben das Netzwerksymbol – tippe darauf, um zu prüfen, ob eine Internetverbindung besteht."
     },
     "library": {
       "title": "Bibliothek",
