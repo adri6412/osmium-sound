@@ -33,22 +33,31 @@ Item {
     // Wide canvases: the row of discs takes the left part and the changer stands
     // big on the right, instead of below the row where it is hardly seen.
     readonly property bool sideBox: Theme.wide
-    readonly property real rowW: sideBox ? Math.round(width * 0.5) : width
+    readonly property real rowW: sideBox ? Math.round(width * 0.47) : width
     readonly property real cs: sideBox ? Math.max(90, Math.min(Math.round((height - 70) / 1.1), Math.round(rowW * 0.3)))
                                        : Math.max(90, Math.min(Math.round(height * 0.36), Math.round(width * 0.2)))   // the front disc
-    readonly property real cx: rowW / 2
-    readonly property real discY: 16 + Math.round(cs * 0.08)        // room for a loaded disc to rise
+    // side by side the disc block sits left of centre so the right fan keeps
+    // clear of the changer beside it instead of sliding under it
+    readonly property real cx: sideBox ? Math.round(rowW * 0.44) : rowW / 2
+    // side by side the disc block is centred vertically to sit level with the
+    // changer (which centres in its box), instead of hugging the top
+    readonly property real rowTop: sideBox ? Math.max(8, Math.round((height - cs - 104) / 2)) : 0
+    readonly property real discY: rowTop + 16 + Math.round(cs * 0.08)        // room for a loaded disc to rise
     readonly property real maxAngle: 74
     readonly property real halfTurned: cs / 2 * Math.cos(maxAngle * Math.PI / 180)
     readonly property real off: cs / 2 + halfTurned + cs * 0.07    // the first turned disc's centre
     readonly property real gap: cs * 0.09                          // between turned discs: a file
-    readonly property int side: Math.max(0, Math.min(14, Math.ceil((rowW / 2 - off + halfTurned) / gap) + 1))
+    // full width: let the fan run off the edges (discs recede into the distance).
+    // side by side: stop the right fan before the changer so they never overlap.
+    readonly property int side: Math.max(0, Math.min(14, sideBox
+        ? Math.floor((rowW - cx - off - halfTurned) / gap)
+        : Math.ceil((rowW / 2 - off + halfTurned) / gap) + 1))
     readonly property int slots: 2 * side + 1
     readonly property int px: Theme.coverPx(cs)
     readonly property real captionY: discY + cs + 8
     // the changer below the row, as large as the rest of the height allows
     readonly property real boxY: captionY + 46
-    readonly property rect box: sideBox ? Qt.rect(rowW + 8, 8, width - rowW - 16, height - 16)
+    readonly property rect box: sideBox ? Qt.rect(rowW + 20, 8, width - rowW - 40, height - 16)
                                         : Qt.rect(8, boxY, width - 16, Math.max(40, height - boxY - 6))
     // where its window is, for the discs flying in (AnimChanger: a 600 x 260
     // stage fitted and centred in its box, the window centred at 235.5, 106)

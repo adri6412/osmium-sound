@@ -89,7 +89,7 @@ Item {
     // on the app's name (Spotty is the Spotify bridge plugin)
     readonly property var sourceServices: [
         { label: "Qobuz", match: ["qobuz"], icon: "disc" },
-        { label: "Tidal", match: ["tidal", "wimp"], icon: "waves" },
+        { label: "Tidal", match: ["tidal", "wimp"], icon: "disc-3" },
         { label: "Spotify", match: ["spotify", "spotty"], icon: "music" }]
     function rebuildSources(apps) {
         var out = []
@@ -100,7 +100,7 @@ Item {
                 var nm = String(apps[i].name || "").toLowerCase()
                 var hit = false
                 for (var m = 0; m < svc.match.length; m++) if (nm.indexOf(svc.match[m]) >= 0) { hit = true; break }
-                if (hit) { out.push({ kind: "app", label: apps[i].name || svc.label, icon: svc.icon, srvIcon: apps[i].icon || "", cmd: apps[i].id }); break }
+                if (hit) { out.push({ kind: "app", label: svc.label || apps[i].name, icon: svc.icon, srvIcon: apps[i].icon || "", cmd: apps[i].id }); break }
             }
         }
         out.push({ kind: "radio", label: Tr.t("player.titles.radio"), icon: "radio", srvIcon: "", cmd: "" })
