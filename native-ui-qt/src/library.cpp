@@ -328,7 +328,12 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
         case PluginItems: {
             o.id = str(it, "id"); if (o.id.isEmpty()) o.id = str(it, "play");
             o.text = str(it, "name"); if (o.text.isEmpty()) o.text = str(it, "title");
-            o.icon = str(it, "icon");
+            // 🚨 plugin items (Qobuz, Tidal...) carry their artwork in `image`,
+            // not `icon`: album/track covers come as `/imageproxy/...` and menu
+            // nodes as `html/images/*.png`, while `icon` is usually empty. Read
+            // the same ladder as the Jive menus (menuIcon: icon-id, window
+            // icon-id, icon, image) or every plugin tile shows no art.
+            o.icon = menuIcon(it);
             QString type = str(it, "type"); o.ptype = type;
             // 🚨 Lyrion marca il nodo di ricerca con type:"search" ma gli mette
             // ANCHE hasitems:1 (il suo ripiego "Bug 7684"): non e' un vero

@@ -13,6 +13,10 @@ Item {
     // A large number so it never collides with a real LibraryModel.View value.
     readonly property int sourcesRoot: 1000
     property var nav: [{ view: sourcesRoot, title: Tr.t("player.titles.sources"), p1: "", p2: "", input: "" }]
+    // where the last long-press menu opened, so a second-level menu (the native
+    // plugin context menu) can reopen in the same spot
+    property real menuX: 0
+    property real menuY: 0
     readonly property var cur: nav[nav.length - 1]
     readonly property int view: cur.view
     readonly property bool hasCrumbs: tab !== 3 && tab !== 2
@@ -349,7 +353,8 @@ Item {
     function tutorialMenuRect() {
         if (view !== LibraryModel.Albums || Library.state !== 2 || Library.count < 1 || list.coverflow || list.changer) return null
         var cw = list.cardW, top = (cdBanner.visible ? 48 : 0)
-        ctx.open(ctxItems(0), list.x + cw / 2, list.y + cw / 2 + top)
+        menuX = list.x + cw / 2; menuY = list.y + cw / 2 + top
+        ctx.open(ctxItems(0), menuX, menuY)
         if (!ctx.visible) return null
         // the card and its menu together
         var x0 = Math.min(list.x, ctx.boxX), y0 = Math.min(list.y + top, ctx.boxY)
@@ -424,6 +429,38 @@ Item {
         function q(mode) { return function() { Player.cmd([cmd, "playlist", mode, "item_id:" + id]) } }
         L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: q("add") })
         L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: q("insert") })
+    }
+    // The native context menu of a plugin item (Qobuz, Tidal...): Material's
+    // "more". A plugin item carries no favorites_url of its own, so the only way
+    // to add a Qobuz album/track to favourites — or jump to its artist/credits —
+    // is to ask the plugin for the item's context menu (`isContextMenu:1`), which
+    // returns rows whose `go` action does the deed. `nextWindow:"parent"` (and
+    // kin) means the action is a one-shot (add to favourites) and leaves the list
+    // where it is; anything else drills into a submenu, so we browse into it.
+    function openNativeCtx(cmd, id) {
+        Player.query([cmd, "items", "0", "100", "item_id:" + id, "isContextMenu:1", "menu:" + cmd], function(ok, r) {
+            if (!ok || !r) { say("alert-triangle", "player.ctxError"); return }
+            var loop = r.item_loop || r.loop_loop || [], items = []
+            for (var i = 0; i < loop.length; i++) {
+                var it = loop[i], a = it.actions
+                if (!a || !a.go || !a.go.cmd || !a.go.params || !a.go.params.item_id) continue
+                var iid = String(a.go.params.item_id), label = String(it.text || "").split("\n")[0]
+                if (!label) continue
+                var nw = String(a.go.nextWindow || "")
+                var terminal = nw === "parent" || nw === "grandparent" || nw === "refresh" || nw === "refreshOrigin" || nw === "home"
+                var isFav = /favor/i.test(label)
+                var ic = isFav ? "heart" : /artist/i.test(label) ? "user" : terminal ? "list-plus" : "chevron-right"
+                items.push((function(c, i2, lab, term, fav) { return { icon: ic, label: lab, cb: function() {
+                    if (term) Player.query([c, "items", "0", "10", "item_id:" + i2, "menu:" + c], function(ok2) {
+                        say(fav ? "heart" : "check", ok2 ? (fav ? "player.addedToFavorites" : "player.actionDone") : "player.favoriteError")
+                        if (ok2 && fav && cur.view === LibraryModel.PluginItems && cur.p1 === "favorites") loadTop()
+                    })
+                    else root.goView(LibraryModel.PluginItems, lab, c, i2)
+                } } })(cmd, iid, label, terminal, isFav))
+            }
+            if (!items.length) { say("info", "player.noActions"); return }
+            ctx.open(items, root.menuX, root.menuY)
+        })
     }
     function favoriteMenu(it, row) {
         var L = []
@@ -509,6 +546,11 @@ Item {
                 L.push({ icon: "disc-3", label: Tr.t("player.changer.putIn"), cb: function() {
                     Ui.app.changerPut({ title: it.text, artUrl: list.iconUrl(it.icon), url: it.favUrl, cmd: cur.p1, item: it.id })
                 } })
+            // the plugin's own context menu (Material's "more"): add to the
+            // service's favourites, go to the artist, credits... Shown for real
+            // music items (an album, a track) since navigation nodes have none.
+            if (!it.hasInput && (it.isAudio || it.ptype === "playlist"))
+                L.push({ icon: "list", label: Tr.t("player.moreActions"), cb: function() { root.openNativeCtx(cur.p1, it.id) } })
             break
         case LibraryModel.MenuHome: case LibraryModel.Menu:
             // i menu Jive portano le proprie azioni: `add` accoda, `add-hold`
@@ -1099,7 +1141,7 @@ Item {
                         visible: Library.state === 2 && Library.count > 0 && !root.isPage
                         onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
                         // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
-                        onRowLongPress: (row, x, y) => ctx.open(root.ctxItems(row), list.x + x, list.y + y + (cdBanner.visible ? 48 : 0))
+                        onRowLongPress: (row, x, y) => { root.menuX = list.x + x; root.menuY = list.y + y + (cdBanner.visible ? 48 : 0); ctx.open(root.ctxItems(row), root.menuX, root.menuY) }
                         onExpandAlbum: (row, x, y, size, src) => hero.fly(row, list.x + x, list.y + y, size, src)
                     }
                     // The album that opens from Cover Flow: a copy of its cover
