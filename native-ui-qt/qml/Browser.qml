@@ -104,7 +104,12 @@ Item {
     function rebuildSources(apps) {
         var out = []
         var byCmd = {}
-        // streaming services first, in the order declared, only if available
+        // Favourites and the local library come first, then the streaming
+        // services, then radio. "favorites" is the global Lyrion favourites
+        // menu (opened as a plugin item with cmd "favorites").
+        out.push({ kind: "favorites", label: Tr.t("player.titles.favorites"), icon: "heart", srvIcon: "", cmd: "favorites" })
+        out.push({ kind: "library", label: Tr.t("player.titles.localLibrary"), icon: "library", srvIcon: "", cmd: "" })
+        // streaming services, in the order declared, only if available
         for (var s = 0; s < sourceServices.length; s++) {
             var svc = sourceServices[s]
             for (var i = 0; i < apps.length; i++) {
@@ -115,7 +120,6 @@ Item {
             }
         }
         out.push({ kind: "radio", label: Tr.t("player.titles.radio"), icon: "radio", srvIcon: "", cmd: "" })
-        out.push({ kind: "library", label: Tr.t("player.titles.localLibrary"), icon: "library", srvIcon: "", cmd: "" })
         sourceTiles = out
         svcByCmd = byCmd
     }
@@ -1031,6 +1035,7 @@ Item {
                                 if (!m) continue
                                 if (m.kind === "library" && e.view === LibraryModel.Home) return c.navTap
                                 if (m.kind === "radio" && e.view === LibraryModel.Radios) return c.navTap
+                                if (m.kind === "favorites" && e.view === LibraryModel.PluginItems && String(e.p1) === "favorites") return c.navTap
                                 if (m.kind === "app" && e.view === LibraryModel.PluginItems && String(e.p1) === String(m.cmd)) return c.navTap
                             }
                             return null
@@ -1078,6 +1083,7 @@ Item {
                                     onClicked: {
                                         if (modelData.kind === "library") root.goView(LibraryModel.Home, Tr.t("player.titles.localLibrary"))
                                         else if (modelData.kind === "radio") root.goView(LibraryModel.Radios, Tr.t("player.titles.radio"))
+                                        else if (modelData.kind === "favorites") root.goView(LibraryModel.PluginItems, Tr.t("player.titles.favorites"), "favorites")
                                         else root.goView(LibraryModel.PluginItems, modelData.label, modelData.cmd)
                                     }
                                 }
