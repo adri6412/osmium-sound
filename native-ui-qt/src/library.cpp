@@ -268,8 +268,17 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
     for (const QString &n : loopNames) if (res.contains(n)) { loop = res.value(n).toList(); break; }
     QVariantMap base = res.value("base").toMap();
     m_items.reserve(loop.size());
+    // The CDplayer plugin's root lists the same disc read several ways (two
+    // metadata matches, CD-Text, raw tracks) plus Eject. Show the disc once:
+    // keep only the first (best) album entry and the non-album actions (Eject).
+    const bool cdMenu = view == PluginItems && cmd == "cdplayer";
+    bool cdAlbumKept = false;
     for (const QVariant &v : loop) {
         QVariantMap it = v.toMap();
+        if (cdMenu && it.value("hasitems").toInt() == 1) {
+            if (cdAlbumKept) continue;
+            cdAlbumKept = true;
+        }
         LibItem o;
         switch (view) {
         case Artists: case Composers: o.id = str(it, "id"); o.text = str(it, "artist"); o.favUrl = str(it, "favorites_url"); break;
@@ -306,7 +315,13 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
             bool hasAct = acts.contains("go") || acts.contains("do") || it.contains("input");
             bool excl = id == "myMusic" || id == "radios" || id == "playerpower";
             QString go0 = acts.value("go").toMap().value("cmd").toList().value(0).toString();
-            if (!okNode || !hasAct || excl || go0 == "favorites") continue;
+            // The streaming services (Qobuz/Tidal/Spotify) and the CD player are
+            // already shown as tiles on the Music root, so hide them here to keep
+            // the Apps tab free of duplicates (match the app command or its id).
+            static const QStringList musicRootApps = {
+                "qobuz", "tidal", "wimp", "spotify", "spotty", "cdplayer" };
+            if (!okNode || !hasAct || excl || go0 == "favorites"
+                || musicRootApps.contains(go0) || musicRootApps.contains(id)) continue;
             o.id = id; o.text = str(it, "text"); if (o.text.isEmpty()) o.text = str(it, "name");
             o.icon = menuIcon(it);
             o.go = resolveAction({}, it, "go"); o.play = resolveAction({}, it, "play"); o.doact = resolveAction({}, it, "do");
@@ -328,6 +343,9 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
         case PluginItems: {
             o.id = str(it, "id"); if (o.id.isEmpty()) o.id = str(it, "play");
             o.text = str(it, "name"); if (o.text.isEmpty()) o.text = str(it, "title");
+            // CDplayer tags its metadata reads with a trailing " [data]"; drop it
+            // so the disc shows its plain album title.
+            if (cdMenu && o.text.endsWith(" [data]")) o.text.chop(7);
             // 🚨 plugin items (Qobuz, Tidal...) carry their artwork in `image`,
             // not `icon`: album/track covers come as `/imageproxy/...` and menu
             // nodes as `html/images/*.png`, while `icon` is usually empty. Read

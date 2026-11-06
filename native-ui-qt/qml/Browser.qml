@@ -89,6 +89,9 @@ Item {
     //  - app     → la radice del servizio (PluginItems con il suo `cmd`).
     property var sourceTiles: []
     property bool sourcesProbed: false
+    // whether the CDplayer plugin is loaded (a home-menu plugin, not an app):
+    // when true the Music root shows a CD tile. Probed with the `can` command.
+    property bool cdAvailable: false
     // login state of the streaming services (key -> {available, loggedIn}),
     // fetched from the backend; and the reverse map plugin cmd -> service key,
     // so a service opened from its tile knows whether it still needs a login.
@@ -119,6 +122,10 @@ Item {
                 if (hit) { out.push({ kind: "app", key: svc.key, label: svc.label || apps[i].name, icon: svc.icon, srvIcon: apps[i].icon || "", cmd: apps[i].id }); byCmd[String(apps[i].id)] = svc.key; break }
             }
         }
+        // the CD player, if the plugin is installed (opened as a plugin item
+        // with cmd "cdplayer", i.e. the home-menu `go` action ['cdplayer','items'])
+        if (root.cdAvailable)
+            out.push({ kind: "cd", label: Tr.t("player.titles.cdPlayer"), icon: "disc", srvIcon: "", cmd: "cdplayer" })
         out.push({ kind: "radio", label: Tr.t("player.titles.radio"), icon: "radio", srvIcon: "", cmd: "" })
         sourceTiles = out
         svcByCmd = byCmd
@@ -132,8 +139,13 @@ Item {
                 var loop = r.appss_loop || r.apps_loop || r.item_loop || []
                 for (var i = 0; i < loop.length; i++) apps.push({ name: loop[i].name, id: loop[i].cmd, icon: loop[i].icon })
             }
-            root.rebuildSources(apps)
-            root.loadServiceStatus()
+            // the CD player is a home-menu plugin, not an app: probe it with
+            // `can` (drive-free) so the tile only appears when it is loaded.
+            Player.query(["can", "cdplayer", "items", "?"], function(ok2, r2) {
+                root.cdAvailable = !!(ok2 && r2 && r2._can)
+                root.rebuildSources(apps)
+                root.loadServiceStatus()
+            })
         })
     }
     // login state of Qobuz/Tidal/Spotify, from the backend (never secrets)
@@ -1037,6 +1049,7 @@ Item {
                                 if (m.kind === "radio" && e.view === LibraryModel.Radios) return c.navTap
                                 if (m.kind === "favorites" && e.view === LibraryModel.PluginItems && String(e.p1) === "favorites") return c.navTap
                                 if (m.kind === "app" && e.view === LibraryModel.PluginItems && String(e.p1) === String(m.cmd)) return c.navTap
+                                if (m.kind === "cd" && e.view === LibraryModel.PluginItems && String(e.p1) === "cdplayer") return c.navTap
                             }
                             return null
                         }
