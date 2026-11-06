@@ -386,7 +386,21 @@ Item {
                 Item {
                     anchors.fill: parent
                     visible: root.menuTile
-                    Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (parent.height - 117) / 2; name: card.glyphName; size: 30; color: Theme.silver }
+                    // a plugin leaf (a radio station above all) carries its own
+                    // logo from Lyrion in `icon` (/imageproxy/…); show it in place
+                    // of the generic Osmium glyph so the stations keep their art.
+                    readonly property bool hasLogo: card.plugin && root.isRemoteCover(card.icon)
+                    Icon { visible: !parent.hasLogo || logo.status !== Image.Ready; anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (parent.height - 117) / 2; name: card.glyphName; size: 30; color: Theme.silver }
+                    Image {
+                        id: logo
+                        visible: parent.hasLogo && status === Image.Ready
+                        anchors.horizontalCenter: parent.horizontalCenter; y: 20 + (parent.height - 117) / 2
+                        width: 48; height: 48
+                        source: parent.hasLogo ? root.iconUrl(card.icon) : ""
+                        asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
+                        sourceSize.width: 96; sourceSize.height: 96
+                        layer.enabled: true; layer.smooth: true
+                    }
                     Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (parent.height - 117) / 2; width: parent.width - 16; height: 20; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: card.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
                 }
                 Item {
