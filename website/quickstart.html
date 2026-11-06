@@ -59,15 +59,15 @@
 
   .osmio-row{ display:flex; gap:14px; align-items:flex-start; margin-bottom:18px; }
   .osmio-mini{ width:50px; flex:0 0 auto; }
-  .osmio-head{ width:44px; height:44px; border-radius:50%; background:var(--white); position:relative; box-shadow:0 2px 8px rgba(0,0,0,.35); }
-  .osmio-head::after{ content:""; position:absolute; left:-4px; top:-14px; width:52px; height:20px; border:5px solid var(--amber); border-bottom:none; border-radius:100% 100% 0 0; }
-  .osmio-cup{ position:absolute; top:15px; width:8px; height:14px; border-radius:4px; background:var(--amber); }
-  .osmio-cup.l{ left:-8px; } .osmio-cup.r{ right:-8px; }
-  .osmio-eyes{ position:absolute; top:18px; left:9px; width:26px; display:flex; justify-content:space-between; }
-  .osmio-eyes span{ width:4.5px; height:4.5px; border-radius:50%; background:#2b2d33; display:block; animation: blink 4.6s infinite; }
-  @keyframes blink{ 0%,92%,100%{ transform:scaleY(1); } 95%{ transform:scaleY(.1); } }
-  .osmio-mouth{ position:absolute; bottom:7px; left:50%; transform:translateX(-50%); width:12px; height:3.5px; border-radius:3px; background:#c77b2e; animation: talk .4s steps(1) infinite; }
-  @keyframes talk{ 0%{ height:3.5px; width:13px; border-radius:3px; } 40%{ height:7px; width:10px; border-radius:50%; } 100%{ height:3.5px; width:13px; border-radius:3px; } }
+  /* Animated sound waves in place of the old headphones avatar. */
+  .osmio-waves{ width:46px; height:44px; display:flex; align-items:center; justify-content:center; gap:4px; }
+  .osmio-waves span{ width:5px; height:10px; border-radius:3px; background:var(--amber); animation: osmio-wave 1.1s ease-in-out infinite; }
+  .osmio-waves span:nth-child(1){ animation-delay:0s; }
+  .osmio-waves span:nth-child(2){ animation-delay:.22s; }
+  .osmio-waves span:nth-child(3){ animation-delay:.44s; }
+  .osmio-waves span:nth-child(4){ animation-delay:.14s; }
+  .osmio-waves span:nth-child(5){ animation-delay:.36s; }
+  @keyframes osmio-wave{ 0%,100%{ height:8px; } 50%{ height:36px; } }
   .speech{ flex:1; background: rgba(255,255,255,.04); border-left:3px solid var(--amber); border-radius:10px; padding:11px 14px; font-size:14px; line-height:1.45; min-height:20px; }
 
   .step-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--amber2); font-weight:700; margin-bottom:6px; }
@@ -207,11 +207,7 @@
 
       <div class="osmio-row">
         <div class="osmio-mini">
-          <div class="osmio-head">
-            <div class="osmio-cup l"></div><div class="osmio-cup r"></div>
-            <div class="osmio-eyes"><span></span><span></span></div>
-            <div class="osmio-mouth"></div>
-          </div>
+          <div class="osmio-waves"><span></span><span></span><span></span><span></span><span></span></div>
         </div>
         <div class="speech" id="osmio-speech"></div>
       </div>
@@ -332,7 +328,7 @@
           <li>oppure collega un <b>cavo di rete</b> e procedi senza configurare nulla.</li>
         </ul>
         <p class="lead">Subito dopo, lo schermo mostra l'indirizzo del dispositivo, ad esempio:</p>
-        <div class="info-box"><span class="mono">http://192.168.1.23</span></div>
+        <div class="info-box"><span class="mono">http://192.168.x.x</span></div>
         <p class="lead muted">È l'indirizzo che userai al passo successivo per completare la configurazione dal browser. In alternativa puoi provare <span class="mono">http://hifiplayer.local</span>, ma l'indirizzo IP mostrato a schermo è più affidabile.</p>
       </div>
 
@@ -383,7 +379,7 @@
         <p class="lead">Dopo il primo avvio, tutto questo resta modificabile in qualsiasi momento dalla web admin:</p>
         <ul class="steps-list">
           <li><b>Rete / Wi-Fi</b> — in Impostazioni → Configurazione di rete</li>
-          <li><b>Servizi di streaming</b> — tramite Lyrion sulla porta <span class="mono">9000</span> (menu principale → Server settings → Manage Plugins); accedi una volta per servizio. Spotify compare come <span class="mono">Spotty</span> in quella lista.</li>
+          <li><b>Servizi di streaming</b> — apri la web admin (l'indirizzo del dispositivo), accedi con le tue credenziali e clicca su <b>Musica</b>; accedi una volta per servizio.</li>
           <li><b>Libreria musicale</b> — sorgenti in Impostazioni → Sorgenti musicali, aggiornamento in Impostazioni → Lyrion Music Server</li>
           <li><b>Altro</b> — uscita audio, modalità del dispositivo, fuso orario, aggiornamenti e backup</li>
         </ul>
@@ -418,11 +414,7 @@
 
       <div class="osmio-row">
         <div class="osmio-mini">
-          <div class="osmio-head">
-            <div class="osmio-cup l"></div><div class="osmio-cup r"></div>
-            <div class="osmio-eyes"><span></span><span></span></div>
-            <div class="osmio-mouth"></div>
-          </div>
+          <div class="osmio-waves"><span></span><span></span><span></span><span></span><span></span></div>
         </div>
         <div class="speech" id="osmio-speech"></div>
       </div>
@@ -543,7 +535,7 @@
           <li>or plug in a <b>network cable</b> and move on without configuring anything.</li>
         </ul>
         <p class="lead">Right after, the screen shows the device's address, for example:</p>
-        <div class="info-box"><span class="mono">http://192.168.1.23</span></div>
+        <div class="info-box"><span class="mono">http://192.168.x.x</span></div>
         <p class="lead muted">That's the address you'll use in the next step to finish the setup from a browser. You can also try <span class="mono">http://hifiplayer.local</span>, but the IP address shown on screen is more reliable.</p>
       </div>
 
@@ -594,7 +586,7 @@
         <p class="lead">After the first boot, all of this stays editable at any time from the web admin:</p>
         <ul class="steps-list">
           <li><b>Network / Wi-Fi</b> — under Settings → Network Configuration</li>
-          <li><b>Streaming services</b> — through Lyrion on port <span class="mono">9000</span> (main menu → Server settings → Manage Plugins); sign in once per service. Spotify shows up as <span class="mono">Spotty</span> in that list.</li>
+          <li><b>Streaming services</b> — open the web admin (the device's address), sign in with your credentials and click <b>Music</b>; sign in once per service.</li>
           <li><b>Music library</b> — sources under Settings → Music sources, library refresh under Settings → Lyrion Music Server</li>
           <li><b>Other</b> — audio output, device mode, time zone, updates and backups</li>
         </ul>
