@@ -1290,7 +1290,9 @@ class CdTests(unittest.TestCase):
         entry = hm.cd_release_entry(box[0])
         self.assertEqual((entry['disc_position'], entry['disc_count'], entry['track_count']), (3, 9, 9))
         self.assertEqual(set(entry), {'mbid', 'title', 'artist', 'date', 'country', 'label', 'catno',
-                                      'track_count', 'disc_position', 'disc_count'})
+                                      'track_count', 'disc_position', 'disc_count', 'tracks'})
+        self.assertEqual(len(entry['tracks']), entry['track_count'])
+        self.assertTrue(all(isinstance(t, str) for t in entry['tracks']))
 
     def test_tags(self):
         album, tracks, artists = hm.cd_tags(fixture('release-moonlight-e6479787.json'), 1)
