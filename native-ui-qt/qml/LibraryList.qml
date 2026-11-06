@@ -21,9 +21,11 @@ Item {
                                || view === LibraryModel.Radios || view === LibraryModel.Apps
                                || view === LibraryModel.PluginItems
                                || view === LibraryModel.MenuHome || view === LibraryModel.Menu
-    // solo la libreria album/novità può diventare Cover Flow o caricatore CD;
-    // i menu di app/servizi restano sempre a tessere quadrate
+    // la libreria album/novità e le liste di album dentro un plugin (Qobuz,
+    // Tidal…) possono diventare Cover Flow o caricatore CD; gli altri menu di
+    // app/servizi restano sempre a tessere quadrate
     readonly property bool albumGrid: view === LibraryModel.Albums || view === LibraryModel.NewMusic
+                                    || (view === LibraryModel.PluginItems && Library.pluginAlbumList)
     // the albums as Cover Flow instead of the grid (Settings → Library, or
     // the button in the crumb bar)
     readonly property bool coverflow: albumGrid && !!Ui.app && Ui.app.albumView === "coverflow"
@@ -105,15 +107,37 @@ Item {
     }
 
     // URL di un'icona di menu/radio: percorso sul server oppure http locale
-    function iconUrl(icon) {
-        if (!icon) return ""
-        if (icon.indexOf("http") === 0) {
-            var h = icon.indexOf("127.0.0.1"); if (h < 0) h = icon.indexOf("localhost")
-            if (h < 0) return ""
-            var slash = icon.indexOf("/", h); if (slash < 0) return ""
-            return Api.lmsBase + icon.substring(slash)
-        }
-        return Api.lmsBase + "/" + (icon.charAt(0) === "/" ? icon.substring(1) : icon)
+    // (logica condivisa in Api.imageUrl, usata anche da CoverFlow e ChangerView)
+    function iconUrl(icon) { return Api.imageUrl(icon || "") }
+    // A plugin item's `icon` is either real cover art (an /imageproxy/ or
+    // /cover URL — the album/track picture, which we keep and show as is) or
+    // one of Lyrion's default-theme menu glyphs (html/images/*.png — which we
+    // replace with an Osmium icon, below, so the plugins look like Osmium).
+    function isRemoteCover(icon) {
+        if (!icon) return false
+        var s = String(icon)
+        return s.indexOf("imageproxy") >= 0 || s.indexOf("/cover") >= 0 || s.indexOf("/music/") >= 0
+    }
+    // Map a Lyrion menu-node glyph to an Osmium icon by a keyword in its path
+    // (albums.png, artists.png, playlists.png…): language-independent, so it
+    // works whatever the UI language. Returns "" when nothing matches, and the
+    // caller falls back to the structural guess (search/folder/music).
+    function pluginGlyphIcon(icon) {
+        var s = String(icon || "").toLowerCase()
+        if (!s) return ""
+        if (s.indexOf("album") >= 0) return "disc"
+        if (s.indexOf("artist") >= 0) return "user"
+        if (s.indexOf("playlist") >= 0) return "list-music"
+        if (s.indexOf("genre") >= 0) return "tag"
+        if (s.indexOf("year") >= 0) return "calendar"
+        if (s.indexOf("podcast") >= 0) return "mic"
+        if (s.indexOf("radio") >= 0 || s.indexOf("station") >= 0) return "radio"
+        if (s.indexOf("favorit") >= 0 || s.indexOf("favourite") >= 0) return "heart"
+        if (s.indexOf("search") >= 0) return "search"
+        if (s.indexOf("folder") >= 0) return "folder"
+        if (s.indexOf("new") >= 0 || s.indexOf("discover") >= 0) return "sparkles"
+        if (s.indexOf("track") >= 0 || s.indexOf("song") >= 0) return "music"
+        return ""
     }
 
     // ─── righe ─────────────────────────────────────────────────────────────
@@ -181,7 +205,10 @@ Item {
                         id: rowImg
                         anchors.fill: parent
                         visible: false
-                        source: (row.v >= LibraryModel.Radios) ? root.iconUrl(row.icon) : ""
+                        // a plugin node keeps its real cover art, but its theme
+                        // glyph gives way to an Osmium icon (the Icon fallback)
+                        source: row.v === LibraryModel.PluginItems ? (root.isRemoteCover(row.icon) ? root.iconUrl(row.icon) : "")
+                              : (row.v >= LibraryModel.Radios) ? root.iconUrl(row.icon) : ""
                         asynchronous: true; cache: true; smooth: true
                         sourceSize.width: Math.round(24 * root.devScale * 2); sourceSize.height: Math.round(24 * root.devScale * 2)
                         fillMode: Image.PreserveAspectCrop
@@ -200,7 +227,7 @@ Item {
                             : row.v === LibraryModel.Search ? (row.kind === 0 ? "user" : row.kind === 1 ? "disc" : "music")
                             : row.v === LibraryModel.Folders ? (row.isDir ? "folder" : "music")
                             : row.v === LibraryModel.Radios ? "radio" : row.v === LibraryModel.Apps ? "app-window"
-                            : row.v === LibraryModel.PluginItems ? (row.hasInput ? "search" : row.hasItems ? "folder" : "music")   // lente sul nodo di ricerca, come Electron
+                            : row.v === LibraryModel.PluginItems ? (root.pluginGlyphIcon(row.icon) || (row.hasInput ? "search" : row.hasItems ? "folder" : "music"))   // Osmium glyph, else lente sul nodo di ricerca, come Electron
                             : (row.v === LibraryModel.MenuHome || row.v === LibraryModel.Menu) ? ((row.go && row.go.length) ? "app-window" : "music") : "music"
                         size: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || (row.v === LibraryModel.Search && row.kind !== 2) ? 13 : row.v === LibraryModel.Playlists ? 14 : row.v === LibraryModel.Folders || row.v === LibraryModel.Genres || row.v === LibraryModel.Years ? 15 : row.v === LibraryModel.Tracks || row.v === LibraryModel.PlaylistTracks ? 13 : 15
                         color: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || row.v === LibraryModel.Playlists || (row.v === LibraryModel.Search && row.kind !== 2) ? Theme.silver
@@ -314,7 +341,7 @@ Item {
                                     name: !card.plugin ? "disc"
                                         : card.v === LibraryModel.Radios ? "radio"
                                         : card.v === LibraryModel.Apps ? "app-window"
-                                        : card.v === LibraryModel.PluginItems ? (card.hasInput ? "search" : card.hasItems ? "folder" : "music")
+                                        : card.v === LibraryModel.PluginItems ? (root.pluginGlyphIcon(card.icon) || (card.hasInput ? "search" : card.hasItems ? "folder" : "music"))
                                         : ((card.go && card.go.length) ? "app-window" : "music") } }
                     Image {
                         id: artImg; anchors.fill: parent; visible: false
@@ -326,8 +353,13 @@ Item {
                         // l'album del CD (voce-contenitore della vista CDplayer) usa la
                         // copertina scaricata dalla rete quando c'e'; gli altri item di
                         // plugin l'icona del server, gli album della libreria la cover LMS
+                        // 🚨 only real cover art (an /imageproxy/ or /cover URL) is
+                        // loaded from the server; Lyrion's default-theme menu glyphs
+                        // (html/images/*.png) are dropped so the Osmium Icon fallback
+                        // shows instead (pluginGlyphIcon), keeping the plugins on the
+                        // Osmium look.
                         source: (card.plugin && card.hasItems && root.cdCoverUrl) ? root.cdCoverUrl
-                              : card.plugin ? root.iconUrl(card.icon)
+                              : card.plugin ? (root.isRemoteCover(card.icon) ? root.iconUrl(card.icon) : "")
                               : card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px : ""
                         asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
                         smooth: true

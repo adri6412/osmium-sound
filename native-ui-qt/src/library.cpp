@@ -178,6 +178,7 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
     QVariantList params;
     QString s1 = p1.typeId() == QMetaType::QVariantList ? QString() : p1.toString();
     QString s2 = p2.toString();
+    m_pluginCmd = view == PluginItems ? s1 : QString();
     // server order only where Lyrion's ordering is the point (new music,
     // random, search results); the alphabetical views sort here
     m_serverOrder = view == NewMusic || view == Search || (view == Albums && s2.contains("sort:"));
@@ -380,6 +381,23 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
     }
     if (view == MenuHome)
         std::stable_sort(m_items.begin(), m_items.end(), [](const LibItem &a, const LibItem &b) { return a.weight < b.weight; });
+
+    // Is this plugin list, in fact, a grid of albums? (so the browser can offer
+    // Cover Flow and the CD changer for it, like the local library.) Generic
+    // heuristic: most rows are navigable containers carrying real cover art —
+    // not the search box, not plain tracks, not Lyrion's theme glyphs.
+    m_pluginAlbumList = false;
+    if (view == PluginItems) {
+        int albums = 0, total = 0;
+        for (const LibItem &o : m_items) {
+            if (o.hasInput) continue;           // a search box is not an album
+            total++;
+            const bool cover = o.icon.contains("imageproxy") || o.icon.contains("/cover")
+                               || o.icon.contains("/music/");
+            if (o.hasItems && !o.isAudio && cover) albums++;
+        }
+        m_pluginAlbumList = total >= 3 && albums * 5 >= total * 3;   // ≥60% album-like
+    }
 }
 
 void LibraryModel::applyOrderFilter() {

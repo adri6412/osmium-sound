@@ -119,10 +119,13 @@ Item {
     // the streaming services we promote to a tile, matched case-insensitively
     // on the app's name (Spotty is the Spotify bridge plugin). `key` is the
     // backend's service id for /services/* (login state + login flows).
+    // Osmium-drawn marks for the services (icons/svc-*.svg), so the Music root
+    // looks like Osmium and not Lyrion's default theme (the `srvIcon` images
+    // Lyrion ships are no longer shown on these tiles — see the tile below).
     readonly property var sourceServices: [
-        { label: "Qobuz", key: "qobuz", match: ["qobuz"], icon: "disc" },
-        { label: "Tidal", key: "tidal", match: ["tidal", "wimp"], icon: "disc-3" },
-        { label: "Spotify", key: "spotty", match: ["spotify", "spotty"], icon: "music" }]
+        { label: "Qobuz", key: "qobuz", match: ["qobuz"], icon: "svc-qobuz" },
+        { label: "Tidal", key: "tidal", match: ["tidal", "wimp"], icon: "svc-tidal" },
+        { label: "Spotify", key: "spotty", match: ["spotify", "spotty"], icon: "svc-spotify" }]
     function rebuildSources(apps) {
         var out = []
         var byCmd = {}
@@ -253,13 +256,15 @@ Item {
     }
     // the scroll position of the list we are leaving, waiting to be put back
     property var pendingScroll: null
-    function goView(view, title, p1, p2, input, replace) {
+    function goView(view, title, p1, p2, input, replace, cover) {
         var n = nav.slice()
         // remember where this list was before we dive into an album/artist, so
         // Back lands us there instead of at the top (#…)
         if (!replace && !isPage && view !== LibraryModel.Home && n.length && n[n.length - 1].view !== LibraryModel.Home)
             n[n.length - 1].scroll = list.scrollAnchor()
-        var e = { view: view, title: title || "…", p1: p1 || "", p2: p2 || "", input: input || "" }
+        // `cover` carries a plugin album's cover URL to AlbumPage (local albums
+        // build theirs from album_id, so it stays empty for them)
+        var e = { view: view, title: title || "…", p1: p1 || "", p2: p2 || "", input: input || "", cover: cover || "" }
         if (replace) n[n.length - 1] = e; else { if (n.length >= 16) return; n.push(e) }
         nav = n
         navDir = 1
@@ -370,6 +375,14 @@ Item {
         goView(LibraryModel.PluginItems, Tr.t("player.titles.favorites"), "favorites")
     }
     function openAlbum(id, title) { if (!id) return; showMusicTab(); goView(LibraryModel.AlbumPage, title, String(id)) }
+    // a plugin album opens the same AlbumPage as a local one, but in plugin mode:
+    // p1 = plugin command, p2 = item id (marks plugin mode), cover = its artwork.
+    // The page drills [cmd,"items",…,"item_id:"+item] for the tracks (AlbumPage.qml).
+    function openPluginAlbum(cmd, item, title, cover, favUrl) {
+        if (!cmd || !item) return
+        // favUrl rides in `input` (an album page has no search input of its own)
+        showMusicTab(); goView(LibraryModel.AlbumPage, title, String(cmd), String(item), favUrl || "", false, cover || "")
+    }
     function openArtist(id, name) { if (!id) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, String(id)) }
     function openPerson(mbid, name) { if (!mbid) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, "", "mbid:" + mbid) }
     function openMenu(items, x, y) { ctx.open(items, x, y) }
@@ -738,6 +751,11 @@ Item {
                 msearchGo = []; msearchPlugin = { cmd: cmd, item: it.id }
                 msearch.takeFocus()
             }
+            // in an album list (grid / Cover Flow / changer) a tap on an album
+            // container opens the same AlbumPage as the local library, in plugin
+            // mode; otherwise a container drills further into the plugin menu
+            else if (!onPlay && it.hasItems && Library.pluginAlbumList && !it.isAudio)
+                openPluginAlbum(cmd, it.id, it.text, list.iconUrl(it.icon), it.favUrl)
             else if (!onPlay && it.hasItems) goView(LibraryModel.PluginItems, it.text, cmd, it.id)
             else if (it.isAudio || onPlay) Player.cmd([cmd, "playlist", "play", "item_id:" + it.id])
             break
@@ -1087,16 +1105,9 @@ Item {
                                 x: 16 + (index % root.homeCols) * (tw + 12); y: 62 + Math.floor(index / root.homeCols) * (th + 12)
                                 width: tw; height: th; radius: 12
                                 color: srcTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
-                                // the server's own icon for a streaming service, else a glyph
-                                Image {
-                                    id: srcImg
-                                    visible: status === Image.Ready
-                                    anchors.horizontalCenter: parent.horizontalCenter; y: 24 + (parent.th - 117) / 2
-                                    width: 40; height: 40; fillMode: Image.PreserveAspectFit
-                                    asynchronous: true; cache: true; smooth: true
-                                    source: modelData.srvIcon ? list.iconUrl(modelData.srvIcon) : ""
-                                }
-                                Icon { visible: !srcImg.visible; anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (parent.th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
+                                // always the Osmium mark (icons/*.svg), never the
+                                // image Lyrion's default theme ships for the service
+                                Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (parent.th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
                                 Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (parent.th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: modelData.label; color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
                                 // badge "non connesso": pallino muto + etichetta
                                 Rectangle {
@@ -1248,7 +1259,17 @@ Item {
                     }
                     Component {
                         id: albumPageComp
-                        AlbumPage { browser: root; albumId: String(root.cur.p1); devScale: root.devScale }
+                        // plugin album: p2 is the item id (marks plugin mode),
+                        // p1 the plugin command; a local album has p1 = album_id
+                        AlbumPage {
+                            browser: root; devScale: root.devScale
+                            albumId: String(root.cur.p2) !== "" ? "" : String(root.cur.p1)
+                            pluginCmd: String(root.cur.p2) !== "" ? String(root.cur.p1) : ""
+                            pluginItemId: String(root.cur.p2 || "")
+                            pluginCover: String(root.cur.cover || "")
+                            pluginFavUrl: String(root.cur.input || "")
+                            pluginTitle: root.cur.title === "…" ? "" : String(root.cur.title || "")
+                        }
                     }
                     Component {
                         id: artistPageComp

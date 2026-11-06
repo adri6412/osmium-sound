@@ -37,6 +37,14 @@ class LibraryModel : public QAbstractListModel {
     // whoever reads a row with get() instead of a delegate has no other way
     // to know the row under that number is a different one now.
     Q_PROPERTY(int rev READ rev NOTIFY revChanged)
+    // true when the current PluginItems view is really a grid of albums (most
+    // rows are containers with cover art): the browser then offers Cover Flow
+    // and the CD changer for it, exactly like the local library.
+    Q_PROPERTY(bool pluginAlbumList READ pluginAlbumList NOTIFY stateChanged)
+    // the Lyrion command of the current PluginItems view (the view's p1): what a
+    // plugin album's play/add needs as `[cmd, "playlist", …, "item_id:"+id]`, so
+    // Cover Flow and the CD changer can load a plugin album by cmd + item.
+    Q_PROPERTY(QString pluginCmd READ pluginCmd NOTIFY stateChanged)
     Q_PROPERTY(QString playerId MEMBER m_playerId)
 public:
     // The new views sit at the end so the numbers the QML compares against
@@ -65,6 +73,8 @@ public:
     int totalCount() const { return m_items.size(); }
     int seq() const { return m_seq; }
     int rev() const { return m_rev; }
+    bool pluginAlbumList() const { return m_pluginAlbumList; }
+    QString pluginCmd() const { return m_pluginCmd; }
     QString filter() const { return m_filter; }
     void setFilter(const QString &f);
 
@@ -94,6 +104,8 @@ private:
     QVector<LibItem> m_items;
     QVector<int> m_order;
     int m_state = 0, m_view = 0, m_seq = 0, m_rev = 0;
+    bool m_pluginAlbumList = false; // see the pluginAlbumList property
+    QString m_pluginCmd;            // the current PluginItems view's command (p1)
     bool m_serverOrder = false;     // keep Lyrion's order (sort:new, search results)
     QString m_filter, m_playerId;
 };

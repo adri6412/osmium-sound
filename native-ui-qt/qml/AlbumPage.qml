@@ -14,6 +14,17 @@ Item {
     property var browser: null
     property string albumId: ""
     property real devScale: 1
+    // plugin mode: the same page for a streaming service's album. The tracks come
+    // from a plugin drill ([cmd,"items",…,"item_id:"+itemId]) instead of album_id,
+    // the cover is the one the plugin gave, and there is no MusicBrainz/Wikipedia
+    // meta (those sections stay hidden). Credits appear only if the service sends
+    // role tags on its tracks, which most do not.
+    property string pluginCmd: ""
+    property string pluginItemId: ""
+    property string pluginCover: ""
+    property string pluginFavUrl: ""
+    property string pluginTitle: ""
+    readonly property bool pluginMode: pluginCmd !== "" && pluginItemId !== ""
 
     property int state_: 0              // 0 loading 2 ready 3 error
     property var album: ({})
@@ -39,6 +50,7 @@ Item {
 
     function load() {
         state_ = 0; meta = null; metaStatus = ""; metaTries = 0; aboutOpen = false; byTrack = false
+        if (pluginMode) { loadPlugin(); return }
         // the album first: the tracks' second line compares with its artist
         Player.query(["albums", "0", "1", "album_id:" + albumId, "tags:alyqwaaSSjW"], function(ok, r) {
             if (!root) return          // the page was closed meanwhile
@@ -54,6 +66,39 @@ Item {
             })
         })
         loadMeta()
+    }
+    // a streaming service's album: drill its item for the tracks. The album
+    // header is what the grid already knew (title + cover + favourite url); no
+    // meta lookup, so About / edition / online-source stay hidden.
+    function loadPlugin() {
+        // the title the grid passed (goView set it as the page title)
+        album = { album: pluginTitle, favorites_url: pluginFavUrl }
+        checkFav()
+        Player.query([pluginCmd, "items", "0", "9999", "item_id:" + pluginItemId], function(ok, r) {
+            if (!root) return          // the page was closed meanwhile
+            // the plugin's loop key varies (loop_loop / item_loop / <cmd>_loop),
+            // same set LibraryModel tries for PluginItems
+            var loop = ok && r ? (r.loop_loop || r.item_loop || r[pluginCmd + "_loop"] || []) : []
+            if (ok && r) parsePluginTracks(loop)
+            root.state_ = ok && r ? 2 : 3
+        })
+    }
+    // the drilled items as tracks: a service rarely sends role tags, so credits
+    // stay empty and only the track list shows. Titles/subtitles come from the
+    // menu item's fields (name/title/text, line1/line2, artist).
+    function parsePluginTracks(loop) {
+        var out = [], total = 0
+        for (var i = 0; i < loop.length; i++) {
+            var t = loop[i]
+            var two = String(t.text || "").split("\n")
+            var title = String(t.name || t.title || t.line1 || two[0] || "")
+            var sub = String(t.artist || t.line2 || (two.length > 1 ? two[1] : "") || "")
+            var dur = Number(t.duration || t.tracklength || 0)
+            out.push({ id: String(t.id || t.item_id || ""), n: Number(t.tracknum || (i + 1)), disc: 1,
+                       title: title, dur: dur, url: String(t.url || ""), sub: sub })
+            total += dur
+        }
+        tracks = out; totalDur = total; localCredits = []; chip = ""
     }
     function loadMeta() {
         Api.get(Meta.url("/album?album_id=" + albumId), function(ok, d) {
@@ -139,6 +184,7 @@ Item {
         else if (p.mbid && browser) browser.openPerson(String(p.mbid), String(p.name || ""))
     }
     function play(mode, index) {
+        if (pluginMode) { playPlugin(mode, index); return }
         var c = ["playlistcontrol", "cmd:" + mode, "album_id:" + albumId]
         if (index !== undefined && index >= 0) c.push("play_index:" + index)
         if (mode !== "add" && mode !== "insert") { Player.cmd(c); return }
@@ -154,7 +200,24 @@ Item {
             else browser.say("list-start", "player.playingNext")
         })
     }
-    function shuffle() { if (browser) browser.loadShuffled("album_id", albumId) }
+    // plugin play: a track plays/queues by its own item id, the Play button the
+    // whole album by its item id. Verbs are the plugin's (play / add / insert).
+    function playPlugin(mode, index) {
+        var verb = mode === "load" ? "play" : mode === "insert" ? "insert" : "add"
+        var itemId = (index !== undefined && index >= 0 && tracks[index]) ? tracks[index].id : pluginItemId
+        if (!itemId) return
+        var c = [pluginCmd, "playlist", verb, "item_id:" + itemId]
+        if (verb === "play") { Player.cmd(c); return }
+        Player.query(c, function(ok) {
+            if (!root) return          // the page was closed meanwhile
+            Player.refresh()
+            if (!browser) return
+            if (!ok) browser.say("alert-triangle", "player.queueFailed")
+            else if (verb === "add") browser.say("list-plus", "player.addedToQueue")
+            else browser.say("list-start", "player.playingNext")
+        })
+    }
+    function shuffle() { if (pluginMode) { play("load"); return } if (browser) browser.loadShuffled("album_id", albumId) }
     // ── favourite heart (add / remove, with its real state) ───────────────
     function checkFav() {
         var url = String(album.favorites_url || "")
@@ -185,7 +248,10 @@ Item {
     function trackMenu(i, x, y) {
         var t = tracks[i]
         if (!t || !browser) return
-        var L = [
+        var L = root.pluginMode ? [
+            { icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { Player.cmd([pluginCmd, "playlist", "add", "item_id:" + t.id]) } },
+            { icon: "list-start", label: Tr.t("player.playNext"), cb: function() { Player.cmd([pluginCmd, "playlist", "insert", "item_id:" + t.id]) } }
+        ] : [
             { icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { Player.cmd(["playlistcontrol", "cmd:add", "track_id:" + t.id]) } },
             { icon: "list-start", label: Tr.t("player.playNext"), cb: function() { Player.cmd(["playlistcontrol", "cmd:insert", "track_id:" + t.id]) } }
         ]
@@ -233,7 +299,8 @@ Item {
                 Cover {
                     id: cover
                     width: 164; height: 164; radius: 12; devScale: root.devScale
-                    source: root.album.artwork_track_id ? Api.lmsBase + "/music/" + root.album.artwork_track_id + "/cover?size=" + Theme.coverPx(164 * 2) : ""
+                    source: root.pluginMode ? root.pluginCover
+                          : root.album.artwork_track_id ? Api.lmsBase + "/music/" + root.album.artwork_track_id + "/cover?size=" + Theme.coverPx(164 * 2) : ""
                 }
                 Column {
                     id: info
@@ -278,7 +345,7 @@ Item {
             Row {
                 spacing: 10
                 PageButton { id: playBtn; icon: "play"; filled: true; primary: true; label: Tr.t("player.page.play"); onClicked: root.play("load") }
-                PageButton { icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: root.shuffle() }
+                PageButton { visible: !root.pluginMode; icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: root.shuffle() }
                 PageButton { icon: "list-plus"; onClicked: root.play("add") }
                 PageButton { icon: "list-start"; onClicked: root.play("insert") }
                 PageButton { id: favBtn; icon: "heart"; filled: root.isFav; visible: !!root.album.favorites_url; onClicked: root.toggleFav() }

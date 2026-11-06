@@ -25,7 +25,10 @@ Item {
     clip: true
     property bool opening: false
     onVisibleChanged: if (visible) opening = false
-    function srcOf(it) { return it && it.art ? Api.lmsBase + "/music/" + it.art + "/cover?size=" + px : "" }
+    // local albums carry an artwork_track_id (art); plugin albums carry their
+    // cover as a Lyrion icon string (icon) that Api.imageUrl resolves to a URL
+    function srcOf(it) { return it && it.art ? Api.lmsBase + "/music/" + it.art + "/cover?size=" + px
+                              : it && it.icon ? Api.imageUrl(it.icon) : "" }
 
     // ─── geometry ──────────────────────────────────────────────────────────
     // the front cover's side, from the height (cover + reflection + the

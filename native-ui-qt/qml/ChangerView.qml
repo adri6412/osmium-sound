@@ -27,7 +27,10 @@ Item {
     readonly property int count: Library.count
     clip: true
     readonly property string art: "file://" + Sys.assets + "/anim/changer/"
-    function srcOf(it) { return it && it.art ? Api.lmsBase + "/music/" + it.art + "/cover?size=" + px : "" }
+    // local albums carry an artwork_track_id (art); plugin albums carry their
+    // cover as a Lyrion icon string (icon) that Api.imageUrl resolves to a URL
+    function srcOf(it) { return it && it.art ? Api.lmsBase + "/music/" + it.art + "/cover?size=" + px
+                              : it && it.icon ? Api.imageUrl(it.icon) : "" }
 
     // ─── geometry ──────────────────────────────────────────────────────────
     // Wide canvases: the row of discs takes the left part and the changer stands
@@ -102,6 +105,15 @@ Item {
     // (each held disc keeps its own record in `disc`: an app's album, put in
     // from its menu, is not a row of this list)
     property var chosen: []
+    // a plugin's album list is loaded into the changer by cmd + item (no local
+    // album_id): the chosen rows then carry a `disc` record App.changerLoad
+    // plays with `[cmd, "playlist", …, "item_id:"+item]`, cover from its artUrl.
+    readonly property bool pluginMode: Library.view === LibraryModel.PluginItems && Library.pluginAlbumList
+    function discFor(it) {
+        return root.pluginMode ? { cmd: Library.pluginCmd, item: String(it.id), title: it.text || "",
+                                   artUrl: it.icon ? Api.imageUrl(it.icon) : "" }
+                               : null   // local album: the chosen row (id/text/art) is itself the disc
+    }
     function fromChanger() {
         chosen = Ui.app ? Ui.app.changerDiscs.map(function(d) { return { id: d.id || "", text: d.title, art: d.art || "", disc: d } }) : []
     }
@@ -119,7 +131,10 @@ Item {
         return false
     }
     function chosenAt(id) {
-        for (var i = 0; i < chosen.length; i++) if (chosen[i].id === id) return i
+        // local albums match on id; a plugin disc (no local id) matches on its
+        // item id, so a re-opened plugin changer still shows its gold rings
+        for (var i = 0; i < chosen.length; i++)
+            if (chosen[i].id === id || (chosen[i].disc && chosen[i].disc.item === id)) return i
         return -1
     }
     // the disc in front is already in the changer: its gold ring is its mark
@@ -141,7 +156,9 @@ Item {
         if (chosen.length + flights.count >= 101) { Ui.toast.show(Tr.t("player.changer.full")); return }
         // the changer turns its file to the next empty slot while the disc flies
         if (changer.scene && changer.scene.prepare) changer.scene.prepare(chosen.length + flights.count)
-        flights.append({ albumId: id, text: it.text, art: it.art || "", sub: it.sub || "" })
+        var d = discFor(it)
+        flights.append({ albumId: id, text: it.text, art: it.art || "", sub: it.sub || "",
+                         artUrl: d && d.artUrl ? d.artUrl : "", cmd: d ? d.cmd : "", item: d ? d.item : "" })
     }
     // a disc reached the window: it is in the changer now
     function landed(id) {
@@ -152,7 +169,10 @@ Item {
         // then the list that puts the album on the disc in that slot
         if (changer.scene && changer.scene.insert) changer.scene.insert(chosen.length)
         var c = chosen.slice()
-        c.push({ id: it.albumId, text: it.text, art: it.art, sub: it.sub })
+        var rec = { id: it.albumId, text: it.text, art: it.art, sub: it.sub }
+        // a plugin album rides on its own disc record (cmd + item, cover artUrl)
+        if (it.cmd && it.item) rec.disc = { cmd: it.cmd, item: it.item, title: it.text, artUrl: it.artUrl || "" }
+        c.push(rec)
         chosen = c
         flights.remove(f)
         if (doneWanted && flights.count === 0) done()
@@ -491,7 +511,8 @@ Item {
                 axis { x: 0; y: 1; z: 0 }
                 angle: fly.turn
             }
-            Disc { src: fly.art ? Api.lmsBase + "/music/" + fly.art + "/cover?size=" + root.px : "" }
+            Disc { src: fly.art ? Api.lmsBase + "/music/" + fly.art + "/cover?size=" + root.px
+                        : fly.artUrl ? fly.artUrl : "" }
             // up a little out of the row, then to the drive's opening in the
             // window, shrinking to the size of the discs in the file and
             // turning edge-on like them; there the changer takes it down into
