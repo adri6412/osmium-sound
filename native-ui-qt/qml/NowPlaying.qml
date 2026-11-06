@@ -125,7 +125,7 @@ Item {
         }
         Image {
             id: bgSrc
-            source: Player.artworkUrl
+            source: Ui.npArtwork
             asynchronous: true; visible: false
             sourceSize.width: 400; sourceSize.height: 400
             width: 400; height: 400
@@ -139,7 +139,7 @@ Item {
         }
         MultiEffect {
             source: bgSrc.status === Image.Ready ? bgSrc : bgPrev
-            visible: Player.artworkUrl !== "" && (bgSrc.status === Image.Ready || bgPrev.status === Image.Ready)
+            visible: Ui.npArtwork !== "" && (bgSrc.status === Image.Ready || bgPrev.status === Image.Ready)
             width: 400; height: 400
             // wide enough to cover ultrawide canvases (3.2 = the old 1280 square)
             readonly property real fillScale: Math.max(3.2, Math.max(root.width, root.height) / 400 * 1.02)
@@ -263,7 +263,7 @@ Item {
         id: art
         x: root.leftX + (root.leftW - root.artSide) / 2; y: root.artY
         width: root.artSide; height: root.artSide
-        source: Player.artworkUrl
+        source: Ui.npArtwork
         radius: 16; devScale: root.devScale
         // Electron chiede `border-white/8`, che Tailwind 3.3 NON genera (la scala
         // va di 5 in 5): resta il colore di preflight, un filo grigio chiaro pieno.

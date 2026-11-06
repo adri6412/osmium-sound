@@ -12,6 +12,10 @@ Item {
     // copertina del disco scaricata dalla rete (Cover Art Archive via /api/cd/cover),
     // impostata dal Browser quando si entra nella vista CDplayer; usata per l'album del CD
     property string cdCoverUrl: ""
+    // true nella vista CDplayer: il disco è un album (card quadrata con la
+    // copertina del CD), non una tessera-menu, anche se l'euristica
+    // pluginAlbumList non scatta (un solo disco → troppo pochi item)
+    property bool inCdPlayer: false
     signal rowTap(int row, bool onPlay)
     signal rowLongPress(int row, real x, real y)
     signal expandAlbum(int row, real x, real y, real size, string src)   // Cover Flow: the front cover opens
@@ -35,7 +39,7 @@ Item {
     // liste di album, quindi niente card quadrata con copertina ma la stessa
     // tessera larga (icona + etichetta) della home della libreria locale, così
     // i menu dei plugin hanno la STESSA forma e misura della libreria locale.
-    readonly property bool menuTile: grid && !albumGrid
+    readonly property bool menuTile: grid && !albumGrid && !inCdPlayer
     // altezza della tessera-menu, passata da Browser (homeTh) per essere
     // identica alle tessere della home; <= 0 = fallback compatto.
     property real menuTileH: 0

@@ -276,12 +276,15 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
     bool cdAlbumKept = false;
     for (const QVariant &v : loop) {
         QVariantMap it = v.toMap();
-        // Hide the plugin's "Eject CD" entry from our kiosk browse (the plugin
-        // marks it type="audio", so it looked like a playable track). The eject
-        // action itself stays in the plugin — this only drops it from the UI.
-        if (cdMenu && it.value("url").toString().contains("Command=eject")) continue;
-        if (cdMenu && it.value("hasitems").toInt() == 1) {
-            if (cdAlbumKept) continue;
+        // CDplayer root: keep only the single disc album and drop everything
+        // else. The disc readings are containers (hasitems=1); the "Eject CD"
+        // action is the only non-container (type="audio", hasitems=0) — older
+        // plugin builds tagged it with a Command=eject url, newer ones send no
+        // url at all, so match it structurally. The eject action itself stays
+        // in the plugin — this only hides it from the kiosk browse.
+        if (cdMenu) {
+            if (it.value("hasitems").toInt() != 1) continue;   // Eject + non-disc entries
+            if (cdAlbumKept) continue;                          // extra readings of the same disc
             cdAlbumKept = true;
         }
         LibItem o;

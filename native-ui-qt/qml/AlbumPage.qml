@@ -223,7 +223,13 @@ Item {
             else browser.say("list-start", "player.playingNext")
         })
     }
-    function shuffle() { if (pluginMode) { play("load"); return } if (browser) browser.loadShuffled("album_id", albumId) }
+    // plugin albums (CD, Qobuz, Tidal…) have no album_id to shuffle through
+    // playlistcontrol: load the whole album by its item id, then turn on song
+    // shuffle so it plays in a shuffled order
+    function shuffle() {
+        if (pluginMode) { play("load"); Player.cmd(["playlist", "shuffle", "1"]); return }
+        if (browser) browser.loadShuffled("album_id", albumId)
+    }
     // ── favourite heart (add / remove, with its real state) ───────────────
     function checkFav() {
         var url = String(album.favorites_url || "")
@@ -351,7 +357,7 @@ Item {
             Row {
                 spacing: 10
                 PageButton { id: playBtn; icon: "play"; filled: true; primary: true; label: Tr.t("player.page.play"); onClicked: root.play("load") }
-                PageButton { visible: !root.pluginMode; icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: root.shuffle() }
+                PageButton { icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: root.shuffle() }
                 PageButton { icon: "list-plus"; onClicked: root.play("add") }
                 PageButton { icon: "list-start"; onClicked: root.play("insert") }
                 PageButton { id: favBtn; icon: "heart"; filled: root.isFav; visible: !!root.album.favorites_url; onClicked: root.toggleFav() }

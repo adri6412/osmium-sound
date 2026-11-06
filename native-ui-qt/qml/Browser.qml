@@ -760,6 +760,10 @@ Item {
             else if (!onPlay && Library.pluginAlbumList && it.hasItems && it.ptype
                      && it.ptype !== "audio" && list.isRemoteCover(it.icon))
                 openPluginAlbum(cmd, it.id, it.text, list.iconUrl(it.icon), it.favUrl)
+            // the CD disc is an album: its cover rides in cdCoverUrl (not in the
+            // item icon), so open the same AlbumPage with that cover
+            else if (!onPlay && root.inCdPlayer && it.hasItems)
+                openPluginAlbum(cmd, it.id, it.text, root.cdCoverUrl, it.favUrl)
             else if (!onPlay && it.hasItems) goView(LibraryModel.PluginItems, it.text, cmd, it.id)
             else if (it.isAudio || onPlay) Player.cmd([cmd, "playlist", "play", "item_id:" + it.id])
             break
@@ -1299,6 +1303,7 @@ Item {
                         menuTileH: root.homeTh
                         visible: Library.state === 2 && Library.count > 0 && !root.isPage && !root.curSvcNeedsLogin
                         cdCoverUrl: root.inCdPlayer ? root.cdCoverUrl : ""
+                        inCdPlayer: root.inCdPlayer
                         onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
                         // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
                         onRowLongPress: (row, x, y) => { root.menuX = list.x + x; root.menuY = list.y + y + (cdBanner.visible ? 48 : 0); ctx.open(root.ctxItems(row), root.menuX, root.menuY) }

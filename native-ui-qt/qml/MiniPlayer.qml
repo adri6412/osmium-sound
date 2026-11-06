@@ -67,7 +67,7 @@ Item {
     Cover {
         id: art
         x: (340 - root.cov) / 2; y: root.y0 + 8; width: root.cov; height: root.cov
-        source: Player.artworkUrl; radius: 16; devScale: root.devScale; border: Theme.wa(0.05)
+        source: Ui.npArtwork; radius: 16; devScale: root.devScale; border: Theme.wa(0.05)
         // 🚨 no scale here: the cover is big and carries a blurred shadow,
         // redrawing it every frame for 1.5 % is not worth it. A dark veil says
         // the touch instead, and that costs one rectangle.

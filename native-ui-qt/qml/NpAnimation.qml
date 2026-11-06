@@ -65,7 +65,7 @@ Item {
     // disc instead, so it is told there is none (no coverid = no cover).
     readonly property string artwork: !live ? ""
                                     : loadedKind === "changer" && !Player.remote && Player.coverId === "" ? ""
-                                    : Player.artworkUrl
+                                    : Ui.npArtwork
     // The album on the media: a new one takes it out and puts the next one in.
     // Album alone (a compilation keeps its disc while the artist changes); a
     // stream without an album is its station URL, so a radio's songs do not
