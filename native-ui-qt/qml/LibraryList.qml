@@ -31,13 +31,23 @@ Item {
     readonly property bool coverflow: albumGrid && !!Ui.app && Ui.app.albumView === "coverflow"
     // ...or as the discs of the CD changer, to load and play (ChangerView)
     readonly property bool changer: albumGrid && !!Ui.app && Ui.app.albumView === "changer"
+    // menu di navigazione (radio, app, voci di plugin, menu Jive): NON sono
+    // liste di album, quindi niente card quadrata con copertina ma la stessa
+    // tessera larga (icona + etichetta) della home della libreria locale, così
+    // i menu dei plugin hanno la STESSA forma e misura della libreria locale.
+    readonly property bool menuTile: grid && !albumGrid
+    // altezza della tessera-menu, passata da Browser (homeTh) per essere
+    // identica alle tessere della home; <= 0 = fallback compatto.
+    property real menuTileH: 0
     readonly property bool search: view === LibraryModel.Search
     readonly property int pitch: view === LibraryModel.Tracks || view === LibraryModel.PlaylistTracks ? 50
                                : view === LibraryModel.Radios || view === LibraryModel.Apps ? 54 : 58
     // 3 columns up to a 1067 canvas; wider canvases add columns (~260 each)
     readonly property int cols: Math.max(3, Math.round(width / (Theme.bar ? 150 : 260)))
     readonly property real cardW: (width - 12 * (cols - 1)) / cols
-    readonly property real cardH: cardW + 48
+    // una tessera-menu è larga quanto una card album (stesse colonne) ma bassa
+    // e orizzontale come la home; una card album è quadrata + 48 di testo.
+    readonly property real cardH: menuTile ? (menuTileH > 0 ? menuTileH : 117) : cardW + 48
     readonly property real devScale: Ui.app ? Ui.app.devicePixelScale : 1
 
     // 🚨 UNA SOLA maschera (angoli tondi in alto) per tutte le schede della
@@ -122,8 +132,34 @@ Item {
     // (albums.png, artists.png, playlists.png…): language-independent, so it
     // works whatever the UI language. Returns "" when nothing matches, and the
     // caller falls back to the structural guess (search/folder/music).
-    function pluginGlyphIcon(icon) {
+    function pluginGlyphIcon(icon, text) {
         var s = String(icon || "").toLowerCase()
+        var t = String(text || "").toLowerCase()
+        // A service often lumps several top sections under one generic theme
+        // glyph (Qobuz marks New Releases, Bestsellers, In the Press… all with
+        // albums.png), so the glyph alone can't tell them apart. For the few
+        // well-known sections we refine by a keyword in the label (EN/IT/DE/FR).
+        // This only ever applies to navigation nodes: an album/track row carries
+        // real cover art, so its Icon fallback — and this function — never runs.
+        function kw() { for (var i = 0; i < arguments.length; i++) if (t.indexOf(arguments[i]) >= 0) return true; return false }
+        if (t) {
+            if (kw("search", "cerca", "suche", "recherch")) return "search"
+            if (kw("favorit", "preferit", "lieblings", "favoris")) return "heart"
+            if (kw("playlist", "wiedergabelist", "liste de lecture")) return "list-music"
+            if (kw("new rel", "novità", "novita", "neuerschein", "neue ", "latest", "nouveau", "nouvelle")) return "sparkles"
+            if (kw("bestsell", "chart", "classific", "top ", "popular", "popolar", "beliebt", "hits", "meilleur")) return "gauge"
+            if (kw("purchas", "acquist", "download", "gekauft", "télécharg", "telecharg")) return "download"
+            if (kw("my music", "mia musica", "meine musik", "collezion", "collection", "sammlung", "libreria", "library", "bibliothek", "ma musique")) return "library"
+            if (kw("press", "stampa", "presse", "magazine", "rivist", "editor", "éditor")) return "scroll-text"
+            if (kw("selection", "selezion", "auswahl", "discover", "scopri", "entdeck", "curat", "découvr", "decouvr", "sélection", "selection")) return "compass"
+            if (kw("genre", "genere", "generi", "stile", "stili")) return "tag"
+            if (kw("artist", "künstler", "kunstler", "interpret", "artisti")) return "user"
+            if (kw("radio", "station", "sender")) return "radio"
+            if (kw("podcast", "sendung")) return "mic"
+            if (kw("album", "release", "disco", "dischi")) return "disc"
+            if (kw("track", "song", "brani", "brano", "titel", "canzon", "chanson", "morceau")) return "music"
+            if (kw("genres", "generi")) return "tag"
+        }
         if (!s) return ""
         if (s.indexOf("album") >= 0) return "disc"
         if (s.indexOf("artist") >= 0) return "user"
@@ -227,10 +263,10 @@ Item {
                             : row.v === LibraryModel.Search ? (row.kind === 0 ? "user" : row.kind === 1 ? "disc" : "music")
                             : row.v === LibraryModel.Folders ? (row.isDir ? "folder" : "music")
                             : row.v === LibraryModel.Radios ? "radio" : row.v === LibraryModel.Apps ? "app-window"
-                            : row.v === LibraryModel.PluginItems ? (root.pluginGlyphIcon(row.icon) || (row.hasInput ? "search" : row.hasItems ? "folder" : "music"))   // Osmium glyph, else lente sul nodo di ricerca, come Electron
+                            : row.v === LibraryModel.PluginItems ? (root.pluginGlyphIcon(row.icon, row.text) || (row.hasInput ? "search" : row.hasItems ? "folder" : "music"))   // Osmium glyph, else lente sul nodo di ricerca, come Electron
                             : (row.v === LibraryModel.MenuHome || row.v === LibraryModel.Menu) ? ((row.go && row.go.length) ? "app-window" : "music") : "music"
                         size: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || (row.v === LibraryModel.Search && row.kind !== 2) ? 13 : row.v === LibraryModel.Playlists ? 14 : row.v === LibraryModel.Folders || row.v === LibraryModel.Genres || row.v === LibraryModel.Years ? 15 : row.v === LibraryModel.Tracks || row.v === LibraryModel.PlaylistTracks ? 13 : 15
-                        color: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || row.v === LibraryModel.Playlists || (row.v === LibraryModel.Search && row.kind !== 2) ? Theme.silver
+                        color: row.v === LibraryModel.Artists || row.v === LibraryModel.Composers || row.v === LibraryModel.Playlists || row.v === LibraryModel.PluginItems || (row.v === LibraryModel.Search && row.kind !== 2) ? Theme.silver
                              : (row.v === LibraryModel.Folders && row.isDir) || row.v === LibraryModel.Genres || row.v === LibraryModel.Years ? Theme.gold : Theme.silverA(0.6)
                     }
                 }
@@ -314,6 +350,13 @@ Item {
             // le tessere di app/servizi (radio, app, voci di plugin, menu Jive)
             // usano l'icona del server invece della copertina album
             readonly property bool plugin: v >= LibraryModel.Radios
+            // l'icona Osmium della voce (glifo di navigazione), condivisa dalla
+            // card album (filigrana quando manca la copertina) e dalla tessera-menu
+            readonly property string glyphName: !plugin ? "disc"
+                : v === LibraryModel.Radios ? "radio"
+                : v === LibraryModel.Apps ? "app-window"
+                : v === LibraryModel.PluginItems ? (root.pluginGlyphIcon(icon, text) || (hasInput ? "search" : hasItems ? "folder" : "music"))
+                : ((go && go.length) ? "app-window" : "music")
             // il pulsante play sulla scheda: sempre per gli album, e per le
             // voci di servizio solo quando sono riproducibili
             readonly property bool playBtn: v === LibraryModel.Albums || v === LibraryModel.NewMusic
@@ -332,17 +375,28 @@ Item {
                 id: cardSkin
                 anchors.fill: parent
                 scale: cardTap.tapScale
-                Rectangle { anchors.fill: parent; radius: 12; color: cardTap.mix(Theme.surface, Theme.wa(0.05)); border.width: 1; border.color: Theme.border }
+                Rectangle { anchors.fill: parent; radius: 12; color: cardTap.mix(Theme.surface, root.menuTile ? Theme.light : Theme.wa(0.05)); border.width: 1; border.color: Theme.border }
+                // tessera-menu (radio, app, voci di plugin, menu Jive): icona
+                // Osmium centrata + etichetta sotto, identica alle tessere della
+                // home della libreria locale (vedi Browser.qml `tiles`).
+                Item {
+                    anchors.fill: parent
+                    visible: root.menuTile
+                    Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (parent.height - 117) / 2; name: card.glyphName; size: 30; color: Theme.silver }
+                    Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (parent.height - 117) / 2; width: parent.width - 16; height: 20; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: card.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                }
                 Item {
                     id: artBox
+                    visible: !root.menuTile
                     width: root.cardW; height: root.cardW
                     DiagonalFallback { anchors.fill: parent; radius: 12; visible: artImg.status !== Image.Ready
-                                Icon { anchors.centerIn: parent; size: 40; color: Theme.silverA(0.2)
-                                    name: !card.plugin ? "disc"
-                                        : card.v === LibraryModel.Radios ? "radio"
-                                        : card.v === LibraryModel.Apps ? "app-window"
-                                        : card.v === LibraryModel.PluginItems ? (root.pluginGlyphIcon(card.icon) || (card.hasInput ? "search" : card.hasItems ? "folder" : "music"))
-                                        : ((card.go && card.go.length) ? "app-window" : "music") } }
+                                // a plugin section tile has no provider cover, so the glyph IS the
+                                // tile: draw it solid and a bit larger, like the local library. Keep
+                                // the faint watermark only for a local album whose art is missing.
+                                readonly property bool sectionGlyph: card.plugin && !root.isRemoteCover(card.icon)
+                                Icon { anchors.centerIn: parent; size: parent.sectionGlyph ? 48 : 40
+                                    color: parent.sectionGlyph ? Theme.silver : Theme.silverA(0.2)
+                                    name: card.glyphName } }
                     Image {
                         id: artImg; anchors.fill: parent; visible: false
                         // 🚨 stessa forma di indirizzo del kiosk Electron (`cover?size=`):
@@ -392,8 +446,8 @@ Item {
                         Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 14; color: Theme.white; pressColor: Theme.black; press: card.playF }
                     }
                 }
-                Text { x: 8; y: artBox.height + 8; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
-                Text { x: 8; y: artBox.height + 24; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.sub; elide: Text.ElideRight; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
+                Text { visible: !root.menuTile; x: 8; y: artBox.height + 8; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
+                Text { visible: !root.menuTile; x: 8; y: artBox.height + 24; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.sub; elide: Text.ElideRight; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
             }
             RowTap {
                 id: cardTap

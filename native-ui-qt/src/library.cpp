@@ -394,7 +394,13 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
             total++;
             const bool cover = o.icon.contains("imageproxy") || o.icon.contains("/cover")
                                || o.icon.contains("/music/");
-            if (o.hasItems && !o.isAudio && cover) albums++;
+            // a streaming album/playlist is a container (hasitems) with real
+            // cover art AND a container type ("album"/"playlist"…). It is also
+            // flagged isaudio (the whole album plays), so isAudio does NOT tell
+            // it apart from a plain track — a track leaf instead carries no type
+            // even though it, too, is audio with a cover. Key on the type.
+            const bool container = o.hasItems && !o.ptype.isEmpty() && o.ptype != QLatin1String("audio");
+            if (container && cover) albums++;
         }
         m_pluginAlbumList = total >= 3 && albums * 5 >= total * 3;   // ≥60% album-like
     }

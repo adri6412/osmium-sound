@@ -754,7 +754,11 @@ Item {
             // in an album list (grid / Cover Flow / changer) a tap on an album
             // container opens the same AlbumPage as the local library, in plugin
             // mode; otherwise a container drills further into the plugin menu
-            else if (!onPlay && it.hasItems && Library.pluginAlbumList && !it.isAudio)
+            // an album/playlist container (type set, not a plain track) with a
+            // real cover: a streaming album is flagged isaudio too, so key on
+            // the type + cover, not on isAudio, exactly like the C++ heuristic.
+            else if (!onPlay && Library.pluginAlbumList && it.hasItems && it.ptype
+                     && it.ptype !== "audio" && list.isRemoteCover(it.icon))
                 openPluginAlbum(cmd, it.id, it.text, list.iconUrl(it.icon), it.favUrl)
             else if (!onPlay && it.hasItems) goView(LibraryModel.PluginItems, it.text, cmd, it.id)
             else if (it.isAudio || onPlay) Player.cmd([cmd, "playlist", "play", "item_id:" + it.id])
@@ -1283,8 +1287,16 @@ Item {
                     LibraryList {
                         id: list
                         x: 12; y: parent.listY + 4
-                        width: (root.azShown ? root.width - 32 - 12 : root.width - 12) - 12
+                        // a plugin grid has no A-Z strip, but still reserve the
+                        // same 32 px gutter the alphabet uses in the library so a
+                        // plugin tile comes out the exact same cardW (same columns,
+                        // same shape) as a local-library tile — not wider.
+                        width: ((root.azShown || list.grid) ? root.width - 32 - 12 : root.width - 12) - 12
                         height: root.height - root.contentTop - y - 12
+                        // navigation menus (radio, app, plugin nodes, Jive menus)
+                        // use the same wide icon+label tile as the local-library
+                        // home, so a plugin menu matches it in shape and size.
+                        menuTileH: root.homeTh
                         visible: Library.state === 2 && Library.count > 0 && !root.isPage && !root.curSvcNeedsLogin
                         cdCoverUrl: root.inCdPlayer ? root.cdCoverUrl : ""
                         onRowTap: (row, onPlay) => root.rowTap(row, onPlay)

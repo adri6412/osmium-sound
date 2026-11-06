@@ -74,7 +74,10 @@ Item {
         // the title the grid passed (goView set it as the page title)
         album = { album: pluginTitle, favorites_url: pluginFavUrl }
         checkFav()
-        Player.query([pluginCmd, "items", "0", "9999", "item_id:" + pluginItemId], function(ok, r) {
+        // menu:1 gives a clean two-line text ("Title\nArtist - Album"), the real
+        // track item_id in params, and favorites_url in presetParams — far better
+        // than the flat form, which collapses the title into one "Title di … da …".
+        Player.query([pluginCmd, "items", "0", "9999", "item_id:" + pluginItemId, "menu:1"], function(ok, r) {
             if (!root) return          // the page was closed meanwhile
             // the plugin's loop key varies (loop_loop / item_loop / <cmd>_loop),
             // same set LibraryModel tries for PluginItems
@@ -90,12 +93,15 @@ Item {
         var out = [], total = 0
         for (var i = 0; i < loop.length; i++) {
             var t = loop[i]
+            var pp = t.params || {}, pre = t.presetParams || {}
             var two = String(t.text || "").split("\n")
-            var title = String(t.name || t.title || t.line1 || two[0] || "")
+            var title = String(two[0] || t.name || t.title || t.line1 || "")
             var sub = String(t.artist || t.line2 || (two.length > 1 ? two[1] : "") || "")
             var dur = Number(t.duration || t.tracklength || 0)
-            out.push({ id: String(t.id || t.item_id || ""), n: Number(t.tracknum || (i + 1)), disc: 1,
-                       title: title, dur: dur, url: String(t.url || ""), sub: sub })
+            var tid = String(pp.item_id || t.id || t.item_id || "")
+            var turl = String(pre.favorites_url || t.url || "")
+            out.push({ id: tid, n: Number(t.tracknum || (i + 1)), disc: 1,
+                       title: title, dur: dur, url: turl, sub: sub })
             total += dur
         }
         tracks = out; totalDur = total; localCredits = []; chip = ""
