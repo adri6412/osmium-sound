@@ -292,6 +292,18 @@
     "clear": "Clear",
     "confirm": "Confirm"
   },
+  "services": {
+    "notConnected": "Not connected",
+    "signIn": "Sign in",
+    "signInTitle": "Sign in to {name}",
+    "loginFailed": "Sign-in failed. Check your details and try again.",
+    "qobuz": { "hint": "Enter your Qobuz email and password." },
+    "device": {
+      "scanHint": "Scan the QR code with your phone, or open the link, and approve access.",
+      "preparing": "Preparing the sign-in link…",
+      "waiting": "Waiting for approval on your phone…"
+    }
+  },
   "player": {
     "muted": "Muted",
     "soundOn": "Sound on",

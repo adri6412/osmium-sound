@@ -48,6 +48,14 @@ Item {
     // accesso (cartella di rete): nome utente e password
     property string luser: ""
     property string lpass: ""
+    // accesso a un servizio con approvazione da telefono (Tidal/Spotify):
+    // link + codice QR da inquadrare, in attesa che il servizio confermi.
+    property string daTitle: ""
+    property string daBody: ""
+    property string daLink: ""
+    property string daCode: ""
+    property bool daWaiting: false
+    property string daErr: ""
 
     Spring { id: sc; stiffness: 550; damping: 30; rate: Theme.motionRate }
     property real fade: 0
@@ -111,6 +119,16 @@ Item {
         openCommon(6); title = t || ""; body = b || ""
         luser = user || ""; lpass = ""; err = error || ""; cb = f
     }
+    // Signs in to a streaming service the user approves on a phone: shows a
+    // link + QR to open and waits. The caller fills in the link/code after its
+    // own "start" call (deviceAuthUpdate), polls, and closes on success;
+    // `f(false)` on cancel so the caller stops polling.
+    function deviceAuth(t, b, f) {
+        openCommon(8); daTitle = t || ""; daBody = b || ""
+        daLink = ""; daCode = ""; daWaiting = true; daErr = ""; cb = f
+    }
+    function deviceAuthUpdate(link, code) { if (kind === 8) { daLink = link || ""; daCode = code || ""; daWaiting = true } }
+    function deviceAuthError(m) { if (kind === 8) { daErr = m || ""; daWaiting = false } }
     // Restart or shut down: `f("reboot" | "shutdown")`, `f("")` on cancel.
     function power(f) { openCommon(7); cb = f }
     function formatStatus(state, msg, pct) {
@@ -132,12 +150,14 @@ Item {
     function finishWifi(ok) { var f = cb; var s = ssid, p = pass, b = band; close(); if (f) f(ok ? s : null, ok ? p : null, ok ? b : "") }
     function finishLogin(ok) { var f = cb; var u = luser.trim(), p = lpass; close(); if (f) f(ok ? u : null, ok ? p : null) }
     function finishPower(act) { var f = cb; close(); if (f) f(act) }
+    function finishDeviceAuth(ok) { var f = cb; close(); if (f) f(ok) }
     function backdrop() {
         if (kind === 1) finishOk(false)
         else if (kind === 7) finishPower("")
         else if (kind === 2) finishPick(-1)
         else if (kind === 4) finishWifi(false)
         else if (kind === 6) finishLogin(false)
+        else if (kind === 8) finishDeviceAuth(false)
         else if (kind === 5) { if (step <= 1) close() }
         else close()
     }
@@ -164,7 +184,7 @@ Item {
     // ─── la scheda ─────────────────────────────────────────────────────────
     Rectangle {
         id: card
-        readonly property real cw: root.kind === 3 ? 512 : root.kind === 4 ? 384 : 448
+        readonly property real cw: root.kind === 3 ? 512 : root.kind === 4 ? 384 : root.kind === 8 ? 420 : 448
         readonly property real ipad: root.kind === 4 ? 20 : 24
         width: Math.min(cw, root.width - 48)
         height: Math.min(content.implicitHeight, root.height - 24)
@@ -181,7 +201,7 @@ Item {
             id: content
             x: card.ipad; y: card.ipad
             width: card.width - 2 * card.ipad
-            implicitHeight: 2 * card.ipad + (root.kind === 1 ? confirmBox.height : root.kind === 2 ? pickBox.height : root.kind === 3 ? textBox.height : root.kind === 4 ? wifiBox.height : root.kind === 6 ? loginBox.height : root.kind === 7 ? powerBox.height : fmtBox.height)
+            implicitHeight: 2 * card.ipad + (root.kind === 1 ? confirmBox.height : root.kind === 2 ? pickBox.height : root.kind === 3 ? textBox.height : root.kind === 4 ? wifiBox.height : root.kind === 6 ? loginBox.height : root.kind === 7 ? powerBox.height : root.kind === 8 ? deviceBox.height : fmtBox.height)
 
             // 1) conferma: max-w-md, testo 18, Annulla + azione 48
             Column {
@@ -392,6 +412,57 @@ Item {
                         Text { anchors.centerIn: parent; text: Tr.t("sources.wizard.signIn"); color: Theme.black; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
                         Tap { id: loTap; enabled: root.luser.trim() !== ""; onClicked: root.finishLogin(true) }
                     }
+                }
+            }
+
+            // 8) accesso a un servizio con approvazione da telefono: titolo,
+            // QR del link (+ link in chiaro), stato "in attesa" e Annulla.
+            Column {
+                id: deviceBox
+                visible: root.kind === 8
+                width: parent.width
+                Row {
+                    spacing: 8
+                    Icon { name: "smartphone"; size: 18; color: Theme.gold; anchors.verticalCenter: parent.verticalCenter }
+                    Text { width: deviceBox.width - 26; height: 28; verticalAlignment: Text.AlignVCenter; text: root.daTitle; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 18; font.bold: true }
+                }
+                Item { width: 1; height: 8 }
+                Text { width: parent.width; text: root.daBody; wrapMode: Text.Wrap; color: Theme.silver; font.family: Theme.font; font.pixelSize: 14; lineHeight: 20; lineHeightMode: Text.FixedHeight }
+                Item { width: 1; height: 16 }
+                // il QR, su fondo bianco come nel wizard; nascosto finche' non
+                // arriva il link dal servizio
+                Rectangle {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 184; height: 184; radius: 12; color: Theme.white
+                    visible: root.daLink !== ""
+                    QrCode { anchors.centerIn: parent; width: 160; height: 160; text: root.daLink }
+                }
+                Item { width: 1; height: 12; visible: root.daLink !== "" }
+                Text {
+                    visible: root.daLink !== ""
+                    width: parent.width; horizontalAlignment: Text.AlignHCenter
+                    text: root.daLink; elide: Text.ElideMiddle; color: Theme.silverA(0.8)
+                    font.family: Theme.font; font.pixelSize: 11
+                }
+                // spinner "in attesa" finche' il link non c'e' ancora o mentre
+                // si aspetta l'approvazione
+                Item { width: 1; height: 14 }
+                Text {
+                    visible: root.daErr === ""
+                    width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                    text: root.daLink === "" ? Tr.t("services.device.preparing") : Tr.t("services.device.waiting")
+                    color: Theme.gold; font.family: Theme.font; font.pixelSize: 13
+                }
+                Text {
+                    visible: root.daErr !== ""
+                    width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                    text: root.daErr; color: Theme.red400; font.family: Theme.font; font.pixelSize: 13
+                }
+                Item { width: 1; height: 20 }
+                Rectangle {
+                    width: parent.width; height: 48; radius: 8; color: dcTap.mix(Theme.accent, Theme.dark)
+                    Text { anchors.centerIn: parent; text: Tr.t("common.cancel"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16 }
+                    Tap { id: dcTap; onClicked: root.finishDeviceAuth(false) }
                 }
             }
 

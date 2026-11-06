@@ -292,6 +292,18 @@
     "clear": "Löschen",
     "confirm": "Bestätigen"
   },
+  "services": {
+    "notConnected": "Nicht verbunden",
+    "signIn": "Anmelden",
+    "signInTitle": "Bei {name} anmelden",
+    "loginFailed": "Anmeldung fehlgeschlagen. Bitte Daten prüfen und erneut versuchen.",
+    "qobuz": { "hint": "E-Mail und Passwort deines Qobuz-Kontos eingeben." },
+    "device": {
+      "scanHint": "QR-Code mit dem Handy scannen oder den Link öffnen und den Zugriff bestätigen.",
+      "preparing": "Anmeldelink wird vorbereitet…",
+      "waiting": "Warten auf die Bestätigung auf dem Handy…"
+    }
+  },
   "player": {
     "muted": "Stummgeschaltet",
     "soundOn": "Ton an",

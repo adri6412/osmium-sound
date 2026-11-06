@@ -292,6 +292,18 @@
     "clear": "Cancella",
     "confirm": "Conferma"
   },
+  "services": {
+    "notConnected": "Non connesso",
+    "signIn": "Accedi",
+    "signInTitle": "Accedi a {name}",
+    "loginFailed": "Accesso non riuscito. Controlla i dati e riprova.",
+    "qobuz": { "hint": "Inserisci email e password del tuo account Qobuz." },
+    "device": {
+      "scanHint": "Inquadra il codice QR col telefono, o apri il link, e approva l'accesso.",
+      "preparing": "Preparazione del link di accesso…",
+      "waiting": "In attesa dell'approvazione dal telefono…"
+    }
+  },
   "player": {
     "muted": "Muto",
     "soundOn": "Audio attivo",

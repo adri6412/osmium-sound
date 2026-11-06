@@ -89,14 +89,21 @@ Item {
     //  - app     → la radice del servizio (PluginItems con il suo `cmd`).
     property var sourceTiles: []
     property bool sourcesProbed: false
+    // login state of the streaming services (key -> {available, loggedIn}),
+    // fetched from the backend; and the reverse map plugin cmd -> service key,
+    // so a service opened from its tile knows whether it still needs a login.
+    property var svcStatus: ({})
+    property var svcByCmd: ({})
     // the streaming services we promote to a tile, matched case-insensitively
-    // on the app's name (Spotty is the Spotify bridge plugin)
+    // on the app's name (Spotty is the Spotify bridge plugin). `key` is the
+    // backend's service id for /services/* (login state + login flows).
     readonly property var sourceServices: [
-        { label: "Qobuz", match: ["qobuz"], icon: "disc" },
-        { label: "Tidal", match: ["tidal", "wimp"], icon: "disc-3" },
-        { label: "Spotify", match: ["spotify", "spotty"], icon: "music" }]
+        { label: "Qobuz", key: "qobuz", match: ["qobuz"], icon: "disc" },
+        { label: "Tidal", key: "tidal", match: ["tidal", "wimp"], icon: "disc-3" },
+        { label: "Spotify", key: "spotty", match: ["spotify", "spotty"], icon: "music" }]
     function rebuildSources(apps) {
         var out = []
+        var byCmd = {}
         // streaming services first, in the order declared, only if available
         for (var s = 0; s < sourceServices.length; s++) {
             var svc = sourceServices[s]
@@ -104,12 +111,13 @@ Item {
                 var nm = String(apps[i].name || "").toLowerCase()
                 var hit = false
                 for (var m = 0; m < svc.match.length; m++) if (nm.indexOf(svc.match[m]) >= 0) { hit = true; break }
-                if (hit) { out.push({ kind: "app", label: svc.label || apps[i].name, icon: svc.icon, srvIcon: apps[i].icon || "", cmd: apps[i].id }); break }
+                if (hit) { out.push({ kind: "app", key: svc.key, label: svc.label || apps[i].name, icon: svc.icon, srvIcon: apps[i].icon || "", cmd: apps[i].id }); byCmd[String(apps[i].id)] = svc.key; break }
             }
         }
         out.push({ kind: "radio", label: Tr.t("player.titles.radio"), icon: "radio", srvIcon: "", cmd: "" })
         out.push({ kind: "library", label: Tr.t("player.titles.localLibrary"), icon: "library", srvIcon: "", cmd: "" })
         sourceTiles = out
+        svcByCmd = byCmd
     }
     function loadSources() {
         if (!Player.connected) return
@@ -121,7 +129,71 @@ Item {
                 for (var i = 0; i < loop.length; i++) apps.push({ name: loop[i].name, id: loop[i].cmd, icon: loop[i].icon })
             }
             root.rebuildSources(apps)
+            root.loadServiceStatus()
         })
+    }
+    // login state of Qobuz/Tidal/Spotify, from the backend (never secrets)
+    function loadServiceStatus() {
+        Api.get(Api.apiBase + "/services/status", function(ok, d) {
+            if (ok && d && d.services) root.svcStatus = d.services
+        })
+    }
+    // the service key of the plugin currently open (empty if not a known
+    // streaming service), its label, and whether its root still needs a login
+    readonly property string curSvcKey: view === LibraryModel.PluginItems ? (svcByCmd[String(cur.p1)] || "") : ""
+    readonly property string curSvcLabel: {
+        for (var i = 0; i < sourceServices.length; i++) if (sourceServices[i].key === curSvcKey) return sourceServices[i].label
+        return ""
+    }
+    readonly property bool curSvcNeedsLogin: curSvcKey !== "" && String(cur.p2 || "") === ""
+                                             && !!svcStatus[curSvcKey] && svcStatus[curSvcKey].loggedIn === false
+    // ─── accesso ai servizi di streaming dal kiosk ──────────────────────────
+    // Qobuz: box utente+password (il plugin fa lui l'md5). Tidal/Spotify:
+    // approvazione da telefono (QR del link + polling finche' il servizio
+    // conferma). Tutta l'autenticazione vive nei plugin, pilotata dal backend.
+    function serviceLogin(key, label) {
+        if (key === "qobuz") qobuzLogin(label, "")
+        else deviceLogin(key, label)
+    }
+    function qobuzLogin(label, error) {
+        Ui.dialogs.login(Tr.tf("services.signInTitle", "name", label), Tr.t("services.qobuz.hint"),
+                         "", error, function(u, p) {
+            if (u === null) return
+            Api.post(Api.apiBase + "/services/qobuz/login", { username: u, password: p }, function(ok, d) {
+                if (ok && d && d.success) root.afterServiceLogin()
+                else root.qobuzLogin(label, Tr.t("services.loginFailed"))
+            }, 40000)
+        })
+    }
+    function deviceLogin(key, label) {
+        Ui.dialogs.deviceAuth(Tr.tf("services.signInTitle", "name", label), Tr.t("services.device.scanHint"),
+                              function(ok) { root._stopSvcPoll() })
+        Api.post(Api.apiBase + "/services/" + key + "/auth/start", {}, function(ok, d) {
+            if (!Ui.dialogs.active || Ui.dialogs.kind !== 8) return
+            if (!ok || !d || !d.success || !d.link) { Ui.dialogs.deviceAuthError(Tr.t("services.loginFailed")); return }
+            Ui.dialogs.deviceAuthUpdate(d.link, d.deviceCode || "")
+            root._startSvcPoll(key, d.deviceCode || "")
+        }, 30000)
+    }
+    function _startSvcPoll(key, code) { svcPoll.stop(); svcPoll.svcKey = key; svcPoll.devCode = code || ""; svcPoll.start() }
+    function _stopSvcPoll() { svcPoll.stop() }
+    function afterServiceLogin() {
+        _stopSvcPoll()
+        if (Ui.dialogs.active) Ui.dialogs.close()
+        loadServiceStatus()
+        loadTop()
+    }
+    Timer {
+        id: svcPoll
+        property string svcKey: ""
+        property string devCode: ""
+        interval: 3000; repeat: true; running: false
+        onTriggered: {
+            if (!Ui.dialogs.active || Ui.dialogs.kind !== 8) { stop(); return }
+            var url = Api.apiBase + "/services/" + svcKey + "/auth/poll"
+            if (devCode !== "") url += "?deviceCode=" + encodeURIComponent(devCode)
+            Api.get(url, function(ok, d) { if (ok && d && Number(d.hasCredentials) === 1) root.afterServiceLogin() }, 12000)
+        }
     }
     Component.onCompleted: { rebuildSources([]); if (Player.connected) loadSources() }
     Connections { target: Player; function onConnectedChanged() { if (Player.connected) root.loadSources() } }
@@ -971,6 +1043,10 @@ Item {
                                 property alias navTap: srcTap
                                 readonly property real tw: root.homeTw
                                 readonly property real th: root.homeTh
+                                // a streaming service whose account is not set up yet
+                                readonly property bool notConnected: modelData.kind === "app" && !!modelData.key
+                                                                     && !!root.svcStatus[modelData.key]
+                                                                     && root.svcStatus[modelData.key].loggedIn === false
                                 x: 16 + (index % root.homeCols) * (tw + 12); y: 62 + Math.floor(index / root.homeCols) * (th + 12)
                                 width: tw; height: th; radius: 12
                                 color: srcTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
@@ -985,6 +1061,18 @@ Item {
                                 }
                                 Icon { visible: !srcImg.visible; anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (parent.th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
                                 Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (parent.th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: modelData.label; color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                                // badge "non connesso": pallino muto + etichetta
+                                Rectangle {
+                                    visible: parent.notConnected
+                                    x: parent.width - width - 10; y: 10
+                                    width: ncRow.width + 14; height: 20; radius: 10
+                                    color: Theme.wa(0.08)
+                                    Row {
+                                        id: ncRow; anchors.centerIn: parent; spacing: 5
+                                        Rectangle { width: 7; height: 7; radius: 3.5; color: Theme.silverA(0.55); anchors.verticalCenter: parent.verticalCenter }
+                                        Text { text: Tr.t("services.notConnected"); color: Theme.silverA(0.75); font.family: Theme.font; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                                    }
+                                }
                                 Tap {
                                     id: srcTap
                                     onClicked: {
@@ -1138,11 +1226,31 @@ Item {
                         x: 12; y: parent.listY + 4
                         width: (root.azShown ? root.width - 32 - 12 : root.width - 12) - 12
                         height: root.height - root.contentTop - y - 12
-                        visible: Library.state === 2 && Library.count > 0 && !root.isPage
+                        visible: Library.state === 2 && Library.count > 0 && !root.isPage && !root.curSvcNeedsLogin
                         onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
                         // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
                         onRowLongPress: (row, x, y) => { root.menuX = list.x + x; root.menuY = list.y + y + (cdBanner.visible ? 48 : 0); ctx.open(root.ctxItems(row), root.menuX, root.menuY) }
                         onExpandAlbum: (row, x, y, size, src) => hero.fly(row, list.x + x, list.y + y, size, src)
+                    }
+                    // il riquadro "Accedi" quando si apre un servizio di streaming
+                    // senza account (al posto della sola riga "richiede credenziali")
+                    Rectangle {
+                        visible: root.curSvcNeedsLogin && !root.isPage
+                        x: 12; y: parent.listY + 4
+                        width: (root.width - 12) - 12; height: 132; radius: 12
+                        color: Theme.surface; border.width: 1; border.color: Theme.border
+                        Column {
+                            anchors.centerIn: parent; spacing: 12; width: parent.width - 48
+                            Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                                   text: Tr.tf("services.signInTitle", "name", root.curSvcLabel)
+                                   color: Theme.white; font.family: Theme.font; font.pixelSize: 17; font.bold: true }
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 176; height: 46; radius: 8; color: accTap.mix(Theme.gold, "#ca8a04")
+                                Text { anchors.centerIn: parent; text: Tr.t("services.signIn"); color: "#1a1a1a"; font.family: Theme.font; font.pixelSize: 15; font.bold: true }
+                                Tap { id: accTap; onClicked: root.serviceLogin(root.curSvcKey, root.curSvcLabel) }
+                            }
+                        }
                     }
                     // The album that opens from Cover Flow: a copy of its cover
                     // swells over the row, then settles where the page keeps its
@@ -1218,7 +1326,7 @@ Item {
                         Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t("player.connectionErrorTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
                     }
                     Text {
-                        visible: Library.state === 2 && Library.count === 0 && !root.isPage
+                        visible: Library.state === 2 && Library.count === 0 && !root.isPage && !root.curSvcNeedsLogin
                         x: list.x; y: list.y + 32; width: list.width; horizontalAlignment: Text.AlignHCenter
                         text: Tr.t("common.noResults"); color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 14
                     }

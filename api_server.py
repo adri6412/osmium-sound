@@ -11412,6 +11412,186 @@ def api_external_convert_remove():
     data = request.get_json(silent=True) or {}
     return jsonify(remove_external_convert(data))
 
+# ── streaming-service sign-in from the kiosk ──────────────────────────────
+# The kiosk shows a tile per streaming service (Qobuz/Tidal/Spotify) found in
+# Lyrion's `apps` list. When a service has no account, browsing into it only
+# shows a lone "requires credentials" notice and the sign-in has to be done by
+# hand from Lyrion's own web UI on :9000. These endpoints let the kiosk sign in
+# in place: they drive each plugin's EXISTING web/auth handlers on the player's
+# Lyrion (the auth/token logic lives inside those external Perl plugins, not
+# here). Qobuz takes a username+password form; Tidal and Spotify are device/
+# OAuth flows the user approves on a phone (the kiosk shows a link + QR + polls).
+_STREAM_SERVICES = {
+    'qobuz':  {'cmd': 'qobuz',  'login': 'password'},
+    'tidal':  {'cmd': 'tidal',  'login': 'device'},
+    'spotty': {'cmd': 'spotty', 'login': 'oauth'},
+}
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    # Return the 3xx response as-is instead of following it, so we can read a
+    # plugin's OAuth "Location" (Spotty's accounts.spotify.com authorize URL).
+    def redirect_request(self, *a, **k):
+        return None
+
+
+def _lms_web(path, method='GET', form=None, follow=True, timeout=12):
+    """GET/POST a Lyrion WEB page on the player's server (:9000), returning
+    (body_text, status, headers). Unlike _lms_rpc (JSON-RPC), the plugin
+    settings/auth pages are HTML and want form-urlencoded bodies. follow=False
+    keeps a 3xx so its Location header can be read."""
+    host = _current_lms_host() or '127.0.0.1'
+    url = f'http://{host}:9000/{path.lstrip("/")}'
+    data = None
+    headers = {}
+    if form is not None:
+        data = urllib.parse.urlencode(form).encode()
+        headers['Content-Type'] = 'application/x-www-form-urlencoded'
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    opener = urllib.request.build_opener(_NoRedirect()) if not follow \
+        else urllib.request.build_opener()
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            return resp.read().decode('utf-8', 'replace'), resp.status, dict(resp.headers)
+    except urllib.error.HTTPError as e:
+        # A 3xx under _NoRedirect (and any 4xx/5xx) lands here; its headers
+        # still carry Location, which is what the Spotty flow needs.
+        try:
+            body = e.read().decode('utf-8', 'replace')
+        except Exception:
+            body = ''
+        return body, e.code, dict(e.headers)
+    except Exception as e:
+        log.warning("lms_web %s failed: %s", path, e)
+        return '', 0, {}
+
+
+def _service_login_state(key):
+    """available (plugin present) + loggedIn, uniform across services: a
+    signed-out streaming plugin returns a single `type:textarea` notice at its
+    root, a signed-in one returns its real menu. No secret is read."""
+    cfg = _STREAM_SERVICES.get(key)
+    if not cfg:
+        return {'available': False, 'loggedIn': False}
+    pid = _own_player_mac() or '-'
+    try:
+        res = _lms_request(pid, [cfg['cmd'], 'items', '0', '1'])
+    except Exception:
+        return {'available': False, 'loggedIn': False}
+    if not isinstance(res, dict):
+        return {'available': False, 'loggedIn': False}
+    loop = res.get('item_loop') or res.get('loop_loop') or []
+    cnt = int(res.get('count') or 0)
+    if cnt <= 0 and not loop:
+        return {'available': False, 'loggedIn': False}
+    not_logged = cnt <= 1 and any(str(i.get('type')) == 'textarea' for i in loop)
+    return {'available': True, 'loggedIn': not not_logged, 'cmd': cfg['cmd']}
+
+
+def _qobuz_login(username, password):
+    # Qobuz/Settings.pm hashes the password itself (md5); we pass it in the
+    # clear only over loopback to the local plugin, and never log it.
+    pid = _own_player_mac()
+    path = 'plugins/Qobuz/settings/basic.html'
+    if pid:
+        path += '?playerid=' + urllib.parse.quote(pid)
+    form = {'useAJAX': '0', 'page': 'PLUGIN_QOBUZ',
+            'username': username, 'password': password,
+            'add_account': 'Add', 'saveSettings': '1'}
+    if pid:
+        form['player'] = pid
+    body, status, _ = _lms_web(path, method='POST', form=form, timeout=30)
+    if status != 200:
+        return {'success': False, 'error': 'unreachable'}
+    if 'PLUGIN_QOBUZ_AUTH_FAILED' in body:
+        return {'success': False, 'error': 'authFailed'}
+    # Trust the real menu, not just the absence of the error string.
+    st = _service_login_state('qobuz')
+    ok = bool(st.get('loggedIn'))
+    return {'success': ok, 'error': None if ok else 'authFailed'}
+
+
+def _tidal_auth_start():
+    # Each GET of auth.html kicks off a fresh device flow server-side and
+    # renders the verification link + deviceCode; the plugin then polls TIDAL
+    # on its own. hasCredentials?deviceCode= flips to 1 once that completes.
+    body, status, _ = _lms_web('plugins/TIDAL/auth.html', timeout=20)
+    if status != 200:
+        return {'success': False, 'error': 'unreachable'}
+    link = code = None
+    m = re.search(r'href="(https://link\.tidal\.com/[^"]+)"', body)
+    if m:
+        link = m.group(1)
+    m = re.search(r'name="deviceCode"[^>]*value="([^"]+)"', body)
+    if m:
+        code = m.group(1)
+    if not link or not code:
+        return {'success': False, 'error': 'noFlow'}
+    return {'success': True, 'link': link, 'deviceCode': code}
+
+
+def _spotty_auth_start():
+    # Load authentication.html to arm the helper (getAuthURL + its background
+    # check), then read the Location of the "sign in with Spotify" redirect:
+    # the real accounts.spotify.com authorize URL to show as link + QR.
+    pid = _own_player_mac()
+    q = ('?player=' + urllib.parse.quote(pid)) if pid else ''
+    _lms_web('plugins/Spotty/settings/authentication.html' + q, timeout=20)
+    _, _, headers = _lms_web('plugins/Spotty/settings/redirect',
+                             method='GET', follow=False, timeout=15)
+    link = headers.get('Location') or headers.get('location')
+    if not link:
+        return {'success': False, 'error': 'noFlow'}
+    return {'success': True, 'link': link}
+
+
+def _poll_has_credentials(path):
+    body, _, _ = _lms_web(path, timeout=10)
+    try:
+        return int(json.loads(body).get('hasCredentials') or 0)
+    except Exception:
+        return 0
+
+
+@app.route('/services/status', methods=['GET'])
+def api_services_status():
+    return jsonify({'services': {k: _service_login_state(k)
+                                 for k in _STREAM_SERVICES}})
+
+
+@app.route('/services/qobuz/login', methods=['POST'])
+def api_qobuz_login():
+    d = request.get_json(silent=True) or {}
+    u = (d.get('username') or '').strip()
+    p = d.get('password') or ''
+    if not u or not p:
+        return jsonify({'success': False, 'error': 'missing'}), 400
+    return jsonify(_qobuz_login(u, p))
+
+
+@app.route('/services/tidal/auth/start', methods=['POST'])
+def api_tidal_start():
+    return jsonify(_tidal_auth_start())
+
+
+@app.route('/services/tidal/auth/poll', methods=['GET'])
+def api_tidal_poll():
+    code = request.args.get('deviceCode') or ''
+    path = 'plugins/TIDAL/settings/hasCredentials?deviceCode=' + urllib.parse.quote(code)
+    return jsonify({'hasCredentials': _poll_has_credentials(path)})
+
+
+@app.route('/services/spotty/auth/start', methods=['POST'])
+def api_spotty_start():
+    return jsonify(_spotty_auth_start())
+
+
+@app.route('/services/spotty/auth/poll', methods=['GET'])
+def api_spotty_poll():
+    return jsonify({'hasCredentials':
+                    _poll_has_credentials('plugins/Spotty/settings/hasCredentials')})
+
+
 @app.route('/lms_role', methods=['GET'])
 def api_lms_role():
     return jsonify(get_lms_role())
