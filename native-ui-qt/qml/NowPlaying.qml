@@ -83,6 +83,9 @@ Item {
     }
     // il prossimo skin dei VU / la prossima animazione, senza aprire la scelta
     function cycleLook(kind) { chooser.cycle(kind) }
+    // CD changer DISC +/- when the changer is not the on-screen animation:
+    // a plain jump to the next/previous album in the queue (NpAnimation.changeDisc)
+    function changeDisc(dir) { npAnim.changeDisc(dir) }
 
     // Con i VU in movimento la scena si ridisegna ~30 volte al secondo: tutto
     // cio' che non si muove sta in uno strato cotto una volta (layer), cosi'
@@ -507,6 +510,7 @@ Item {
     // VU meters are off and one is chosen (so switching to the lyrics and back
     // does not reload the pictures); it runs only while visible on screen.
     NpAnimation {
+        id: npAnim
         x: root.boxX; y: root.boxY; width: root.boxW; height: root.boxH
         // unloaded while the full-screen stage runs its own copy
         kind: Player.vuEnabled || root.staged ? "" : Player.npAnimation

@@ -32,6 +32,11 @@ Item {
     property real totalDur: 0
     property string chip: ""
     property var localCredits: []
+    // a streaming album's extra rows, shown below the tracks like a local album:
+    // pluginInfo = "key: value" metadata lines, pluginCreditsId = the drillable
+    // Credits node's item_id (parsed into localCredits in loadPlugin)
+    property var pluginInfo: []
+    property string pluginCreditsId: ""
     property var meta: null
     property string metaStatus: ""      // "", pending, ok, nomatch, offline, disabled, error
     property int metaTries: 0
@@ -89,22 +94,87 @@ Item {
     // the drilled items as tracks: a service rarely sends role tags, so credits
     // stay empty and only the track list shows. Titles/subtitles come from the
     // menu item's fields (name/title/text, line1/line2, artist).
+    // A drilled plugin item is a real track only if it is music: it carries a
+    // play/add action or a saveable (favorites_url) / audio leaf. An album's
+    // metadata rows (Artist Credits, Description, Label, Awards, Copyright) and
+    // the "Add Release to … favourites" action are go-only navigation with a
+    // nextWindow and none of those — they must not show up as fake tracks.
+    function isPluginTrack(t) {
+        var a = t.actions || {}, pre = t.presetParams || {}
+        // a track plays (its own play action, or the base's via goAction:"play"
+        // / style:"itemplay") or is saveable music (favorites_url / audio).
+        if (String(t.goAction) === "play" || String(t.style) === "itemplay") return true
+        if (a.play || a["add"] || a["add-hold"]) return true
+        if (pre.favorites_url || t.url) return true
+        if (t.isaudio == 1 || String(t.type) === "audio") return true
+        return false
+    }
     function parsePluginTracks(loop) {
-        var out = [], total = 0
+        var out = [], total = 0, info = [], credId = ""
         for (var i = 0; i < loop.length; i++) {
             var t = loop[i]
-            var pp = t.params || {}, pre = t.presetParams || {}
-            var two = String(t.text || "").split("\n")
-            var title = String(two[0] || t.name || t.title || t.line1 || "")
-            var sub = String(t.artist || t.line2 || (two.length > 1 ? two[1] : "") || "")
-            var dur = Number(t.duration || t.tracklength || 0)
-            var tid = String(pp.item_id || t.id || t.item_id || "")
-            var turl = String(pre.favorites_url || t.url || "")
-            out.push({ id: tid, n: Number(t.tracknum || (i + 1)), disc: 1,
-                       title: title, dur: dur, url: turl, sub: sub })
-            total += dur
+            if (isPluginTrack(t)) {
+                var pp = t.params || {}, pre = t.presetParams || {}
+                var two = String(t.text || "").split("\n")
+                var title = String(two[0] || t.name || t.title || t.line1 || "")
+                var sub = String(t.artist || t.line2 || (two.length > 1 ? two[1] : "") || "")
+                var dur = Number(t.duration || t.tracklength || 0)
+                var tid = String(pp.item_id || t.id || t.item_id || "")
+                var turl = String(pre.favorites_url || t.url || "")
+                out.push({ id: tid, n: Number(t.tracknum || (out.length + 1)), disc: 1,
+                           title: title, dur: dur, url: turl, sub: sub })
+                total += dur
+                continue
+            }
+            // a non-track row: shown like a local album's credits/info, not dropped.
+            // The Credits node (type:"actions") drills into a people-by-role list;
+            // "key: value" rows (Genre, Duration, Label, …) are inline info lines;
+            // the "Add/Remove Release … favourites" service action is skipped.
+            var txt = String(t.text || t.name || "")
+            var gp = (t.actions && t.actions.go && t.actions.go.params) || t.params || {}
+            var low = txt.toLowerCase()
+            if (low.indexOf("favorite") >= 0 || low.indexOf("favourite") >= 0) continue
+            if (String(t.type) === "actions") { if (!credId) credId = String(gp.item_id || ""); continue }
+            if (String(t.type) === "text" || txt.indexOf(": ") > 0) { if (txt) info.push(txt) }
         }
-        tracks = out; totalDur = total; localCredits = []; chip = ""
+        tracks = out; totalDur = total; pluginInfo = info; pluginCreditsId = credId
+        localCredits = []; chip = ""
+        if (credId) loadPluginCredits(credId)
+    }
+    // the Credits node drills into flat "Name: Role ( 1, 3, 5-6 )" strings; turn
+    // them into the local credit-entry shape so CreditRows renders them like a
+    // local album (people carry no id here → not tappable, which CreditRows allows)
+    function loadPluginCredits(credId) {
+        Player.query([pluginCmd, "items", "0", "200", "item_id:" + credId, "menu:1"], function(ok, r) {
+            if (!root) return
+            var loop = ok && r ? (r.loop_loop || r.item_loop || r[pluginCmd + "_loop"] || []) : []
+            var byRole = {}, order = []
+            for (var i = 0; i < loop.length; i++) {
+                var s = String(loop[i].text || loop[i].name || "").replace(/\n/g, " ").trim()
+                if (!s) continue
+                var ci = s.indexOf(":")
+                if (ci < 0) continue                       // a bare artist/header line
+                var name = s.slice(0, ci).trim()
+                var rest = s.slice(ci + 1).trim()
+                var trk = ""                               // optional "( 1, 3, 5-6 )"
+                var m = rest.match(/\(([^)]*)\)\s*$/)
+                if (m) { trk = m[1].trim(); rest = rest.slice(0, m.index).trim() }
+                var role = rest || "performer"
+                var key = role.toLowerCase()
+                if (!byRole[key]) { byRole[key] = { group: root.pluginRoleGroup(key), role: key, attr: "", people: [], tracks: null }; order.push(key) }
+                byRole[key].people.push({ name: name, id: "", credit: trk })
+            }
+            var c = []
+            for (var o = 0; o < order.length; o++) c.push(byRole[order[o]])
+            root.localCredits = c
+        })
+    }
+    // map a Qobuz role word to one of CreditRows' groups
+    function pluginRoleGroup(r) {
+        if (/compos|writ|lyric|author|songwriter/.test(r)) return "composition"
+        if (/produc|engineer|mix|master|mastering/.test(r)) return "production"
+        if (/perform|vocal|guitar|bass|drum|piano|key|band|feat|artist|orchestr|conduct/.test(r)) return "performer"
+        return "other"
     }
     function loadMeta() {
         Api.get(Meta.url("/album?album_id=" + albumId), function(ok, d) {
@@ -231,7 +301,27 @@ Item {
         if (browser) browser.loadShuffled("album_id", albumId)
     }
     // ── favourite heart (add / remove, with its real state) ───────────────
+    // a streaming album has no stable favorites_url, so we store it as a
+    // favourites FOLDER named "<Album> — <Artist>" holding its track urls — the
+    // same shape the CD changer uses: the album is its tracks (issue #125)
+    function pluginFavTitle() {
+        var t = String(pluginTitle || album.album || "").replace(/\n/g, " — ").trim()
+        return t
+    }
     function checkFav() {
+        if (pluginMode) {
+            var want = pluginFavTitle()
+            Player.query(["favorites", "items", "0", "9999"], function(ok, r) {
+                if (!root) return
+                var loop = ok && r ? (r.loop_loop || []) : []
+                var idx = ""
+                for (var i = 0; i < loop.length; i++) {
+                    if (String(loop[i].name || loop[i].text || "") === want) { idx = String(loop[i].id); break }
+                }
+                root.isFav = idx !== ""; root.favIndex = idx
+            })
+            return
+        }
         var url = String(album.favorites_url || "")
         if (!url) { isFav = false; favIndex = ""; return }
         Player.favoriteExists(url, function(ex, idx) {
@@ -239,7 +329,49 @@ Item {
             root.isFav = !!ex; root.favIndex = ex ? String(idx) : ""
         })
     }
+    // add the plugin album's tracks into a new favourites folder, one by one
+    function pluginFavAddTracks(idx, i) {
+        if (!root) return
+        if (i >= tracks.length) {
+            root.isFav = true; root.favIndex = idx; favBtn.burst()
+            if (root.browser) root.browser.say("heart", "player.addedToFavorites")
+            return
+        }
+        var t = tracks[i]
+        Player.query(["favorites", "add", "item_id:" + idx, "url:" + t.url,
+                      "title:" + t.title, "type:audio", "icon:" + root.pluginCover], function() {
+            root.pluginFavAddTracks(idx, i + 1)
+        })
+    }
     function toggleFav() {
+        if (pluginMode) {
+            if (isFav) {
+                if (!favIndex) return
+                Player.query(["favorites", "delete", "item_id:" + favIndex], function(ok) {
+                    if (!root) return
+                    if (ok) { root.isFav = false; root.favIndex = ""; if (root.browser) root.browser.say("heart", "player.removedFromFavorites") }
+                    else if (root.browser) root.browser.say("alert-triangle", "player.favoriteError")
+                })
+            } else {
+                if (!tracks.length) return
+                var want = pluginFavTitle()
+                Player.query(["favorites", "addlevel", "title:" + want], function(ok) {
+                    if (!root || !ok) { if (root && root.browser) root.browser.say("alert-triangle", "player.favoriteError"); return }
+                    // addlevel returns only a count, not the index: find the folder
+                    Player.query(["favorites", "items", "0", "9999"], function(ok2, r2) {
+                        if (!root) return
+                        var loop = ok2 && r2 ? (r2.loop_loop || []) : []
+                        var idx = ""
+                        for (var i = 0; i < loop.length; i++) {
+                            if (String(loop[i].name || loop[i].text || "") === want) idx = String(loop[i].id)
+                        }
+                        if (idx === "") { if (root.browser) root.browser.say("alert-triangle", "player.favoriteError"); return }
+                        root.pluginFavAddTracks(idx, 0)
+                    })
+                })
+            }
+            return
+        }
         var url = String(album.favorites_url || "")
         if (!url) return
         if (isFav) {
@@ -360,7 +492,9 @@ Item {
                 PageButton { icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: root.shuffle() }
                 PageButton { icon: "list-plus"; onClicked: root.play("add") }
                 PageButton { icon: "list-start"; onClicked: root.play("insert") }
-                PageButton { id: favBtn; icon: "heart"; filled: root.isFav; visible: !!root.album.favorites_url; onClicked: root.toggleFav() }
+                PageButton { id: favBtn; icon: "heart"; filled: root.isFav
+                    label: Tr.t(root.isFav ? "player.removeFromFavorites" : "player.addToFavorites")
+                    visible: !!root.album.favorites_url || (root.pluginMode && root.tracks.length > 0); onClicked: root.toggleFav() }
             }
 
             // ── state of the online lookup ─────────────────────────────────
@@ -447,6 +581,19 @@ Item {
                 places: root.metaOk ? (root.meta.places || []) : []
                 discs: root.discs
                 onPerson: (p) => root.openPerson(p)
+            }
+            // a streaming album's "key: value" metadata (genre, label, …), listed
+            // like a local album's details — the service already localised them
+            Item { width: 1; height: root.pluginInfo.length ? 12 : 0 }
+            SectionTitle { visible: root.pluginInfo.length > 0; text: Tr.t("player.page.info") }
+            Repeater {
+                model: root.pluginInfo
+                Text {
+                    required property var modelData
+                    width: col.width; wrapMode: Text.Wrap; bottomPadding: 4
+                    text: String(modelData)
+                    color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 13; lineHeight: 18; lineHeightMode: Text.FixedHeight
+                }
             }
             // per-track detail, on request (a big box set has hundreds of lines)
             Item {

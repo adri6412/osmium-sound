@@ -297,7 +297,9 @@
     "signIn": "Anmelden",
     "signInTitle": "Bei {name} anmelden",
     "loginFailed": "Anmeldung fehlgeschlagen. Bitte Daten prüfen und erneut versuchen.",
-    "qobuz": { "hint": "E-Mail und Passwort deines Qobuz-Kontos eingeben." },
+    "qobuz": {
+      "hint": "E-Mail und Passwort deines Qobuz-Kontos eingeben."
+    },
     "device": {
       "scanHint": "QR-Code mit dem Handy scannen oder den Link öffnen und den Zugriff bestätigen.",
       "preparing": "Anmeldelink wird vorbereitet…",
@@ -540,6 +542,7 @@
       "tracksCount": "{count} Titel",
       "disc": "CD {n}",
       "credits": "Credits",
+      "info": "Details",
       "creditsByTrack": "Credits nach Titeln",
       "onTracks": "Titel {list}",
       "about": "Über dieses Album",
@@ -887,6 +890,8 @@
         "fullScreen": "Vollbild",
         "nextVu": "Nächstes VU-Meter",
         "nextAnimation": "Nächste Animation",
+        "nextDisc": "CD-Wechsler: Disc +",
+        "prevDisc": "CD-Wechsler: Disc −",
         "queue": "Warteschlange öffnen / schließen",
         "search": "Suche",
         "favorite": "Zu Favoriten hinzufügen",

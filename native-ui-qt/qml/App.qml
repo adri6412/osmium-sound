@@ -101,6 +101,14 @@ Item {
         else if (dir > 0) Player.next()
         else Player.prev()
     }
+    // CD changer DISC +/- : with the changer on screen the music waits for the
+    // disc to seat (NpAnimation.changerJump); otherwise a plain jump to the
+    // next/previous album in the queue. Reuses NpAnimation.changeDisc, which
+    // groups the queue by album.
+    function changeDisc(dir) {
+        if (changerScreen) changerScreen.changeDisc(dir)
+        else np.changeDisc(dir)
+    }
     function changerTakesPlay() {
         if (Player.playing) return false
         if (changerPending && changerDiscs.length > 0) {
@@ -387,6 +395,9 @@ Item {
         // libreria: il riquadro dice il nome di quello che e' venuto su
         case "nextVu": if (Player.isOwn) np.cycleLook("vu"); return
         case "nextAnimation": np.cycleLook("anim"); return
+        // CD changer disc +/- : jump to the next / previous loaded disc
+        case "nextDisc": app.changeDisc(1); return
+        case "prevDisc": app.changeDisc(-1); return
         case "queue": if (overlays.busy) overlays.close(); else overlays.openQueue(); return
         case "search": setExpanded(false); mainScreen.browser.focusSearch(); return
         case "favorite": if (Player.favoritesAvailable) Player.toggleFavorite(); return

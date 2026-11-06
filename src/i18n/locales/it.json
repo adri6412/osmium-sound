@@ -297,7 +297,9 @@
     "signIn": "Accedi",
     "signInTitle": "Accedi a {name}",
     "loginFailed": "Accesso non riuscito. Controlla i dati e riprova.",
-    "qobuz": { "hint": "Inserisci email e password del tuo account Qobuz." },
+    "qobuz": {
+      "hint": "Inserisci email e password del tuo account Qobuz."
+    },
     "device": {
       "scanHint": "Inquadra il codice QR col telefono, o apri il link, e approva l'accesso.",
       "preparing": "Preparazione del link di accesso…",
@@ -540,6 +542,7 @@
       "tracksCount": "{count} brani",
       "disc": "Disco {n}",
       "credits": "Crediti",
+      "info": "Informazioni",
       "creditsByTrack": "Crediti per brano",
       "onTracks": "brani {list}",
       "about": "Informazioni sull'album",
@@ -631,7 +634,7 @@
       "language": "Lingua",
       "thirdPartyNotices": "Componenti di terze parti",
       "netCheck": "Diagnosi rete",
-      "uiMotion": "Movimento dell\u2019interfaccia",
+      "uiMotion": "Movimento dell’interfaccia",
       "remote": "Telecomando"
     },
     "language": {
@@ -687,15 +690,15 @@
       "removeConfirm": "Rimuovere l'animazione «{name}» da questo apparecchio? Potrai scaricarla di nuovo in seguito."
     },
     "uiMotion": {
-      "help": "Quanto lo schermo si muove quando lo tocchi. Il movimento \u00e8 breve e si ferma da solo, quindi non pesa quasi nulla sulla scheda video; abbassalo se preferisci l\u2019interfaccia ferma.",
+      "help": "Quanto lo schermo si muove quando lo tocchi. Il movimento è breve e si ferma da solo, quindi non pesa quasi nulla sulla scheda video; abbassalo se preferisci l’interfaccia ferma.",
       "option": {
         "full": "Completo",
         "reduced": "Ridotto",
         "none": "Nessuno"
       },
       "optionHelp": {
-        "full": "Consigliato \u2014 i pulsanti cedono sotto il dito, i pannelli scorrono",
-        "reduced": "Gli stessi movimenti, al doppio della velocit\u00e0",
+        "full": "Consigliato — i pulsanti cedono sotto il dito, i pannelli scorrono",
+        "reduced": "Gli stessi movimenti, al doppio della velocità",
         "none": "Niente si muove: tutto cambia di colpo"
       }
     },
@@ -887,6 +890,8 @@
         "fullScreen": "Schermo intero",
         "nextVu": "VU meter successivo",
         "nextAnimation": "Animazione successiva",
+        "nextDisc": "Caricatore: disco +",
+        "prevDisc": "Caricatore: disco −",
         "queue": "Apri / chiudi la coda",
         "search": "Cerca",
         "favorite": "Aggiungi ai preferiti",
@@ -1341,7 +1346,12 @@
       "auto": "Automatico",
       "off": "Off",
       "dsdLabel": "File DSD",
-      "dsd": { "auto": "Automatico", "dop": "DoP", "native": "Nativo", "off": "Converti in PCM" },
+      "dsd": {
+        "auto": "Automatico",
+        "dop": "DoP",
+        "native": "Nativo",
+        "off": "Converti in PCM"
+      },
       "dsdDetectedNative": "Questo DAC dichiara il DSD nativo. DoP incapsula gli stessi bit in cornici PCM, di solito fino a DSD128. Converti in PCM serve alle uscite senza DSD, come l'HDMI.",
       "dsdDetectedDop": "Questo DAC non dichiara il DSD nativo, quindi Automatico usa il DoP. Converti in PCM serve alle uscite senza DSD, come l'HDMI.",
       "dsdDetectedPcm": "Questa uscita non è un DAC USB (HDMI o l'audio integrato), quindi Automatico converte il DSD in PCM. Scegli DoP solo se vi è collegato un DAC che lo accetta.",
@@ -1958,18 +1968,57 @@
     "skip": "Salta",
     "next": "Avanti",
     "finish": "Fine",
-    "welcome": { "title": "Benvenuto in Osmium Sound", "body": "Un giro veloce dello schermo: cosa c'è dove, e cosa fa un tocco. Dura un minuto, e puoi rivederlo da Impostazioni → Info di sistema." },
-    "miniPlayer": { "title": "Quello che suona", "body": "A sinistra c'è sempre il brano in corso: copertina, titolo, tasti di riproduzione e salto, casuale e ripeti, il volume. Tocca l'artista o l'album per aprire la loro pagina." },
-    "expand": { "title": "Il player grande", "body": "Questa freccia apre la schermata “in riproduzione” a tutto schermo, con i VU meter o un'animazione. Per tornare, trascinala in basso o tocca la freccia in alto a sinistra." },
-    "tabs": { "title": "Musica, App, Scopri, Impostazioni", "body": "Le schede in alto: Musica apre le tue sorgenti a tessere — i servizi di streaming che hai, le radio internet e la libreria locale; poi le app di Lyrion, musica da scoprire e le impostazioni dell'apparecchio. Il tasto di accensione è nell'angolo, e accanto c'è l'icona della rete: toccala per sapere se internet è raggiungibile." },
-    "library": { "title": "La tua libreria", "body": "Cerca in tutta la libreria dalla casella, oppure sfoglia per artisti, album, generi, anni, compositori, cartelle e playlist. In ogni elenco, una pressione lunga su una riga apre il suo menu: suona dopo, aggiungi alla coda, preferiti." },
-    "albumList": { "title": "Gli album", "body": "Tutti gli album della libreria, con la copertina. Un tocco apre l'album, il tasto play sulla scheda lo fa partire subito. Scrivi nella casella per filtrare, o salta con le lettere a destra." },
-    "longPress": { "title": "Tieni premuto per il menu", "body": "Tieni il dito per un attimo su un album, un brano, un artista o una playlist: si apre il suo menu, come questo. Suona dopo, aggiungi alla coda, salva tra i preferiti, vai all'artista." },
-    "coverFlow": { "title": "Cover Flow", "body": "Gli stessi album come una fila di copertine da sfogliare: trascina col dito, gira la rotella del mouse, tocca una copertina di lato, tieni premute le frecce o scorri il cursore in basso. Griglia o Cover Flow si scelgono dal pulsante nella barra in alto, o da Impostazioni → Libreria." },
-    "npLeft": { "title": "Ora, schermo intero, aspetto", "body": "L'ora avvia il salvaschermo. Accanto: lo schermo intero per gli strumenti o l'animazione, poi le due scelte: quali VU meter, quale animazione (un CD, un disco, una cassetta)." },
-    "npRight": { "title": "Player, testi, coda, sonno", "body": "Da destra: il player da comandare, strumenti o testi, la coda, il timer di spegnimento e le impostazioni." },
-    "npInfo": { "title": "Il brano", "body": "Tocca l'artista o l'album per aprire la loro pagina. La barra fa saltare nel brano, il cuore lo salva tra i preferiti, il cursore a destra è il volume." },
-    "npPanel": { "title": "Strumenti e animazioni", "body": "Qui stanno i VU meter, oppure l'animazione che hai scelto. Il registratore a cassette e i lettori CD hanno tasti che funzionano: play, stop, salto, espulsione, i numeri delle tracce." },
-    "done": { "title": "Questo è tutto", "body": "Buon ascolto. Puoi rivedere questa guida quando vuoi da Impostazioni → Info di sistema." }
+    "welcome": {
+      "title": "Benvenuto in Osmium Sound",
+      "body": "Un giro veloce dello schermo: cosa c'è dove, e cosa fa un tocco. Dura un minuto, e puoi rivederlo da Impostazioni → Info di sistema."
+    },
+    "miniPlayer": {
+      "title": "Quello che suona",
+      "body": "A sinistra c'è sempre il brano in corso: copertina, titolo, tasti di riproduzione e salto, casuale e ripeti, il volume. Tocca l'artista o l'album per aprire la loro pagina."
+    },
+    "expand": {
+      "title": "Il player grande",
+      "body": "Questa freccia apre la schermata “in riproduzione” a tutto schermo, con i VU meter o un'animazione. Per tornare, trascinala in basso o tocca la freccia in alto a sinistra."
+    },
+    "tabs": {
+      "title": "Musica, App, Scopri, Impostazioni",
+      "body": "Le schede in alto: Musica apre le tue sorgenti a tessere — i servizi di streaming che hai, le radio internet e la libreria locale; poi le app di Lyrion, musica da scoprire e le impostazioni dell'apparecchio. Il tasto di accensione è nell'angolo, e accanto c'è l'icona della rete: toccala per sapere se internet è raggiungibile."
+    },
+    "library": {
+      "title": "La tua libreria",
+      "body": "Cerca in tutta la libreria dalla casella, oppure sfoglia per artisti, album, generi, anni, compositori, cartelle e playlist. In ogni elenco, una pressione lunga su una riga apre il suo menu: suona dopo, aggiungi alla coda, preferiti."
+    },
+    "albumList": {
+      "title": "Gli album",
+      "body": "Tutti gli album della libreria, con la copertina. Un tocco apre l'album, il tasto play sulla scheda lo fa partire subito. Scrivi nella casella per filtrare, o salta con le lettere a destra."
+    },
+    "longPress": {
+      "title": "Tieni premuto per il menu",
+      "body": "Tieni il dito per un attimo su un album, un brano, un artista o una playlist: si apre il suo menu, come questo. Suona dopo, aggiungi alla coda, salva tra i preferiti, vai all'artista."
+    },
+    "coverFlow": {
+      "title": "Cover Flow",
+      "body": "Gli stessi album come una fila di copertine da sfogliare: trascina col dito, gira la rotella del mouse, tocca una copertina di lato, tieni premute le frecce o scorri il cursore in basso. Griglia o Cover Flow si scelgono dal pulsante nella barra in alto, o da Impostazioni → Libreria."
+    },
+    "npLeft": {
+      "title": "Ora, schermo intero, aspetto",
+      "body": "L'ora avvia il salvaschermo. Accanto: lo schermo intero per gli strumenti o l'animazione, poi le due scelte: quali VU meter, quale animazione (un CD, un disco, una cassetta)."
+    },
+    "npRight": {
+      "title": "Player, testi, coda, sonno",
+      "body": "Da destra: il player da comandare, strumenti o testi, la coda, il timer di spegnimento e le impostazioni."
+    },
+    "npInfo": {
+      "title": "Il brano",
+      "body": "Tocca l'artista o l'album per aprire la loro pagina. La barra fa saltare nel brano, il cuore lo salva tra i preferiti, il cursore a destra è il volume."
+    },
+    "npPanel": {
+      "title": "Strumenti e animazioni",
+      "body": "Qui stanno i VU meter, oppure l'animazione che hai scelto. Il registratore a cassette e i lettori CD hanno tasti che funzionano: play, stop, salto, espulsione, i numeri delle tracce."
+    },
+    "done": {
+      "title": "Questo è tutto",
+      "body": "Buon ascolto. Puoi rivedere questa guida quando vuoi da Impostazioni → Info di sistema."
+    }
   }
 }

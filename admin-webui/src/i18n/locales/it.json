@@ -616,6 +616,8 @@
         "fullScreen": "Schermo intero",
         "nextVu": "VU meter successivo",
         "nextAnimation": "Animazione successiva",
+        "nextDisc": "Caricatore: disco +",
+        "prevDisc": "Caricatore: disco −",
         "queue": "Apri / chiudi la coda",
         "search": "Cerca",
         "favorite": "Aggiungi ai preferiti",

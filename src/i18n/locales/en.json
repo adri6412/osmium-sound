@@ -297,7 +297,9 @@
     "signIn": "Sign in",
     "signInTitle": "Sign in to {name}",
     "loginFailed": "Sign-in failed. Check your details and try again.",
-    "qobuz": { "hint": "Enter your Qobuz email and password." },
+    "qobuz": {
+      "hint": "Enter your Qobuz email and password."
+    },
     "device": {
       "scanHint": "Scan the QR code with your phone, or open the link, and approve access.",
       "preparing": "Preparing the sign-in link…",
@@ -540,6 +542,7 @@
       "tracksCount": "{count} tracks",
       "disc": "Disc {n}",
       "credits": "Credits",
+      "info": "Details",
       "creditsByTrack": "Credits by track",
       "onTracks": "tracks {list}",
       "about": "About this album",
@@ -694,7 +697,7 @@
         "none": "None"
       },
       "optionHelp": {
-        "full": "Recommended \u2014 buttons give way under a finger, panels slide in",
+        "full": "Recommended — buttons give way under a finger, panels slide in",
         "reduced": "The same movements, twice as quick",
         "none": "Nothing moves: everything changes at once"
       }
@@ -887,6 +890,8 @@
         "fullScreen": "Full screen",
         "nextVu": "Next VU meter",
         "nextAnimation": "Next animation",
+        "nextDisc": "CD changer: disc +",
+        "prevDisc": "CD changer: disc −",
         "queue": "Open / close the queue",
         "search": "Search",
         "favorite": "Add to favourites",
@@ -1341,7 +1346,12 @@
       "auto": "Automatic",
       "off": "Off",
       "dsdLabel": "DSD files",
-      "dsd": { "auto": "Automatic", "dop": "DoP", "native": "Native", "off": "Convert to PCM" },
+      "dsd": {
+        "auto": "Automatic",
+        "dop": "DoP",
+        "native": "Native",
+        "off": "Convert to PCM"
+      },
       "dsdDetectedNative": "This DAC declares native DSD. DoP wraps the same bits in PCM frames, usually up to DSD128. Convert to PCM is for outputs with no DSD at all, such as HDMI.",
       "dsdDetectedDop": "This DAC does not declare native DSD, so Automatic uses DoP. Convert to PCM is for outputs with no DSD at all, such as HDMI.",
       "dsdDetectedPcm": "This output is not a USB DAC (HDMI or the built-in audio), so Automatic converts DSD to PCM. Choose DoP only if a DAC that takes DoP is connected to it.",
@@ -1958,18 +1968,57 @@
     "skip": "Skip",
     "next": "Next",
     "finish": "Done",
-    "welcome": { "title": "Welcome to Osmium Sound", "body": "A quick tour of the screen: what is where, and what a touch does. It takes a minute, and you can see it again from Settings → System info." },
-    "miniPlayer": { "title": "What is playing", "body": "The left side always shows the current track: cover, title, play and skip keys, shuffle and repeat, the volume. Touch the artist or the album name to open their page." },
-    "expand": { "title": "The big player", "body": "This arrow opens the full Now Playing screen, with the VU meters or an animation. Swipe it down, or touch the arrow at its top left, to come back." },
-    "tabs": { "title": "Music, Apps, Discover, Settings", "body": "The tabs at the top: Music opens your sources as tiles — the streaming services you have, internet radio and your local library; then the Lyrion apps, music to discover, and the settings of the appliance. The power key is in the corner, and next to it the network icon: touch it to see whether the internet is reachable." },
-    "library": { "title": "Your library", "body": "Search the whole library from the box, or browse by artists, albums, genres, years, composers, folders and playlists. In any list, a long press on a row opens its menu: play next, add to the queue, favourites." },
-    "albumList": { "title": "The albums", "body": "Every album of the library, with its cover. A touch opens the album, the play button on the card plays it right away. Type in the box to filter, or jump with the letters on the right." },
-    "longPress": { "title": "Hold to get the menu", "body": "Keep a finger on an album, a track, an artist or a playlist for a moment: its menu opens, like this one. Play next, add to the queue, save among the favourites, go to the artist." },
-    "coverFlow": { "title": "Cover Flow", "body": "The same albums as a row of covers to flip through: drag with a finger, turn the mouse wheel, touch a cover at the side, hold the arrows, or slide the knob below. Switch between grid and Cover Flow with the button in the crumb bar, or in Settings → Library." },
-    "npLeft": { "title": "Clock, full screen, looks", "body": "The clock starts the screensaver. Next to it: full screen for the meters or the animation, then the two choosers: which VU meters, which animation (a CD, a record, a cassette)." },
-    "npRight": { "title": "Player, lyrics, queue, sleep", "body": "From the right: the player to control, meters or lyrics, the queue, the sleep timer, and the settings." },
-    "npInfo": { "title": "The track", "body": "Touch the artist or the album to open their page. The bar seeks, the heart saves the track among the favourites, the slider on the right is the volume." },
-    "npPanel": { "title": "Meters and animations", "body": "Here live the VU meters, or the animation you chose. The cassette deck and the CD players have working keys: play, stop, skip, eject, the track numbers." },
-    "done": { "title": "That is all", "body": "Enjoy the music. You can see this tour again any time from Settings → System info." }
+    "welcome": {
+      "title": "Welcome to Osmium Sound",
+      "body": "A quick tour of the screen: what is where, and what a touch does. It takes a minute, and you can see it again from Settings → System info."
+    },
+    "miniPlayer": {
+      "title": "What is playing",
+      "body": "The left side always shows the current track: cover, title, play and skip keys, shuffle and repeat, the volume. Touch the artist or the album name to open their page."
+    },
+    "expand": {
+      "title": "The big player",
+      "body": "This arrow opens the full Now Playing screen, with the VU meters or an animation. Swipe it down, or touch the arrow at its top left, to come back."
+    },
+    "tabs": {
+      "title": "Music, Apps, Discover, Settings",
+      "body": "The tabs at the top: Music opens your sources as tiles — the streaming services you have, internet radio and your local library; then the Lyrion apps, music to discover, and the settings of the appliance. The power key is in the corner, and next to it the network icon: touch it to see whether the internet is reachable."
+    },
+    "library": {
+      "title": "Your library",
+      "body": "Search the whole library from the box, or browse by artists, albums, genres, years, composers, folders and playlists. In any list, a long press on a row opens its menu: play next, add to the queue, favourites."
+    },
+    "albumList": {
+      "title": "The albums",
+      "body": "Every album of the library, with its cover. A touch opens the album, the play button on the card plays it right away. Type in the box to filter, or jump with the letters on the right."
+    },
+    "longPress": {
+      "title": "Hold to get the menu",
+      "body": "Keep a finger on an album, a track, an artist or a playlist for a moment: its menu opens, like this one. Play next, add to the queue, save among the favourites, go to the artist."
+    },
+    "coverFlow": {
+      "title": "Cover Flow",
+      "body": "The same albums as a row of covers to flip through: drag with a finger, turn the mouse wheel, touch a cover at the side, hold the arrows, or slide the knob below. Switch between grid and Cover Flow with the button in the crumb bar, or in Settings → Library."
+    },
+    "npLeft": {
+      "title": "Clock, full screen, looks",
+      "body": "The clock starts the screensaver. Next to it: full screen for the meters or the animation, then the two choosers: which VU meters, which animation (a CD, a record, a cassette)."
+    },
+    "npRight": {
+      "title": "Player, lyrics, queue, sleep",
+      "body": "From the right: the player to control, meters or lyrics, the queue, the sleep timer, and the settings."
+    },
+    "npInfo": {
+      "title": "The track",
+      "body": "Touch the artist or the album to open their page. The bar seeks, the heart saves the track among the favourites, the slider on the right is the volume."
+    },
+    "npPanel": {
+      "title": "Meters and animations",
+      "body": "Here live the VU meters, or the animation you chose. The cassette deck and the CD players have working keys: play, stop, skip, eject, the track numbers."
+    },
+    "done": {
+      "title": "That is all",
+      "body": "Enjoy the music. You can see this tour again any time from Settings → System info."
+    }
   }
 }

@@ -153,7 +153,7 @@ const char *const kActions[] = {
     "playPause", "play", "pause", "stop", "next", "prev", "forward", "rewind",
     "volumeUp", "volumeDown", "mute",
     "up", "down", "left", "right", "ok", "back", "home", "menu", "pageUp", "pageDown",
-    "nowPlaying", "fullScreen", "nextVu", "nextAnimation",
+    "nowPlaying", "fullScreen", "nextVu", "nextAnimation", "nextDisc", "prevDisc",
     "queue", "search", "favorite", "openFavorites", "shuffle", "standby", "powerMenu", "eject", "resetTouch",
 };
 
@@ -275,7 +275,8 @@ bool mediaOnly(const QString &a) {
         || a == "volumeUp" || a == "volumeDown" || a == "mute"
         || a == "nowPlaying" || a == "queue" || a == "favorite" || a == "openFavorites" || a == "resetTouch"
         || a == "shuffle" || a == "eject" || a == "standby" || a == "powerMenu"
-        || a == "fullScreen" || a == "nextVu" || a == "nextAnimation";
+        || a == "fullScreen" || a == "nextVu" || a == "nextAnimation"
+        || a == "nextDisc" || a == "prevDisc";
 }
 
 }  // namespace

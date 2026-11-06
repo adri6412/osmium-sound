@@ -616,6 +616,8 @@
         "fullScreen": "Full screen",
         "nextVu": "Next VU meter",
         "nextAnimation": "Next animation",
+        "nextDisc": "CD changer: disc +",
+        "prevDisc": "CD changer: disc −",
         "queue": "Open / close the queue",
         "search": "Search",
         "favorite": "Add to favourites",
