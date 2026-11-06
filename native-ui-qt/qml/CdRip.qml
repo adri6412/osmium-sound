@@ -60,11 +60,12 @@ Item {
                                     && !autoWillStart && !open && !blocked && (state === "" || state === "idle")
     onWantAskChanged: if (wantAsk) ask()
     onHaveDiscChanged: if (!haveDisc && asking) close()
-    // the strip on the Music tab: only while a rip runs, or to eject after it
-    // (its own close, `bannerClosed`, is only for that last case)
+    // the strip on the Music tab: only to eject after a rip (its own close,
+    // `bannerClosed`, is only for that case). While a rip runs the progress is
+    // in the bottom-right notification (CdRipProgress), not here.
     property string bannerClosed: ""
-    readonly property bool bannerVisible: enabled && (ripping || (haveDisc && discid !== bannerClosed
-                                          && (state === "done" || state === "error" || state === "cancelled")))
+    readonly property bool bannerVisible: enabled && haveDisc && discid !== bannerClosed
+                                          && (state === "done" || state === "error" || state === "cancelled")
     // where the remote's spotlight starts: on Yes
     readonly property Item navFirst: asking ? yesTap : null
     anchors.fill: parent
@@ -205,9 +206,14 @@ Item {
         if (release) body.release = release
         Api.post(Api.srcBase + "/api/cd/rip", body, function() { root.loadStatus() })
         state = "starting"; ripping = true; total = sel.length
+        // the rip runs in the background from here: close the window and let
+        // the bottom-right notification (CdRipProgress) follow the progress
+        close()
     }
 
-    Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, 0.7 * root.fade); MouseArea { anchors.fill: parent; onClicked: if (!root.ripping) root.close() } }
+    // tapping the backdrop closes the window; while ripping that just sends it
+    // back to the background (the rip keeps running, the corner notification stays)
+    Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, 0.7 * root.fade); MouseArea { anchors.fill: parent; onClicked: root.close() } }
     // ── the question, when a disc goes in ─────────────────────────────────
     Rectangle {
         id: askCard
@@ -258,8 +264,9 @@ Item {
         MouseArea { anchors.fill: parent }
         Icon { x: 20; y: 22; name: "disc"; size: 16; color: Theme.gold }
         Text { x: 44; y: 16; height: 28; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.ripTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+        // always available: while ripping it closes the window to the background
+        // (the rip keeps running), it does not cancel — Cancel is its own button
         Item {
-            visible: !root.ripping
             x: parent.width - 20 - 28; y: 16; width: 28; height: 28
             Icon { anchors.centerIn: parent; name: "x"; size: 16; color: Theme.silverA(0.6) }
             Tap { grow: 6; onClicked: root.close() }

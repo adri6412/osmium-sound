@@ -431,6 +431,7 @@
       "ripTitle": "Rippa CD in libreria",
       "ripProgress": "Traccia {track} di {total}",
       "ripProgressShort": "In corso…",
+      "ripping": "Copia del CD…",
       "ripDone": "Rip completato! L'album è in libreria.",
       "ripError": "Rip fallito. Controlla il disco e riprova.",
       "artist": "Artista",

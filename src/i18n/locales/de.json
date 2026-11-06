@@ -431,6 +431,7 @@
       "ripTitle": "CD in die Bibliothek einlesen",
       "ripProgress": "Titel {track} von {total}",
       "ripProgressShort": "Einlesen läuft...",
+      "ripping": "CD wird eingelesen…",
       "ripDone": "Einlesen abgeschlossen! Das Album befindet sich in deiner Bibliothek.",
       "ripError": "Das Einlesen ist fehlgeschlagen. Prüfe die CD und versuche es erneut.",
       "artist": "Künstler",

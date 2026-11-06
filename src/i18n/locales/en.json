@@ -431,6 +431,7 @@
       "ripTitle": "Rip CD to library",
       "ripProgress": "Track {track} of {total}",
       "ripProgressShort": "In progress…",
+      "ripping": "Ripping CD…",
       "ripDone": "Rip complete! The album is in your library.",
       "ripError": "Rip failed. Check the disc and try again.",
       "artist": "Artist",

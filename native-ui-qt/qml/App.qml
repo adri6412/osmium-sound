@@ -575,6 +575,13 @@ Item {
         onEnded: remoteIntro.check()                       // another known remote may be waiting for its map
     }
     Toast { id: toast; anchors.fill: parent }             // z-[10050]: sopra CD (z-70) e aggiornamento
+    // the background CD-rip notification, bottom-right: follows the rip from
+    // anywhere once the CdRip window has closed (hidden while it is open)
+    CdRipProgress {
+        id: cdRipProgress; anchors.fill: parent
+        blocked: wizard.active || screensaver.covering || dialogs.active || vk.active || ota.active
+                 || tutorial.active || remoteTour.active || remotePair.active
+    }
     // The system disk filling up (hifi_diskguard.py, /system_disk): a notice
     // when it passes 90 %, and every half hour while it sits at the reserve
     // kept for Lyrion, where copies to it are refused.
