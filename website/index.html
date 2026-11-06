@@ -326,6 +326,10 @@
       transition: border-color 0.2s, background 0.2s;
       display: inline-flex; align-items: center; gap: 8px;
     }
+    /* The same button, when it is a real <button> and not a link. */
+    button.btn-secondary {
+      cursor: pointer; font-family: inherit; line-height: 1.6;
+    }
     .btn-secondary:hover {
       border-color: #555;
       background: rgba(255,255,255,0.04);
@@ -571,6 +575,30 @@
       word-break: break-all;
     }
 
+    /* ── QUICK START GUIDE MODAL ─────────────────────── */
+    .qs-modal {
+      display: none; position: fixed; inset: 0; z-index: 10000;
+      background: rgba(0,0,0,0.82);
+      align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    .qs-modal.open { display: flex; }
+    .qs-modal-card {
+      position: relative; width: 100%; max-width: 712px;
+      height: 560px; max-height: 92vh;   /* height is matched to the tutorial box via JS */
+      border-radius: 20px; overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+      transition: height 0.2s ease;
+    }
+    .qs-modal-frame { width: 100%; height: 100%; border: 0; display: block; background: #141519; }
+    .qs-modal-close {
+      position: absolute; top: 0.4rem; right: 0.6rem; z-index: 2;
+      width: 34px; height: 34px; border-radius: 50%;
+      font-size: 1.5rem; line-height: 1; color: #fff;
+      background: rgba(0,0,0,0.55); border: none; cursor: pointer; transition: background 0.2s;
+    }
+    .qs-modal-close:hover { background: rgba(0,0,0,0.8); }
+
     /* ── SPECS ───────────────────────────────────────── */
     #specs { border-top: 1px solid var(--border); }
     .specs-inner {
@@ -636,6 +664,19 @@
       text-align: left;
     }
     .dl-alt-head { margin: 0 0 0.7rem; font-size: 0.88rem; opacity: 0.7; }
+
+    /* Beta versions: a step further down still, closed until asked for. */
+    .dl-dev {
+      max-width: 720px; margin: 1.1rem auto 0;
+      padding: 0.9rem 1.1rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      text-align: left;
+    }
+    .dl-dev summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; }
+    .dl-dev summary small { font-weight: 400; opacity: 0.65; margin-left: 0.4rem; }
+    .dl-dev p { margin: 0.7rem 0 0; font-size: 0.88rem; opacity: 0.8; }
+    .dl-dev-btns { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
 
     .flasher-note pre.cmd {
       margin: 0.6rem 0 0.6rem 1.1rem;
@@ -813,10 +854,42 @@
     .manual-card p { color: var(--muted); font-size: 0.95rem; max-width: 480px; margin: 0 auto 1.5rem; line-height: 1.65; }
     .support-grid .manual-card p { flex-grow: 1; }
     .support-grid .manual-card p.alt-contact {
-      flex-grow: 0; margin: 1.1rem auto 0; font-size: 0.85rem; line-height: 1.5;
+      flex-grow: 0; margin: 1.25rem auto 0; font-size: 0.95rem; line-height: 1.55;
+      max-width: none; color: var(--text); font-weight: 500;
+      background: rgba(245,184,32,0.1); border: 1px solid rgba(245,184,32,0.4);
+      border-radius: var(--radius); padding: 0.85rem 1.1rem;
     }
-    .alt-contact a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .alt-contact a { color: var(--accent); text-decoration: underline; font-weight: 700; }
     .alt-contact a:hover { text-decoration: underline; }
+    .support-form { text-align: left; display: flex; flex-direction: column; gap: 0.9rem; margin: 0.25rem 0 0; max-width: none; }
+    .support-form .field { display: flex; flex-direction: column; gap: 0.35rem; }
+    .support-form label { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+    .support-form .req { color: var(--accent); font-style: normal; }
+    .support-form .opt { color: var(--muted); font-weight: 400; }
+    .support-form input[type="text"],
+    .support-form input[type="email"],
+    .support-form textarea {
+      width: 100%; box-sizing: border-box; font: inherit; color: var(--text);
+      background: var(--bg-card2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 0.6rem 0.75rem;
+    }
+    .support-form textarea { resize: vertical; min-height: 120px; }
+    .support-form input:focus, .support-form textarea:focus {
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(245,184,32,0.2);
+    }
+    .support-form input[type="file"] { font-size: 0.85rem; color: var(--muted); }
+    .support-form input[type="file"]::file-selector-button {
+      font: inherit; font-weight: 600; margin-right: 0.6rem; padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card);
+      color: var(--text); cursor: pointer;
+    }
+    .support-form .hint { color: var(--muted); font-size: 0.78rem; }
+    .support-form .btn-primary { align-self: flex-start; margin-top: 0.25rem; }
+    .support-form .btn-primary[disabled] { opacity: 0.6; cursor: default; }
+    .support-form .hp { position: absolute !important; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    .sf-msg { margin: 0.4rem 0 0; font-size: 0.9rem; font-weight: 600; }
+    .sf-msg.ok { color: #35c26b; }
+    .sf-msg.err { color: #ff6b6b; }
     @media (max-width: 760px) { .quickstart { grid-template-columns: 1fr; } }
     .code-block {
       background: #060606;
@@ -1132,8 +1205,12 @@
   <div class="hero-ctas">
     <a class="btn-primary" href="#install">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      <span data-en="Get started" data-it="Per iniziare">Get started</span>
+      <span data-en="Download" data-it="Download">Download</span>
     </a>
+    <button type="button" class="btn-secondary" id="quickStartBtn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <span data-en="Quick start guide" data-it="Guida rapida">Quick start guide</span>
+    </button>
     <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound" target="_blank">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
       <span data-en="View on GitHub" data-it="Guarda su GitHub">View on GitHub</span>
@@ -1381,6 +1458,21 @@
         </a>
       </div>
     </div>
+
+    <details class="dl-dev" id="devDownloads">
+      <summary><span data-en="Beta version" data-it="Versione beta">Beta version</span><small>v2.5.26-dev.1</small></summary>
+      <p data-en="This is the next version, still in development. It has the newest features but may have rough edges, so keep the stable version above if the music matters more than the news. You can write it to a stick with Osmium Flasher or balenaEtcher, or install it from the ISO." data-it="È la versione che arriverà dopo, ancora in sviluppo. Ha le novità più recenti ma può avere qualche spigolo: se per te conta di più la musica che le novità, tieni la versione stabile qui sopra. La scrivi su una chiavetta con Osmium Flasher o balenaEtcher, oppure la installi dalla ISO.">This is the next version, still in development. It has the newest features but may have rough edges, so keep the stable version above if the music matters more than the news. You can write it to a stick with Osmium Flasher or balenaEtcher, or install it from the ISO.</p>
+      <div class="dl-dev-btns">
+        <a class="btn-secondary" id="devImgBtn" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.26-dev.1/hifi-player-v2.5.26-dev.1.img.xz">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="iso-badge"><span data-en="Download IMG.xz" data-it="Scarica IMG.xz">Download IMG.xz</span><small>v2.5.26-dev.1</small></span>
+        </a>
+        <a class="btn-secondary" id="devIsoBtn" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.26-dev.1/hifi-player-v2.5.26-dev.1.iso">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="iso-badge"><span data-en="Download ISO" data-it="Scarica ISO">Download ISO</span><small>v2.5.26-dev.1</small></span>
+        </a>
+      </div>
+    </details>
 
     <div class="quickstart">
       <div class="qs-step">
@@ -1671,11 +1763,11 @@
     <div class="other-ways">
       <p class="other-ways-label" data-en="Prefer not to use Google Play?" data-it="Preferisci non usare Google Play?">Prefer not to use Google Play?</p>
       <div class="other-ways-btns">
-      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/download/companion-v1.0.14/HiFiMediaPlayer-companion-v1.0.14-release.apk">
+      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/download/companion-v1.0.17/HiFiMediaPlayer-companion-v1.0.17-release.apk">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span class="iso-badge"><span data-en="Download APK" data-it="Scarica l'APK">Download APK</span><small>v1.0.14</small></span>
+        <span class="iso-badge"><span data-en="Download APK" data-it="Scarica l'APK">Download APK</span><small>v1.0.17</small></span>
       </a>
-      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/tag/companion-v1.0.14" target="_blank">
+      <a class="btn-secondary" href="https://github.com/adri6412/osmium-sound/releases/tag/companion-v1.0.17" target="_blank">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
         <span data-en="Release notes" data-it="Note di rilascio">Release notes</span>
       </a>
@@ -1731,12 +1823,37 @@
   <div class="support-grid">
     <div class="manual-card">
       <div class="manual-icon">✉️</div>
-      <h2 data-en="Need help? Email support" data-it="Serve aiuto? Scrivi al supporto">Need help? Email support</h2>
-      <p data-en="Write to &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt;. Say what happened, what you expected, and the details that save a round of questions: the version and update channel, whether the device runs with a screen, headless or server-only, and the exact message you saw." data-it="Scrivi a &lt;strong&gt;support@osmiumsound.it&lt;/strong&gt;. Racconta cosa è successo, cosa ti aspettavi e i dettagli che fanno risparmiare un giro di domande: versione e canale di aggiornamento, se l'apparecchio è con schermo, headless o solo server, e il messaggio esatto che hai visto.">Write to <strong>support@osmiumsound.it</strong>. Say what happened, what you expected, and the details that save a round of questions: the version and update channel, whether the device runs with a screen, headless or server-only, and the exact message you saw.</p>
-      <a class="btn-primary" href="mailto:support@osmiumsound.it">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" fill="none"/><path d="M22 6 12 13 2 6"/><path d="M2 6h20v12H2z"/></svg>
-        <span data-en="Email support@osmiumsound.it" data-it="Scrivi a support@osmiumsound.it">Email support@osmiumsound.it</span>
-      </a>
+      <h2 data-en="Need help? Send a report" data-it="Serve aiuto? Invia una segnalazione">Need help? Send a report</h2>
+      <p data-en="Tell us what happens and on which machine. The more precise the model and the description, the fewer round-trips before a fix." data-it="Raccontaci cosa succede e su quale macchina. Più sono precisi il modello e la descrizione, meno giri di domande servono prima di risolvere.">Tell us what happens and on which machine. The more precise the model and the description, the fewer round-trips before a fix.</p>
+      <form id="supportForm" class="support-form" novalidate>
+        <div class="field">
+          <label for="sfModel"><span data-en="PC model" data-it="Modello del PC">PC model</span> <em class="req" title="required">*</em></label>
+          <input type="text" id="sfModel" name="model" required maxlength="120" autocomplete="off"
+                 data-ph-en="e.g. Dell OptiPlex 7050" data-ph-it="es. Dell OptiPlex 7050" placeholder="e.g. Dell OptiPlex 7050">
+        </div>
+        <div class="field">
+          <label for="sfProblem"><span data-en="What's wrong" data-it="Qual è il problema">What's wrong</span> <em class="req" title="required">*</em></label>
+          <textarea id="sfProblem" name="problem" required maxlength="4000" rows="5"
+                    data-ph-en="What happened, what you expected, the exact message, the version and update channel…" data-ph-it="Cosa è successo, cosa ti aspettavi, il messaggio esatto, la versione e il canale di aggiornamento…" placeholder="What happened, what you expected, the exact message, the version and update channel…"></textarea>
+        </div>
+        <div class="field">
+          <label for="sfEmail"><span data-en="Your email" data-it="La tua email">Your email</span> <em class="req" title="required">*</em></label>
+          <input type="email" id="sfEmail" name="email" required maxlength="200" autocomplete="email"
+                 data-ph-en="you@example.com — this is where we reply" data-ph-it="tu@esempio.it — qui ti rispondiamo" placeholder="you@example.com — this is where we reply">
+        </div>
+        <div class="field">
+          <label for="sfFile"><span data-en="Screenshots or files" data-it="Screenshot o file">Screenshots or files</span> <span class="opt" data-en="(optional)" data-it="(facoltativo)">(optional)</span></label>
+          <input type="file" id="sfFile" name="files" multiple accept=".zip,.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.log,.json,.csv,image/*,application/zip,application/pdf">
+          <small class="hint" data-en="Screenshots, a diagnostics .zip, logs… up to 5 MB in total." data-it="Screenshot, uno .zip di diagnostica, log… fino a 5 MB in tutto.">Screenshots, a diagnostics .zip, logs… up to 5 MB in total.</small>
+        </div>
+        <!-- honeypot: off-screen, real people leave it empty -->
+        <div class="hp" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+        <button type="submit" class="btn-primary" id="sfSubmit">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg>
+          <span data-en="Send the report" data-it="Invia la segnalazione">Send the report</span>
+        </button>
+        <p class="sf-msg" id="sfMsg" role="status" aria-live="polite" hidden></p>
+      </form>
       <p class="alt-contact" data-en="Not a bug or a request to track? For general enquiries write to &lt;a href=&quot;mailto:info@osmiumsound.it&quot;&gt;info@osmiumsound.it&lt;/a&gt; instead." data-it="Non &egrave; un problema da segnalare? Per comunicazioni generiche scrivi invece a &lt;a href=&quot;mailto:info@osmiumsound.it&quot;&gt;info@osmiumsound.it&lt;/a&gt;.">Not a bug or a request to track? For general enquiries write to <a href="mailto:info@osmiumsound.it">info@osmiumsound.it</a> instead.</p>
     </div>
     <div class="manual-card">
@@ -1772,6 +1889,15 @@
 <div class="lightbox" id="lightbox">
   <button class="lb-close" id="lbClose" aria-label="Close">&#215;</button>
   <img id="lightboxImg" src="" alt="">
+</div>
+
+<!-- QUICK START GUIDE POPUP: the hero button opens the step-by-step tutorial
+     (quickstart.html) in an iframe, in the page's current language. -->
+<div class="qs-modal" id="qsModal" role="dialog" aria-modal="true" aria-label="Quick start guide" aria-hidden="true">
+  <div class="qs-modal-card">
+    <button type="button" class="qs-modal-close" id="qsModalClose" aria-label="Close">&#215;</button>
+    <iframe class="qs-modal-frame" id="qsModalFrame" title="Osmium Sound — Quick start guide" src="about:blank" loading="lazy"></iframe>
+  </div>
 </div>
 
 <!-- DOWNLOAD + KO-FI POPUP: the flasher/ISO buttons open this before downloading -->
@@ -1840,6 +1966,8 @@
     const suffix = lang === 'it' ? 'It' : 'En';
     document.querySelectorAll('[data-src-en]').forEach(el => { el.src = el.dataset['src' + suffix]; });
     document.querySelectorAll('[data-href-en]').forEach(el => { el.href = el.dataset['href' + suffix]; });
+    // Placeholders: applyLang only touches innerHTML, so translate them here.
+    document.querySelectorAll('[data-ph-en]').forEach(el => { el.placeholder = el.dataset['ph' + suffix]; });
     document.querySelectorAll('.lang-switch button').forEach(b => {
       b.classList.toggle('active', b.dataset.lang === lang);
     });
@@ -2185,6 +2313,45 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDlModal(); });
   }
 
+  // Quick start guide popup: opens the step-by-step tutorial in an iframe,
+  // in the page's current language. The frame is loaded only on first open.
+  const qsModal = document.getElementById('qsModal');
+  const qsBtn   = document.getElementById('quickStartBtn');
+  if (qsModal && qsBtn) {
+    const qsFrame = document.getElementById('qsModalFrame');
+    const qsClose = document.getElementById('qsModalClose');
+    const qsCard  = qsModal.querySelector('.qs-modal-card');
+    // The tutorial reports its real content height; size the card to match it,
+    // capped to the viewport (beyond that the iframe scrolls on its own).
+    window.addEventListener('message', e => {
+      if (e.source !== qsFrame.contentWindow) return;
+      const h = e.data && e.data.osmiumQuickstartHeight;
+      if (!h) return;
+      const maxH = Math.round(window.innerHeight * 0.92);
+      qsCard.style.height = Math.min(h, maxH) + 'px';
+    });
+    function openQsModal() {
+      qsFrame.src = 'quickstart.html?lang=' + (lang === 'it' ? 'it' : 'en');
+      qsModal.classList.add('open');
+      qsModal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      qsClose.focus();
+      if (window.osmiumTrack) window.osmiumTrack('quickstart', lang);
+    }
+    function closeQsModal() {
+      if (!qsModal.classList.contains('open')) return;
+      qsModal.classList.remove('open');
+      qsModal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      qsFrame.src = 'about:blank';   // stop the tutorial's timers/animations
+      qsBtn.focus();
+    }
+    qsBtn.addEventListener('click', openQsModal);
+    qsClose.addEventListener('click', closeQsModal);
+    qsModal.addEventListener('click', e => { if (e.target === e.currentTarget) closeQsModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeQsModal(); });
+  }
+
   // Auto-advance
   function startAuto() { autoTimer = setInterval(() => goTo(current + 1), 4800); }
   function stopAuto()  { clearInterval(autoTimer); }
@@ -2192,6 +2359,91 @@
   const wrap = document.querySelector('.carousel-wrap');
   wrap.addEventListener('mouseenter', stopAuto);
   wrap.addEventListener('mouseleave', startAuto);
+
+  // Support form: POST the report to /api/support (functions/api/support.js).
+  // The PC model and the description are required; the .zip is optional and
+  // capped at 10 MB client-side so an oversized file is caught before upload.
+  (function () {
+    const form = document.getElementById('supportForm');
+    if (!form) return;
+    const btn = document.getElementById('sfSubmit');
+    const msg = document.getElementById('sfMsg');
+    const fileInput = document.getElementById('sfFile');
+    const MAX_TOTAL = 5 * 1024 * 1024;
+    const MAX_FILES = 8;
+    const ALLOWED_EXT = ['zip','png','jpg','jpeg','gif','webp','pdf','txt','log','json','csv'];
+
+    function say(kind, en, it) {
+      msg.className = 'sf-msg ' + kind;
+      msg.dataset.en = en;
+      msg.dataset.it = it;
+      msg.innerHTML = (lang === 'it') ? it : en;
+      msg.hidden = false;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const model = form.model.value.trim();
+      const problem = form.problem.value.trim();
+      const email = form.email.value.trim();
+      if (!model || !problem || !email) {
+        say('err', 'Please fill in the PC model, the description and your email.',
+                   'Compila il modello del PC, la descrizione e la tua email.');
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        say('err', 'That email address doesn’t look right.',
+                   'L’indirizzo email non sembra valido.');
+        return;
+      }
+      const files = Array.from(fileInput.files);
+      if (files.length > MAX_FILES) {
+        say('err', 'Please attach at most ' + MAX_FILES + ' files.',
+                   'Allega al massimo ' + MAX_FILES + ' file.');
+        return;
+      }
+      let totalSize = 0;
+      for (const f of files) {
+        const ext = (f.name.split('.').pop() || '').toLowerCase();
+        if (!ALLOWED_EXT.includes(ext)) {
+          say('err', 'This file type is not allowed: ' + f.name + '.',
+                     'Questo tipo di file non è ammesso: ' + f.name + '.');
+          return;
+        }
+        totalSize += f.size;
+      }
+      if (totalSize > MAX_TOTAL) {
+        say('err', 'The attachments are too large (max 5 MB in total).',
+                   'Gli allegati sono troppo grandi (max 5 MB in tutto).');
+        return;
+      }
+
+      btn.disabled = true;
+      say('', 'Sending…', 'Invio in corso…');
+      try {
+        const res = await fetch('/api/support', { method: 'POST', body: new FormData(form) });
+        let data = {};
+        try { data = await res.json(); } catch (_) {}
+        if (res.ok && data.ok) {
+          form.reset();
+          const ref = data.id ? ' (' + data.id + ')' : '';
+          say('ok', 'Thanks — your report has reached us' + ref + '. We’ll be in touch if you left an email.',
+                    'Grazie — la tua segnalazione ci è arrivata' + ref + '. Ti scriveremo se hai lasciato un’email.');
+        } else if (res.status === 413) {
+          say('err', 'The attachments are too large (max 5 MB in total).',
+                     'Gli allegati sono troppo grandi (max 5 MB in tutto).');
+        } else {
+          say('err', 'Something went wrong. Please try again, or email support@osmiumsound.it.',
+                     'Qualcosa è andato storto. Riprova, oppure scrivi a support@osmiumsound.it.');
+        }
+      } catch (_) {
+        say('err', 'Could not send. Check your connection and try again.',
+                   'Invio non riuscito. Controlla la connessione e riprova.');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  })();
 </script>
 </body>
 </html>

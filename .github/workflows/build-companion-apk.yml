@@ -61,7 +61,7 @@ jobs:
       - name: Generate version from tag
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION=${GITHUB_REF_NAME}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "App Version: ${VERSION}"
 

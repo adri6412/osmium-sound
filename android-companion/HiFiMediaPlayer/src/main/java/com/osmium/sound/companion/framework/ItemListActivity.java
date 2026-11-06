@@ -21,8 +21,11 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 
 import androidx.annotation.CallSuper;
+import androidx.annotation.DrawableRes;
+import androidx.annotation.StringRes;
 import androidx.annotation.NonNull;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.util.Pair;
@@ -80,7 +83,7 @@ public abstract class ItemListActivity<VH extends ItemViewHolder<T>, T extends I
     /**
      * View to show when no players are connected
      */
-    private View emptyView;
+    private TextView emptyView;
 
     /**
      * Layout hosting the sub activity content
@@ -205,8 +208,23 @@ public abstract class ItemListActivity<VH extends ItemViewHolder<T>, T extends I
     }
 
     private void showEmptyView() {
+        showEmptyView(R.string.no_players_connected, R.drawable.ic_squeezeplay);
+    }
+
+    /**
+     * The server answered, but there is nothing to list (an empty menu such as
+     * the Apps tab with no apps installed, or a search without hits). Says so,
+     * instead of leaving a blank screen that looks like a stuck load.
+     */
+    private void showNoItems() {
+        showEmptyView(R.string.item_list_empty, 0);
+    }
+
+    private void showEmptyView(@StringRes int text, @DrawableRes int icon) {
         subActivityContent.setVisibility(View.GONE);
         loadingProgress.setVisibility(View.GONE);
+        emptyView.setText(text);
+        emptyView.setCompoundDrawablesWithIntrinsicBounds(icon, 0, 0, 0);
         emptyView.setVisibility(View.VISIBLE);
     }
 
@@ -351,7 +369,13 @@ public abstract class ItemListActivity<VH extends ItemViewHolder<T>, T extends I
     protected void onItemsReceived(final int count, final int start, final List<T> items) {
         Log.d(TAG, "onItemsReceived(" + count + ", " + start + ", " + items.size() + ")");
         runOnUiThread(() -> {
-            showContent();
+            // Nothing at all from the server: show the empty message. It is
+            // cleared as soon as items arrive (showContent) or the list reloads.
+            if (count == 0 && items.isEmpty()) {
+                showNoItems();
+            } else {
+                showContent();
+            }
             getItemAdapter().update(count, start, items);
         });
     }

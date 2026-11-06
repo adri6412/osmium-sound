@@ -14,6 +14,7 @@
     <!-- Icons in grid -->
     <dimen name="album_art_icon_grid_size">144dp</dimen>
     <dimen name="grid_column_width">160dp</dimen>
+    <dimen name="settings_tile_column_width">170dp</dimen>
 
     <!-- Icons in display messages. -->
     <dimen name="display_message_icon_size">96dp</dimen>

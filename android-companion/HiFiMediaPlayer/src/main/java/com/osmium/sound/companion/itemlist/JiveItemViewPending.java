@@ -24,16 +24,11 @@ import com.osmium.sound.companion.R;
 import com.osmium.sound.companion.framework.BaseActivity;
 import com.osmium.sound.companion.framework.ItemViewHolder;
 import com.osmium.sound.companion.model.JiveItem;
-import com.osmium.sound.companion.model.Window;
 
 public class JiveItemViewPending extends ItemViewHolder<JiveItem> {
 
     private final boolean showIcon;
     private final View icon;
-
-    JiveItemViewPending(@NonNull JiveItemListActivity activity, @NonNull View view) {
-        this(activity, view, activity.window.windowStyle != Window.WindowStyle.TEXT_ONLY);
-    }
 
     public JiveItemViewPending(@NonNull BaseActivity activity, @NonNull View view, boolean showIcon) {
         super(activity, view);

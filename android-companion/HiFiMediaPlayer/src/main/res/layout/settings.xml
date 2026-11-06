@@ -16,9 +16,9 @@
             app:navigationIcon="@drawable/ic_keyboard_arrow_left" />
     </com.google.android.material.appbar.AppBarLayout>
 
+    <!-- Filled by SettingsActivity: the tile grid, then the sections. -->
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/settings_container"
-        android:name="com.osmium.sound.companion.SettingsFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 

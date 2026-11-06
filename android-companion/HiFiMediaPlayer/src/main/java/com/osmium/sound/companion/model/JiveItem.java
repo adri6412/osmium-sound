@@ -706,6 +706,32 @@ public class JiveItem extends Item {
     }
     private static final Set<String> title_parameters = new HashSet<>(Arrays.asList("track_id", "album_id", "artist_id", "genre_id", "year"));
 
+    /**
+     * True when this row opens an album's track list, i.e. a {@code browselibrary items}
+     * browse carrying {@code album_id} but no {@code track_id}. Osmium routes these to the
+     * bespoke kiosk-style album page instead of the generic browse list.
+     */
+    public boolean isAlbumRow() {
+        if (goAction == null || goAction.action == null) {
+            return false;
+        }
+        Action.JsonAction go = goAction.action;
+        return go.cmd != null
+                && go.cmd.equals(Arrays.asList("browselibrary", "items"))
+                && go.params != null
+                && go.params.containsKey("album_id")
+                && !go.params.containsKey("track_id");
+    }
+
+    /** The {@code album_id} from this row's go action, or null when there is none. */
+    public String getAlbumId() {
+        if (goAction == null || goAction.action == null || goAction.action.params == null) {
+            return null;
+        }
+        Object v = goAction.action.params.get("album_id");
+        return v == null ? null : v.toString();
+    }
+
     public void setNode(String node) {
         this.node = node;
     }

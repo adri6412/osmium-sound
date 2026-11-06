@@ -24,6 +24,7 @@ import java.util.List;
 import com.osmium.sound.companion.Preferences;
 import com.osmium.sound.companion.itemlist.IServiceItemListCallback;
 import com.osmium.sound.companion.model.Action;
+import com.osmium.sound.companion.model.SlimCommand;
 import com.osmium.sound.companion.model.Alarm;
 import com.osmium.sound.companion.model.AlarmPlaylist;
 import com.osmium.sound.companion.model.JiveItem;
@@ -180,6 +181,13 @@ public interface ISqueezeService {
      * @param callback This will be called as the items arrive.
      */
     void pluginItems(Action action, IServiceItemListCallback<JiveItem> callback);
+
+    /**
+     * Start an asynchronous fetch for a raw {@link SlimCommand} (e.g. {@code titles album_id:X}).
+     * The response loop is chosen from the callback's generic type (a {@code Song} callback reads
+     * {@code titles_loop}). Used by the kiosk album page to load an album's tracks.
+     */
+    <T> void requestItems(SlimCommand command, IServiceItemListCallback<T> callback);
 
     /**
      * Perform the supplied SBS <code>do</code> <code>action</code> using parameters in <code>item</code>.

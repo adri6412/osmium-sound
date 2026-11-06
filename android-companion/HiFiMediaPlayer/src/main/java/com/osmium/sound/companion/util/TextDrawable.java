@@ -1,4 +1,4 @@
-package com.osmium.sound.companion.homescreenwidgets;
+package com.osmium.sound.companion.util;
 
 import android.content.res.Resources;
 import android.graphics.Canvas;

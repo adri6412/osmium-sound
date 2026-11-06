@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Body of ResolutionActivity: the render-resolution part of the web admin's
+     Settings → Display card, a screen of its own to match the kiosk. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView style="@style/ApplianceTitle" android:text="@string/appliance_display_resolution_label" />
+    <TextView style="@style/ApplianceHelp" android:text="@string/appliance_display_resolution_help" />
+    <RadioGroup
+        android:id="@+id/display_resolution_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+</LinearLayout>

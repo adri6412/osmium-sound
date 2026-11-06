@@ -406,22 +406,6 @@
     <string name="settings_language_summary">Lingua usata da questa app</string>
     <string name="settings_language_system">Predefinita di sistema</string>
 
-    <string name="configure_select_player">Scegli il player da controllare</string>
-    <string name="configure_select_button">Azione del widget</string>
-    <string name="remote_unknownDescription">Sconosciuto</string>
-    <string name="remote_openPlayer">Apri il player in Squeezer</string>
-    <string name="remote_openNowPlaying">Apri In riproduzione per il player</string>
-    <string name="remote_openCurrentPlaylist">Apri la playlist corrente del player</string>
-    <string name="remote_powerDescription">Accensione</string>
-    <string name="remote_pausePlayDescription">Pausa/Riproduci</string>
-    <string name="remote_nextDescription">Brano successivo</string>
-    <string name="remote_previousDescription">Brano precedente</string>
-    <string name="remote_preset1Description">Preset 1</string>
-    <string name="remote_preset2Description">Preset 2</string>
-    <string name="remote_preset3Description">Preset 3</string>
-    <string name="remote_preset4Description">Preset 4</string>
-    <string name="remote_preset5Description">Preset 5</string>
-    <string name="remote_preset6Description">Preset 6</string>
 
     <string name="ARCHIVE_NODE">Archivio</string>
     <string name="MENU_ITEM_MOVED">Voce di menu spostata nell\'archivio (o rimossa)</string>
@@ -516,4 +500,22 @@ Serve altro aiuto? Scrivi a support@osmiumsound.it]]></string>
     <string name="settings_remote_address_unset">Non impostato</string>
     <string name="settings_playback_open_title">Riproduzione</string>
     <string name="settings_playback_open_summary">Dissolvenza incrociata, guadagno di riproduzione e il resto, sul lettore in uso</string>
+
+    <!-- Impostazioni a riquadri: gruppi e sezioni delle Impostazioni del kiosk (stessi nomi). -->
+    <string name="settings_group_music">Musica e libreria</string>
+    <string name="settings_group_sound">Audio e uscite</string>
+    <string name="settings_group_look">Aspetto e schermo</string>
+    <string name="settings_group_control">Controllo e telecomandi</string>
+    <string name="settings_group_network">Rete e accesso</string>
+    <string name="settings_group_system">Sistema e aggiornamenti</string>
+    <string name="settings_tile_library">Libreria</string>
+    <string name="settings_tile_audio_output">Uscita audio (DAC)</string>
+    <string name="settings_tile_language_screen">Lingua e schermo</string>
+    <string name="settings_tile_display_mode">Modalità schermo</string>
+    <string name="settings_tile_interface">Interfaccia e scorciatoie</string>
+    <string name="settings_tile_network">Configurazione rete</string>
+    <string name="settings_tile_ssh">Accesso SSH</string>
+    <string name="settings_tile_system_controls">Controlli sistema</string>
+    <!-- Lista vuota dal server (nessuna app, nessun risultato di ricerca). -->
+    <string name="item_list_empty">Niente da mostrare.</string>
 </resources>

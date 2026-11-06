@@ -215,22 +215,6 @@
     <string name="download_item">%s herunterladen</string>
     <string name="disable_downloads">Option "Herunterladen" deaktivieren</string>
 
-    <string name="configure_select_player">Player auswählen</string>
-    <string name="configure_select_button">Widget-Aktion</string>
-    <string name="remote_unknownDescription">Unbekannt</string>
-    <string name="remote_openPlayer">Player in Squeezer öffnen</string>
-    <string name="remote_openNowPlaying">"Aktuelle Wiedergabe" für Player öffnen</string>
-    <string name="remote_openCurrentPlaylist">Aktuelle Wiedergabeliste für Player öffnen</string>
-    <string name="remote_powerDescription">Ein/Aus</string>
-    <string name="remote_pausePlayDescription">Pause/Wiedergabe</string>
-    <string name="remote_nextDescription">Nächster Titel</string>
-    <string name="remote_previousDescription">Vorheriger Titel</string>
-    <string name="remote_preset1Description">Favoritentaste 1</string>
-    <string name="remote_preset2Description">Favoritentaste 2</string>
-    <string name="remote_preset3Description">Favoritentaste 3</string>
-    <string name="remote_preset4Description">Favoritentaste 4</string>
-    <string name="remote_preset5Description">Favoritentaste 5</string>
-    <string name="remote_preset6Description">Favoritentaste 6</string>
     <string name="ARCHIVE_NODE">Archiv</string>
     <string name="MENU_ITEM_MOVED">Menüpunkt (un-)archiviert</string>
     <string name="MENU_IS_SUBMENU_IN_ARCHIVE">Sie befinden sich bereits im Archiv!</string>

@@ -62,7 +62,7 @@ import com.osmium.sound.companion.HiFiMediaPlayer;
 import com.osmium.sound.companion.SqueezerRepository;
 import com.osmium.sound.companion.dialog.AlertEventDialog;
 import com.osmium.sound.companion.dialog.DownloadDialog;
-import com.osmium.sound.companion.itemlist.HomeActivity;
+import com.osmium.sound.companion.kiosk.MainActivity;
 import com.osmium.sound.companion.model.Action;
 import com.osmium.sound.companion.model.DisplayMessage;
 import com.osmium.sound.companion.model.JiveItem;
@@ -329,7 +329,7 @@ public abstract class BaseActivity extends AppCompatActivity implements Download
                     NavUtils.navigateUpTo(this, upIntent);
                 }
             } else {
-                HomeActivity.show(this);
+                MainActivity.show(this);
             }
             return true;
         }

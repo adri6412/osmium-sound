@@ -7,6 +7,7 @@ import androidx.annotation.NonNull;
 import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller;
 
 import com.osmium.sound.companion.R;
+import com.osmium.sound.companion.framework.BaseActivity;
 import com.osmium.sound.companion.framework.ItemAdapter;
 import com.osmium.sound.companion.framework.ItemViewHolder;
 import com.osmium.sound.companion.itemlist.dialog.ArtworkListLayout;
@@ -17,8 +18,41 @@ class JiveItemAdapter extends ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> im
     private Window.WindowStyle windowStyle = Window.WindowStyle.TEXT_ONLY;
     protected ArtworkListLayout listLayout = ArtworkListLayout.list;
 
+    /**
+     * Per-list state that used to live on {@link JiveItemListActivity}. Keeping it on the adapter lets
+     * the row views (which only hold a {@link BaseActivity}) stay agnostic of their host, so the same
+     * adapter and rows can be driven either by an activity or by a fragment in the kiosk shell.
+     */
+    private JiveItem parent;
+    private int selectedIndex;
+
     public JiveItemAdapter(JiveItemListActivity activity) {
         super(activity);
+    }
+
+    /**
+     * Host-agnostic constructor used when the list is driven by a fragment in the kiosk shell: the
+     * {@code activity} is the shell that row views navigate through, while {@code orderer} is the
+     * fragment that fetches pages and receives the results.
+     */
+    public JiveItemAdapter(BaseActivity activity, ItemAdapter.PageOrderer orderer) {
+        super(activity, orderer);
+    }
+
+    public JiveItem getParent() {
+        return parent;
+    }
+
+    public void setParent(JiveItem parent) {
+        this.parent = parent;
+    }
+
+    public int getSelectedIndex() {
+        return selectedIndex;
+    }
+
+    public void setSelectedIndex(int selectedIndex) {
+        this.selectedIndex = selectedIndex;
     }
 
     public void setWindowStyle(ArtworkListLayout preferredListLayout, Window.WindowStyle windowStyle) {
@@ -29,7 +63,7 @@ class JiveItemAdapter extends ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> im
     @Override
     public ItemViewHolder<JiveItem> createViewHolder(View view, int viewType) {
         if (viewType == R.layout.grid_item_pending || viewType == R.layout.list_item_pending) {
-            return new JiveItemViewPending(getActivity(), view);
+            return new JiveItemViewPending(getActivity(), view, windowStyle != Window.WindowStyle.TEXT_ONLY);
         } else if (viewType == R.layout.slider_item) {
             return new SliderView(getActivity(), view);
         } else {
@@ -45,11 +79,6 @@ class JiveItemAdapter extends ItemAdapter<ItemViewHolder<JiveItem>, JiveItem> im
         return item.hasSlider()
                 ? R.layout.slider_item
                 : (listLayout == ArtworkListLayout.grid) ? R.layout.grid_item : R.layout.list_item;
-    }
-
-    @Override
-    protected JiveItemListActivity getActivity() {
-        return (JiveItemListActivity) super.getActivity();
     }
 
     public ArtworkListLayout getListLayout() {

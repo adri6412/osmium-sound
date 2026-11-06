@@ -4,16 +4,13 @@ import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
@@ -60,24 +57,23 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
 
     private final String TAG = "SettingsFragment";
 
-    private static final String KEY_OSMIUM_SOUND = "squeezer.osmium_sound";
-    private static final String KEY_APPLIANCE_CATEGORY = "squeezer.category.appliance";
-    private static final String KEY_LYRION_SKIN = "squeezer.lyrion_skin.open";
-
-    // Progress polling for the web-player skin change (see
-    // fillLyrionSkinPreferences): 1.5s like the kiosk/webui, bounded so a
-    // job that never reports done/error can't keep this fragment polling for
-    // ever. Installing Material + restarting Lyrion normally takes well under
-    // a minute; 6 minutes is generous.
-    private static final long SKIN_POLL_INTERVAL_MS = 1500;
-    private static final int SKIN_POLL_MAX = 240;
-    private final Handler skinPollHandler = new Handler(Looper.getMainLooper());
-    private String skinChoice = "unset";
-    private int skinPollCount;
+    // The Settings leaves, one per tile that opens a list of preferences. Each
+    // is a PreferenceScreen in res/xml/preferences.xml, opened by its key.
+    static final String SCREEN_PLAYBACK = "squeezer.leaf.playback";
+    static final String SCREEN_DOWNLOAD = "squeezer.leaf.download";
+    static final String SCREEN_DISPLAY = "squeezer.leaf.display";
+    static final String SCREEN_NOW_PLAYING = "squeezer.leaf.nowplaying";
+    static final String SCREEN_INTERFACE = "squeezer.leaf.interface";
+    static final String SCREEN_LOCAL_PLAYER = "squeezer.leaf.localplayer";
+    static final String SCREEN_THIRD_PARTY = "squeezer.leaf.thirdparty";
+    static final String SCREEN_LYRPLAY = "squeezer.leaf.lyrplay";
+    static final String SCREEN_CONNECTION = "squeezer.leaf.connection";
+    static final String SCREEN_TIMEZONE = "squeezer.leaf.timezone";
 
     private ISqueezeService service = null;
 
     private IntEditTextPreference fadeInPref;
+    private SharedPreferences listenedPreferences;
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
@@ -100,79 +96,45 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         getPreferenceManager().setSharedPreferencesName(Preferences.NAME);
         setPreferencesFromResource(R.xml.preferences, rootKey);
 
-        // Inside a submenu the bar must say which submenu it is. The activity
-        // sets it when navigating, but not when the fragment is rebuilt — after
-        // a rotation, or when the system restores the screen — and a page
-        // headed "Settings" is exactly the confusion this reorganisation is
-        // meant to remove.
-        if (rootKey != null && getPreferenceScreen() != null
-                && getPreferenceScreen().getTitle() != null) {
+        // The bar names the section; the activity also sets it when navigating,
+        // but not when the fragment is rebuilt (rotation, state restore).
+        if (getPreferenceScreen() != null && getPreferenceScreen().getTitle() != null) {
             requireActivity().setTitle(getPreferenceScreen().getTitle());
-        }
-
-        // The "Osmium Sound" screen is a nested PreferenceScreen: when opened,
-        // rootKey scopes findPreference() to just its own children, so only
-        // wire up the preferences that actually live under it.
-        if (KEY_OSMIUM_SOUND.equals(rootKey)) {
-            fillBackupPreferences();
-            fillAudioOutputPreferences();
-            fillUpdatesPreferences();
-            fillSystemAdminPreferences();
-            fillMultiroomPreferences();
-            fillApplianceScreenPreferences();
-            fillTimezonePreferences();
-            fillLyrPlayPreferences();
-            // The Lyrion entries moved in here: they act on the device's own
-            // server, so this is where someone looks for them.
-            fillLyrionRescanPreferences();
-            fillLyrionSkinPreferences();
-            return;
         }
 
         SharedPreferences sharedPreferences = getPreferenceManager().getSharedPreferences();
         sharedPreferences.registerOnSharedPreferenceChangeListener(this);
+        listenedPreferences = sharedPreferences;
         Preferences preferences = new Preferences(getActivity(), sharedPreferences);
-
-        fadeInPref = requirePreference(Preferences.KEY_FADE_IN_SECS);
-        fadeInPref.setOnPreferenceChangeListener(this);
-        updateFadeInSecondsSummary(preferences.getFadeInSecs());
-
-        fillIncomingCallPreferences(preferences);
-
-        fillDisplayPreferences(preferences);
-
-        fillNowPlayingPreferences(preferences);
-
-        fillUserInterfacePreferences(preferences);
-
-        fillScrobblePreferences(sharedPreferences);
-        fillLocalPlayerPreferences(preferences);
-        fillDevicePlayerPreferences(preferences);
-
-        fillDownloadPreferences(preferences);
-
-        fillPlaybackPreferences();
-        fillConnectionPreferences(preferences);
-
-        applyServerKind(preferences);
+        fillSection(rootKey, preferences, sharedPreferences);
     }
 
-    /**
-     * The appliance settings only mean anything against an Osmium Sound device:
-     * on a plain Lyrion server there is no appliance API behind them, so they
-     * are hidden rather than left to fail when tapped. Which server this is was
-     * decided in the connection wizard.
-     */
-    private void applyServerKind(Preferences preferences) {
-        boolean osmium = preferences.isOsmiumAppliance();
-        // Hide the heading too: a lone empty section headed "Your Osmium Sound
-        // device" on a plain Lyrion server is worse than no section at all.
-        Preference applianceCategory = requirePreference(KEY_APPLIANCE_CATEGORY);
-        if (applianceCategory != null) applianceCategory.setVisible(osmium);
-        Preference osmiumScreen = requirePreference(KEY_OSMIUM_SOUND);
-        if (osmiumScreen != null) osmiumScreen.setVisible(osmium);
+    /** Wires up the preferences of one Settings leaf; the screen is picked by its key. */
+    private void fillSection(String screenKey, Preferences preferences, SharedPreferences sharedPreferences) {
+        if (screenKey == null) return;
+        switch (screenKey) {
+            case SCREEN_PLAYBACK -> {
+                fillAppliancePlaybackPreference(preferences);
+                fillPlaybackPreferences();
+                fillFadeInPreference(preferences);
+                fillIncomingCallPreferences(preferences);
+            }
+            case SCREEN_DOWNLOAD -> fillDownloadPreferences(preferences);
+            case SCREEN_DISPLAY -> fillDisplayPreferences(preferences);
+            case SCREEN_NOW_PLAYING -> fillNowPlayingPreferences(preferences);
+            case SCREEN_INTERFACE -> fillUserInterfacePreferences(preferences);
+            case SCREEN_LOCAL_PLAYER -> fillLocalPlayerPreferences(preferences);
+            case SCREEN_THIRD_PARTY -> {
+                fillScrobblePreferences(sharedPreferences);
+                fillDevicePlayerPreferences(preferences);
+            }
+            case SCREEN_LYRPLAY -> fillLyrPlayPreferences();
+            case SCREEN_CONNECTION -> fillConnectionPreferences(preferences);
+            case SCREEN_TIMEZONE -> fillTimezonePreferences();
+            default -> {
+            }
+        }
     }
-
     /**
      * The address the app connects to, and the one to use from outside the
      * house. The second is what makes Tailscale usable: the QR code can only
@@ -214,22 +176,6 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     // tier, same as the kiosk and admin-webui (see commit 1dd7868).
     // DspSettingsActivity stays intact and reachable by class name only.
 
-    private void fillBackupPreferences() {
-        Preference pref = requirePreference("squeezer.backup.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            BackupRestoreActivity.show(requireActivity());
-            return true;
-        });
-    }
-
-    private void fillAudioOutputPreferences() {
-        Preference pref = requirePreference("squeezer.audio_output.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            AudioOutputActivity.show(requireActivity());
-            return true;
-        });
-    }
-
     private void fillPlaybackPreferences() {
         Preference pref = requirePreference("squeezer.playback.open");
         pref.setOnPreferenceClickListener(preference -> {
@@ -240,195 +186,20 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
         });
     }
 
-    private void fillLyrionRescanPreferences() {
-        Preference pref = requirePreference("squeezer.lyrion_rescan.open");
+    /** Playback of the device itself: a screen of its own, only on an Osmium Sound device. */
+    private void fillAppliancePlaybackPreference(Preferences preferences) {
+        Preference pref = requirePreference("squeezer.appliance_playback.open");
+        pref.setVisible(preferences.isOsmiumAppliance());
         pref.setOnPreferenceClickListener(preference -> {
-            if (service != null) {
-                service.rescanLibrary();
-                Toast.makeText(getContext(), R.string.settings_lyrion_rescan_started, Toast.LENGTH_SHORT).show();
-            }
-            return true;
-        });
-    }
-
-    // ── LMS web player skin (Osmium / Material) ─────────────────────────
-    // Mirrors the chooser the kiosk (Settings.jsx, "Lyrion" section) and the
-    // admin-webui (Settings.vue, same section) offer. It lives on
-    // sources_server itself (/api/lms_skin, /api/lms_skin_status — not behind
-    // the /api/system/* proxy), reached with the same pairing token. The
-    // entry hides itself when the appliance can't answer: older bundle without
-    // the route, not paired yet, or no local Lyrion to skin (external server).
-
-    private void fillLyrionSkinPreferences() {
-        Preference pref = requirePreference(KEY_LYRION_SKIN);
-        pref.setOnPreferenceClickListener(preference -> {
-            showLyrionSkinDialog(pref);
-            return true;
-        });
-        loadLyrionSkin(pref);
-    }
-
-    private void loadLyrionSkin(Preference pref) {
-        ApplianceHttpClient.getJson("/api/lms_skin", new ApplianceHttpClient.JsonCallback() {
-            @Override
-            public void onSuccess(JSONObject body) {
-                if (!isAdded()) return;
-                if (!body.optBoolean("success", false) || !body.optBoolean("lms_installed", false)) {
-                    pref.setVisible(false);
-                    return;
-                }
-                skinChoice = body.optString("skin", "unset");
-                pref.setSummary(getString(R.string.settings_lyrion_skin_summary) + "\n"
-                        + getString(R.string.settings_lyrion_skin_current, skinLabel(skinChoice)));
-                pref.setEnabled(true);
-                pref.setVisible(true);
-            }
-
-            @Override
-            public void onFailure(String message) {
-                if (!isAdded()) return;
-                pref.setVisible(false);
-            }
-        });
-    }
-
-    private String skinLabel(String skin) {
-        if ("osmium".equals(skin)) return getString(R.string.settings_lyrion_skin_osmium);
-        if ("material".equals(skin)) return getString(R.string.settings_lyrion_skin_material);
-        return getString(R.string.settings_lyrion_skin_unset);
-    }
-
-    private void showLyrionSkinDialog(Preference pref) {
-        final String[] values = {"osmium", "material"};
-        final CharSequence[] labels = {
-                getString(R.string.settings_lyrion_skin_osmium),
-                getString(R.string.settings_lyrion_skin_material)};
-        int current = "material".equals(skinChoice) ? 1 : ("osmium".equals(skinChoice) ? 0 : -1);
-        final int[] picked = {current};
-        new MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.settings_lyrion_skin_title)
-                .setSingleChoiceItems(labels, current, (dialog, which) -> picked[0] = which)
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    if (picked[0] < 0 || values[picked[0]].equals(skinChoice)) return;
-                    applyLyrionSkin(pref, values[picked[0]]);
-                })
-                .show();
-    }
-
-    private void applyLyrionSkin(Preference pref, String skin) {
-        JSONObject payload = new JSONObject();
-        try {
-            payload.put("skin", skin);
-        } catch (JSONException ignored) {
-        }
-        pref.setEnabled(false);
-        pref.setSummary(R.string.settings_lyrion_skin_applying);
-        ApplianceHttpClient.postJson("/api/lms_skin", payload, new ApplianceHttpClient.JsonCallback() {
-            @Override
-            public void onSuccess(JSONObject body) {
-                if (!isAdded()) return;
-                if (!body.optBoolean("started", false)) {
-                    // Refused (busy, no local Lyrion, bad token...) — the
-                    // appliance's message says why; the choice on disk is unchanged.
-                    Toast.makeText(getContext(),
-                            body.optString("message", getString(R.string.settings_lyrion_skin_failed)),
-                            Toast.LENGTH_LONG).show();
-                    loadLyrionSkin(pref);
-                    return;
-                }
-                skinChoice = skin;
-                skinPollCount = 0;
-                pollLyrionSkinStatus(pref);
-            }
-
-            @Override
-            public void onFailure(String message) {
-                if (!isAdded()) return;
-                Toast.makeText(getContext(), getString(R.string.settings_lyrion_skin_failed), Toast.LENGTH_LONG).show();
-                loadLyrionSkin(pref);
-            }
-        });
-    }
-
-    private void pollLyrionSkinStatus(Preference pref) {
-        skinPollHandler.removeCallbacksAndMessages(null);
-        if (++skinPollCount > SKIN_POLL_MAX) {
-            Toast.makeText(getContext(), getString(R.string.settings_lyrion_skin_failed), Toast.LENGTH_LONG).show();
-            loadLyrionSkin(pref);
-            return;
-        }
-        skinPollHandler.postDelayed(() -> ApplianceHttpClient.getJson("/api/lms_skin_status",
-                new ApplianceHttpClient.JsonCallback() {
-            @Override
-            public void onSuccess(JSONObject body) {
-                if (!isAdded()) return;
-                String state = body.optString("state", "");
-                if ("done".equals(state) || "error".equals(state)) {
-                    Toast.makeText(getContext(), "done".equals(state)
-                            ? getString(R.string.settings_lyrion_skin_changed)
-                            : body.optString("message", getString(R.string.settings_lyrion_skin_failed)),
-                            Toast.LENGTH_LONG).show();
-                    loadLyrionSkin(pref);
-                    return;
-                }
-                pref.setSummary("installing".equals(state)
-                        ? R.string.settings_lyrion_skin_installing
-                        : R.string.settings_lyrion_skin_applying);
-                pollLyrionSkinStatus(pref);
-            }
-
-            @Override
-            public void onFailure(String message) {
-                if (!isAdded()) return;
-                // One dropped poll (Wi-Fi hiccup) is not a verdict — keep watching.
-                pollLyrionSkinStatus(pref);
-            }
-        }), SKIN_POLL_INTERVAL_MS);
-    }
-
-    private void fillUpdatesPreferences() {
-        Preference pref = requirePreference("squeezer.updates.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            UpdatesActivity.show(requireActivity());
-            return true;
-        });
-    }
-
-    private void fillSystemAdminPreferences() {
-        Preference pref = requirePreference("squeezer.system_admin.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            SystemAdminActivity.show(requireActivity());
-            return true;
-        });
-    }
-
-    private void fillMultiroomPreferences() {
-        Preference pref = requirePreference("squeezer.multiroom.open");
-        pref.setOnPreferenceClickListener(preference -> {
-            MultiroomActivity.show(requireActivity());
-            return true;
-        });
-    }
-
-    /** Sections of the web admin's Settings that are a screen of their own here. */
-    private void fillApplianceScreenPreferences() {
-        requirePreference("squeezer.sources.open").setOnPreferenceClickListener(preference -> {
-            SourcesActivity.show(requireActivity());
-            return true;
-        });
-        requirePreference("squeezer.services.open").setOnPreferenceClickListener(preference -> {
-            ServicesActivity.show(requireActivity());
-            return true;
-        });
-        requirePreference("squeezer.appliance_playback.open").setOnPreferenceClickListener(preference -> {
             AppliancePlaybackActivity.show(requireActivity());
             return true;
         });
-        requirePreference("squeezer.display.open").setOnPreferenceClickListener(preference -> {
-            DisplayActivity.show(requireActivity());
-            return true;
-        });
+    }
+
+    private void fillFadeInPreference(Preferences preferences) {
+        fadeInPref = requirePreference(Preferences.KEY_FADE_IN_SECS);
+        fadeInPref.setOnPreferenceChangeListener(this);
+        updateFadeInSecondsSummary(preferences.getFadeInSecs());
     }
 
     // ── Timezone ────────────────────────────────────────────────────────
@@ -770,9 +541,11 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     }
 
     private boolean isLauncherEnabled() {
-        ComponentName componentName = new ComponentName(requireContext(), "com.osmium.sound.companion.HomeLauncherActivity");
-        int setting = requireContext().getPackageManager().getComponentEnabledSetting(componentName);
-        return setting == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+        // The Android home-launcher mode (the disabled HomeLauncherActivity alias it keyed off)
+        // was removed with the old server-menu home. The mode is not implemented in the kiosk app
+        // (see updateLauncherMode), so it always reads as off; querying the removed component here
+        // would throw "Unknown component".
+        return false;
     }
 
     private void updateLauncherMode(boolean enabled) {
@@ -810,7 +583,9 @@ public class SettingsFragment  extends PreferenceFragmentCompat implements
     @Override
     public void onDestroy() {
         super.onDestroy();
-        skinPollHandler.removeCallbacksAndMessages(null);
+        if (listenedPreferences != null) {
+            listenedPreferences.unregisterOnSharedPreferenceChangeListener(this);
+        }
         getActivity().unbindService(serviceConnection);
     }
 

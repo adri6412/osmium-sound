@@ -1,10 +1,13 @@
 package com.osmium.sound.companion;
 
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.view.MenuItem;
 import android.view.View;
@@ -22,9 +25,12 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import com.osmium.sound.companion.appliance.ApplianceHttpClient;
+import com.osmium.sound.companion.service.ISqueezeService;
+import com.osmium.sound.companion.service.SqueezeService;
 import com.osmium.sound.companion.util.ThemeManager;
 import com.osmium.sound.companion.widget.ViewUtilities;
 
@@ -79,6 +85,34 @@ public class MultiroomActivity extends AppCompatActivity {
     private final Handler pollHandler = new Handler(Looper.getMainLooper());
     private Runnable pollTask;
 
+    // Lyrion web player skin (Osmium / Material), moved here from the old
+    // Library tile. Lives on sources_server itself (/api/lms_skin,
+    // /api/lms_skin_status — not behind the /api/system/* proxy), reached with
+    // the same pairing token. The section hides itself when the appliance can't
+    // answer: older bundle without the route, not paired, or no local Lyrion.
+    private static final int SKIN_POLL_MAX = 60;
+    private static final long SKIN_POLL_INTERVAL_MS = 1000;
+    private View skinSection;
+    private TextView skinSummary;
+    private String skinChoice = "unset";
+    private int skinPollCount;
+    private final Handler skinPollHandler = new Handler(Looper.getMainLooper());
+
+    // Library rescan, moved here from the old Library tile; runs on whichever
+    // server this device is connected to, through the bound SqueezeService.
+    private ISqueezeService service;
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder binder) {
+            service = (ISqueezeService) binder;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            service = null;
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         mThemeManager.onCreate(this);
@@ -109,9 +143,16 @@ public class MultiroomActivity extends AppCompatActivity {
         lyrionProgress = findViewById(R.id.lyrion_progress);
         installButton = findViewById(R.id.button_install_lyrion);
 
+        skinSection = findViewById(R.id.lyrion_skin_section);
+        skinSummary = findViewById(R.id.lyrion_skin_summary);
+
         findViewById(R.id.button_scan).setOnClickListener(v -> scan());
         findViewById(R.id.button_apply_host).setOnClickListener(v -> applyHost());
         installButton.setOnClickListener(v -> installLyrion());
+        findViewById(R.id.button_lyrion_skin).setOnClickListener(v -> showSkinDialog());
+        findViewById(R.id.button_rescan).setOnClickListener(v -> rescanLibrary());
+
+        bindService(new Intent(this, SqueezeService.class), serviceConnection, Context.BIND_AUTO_CREATE);
 
         roleGroup.setOnCheckedChangeListener((group, checkedId) -> {
             if (suppressRoleEvent) return;
@@ -128,6 +169,130 @@ public class MultiroomActivity extends AppCompatActivity {
         loadRole();
         loadLyrionChannel();
         loadLyrionState();
+        loadSkin();
+    }
+
+    // ── Lyrion web player skin ──────────────────────────────────────────
+    private void loadSkin() {
+        ApplianceHttpClient.getJson("/api/lms_skin", new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (isFinishing()) return;
+                if (!body.optBoolean("success", false) || !body.optBoolean("lms_installed", false)) {
+                    skinSection.setVisibility(View.GONE);
+                    return;
+                }
+                skinChoice = body.optString("skin", "unset");
+                skinSummary.setText(getString(R.string.settings_lyrion_skin_summary) + "\n"
+                        + getString(R.string.settings_lyrion_skin_current, skinLabel(skinChoice)));
+                skinSection.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (isFinishing()) return;
+                skinSection.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    private String skinLabel(String skin) {
+        if ("osmium".equals(skin)) return getString(R.string.settings_lyrion_skin_osmium);
+        if ("material".equals(skin)) return getString(R.string.settings_lyrion_skin_material);
+        return getString(R.string.settings_lyrion_skin_unset);
+    }
+
+    private void showSkinDialog() {
+        final String[] values = {"osmium", "material"};
+        final CharSequence[] labels = {
+                getString(R.string.settings_lyrion_skin_osmium),
+                getString(R.string.settings_lyrion_skin_material)};
+        int current = "material".equals(skinChoice) ? 1 : ("osmium".equals(skinChoice) ? 0 : -1);
+        final int[] picked = {current};
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.settings_lyrion_skin_title)
+                .setSingleChoiceItems(labels, current, (dialog, which) -> picked[0] = which)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    if (picked[0] < 0 || values[picked[0]].equals(skinChoice)) return;
+                    applySkin(values[picked[0]]);
+                })
+                .show();
+    }
+
+    private void applySkin(String skin) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("skin", skin);
+        } catch (JSONException ignored) {
+        }
+        skinSummary.setText(R.string.settings_lyrion_skin_applying);
+        ApplianceHttpClient.postJson("/api/lms_skin", payload, new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (isFinishing()) return;
+                if (!body.optBoolean("started", false)) {
+                    // Refused (busy, no local Lyrion, bad token...) — the
+                    // appliance's message says why; the choice on disk is unchanged.
+                    showMessage(body.optString("message", getString(R.string.settings_lyrion_skin_failed)));
+                    loadSkin();
+                    return;
+                }
+                skinChoice = skin;
+                skinPollCount = 0;
+                pollSkinStatus();
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (isFinishing()) return;
+                showMessage(getString(R.string.settings_lyrion_skin_failed));
+                loadSkin();
+            }
+        });
+    }
+
+    private void pollSkinStatus() {
+        skinPollHandler.removeCallbacksAndMessages(null);
+        if (++skinPollCount > SKIN_POLL_MAX) {
+            showMessage(getString(R.string.settings_lyrion_skin_failed));
+            loadSkin();
+            return;
+        }
+        skinPollHandler.postDelayed(() -> ApplianceHttpClient.getJson("/api/lms_skin_status",
+                new ApplianceHttpClient.JsonCallback() {
+            @Override
+            public void onSuccess(JSONObject body) {
+                if (isFinishing()) return;
+                String state = body.optString("state", "");
+                if ("done".equals(state) || "error".equals(state)) {
+                    showMessage("done".equals(state)
+                            ? getString(R.string.settings_lyrion_skin_changed)
+                            : body.optString("message", getString(R.string.settings_lyrion_skin_failed)));
+                    loadSkin();
+                    return;
+                }
+                skinSummary.setText("installing".equals(state)
+                        ? R.string.settings_lyrion_skin_installing
+                        : R.string.settings_lyrion_skin_applying);
+                pollSkinStatus();
+            }
+
+            @Override
+            public void onFailure(String message) {
+                if (isFinishing()) return;
+                // One dropped poll (Wi-Fi hiccup) is not a verdict — keep watching.
+                pollSkinStatus();
+            }
+        }), SKIN_POLL_INTERVAL_MS);
+    }
+
+    // ── library rescan ──────────────────────────────────────────────────
+    private void rescanLibrary() {
+        if (service != null) {
+            service.rescanLibrary();
+            Toast.makeText(this, R.string.settings_lyrion_rescan_started, Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void showRoleSection(boolean follow) {
@@ -315,6 +480,8 @@ public class MultiroomActivity extends AppCompatActivity {
     protected void onDestroy() {
         installing = false;
         if (pollTask != null) pollHandler.removeCallbacks(pollTask);
+        skinPollHandler.removeCallbacksAndMessages(null);
+        unbindService(serviceConnection);
         super.onDestroy();
     }
 

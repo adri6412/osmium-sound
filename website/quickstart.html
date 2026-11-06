@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Osmium Sound - Tutorial di installazione / Installation tutorial</title>
+<style>
+  :root{
+    --bg: #141519;
+    --bg2: #1d1f25;
+    --panel: #23262d;
+    --panel2: #2a2d35;
+    --white: #f3f2ee;
+    --amber: #e0983f;
+    --amber2: #f4b35e;
+    --amber-dim: #7a4f22;
+    --muted: #93969d;
+    --green: #4caf50;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; background: var(--bg);
+    font-family: 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif;
+    color: var(--white);
+    min-height:100%;
+  }
+  #app{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:28px 16px; }
+  /* When shown inside the website popup the box hugs its content instead of
+     filling the viewport, so the modal can be sized to the card itself. */
+  body.embedded{ background:transparent; min-height:0; }
+  body.embedded #app{ min-height:0; align-items:flex-start; padding:18px 16px; }
+  #card{
+    position:relative; width:100%; max-width:680px;
+    background: linear-gradient(165deg, var(--bg2), var(--bg) 75%);
+    border-radius:20px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.05);
+    padding:28px 30px 24px;
+    overflow:hidden;
+  }
+  #eq-bg{ position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; gap:6px; opacity:.05; pointer-events:none; z-index:0; }
+  #eq-bg span{ width:10px; background: var(--amber2); border-radius:3px 3px 0 0; animation: eqbar 1.4s ease-in-out infinite; }
+  @keyframes eqbar{ 0%,100%{ height:14px; } 50%{ height:110px; } }
+
+  .inner{ position:relative; z-index:1; }
+
+  #header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; gap:10px; }
+  .logo{ font-weight:800; letter-spacing:.07em; font-size:15px; white-space:nowrap; }
+  .logo .accent{ color: var(--amber); }
+  #progress-wrap{ flex:1; height:6px; background:rgba(255,255,255,.08); border-radius:4px; overflow:hidden; }
+  #progress-fill{ height:100%; width:0%; background: linear-gradient(90deg, var(--amber-dim), var(--amber2)); border-radius:4px; transition: width .45s cubic-bezier(.2,.8,.2,1); }
+  #step-count{ font-size:11.5px; color: var(--muted); white-space:nowrap; min-width:52px; text-align:right; }
+
+  #lang-switch{ display:flex; gap:3px; background:var(--panel); border-radius:8px; padding:3px; flex:0 0 auto; }
+  #lang-switch button{
+    background:none; border:none; color:var(--muted); font-size:11px; font-weight:700;
+    padding:4px 8px; border-radius:6px; cursor:pointer; letter-spacing:.03em;
+  }
+  #lang-switch button.active{ background: var(--amber); color:#1b1d21; }
+
+  .osmio-row{ display:flex; gap:14px; align-items:flex-start; margin-bottom:18px; }
+  .osmio-mini{ width:50px; flex:0 0 auto; }
+  /* Animated sound waves in place of the old headphones avatar. */
+  .osmio-waves{ width:46px; height:44px; display:flex; align-items:center; justify-content:center; gap:4px; }
+  .osmio-waves span{ width:5px; height:10px; border-radius:3px; background:var(--amber); animation: osmio-wave 1.1s ease-in-out infinite; }
+  .osmio-waves span:nth-child(1){ animation-delay:0s; }
+  .osmio-waves span:nth-child(2){ animation-delay:.22s; }
+  .osmio-waves span:nth-child(3){ animation-delay:.44s; }
+  .osmio-waves span:nth-child(4){ animation-delay:.14s; }
+  .osmio-waves span:nth-child(5){ animation-delay:.36s; }
+  @keyframes osmio-wave{ 0%,100%{ height:8px; } 50%{ height:36px; } }
+  .speech{ flex:1; background: rgba(255,255,255,.04); border-left:3px solid var(--amber); border-radius:10px; padding:11px 14px; font-size:14px; line-height:1.45; min-height:20px; }
+
+  .step-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--amber2); font-weight:700; margin-bottom:6px; }
+  .step-title, #step-title{ font-size:20px; font-weight:700; margin:0 0 12px; }
+
+  .view{ display:none; }
+  .view.active{ display:block; animation: fadein .35s ease; }
+  @keyframes fadein{ from{ opacity:0; transform: translateY(6px); } to{ opacity:1; transform: translateY(0); } }
+
+  .lead{ font-size:14.5px; color:var(--white); line-height:1.6; margin:0 0 14px; }
+  .lead.muted{ color:var(--muted); }
+
+  ul.steps-list, ol.steps-list{ margin:0 0 14px; padding-left:20px; }
+  ul.steps-list li, ol.steps-list li{ font-size:14px; line-height:1.55; margin-bottom:8px; }
+  ul.steps-list li b, ol.steps-list li b{ color:var(--white); }
+
+  .req-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:14px; }
+  @media (max-width:480px){ .req-grid{ grid-template-columns:1fr; } }
+  .req-card{ background:var(--panel); border-radius:12px; padding:12px 14px; display:flex; gap:10px; align-items:flex-start; border:1px solid rgba(255,255,255,.07); }
+  .req-card .ico{ font-size:18px; }
+  .req-card b{ font-size:13.5px; display:block; margin-bottom:2px; }
+  .req-card span{ font-size:12px; color:var(--muted); line-height:1.4; }
+
+  .info-box{
+    background: rgba(224,152,63,.08); border:1px solid rgba(224,152,63,.25);
+    border-radius:10px; padding:11px 14px; font-size:13px; line-height:1.55;
+    margin-bottom:14px; color: var(--white);
+  }
+  .info-box b{ color: var(--amber2); }
+  .info-box code, .mono{
+    background: rgba(0,0,0,.35); border-radius:4px; padding:1px 6px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size:12.5px; color: var(--amber2);
+  }
+
+  .warn-box{
+    background: rgba(217,99,74,.08); border:1px solid rgba(217,99,74,.3);
+    border-radius:10px; padding:11px 14px; font-size:13px; line-height:1.55;
+    margin-bottom:14px;
+  }
+
+  .chip-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .chip{
+    background: var(--panel); border:1.5px solid rgba(255,255,255,.1); color:var(--muted);
+    border-radius:20px; padding:7px 14px; font-size:12.5px; cursor:pointer; font-weight:600;
+    transition: all .15s ease;
+  }
+  .chip:hover{ background: var(--panel2); }
+  .chip.active{ border-color: var(--amber); color: var(--white); background: rgba(224,152,63,.12); }
+  .chip-tip{
+    background: rgba(255,255,255,.04); border-radius:10px; padding:11px 14px;
+    font-size:13px; line-height:1.55; margin-bottom:14px; border-left:3px solid var(--amber);
+  }
+
+  .dl-btn{
+    display:inline-flex; align-items:center; gap:8px;
+    background: var(--panel2); border:1px solid rgba(224,152,63,.35);
+    color: var(--white); text-decoration:none; font-weight:600; font-size:13px;
+    padding:9px 14px; border-radius:9px; margin:2px 6px 8px 0;
+    transition: background .15s ease, border-color .15s ease, transform .1s ease;
+  }
+  .dl-btn:hover{ background:#323640; border-color: var(--amber); }
+  .dl-btn:active{ transform: scale(.97); }
+  .dl-btn .ico{ font-size:15px; }
+  .dl-btn small{ display:block; font-weight:400; color:var(--muted); font-size:10.5px; }
+
+  .mode-block{ display:none; }
+  .mode-block.show{ display:block; }
+
+  .version-note{ font-size:11.5px; color:var(--muted); margin:-4px 0 14px; line-height:1.5; }
+
+  #nav{ display:flex; justify-content:space-between; align-items:center; margin-top:20px; gap:10px; }
+  .btn{
+    background: var(--panel); border:1px solid rgba(255,255,255,.1); color: var(--white);
+    border-radius:10px; padding:11px 18px; font-size:14px; cursor:pointer; font-weight:600;
+    transition: background .2s ease, transform .15s ease, opacity .2s ease;
+  }
+  .btn:hover{ background:#2b2e35; }
+  .btn:active{ transform: scale(.97); }
+  .btn.primary{ background: linear-gradient(135deg, var(--amber-dim), var(--amber)); color:#1b1d21; border:none; }
+  .btn.primary:hover{ filter: brightness(1.08); }
+  .btn.ghost{ background:transparent; border:1px solid rgba(255,255,255,.12); color:var(--muted); }
+
+  #dots{ display:flex; gap:5px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
+  .step-dot{ width:6px; height:6px; border-radius:50%; background: rgba(255,255,255,.15); transition: background .25s ease, transform .25s ease; cursor:pointer; }
+  .step-dot.done{ background: var(--amber-dim); }
+  .step-dot.active{ background: var(--amber); transform: scale(1.4); }
+
+  .url-pill{ display:inline-flex; align-items:center; gap:6px; margin-top:6px; font-size:12.5px; color: var(--muted); border:1px solid rgba(255,255,255,.14); padding:6px 12px; border-radius:20px; }
+  .url-pill a{ color: var(--amber2); text-decoration:none; font-weight:600; }
+
+  .done-badge{ font-size:46px; text-align:center; margin:6px 0 10px; }
+
+  @media (max-width:480px){ #card{ padding:20px 18px 18px; } .logo{ font-size:13px; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="card">
+    <div id="eq-bg"></div>
+    <div class="inner" id="inner"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+
+  // ============== embed / auto-height ==============
+  // When this page is loaded inside the website's quick-start popup it reports
+  // its real content height to the parent, so the modal matches the card size.
+  var EMBEDDED = false;
+  try { EMBEDDED = window.self !== window.top; } catch(e){ EMBEDDED = true; }
+  function reportHeight(){
+    if(!EMBEDDED) return;
+    var h = Math.ceil(document.documentElement.scrollHeight);
+    try { parent.postMessage({ osmiumQuickstartHeight: h }, '*'); } catch(e){}
+  }
+  if(EMBEDDED){
+    window.addEventListener('resize', reportHeight);
+    if(window.ResizeObserver){
+      var ro = new ResizeObserver(function(){ reportHeight(); });
+      // body exists (script sits at the end of body); watch its content box.
+      if(document.body) ro.observe(document.body);
+    }
+  }
+
+  // ============== TEMPLATES (IT / EN) ==============
+  var TEMPLATES = {};
+
+  TEMPLATES.it = `
+      <div id="header">
+        <div class="logo">OSMIUM <span class="accent">SOUND</span></div>
+        <div id="progress-wrap"><div id="progress-fill"></div></div>
+        <div id="step-count">1/10</div>
+        <div id="lang-switch"><button data-lang="it" class="active">IT</button><button data-lang="en">EN</button></div>
+      </div>
+
+      <div class="osmio-row">
+        <div class="osmio-mini">
+          <div class="osmio-waves"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="speech" id="osmio-speech"></div>
+      </div>
+
+      <div class="view active" data-view="0">
+        <div class="step-eyebrow">Prima di iniziare</div>
+        <h2 class="step-title">Cosa ti serve</h2>
+        <p class="lead">Questo tutorial ti guida passo passo nell'installazione di Osmium Sound, dal download dell'immagine alla prima configurazione. Ecco cosa ti serve prima di partire:</p>
+        <div class="req-grid">
+          <div class="req-card"><div class="ico">🖥️</div><div><b>Mini PC x86 · 64 bit</b><span>Va bene sia con UEFI sia con BIOS tradizionale</span></div></div>
+          <div class="req-card"><div class="ico">💾</div><div><b>Chiavetta USB · min. 8 GB</b><span>Verrà cancellata durante la scrittura dell'immagine</span></div></div>
+          <div class="req-card"><div class="ico">🖐️</div><div><b>Uno schermo (facoltativo)</b><span>Monitor touchscreen, TV, oppure nessuno in modalità headless</span></div></div>
+          <div class="req-card"><div class="ico">📱</div><div><b>Un browser</b><span>Tablet, telefono o computer per la configurazione iniziale</span></div></div>
+        </div>
+        <p class="lead muted">Ci vogliono circa 15-20 minuti. Iniziamo.</p>
+      </div>
+
+      <div class="view" data-view="1">
+        <div class="step-eyebrow">Passo 1</div>
+        <h2 class="step-title">Scarica l'immagine</h2>
+        <p class="lead">Prima di tutto, come vuoi usare Osmium Sound?</p>
+        <div class="chip-row" id="install-mode-chips">
+          <div class="chip active" data-mode="disk">💿 Installarlo sul disco interno</div>
+          <div class="chip" data-mode="usb">🔌 Avviarlo direttamente dalla chiavetta</div>
+        </div>
+
+        <div class="mode-block show" id="mode-disk-block">
+          <p class="lead">Scarichi un <b>ISO</b>, lo scrivi su una chiavetta USB (passo successivo) e la usi solo per avviare il programma di installazione, che copia il sistema sul disco interno del mini PC.</p>
+          <div class="chip-row" id="disk-version-chips">
+            <div class="chip active" data-ver="stable">Versione stabile · v2.5.25</div>
+            <div class="chip" data-ver="dev">Versione di sviluppo · v2.5.26-dev.1</div>
+          </div>
+          <div id="disk-version-links"></div>
+          <div class="version-note" id="disk-version-note"></div>
+        </div>
+
+        <div class="mode-block" id="mode-usb-block">
+          <p class="lead">Scarichi un'immagine <b>già pronta all'uso (<span class="mono">.img.xz</span>)</b>, la scrivi sulla chiavetta e il mini PC si avvia <b>direttamente da lì</b>: niente installazione, niente disco interno toccato. Lascia la chiavetta sempre inserita: è lì che vive il sistema.</p>
+          <a class="dl-btn" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.26-dev.1/hifi-player-v2.5.26-dev.1.img.xz" target="_blank" rel="noopener">
+            <span class="ico">⬇️</span><span>hifi-player-v2.5.26-dev.1.img.xz<small>Immagine per avvio diretto da USB</small></span>
+          </a>
+          <div class="version-note">⚠️ Questa modalità è disponibile per ora solo nella versione di sviluppo (dev) v2.5.26-dev.1: può contenere novità non ancora rifinite.</div>
+        </div>
+
+        <div class="info-box">Non trovi la tua versione o vuoi controllare se ne è uscita una più recente? Dai un'occhiata alla sezione download di <b>osmiumsound.it</b> o alla pagina delle <b>release su GitHub</b> del progetto.</div>
+      </div>
+
+      <div class="view" data-view="2">
+        <div class="step-eyebrow">Passo 2</div>
+        <h2 class="step-title">Scrivi l'immagine sulla chiavetta</h2>
+        <p class="lead">Da che sistema stai scrivendo l'immagine? Ti mostro lo strumento più comodo.</p>
+        <div class="chip-row" id="os-chips">
+          <div class="chip active" data-os="windows">Windows</div>
+          <div class="chip" data-os="mac">macOS</div>
+          <div class="chip" data-os="linux">Linux</div>
+        </div>
+        <div class="chip-tip" id="os-tip"></div>
+        <div id="os-dl"></div>
+        <ul class="steps-list">
+          <li><b>Osmium Flasher</b> (consigliato dove disponibile): scarica l'immagine, ne verifica la firma e scrive la chiavetta da solo. Non mostra mai il disco di sistema, per evitare di cancellarlo per errore.</li>
+          <li>In alternativa vanno bene anche <b>balenaEtcher</b>, <b>Rufus</b> o il comando <span class="mono">dd</span> — tutti scrivono sia file <span class="mono">.iso</span> sia <span class="mono">.img.xz</span> sulla chiavetta.</li>
+        </ul>
+        <div class="warn-box">⚠️ La chiavetta verrà formattata: tutto il suo contenuto andrà perso. Usane una senza dati importanti.</div>
+      </div>
+
+      <div class="view" data-view="3">
+        <div class="step-eyebrow">Passo 3</div>
+        <h2 class="step-title">Avvia il mini PC dalla chiavetta</h2>
+        <ol class="steps-list">
+          <li>Inserisci la chiavetta nel mini PC e accendilo.</li>
+          <li>Premi il tasto per il <b>menu di avvio</b> (boot menu) — di solito <span class="mono">F11</span>, <span class="mono">F12</span> oppure <span class="mono">Esc</span> — e scegli la chiavetta USB.</li>
+          <li>Se la chiavetta compare due volte nel menu, scegli quella che inizia con <span class="mono">UEFI:</span></li>
+        </ol>
+        <div class="mode-block show" data-modeblock="disk">
+          <ol class="steps-list" start="4">
+            <li>Seleziona <b>«Install Osmium Sound»</b>. Se vuoi solo provarlo senza installarlo, scegli <b>«Try Osmium Sound (no install)»</b>.</li>
+          </ol>
+        </div>
+        <div class="mode-block" data-modeblock="usb">
+          <ol class="steps-list" start="4">
+            <li>Non vedrai un vero e proprio installer: con l'immagine <span class="mono">.img.xz</span> il mini PC si avvia già nel sistema pronto all'uso, direttamente dalla chiavetta.</li>
+          </ol>
+        </div>
+        <div class="info-box"><b>Secure Boot:</b> può restare attivo, di solito non dà problemi. Se il mini PC proprio non si avvia dalla chiavetta, entra nel firmware (di solito <span class="mono">F2</span>, <span class="mono">Canc</span> o <span class="mono">Esc</span> all'accensione), disattiva Secure Boot e riprova.</div>
+      </div>
+
+      <div class="view" data-view="4">
+        <div class="step-eyebrow">Passo 4</div>
+        <h2 class="step-title" data-modetitle>Installazione guidata</h2>
+
+        <div class="mode-block show" data-modeblock="disk">
+          <ol class="steps-list">
+            <li>Nella schermata di benvenuto tocca <b>«Choose disk»</b> e scegli il disco su cui installare.</li>
+            <li>Conferma l'avviso: <b>tutti i dati su quel disco verranno cancellati.</b></li>
+            <li>Tocca <b>«Erase and install»</b> e attendi: non serve una connessione a internet.</li>
+            <li>Il dispositivo si riavvia da solo a fine installazione. <b>Rimuovi la chiavetta</b> dopo il riavvio.</li>
+          </ol>
+          <div class="info-box">📱 <b>Installare da telefono:</b> in alto a destra compare un QR code. Se non hai un cavo di rete collegato, il mini PC crea una rete Wi-Fi chiamata <span class="mono">Osmium-Setup-XXXX</span> (senza password): connettiti e si aprirà la pagina di installazione. Se non si apre da sola, vai su <span class="mono">http://10.42.0.1</span>.</div>
+        </div>
+
+        <div class="mode-block" data-modeblock="usb">
+          <p class="lead">Con l'avvio diretto da chiavetta non c'è nulla da installare: il disco interno del mini PC non viene toccato.</p>
+          <ul class="steps-list">
+            <li>Il sistema parte già pronto direttamente dalla chiavetta.</li>
+            <li><b>Lascia la chiavetta sempre inserita:</b> è lì che vive il sistema, non nel disco interno.</li>
+            <li>Procedi pure al passo successivo per il primo avvio e la configurazione di rete.</li>
+          </ul>
+          <div class="info-box">💡 Comodo per provare Osmium Sound senza modificare il mini PC, o per portarlo con te da una macchina all'altra.</div>
+        </div>
+      </div>
+
+      <div class="view" data-view="5">
+        <div class="step-eyebrow">Passo 5</div>
+        <h2 class="step-title">Primo avvio e indirizzo di rete</h2>
+        <p class="lead">Al primo avvio dopo l'installazione, lo schermo ti chiede come collegarti alla rete:</p>
+        <ul class="steps-list">
+          <li>Scegli una rete <b>Wi-Fi</b> e inserisci la password,</li>
+          <li>oppure collega un <b>cavo di rete</b> e procedi senza configurare nulla.</li>
+        </ul>
+        <p class="lead">Subito dopo, lo schermo mostra l'indirizzo del dispositivo, ad esempio:</p>
+        <div class="info-box"><span class="mono">http://192.168.x.x</span></div>
+        <p class="lead muted">È l'indirizzo che userai al passo successivo per completare la configurazione dal browser. In alternativa puoi provare <span class="mono">http://hifiplayer.local</span>, ma l'indirizzo IP mostrato a schermo è più affidabile.</p>
+      </div>
+
+      <div class="view" data-view="6">
+        <div class="step-eyebrow">Passo 6</div>
+        <h2 class="step-title">Configurazione guidata dal browser</h2>
+        <p class="lead">Apri l'indirizzo mostrato a schermo (con <span class="mono">http://</span>) da un browser — va bene tablet, telefono o computer, ma un computer è più comodo. La procedura chiede, in ordine:</p>
+        <ol class="steps-list">
+          <li>Lingua (inglese o italiano)</li>
+          <li>Ripristino da un backup, oppure configurazione nuova</li>
+          <li>Eventuale aggiornamento, se disponibile</li>
+          <li>Nome del dispositivo (facoltativo)</li>
+          <li><b>Modalità del dispositivo</b> — vedi sotto</li>
+          <li>Puntatore del mouse (solo in modalità con schermo)</li>
+          <li>Uscita audio</li>
+          <li>Server musicale: su questo dispositivo (Lyrion) o un server Lyrion già esistente</li>
+          <li>Aspetto del web player: Osmium o Material</li>
+          <li>Servizi musicali: Spotify, TIDAL, Qobuz, Deezer, radio internet — non si installa nulla finché non premi <b>«Install and continue»</b></li>
+          <li>Creazione del tuo account (username e password)</li>
+          <li>Fuso orario</li>
+          <li>Sorgenti musicali: NAS in rete, disco interno (da formattare in ext4 o exFAT) o chiavette USB, che si montano da sole</li>
+          <li>Telecomando (facoltativo)</li>
+          <li><b>«Complete setup»</b> per finire</li>
+        </ol>
+        <p class="lead" style="margin-top:4px;">La modalità del dispositivo (passo 5) cambia cosa vedi dopo:</p>
+        <div class="chip-row" id="mode-chips">
+          <div class="chip active" data-mode="screen">Con schermo</div>
+          <div class="chip" data-mode="headless">Headless</div>
+          <div class="chip" data-mode="server">Solo server</div>
+        </div>
+        <div class="chip-tip" id="mode-tip"></div>
+      </div>
+
+      <div class="view" data-view="7">
+        <div class="step-eyebrow">Passo 7</div>
+        <h2 class="step-title">Usare l'interfaccia e il telecomando</h2>
+        <ul class="steps-list">
+          <li>In modalità <b>con schermo</b>, l'interfaccia è il player a schermo intero (modalità kiosk) sul monitor touchscreen o sulla TV collegata.</li>
+          <li>Il telecomando si configura in <b>Impostazioni → Telecomando</b>.</li>
+          <li>I <b>telecomandi USB</b> funzionano non appena colleghi il ricevitore.</li>
+          <li>I <b>telecomandi Bluetooth</b> sono supportati per: Amazon Fire TV, Xiaomi Mi Box S e G20S PRO.</li>
+        </ul>
+      </div>
+
+      <div class="view" data-view="8">
+        <div class="step-eyebrow">Passo 8</div>
+        <h2 class="step-title">Cosa configurare in seguito</h2>
+        <p class="lead">Dopo il primo avvio, tutto questo resta modificabile in qualsiasi momento dalla web admin:</p>
+        <ul class="steps-list">
+          <li><b>Rete / Wi-Fi</b> — in Impostazioni → Configurazione di rete</li>
+          <li><b>Servizi di streaming</b> — apri la web admin (l'indirizzo del dispositivo), accedi con le tue credenziali e clicca su <b>Musica</b>; accedi una volta per servizio.</li>
+          <li><b>Libreria musicale</b> — sorgenti in Impostazioni → Sorgenti musicali, aggiornamento in Impostazioni → Lyrion Music Server</li>
+          <li><b>Altro</b> — uscita audio, modalità del dispositivo, fuso orario, aggiornamenti e backup</li>
+        </ul>
+        <div class="info-box">💡 <b>Copiare musica sul dispositivo:</b> i file copiati in una cartella condivisa compaiono da soli in libreria, ma il dispositivo deve restare acceso.</div>
+      </div>
+
+      <div class="view" data-view="9">
+        <div class="step-eyebrow">Fatto</div>
+        <div class="done-badge">🎧</div>
+        <h2 class="step-title" style="text-align:center;">Osmium Sound è pronto</h2>
+        <p class="lead" style="text-align:center;">Mini PC, chiavetta, uno schermo o il telecomando, e un browser per configurarlo: è tutto quello che serviva. Buon ascolto.</p>
+        <div style="text-align:center;">
+          <div class="url-pill">🌐 Guida completa su <a href="https://osmiumsound.it/manual" target="_blank" rel="noopener">osmiumsound.it/manual</a></div>
+        </div>
+      </div>
+
+      <div id="dots"></div>
+
+      <div id="nav">
+        <button class="btn ghost" id="backBtn">← Indietro</button>
+        <button class="btn primary" id="nextBtn">Avanti →</button>
+      </div>
+  `;
+
+  TEMPLATES.en = `
+      <div id="header">
+        <div class="logo">OSMIUM <span class="accent">SOUND</span></div>
+        <div id="progress-wrap"><div id="progress-fill"></div></div>
+        <div id="step-count">1/10</div>
+        <div id="lang-switch"><button data-lang="it">IT</button><button data-lang="en" class="active">EN</button></div>
+      </div>
+
+      <div class="osmio-row">
+        <div class="osmio-mini">
+          <div class="osmio-waves"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="speech" id="osmio-speech"></div>
+      </div>
+
+      <div class="view active" data-view="0">
+        <div class="step-eyebrow">Before you start</div>
+        <h2 class="step-title">What you'll need</h2>
+        <p class="lead">This tutorial walks you through installing Osmium Sound, from downloading the image to the first setup. Here's what you need before you start:</p>
+        <div class="req-grid">
+          <div class="req-card"><div class="ico">🖥️</div><div><b>x86 mini PC · 64-bit</b><span>Works with either UEFI or a traditional BIOS</span></div></div>
+          <div class="req-card"><div class="ico">💾</div><div><b>USB drive · min. 8 GB</b><span>Will be erased while writing the image</span></div></div>
+          <div class="req-card"><div class="ico">🖐️</div><div><b>A screen (optional)</b><span>Touchscreen monitor, TV, or none in headless mode</span></div></div>
+          <div class="req-card"><div class="ico">📱</div><div><b>A browser</b><span>Tablet, phone or computer for the first-time setup</span></div></div>
+        </div>
+        <p class="lead muted">It takes about 15-20 minutes. Let's get started.</p>
+      </div>
+
+      <div class="view" data-view="1">
+        <div class="step-eyebrow">Step 1</div>
+        <h2 class="step-title">Download the image</h2>
+        <p class="lead">First off, how do you want to use Osmium Sound?</p>
+        <div class="chip-row" id="install-mode-chips">
+          <div class="chip active" data-mode="disk">💿 Install it on the internal disk</div>
+          <div class="chip" data-mode="usb">🔌 Boot it directly from the USB drive</div>
+        </div>
+
+        <div class="mode-block show" id="mode-disk-block">
+          <p class="lead">You download an <b>ISO</b>, write it to a USB drive (next step), and use it only to run the installer, which copies the system onto the mini PC's internal disk.</p>
+          <div class="chip-row" id="disk-version-chips">
+            <div class="chip active" data-ver="stable">Stable release · v2.5.25</div>
+            <div class="chip" data-ver="dev">Development build · v2.5.26-dev.1</div>
+          </div>
+          <div id="disk-version-links"></div>
+          <div class="version-note" id="disk-version-note"></div>
+        </div>
+
+        <div class="mode-block" id="mode-usb-block">
+          <p class="lead">You download a <b>ready-to-run image (<span class="mono">.img.xz</span>)</b>, write it to the USB drive, and the mini PC boots <b>directly from it</b>: no install step, no changes to the internal disk. Leave the drive plugged in at all times — that's where the system lives.</p>
+          <a class="dl-btn" href="https://github.com/adri6412/osmium-sound/releases/download/v2.5.26-dev.1/hifi-player-v2.5.26-dev.1.img.xz" target="_blank" rel="noopener">
+            <span class="ico">⬇️</span><span>hifi-player-v2.5.26-dev.1.img.xz<small>Image for direct USB boot</small></span>
+          </a>
+          <div class="version-note">⚠️ This mode is currently only available in the development build (dev) v2.5.26-dev.1: it may include unfinished changes.</div>
+        </div>
+
+        <div class="info-box">Can't find your version, or want to check for a newer one? Check the download section on <b>osmiumsound.it</b> or the project's <b>GitHub releases</b> page.</div>
+      </div>
+
+      <div class="view" data-view="2">
+        <div class="step-eyebrow">Step 2</div>
+        <h2 class="step-title">Write the image to the USB drive</h2>
+        <p class="lead">Which system are you writing the image from? Here's the easiest tool for it.</p>
+        <div class="chip-row" id="os-chips">
+          <div class="chip active" data-os="windows">Windows</div>
+          <div class="chip" data-os="mac">macOS</div>
+          <div class="chip" data-os="linux">Linux</div>
+        </div>
+        <div class="chip-tip" id="os-tip"></div>
+        <div id="os-dl"></div>
+        <ul class="steps-list">
+          <li><b>Osmium Flasher</b> (recommended where available): downloads the image, verifies its signature, and writes the drive on its own. It never shows your system disk, so you can't accidentally erase it.</li>
+          <li><b>balenaEtcher</b>, <b>Rufus</b>, or the <span class="mono">dd</span> command also work — all of them can write both <span class="mono">.iso</span> and <span class="mono">.img.xz</span> files to the drive.</li>
+        </ul>
+        <div class="warn-box">⚠️ The USB drive will be formatted: everything on it will be lost. Use one with nothing important on it.</div>
+      </div>
+
+      <div class="view" data-view="3">
+        <div class="step-eyebrow">Step 3</div>
+        <h2 class="step-title">Boot the mini PC from the USB drive</h2>
+        <ol class="steps-list">
+          <li>Plug the drive into the mini PC and power it on.</li>
+          <li>Press the key for the <b>boot menu</b> — usually <span class="mono">F11</span>, <span class="mono">F12</span> or <span class="mono">Esc</span> — and pick the USB drive.</li>
+          <li>If the drive shows up twice in the menu, choose the entry that starts with <span class="mono">UEFI:</span></li>
+        </ol>
+        <div class="mode-block show" data-modeblock="disk">
+          <ol class="steps-list" start="4">
+            <li>Select <b>«Install Osmium Sound»</b>. To just try it without installing, choose <b>«Try Osmium Sound (no install)»</b> instead.</li>
+          </ol>
+        </div>
+        <div class="mode-block" data-modeblock="usb">
+          <ol class="steps-list" start="4">
+            <li>You won't see a real installer: with the <span class="mono">.img.xz</span> image, the mini PC boots straight into the ready-to-use system, directly from the drive.</li>
+          </ol>
+        </div>
+        <div class="info-box"><b>Secure Boot:</b> can stay on, it usually isn't a problem. If the mini PC really won't boot from the drive, open the firmware setup (usually <span class="mono">F2</span>, <span class="mono">Del</span> or <span class="mono">Esc</span> at power-on), disable Secure Boot, and try again.</div>
+      </div>
+
+      <div class="view" data-view="4">
+        <div class="step-eyebrow">Step 4</div>
+        <h2 class="step-title" data-modetitle>Guided installer</h2>
+
+        <div class="mode-block show" data-modeblock="disk">
+          <ol class="steps-list">
+            <li>On the welcome screen, tap <b>«Choose disk»</b> and pick the disk to install on.</li>
+            <li>Confirm the warning: <b>all data on that disk will be erased.</b></li>
+            <li>Tap <b>«Erase and install»</b> and wait: no internet connection is needed.</li>
+            <li>The device reboots on its own once installation is done. <b>Remove the USB drive</b> after the restart.</li>
+          </ol>
+          <div class="info-box">📱 <b>Installing from a phone:</b> a QR code appears in the top-right corner. Without a network cable plugged in, the mini PC creates a Wi-Fi network called <span class="mono">Osmium-Setup-XXXX</span> (no password): connect to it and the install page should open. If it doesn't open on its own, go to <span class="mono">http://10.42.0.1</span>.</div>
+        </div>
+
+        <div class="mode-block" data-modeblock="usb">
+          <p class="lead">With a direct USB boot there's nothing to install: the mini PC's internal disk is never touched.</p>
+          <ul class="steps-list">
+            <li>The system starts up already ready to go, directly from the drive.</li>
+            <li><b>Leave the drive plugged in at all times:</b> that's where the system lives, not on the internal disk.</li>
+            <li>Go ahead to the next step for the first boot and network setup.</li>
+          </ul>
+          <div class="info-box">💡 Handy for trying Osmium Sound without touching the mini PC, or for taking it with you from one machine to another.</div>
+        </div>
+      </div>
+
+      <div class="view" data-view="5">
+        <div class="step-eyebrow">Step 5</div>
+        <h2 class="step-title">First boot and network address</h2>
+        <p class="lead">On the first boot after installing, the screen asks how you want to connect to the network:</p>
+        <ul class="steps-list">
+          <li>Pick a <b>Wi-Fi</b> network and enter its password,</li>
+          <li>or plug in a <b>network cable</b> and move on without configuring anything.</li>
+        </ul>
+        <p class="lead">Right after, the screen shows the device's address, for example:</p>
+        <div class="info-box"><span class="mono">http://192.168.x.x</span></div>
+        <p class="lead muted">That's the address you'll use in the next step to finish the setup from a browser. You can also try <span class="mono">http://hifiplayer.local</span>, but the IP address shown on screen is more reliable.</p>
+      </div>
+
+      <div class="view" data-view="6">
+        <div class="step-eyebrow">Step 6</div>
+        <h2 class="step-title">Guided setup from the browser</h2>
+        <p class="lead">Open the address shown on screen (including <span class="mono">http://</span>) in a browser — a tablet, phone or computer all work, though a computer is easier. The wizard asks, in order:</p>
+        <ol class="steps-list">
+          <li>Language (English or Italian)</li>
+          <li>Restore from a backup, or start fresh</li>
+          <li>An update, if one is available</li>
+          <li>Device name (optional)</li>
+          <li><b>Device mode</b> — see below</li>
+          <li>Mouse pointer (screen mode only)</li>
+          <li>Audio output</li>
+          <li>Music server: this device (Lyrion) or an existing Lyrion server</li>
+          <li>Web player look: Osmium or Material</li>
+          <li>Music services: Spotify, TIDAL, Qobuz, Deezer, internet radio — nothing installs until you press <b>«Install and continue»</b></li>
+          <li>Creating your account (username and password)</li>
+          <li>Time zone</li>
+          <li>Music sources: a network NAS, the internal disk (to be formatted as ext4 or exFAT), or USB drives, which mount on their own</li>
+          <li>Remote control (optional)</li>
+          <li><b>«Complete setup»</b> to finish</li>
+        </ol>
+        <p class="lead" style="margin-top:4px;">The device mode (step 5) changes what you see afterwards:</p>
+        <div class="chip-row" id="mode-chips">
+          <div class="chip active" data-mode="screen">With screen</div>
+          <div class="chip" data-mode="headless">Headless</div>
+          <div class="chip" data-mode="server">Server-only</div>
+        </div>
+        <div class="chip-tip" id="mode-tip"></div>
+      </div>
+
+      <div class="view" data-view="7">
+        <div class="step-eyebrow">Step 7</div>
+        <h2 class="step-title">Using the interface and remote control</h2>
+        <ul class="steps-list">
+          <li>In <b>with-screen</b> mode, the interface is the full-screen player (kiosk mode) on the touchscreen monitor or the connected TV.</li>
+          <li>The remote control is set up under <b>Settings → Remote control</b>.</li>
+          <li><b>USB remotes</b> work as soon as you plug in the receiver.</li>
+          <li><b>Bluetooth remotes</b> are supported for: Amazon Fire TV, Xiaomi Mi Box S, and G20S PRO.</li>
+        </ul>
+      </div>
+
+      <div class="view" data-view="8">
+        <div class="step-eyebrow">Step 8</div>
+        <h2 class="step-title">What to configure later</h2>
+        <p class="lead">After the first boot, all of this stays editable at any time from the web admin:</p>
+        <ul class="steps-list">
+          <li><b>Network / Wi-Fi</b> — under Settings → Network Configuration</li>
+          <li><b>Streaming services</b> — open the web admin (the device's address), sign in with your credentials and click <b>Music</b>; sign in once per service.</li>
+          <li><b>Music library</b> — sources under Settings → Music sources, library refresh under Settings → Lyrion Music Server</li>
+          <li><b>Other</b> — audio output, device mode, time zone, updates and backups</li>
+        </ul>
+        <div class="info-box">💡 <b>Copying music to the device:</b> files copied into a shared folder show up in the library on their own, but the device must stay powered on.</div>
+      </div>
+
+      <div class="view" data-view="9">
+        <div class="step-eyebrow">Done</div>
+        <div class="done-badge">🎧</div>
+        <h2 class="step-title" style="text-align:center;">Osmium Sound is ready</h2>
+        <p class="lead" style="text-align:center;">A mini PC, a USB drive, a screen or remote, and a browser to set it up: that's everything you needed. Enjoy the music.</p>
+        <div style="text-align:center;">
+          <div class="url-pill">🌐 Full guide at <a href="https://osmiumsound.it/manual" target="_blank" rel="noopener">osmiumsound.it/manual</a></div>
+        </div>
+      </div>
+
+      <div id="dots"></div>
+
+      <div id="nav">
+        <button class="btn ghost" id="backBtn">← Back</button>
+        <button class="btn primary" id="nextBtn">Next →</button>
+      </div>
+  `;
+
+  // ============== localized dynamic strings ==============
+  var STR = {
+    it: {
+      speeches: [
+        "Ciao! Ti accompagno passo passo nell'installazione. Niente di complicato, promesso.",
+        "Prendi l'immagine dalla fonte ufficiale: così sei sempre sulla versione più aggiornata.",
+        "Osmium Flasher è il più sicuro: non ti fa mai scegliere per sbaglio il disco del tuo computer.",
+        "Il tasto per il menu di boot cambia da PC a PC: se uno non funziona, prova gli altri.",
+        "Da qui in poi fa quasi tutto da solo: ti serve solo confermare un paio di scelte.",
+        "Segna da qualche parte l'indirizzo che compare a schermo: ti servirà tra un attimo.",
+        "Sono tante domande, ma si rispondono in pochi secondi l'una. Vai con calma.",
+        "Anche senza telecomando dedicato va tutto bene: puoi sempre configurarlo dopo.",
+        "Non devi decidere tutto subito: rete, streaming e libreria si possono sempre cambiare.",
+        "Missione compiuta! Da qui in poi è solo musica."
+      ],
+      nextLabel: 'Avanti →',
+      restartLabel: '↺ Ricomincia',
+      osTips: {
+        windows: 'Su Windows apri Osmium Flasher, seleziona il file immagine scaricato e la tua chiavetta, poi avvia la scrittura.',
+        mac: 'Su macOS non c\'è ancora una build di Osmium Flasher: usa balenaEtcher, seleziona il file immagine e la chiavetta, poi avvia la scrittura.',
+        linux: 'Su Linux apri Osmium Flasher (file .run, da rendere eseguibile), oppure usa balenaEtcher o il comando dd dal terminale, verificando sempre con cura quale sia il dispositivo della chiavetta prima di scrivere.'
+      },
+      osDownloads: {
+        windows: [{name:'Osmium-Flasher-1.0.2-win-x64.exe', sub:'Osmium Flasher per Windows', url:'https://file.osmiumsound.it/Osmium-Flasher-1.0.2-win-x64.exe'}],
+        mac: [{name:'balenaEtcher-2.1.9-arm64.dmg', sub:'balenaEtcher per Mac (Apple Silicon)', url:'https://github.com/balena-io/etcher/releases/download/v2.1.9/balenaEtcher-2.1.9-arm64.dmg'}],
+        linux: [{name:'Osmium-Flasher-1.0.2-linux-x86_64.run', sub:'Osmium Flasher per Linux x86_64', url:'https://file.osmiumsound.it/Osmium-Flasher-1.0.2-linux-x86_64.run'}]
+      },
+      diskVersions: {
+        stable: { file:'hifi-player-v2.5.25.iso', url:'https://file.osmiumsound.it/hifi-player-v2.5.25.iso', sub:'Immagine ISO da scrivere su chiavetta', note:'Versione consigliata per un uso quotidiano.' },
+        dev: { file:'hifi-player-v2.5.26-dev.1.iso', url:'https://github.com/adri6412/osmium-sound/releases/download/v2.5.26-dev.1/hifi-player-v2.5.26-dev.1.iso', sub:'Immagine ISO da scrivere su chiavetta', note:'⚠️ Contiene le novità più recenti, ma può essere meno stabile: adatta a chi vuole provare le ultime funzioni in anteprima.' }
+      },
+      modeTips: {
+        screen: 'Con schermo: dopo il setup vedrai subito il player a schermo intero, pronto per essere usato col tocco o col telecomando.',
+        headless: 'Headless: nessuno schermo collegato al mini PC. Controlli tutto da browser o dall\'app sul telefono/tablet, come un lettore di rete silenzioso.',
+        server: 'Solo server: il mini PC gestisce libreria e streaming per altri dispositivi collegati in rete, senza essere lui stesso un punto di ascolto.'
+      },
+      installTitles: { disk: 'Installazione guidata', usb: 'Avvio diretto da chiavetta' }
+    },
+    en: {
+      speeches: [
+        "Hi! I'll walk you through the install, step by step. Nothing complicated, promise.",
+        "Grab the image from the official source: that way you're always on the latest version.",
+        "Osmium Flasher is the safest option: it never lets you accidentally pick your computer's own disk.",
+        "The boot-menu key differs from PC to PC: if one doesn't work, try the others.",
+        "From here it mostly runs itself: you just need to confirm a couple of choices.",
+        "Jot down the address that shows up on screen somewhere: you'll need it in a moment.",
+        "That's a lot of questions, but each one takes a few seconds. Take your time.",
+        "Even without a dedicated remote, you're fine: you can always set it up later.",
+        "You don't have to decide everything now: network, streaming and library can always be changed.",
+        "Mission accomplished! From here it's just music."
+      ],
+      nextLabel: 'Next →',
+      restartLabel: '↺ Start over',
+      osTips: {
+        windows: 'On Windows, open Osmium Flasher, pick the downloaded image file and your USB drive, then start writing.',
+        mac: 'There\'s no Osmium Flasher build for macOS yet: use balenaEtcher, pick the image file and the drive, then start writing.',
+        linux: 'On Linux, open Osmium Flasher (a .run file — make it executable first), or use balenaEtcher or the dd command from a terminal, always double-checking which device is the USB drive before writing.'
+      },
+      osDownloads: {
+        windows: [{name:'Osmium-Flasher-1.0.2-win-x64.exe', sub:'Osmium Flasher for Windows', url:'https://file.osmiumsound.it/Osmium-Flasher-1.0.2-win-x64.exe'}],
+        mac: [{name:'balenaEtcher-2.1.9-arm64.dmg', sub:'balenaEtcher for Mac (Apple Silicon)', url:'https://github.com/balena-io/etcher/releases/download/v2.1.9/balenaEtcher-2.1.9-arm64.dmg'}],
+        linux: [{name:'Osmium-Flasher-1.0.2-linux-x86_64.run', sub:'Osmium Flasher for Linux x86_64', url:'https://file.osmiumsound.it/Osmium-Flasher-1.0.2-linux-x86_64.run'}]
+      },
+      diskVersions: {
+        stable: { file:'hifi-player-v2.5.25.iso', url:'https://file.osmiumsound.it/hifi-player-v2.5.25.iso', sub:'ISO image to write to the USB drive', note:'Recommended version for everyday use.' },
+        dev: { file:'hifi-player-v2.5.26-dev.1.iso', url:'https://github.com/adri6412/osmium-sound/releases/download/v2.5.26-dev.1/hifi-player-v2.5.26-dev.1.iso', sub:'ISO image to write to the USB drive', note:'⚠️ Contains the newest changes, but may be less stable: a good fit if you want to try upcoming features early.' }
+      },
+      modeTips: {
+        screen: 'With screen: right after setup you\'ll see the full-screen player, ready to use by touch or remote.',
+        headless: 'Headless: no screen connected to the mini PC. You control everything from a browser or the phone/tablet app, like a silent network player.',
+        server: 'Server-only: the mini PC handles the library and streaming for other devices on the network, without being a listening point itself.'
+      },
+      installTitles: { disk: 'Guided installer', usb: 'Direct boot from USB drive' }
+    }
+  };
+
+  // ============== boot / language handling ==============
+  function getLangFromUrl(){
+    var m = location.search.match(/[?&]lang=(it|en)/);
+    if(m) return m[1];
+    if(/[?&]en(&|=|$)/.test(location.search)) return 'en';
+    return 'it';
+  }
+
+  var currentLang = getLangFromUrl();
+
+  function setLangInUrl(lang){
+    var url = new URL(location.href);
+    url.searchParams.set('lang', lang);
+    history.replaceState(null, '', url.toString());
+  }
+
+  function boot(lang){
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    if(EMBEDDED) document.body.classList.add('embedded');
+    document.getElementById('inner').innerHTML = TEMPLATES[lang];
+    wireUp(lang);
+    setTimeout(reportHeight, 60);
+  }
+
+  function wireUp(lang){
+    var S = STR[lang];
+
+    var eqBg = document.createElement('div');
+    eqBg.id = 'eq-bg';
+    // eq-bg bars live outside #inner (in #card), create once
+    if(!document.getElementById('eq-bg')){
+      document.getElementById('card').insertBefore(eqBg, document.getElementById('inner'));
+    }
+    var eqBgEl = document.getElementById('eq-bg');
+    if(eqBgEl && !eqBgEl.children.length){
+      for(var i=0;i<20;i++){
+        var s = document.createElement('span');
+        s.style.animationDelay = (Math.random()*1.4).toFixed(2)+'s';
+        s.style.animationDuration = (1.1+Math.random()*0.8).toFixed(2)+'s';
+        eqBgEl.appendChild(s);
+      }
+    }
+
+    var totalSteps = 10;
+    var current = 0;
+
+    var views = {};
+    document.querySelectorAll('.view').forEach(function(v){ views[v.getAttribute('data-view')] = v; });
+
+    var dotsWrap = document.getElementById('dots');
+    dotsWrap.innerHTML = '';
+    for(var d=0; d<totalSteps; d++){
+      var dot = document.createElement('div');
+      dot.className = 'step-dot';
+      (function(idx){ dot.addEventListener('click', function(){ showView(idx); }); })(d);
+      dotsWrap.appendChild(dot);
+    }
+    var dotEls = Array.prototype.slice.call(dotsWrap.children);
+
+    var progressFill = document.getElementById('progress-fill');
+    var stepCount = document.getElementById('step-count');
+    var osmioSpeech = document.getElementById('osmio-speech');
+    var backBtn = document.getElementById('backBtn');
+    var nextBtn = document.getElementById('nextBtn');
+
+    function updateNav(){
+      stepCount.textContent = (current+1) + '/' + totalSteps;
+      progressFill.style.width = (current/(totalSteps-1)*100) + '%';
+      dotEls.forEach(function(el,i){
+        el.classList.toggle('active', i===current);
+        el.classList.toggle('done', i<current);
+      });
+      osmioSpeech.textContent = S.speeches[current] || '';
+      backBtn.style.visibility = current === 0 ? 'hidden' : 'visible';
+      nextBtn.textContent = current === totalSteps-1 ? S.restartLabel : S.nextLabel;
+      reportHeight();
+    }
+
+    function showView(idx){
+      Object.keys(views).forEach(function(k){ views[k].classList.remove('active'); });
+      views[idx].classList.add('active');
+      current = idx;
+      updateNav();
+      document.getElementById('card').scrollIntoView({behavior:'smooth', block:'start'});
+    }
+
+    nextBtn.addEventListener('click', function(){
+      if(current === totalSteps-1){ showView(0); }
+      else { showView(current+1); }
+    });
+    backBtn.addEventListener('click', function(){
+      if(current > 0){ showView(current-1); }
+    });
+
+    // language switch buttons
+    document.querySelectorAll('#lang-switch button').forEach(function(b){
+      b.addEventListener('click', function(){
+        var newLang = b.getAttribute('data-lang');
+        if(newLang === currentLang) return;
+        setLangInUrl(newLang);
+        boot(newLang);
+      });
+    });
+
+    // OS chips (step 2)
+    var osChips = document.querySelectorAll('#os-chips .chip');
+    var osTip = document.getElementById('os-tip');
+    var osDl = document.getElementById('os-dl');
+    function setOs(os){
+      osChips.forEach(function(c){ c.classList.toggle('active', c.getAttribute('data-os')===os); });
+      osTip.textContent = S.osTips[os];
+      osDl.innerHTML = '';
+      (S.osDownloads[os]||[]).forEach(function(d){
+        var a = document.createElement('a');
+        a.className = 'dl-btn'; a.href = d.url; a.target = '_blank'; a.rel = 'noopener';
+        a.innerHTML = '<span class="ico">⬇️</span><span>'+d.name+'<small>'+d.sub+'</small></span>';
+        osDl.appendChild(a);
+      });
+    }
+    osChips.forEach(function(c){ c.addEventListener('click', function(){ setOs(c.getAttribute('data-os')); }); });
+    setOs('windows');
+
+    // Install mode chips (step 1): disk vs direct-usb
+    var installMode = 'disk';
+    var modeChipsInstall = document.querySelectorAll('#install-mode-chips .chip');
+    var diskBlock = document.getElementById('mode-disk-block');
+    var usbBlock = document.getElementById('mode-usb-block');
+    var modeBlocksAll = document.querySelectorAll('.mode-block[data-modeblock]');
+    var step4Title = document.querySelector('[data-view="4"] [data-modetitle]');
+
+    function applyInstallMode(){
+      diskBlock.classList.toggle('show', installMode==='disk');
+      usbBlock.classList.toggle('show', installMode==='usb');
+      modeBlocksAll.forEach(function(b){
+        b.classList.toggle('show', b.getAttribute('data-modeblock')===installMode);
+      });
+      if(step4Title){ step4Title.textContent = S.installTitles[installMode]; }
+    }
+    modeChipsInstall.forEach(function(c){
+      c.addEventListener('click', function(){
+        installMode = c.getAttribute('data-mode');
+        modeChipsInstall.forEach(function(x){ x.classList.toggle('active', x===c); });
+        applyInstallMode();
+      });
+    });
+
+    // Disk version chips (stable vs dev) inside step 1
+    var verChips = document.querySelectorAll('#disk-version-chips .chip');
+    var verLinks = document.getElementById('disk-version-links');
+    var verNote = document.getElementById('disk-version-note');
+    function setDiskVersion(ver){
+      verChips.forEach(function(c){ c.classList.toggle('active', c.getAttribute('data-ver')===ver); });
+      var v = S.diskVersions[ver];
+      verLinks.innerHTML = '<a class="dl-btn" href="'+v.url+'" target="_blank" rel="noopener"><span class="ico">⬇️</span><span>'+v.file+'<small>'+v.sub+'</small></span></a>';
+      verNote.textContent = v.note;
+    }
+    verChips.forEach(function(c){ c.addEventListener('click', function(){ setDiskVersion(c.getAttribute('data-ver')); }); });
+    setDiskVersion('stable');
+    applyInstallMode();
+
+    // Mode chips (step 6)
+    var modeChips = document.querySelectorAll('#mode-chips .chip');
+    var modeTip = document.getElementById('mode-tip');
+    function setMode(mode){
+      modeChips.forEach(function(c){ c.classList.toggle('active', c.getAttribute('data-mode')===mode); });
+      modeTip.textContent = S.modeTips[mode];
+    }
+    modeChips.forEach(function(c){ c.addEventListener('click', function(){ setMode(c.getAttribute('data-mode')); }); });
+    setMode('screen');
+
+    updateNav();
+  }
+
+  boot(currentLang);
+})();
+</script>
+</body>
+</html>

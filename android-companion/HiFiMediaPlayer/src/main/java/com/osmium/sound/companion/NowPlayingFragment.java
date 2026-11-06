@@ -548,6 +548,13 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
 
         ActionBar actionBar = mActivity.getSupportActionBar();
 
+        // The player dropdown lives in the host's action bar. The kiosk shell
+        // (MainActivity) has no action bar — it hosts this fragment only as the
+        // bottom mini player — so there is nothing to populate here.
+        if (actionBar == null) {
+            return;
+        }
+
         // If there are multiple players connected then show a spinner allowing the user to
         // choose between them.
         if (connectedPlayers.size() > 1) {
@@ -1092,6 +1099,18 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
         private void setTopBarSearchDefaultText(String initialText) {
         if (topBarSearch.input == null) topBarSearch.input = new Input();
         topBarSearch.input.initialText = initialText;
+    }
+
+    /**
+     * Opens the same global / My-Music search the top-bar magnifier opens, so the kiosk shell's
+     * search FAB and the classic toolbar share one entry point. Returns {@code false} when the
+     * server has not yet advertised a search home-menu item (nothing to open yet).
+     */
+    public boolean launchTopBarSearch() {
+        if (topBarSearch == null) return false;
+        setTopBarSearchDefaultText("");
+        JiveItemListActivity.show(mActivity, topBarSearch, topBarSearch.goAction);
+        return true;
     }
 
     public void startVisibleConnection(boolean autoConnect) {

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Music tab's home: a grid of fixed category tiles, like the kiosk. -->
+<androidx.recyclerview.widget.RecyclerView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tile_grid"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/osmium_dark"
+    android:clipToPadding="false"
+    android:paddingStart="6dp"
+    android:paddingEnd="6dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp"
+    android:scrollbars="none" />

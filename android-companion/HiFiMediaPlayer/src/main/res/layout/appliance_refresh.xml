@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Body of RefreshRateActivity: the refresh-rate part of the web admin's
+     Settings → Display card, a screen of its own to match the kiosk. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView style="@style/ApplianceTitle" android:text="@string/settings_ui_refresh_title" />
+    <TextView style="@style/ApplianceHelp" android:text="@string/settings_ui_refresh_summary" />
+    <TextView
+        android:id="@+id/display_refresh_unsupported"
+        style="@style/ApplianceHelp"
+        android:text="@string/settings_ui_refresh_unsupported"
+        android:visibility="gone" />
+    <RadioGroup
+        android:id="@+id/display_refresh_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+</LinearLayout>
