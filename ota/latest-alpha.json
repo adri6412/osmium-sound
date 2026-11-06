@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.26-dev.2-alpha28",
-  "name": "v2.5.26-dev.2-alpha28",
-  "body": "## What's new in v2.5.26-dev.2-alpha28\n\n- fix(kiosk): restore radio station logos in menu-tile lists\n- feat(kiosk): make the inserted CD a first-class album everywhere\n- feat(website): refine the Quick start guide tutorial\n- feat(website): add a Quick start guide popup to the hero\n- companion: release 1.0.18 (versionCode 41)\n- website: make the 'general enquiries' contact line a visible callout\n- website: let the support form take several files (5 MB total)\n- website: send the support-form notice via Resend\n- website: replace the support mailto box with a report form\n- website: point companion download to 1.0.17\n- companion: promote 1.0.17 to stable (bespoke album page, Qt-aligned settings)\n- site: point companion download to 1.0.15\n- companion: promote 1.0.15 to stable (kiosk UI, dual-proxy)\n- Fix version extraction from GitHub tag\n- website: count Ko-fi \"Tip\" donations in the supporters strip\n- website: a beta version to download, ISO and USB image\n",
+  "tag_name": "v2.5.26-dev.2-alpha29",
+  "name": "v2.5.26-dev.2-alpha29",
+  "body": "## What's new in v2.5.26-dev.2-alpha29\n\n- feat(kiosk): mappable CD-changer disc +/- remote actions + Qobuz album page polish\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.26-dev.2-alpha28.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha28/hifi-qtui-v2.5.26-dev.2-alpha28.tar.gz",
-      "size": 22891338
+      "name": "hifi-qtui-v2.5.26-dev.2-alpha29.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha29/hifi-qtui-v2.5.26-dev.2-alpha29.tar.gz",
+      "size": 22895246
     },
     {
-      "name": "hifi-qtui-v2.5.26-dev.2-alpha28.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha28/hifi-qtui-v2.5.26-dev.2-alpha28.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.26-dev.2-alpha29.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha29/hifi-qtui-v2.5.26-dev.2-alpha29.tar.gz.sha256",
       "size": 105
     },
     {
-      "name": "hifi-system-v2.5.26-dev.2-alpha28.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha28/hifi-system-v2.5.26-dev.2-alpha28.tar.gz",
-      "size": 2162239
+      "name": "hifi-system-v2.5.26-dev.2-alpha29.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha29/hifi-system-v2.5.26-dev.2-alpha29.tar.gz",
+      "size": 2161606
     },
     {
-      "name": "hifi-system-v2.5.26-dev.2-alpha28.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha28/hifi-system-v2.5.26-dev.2-alpha28.tar.gz.sha256",
+      "name": "hifi-system-v2.5.26-dev.2-alpha29.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha29/hifi-system-v2.5.26-dev.2-alpha29.tar.gz.sha256",
       "size": 107
     },
     {
-      "name": "hifi-os-v2.5.26-dev.2-alpha28.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha28/hifi-os-v2.5.26-dev.2-alpha28.tar.gz",
-      "size": 133756
+      "name": "hifi-os-v2.5.26-dev.2-alpha29.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha29/hifi-os-v2.5.26-dev.2-alpha29.tar.gz",
+      "size": 133752
     },
     {
-      "name": "hifi-os-v2.5.26-dev.2-alpha28.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha28/hifi-os-v2.5.26-dev.2-alpha28.tar.gz.sha256",
+      "name": "hifi-os-v2.5.26-dev.2-alpha29.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha29/hifi-os-v2.5.26-dev.2-alpha29.tar.gz.sha256",
       "size": 103
     },
     {
-      "name": "hifi-os-v2.5.26-dev.2-alpha28.tar.gz.sha256.sig",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha28/hifi-os-v2.5.26-dev.2-alpha28.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.26-dev.2-alpha29.tar.gz.sha256.sig",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha29/hifi-os-v2.5.26-dev.2-alpha29.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.26-dev.2-alpha28.raucb",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha28/hifi-image-v2.5.26-dev.2-alpha28.raucb",
-      "size": 1029847717
+      "name": "hifi-image-v2.5.26-dev.2-alpha29.raucb",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha29/hifi-image-v2.5.26-dev.2-alpha29.raucb",
+      "size": 1029954213
     },
     {
-      "name": "hifi-image-v2.5.26-dev.2-alpha28.raucb.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha28/hifi-image-v2.5.26-dev.2-alpha28.raucb.sha256",
+      "name": "hifi-image-v2.5.26-dev.2-alpha29.raucb.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.2-alpha29/hifi-image-v2.5.26-dev.2-alpha29.raucb.sha256",
       "size": 105
     }
   ]
