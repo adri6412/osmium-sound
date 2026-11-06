@@ -36,6 +36,25 @@ Item {
     readonly property var pageItem: pageLoader.item       // the album/artist page on screen, if any
     x: 341; width: parent ? parent.width - 341 : 683; height: parent ? parent.height : 600
 
+    // ─── copertina del CD scaricata dalla rete ──────────────────────────────
+    // Il plugin CDplayer non allega la copertina all'album della sua browse; il
+    // backend pero' conosce il release MusicBrainz del disco (/api/cd/info) e la
+    // scarica da Cover Art Archive (/api/cd/cover). Quando si entra nella vista
+    // CDplayer chiediamo l'info e teniamo l'URL, che LibraryList usa per l'album.
+    readonly property bool inCdPlayer: view === LibraryModel.PluginItems && String(cur.p1) === "cdplayer"
+    property string cdCoverUrl: ""
+    onInCdPlayerChanged: {
+        if (!inCdPlayer) { cdCoverUrl = ""; return }
+        Api.get(Api.srcBase + "/api/cd/info", function(ok, d) {
+            if (!root.inCdPlayer) return
+            if (ok && d && typeof d === "object" && !d.no_disc) {
+                if (d.cover) root.cdCoverUrl = Api.srcBase + String(d.cover)
+                else if (d.mbid) root.cdCoverUrl = Api.srcBase + "/api/cd/cover?release=" + encodeURIComponent(String(d.mbid))
+                else root.cdCoverUrl = ""
+            } else root.cdCoverUrl = ""
+        })
+    }
+
     // ─── "Aggiornamento disponibile" sul tab delle impostazioni ────────────
     // Come nel kiosk Electron: si guardano i tre componenti (interfaccia,
     // sistema, sistema operativo) ogni quarto d'ora — non piu' spesso, perche'
@@ -1246,6 +1265,7 @@ Item {
                         width: (root.azShown ? root.width - 32 - 12 : root.width - 12) - 12
                         height: root.height - root.contentTop - y - 12
                         visible: Library.state === 2 && Library.count > 0 && !root.isPage && !root.curSvcNeedsLogin
+                        cdCoverUrl: root.inCdPlayer ? root.cdCoverUrl : ""
                         onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
                         // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
                         onRowLongPress: (row, x, y) => { root.menuX = list.x + x; root.menuY = list.y + y + (cdBanner.visible ? 48 : 0); ctx.open(root.ctxItems(row), root.menuX, root.menuY) }

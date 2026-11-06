@@ -9,6 +9,9 @@ Item {
     id: root
     property int view: Library.view
     property string pluginCmd: ""
+    // copertina del disco scaricata dalla rete (Cover Art Archive via /api/cd/cover),
+    // impostata dal Browser quando si entra nella vista CDplayer; usata per l'album del CD
+    property string cdCoverUrl: ""
     signal rowTap(int row, bool onPlay)
     signal rowLongPress(int row, real x, real y)
     signal expandAlbum(int row, real x, real y, real size, string src)   // Cover Flow: the front cover opens
@@ -320,7 +323,11 @@ Item {
                         // perche' Lyrion non sa sempre produrre quella variante.
                         // La misura segue lo schermo: 300 sulla tela 1 a 1, fino a 1200 a 4K.
                         readonly property int px: Theme.coverPx(root.cardW)
-                        source: card.plugin ? root.iconUrl(card.icon)
+                        // l'album del CD (voce-contenitore della vista CDplayer) usa la
+                        // copertina scaricata dalla rete quando c'e'; gli altri item di
+                        // plugin l'icona del server, gli album della libreria la cover LMS
+                        source: (card.plugin && card.hasItems && root.cdCoverUrl) ? root.cdCoverUrl
+                              : card.plugin ? root.iconUrl(card.icon)
                               : card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px : ""
                         asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
                         smooth: true

@@ -8362,6 +8362,9 @@ def api_cd_info():
         "auto_start": settings["auto_start"],
         "discid": toc["discid"],
         "mbid": meta["mbid"],
+        # ready-made URL for the disc cover (Cover Art Archive via /api/cd/cover),
+        # so the kiosk can show it on the CDplayer album without rebuilding it
+        "cover": ("/api/cd/cover?release=" + meta["mbid"]) if meta["mbid"] else "",
         "artist": meta["artist"],
         "album": meta["album"],
         "year": meta["year"],
@@ -8375,6 +8378,53 @@ def api_cd_info():
         ],
         "ripping": _rip_running(),
     })
+
+
+# MusicBrainz release id, validated so it is only ever used inside a cache
+# filename (never a path component the caller controls).
+_MBID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
+
+
+@app.route("/api/cd/cover", methods=["GET"])
+def api_cd_cover():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    mbid = (request.args.get("release") or "").strip()
+    if not mbid:
+        # no release given: use the disc currently in the drive
+        toc = _cd_toc()
+        if toc:
+            mbid = str(_cd_metadata(toc).get("mbid") or "")
+    if not _MBID_RE.match(mbid):
+        return Response(status=404)
+    path = os.path.join(hmeta.CACHE_DIR, "cover-" + mbid + ".jpg")
+    if not os.path.exists(path):
+        # Cover Art Archive redirects /front-500 to the CDN; urllib follows it.
+        try:
+            req = urllib.request.Request(
+                "https://coverartarchive.org/release/" + mbid + "/front-500",
+                headers={"User-Agent": hmeta.user_agent()})
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                data = resp.read(5 * 1024 * 1024)
+        except Exception:
+            data = b""
+        if not data:
+            return Response(status=404)
+        try:
+            os.makedirs(hmeta.CACHE_DIR, exist_ok=True)
+            tmp = path + ".tmp"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, path)
+        except OSError:
+            # serve the bytes even if the cache write failed
+            return Response(data, mimetype="image/jpeg")
+    try:
+        with open(path, "rb") as f:
+            return Response(f.read(), mimetype="image/jpeg")
+    except OSError:
+        return Response(status=404)
 
 
 def _cd_settings():
