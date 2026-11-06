@@ -493,7 +493,6 @@ Item {
                 PageButton { icon: "list-plus"; onClicked: root.play("add") }
                 PageButton { icon: "list-start"; onClicked: root.play("insert") }
                 PageButton { id: favBtn; icon: "heart"; filled: root.isFav
-                    label: Tr.t(root.isFav ? "player.removeFromFavorites" : "player.addToFavorites")
                     visible: !!root.album.favorites_url || (root.pluginMode && root.tracks.length > 0); onClicked: root.toggleFav() }
             }
 
