@@ -53,6 +53,7 @@ Item {
     property string daTitle: ""
     property string daBody: ""
     property string daLink: ""
+    property string daQr: ""
     property string daCode: ""
     property bool daWaiting: false
     property string daErr: ""
@@ -125,9 +126,11 @@ Item {
     // `f(false)` on cancel so the caller stops polling.
     function deviceAuth(t, b, f) {
         openCommon(8); daTitle = t || ""; daBody = b || ""
-        daLink = ""; daCode = ""; daWaiting = true; daErr = ""; cb = f
+        daLink = ""; daQr = ""; daCode = ""; daWaiting = true; daErr = ""; cb = f
     }
-    function deviceAuthUpdate(link, code) { if (kind === 8) { daLink = link || ""; daCode = code || ""; daWaiting = true } }
+    // qr: optional short URL to encode when `link` is too long for the QR
+    // encoder (Spotify's authorize URL); falls back to `link`.
+    function deviceAuthUpdate(link, code, qr) { if (kind === 8) { daLink = link || ""; daQr = qr || ""; daCode = code || ""; daWaiting = true } }
     function deviceAuthError(m) { if (kind === 8) { daErr = m || ""; daWaiting = false } }
     // Restart or shut down: `f("reboot" | "shutdown")`, `f("")` on cancel.
     function power(f) { openCommon(7); cb = f }
@@ -431,17 +434,20 @@ Item {
                 Item { width: 1; height: 16 }
                 // il QR, su fondo bianco come nel wizard; nascosto finche' non
                 // arriva il link dal servizio
+                // what the QR encodes and the link line shows: the short URL
+                // when the backend gave one, otherwise the service link itself
+                property string daShown: root.daQr !== "" ? root.daQr : root.daLink
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 184; height: 184; radius: 12; color: Theme.white
-                    visible: root.daLink !== ""
-                    QrCode { anchors.centerIn: parent; width: 160; height: 160; text: root.daLink }
+                    visible: deviceBox.daShown !== ""
+                    QrCode { anchors.centerIn: parent; width: 160; height: 160; text: deviceBox.daShown }
                 }
-                Item { width: 1; height: 12; visible: root.daLink !== "" }
+                Item { width: 1; height: 12; visible: deviceBox.daShown !== "" }
                 Text {
-                    visible: root.daLink !== ""
+                    visible: deviceBox.daShown !== ""
                     width: parent.width; horizontalAlignment: Text.AlignHCenter
-                    text: root.daLink; elide: Text.ElideMiddle; color: Theme.silverA(0.8)
+                    text: deviceBox.daShown; elide: Text.ElideMiddle; color: Theme.silverA(0.8)
                     font.family: Theme.font; font.pixelSize: 11
                 }
                 // spinner "in attesa" finche' il link non c'e' ancora o mentre
@@ -450,7 +456,7 @@ Item {
                 Text {
                     visible: root.daErr === ""
                     width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-                    text: root.daLink === "" ? Tr.t("services.device.preparing") : Tr.t("services.device.waiting")
+                    text: deviceBox.daShown === "" ? Tr.t("services.device.preparing") : Tr.t("services.device.waiting")
                     color: Theme.gold; font.family: Theme.font; font.pixelSize: 13
                 }
                 Text {

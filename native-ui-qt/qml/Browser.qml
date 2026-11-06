@@ -171,7 +171,7 @@ Item {
         Api.post(Api.apiBase + "/services/" + key + "/auth/start", {}, function(ok, d) {
             if (!Ui.dialogs.active || Ui.dialogs.kind !== 8) return
             if (!ok || !d || !d.success || !d.link) { Ui.dialogs.deviceAuthError(Tr.t("services.loginFailed")); return }
-            Ui.dialogs.deviceAuthUpdate(d.link, d.deviceCode || "")
+            Ui.dialogs.deviceAuthUpdate(d.link, d.deviceCode || "", d.qr || "")
             root._startSvcPoll(key, d.deviceCode || "")
         }, 30000)
     }

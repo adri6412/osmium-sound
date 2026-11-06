@@ -11427,6 +11427,25 @@ _STREAM_SERVICES = {
     'spotty': {'cmd': 'spotty', 'login': 'oauth'},
 }
 
+# Last Spotify authorize URL from auth/start. Spotify's URL is far too long for
+# the on-device QR encoder (byte mode, version <=20, ~666 bytes), so the kiosk
+# gets a short LAN URL (/services/spotty/go) that 302s here instead.
+_SPOTTY_FLOW = {'link': ''}
+
+
+def _lan_ip():
+    """This box's primary LAN IPv4, for a QR a phone on the same network can
+    reach (Api.apiBase is 127.0.0.1 on the device itself). No packet is sent."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('8.8.8.8', 80))
+            return s.getsockname()[0]
+        finally:
+            s.close()
+    except Exception:
+        return '127.0.0.1'
+
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     # Return the 3xx response as-is instead of following it, so we can read a
@@ -11542,7 +11561,11 @@ def _spotty_auth_start():
     link = headers.get('Location') or headers.get('location')
     if not link:
         return {'success': False, 'error': 'noFlow'}
-    return {'success': True, 'link': link}
+    # Cache the long authorize URL and hand the kiosk a short LAN URL that 302s
+    # to it, so the QR stays within the on-device encoder's capacity.
+    _SPOTTY_FLOW['link'] = link
+    qr = 'http://' + _lan_ip() + ':8000/services/spotty/go'
+    return {'success': True, 'link': link, 'qr': qr}
 
 
 def _poll_has_credentials(path):
@@ -11584,6 +11607,16 @@ def api_tidal_poll():
 @app.route('/services/spotty/auth/start', methods=['POST'])
 def api_spotty_start():
     return jsonify(_spotty_auth_start())
+
+
+@app.route('/services/spotty/go', methods=['GET'])
+def api_spotty_go():
+    # Scanned from the phone's QR: 302 to the cached Spotify authorize URL.
+    link = _SPOTTY_FLOW.get('link') or ''
+    if not link:
+        return Response('No active Spotify sign-in. Start it on the player.',
+                        status=409, mimetype='text/plain')
+    return Response(status=302, headers={'Location': link})
 
 
 @app.route('/services/spotty/auth/poll', methods=['GET'])
