@@ -304,6 +304,11 @@
       "scanHint": "Inquadra il codice QR col telefono, o apri il link, e approva l'accesso.",
       "preparing": "Preparazione del link di accesso…",
       "waiting": "In attesa dell'approvazione dal telefono…"
+    },
+    "spotty": {
+      "preparing": "Preparazione dell'accesso…",
+      "steps": "Serve Spotify Premium.\n\n1. Apri l'app Spotify sul telefono o sul computer\n2. Riproduci un brano\n3. Apri l'elenco dei dispositivi\n4. Scegli il dispositivo qui sotto:",
+      "waiting": "In attesa dell'autorizzazione da Spotify…"
     }
   },
   "player": {
@@ -418,6 +423,8 @@
     "addedToQueue": "Aggiunto alla coda",
     "playingNext": "In riproduzione dopo",
     "queueFailed": "Impossibile cambiare la coda",
+    "cdEjected": "CD espulso",
+    "cdEjectFailed": "Impossibile espellere il CD",
     "saveAsPlaylist": "Salva come playlist",
     "clearQueue": "Svuota",
     "playlistNamePlaceholder": "Nome playlist",
@@ -537,6 +544,7 @@
     "page": {
       "play": "Riproduci",
       "shuffle": "Casuale",
+      "eject": "Espelli",
       "tracks": "Brani",
       "oneTrack": "1 brano",
       "tracksCount": "{count} brani",

@@ -304,6 +304,11 @@
       "scanHint": "QR-Code mit dem Handy scannen oder den Link öffnen und den Zugriff bestätigen.",
       "preparing": "Anmeldelink wird vorbereitet…",
       "waiting": "Warten auf die Bestätigung auf dem Handy…"
+    },
+    "spotty": {
+      "preparing": "Anmeldung wird vorbereitet…",
+      "steps": "Spotify Premium ist erforderlich.\n\n1. Öffne die Spotify-App auf dem Handy oder Computer\n2. Spiele einen Titel ab\n3. Öffne die Geräteliste\n4. Wähle das Gerät unten aus:",
+      "waiting": "Warten auf die Autorisierung durch Spotify…"
     }
   },
   "player": {
@@ -418,6 +423,8 @@
     "addedToQueue": "Zur Warteschlange hinzugefügt",
     "playingNext": "Wird als Nächstes gespielt",
     "queueFailed": "Die Warteschlange konnte nicht geändert werden",
+    "cdEjected": "CD ausgeworfen",
+    "cdEjectFailed": "CD konnte nicht ausgeworfen werden",
     "saveAsPlaylist": "Als Wiedergabeliste speichern",
     "clearQueue": "Löschen",
     "playlistNamePlaceholder": "Name der Wiedergabeliste",
@@ -537,6 +544,7 @@
     "page": {
       "play": "Abspielen",
       "shuffle": "Zufällig",
+      "eject": "Auswerfen",
       "tracks": "Titel",
       "oneTrack": "1 Titel",
       "tracksCount": "{count} Titel",

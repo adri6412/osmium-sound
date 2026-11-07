@@ -57,6 +57,9 @@ Item {
     property string daCode: ""
     property bool daWaiting: false
     property string daErr: ""
+    // Spotify Connect sign-in: no QR, show steps naming the device to pick
+    property bool daConnect: false
+    property string daDevice: ""
 
     Spring { id: sc; stiffness: 550; damping: 30; rate: Theme.motionRate }
     property real fade: 0
@@ -126,11 +129,15 @@ Item {
     // `f(false)` on cancel so the caller stops polling.
     function deviceAuth(t, b, f) {
         openCommon(8); daTitle = t || ""; daBody = b || ""
-        daLink = ""; daQr = ""; daCode = ""; daWaiting = true; daErr = ""; cb = f
+        daLink = ""; daQr = ""; daCode = ""; daWaiting = true; daErr = ""
+        daConnect = false; daDevice = ""; cb = f
     }
     // qr: optional short URL to encode when `link` is too long for the QR
     // encoder (Spotify's authorize URL); falls back to `link`.
     function deviceAuthUpdate(link, code, qr) { if (kind === 8) { daLink = link || ""; daQr = qr || ""; daCode = code || ""; daWaiting = true } }
+    // Spotify Connect: show the steps to pick `device` in the Spotify app
+    // (no QR), keep waiting until the poll confirms the sign-in.
+    function deviceAuthConnect(device) { if (kind === 8) { daConnect = true; daDevice = device || ""; daWaiting = true } }
     function deviceAuthError(m) { if (kind === 8) { daErr = m || ""; daWaiting = false } }
     // Restart or shut down: `f("reboot" | "shutdown")`, `f("")` on cancel.
     function power(f) { openCommon(7); cb = f }
@@ -431,6 +438,29 @@ Item {
                 }
                 Item { width: 1; height: 8 }
                 Text { width: parent.width; text: root.daBody; wrapMode: Text.Wrap; color: Theme.silver; font.family: Theme.font; font.pixelSize: 14; lineHeight: 20; lineHeightMode: Text.FixedHeight }
+                // Spotify Connect: the steps to follow in the Spotify app, then
+                // the device name to pick highlighted — no QR for this flow
+                Item { width: 1; height: 12; visible: root.daConnect }
+                Column {
+                    visible: root.daConnect
+                    width: parent.width; spacing: 10
+                    Text {
+                        width: parent.width; wrapMode: Text.Wrap
+                        text: Tr.t("services.spotty.steps")
+                        color: Theme.silver; font.family: Theme.font; font.pixelSize: 14; lineHeight: 22; lineHeightMode: Text.FixedHeight
+                    }
+                    Rectangle {
+                        width: parent.width; radius: 8; height: devName.implicitHeight + 24
+                        color: Theme.goldA(0.1); border.width: 1; border.color: Theme.gold
+                        Text {
+                            id: devName
+                            anchors.centerIn: parent; width: parent.width - 24
+                            horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                            text: root.daDevice; color: Theme.white
+                            font.family: Theme.font; font.pixelSize: 16; font.bold: true
+                        }
+                    }
+                }
                 Item { width: 1; height: 16 }
                 // il QR, su fondo bianco come nel wizard; nascosto finche' non
                 // arriva il link dal servizio
@@ -456,7 +486,8 @@ Item {
                 Text {
                     visible: root.daErr === ""
                     width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-                    text: deviceBox.daShown === "" ? Tr.t("services.device.preparing") : Tr.t("services.device.waiting")
+                    text: root.daConnect ? Tr.t("services.spotty.waiting")
+                          : (deviceBox.daShown === "" ? Tr.t("services.device.preparing") : Tr.t("services.device.waiting"))
                     color: Theme.gold; font.family: Theme.font; font.pixelSize: 13
                 }
                 Text {

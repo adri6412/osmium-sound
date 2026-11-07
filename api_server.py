@@ -11428,12 +11428,6 @@ _STREAM_SERVICES = {
     'spotty': {'cmd': 'spotty', 'login': 'oauth'},
 }
 
-# Last Spotify authorize URL from auth/start. Spotify's URL is far too long for
-# the on-device QR encoder (byte mode, version <=20, ~666 bytes), so the kiosk
-# gets a short LAN URL (/services/spotty/go) that 302s here instead.
-_SPOTTY_FLOW = {'link': ''}
-
-
 def _lan_ip():
     """This box's primary LAN IPv4, for a QR a phone on the same network can
     reach (Api.apiBase is 127.0.0.1 on the device itself). No packet is sent."""
@@ -11551,22 +11545,21 @@ def _tidal_auth_start():
 
 
 def _spotty_auth_start():
-    # Load authentication.html to arm the helper (getAuthURL + its background
-    # check), then read the Location of the "sign in with Spotify" redirect:
-    # the real accounts.spotify.com authorize URL to show as link + QR.
+    # Spotty authorises over Spotify Connect, not a browser OAuth flow: loading
+    # authentication.html starts the `spotty … --authenticate` helper, which
+    # advertises a "Spotify Authorization (<player>)" device over zeroconf on the
+    # LAN. The user picks that device in their own Spotify app (Premium required,
+    # and only the desktop/mobile apps — not the web player) to hand this box its
+    # credentials; the kiosk then polls until the Spotty menu goes live. So we
+    # don't return a link/QR: we return the device name to look for in the app.
     pid = _own_player_mac()
     q = ('?player=' + urllib.parse.quote(pid)) if pid else ''
-    _lms_web('plugins/Spotty/settings/authentication.html' + q, timeout=20)
-    _, _, headers = _lms_web('plugins/Spotty/settings/redirect',
-                             method='GET', follow=False, timeout=15)
-    link = headers.get('Location') or headers.get('location')
-    if not link:
-        return {'success': False, 'error': 'noFlow'}
-    # Cache the long authorize URL and hand the kiosk a short LAN URL that 302s
-    # to it, so the QR stays within the on-device encoder's capacity.
-    _SPOTTY_FLOW['link'] = link
-    qr = 'http://' + _lan_ip() + ':8000/services/spotty/go'
-    return {'success': True, 'link': link, 'qr': qr}
+    _, status, _ = _lms_web('plugins/Spotty/settings/authentication.html' + q, timeout=20)
+    if status != 200:
+        return {'success': False, 'error': 'unreachable'}
+    name = _current_player_name() or ''
+    device = 'Spotify Authorization' + ((' (' + name + ')') if name else '')
+    return {'success': True, 'connect': True, 'device': device}
 
 
 def _poll_has_credentials(path):
@@ -11610,20 +11603,16 @@ def api_spotty_start():
     return jsonify(_spotty_auth_start())
 
 
-@app.route('/services/spotty/go', methods=['GET'])
-def api_spotty_go():
-    # Scanned from the phone's QR: 302 to the cached Spotify authorize URL.
-    link = _SPOTTY_FLOW.get('link') or ''
-    if not link:
-        return Response('No active Spotify sign-in. Start it on the player.',
-                        status=409, mimetype='text/plain')
-    return Response(status=302, headers={'Location': link})
-
-
 @app.route('/services/spotty/auth/poll', methods=['GET'])
 def api_spotty_poll():
-    return jsonify({'hasCredentials':
-                    _poll_has_credentials('plugins/Spotty/settings/hasCredentials')})
+    # Spotty's settings/hasCredentials returns the credentials.json PATH as a
+    # string (e.g. ".../cache/spotty/__AUTHENTICATE__/credentials.json"), not a
+    # 0/1 flag like TIDAL, so int() always failed and the sign-in was never
+    # detected. Use the uniform menu-based check instead (same signal as
+    # /services/status): a signed-in Spotty returns its real menu, a signed-out
+    # one only a `type:textarea` notice.
+    st = _service_login_state('spotty')
+    return jsonify({'hasCredentials': 1 if st.get('loggedIn') else 0})
 
 
 @app.route('/lms_role', methods=['GET'])

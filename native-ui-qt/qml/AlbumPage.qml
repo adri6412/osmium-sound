@@ -25,6 +25,10 @@ Item {
     property string pluginFavUrl: ""
     property string pluginTitle: ""
     readonly property bool pluginMode: pluginCmd !== "" && pluginItemId !== ""
+    // the inserted audio CD opens this same page through the CDplayer plugin.
+    // For it the queue/favourite buttons make no sense (there is one disc, it is
+    // not a library album you save) -- it gets an Eject button instead.
+    readonly property bool isCd: pluginCmd === "cdplayer"
 
     property int state_: 0              // 0 loading 2 ready 3 error
     property var album: ({})
@@ -46,6 +50,11 @@ Item {
     // favIndex is the favourite's position, needed to delete it
     property bool isFav: false
     property string favIndex: ""
+    // a streaming album's own "Add/Remove Release … to <service> favourites"
+    // action, captured from the plugin drill: { cmd: [...], params: {...} }.
+    // Toggling it puts the album in the service's My Favourites (which Lyrion
+    // then imports into the library) instead of a generic Lyrion folder.
+    property var pluginFavAction: null
     readonly property int discs: Math.max(1, Number(album.disccount || 1))
     // the cover is on screen: the Cover Flow's flying copy can go (Browser)
     readonly property bool coverReady: state_ === 2 && cover.ready
@@ -78,7 +87,9 @@ Item {
     function loadPlugin() {
         // the title the grid passed (goView set it as the page title)
         album = { album: pluginTitle, favorites_url: pluginFavUrl }
-        checkFav()
+        // the favourite state comes from the drill's "Add/Remove Release …"
+        // row (parsePluginTracks), not from a generic favourites folder
+        isFav = false; favIndex = ""; pluginFavAction = null
         // menu:1 gives a clean two-line text ("Title\nArtist - Album"), the real
         // track item_id in params, and favorites_url in presetParams — far better
         // than the flat form, which collapses the title into one "Title di … da …".
@@ -129,11 +140,21 @@ Item {
             // a non-track row: shown like a local album's credits/info, not dropped.
             // The Credits node (type:"actions") drills into a people-by-role list;
             // "key: value" rows (Genre, Duration, Label, …) are inline info lines;
-            // the "Add/Remove Release … favourites" service action is skipped.
+            // the "Add/Remove Release … favourites" service action is captured so
+            // the heart can toggle the service's own My Favourites.
             var txt = String(t.text || t.name || "")
             var gp = (t.actions && t.actions.go && t.actions.go.params) || t.params || {}
             var low = txt.toLowerCase()
-            if (low.indexOf("favorite") >= 0 || low.indexOf("favourite") >= 0) continue
+            if (low.indexOf("favorite") >= 0 || low.indexOf("favourite") >= 0) {
+                var go = t.actions && t.actions.go
+                if (go && go.cmd) {
+                    root.pluginFavAction = { cmd: go.cmd, params: go.params || {} }
+                    // the label tells the current state: "Remove … from" = is a
+                    // favourite, "Add … to" = not yet
+                    root.isFav = /\bremove\b|\brimuov|\btogli/i.test(txt)
+                }
+                continue
+            }
             if (String(t.type) === "actions") { if (!credId) credId = String(gp.item_id || ""); continue }
             if (String(t.type) === "text" || txt.indexOf(": ") > 0) { if (txt) info.push(txt) }
         }
@@ -300,28 +321,37 @@ Item {
         if (pluginMode) { play("load"); Player.cmd(["playlist", "shuffle", "1"]); return }
         if (browser) browser.loadShuffled("album_id", albumId)
     }
+    // ── eject (CD only) ───────────────────────────────────────────────────
+    // Stop playback, tell the backend to open the drive, then leave the now
+    // empty CD page. Mirrors CdRip.eject()'s backend call (/api/cd/eject).
+    function eject() {
+        Player.cmd(["stop"])
+        Api.post(Api.srcBase + "/api/cd/eject", {}, function(ok) {
+            if (!ok && browser) browser.say("alert-triangle", "player.cdEjectFailed")
+        })
+        if (browser) { browser.say("eject", "player.cdEjected"); browser.navBack() }
+    }
     // ── favourite heart (add / remove, with its real state) ───────────────
-    // a streaming album has no stable favorites_url, so we store it as a
-    // favourites FOLDER named "<Album> — <Artist>" holding its track urls — the
-    // same shape the CD changer uses: the album is its tracks (issue #125)
-    function pluginFavTitle() {
-        var t = String(pluginTitle || album.album || "").replace(/\n/g, " — ").trim()
-        return t
+    // re-read the plugin drill's "Add/Remove Release …" row and refresh the
+    // favourite state from its label (its item_id toggles the same way)
+    function refreshPluginFav() {
+        Player.query([pluginCmd, "items", "0", "9999", "item_id:" + pluginItemId, "menu:1"], function(ok, r) {
+            if (!root || !ok || !r) return
+            var loop = r.loop_loop || r.item_loop || r[pluginCmd + "_loop"] || []
+            for (var i = 0; i < loop.length; i++) {
+                var txt = String(loop[i].text || loop[i].name || "")
+                if (txt.toLowerCase().indexOf("favorite") < 0 && txt.toLowerCase().indexOf("favourite") < 0) continue
+                var go = loop[i].actions && loop[i].actions.go
+                if (go && go.cmd) {
+                    root.pluginFavAction = { cmd: go.cmd, params: go.params || {} }
+                    root.isFav = /\bremove\b|\brimuov|\btogli/i.test(txt)
+                }
+                return
+            }
+        })
     }
     function checkFav() {
-        if (pluginMode) {
-            var want = pluginFavTitle()
-            Player.query(["favorites", "items", "0", "9999"], function(ok, r) {
-                if (!root) return
-                var loop = ok && r ? (r.loop_loop || []) : []
-                var idx = ""
-                for (var i = 0; i < loop.length; i++) {
-                    if (String(loop[i].name || loop[i].text || "") === want) { idx = String(loop[i].id); break }
-                }
-                root.isFav = idx !== ""; root.favIndex = idx
-            })
-            return
-        }
+        if (pluginMode) return     // state comes from the drill (refreshPluginFav)
         var url = String(album.favorites_url || "")
         if (!url) { isFav = false; favIndex = ""; return }
         Player.favoriteExists(url, function(ex, idx) {
@@ -329,47 +359,26 @@ Item {
             root.isFav = !!ex; root.favIndex = ex ? String(idx) : ""
         })
     }
-    // add the plugin album's tracks into a new favourites folder, one by one
-    function pluginFavAddTracks(idx, i) {
-        if (!root) return
-        if (i >= tracks.length) {
-            root.isFav = true; root.favIndex = idx; favBtn.burst()
-            if (root.browser) root.browser.say("heart", "player.addedToFavorites")
-            return
-        }
-        var t = tracks[i]
-        Player.query(["favorites", "add", "item_id:" + idx, "url:" + t.url,
-                      "title:" + t.title, "type:audio", "icon:" + root.pluginCover], function() {
-            root.pluginFavAddTracks(idx, i + 1)
-        })
-    }
     function toggleFav() {
         if (pluginMode) {
-            if (isFav) {
-                if (!favIndex) return
-                Player.query(["favorites", "delete", "item_id:" + favIndex], function(ok) {
-                    if (!root) return
-                    if (ok) { root.isFav = false; root.favIndex = ""; if (root.browser) root.browser.say("heart", "player.removedFromFavorites") }
-                    else if (root.browser) root.browser.say("alert-triangle", "player.favoriteError")
-                })
-            } else {
-                if (!tracks.length) return
-                var want = pluginFavTitle()
-                Player.query(["favorites", "addlevel", "title:" + want], function(ok) {
-                    if (!root || !ok) { if (root && root.browser) root.browser.say("alert-triangle", "player.favoriteError"); return }
-                    // addlevel returns only a count, not the index: find the folder
-                    Player.query(["favorites", "items", "0", "9999"], function(ok2, r2) {
-                        if (!root) return
-                        var loop = ok2 && r2 ? (r2.loop_loop || []) : []
-                        var idx = ""
-                        for (var i = 0; i < loop.length; i++) {
-                            if (String(loop[i].name || loop[i].text || "") === want) idx = String(loop[i].id)
-                        }
-                        if (idx === "") { if (root.browser) root.browser.say("alert-triangle", "player.favoriteError"); return }
-                        root.pluginFavAddTracks(idx, 0)
-                    })
-                })
-            }
+            // invoke the service's own "Add/Remove Release …" action: the album
+            // lands in the service's My Favourites (Lyrion imports it into the
+            // library), not in a generic Lyrion favourites folder
+            if (!pluginFavAction || !pluginFavAction.cmd) return
+            var p = pluginFavAction.params || {}
+            var args = pluginFavAction.cmd.slice()
+            if (p.item_id !== undefined) args.push("item_id:" + p.item_id)
+            if (p.menu !== undefined) args.push("menu:" + p.menu)
+            var wasFav = isFav
+            Player.query(args, function(ok) {
+                if (!root) return
+                if (!ok) { if (root.browser) root.browser.say("alert-triangle", "player.favoriteError"); return }
+                root.isFav = !wasFav
+                if (!wasFav) favBtn.burst()
+                if (root.browser) root.browser.say("heart", wasFav ? "player.removedFromFavorites" : "player.addedToFavorites")
+                // re-read the row: its label (and item_id) flips add<->remove
+                root.refreshPluginFav()
+            })
             return
         }
         var url = String(album.favorites_url || "")
@@ -490,10 +499,11 @@ Item {
                 spacing: 10
                 PageButton { id: playBtn; icon: "play"; filled: true; primary: true; label: Tr.t("player.page.play"); onClicked: root.play("load") }
                 PageButton { icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: root.shuffle() }
-                PageButton { icon: "list-plus"; onClicked: root.play("add") }
-                PageButton { icon: "list-start"; onClicked: root.play("insert") }
+                PageButton { icon: "list-plus"; visible: !root.isCd; onClicked: root.play("add") }
+                PageButton { icon: "list-start"; visible: !root.isCd; onClicked: root.play("insert") }
                 PageButton { id: favBtn; icon: "heart"; filled: root.isFav
-                    visible: !!root.album.favorites_url || (root.pluginMode && root.tracks.length > 0); onClicked: root.toggleFav() }
+                    visible: !root.isCd && (!!root.album.favorites_url || (root.pluginMode && root.tracks.length > 0)); onClicked: root.toggleFav() }
+                PageButton { icon: "eject"; visible: root.isCd; label: Tr.t("player.page.eject"); onClicked: root.eject() }
             }
 
             // ── state of the online lookup ─────────────────────────────────

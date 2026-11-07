@@ -204,12 +204,17 @@ Item {
         })
     }
     function deviceLogin(key, label) {
-        Ui.dialogs.deviceAuth(Tr.tf("services.signInTitle", "name", label), Tr.t("services.device.scanHint"),
+        // Spotty signs in over Spotify Connect (pick a device in the Spotify
+        // app), the others via a QR link: the opening hint differs
+        var hint = key === "spotty" ? Tr.t("services.spotty.preparing") : Tr.t("services.device.scanHint")
+        Ui.dialogs.deviceAuth(Tr.tf("services.signInTitle", "name", label), hint,
                               function(ok) { root._stopSvcPoll() })
         Api.post(Api.apiBase + "/services/" + key + "/auth/start", {}, function(ok, d) {
             if (!Ui.dialogs.active || Ui.dialogs.kind !== 8) return
-            if (!ok || !d || !d.success || !d.link) { Ui.dialogs.deviceAuthError(Tr.t("services.loginFailed")); return }
-            Ui.dialogs.deviceAuthUpdate(d.link, d.deviceCode || "", d.qr || "")
+            if (!ok || !d || !d.success) { Ui.dialogs.deviceAuthError(Tr.t("services.loginFailed")); return }
+            if (d.connect) Ui.dialogs.deviceAuthConnect(d.device || "")       // Spotify Connect
+            else if (d.link) Ui.dialogs.deviceAuthUpdate(d.link, d.deviceCode || "", d.qr || "")
+            else { Ui.dialogs.deviceAuthError(Tr.t("services.loginFailed")); return }
             root._startSvcPoll(key, d.deviceCode || "")
         }, 30000)
     }

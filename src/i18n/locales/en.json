@@ -304,6 +304,11 @@
       "scanHint": "Scan the QR code with your phone, or open the link, and approve access.",
       "preparing": "Preparing the sign-in link…",
       "waiting": "Waiting for approval on your phone…"
+    },
+    "spotty": {
+      "preparing": "Preparing sign-in…",
+      "steps": "Spotify Premium is required.\n\n1. Open the Spotify app on your phone or computer\n2. Play a track\n3. Open the list of devices\n4. Pick the device below:",
+      "waiting": "Waiting for authorization from Spotify…"
     }
   },
   "player": {
@@ -418,6 +423,8 @@
     "addedToQueue": "Added to the queue",
     "playingNext": "Playing next",
     "queueFailed": "Could not change the queue",
+    "cdEjected": "CD ejected",
+    "cdEjectFailed": "Couldn't eject the CD",
     "saveAsPlaylist": "Save as playlist",
     "clearQueue": "Clear",
     "playlistNamePlaceholder": "Playlist name",
@@ -537,6 +544,7 @@
     "page": {
       "play": "Play",
       "shuffle": "Shuffle",
+      "eject": "Eject",
       "tracks": "Tracks",
       "oneTrack": "1 track",
       "tracksCount": "{count} tracks",
