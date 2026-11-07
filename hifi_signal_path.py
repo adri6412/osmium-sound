@@ -24,11 +24,26 @@ import hifi_squeezelite as sq
 
 PROC_ASOUND = '/proc/asound'
 
-# Lossy codecs, as Lyrion names a track's `type`: not a change made on the
-# way, but worth saying next to a "bit-perfect" that would otherwise read as
-# "hi-fi".
-LOSSY_TYPES = ('mp3', 'aac', 'mp4', 'ogg', 'ops', 'opus', 'wma', 'mpc')
+# How to read a track's `type` as Lyrion names it. Lossy throws data away for
+# good (worth saying next to a "bit-perfect" that would otherwise read as
+# "hi-fi"); lossless keeps every sample. A `type` in neither list -- empty, or
+# one of the odd tokens some internet radios report -- stays unknown, and the
+# screen then says nothing about the quality rather than claim one it cannot
+# vouch for. 🚨 Do NOT guess lossless from the absence of a lossy tag: an AAC
+# radio stream whose type is not plainly "aac" would read as "lossless".
+LOSSY_TYPES = ('mp3', 'aac', 'mp4', 'm4a', 'ogg', 'ops', 'opus', 'wma', 'wmap', 'mpc', 'spt')
+LOSSLESS_TYPES = ('flc', 'ogf', 'wav', 'aif', 'aiff', 'pcm', 'l16', 'alc', 'alcx',
+                  'wvp', 'wvpx', 'ape', 'wmal', 'mlp', 'shn', 'tak')
 DSD_TYPES = ('dsf', 'dff', 'dsd')
+
+
+def source_quality(stype, is_dsd):
+    """'lossless' / 'lossy' / '' for a codec `type`; DSD counts as lossless."""
+    if is_dsd or stype in LOSSLESS_TYPES:
+        return 'lossless'
+    if stype in LOSSY_TYPES:
+        return 'lossy'
+    return ''
 
 # hw_params `format` → how many DSD bits one frame carries per channel.
 _DSD_BITS = {'DSD_U8': 8, 'DSD_U16_LE': 16, 'DSD_U16_BE': 16, 'DSD_U32_LE': 32, 'DSD_U32_BE': 32}
@@ -193,18 +208,19 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
     model, zone = find_player(player, main, zones)
     out = {
         'source': {'type': stype, 'rate': src_rate, 'bits': _as_int(source.get('bits')),
-                   'dsd': src_dsd, 'lossy': stype in LOSSY_TYPES, 'remote': bool(source.get('remote'))},
+                   'dsd': src_dsd, 'quality': source_quality(stype, src_dsd), 'remote': bool(source.get('remote'))},
         'local': model is not None,
         'zone': zone,
         'lyrion': {'local': sq.server_is_local(main.get('server')), 'server': main.get('server') or ''},
     }
 
     if model is None:
-        # Another device's player: its volume and its DAC are out of sight.
-        if lyrion.get('digital_volume') and _as_int(lyrion.get('volume')) < 100:
-            changes.append('volume')
-        out['changes'] = changes
-        out['verdict'] = 'processed' if changes else 'unknown'
+        # Another device's player (a Wi-Fi speaker, someone else's box): the
+        # output lives on hardware we can't see, so there is nothing to trace.
+        # Don't guess at a volume change -- "processed" would light the path up
+        # orange over steps we never measured. Say plainly it can't be tracked.
+        out['changes'] = []
+        out['verdict'] = 'unknown'
         return out
 
     # ── this device's player ───────────────────────────────────────
@@ -213,28 +229,25 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
     tok = None if dsp else sq.dsd_token(model, fmt)
     carrier = None if tok is None else ('native' if sq.is_native(fmt) and model['dsd'] in ('auto', 'native') else 'dop')
     p2d = None if dsp else sq.pcm2dsd_state(model, fmt, zone=bool(zone))
-    # converted on the player's side (music from another Lyrion): squeezelite
-    # plays PCM into the Loopback, its own volume included, and every track
-    # -- a DSD one decoded to PCM first -- is turned into DSD after it
-    player_side = p2d == 'player'
     hw = describe_hw(None if dsp else hw_fn(model['output']), carrier)
-    hardware_volume = not player_side and model['volume'] == 'hardware' and bool(model['mixer'])
+    hardware_volume = model['volume'] == 'hardware' and bool(model['mixer'])
     out['player'] = {
         'name': model['name'], 'volume': 'hardware' if hardware_volume else 'software',
         'realtime': model['realtime'], 'max_rate': model['max_rate'],
         'dsd': carrier or 'pcm',
-        'pcm2dsd': {'state': p2d or 'off', 'mode': model['pcm2dsd'], 'filter': model['pcm2dsd_filter']},
+        # A box player (built-in or zone) converts PCM on its own player side now
+        # (squeezelite soxr for upsampling, the Loopback + hifi-pcm2dsd-player for
+        # PCM -> DSD), so the conversion always belongs on the player stage.
+        'pcm2dsd': {'state': p2d or 'off', 'mode': model['pcm2dsd'], 'filter': model['pcm2dsd_filter'],
+                    'where': 'player'},
     }
     out['dac'] = card_fn(model['output'])
     out['hw'] = hw
 
+    # A box player converts every PCM track to DSD on its own side (the Loopback
+    # + hifi-pcm2dsd-player) when its model asks for it.
     converted = False
-    if player_side:
-        converted = True
-        if src_dsd:
-            changes.append('dsdToPcm')
-        changes.append('pcmToDsd')
-    elif not src_dsd and p2d == 'active':
+    if not src_dsd and p2d == 'active':
         converted = True
         changes.append('pcmToDsd')
     # software volume below 100 % is arithmetic on every PCM sample; a DSD
@@ -242,7 +255,7 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
     dsd_out = hw['kind'] == 'dsd' or bool(hw.get('maybe_dop') and (src_dsd or converted)) if hw else \
         (src_dsd and carrier is not None) or converted
     out['player']['dsd_out'] = dsd_out
-    if (not hardware_volume and (player_side or not dsd_out) and lyrion.get('digital_volume')
+    if (not hardware_volume and not dsd_out and lyrion.get('digital_volume')
             and _as_int(lyrion.get('volume')) < 100):
         changes.append('volume')
     if hw is not None:

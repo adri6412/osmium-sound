@@ -1,0 +1,23 @@
+[Unit]
+Description=Osmium Sound — install & enable the CD Player plugin via the LMS extension manager
+ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
+ConditionKernelCommandLine=!boot=live
+ConditionPathExists=!/etc/hifi-player/provisioning-pending
+# One-shot first-boot install: skip once the marker is set.
+ConditionPathExists=!/etc/hifi-player/cdplayer-installed
+# Unlike the tolerate/ensure jobs (which run BEFORE the server scans its
+# plugins), this one drives the server's own web UI to pull the plugin from the
+# standard repo, so it needs the server up and the network online. It restarts
+# lyrionmusicserver itself to extract & enable the plugin.
+After=lyrionmusicserver.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-cdplayer-enable.sh
+# It polls for the server, the download and the restart, so allow generous time
+# but never hang the boot transaction indefinitely.
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

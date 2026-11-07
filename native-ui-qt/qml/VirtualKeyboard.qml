@@ -9,6 +9,8 @@ import Hifi.Ui
 Item {
     id: root
     property bool active: false
+    // read by the key filter in main.cpp: a real keyboard types into this keyboard
+    readonly property bool takesTyping: true
     property bool closing: false
     property bool shift: false
     property bool sym: false          // strato dei simboli
@@ -69,6 +71,7 @@ Item {
         if (e.key === Qt.Key_Escape) { close(false); e.accepted = true; return }
         if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { close(true); e.accepted = true; return }
         if (e.key === Qt.Key_Backspace) { backspace(); e.accepted = true; return }
+        if (e.key === Qt.Key_Space) { put(" "); e.accepted = true; return }
         if (e.text && e.text.length && e.text.charCodeAt(0) >= 32) { put(e.text); e.accepted = true }
     }
     onActiveChanged: if (active) forceActiveFocus()
@@ -85,13 +88,26 @@ Item {
         [{k:"a"},{k:"s"},{k:"d"},{k:"f"},{k:"g"},{k:"h"},{k:"j"},{k:"k"},{k:"l"}],
         [{k:"⇧",fn:"shift",flex:1.5},{k:"z"},{k:"x"},{k:"c"},{k:"v"},{k:"b"},{k:"n"},{k:"m"},{k:"."},{k:"-"},{k:"⌫",fn:"bksp",flex:2.5}],
         [{k:"?#:",fn:"sym",flex:2},{k:"space",fn:"space",flex:8}]]
+    // German QWERTZ: y/z swapped and the umlauts ä ö ü plus ß on the main layer,
+    // the way a German keyboard has them. ß keeps its shape under Shift (u:"ß"):
+    // JS toUpperCase() would turn a single ß into "SS", which no one wants from
+    // one key press. The symbol layer stays shared.
+    readonly property var deLetterRows: [
+        [{k:"1"},{k:"2"},{k:"3"},{k:"4"},{k:"5"},{k:"6"},{k:"7"},{k:"8"},{k:"9"},{k:"0"}],
+        [{k:"q"},{k:"w"},{k:"e"},{k:"r"},{k:"t"},{k:"z"},{k:"u"},{k:"i"},{k:"o"},{k:"p"},{k:"ü"}],
+        [{k:"a"},{k:"s"},{k:"d"},{k:"f"},{k:"g"},{k:"h"},{k:"j"},{k:"k"},{k:"l"},{k:"ö"},{k:"ä"}],
+        [{k:"⇧",fn:"shift",flex:1.5},{k:"y"},{k:"x"},{k:"c"},{k:"v"},{k:"b"},{k:"n"},{k:"m"},{k:"ß",u:"ß"},{k:"."},{k:"-"},{k:"⌫",fn:"bksp",flex:2.5}],
+        [{k:"?#:",fn:"sym",flex:2},{k:"space",fn:"space",flex:8}]]
     readonly property var symRows: [
         [{k:"1"},{k:"2"},{k:"3"},{k:"4"},{k:"5"},{k:"6"},{k:"7"},{k:"8"},{k:"9"},{k:"0"}],
         [{k:"@"},{k:"#"},{k:"€"},{k:"$"},{k:"%"},{k:"&"},{k:"*"},{k:"("},{k:")"},{k:"~"}],
         [{k:"-"},{k:"_"},{k:"="},{k:"+"},{k:"/"},{k:"\\"},{k:"|"},{k:":"},{k:";"}],
         [{k:"'"},{k:"\""},{k:","},{k:"."},{k:"!"},{k:"?"},{k:"<"},{k:">"},{k:"["},{k:"]"},{k:"⌫",fn:"bksp",flex:2.5}],
         [{k:"ABC",fn:"sym",flex:2},{k:"space",fn:"space",flex:8}]]
-    readonly property var rows: sym ? symRows : letterRows
+    readonly property var rows: sym ? symRows : (Tr.lang === "de" ? deLetterRows : letterRows)
+    // the character a letter key produces, honouring Shift (and a per-key
+    // uppercase override, e.g. ß that must not become "SS")
+    function shifted(m) { return (root.shift && !root.sym) ? (m.u !== undefined ? m.u : m.k.toUpperCase()) : m.k }
 
     Rectangle {
         id: sheet
@@ -152,7 +168,7 @@ Item {
                             color: shiftOn ? Theme.gold : fn ? "#4a4a4a" : kTap.mix(Theme.light, "#4a4a4a")
                             border.width: 1; border.color: shiftOn ? Theme.gold : Theme.accent
                             scale: kTap.tapScale
-                            Text { anchors.centerIn: parent; text: modelData.fn === "space" ? Tr.t("keyboard.space") : (root.shift && !root.sym ? modelData.k.toUpperCase() : modelData.k); color: shiftOn ? Theme.black : Theme.white; font.family: Theme.font; font.pixelSize: 15; font.bold: true }
+                            Text { anchors.centerIn: parent; text: modelData.fn === "space" ? Tr.t("keyboard.space") : root.shifted(modelData); color: shiftOn ? Theme.black : Theme.white; font.family: Theme.font; font.pixelSize: 15; font.bold: true }
                             Tap {
                                 id: kTap; tap: 0.95
                                 onClicked: {
@@ -160,7 +176,7 @@ Item {
                                     else if (modelData.fn === "sym") root.sym = !root.sym
                                     else if (modelData.fn === "bksp") root.backspace()
                                     else if (modelData.fn === "space") root.put(" ")
-                                    else root.put(root.shift && !root.sym ? modelData.k.toUpperCase() : modelData.k)   // lo shift resta finche' non lo si ritocca, come in Electron
+                                    else root.put(root.shifted(modelData))   // lo shift resta finche' non lo si ritocca, come in Electron
                                 }
                             }
                         }

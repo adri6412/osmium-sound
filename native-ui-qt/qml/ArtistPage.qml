@@ -147,7 +147,20 @@ Item {
         })
     }
 
-    function play(mode) { if (!person) Player.cmd(["playlistcontrol", "cmd:" + mode, "artist_id:" + artistId]) }
+    function play(mode) {
+        if (person) return
+        var c = ["playlistcontrol", "cmd:" + mode, "artist_id:" + artistId]
+        if (mode !== "add" && mode !== "insert") { Player.cmd(c); return }
+        // same as the album page: the queue answer is what the toast reports (#120)
+        Player.query(c, function(ok) {
+            if (!root) return          // the page was closed meanwhile
+            Player.refresh()
+            if (!browser) return
+            if (!ok) browser.say("alert-triangle", "player.queueFailed")
+            else if (mode === "add") browser.say("list-plus", "player.addedToQueue")
+            else browser.say("list-start", "player.playingNext")
+        })
+    }
     function openPerson(p) {
         var id = String(p.artist_id || p.id || "")
         if (id && browser) browser.openArtist(id, String(p.name || ""))

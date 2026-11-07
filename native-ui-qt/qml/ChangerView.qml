@@ -27,23 +27,41 @@ Item {
     readonly property int count: Library.count
     clip: true
     readonly property string art: "file://" + Sys.assets + "/anim/changer/"
-    function srcOf(it) { return it && it.art ? Api.lmsBase + "/music/" + it.art + "/cover?size=" + px : "" }
+    // local albums carry an artwork_track_id (art); plugin albums carry their
+    // cover as a Lyrion icon string (icon) that Api.imageUrl resolves to a URL
+    function srcOf(it) { return it && it.art ? Api.lmsBase + "/music/" + it.art + "/cover?size=" + px
+                              : it && it.icon ? Api.imageUrl(it.icon) : "" }
 
     // ─── geometry ──────────────────────────────────────────────────────────
-    readonly property real cs: Math.max(90, Math.min(Math.round(height * 0.36), Math.round(width * 0.2)))   // the front disc
-    readonly property real cx: width / 2
-    readonly property real discY: 16 + Math.round(cs * 0.08)        // room for a loaded disc to rise
+    // Wide canvases: the row of discs takes the left part and the changer stands
+    // big on the right, instead of below the row where it is hardly seen.
+    readonly property bool sideBox: Theme.wide
+    readonly property real rowW: sideBox ? Math.round(width * 0.47) : width
+    readonly property real cs: sideBox ? Math.max(90, Math.min(Math.round((height - 70) / 1.1), Math.round(rowW * 0.3)))
+                                       : Math.max(90, Math.min(Math.round(height * 0.36), Math.round(width * 0.2)))   // the front disc
+    // side by side the disc block sits left of centre so the right fan keeps
+    // clear of the changer beside it instead of sliding under it
+    readonly property real cx: sideBox ? Math.round(rowW * 0.44) : rowW / 2
+    // side by side the disc block is centred vertically to sit level with the
+    // changer (which centres in its box), instead of hugging the top
+    readonly property real rowTop: sideBox ? Math.max(8, Math.round((height - cs - 104) / 2)) : 0
+    readonly property real discY: rowTop + 16 + Math.round(cs * 0.08)        // room for a loaded disc to rise
     readonly property real maxAngle: 74
     readonly property real halfTurned: cs / 2 * Math.cos(maxAngle * Math.PI / 180)
     readonly property real off: cs / 2 + halfTurned + cs * 0.07    // the first turned disc's centre
     readonly property real gap: cs * 0.09                          // between turned discs: a file
-    readonly property int side: Math.max(0, Math.min(14, Math.ceil((width / 2 - off + halfTurned) / gap) + 1))
+    // full width: let the fan run off the edges (discs recede into the distance).
+    // side by side: stop the right fan before the changer so they never overlap.
+    readonly property int side: Math.max(0, Math.min(14, sideBox
+        ? Math.floor((rowW - cx - off - halfTurned) / gap)
+        : Math.ceil((rowW / 2 - off + halfTurned) / gap) + 1))
     readonly property int slots: 2 * side + 1
     readonly property int px: Theme.coverPx(cs)
     readonly property real captionY: discY + cs + 8
     // the changer below the row, as large as the rest of the height allows
     readonly property real boxY: captionY + 46
-    readonly property rect box: Qt.rect(8, boxY, width - 16, Math.max(40, height - boxY - 6))
+    readonly property rect box: sideBox ? Qt.rect(rowW + 20, 8, width - rowW - 40, height - 16)
+                                        : Qt.rect(8, boxY, width - 16, Math.max(40, height - boxY - 6))
     // where its window is, for the discs flying in (AnimChanger: a 600 x 260
     // stage fitted and centred in its box, the window centred at 235.5, 106)
     readonly property real stageS: Math.min(box.width / 600, box.height / 260)
@@ -87,6 +105,15 @@ Item {
     // (each held disc keeps its own record in `disc`: an app's album, put in
     // from its menu, is not a row of this list)
     property var chosen: []
+    // a plugin's album list is loaded into the changer by cmd + item (no local
+    // album_id): the chosen rows then carry a `disc` record App.changerLoad
+    // plays with `[cmd, "playlist", …, "item_id:"+item]`, cover from its artUrl.
+    readonly property bool pluginMode: Library.view === LibraryModel.PluginItems && Library.pluginAlbumList
+    function discFor(it) {
+        return root.pluginMode ? { cmd: Library.pluginCmd, item: String(it.id), title: it.text || "",
+                                   artUrl: it.icon ? Api.imageUrl(it.icon) : "" }
+                               : null   // local album: the chosen row (id/text/art) is itself the disc
+    }
     function fromChanger() {
         chosen = Ui.app ? Ui.app.changerDiscs.map(function(d) { return { id: d.id || "", text: d.title, art: d.art || "", disc: d } }) : []
     }
@@ -104,7 +131,10 @@ Item {
         return false
     }
     function chosenAt(id) {
-        for (var i = 0; i < chosen.length; i++) if (chosen[i].id === id) return i
+        // local albums match on id; a plugin disc (no local id) matches on its
+        // item id, so a re-opened plugin changer still shows its gold rings
+        for (var i = 0; i < chosen.length; i++)
+            if (chosen[i].id === id || (chosen[i].disc && chosen[i].disc.item === id)) return i
         return -1
     }
     // the disc in front is already in the changer: its gold ring is its mark
@@ -126,7 +156,9 @@ Item {
         if (chosen.length + flights.count >= 101) { Ui.toast.show(Tr.t("player.changer.full")); return }
         // the changer turns its file to the next empty slot while the disc flies
         if (changer.scene && changer.scene.prepare) changer.scene.prepare(chosen.length + flights.count)
-        flights.append({ albumId: id, text: it.text, art: it.art || "", sub: it.sub || "" })
+        var d = discFor(it)
+        flights.append({ albumId: id, text: it.text, art: it.art || "", sub: it.sub || "",
+                         artUrl: d && d.artUrl ? d.artUrl : "", cmd: d ? d.cmd : "", item: d ? d.item : "" })
     }
     // a disc reached the window: it is in the changer now
     function landed(id) {
@@ -137,7 +169,10 @@ Item {
         // then the list that puts the album on the disc in that slot
         if (changer.scene && changer.scene.insert) changer.scene.insert(chosen.length)
         var c = chosen.slice()
-        c.push({ id: it.albumId, text: it.text, art: it.art, sub: it.sub })
+        var rec = { id: it.albumId, text: it.text, art: it.art, sub: it.sub }
+        // a plugin album rides on its own disc record (cmd + item, cover artUrl)
+        if (it.cmd && it.item) rec.disc = { cmd: it.cmd, item: it.item, title: it.text, artUrl: it.artUrl || "" }
+        c.push(rec)
         chosen = c
         flights.remove(f)
         if (doneWanted && flights.count === 0) done()
@@ -176,6 +211,7 @@ Item {
     }
     // its top fades into the dark, so the row of discs stands in front
     Rectangle {
+        visible: !root.sideBox
         x: 0; y: root.box.y - 1; width: root.width; height: root.box.height * 0.22
         gradient: Gradient {
             GradientStop { position: 0.0; color: Theme.dark }
@@ -298,7 +334,7 @@ Item {
     // ─── touch, mouse and the remote over the row ──────────────────────────
     MouseArea {
         id: area
-        x: 0; y: 0; width: root.width; height: root.captionY
+        x: 0; y: 0; width: root.rowW; height: root.captionY
         property real x0: 0
         property real pos0: 0
         property bool moved: false
@@ -375,7 +411,7 @@ Item {
             required property int index
             readonly property int dir: index === 0 ? -1 : 1
             readonly property bool can: root.count > 1 && (dir < 0 ? root.cur > 0 : root.cur < root.count - 1)
-            x: index === 0 ? 14 : root.width - 14 - width
+            x: index === 0 ? 14 : root.rowW - 14 - width
             y: root.discY + root.cs / 2 - height / 2
             width: 44; height: 44
             z: 200
@@ -403,7 +439,7 @@ Item {
     // ─── under the row: the album in front, what is loaded, Load ───────────
     Item {
         id: caption
-        x: 0; y: root.captionY; width: root.width; height: 40
+        x: 0; y: root.captionY; width: root.rowW; height: 40
         z: 150
         readonly property real sideW: Math.min(230, (width - 260) / 2)
         Text {
@@ -475,7 +511,8 @@ Item {
                 axis { x: 0; y: 1; z: 0 }
                 angle: fly.turn
             }
-            Disc { src: fly.art ? Api.lmsBase + "/music/" + fly.art + "/cover?size=" + root.px : "" }
+            Disc { src: fly.art ? Api.lmsBase + "/music/" + fly.art + "/cover?size=" + root.px
+                        : fly.artUrl ? fly.artUrl : "" }
             // up a little out of the row, then to the drive's opening in the
             // window, shrinking to the size of the discs in the file and
             // turning edge-on like them; there the changer takes it down into

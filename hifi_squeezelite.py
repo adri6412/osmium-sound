@@ -36,21 +36,20 @@ Fields (the UI exposes the starred ones, the rest are set elsewhere):
   max_rate *     `-r <max>`, 0 = let the DAC say
   volume *       software | hardware (`-V <mixer>`, the DAC's own control)
   mixer *        the ALSA control `-V` drives (first playback volume if empty)
-  alsa_buffer *  auto | large (`-a 200:8`)
+  alsa_buffer *  auto | large (`-a 100:8`); the built-in player always takes it
   stream_buffer* auto | large (`-b 16384:8192`)
   realtime *     `-p 45` for the output thread
   extra *        anything else, one line, validated: no quotes, no `$`, and
                  none of the options handled above
-  pcm2dsd *      off | dsd64 | dsd128 | dsd256: every PCM track reaches the
+  pcm2dsd *      off | dsd64 | dsd128 | dsd256 | dsd512: every PCM track reaches the
                  DAC as DSD (sox_ng's sigma-delta modulator), when DSD
-                 actually reaches the DAC. With this device as the Lyrion
-                 server, Lyrion converts it on its way here (hifi-pcm2dsd.py):
-                 the player advertises DSD alone (`-c dsd`) so Lyrion has to
-                 use the rules this module writes into custom-convert.conf.
-                 With another server, whose rules are out of reach, the
-                 built-in player converts it itself: squeezelite plays PCM
-                 into the Loopback and hifi-pcm2dsd-player.py turns what
-                 comes out into DSD for the DAC (sync_player()).
+                 actually reaches the DAC. The conversion is always the
+                 server's: the Lyrion this player follows runs it (the Osmium
+                 Convert plugin), whether that Lyrion is this box or another.
+                 The player advertises DSD alone (`-c dsd`) so Lyrion has to
+                 use the plugin's per-MAC rule. api_server pushes that rule to
+                 the plugin over the CLI; this module no longer writes
+                 custom-convert.conf itself.
   pcm2dsd_filter * the modulator's noise-shaping filter
   dsp.enabled    squeezelite plays into the CamillaDSP Loopback at 48 kHz
 
@@ -76,6 +75,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -91,25 +91,58 @@ ZONES_CONF = '/etc/hifi-player/zones.json'
 # What the PCM → DSD wrapper reads to know each player's rate and filter. Not
 # the models themselves: it runs as Lyrion's user, for every track.
 PCM2DSD_MAP = '/etc/hifi-player/pcm2dsd.json'
+# What the PCM upsampling wrapper reads: {mac: {mult, cap}}, same idea.
+UPSAMPLE_MAP = '/etc/hifi-player/upsample.json'
+# Players on another Lyrion that the user chose to convert through this box's
+# Lyrion (server-side, like C-3PO). {mac: {name, pcm2dsd, pcm2dsd_filter,
+# upsample, upsample_cap}}. Read at boot; never probed (the remote DAC is
+# unknown), so the user's choice is trusted.
+EXTERNAL_CONVERT = '/etc/hifi-player/external-convert.json'
 # Lyrion reads custom-convert.conf next to its convert.conf, and only at start.
 # /etc/squeezeboxserver points into the Lyrion version in use, so a Lyrion
 # update leaves a fresh directory: the rules are written again at every boot
 # (hifi-zones.service, before Lyrion) and after every Lyrion update.
 LMS_CONVERT = '/etc/squeezeboxserver/custom-convert.conf'
 SOX_NG = '/usr/local/bin/sox_ng'
+FLAC_BIN = '/usr/bin/flac'
 PCM2DSD_WRAPPER = '/usr/local/sbin/hifi-pcm2dsd.py'
+UPSAMPLE_WRAPPER = '/usr/local/sbin/hifi-upsample.py'
 SQUEEZELITE_BIN = '/usr/bin/squeezelite'
 DSP_RATE = 48000
-# PCM → DSD after another Lyrion server: squeezelite plays every track into
-# the Loopback at P2D_RATE and hifi-pcm2dsd-player.py reads the other end.
-# Subdevice 0 on both sides, never in use by the DSP at the same time; the
-# Bluetooth VU tap keeps to subdevice 1.
-P2D_PLAYBACK = 'hw:CARD=Loopback,DEV=0,SUBDEV=0'
-P2D_CAPTURE = 'hw:CARD=Loopback,DEV=1,SUBDEV=0'
+# PCM → DSD on the player's own side: squeezelite plays every track into the
+# Loopback at P2D_RATE and hifi-pcm2dsd-player.py reads the other end and emits
+# DSD to the DAC. This is the only place PCM → DSD runs for a player of this box
+# now (the built-in one and the zones alike); only external players on another
+# Lyrion still convert server-side, through the Osmium Convert plugin.
+#
+# One Loopback subdevice pair (DEV=0 playback / DEV=1 capture, same index) per
+# conversion. Subdevice 0 is the built-in player's (also the DSP's squeezelite →
+# CamillaDSP bridge, never both at once); subdevice 1 is the Bluetooth/DSP VU
+# tap. Each converting zone takes its own subdevice from P2D_ZONE_BASE_SUBDEV up,
+# by its position among the enabled zones (see zone_subdev()).
+P2D_DEV_PLAYBACK = 0
+P2D_DEV_CAPTURE = 1
+P2D_ZONE_BASE_SUBDEV = 2
+
+
+def p2d_playback(sub=0):
+    return f'hw:CARD=Loopback,DEV={P2D_DEV_PLAYBACK},SUBDEV={sub}'
+
+
+def p2d_capture(sub=0):
+    return f'hw:CARD=Loopback,DEV={P2D_DEV_CAPTURE},SUBDEV={sub}'
+
+
+P2D_PLAYBACK = p2d_playback(0)
+P2D_CAPTURE = p2d_capture(0)
 P2D_RATE = 176400
 P2D_PLAYER = '/usr/local/sbin/hifi-pcm2dsd-player.py'
 P2D_PLAYER_CONF = '/run/hifi-pcm2dsd/player.json'
 P2D_PLAYER_UNIT = 'hifi-pcm2dsd-player.service'
+# Per-zone converter: a templated instance of the same daemon, one per
+# converting zone, reading /run/hifi-pcm2dsd/zone-<id>.json.
+P2D_ZONE_UNIT = 'hifi-pcm2dsd-player@{}.service'
+P2D_ZONE_CONF = '/run/hifi-pcm2dsd/zone-{}.json'
 SYS_ALOOP = '/sys/module/snd_aloop'
 LIB_MODULES = '/lib/modules'
 # How long a writer waits for another one to finish. A Settings → Audio save
@@ -133,17 +166,24 @@ DEFAULTS = {
     'extra': '',
     'pcm2dsd': 'off',
     'pcm2dsd_filter': 'clans-8',
+    'upsample': 'off',
+    'upsample_cap': 0,
     'dsp': {'enabled': False},
 }
 # What Settings → Audio may change and "Back to defaults" resets.
 TUNABLE = ('dsd', 'dsd_delay_ms', 'max_rate', 'volume', 'mixer',
            'alsa_buffer', 'stream_buffer', 'realtime', 'extra',
-           'pcm2dsd', 'pcm2dsd_filter')
+           'pcm2dsd', 'pcm2dsd_filter', 'upsample', 'upsample_cap')
 
 DSD_MODES = ('auto', 'dop', 'native', 'off')
-RATES = (0, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000)
+RATES = (0, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000,
+         1411200, 1536000)
 DSD_DELAYS = (0, 100, 250, 500)
-ALSA_LARGE = '200:8'
+ALSA_LARGE = '100:8'
+# Large ALSA presets recognized on import: the current value and older ones that
+# shipped before (e.g. 200:8), so a config written by an earlier build still maps
+# to 'large' instead of being dropped as a custom value.
+ALSA_LARGE_VALUES = (ALSA_LARGE, '200:8')
 STREAM_LARGE = '16384:8192'
 RT_PRIORITY = '45'
 # Options the model renders itself: refused in `extra` so they cannot appear twice.
@@ -151,9 +191,27 @@ MANAGED_FLAGS = ('-o', '-n', '-s', '-m', '-M', '-D', '-r', '-V', '-a', '-b', '-p
 
 # PCM → DSD: the DSD rate for each choice. From 44.1 kHz material that is
 # 64, 128 and 256 times the CD rate; 48 kHz material is resampled on the way.
-PCM2DSD_MODES = ('off', 'dsd64', 'dsd128', 'dsd256')
-PCM2DSD_RATES = {'dsd64': 2822400, 'dsd128': 5644800, 'dsd256': 11289600}
+PCM2DSD_MODES = ('off', 'dsd64', 'dsd128', 'dsd256', 'dsd512')
+PCM2DSD_RATES = {'dsd64': 2822400, 'dsd128': 5644800, 'dsd256': 11289600,
+                 'dsd512': 22579200}
 PCM2DSD_FILTERS = ('clans-8', 'sdm-8')
+
+# PCM upsampling: integer multiples kept inside the source's rate family
+# (44.1 kHz → 88.2/176.4/352.8/705.6, 48 kHz → 96/192/384/768), never mixing
+# the two families. `max` is the largest family multiple at or below the cap
+# (the DAC's top rate for the built-in player and zones, the player's announced
+# top rate for an external one; 0 → the universal ceiling). Mutually exclusive
+# with pcm2dsd: a player either upsamples PCM or makes DSD, never both.
+UPSAMPLE_MODES = ('off', 'x2', 'x4', 'max')
+UPSAMPLE_MULT = {'x2': 2, 'x4': 4}
+PCM_FAMILY_BASE = (44100, 48000)
+UPSAMPLE_CEILING = 768000
+# Absolute target rates offered for player-side PCM upsampling (the box's own
+# players, where squeezelite resamples to one fixed `-r` rate and has no
+# per-track source rate to key x2/x4 on). 0 = Auto: climb to the DAC's own
+# ceiling. The list tops at UPSAMPLE_CEILING; player_upsample_rate clamps each
+# choice to what the DAC actually declares.
+UPSAMPLE_CAPS = (0, 96000, 192000, 384000, 768000)
 
 _NAME_RE = re.compile(r'^[A-Za-z0-9_.\-]{1,24}$')
 _HOST_RE = re.compile(r'^[A-Za-z0-9.\-:\[\]]{1,253}$')
@@ -216,6 +274,25 @@ def native_format_from_stream(text):
     return None
 
 
+def playback_rates(text):
+    """Every sample rate the *playback* side of a /proc/asound stream file
+    lists, as a set of ints. A `Rates:` line is either a comma list
+    (`44100, 48000, …`) or a range (`44100 - 768000`); both are read as the
+    bare numbers on the line, which is all a max/supported lookup needs."""
+    rates, section = set(), None
+    for line in (text or '').splitlines():
+        s = line.strip()
+        if s.startswith('Playback:'):
+            section = 'playback'
+            continue
+        if s.startswith('Capture:'):
+            section = 'capture'
+            continue
+        if section == 'playback' and s.startswith('Rates:'):
+            rates.update(int(n) for n in re.findall(r'\d+', s[len('Rates:'):]))
+    return rates
+
+
 # What probe() answers for an output that is not a USB audio device.
 PCM_ONLY = 'pcm'
 
@@ -259,6 +336,124 @@ def dop_bits(device, proc_asound=None):
     lists S24_3LE and not S32_LE, as some USB DACs do."""
     formats = playback_formats(_stream_text(device, proc_asound))
     return 24 if 'S24_3LE' in formats and 'S32_LE' not in formats else 32
+
+
+def dac_max_pcm_rate(device, proc_asound=None):
+    """The top PCM sample rate `device` declares in its /proc/asound stream
+    file, among the rates this renderer knows (RATES); 0 when it cannot be read
+    (`default`, a non-USB card, an unreadable stream). Player-side upsampling
+    uses it to cap the rate squeezelite is forced to, so the DAC is never asked
+    for one it would refuse."""
+    known = [r for r in playback_rates(_stream_text(device, proc_asound)) if r in RATES]
+    return max(known) if known else 0
+
+
+def current_output_rate(device, proc_asound=None):
+    """The sample rate the DAC is receiving *right now*, from the open PCM's
+    hw_params, or 0 when the stream is closed / unreadable / not a real card.
+    Player-side upsampling picks a synchronous rate (2^n of the track's family)
+    under the user cap, so this real rate is what the UI should report, not the
+    cap itself (a 768 kHz cap feeds a 44.1 kHz track at 705600, not 768000)."""
+    card, dev = parse_device(device)
+    if card is None:
+        return 0
+    card_dir = _card_dir(os.path.realpath(proc_asound or PROC_ASOUND), card)
+    if card_dir is None:
+        return 0
+    try:
+        with open(os.path.join(card_dir, f'pcm{dev}p', 'sub0', 'hw_params'),
+                  encoding='utf-8', errors='replace') as f:
+            text = f.read()
+    except OSError:
+        return 0
+    m = re.search(r'^rate:\s*(\d+)', text, re.M)
+    return int(m.group(1)) if m else 0
+
+
+# Bits per word of each native DSD carrier, for turning a DSD bitrate into the
+# PCM-style carrier rate the DAC's stream file declares: DSD_U32 packs 32 DSD
+# bits into each frame, so DSD512 (22.5792 Mbit/s) rides a 705600 Hz carrier.
+_NATIVE_BITS = {'u32be': 32, 'u32le': 32, 'u16be': 16, 'u16le': 16, 'u8': 8}
+
+
+def _playback_altsets(text):
+    """(formats, rates) for each playback altset block of a /proc/asound stream
+    file: the ALSA format tokens and the int sample rates that one block
+    declares. A USB DAC lists one block per interface/altset, so a native-DSD
+    altset's own rate range can be read apart from the PCM altsets' — a DAC that
+    does S32_LE PCM to 768000 may still stop its DSD_U32_BE altset lower."""
+    blocks, section, formats, rates = [], None, [], set()
+
+    def flush():
+        if formats or rates:
+            blocks.append((formats, rates))
+
+    for line in (text or '').splitlines():
+        s = line.strip()
+        if s.startswith('Playback:'):
+            section = 'playback'
+            continue
+        if s.startswith('Capture:'):
+            flush()
+            section, formats, rates = 'capture', [], set()
+            continue
+        if section != 'playback':
+            continue
+        if s.startswith('Interface '):          # each endpoint repeats this line
+            flush()
+            formats, rates = [], set()
+        elif s.startswith('Format:'):
+            formats.extend(s[len('Format:'):].split())
+        elif s.startswith('Rates:'):
+            rates.update(int(n) for n in re.findall(r'\d+', s[len('Rates:'):]))
+    flush()
+    return blocks
+
+
+def dac_dsd_ceiling(device, fmt, proc_asound=None):
+    """The highest PCM-to-DSD mode `device` can actually take, given how DSD
+    reaches it (`fmt` from probe()): the top PCM2DSD mode whose carrier rate the
+    DAC still declares — its native-DSD altset's own rates when it decodes DSD
+    natively, its PCM rates over DoP. Falls back to the ceiling mode ('dsd512',
+    no clamp) whenever the stream cannot be read or parsed, so a DAC whose file
+    we do not understand is never limited by a guess. The Topping D50s declares
+    DSD_U32_BE up to 768000, so its 705600 DSD512 carrier fits; an RME that
+    stops its native-DSD altset at 352800 caps at DSD256, matching the field
+    report that DSD512 fails on it."""
+    modes = [m for m in PCM2DSD_MODES if m != 'off']
+    top = modes[-1]
+    text = _stream_text(device, proc_asound)
+    if not text:
+        return top
+    if fmt in _NATIVE_BITS:
+        bits = _NATIVE_BITS[fmt]
+        alsa = next((a for a, sq in _NATIVE_FORMATS if sq == fmt), None)
+        rates = set()
+        for formats, rs in _playback_altsets(text):
+            if alsa in formats:
+                rates |= rs
+        max_rate = max(rates) if rates else 0
+    elif fmt == 'dop':
+        # DoP wraps DSD into 16-bits-per-word PCM frames, so the DAC's PCM rate
+        # ceiling bounds it: DoP DSD64 = 176400, DSD128 = 352800, DSD256 = 705600.
+        bits = 16
+        max_rate = dac_max_pcm_rate(device, proc_asound)
+    else:
+        return top        # PCM only: nothing reaches this DAC as DSD to cap
+    if not max_rate:
+        return top
+    fits = [m for m in modes if PCM2DSD_RATES[m] // bits <= max_rate]
+    return fits[-1] if fits else modes[0]
+
+
+def clamp_pcm2dsd(mode, device, fmt, proc_asound=None):
+    """`mode` lowered to what the DAC can take (dac_dsd_ceiling), never raised.
+    A saved dsd512 becomes dsd256 on a DAC that stops there, so the converter
+    never generates a DSD rate the DAC would refuse track after track."""
+    if mode == 'off':
+        return mode
+    ceiling = dac_dsd_ceiling(device, fmt, proc_asound)
+    return mode if PCM2DSD_MODES.index(mode) <= PCM2DSD_MODES.index(ceiling) else ceiling
 
 
 def probe(device, proc_asound=None):
@@ -319,6 +514,95 @@ def mixer_controls(device, run=None):
         return parse_mixer_controls(run(['amixer', '-c', card, 'scontents']))
     except Exception:
         return []
+
+
+# ── Playback switches: mute/unmute, e.g. the onboard S/PDIF (IEC958) ─
+# A playback *switch* (pswitch) toggles a path on or off; unlike mixer_controls
+# above it carries no volume, so it never drives squeezelite's `-V`. The usual
+# case is the onboard codec's digital transmitter (IEC958 / S/PDIF / Digital):
+# Daphile and the like leave it unmuted, but on a clean ALSA state it boots
+# muted, so squeezelite opens the hw card and plays while no bits leave the
+# coax/optical jack. We surface these switches so the web UI can toggle them
+# (set_mixer_switch) and unmute the digital ones on their own when the card is
+# chosen as the output (unmute_digital_output). Names here may contain spaces:
+# they go straight to amixer as one argv element, never onto the ARGS line, so
+# the _MIXER_RE restriction mixer_controls applies does not apply to them.
+_DIGITAL_SWITCH_RE = re.compile(r'iec958|s/?pdif|digital', re.I)
+_ON_OFF_RE = re.compile(r'\[(on|off)\]')
+
+
+def parse_mixer_switches(scontents):
+    """[(name, on)] for every simple control that has a playback switch
+    (pswitch), from `amixer -c N scontents`. `on` is True when any channel of
+    the control reads [on]."""
+    out, name, is_switch, states = [], None, False, []
+
+    def flush():
+        if name is not None and is_switch:
+            out.append((name, any(states)))
+
+    for line in (scontents or '').splitlines():
+        s = line.strip()
+        m = re.match(r"Simple mixer control '(.*)',\d+$", s)
+        if m:
+            flush()
+            name, is_switch, states = m.group(1), False, []
+            continue
+        if name is None:
+            continue
+        if s.startswith('Capabilities:'):
+            is_switch = 'pswitch' in s.split(':', 1)[1].split()
+        elif 'Playback' in s:
+            states += [tok == 'on' for tok in _ON_OFF_RE.findall(s)]
+    flush()
+    return out
+
+
+def mixer_switches(device, run=None):
+    """[{'name', 'on'}] playback switches of the card behind `device` (empty for
+    `default`, the Loopback and anything that is not a hw: card)."""
+    card, _ = parse_device(device)
+    if card is None or card == 'Loopback':
+        return []
+    run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout)
+    try:
+        return [{'name': n, 'on': on}
+                for n, on in parse_mixer_switches(run(['amixer', '-c', card, 'scontents']))]
+    except Exception:
+        return []
+
+
+def set_mixer_switch(device, name, on, run=None):
+    """Mute/unmute one playback switch of the card behind `device`. `name` must
+    be one the card actually has (checked by the caller). Returns the switches
+    afterwards, or None when `device` has no card."""
+    card, _ = parse_device(device)
+    if card is None or card == 'Loopback':
+        return None
+    run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout)
+    run(['amixer', '-q', '-c', card, 'sset', name, 'unmute' if on else 'mute'])
+    return [{'name': n, 'on': s}
+            for n, s in parse_mixer_switches(run(['amixer', '-c', card, 'scontents']))]
+
+
+def unmute_digital_output(device, run=None):
+    """Unmute the card's digital playback switches (IEC958 / S/PDIF / Digital)
+    that are currently off, so a freshly chosen onboard coax/optical output is
+    not silent. Returns the names it unmuted (empty when there was nothing to
+    do, no such card, or amixer failed)."""
+    card, _ = parse_device(device)
+    if card is None or card == 'Loopback':
+        return []
+    run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout)
+    done = []
+    try:
+        for name, on in parse_mixer_switches(run(['amixer', '-c', card, 'scontents'])):
+            if not on and _DIGITAL_SWITCH_RE.search(name):
+                run(['amixer', '-q', '-c', card, 'sset', name, 'unmute'])
+                done.append(name)
+    except Exception:
+        pass
+    return done
 
 
 # ── Model ───────────────────────────────────────────────────────────
@@ -383,6 +667,23 @@ def normalize(model):
     m['pcm2dsd'] = p2d if p2d in PCM2DSD_MODES else 'off'
     flt = str(src.get('pcm2dsd_filter') or '').strip().lower()
     m['pcm2dsd_filter'] = flt if flt in PCM2DSD_FILTERS else DEFAULTS['pcm2dsd_filter']
+    ups = str(src.get('upsample') or '').strip().lower()
+    m['upsample'] = ups if ups in UPSAMPLE_MODES else 'off'
+    try:
+        cap = int(src.get('upsample_cap') or 0)
+    except (TypeError, ValueError):
+        cap = 0
+    m['upsample_cap'] = cap if cap in RATES else 0
+    # DSD and PCM upsampling are mutually exclusive; DSD wins if a hand edit
+    # set both, so a leftover upsample can never silence the DSD choice.
+    if m['pcm2dsd'] != 'off':
+        m['upsample'] = 'off'
+        # PCM→DSD only reaches the DAC as DSD when squeezelite runs with -D; with
+        # the DSD mode off the converted DSF is re-decoded to PCM, defeating the
+        # conversion. So a player that converts to DSD must pass DSD: auto is the
+        # safe choice (native when the DAC has it, no noise otherwise).
+        if m['dsd'] == 'off':
+            m['dsd'] = 'auto'
     dsp = src.get('dsp') if isinstance(src.get('dsp'), dict) else {}
     m['dsp'] = {'enabled': bool(dsp.get('enabled'))}
     return m
@@ -433,6 +734,12 @@ def set_fields(model, changes):
         elif key == 'pcm2dsd_filter':
             if value not in PCM2DSD_FILTERS:
                 raise InvalidField('squeezelite.invalidValue', key, str(value))
+        elif key == 'upsample':
+            if value not in UPSAMPLE_MODES:
+                raise InvalidField('squeezelite.invalidValue', key, str(value))
+        elif key == 'upsample_cap':
+            if not isinstance(value, int) or isinstance(value, bool) or value not in RATES:
+                raise InvalidField('squeezelite.invalidValue', key, str(value))
         elif key == 'extra':
             clean, bad, managed = check_extra(str(value or ''))
             if managed:
@@ -441,6 +748,20 @@ def set_fields(model, changes):
                 raise InvalidField('squeezelite.extraInvalid', key, ' '.join(bad))
             value = clean
         m[key] = value
+    # DSD and PCM upsampling cannot be on at once: turning one on turns the
+    # other off in the same save, so a client only ever has to send the field
+    # it is changing.
+    if changes.get('pcm2dsd') not in (None, 'off') and m['upsample'] != 'off':
+        m['upsample'] = 'off'
+    elif changes.get('upsample') not in (None, 'off') and m['pcm2dsd'] != 'off':
+        m['pcm2dsd'] = 'off'
+    if m['pcm2dsd'] != 'off' and m['upsample'] != 'off':
+        raise InvalidField('squeezelite.convertConflict', 'upsample', m['upsample'])
+    # Converting to DSD requires the player to pass DSD (-D); with the DSD mode
+    # off the converted DSF is re-decoded to PCM. Force auto so enabling the
+    # conversion is enough — the client need not also flip the DSD mode.
+    if m['pcm2dsd'] != 'off' and m['dsd'] == 'off':
+        m['dsd'] = 'auto'
     return m
 
 
@@ -531,7 +852,7 @@ def parse_args(args, dsp_target=None):
     if '-V' in got:
         m['volume'] = 'hardware'
         m['mixer'] = got['-V']
-    if got.get('-a') == ALSA_LARGE:
+    if got.get('-a') in ALSA_LARGE_VALUES:
         m['alsa_buffer'] = 'large'
     if got.get('-b') == STREAM_LARGE:
         m['stream_buffer'] = 'large'
@@ -572,6 +893,74 @@ def tools_present():
     return os.path.exists(SOX_NG) and os.path.exists(PCM2DSD_WRAPPER)
 
 
+def flac_encoder_present():
+    """A FLAC encoder for the upsampling output. The project's sox_ng is built
+    without the FLAC handler, so the standalone `flac` CLI does the encoding
+    (the wrapper falls back to a FLAC-capable sox if one is on PATH)."""
+    return os.access(FLAC_BIN, os.X_OK) or bool(shutil.which('flac'))
+
+
+def upsample_tools_present():
+    """What PCM upsampling needs: sox_ng, the wrapper Lyrion runs, and a FLAC
+    encoder for the output (sox_ng itself cannot write FLAC)."""
+    return (os.path.exists(SOX_NG) and os.path.exists(UPSAMPLE_WRAPPER)
+            and flac_encoder_present())
+
+
+def family_base(src_rate):
+    """The base of `src_rate`'s PCM family: 44100 for the 44.1 kHz family
+    (44.1/88.2/…), 48000 for the 48 kHz one. 48 kHz is the default for
+    anything that fits neither cleanly."""
+    r = int(src_rate or 0)
+    for base in PCM_FAMILY_BASE:
+        if r and r % base == 0:
+            return base
+    return 48000
+
+
+def upsample_target(mode, cap, src_rate):
+    """The output rate PCM upsampling aims for, kept inside `src_rate`'s family.
+    `x2`/`x4` are that multiple of the source; `max` is the largest family
+    multiple at or below `cap` (or the universal ceiling when cap is 0). Never
+    below the source rate; 0 (no change) when nothing larger fits."""
+    src = int(src_rate or 0)
+    if src <= 0 or mode == 'off':
+        return 0
+    base = family_base(src)
+    ceiling = cap if cap and cap > 0 else UPSAMPLE_CEILING
+    if mode in UPSAMPLE_MULT:
+        target = src * UPSAMPLE_MULT[mode]
+        return target if src < target <= ceiling else 0
+    # max: climb the family (base, 2·base, 4·base, …) to the top rate that fits
+    target, best = base, 0
+    while target <= ceiling:
+        if target > src:
+            best = target
+        target *= 2
+    return best
+
+
+def player_upsample_rate(model, device, proc_asound=None):
+    """The one rate squeezelite resamples every track to for player-side PCM
+    upsampling (`-r <rate> -R`), or 0 when none fits. Unlike the server side,
+    squeezelite has no per-track source rate to key x2/x4 on — it sees a single
+    static rate — so the player side raises everything to the top rate that
+    fits: the cap when the user set one, otherwise the DAC's own ceiling, never
+    past the universal one. Capped at what the DAC declares so squeezelite is
+    never forced to a rate it would refuse."""
+    m = normalize(model)
+    cap = m['upsample_cap'] if m['upsample_cap'] in RATES and m['upsample_cap'] else 0
+    dac_max = dac_max_pcm_rate(device, proc_asound)
+    # Force a rate only with evidence it is safe: a USB DAC's declared ceiling,
+    # or a cap the user set. On `default`/HDA (rates unknown, no cap) leave it to
+    # squeezelite rather than risk forcing a rate the device would refuse.
+    if not dac_max and not cap:
+        return 0
+    ceiling = min(cap or UPSAMPLE_CEILING, dac_max or UPSAMPLE_CEILING)
+    fits = [r for r in RATES if 0 < r <= ceiling and (not dac_max or r <= dac_max)]
+    return max(fits) if fits else 0
+
+
 def server_is_local(server):
     return str(server or '').strip() in ('127.0.0.1', 'localhost', '::1')
 
@@ -586,20 +975,26 @@ def loopback_available(sys_module=None, modules_dir=None):
 
 
 def player_side_present():
-    """What converting on the player's side needs besides sox_ng."""
+    """What converting on the player's own side needs besides sox_ng: the
+    converter daemon and the Loopback to feed it through."""
     return os.path.exists(P2D_PLAYER) and loopback_available()
 
 
 def pcm2dsd_state(model, fmt, zone=False):
     """Why the PCM → DSD choice of `model` does or does not apply, given what
-    probe() says of its output: 'off'; 'active' (this device's Lyrion
-    converts); 'player' (another server's music, converted by the built-in
-    player itself); or the reason it cannot — 'noTools' (an image without
-    sox_ng, or without the player side's converter or the Loopback), 'dsp'
-    (the DSP path plays PCM into the Loopback), 'noDsd' (no DSD reaches the
-    DAC: DSD mode off, or an output that is no DSD DAC), 'remoteServer'
-    (another server, and a zone: only the built-in player has the Loopback
-    path)."""
+    probe() says of its output: 'off'; 'active' (the conversion runs on this
+    box's own side — squeezelite into the Loopback, hifi-pcm2dsd-player.py out
+    to the DAC); or the reason it cannot — 'noTools' (an image without sox_ng or
+    its wrapper, or without the converter daemon or the Loopback), 'dsp' (the DSP
+    path plays PCM into the Loopback), 'noDsd' (no DSD reaches the DAC: an output
+    that is no DSD DAC — the DSD mode itself can no longer be off here, enabling
+    the conversion forces it to auto).
+
+    PCM → DSD runs player-side for every player of this box, the built-in one and
+    the zones alike, so the converter daemon and the Loopback are required for
+    both. Only external players on another Lyrion still convert server-side,
+    through the Osmium Convert plugin; they do not go through here. `zone` is kept
+    for call-site compatibility and no longer changes the verdict."""
     m = normalize(model)
     if m['pcm2dsd'] == 'off':
         return 'off'
@@ -609,36 +1004,76 @@ def pcm2dsd_state(model, fmt, zone=False):
         return 'dsp'
     if dsd_token(m, fmt) is None:
         return 'noDsd'
-    if server_is_local(m['server']):
-        return 'active'
-    if zone:
-        return 'remoteServer'
     if not player_side_present():
         return 'noTools'
-    return 'player'
+    return 'active'
 
 
-def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False):
+def upsample_state(model, zone=False):
+    """Why PCM upsampling of `model` does or does not apply: 'off'; 'active'
+    (the Lyrion this player follows upsamples it, server-side, local or remote);
+    'noTools' (an image without sox_ng or the wrapper); 'dsp' (the CamillaDSP
+    path owns the samplerate). PCM reaches any DAC, so there is no 'noDsd'
+    here. `zone` is accepted for call-site compatibility."""
+    m = normalize(model)
+    if m['upsample'] == 'off':
+        return 'off'
+    if not upsample_tools_present():
+        return 'noTools'
+    if m['dsp']['enabled']:
+        return 'dsp'
+    return 'active'
+
+
+def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, proc_asound=None,
+                p2d_subdev=None):
     """squeezelite's arguments for a model, as a list. `probe_fn(device)`
     tells what the DAC declares for DSD (defaults to reading /proc/asound).
     `visualizer`: `-v`, the VU meters' shared memory -- the built-in player
     only. `name`: a zone's, which may have spaces (it goes through execv,
-    not through the ARGS line). `zone`: the model is a zone's."""
+    not through the ARGS line). `zone`: the model is a zone's. `proc_asound`:
+    where card presence is read for the built-in player's fallback (defaults to
+    /proc/asound, like probe). `p2d_subdev`: for a zone that converts PCM → DSD
+    player-side, the Loopback subdevice its own converter daemon reads (see
+    zone_subdev()); None when the zone does not convert player-side. The built-in
+    player always uses subdevice 0."""
     m = normalize(model)
     if name:
         m['name'] = name
     probe_fn = probe_fn or probe
     dsp = m['dsp']['enabled']
-    fmt = None if dsp else probe_fn(m['output'])
+    # The built-in player falls back to the silent `null` device when its chosen
+    # card is gone, so a USB DAC unplugged after setup does not leave squeezelite
+    # crash-looping on a missing device (it would exit 1 and systemd restart it
+    # every 5 s) and nothing leaks to the onboard analog output; follow_dac_state()
+    # (ExecStartPost) then pauses the player on Lyrion. A zone keeps its own
+    # output: run_zone() waits for the card instead.
+    output = m['output'] if (dsp or zone) else available_output(m['output'], proc_asound)
+    fell_back = not dsp and not zone and output != m['output']
+    fmt = None if dsp else probe_fn(output)
     state = None if dsp else pcm2dsd_state(m, fmt, zone)
-    # PCM → DSD on the player's side: PCM into the Loopback at one rate, like
-    # the DSP path. The DAC and its DSD mode are hifi-pcm2dsd-player.py's.
-    player = state == 'player'
+    # PCM → DSD on the player's own side: squeezelite plays PCM into the Loopback
+    # at one fixed rate, like the DSP path, and hifi-pcm2dsd-player.py turns it
+    # into DSD for the DAC. Every player of this box converts this way now -- the
+    # built-in one (subdevice 0, sync_player()) and the zones alike (each on its
+    # own subdevice, its own converter instance, see run_zone()/sync_zones()). A
+    # zone only takes the player side once a subdevice was allocated to it; with
+    # none it degrades to playing PCM straight to its DAC.
+    player = state == 'active' and not dsp and (not zone or p2d_subdev is not None)
+    sub = p2d_subdev if (zone and player) else 0
+    # PCM upsampling always runs on the player's own side -- for the built-in
+    # player AND for zones. squeezelite resamples straight to the DAC
+    # (-r <rate> -R); ordinary PCM reaches any DAC, so there is no Loopback or
+    # daemon here, unlike the player-side DSD path above. A DSD conversion
+    # (state == 'active') owns the samplerate, so upsampling steps aside -- the
+    # model keeps the two mutually exclusive anyway.
+    up_player = (not dsp and state != 'active' and upsample_state(m, zone) == 'active')
+    up_rate = player_upsample_rate(m, output, proc_asound) if up_player else 0
     pcm_only = dsp or player
     out = []
     if m['mac']:
         out += ['-m', m['mac']]
-    out += ['-o', LOOPBACK if dsp else P2D_PLAYBACK if player else m['output']]
+    out += ['-o', LOOPBACK if dsp else p2d_playback(sub) if player else output]
     if not pcm_only:
         tok = dsd_token(m, fmt)
         if tok:
@@ -650,33 +1085,50 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False):
         out += ['-r', str(DSP_RATE), '-R']
     elif player:
         out += ['-r', str(P2D_RATE), '-R']
+    elif up_player and up_rate:
+        out += ['-r', str(up_rate), '-R']
     elif m['max_rate']:
         out += ['-r', str(m['max_rate'])]
     # the Loopback has no volume control of its own: squeezelite's volume
-    # acts on the PCM, before the conversion
-    if not pcm_only and m['volume'] == 'hardware' and m['mixer']:
+    # acts on the PCM, before the conversion. A hardware mixer control belongs
+    # to the chosen card, so drop it when we fell back to `null`: that card
+    # is gone and `-V` on a missing control would only warn.
+    if not pcm_only and m['volume'] == 'hardware' and m['mixer'] and not fell_back:
         out += ['-V', m['mixer']]
-    if m['alsa_buffer'] == 'large':
+    # ALSA output buffer. The built-in player drives a USB DAC, whose isochronous
+    # audio slots jitter on this box (a shared USB2 controller, a weak CPU): the
+    # default ~40 ms ALSA buffer underruns at the USB endpoint and the audio
+    # crackles like dropped samples -- on local, streaming and CD alike, since
+    # they share the one process -- while squeezelite itself logs no xrun (the gap
+    # is downstream of its write). A larger ALSA buffer absorbs the jitter, so the
+    # built-in player always takes it. Unlike the stream buffer `-b`, this `-a`
+    # ring lives in the kernel, not squeezelite's heap, so it costs no process RAM.
+    # Zones only get it when configured, to stay out of the common case.
+    if not zone or m['alsa_buffer'] == 'large':
         out += ['-a', ALSA_LARGE]
-    p2d = state == 'active'
-    # A DSD stream is 1.4 MB/s at DSD128: squeezelite's default 2 MB stream
-    # buffer would hold little more than a second of it.
-    if m['stream_buffer'] == 'large' or p2d:
+    # Stream buffer, opt-in (stream_buffer == 'large'). Forcing the large buffer
+    # on every built-in-player stream fixed the audio-CD crackle but brought the
+    # same dropped-samples crackle back on local and streaming playback (16+8 MB
+    # per squeezelite is heavy on this RAM-tight box, and they share the one
+    # built-in process, so `-b` cannot be scoped per source). The CD's live,
+    # non-seekable transcode pipe is now fed by osmium-cdread (RAM read-ahead +
+    # concealment) instead, so it no longer needs the oversized squeezelite
+    # buffer. (Player-side conversion streams plain PCM into the Loopback and
+    # needs no `-c dsd`; the converter daemon emits the DSD carrier to the DAC.
+    # Only external players advertise DSD alone, server-side, and they do not go
+    # through render_argv.)
+    if m['stream_buffer'] == 'large':
         out += ['-b', STREAM_LARGE]
     if m['realtime']:
         out += ['-p', RT_PRIORITY]
-    if p2d:
-        # DSD is all the player admits to, so every PCM track has to go
-        # through one of the dsf rules written for its MAC (lms_rules()).
-        out += ['-c', 'dsd']
     if m['extra']:
         out += m['extra'].split()
     return out
 
 
-def render(model, probe_fn=None):
+def render(model, probe_fn=None, proc_asound=None):
     """The ARGS line for the built-in player's model."""
-    return ' '.join(render_argv(model, probe_fn))
+    return ' '.join(render_argv(model, probe_fn, proc_asound=proc_asound))
 
 
 # ── Files ───────────────────────────────────────────────────────────
@@ -877,12 +1329,18 @@ def _apply(conf_path, default_path, dsp_target_path, probe_fn, out, machine_id_p
         except OSError as e:
             if out is not None:
                 print(f'hifi_squeezelite: could not save {conf_path}: {e}', file=out)
+    if out is not None and not model['dsp']['enabled']:
+        eff = available_output(model['output'])
+        if eff != model['output']:
+            print(f'hifi_squeezelite: output {model["output"]} not present, '
+                  f'falling back to {eff} (silent; player paused on Lyrion)', file=out)
     args = render(model, probe_fn)
     changed = write_default(args, default_path)
     if out is not None and changed:
         print(f'hifi_squeezelite: {default_path} rendered: {args}', file=out)
-    # squeezelite starts right after this: the Loopback it opens has to be
-    # there, or the DAC it opens freed by the player side's conversion
+    # squeezelite starts right after this: when the built-in player converts on
+    # its own side, the Loopback it opens has to be there and the converter fed;
+    # otherwise the player side is torn down so the DAC it opens is free.
     try:
         sync_player(model, probe_fn, player_conf_path)
     except Exception as e:
@@ -990,12 +1448,15 @@ def find_zone(zones, zid):
     return None
 
 
-def zone_argv(zone, server, probe_fn=None):
+def zone_argv(zone, server, probe_fn=None, p2d_subdev=None):
     """The full squeezelite command line for a zone. `server` is the built-in
-    player's: a zone joins whatever Lyrion this device plays from."""
+    player's: a zone joins whatever Lyrion this device plays from. `p2d_subdev`:
+    the Loopback subdevice when the zone converts PCM → DSD player-side (its own
+    converter instance reads it); None sends the zone straight to its DAC."""
     z = dict(zone)
     z['server'] = server
-    return [SQUEEZELITE_BIN] + render_argv(z, probe_fn, visualizer=False, name=zone.get('name'), zone=True)
+    return [SQUEEZELITE_BIN] + render_argv(z, probe_fn, visualizer=False, name=zone.get('name'),
+                                           zone=True, p2d_subdev=p2d_subdev)
 
 
 def card_present(output, proc_asound=None):
@@ -1004,6 +1465,26 @@ def card_present(output, proc_asound=None):
         return False
     root = os.path.realpath(proc_asound or PROC_ASOUND)
     return _card_dir(root, card) is not None
+
+
+def available_output(output, proc_asound=None):
+    """The output to actually hand the built-in player: the configured one when
+    its card is present (or it is `null` / `default` / not a hw: card), else the
+    silent ALSA `null` device so squeezelite still starts instead of
+    crash-looping on a DAC that was unplugged after it was chosen. `null` (not
+    `default`) on purpose: `default` is the onboard analog codec on most boxes,
+    so falling back there plays the music out of the built-in speaker/jack —
+    the field saw a Dell 5070 switch to its analog output when the USB DAC was
+    turned off. `null` makes no sound at all; follow_dac_state() then pauses the
+    player on Lyrion so playback actually stops and holds its place. The stored
+    choice in the model is left untouched — when the card comes back the next
+    render picks it again, and 62-hifi-audio-hotplug.rules restarts the player
+    on a USB card add/remove so that happens at once rather than at the next
+    crash cycle."""
+    card, _ = parse_device(output)
+    if card is None or card_present(output, proc_asound):
+        return output
+    return 'null'
 
 
 # ── PCM → DSD: Lyrion's side ──────────────────────────────────────────
@@ -1026,55 +1507,172 @@ _LMS_TYPES = (('flc', _DECODE_FLAC),) + tuple(
 _SPOTTY = ('# RT:{START=--start-position %s}',
            '[spotty] -n Squeezebox -c "$CACHE$" --single-track $URL$ --bitrate 320 '
            '--disable-discovery --disable-audio-cache $START$')
-RULES_BEGIN = '# BEGIN Osmium PCM to DSD -- generated by hifi_squeezelite.py, do not edit'
-RULES_END = '# END Osmium PCM to DSD'
+RULES_BEGIN = '# BEGIN Osmium PCM conversion -- generated by hifi_squeezelite.py, do not edit'
+RULES_END = '# END Osmium PCM conversion'
+# Older images wrote a DSD-only block under a different marker; strip it too on
+# upgrade so a renamed block is never left orphaned next to the new one.
+_LEGACY_MARKERS = (
+    ('# BEGIN Osmium PCM to DSD -- generated by hifi_squeezelite.py, do not edit',
+     '# END Osmium PCM to DSD'),
+)
 
 
-def pcm2dsd_players(main, zones, probe_fn=None):
-    """{mac: {'mode', 'filter', 'name'}} for every player of this device whose
-    PCM → DSD applies right now. Zones only when switched on."""
+def _convert_entry(m, fmt, zone):
+    """The conversion a probed player of this box gets right now, or None.
+    DSD wins over upsampling (the model keeps them mutually exclusive)."""
+    if m['pcm2dsd'] != 'off' and pcm2dsd_state(m, fmt, zone) == 'active':
+        mode = clamp_pcm2dsd(m['pcm2dsd'], m['output'], fmt)
+        return {'kind': 'dsd', 'mode': mode, 'filter': m['pcm2dsd_filter']}
+    if m['upsample'] != 'off' and upsample_state(m, zone) == 'active':
+        # No explicit cap? Never go past the rate the player already caps the
+        # DAC at (max_rate, 0 = the family ceiling).
+        return {'kind': 'pcm', 'mult': m['upsample'], 'cap': m['upsample_cap'] or m['max_rate']}
+    return None
+
+
+def _external_entry(e):
+    """The conversion an external player gets. It always plays from this box's
+    Lyrion, so there is nothing to probe — only the tools must be present."""
+    if e.get('pcm2dsd', 'off') != 'off' and tools_present():
+        return {'kind': 'dsd', 'mode': e['pcm2dsd'], 'filter': e['pcm2dsd_filter']}
+    if e.get('upsample', 'off') != 'off' and upsample_tools_present():
+        return {'kind': 'pcm', 'mult': e['upsample'], 'cap': e['upsample_cap']}
+    return None
+
+
+def convert_players(main, zones, external=None, probe_fn=None):
+    """{mac: entry} for every player converted server-side right now by this
+    box's Lyrion. Each entry has 'kind' ('dsd' or 'pcm') and its settings.
+    `main` and the enabled `zones` are probed; `external` players (chosen by
+    MAC on another device) are trusted without probing. A player of this box
+    always wins over an external row with the same MAC."""
     probe_fn = probe_fn or probe
     out = {}
-    candidates = [(main, False)] + [(dict(z, server=main['server']), True) for z in zones if z.get('enabled')]
+    candidates = [(main, False)] + [(dict(z, server=main['server']), True)
+                                    for z in zones if z.get('enabled')]
     for m, zone in candidates:
         m = normalize(m)
         if not m['mac']:
             continue
-        if pcm2dsd_state(m, probe_fn(m['output']), zone) == 'active':
-            out[m['mac']] = {'mode': m['pcm2dsd'], 'filter': m['pcm2dsd_filter']}
+        entry = _convert_entry(m, probe_fn(m['output']), zone)
+        if entry:
+            out[m['mac']] = entry
+    for mac, e in (external or {}).items():
+        if mac in out:
+            continue
+        entry = _external_entry(e)
+        if entry:
+            out[mac] = entry
     return out
 
 
+def external_players(external):
+    """{mac: entry} for the external players (on other devices) the user chose
+    to convert through this box's own Lyrion. Unlike convert_players() these
+    are never folded in with the box's own players: they follow a different
+    Lyrion host (always 127.0.0.1) and the box pushes their plugin rules there,
+    while the internal player and the zones follow `main['server']`."""
+    out = {}
+    for mac, e in (external or {}).items():
+        entry = _external_entry(e)
+        if entry:
+            out[mac] = entry
+    return out
+
+
+# Backwards-compatible alias: some callers still speak of "the DSD players".
+def pcm2dsd_players(main, zones, probe_fn=None):
+    """Only the players converted to DSD right now ({mac: {'mode', 'filter'}}).
+    Kept for callers that predate PCM upsampling; new code uses
+    convert_players()."""
+    return dsd_map(convert_players(main, zones, None, probe_fn))
+
+
+def dsd_map(players):
+    """The PCM → DSD wrapper's map ({mac: {mode, filter}}) from convert_players()."""
+    return {mac: {'mode': e['mode'], 'filter': e['filter']}
+            for mac, e in players.items() if e['kind'] == 'dsd'}
+
+
+def pcm_map(players):
+    """The upsampling wrapper's map ({mac: {mult, cap}}) from convert_players()."""
+    return {mac: {'mult': e['mult'], 'cap': e['cap']}
+            for mac, e in players.items() if e['kind'] == 'pcm'}
+
+
 def lms_rules(players):
-    """The block of custom-convert.conf for `players` (pcm2dsd_players())."""
+    """The block of custom-convert.conf for `players` (convert_players()).
+    DSD players decode to the PCM → DSD wrapper and come out as DSF; PCM
+    upsampling players go through the upsampling wrapper and come out as WAV.
+    The destination must differ from the FLAC source so LMS actually runs the
+    rule instead of direct-streaming the original FLAC (which would bypass the
+    upsample and leave playback stalled); the wrapper emits a WAV header that
+    carries the new rate."""
     if not players:
         return ''
     lines = [RULES_BEGIN]
     for mac in sorted(players):
+        if players[mac]['kind'] == 'dsd':
+            dst, wrapper = 'dsf', PCM2DSD_WRAPPER
+        else:
+            dst, wrapper = 'wav', UPSAMPLE_WRAPPER
         for typ, (caps, decode) in _LMS_TYPES:
-            lines += [f'{typ} dsf * {mac}', f'\t{caps}', f'\t{decode} | {PCM2DSD_WRAPPER} $CLIENTID$ wav']
+            lines += [f'{typ} {dst} * {mac}', f'\t{caps}', f'\t{decode} | {wrapper} $CLIENTID$ wav']
         caps, decode = _SPOTTY
-        lines += [f'spt dsf * {mac}', f'\t{caps}', f'\t{decode} | {PCM2DSD_WRAPPER} $CLIENTID$ raw']
+        lines += [f'spt {dst} * {mac}', f'\t{caps}', f'\t{decode} | {wrapper} $CLIENTID$ raw']
     lines.append(RULES_END)
     return '\n'.join(lines) + '\n'
 
 
+def _strip_block(text, begin, end):
+    start = text.find(begin)
+    if start < 0:
+        return text
+    stop = text.find(end, start)
+    stop = len(text) if stop < 0 else stop + len(end)
+    if stop < len(text) and text[stop] == '\n':
+        stop += 1
+    return text[:start] + text[stop:]
+
+
 def merge_rules(existing, block):
     """`existing` custom-convert.conf with our block replaced by `block`
-    (removed when empty). Whatever else the owner put there stays."""
+    (removed when empty). Whatever else the owner put there stays; any legacy
+    block from an older image is stripped too."""
     text = existing or ''
-    start = text.find(RULES_BEGIN)
-    if start >= 0:
-        end = text.find(RULES_END, start)
-        end = len(text) if end < 0 else end + len(RULES_END)
-        if end < len(text) and text[end] == '\n':
-            end += 1
-        text = text[:start] + text[end:]
+    for begin, end in _LEGACY_MARKERS:
+        text = _strip_block(text, begin, end)
+    text = _strip_block(text, RULES_BEGIN, RULES_END)
     if block:
         if text and not text.endswith('\n'):
             text += '\n'
         text += block
     return text
+
+
+def load_external(path=None):
+    """{mac: {name, pcm2dsd, pcm2dsd_filter, upsample, upsample_cap}} for the
+    external players the user chose to convert through this box's Lyrion. Lenient
+    like load(): this is a file api_server writes but a hand edit may touch."""
+    path = path or EXTERNAL_CONVERT
+    try:
+        with open(path, encoding='utf-8') as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    if not isinstance(raw, dict):
+        return out
+    for mac, entry in raw.items():
+        mac = str(mac or '').strip().lower()
+        if not _MAC_RE.match(mac) or not isinstance(entry, dict):
+            continue
+        m = normalize(entry)
+        name = ' '.join(str(entry.get('name') or '').split())[:40]
+        out[mac] = {'name': name, 'pcm2dsd': m['pcm2dsd'],
+                    'pcm2dsd_filter': m['pcm2dsd_filter'],
+                    'upsample': m['upsample'], 'upsample_cap': m['upsample_cap']}
+    return out
 
 
 def _write_if_changed(path, text, mode=0o644):
@@ -1090,22 +1688,42 @@ def _write_if_changed(path, text, mode=0o644):
     return True
 
 
-def player_conf(model, fmt, proc_asound=None):
-    """What hifi-pcm2dsd-player.py needs to convert for the built-in player,
-    or None when that path does not apply. The DSD goes to the DAC the way
-    squeezelite's own `-D` would send it: native when the DAC declares it and
-    the DSD mode allows it, DoP otherwise."""
+def player_conf(model, fmt, proc_asound=None, sub=0):
+    """What hifi-pcm2dsd-player.py needs to convert for a player of this box
+    (the built-in one on subdevice 0, or a zone on `sub`), or None when the
+    conversion cannot run. The DSD goes to the DAC the way squeezelite's own
+    `-D` would send it: native when the DAC declares it and the DSD mode allows
+    it, DoP otherwise."""
     m = normalize(model)
-    if pcm2dsd_state(m, fmt) != 'player':
+    if pcm2dsd_state(m, fmt) != 'active':
         return None
     native = fmt if m['dsd'] in ('auto', 'native') and is_native(fmt) else None
-    return {'mode': m['pcm2dsd'], 'filter': m['pcm2dsd_filter'], 'carrier': native or 'dop',
+    mode = clamp_pcm2dsd(m['pcm2dsd'], m['output'], fmt, proc_asound)
+    return {'mode': mode, 'filter': m['pcm2dsd_filter'], 'carrier': native or 'dop',
             'dop_bits': dop_bits(m['output'], proc_asound), 'rate': P2D_RATE,
-            'capture': P2D_CAPTURE, 'dac': m['output']}
+            'capture': p2d_capture(sub), 'dac': m['output']}
 
 
 def _modprobe_aloop():
     subprocess.run(['modprobe', 'snd-aloop'], capture_output=True, timeout=30)
+
+
+def _sync_p2d(want, conf_path, unit, systemctl, modprobe):
+    """Write or remove one converter's conf and start or stop its unit. Returns
+    True when the converter should run."""
+    if want is None:
+        if os.path.exists(conf_path):
+            os.remove(conf_path)
+            systemctl('stop', unit)
+        return False
+    if not os.path.isdir(SYS_ALOOP):
+        (modprobe or _modprobe_aloop)()
+    os.makedirs(os.path.dirname(conf_path), exist_ok=True)
+    # the service reads the file again when it changes: a new rate, filter or
+    # DAC needs no restart from here
+    _write_if_changed(conf_path, json.dumps(want, indent=2, sort_keys=True) + '\n')
+    systemctl('start', '--no-block', unit)
+    return True
 
 
 def sync_player(model, probe_fn=None, conf_path=None, systemctl=None, modprobe=None):
@@ -1118,38 +1736,62 @@ def sync_player(model, probe_fn=None, conf_path=None, systemctl=None, modprobe=N
     systemctl = systemctl or _systemctl
     m = normalize(model)
     want = None if m['dsp']['enabled'] else player_conf(m, (probe_fn or probe)(m['output']))
-    if want is None:
-        if os.path.exists(conf_path):
-            os.remove(conf_path)
-            systemctl('stop', P2D_PLAYER_UNIT)
+    return _sync_p2d(want, conf_path, P2D_PLAYER_UNIT, systemctl, modprobe)
+
+
+def zone_subdev(zones, zid):
+    """The Loopback subdevice a converting zone uses: P2D_ZONE_BASE_SUBDEV plus
+    the zone's index among ALL the zones sorted by id. None when the zone is not
+    present. The index is over every zone, enabled or not, and ignores whether a
+    zone actually converts, so a zone's subdevice is stable: it does not shift
+    when another zone is enabled, disabled or has its DSD toggled -- only adding
+    or removing a zone reindexes, and those paths restart the zones. run_zone()
+    (building the zone's squeezelite line) and sync_zone_player() (writing its
+    converter's conf) compute it the same way from the same zones.json, so the
+    two always agree on the subdevice."""
+    ids = sorted(z['id'] for z in zones)
+    if zid not in ids:
+        return None
+    return P2D_ZONE_BASE_SUBDEV + ids.index(zid)
+
+
+def sync_zone_player(zone, zones, probe_fn=None, systemctl=None, modprobe=None):
+    """Start or stop a zone's own hifi-pcm2dsd-player@<id> converter for what the
+    zone's model says now. Mirrors sync_player() for the built-in player, on the
+    zone's allocated Loopback subdevice. Returns True when the zone converts
+    player-side."""
+    systemctl = systemctl or _systemctl
+    z = normalize_zone(zone)
+    if z is None:
         return False
-    if not os.path.isdir(SYS_ALOOP):
-        (modprobe or _modprobe_aloop)()
-    os.makedirs(os.path.dirname(conf_path), exist_ok=True)
-    # the service reads the file again when it changes: a new rate, filter or
-    # DAC needs no restart from here
-    _write_if_changed(conf_path, json.dumps(want, indent=2, sort_keys=True) + '\n')
-    systemctl('start', '--no-block', P2D_PLAYER_UNIT)
-    return True
+    sub = zone_subdev(zones, z['id'])
+    conf_path = P2D_ZONE_CONF.format(z['id'])
+    unit = P2D_ZONE_UNIT.format(z['id'])
+    want = None if sub is None else player_conf(z, (probe_fn or probe)(z['output']), sub=sub)
+    return _sync_p2d(want, conf_path, unit, systemctl, modprobe)
 
 
 def sync_pcm2dsd(conf_path=CONF, zones_path=None, map_path=None, rules_path=None,
                  default_path=DEFAULT, dsp_target_path=DSP_TARGET_FILE, probe_fn=None,
-                 player_conf_path=None):
-    """Write the map the wrapper reads and Lyrion's rules for what the models
-    say now, and bring the player side's conversion in line (sync_player()).
-    Returns True when the rules changed: Lyrion only reads them at start, so
-    the caller restarts it. A Lyrion that is not installed (no
+                 external_path=None, upsample_map_path=None):
+    """LEGACY — compute the per-player conversion and write the maps and a
+    custom-convert.conf block, as the box used to before the Osmium Convert
+    plugin. No production path calls this any more: the plugin is the single
+    mechanism now (api_server drives it over the CLI, per player, to whichever
+    Lyrion the player follows). Kept for the rule-shape tests and as a reference
+    for the block the plugin generates. A Lyrion that is not installed (no
     /etc/squeezeboxserver) is left alone."""
     main, _ = load(conf_path, default_path, dsp_target_path)
-    try:
-        sync_player(main, probe_fn, player_conf_path)
-    except Exception as e:
-        print(f'hifi_squeezelite: PCM to DSD on the player side: {e}', file=sys.stderr)
-    players = pcm2dsd_players(main, load_zones(zones_path), probe_fn)
+    players = convert_players(main, load_zones(zones_path),
+                              load_external(external_path), probe_fn)
     map_path = map_path or PCM2DSD_MAP
-    if players or os.path.exists(map_path):
-        _write_if_changed(map_path, json.dumps(players, indent=2, sort_keys=True) + '\n')
+    dmap = dsd_map(players)
+    if dmap or os.path.exists(map_path):
+        _write_if_changed(map_path, json.dumps(dmap, indent=2, sort_keys=True) + '\n')
+    upsample_map_path = upsample_map_path or UPSAMPLE_MAP
+    pmap = pcm_map(players)
+    if pmap or os.path.exists(upsample_map_path):
+        _write_if_changed(upsample_map_path, json.dumps(pmap, indent=2, sort_keys=True) + '\n')
     rules_path = rules_path or LMS_CONVERT
     if not os.path.isdir(os.path.dirname(rules_path)):
         return False
@@ -1242,21 +1884,116 @@ def _lms_host(server):
     return s
 
 
-def forget_player(server, mac, timeout=5.0, opener=None):
-    """Ask Lyrion to drop a disconnected player from its list. True when it
-    answered; never raises (Lyrion may be down, or on another device)."""
+def _player_request(server, mac, cmd, timeout=5.0, opener=None):
+    """Send a Lyrion CLI command to a player by MAC over JSON-RPC and return the
+    reply's `result` object (a dict, possibly empty), or None when Lyrion did
+    not answer (it may be down, or on another device). Never raises."""
     if not mac:
-        return False
+        return None
     url = f'http://{_lms_host(server)}:{LMS_HTTP_PORT}/jsonrpc.js'
-    body = json.dumps({'id': 1, 'method': 'slim.request', 'params': [mac, ['client', 'forget']]}).encode()
+    body = json.dumps({'id': 1, 'method': 'slim.request', 'params': [mac, list(cmd)]}).encode()
     try:
         req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
         with (opener or urllib.request.urlopen)(req, timeout=timeout) as resp:
-            resp.read()
-        return True
+            data = resp.read()
+        reply = json.loads((data or b'').decode() or '{}')
+        return reply.get('result') if isinstance(reply.get('result'), dict) else {}
     except Exception as e:
-        print(f'hifi_squeezelite: Lyrion did not forget {mac}: {e}', file=sys.stderr)
-        return False
+        print(f'hifi_squeezelite: Lyrion request {list(cmd)} to {mac} failed: {e}', file=sys.stderr)
+        return None
+
+
+def forget_player(server, mac, timeout=5.0, opener=None):
+    """Ask Lyrion to drop a disconnected player from its list. True when it
+    answered; never raises (Lyrion may be down, or on another device)."""
+    return _player_request(server, mac, ['client', 'forget'], timeout, opener) is not None
+
+
+def player_mode(server, mac, timeout=5.0, opener=None):
+    """Lyrion's playback mode for the player ('play', 'pause' or 'stop'), or ''
+    when Lyrion did not answer or does not know the player yet."""
+    res = _player_request(server, mac, ['mode', '?'], timeout, opener)
+    return str((res or {}).get('_mode', '')) if res is not None else ''
+
+
+# The built-in player's chosen USB DAC was unplugged, so render fell back to the
+# silent `null` device and we paused the player on Lyrion. This marker (holding
+# the MAC we paused) records that, so when the DAC comes back we resume only the
+# player we paused — never a player the owner had stopped or paused themselves.
+# In /run (tmpfs): it lives for the boot, cleared on reboot like the DAC state.
+def _dac_pause_marker(run_dir=None):
+    return os.path.join(run_dir or PLAYERS_RUN_DIR, 'dac-paused')
+
+
+def _wait_for_player(server, mac, opener, timeout, poll):
+    """Poll Lyrion until it knows the just-(re)started player, returning its
+    mode; '' if it never answered within `timeout`."""
+    deadline = time.monotonic() + timeout
+    while True:
+        mode = player_mode(server, mac, opener=opener)
+        if mode or time.monotonic() >= deadline:
+            return mode
+        time.sleep(poll)
+
+
+def follow_dac_state(model, proc_asound=None, run_dir=None, opener=None,
+                     connect_timeout=6.0, poll=0.5, settle_tries=6, settle_wait=0.5,
+                     out=None):
+    """ExecStartPost of squeezelite.service. When the built-in player's chosen
+    USB DAC is gone, render falls back to the silent `null` device (see
+    available_output) so nothing leaks to the onboard analog output — and here
+    we pause the player on Lyrion so playback actually stops and holds its place
+    instead of running on into silence. When the DAC is back (the hotplug udev
+    rule restarts the service, the card is present again) we resume the player
+    we had paused. Keyed on the player's MAC; never raises."""
+    m = normalize(model)
+    mac, server = m['mac'], m['server']
+    if not mac or m['dsp']['enabled']:
+        return
+    card, _ = parse_device(m['output'])
+    if card is None:        # `default`/`null`/not a hw: card — nothing to follow
+        return
+    marker = _dac_pause_marker(run_dir)
+    if not card_present(m['output'], proc_asound):
+        # DAC gone: squeezelite is now on `null`. Pause only if it is playing,
+        # and remember we did so, so we can resume it when the DAC returns.
+        #
+        # The hotplug udev rule restarts the service, so squeezelite has just
+        # reconnected to Lyrion — and Lyrion resumes a player that reconnects
+        # while it was playing. A single `pause 1` races that resume and can
+        # lose: it may land before the reconnect settles and be played over,
+        # leaving the player running on into `null` (no sound, but the VU
+        # meters keep moving). So pause, confirm it stuck, and pause again if
+        # Lyrion resumed it, over a short settle window.
+        if _wait_for_player(server, mac, opener, connect_timeout, poll) != 'play':
+            return
+        paused = False
+        for _ in range(max(1, settle_tries)):
+            if _player_request(server, mac, ['pause', '1'], opener=opener) is not None:
+                paused = True
+            time.sleep(settle_wait)
+            if player_mode(server, mac, opener=opener) != 'play':
+                break          # the pause held — Lyrion did not resume it
+        if paused:
+            with contextlib.suppress(OSError):
+                _write_atomic(marker, mac + '\n')
+            if out is not None:
+                print(f'hifi_squeezelite: DAC {m["output"]} gone — paused {mac} on Lyrion', file=out)
+        return
+    # DAC present: resume the player if it is the one we paused for a gone DAC.
+    try:
+        with open(marker, encoding='utf-8') as f:
+            paused_mac = f.read().strip()
+    except OSError:
+        paused_mac = ''
+    if paused_mac == mac:
+        _wait_for_player(server, mac, opener, connect_timeout, poll)
+        _player_request(server, mac, ['pause', '0'], opener=opener)
+        if out is not None:
+            print(f'hifi_squeezelite: DAC {m["output"]} back — resumed {mac} on Lyrion', file=out)
+    if paused_mac:
+        with contextlib.suppress(OSError):
+            os.remove(marker)
 
 
 def forget_unit(unit, run_dir=None, forget=None):
@@ -1286,11 +2023,13 @@ def run_zone(zid, zones_path=None, conf_path=CONF, poll=3.0, out=None):
     if not _ZONE_ID_RE.match(zid or ''):
         print(f'hifi_squeezelite: not a zone id: {zid!r}', file=sys.stderr)
         return 64
-    zone = find_zone(load_zones(zones_path), zid)
+    zones = load_zones(zones_path)
+    zone = find_zone(zones, zid)
     if zone is None or not zone['enabled']:
         print(f'hifi_squeezelite: zone {zid} is not configured or is off', file=sys.stderr)
         return 64
     unit = ZONE_UNIT.format(zid)
+    sub = zone_subdev(zones, zid)
     state = {'proc': None}
 
     def say(msg):
@@ -1309,8 +2048,20 @@ def run_zone(zid, zones_path=None, conf_path=CONF, poll=3.0, out=None):
             p.kill()
             p.wait()
 
+    def stop_converter():
+        # Drop the zone's PCM → DSD converter instance and its conf, so a zone
+        # whose DAC went away does not leave a daemon reading a dead Loopback.
+        conf_path_p2d = P2D_ZONE_CONF.format(zid)
+        if os.path.exists(conf_path_p2d):
+            try:
+                os.remove(conf_path_p2d)
+            except OSError:
+                pass
+        _systemctl('stop', P2D_ZONE_UNIT.format(zid))
+
     def on_term(signum, frame):
         stop_child()
+        stop_converter()
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, on_term)
@@ -1323,7 +2074,17 @@ def run_zone(zid, zones_path=None, conf_path=CONF, poll=3.0, out=None):
             waited = True
             time.sleep(poll)
         main, _ = load(conf_path)
-        argv = zone_argv(zone, main['server'])
+        # Start (or stop) the zone's own PCM → DSD converter before squeezelite,
+        # so the Loopback subdevice it will play into is being read. When the
+        # zone does not convert, this stops any stale instance and squeezelite
+        # goes straight to the DAC (zone_argv with the live subdevice; render_argv
+        # only takes the Loopback once the conversion is actually active).
+        try:
+            if sync_zone_player(zone, zones):
+                say(f'PCM to DSD on subdevice {sub}')
+        except Exception as e:
+            say(f'PCM to DSD converter: {e}')
+        argv = zone_argv(zone, main['server'], p2d_subdev=sub)
         say(' '.join(argv))
         record_player(unit, zone['mac'], main['server'])
         state['proc'] = subprocess.Popen(argv)
@@ -1335,6 +2096,7 @@ def run_zone(zid, zones_path=None, conf_path=CONF, poll=3.0, out=None):
             if not card_present(zone['output']):
                 say(f'{zone["output"]} is gone: player stopped')
                 stop_child()
+                stop_converter()
                 state['proc'] = None
                 forget_unit(unit)
                 break
@@ -1349,9 +2111,10 @@ def main(argv):
         model, imported = load()
         print(json.dumps(model, indent=2, sort_keys=True))
         print(f"ARGS='{render(model)}'" + ('  (model not saved yet: imported from the file)' if imported else ''))
-        for z in load_zones():
+        zones = load_zones()
+        for z in zones:
             print(f"zone {z['id']} ({'on' if z['enabled'] else 'off'}): "
-                  + ' '.join(zone_argv(z, model['server'])))
+                  + ' '.join(zone_argv(z, model['server'], p2d_subdev=zone_subdev(zones, z['id']))))
         return 0
     if cmd == 'probe' and len(argv) == 3:
         print(probe(argv[2]))
@@ -1361,19 +2124,27 @@ def main(argv):
     if cmd == 'forget-unit' and len(argv) == 3:
         forget_unit(argv[2])
         return 0
+    if cmd == 'dac-check' and len(argv) == 2:
+        # ExecStartPost: pause the built-in player on Lyrion when its USB DAC is
+        # gone (render fell back to the silent `null`), resume it when it is back.
+        model, _ = load()
+        follow_dac_state(model, out=sys.stdout)
+        return 0
     if cmd == 'lms-rules' and len(argv) == 2:
-        # Lyrion's rules only: what hifi-lyrion-update.sh needs before it
-        # starts a freshly installed Lyrion.
-        changed = sync_pcm2dsd()
-        print(f'hifi_squeezelite: Lyrion PCM to DSD rules {"written" if changed else "unchanged"}')
+        # Legacy no-op. The box no longer writes custom-convert.conf: the
+        # Osmium Convert plugin is the single mechanism and keeps its own rules
+        # (it re-applies them when Lyrion starts). Kept so older callers that
+        # still invoke it (an in-flight hifi-lyrion-update.sh) do no harm.
+        print('hifi_squeezelite: Lyrion conversion rules are handled by the '
+              'Osmium Convert plugin now (nothing to write)')
         return 0
     if cmd == 'zones-sync' and len(argv) == 2:
-        # At boot, before Lyrion: its rules, then the zones that are on.
-        sync_pcm2dsd()
+        # At boot: bring up the zones that are on. Their conversion is the
+        # plugin's, driven by api_server, not written here.
         sync_zones()
         return 0
     print('usage: hifi_squeezelite.py apply | show | probe <hw:CARD=…,DEV=n> | run-zone <id> '
-          '| forget-unit <unit> | lms-rules | zones-sync', file=sys.stderr)
+          '| forget-unit <unit> | dac-check | lms-rules | zones-sync', file=sys.stderr)
     return 2
 
 

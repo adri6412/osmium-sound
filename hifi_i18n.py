@@ -69,6 +69,9 @@ MESSAGES = {
     'audio.deviceSetRestartFailed': {'en': 'Device set ({device}); restart failed',
                                      'it': 'Device impostato ({device}); riavvio non riuscito'},
     'audio.outputSet': {'en': 'Audio output set to {device}', 'it': 'Uscita audio impostata su {device}'},
+    'audio.invalidMixerSwitch': {'en': 'Unknown mixer switch: {name}', 'it': 'Interruttore mixer sconosciuto: {name}'},
+    'audio.mixerSwitchFailed': {'en': 'Could not change the mixer switch', 'it': 'Impossibile cambiare l’interruttore del mixer'},
+    'audio.mixerSwitchSet': {'en': 'Done', 'it': 'Fatto'},
     'audio.defaultDeviceName': {'en': 'System default', 'it': 'Predefinito di sistema'},
     # Settings → Audio, the squeezelite model (hifi_squeezelite.py)
     'squeezelite.saved': {'en': 'Saved, player restarted', 'it': 'Salvato, player riavviato'},
@@ -82,10 +85,22 @@ MESSAGES = {
     'squeezelite.noMixer': {'en': 'This output has no hardware volume control',
                             'it': 'Questa uscita non ha un controllo di volume hardware'},
     'squeezelite.restartWarn': {'en': 'Saved; squeezelite restart: {err}', 'it': 'Salvato; riavvio di squeezelite: {err}'},
-    'squeezelite.savedLyrionRestart': {'en': 'Saved. Lyrion is restarting to apply the DSD conversion: music is back in a few seconds',
-                                       'it': 'Salvato. Lyrion si riavvia per applicare la conversione in DSD: la musica torna fra pochi secondi'},
+    'squeezelite.savedLyrionRestart': {'en': 'Saved. Lyrion is restarting to apply the conversion: music is back in a few seconds',
+                                       'it': 'Salvato. Lyrion si riavvia per applicare la conversione: la musica torna fra pochi secondi'},
     'squeezelite.pcm2dsdTooHeavy': {'en': 'This processor is not fast enough to convert to {detail} while playing',
                                     'it': 'Questo processore non è abbastanza veloce per convertire in {detail} durante l\'ascolto'},
+    'squeezelite.convertConflict': {'en': 'DSD conversion and PCM upsampling cannot be on at the same time',
+                                    'it': 'Conversione in DSD e upsampling PCM non possono essere attivi insieme'},
+
+    # ── Settings → System tweaks (CPU governor / security / hyper-threading) ──
+    'systemTweaks.saved': {'en': 'Saved', 'it': 'Salvato'},
+    'systemTweaks.reboot': {'en': 'Saved — restart the player to apply the CPU security change',
+                            'it': 'Salvato — riavvia il player per applicare la modifica alla sicurezza CPU'},
+    'systemTweaks.writeFailed': {'en': 'Could not save the system tweaks',
+                                 'it': 'Impossibile salvare le ottimizzazioni di sistema'},
+    'systemTweaks.unknownField': {'en': 'Unknown setting: {field}', 'it': 'Impostazione sconosciuta: {field}'},
+    'systemTweaks.invalidValue': {'en': 'Invalid value for {field}: {detail}',
+                                  'it': 'Valore non valido per {field}: {detail}'},
 
     # ── Audio zones: one more player per DAC ────────────────────────
     'zones.added': {'en': '"{name}" added: it is now a player of its own in Lyrion',
@@ -112,6 +127,8 @@ MESSAGES = {
                        'it': '{host} è questo stesso dispositivo. Per usare il suo server musicale scegli il server interno invece di uno esterno'},
     'lms.invalidMode': {'en': 'Invalid mode: {mode}', 'it': 'Modalità non valida: {mode}'},
     'lms.sqConfigMissing': {'en': 'squeezelite configuration not found', 'it': 'Configurazione squeezelite non trovata'},
+    'lms.unreachable': {'en': 'Cannot reach the music server to list its players',
+                        'it': 'Server musicale non raggiungibile per elencare i suoi player'},
     'lms.serverSetRestartWarn': {'en': 'Server set ({target}); squeezelite restart: {err}',
                                  'it': 'Server impostato ({target}); riavvio squeezelite: {err}'},
     'lms.serverSetRestartFailed': {'en': 'Server set ({target}); restart failed',
@@ -566,6 +583,14 @@ MESSAGES = {
         'it': 'Non c\'è abbastanza spazio sul disco di sistema: servono {need} GB e ne restano {room}, '
               'perché {reserve} GB restano sempre liberi per Lyrion e il sistema. '
               'Libera un po\' di spazio o usa un altro disco.'},
+    'disk.noRoomPlain': {
+        'en': 'Not enough room on this disk: this needs {need} GB and only {room} GB are free. '
+              'Free some space or use another disk.',
+        'it': 'Non c\'è abbastanza spazio su questo disco: servono {need} GB e ne sono liberi solo {room}. '
+              'Libera un po\' di spazio o usa un altro disco.'},
+    'disk.noRoomStoppedPlain': {
+        'en': 'Stopped: this disk is full. What was not finished has been removed.',
+        'it': 'Interrotto: questo disco è pieno. Quel che non era finito è stato tolto.'},
     'disk.noRoomInstall': {
         'en': 'Not enough room on the system disk to install Lyrion: it needs {need} GB free and there are {free}. Free some space and try again.',
         'it': 'Non c\'è abbastanza spazio sul disco di sistema per installare Lyrion: servono {need} GB liberi e ce ne sono {free}. Libera un po\' di spazio e riprova.'},

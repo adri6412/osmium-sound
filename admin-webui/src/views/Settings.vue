@@ -27,48 +27,78 @@ const { t, lang } = useI18n();
 
 // ── kiosk-like submenu navigation ────────────────────────────────
 const sections = computed(() => [
-  { key: 'network',   label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
-  { key: 'audio',     label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
+  { key: 'network',   icon: 'wifi',      label: t('settings.sections.network.label'),   desc: t('settings.sections.network.desc') },
+  { key: 'audio',     icon: 'volume-2',  label: t('settings.sections.audio.label'),     desc: t('settings.sections.audio.desc') },
   // DSD, PCM to DSD and the rest of squeezelite's options, out of Audio
-  { key: 'audioAdvanced', label: t('settings.sections.audioAdvanced.label'), desc: t('settings.sections.audioAdvanced.desc') },
+  { key: 'audioAdvanced', icon: 'settings', label: t('settings.sections.audioAdvanced.label'), desc: t('settings.sections.audioAdvanced.desc') },
   // One more Lyrion player per further DAC (api_server.py /zones)
-  { key: 'zones',     label: t('settings.sections.zones.label'),     desc: t('settings.sections.zones.desc') },
-  { key: 'btSpeakers', label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
-  { key: 'remote',    label: t('settings.sections.remote.label'),    desc: t('settings.sections.remote.desc') },
-  { key: 'sources',   label: t('settings.sections.sources.label'),   desc: t('settings.sections.sources.desc') },
+  { key: 'zones',     icon: 'usb',       label: t('settings.sections.zones.label'),     desc: t('settings.sections.zones.desc') },
+  { key: 'btSpeakers', icon: 'speaker',  label: t('settings.sections.btSpeakers.label'), desc: t('settings.sections.btSpeakers.desc') },
+  { key: 'extPlayers', icon: 'speaker',  label: t('settings.sections.extPlayers.label'), desc: t('settings.sections.extPlayers.desc') },
+  { key: 'remote',    icon: 'remote',    label: t('settings.sections.remote.label'),    desc: t('settings.sections.remote.desc') },
+  { key: 'sources',   icon: 'hard-drive', label: t('settings.sections.sources.label'),  desc: t('settings.sections.sources.desc') },
   // Daphile's CD Ripping page, field by field (sources_server /api/cd/settings)
-  { key: 'cdRip',     label: t('settings.sections.cdRip.label'),     desc: t('settings.sections.cdRip.desc') },
+  { key: 'cdRip',     icon: 'disc',      label: t('settings.sections.cdRip.label'),     desc: t('settings.sections.cdRip.desc') },
   // 'dsp' is deliberately NOT listed here — the feature (and its room-correction
   // sub-flow) is being held back for a future paid tier. The card markup below
   // (v-if="open === 'dsp'") and all its backing code/API endpoints are left
   // fully intact on purpose, just unreachable: normalizeSection() below also
   // strips a hand-typed ?open=dsp so there's no direct-URL bypass either.
-  { key: 'services',  label: t('settings.sections.services.label'),  desc: t('settings.sections.services.desc') },
-  { key: 'tailscale', label: t('settings.sections.tailscale.label'), desc: t('settings.sections.tailscale.desc') },
-  { key: 'lyrion',    label: t('settings.sections.lyrion.label'),    desc: t('settings.sections.lyrion.desc') },
-  { key: 'playback',  label: t('settings.sections.playback.label'),  desc: t('settings.sections.playback.desc') },
+  { key: 'services',  icon: 'settings',  label: t('settings.sections.services.label'),  desc: t('settings.sections.services.desc') },
+  { key: 'tailscale', icon: 'globe',     label: t('settings.sections.tailscale.label'), desc: t('settings.sections.tailscale.desc') },
+  { key: 'lyrion',    icon: 'speaker',   label: t('settings.sections.lyrion.label'),    desc: t('settings.sections.lyrion.desc') },
+  { key: 'playback',  icon: 'list-music', label: t('settings.sections.playback.label'), desc: t('settings.sections.playback.desc') },
   // A section of its own, like the kiosk's Settings → VU meter: the switch,
   // the styles with a preview each, and the store.
-  { key: 'vuMeters',  label: t('settings.sections.vuMeters.label'),  desc: t('settings.sections.vuMeters.desc') },
+  { key: 'vuMeters',  icon: 'layout-grid', label: t('settings.sections.vuMeters.label'), desc: t('settings.sections.vuMeters.desc') },
   // What the kiosk draws in place of the meters when they are off. Only the
   // choice lives here: the animations themselves exist on the device screen.
-  { key: 'animations', label: t('settings.sections.animations.label'), desc: t('settings.sections.animations.desc') },
-  { key: 'display',  label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
-  { key: 'timezone',  label: t('settings.sections.timezone.label'),  desc: t('settings.sections.timezone.desc') },
-  { key: 'updates',   label: t('settings.sections.updates.label'),   desc: t('settings.sections.updates.desc') },
-  { key: 'companion', label: t('settings.sections.companion.label'), desc: t('settings.sections.companion.desc') },
-  { key: 'companionIos', label: t('settings.sections.companionIos.label'), desc: t('settings.sections.companionIos.desc') },
-  { key: 'account',   label: t('settings.sections.account.label'),   desc: t('settings.sections.account.desc') },
-  { key: 'backup',    label: t('settings.sections.backup.label'),    desc: t('settings.sections.backup.desc') },
-  { key: 'language',  label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
-  { key: 'system',    label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
+  { key: 'animations', icon: 'sparkles', label: t('settings.sections.animations.label'), desc: t('settings.sections.animations.desc') },
+  { key: 'display',  icon: 'monitor',    label: t('settings.sections.display.label'),   desc: t('settings.sections.display.desc') },
+  { key: 'timezone',  icon: 'history',   label: t('settings.sections.timezone.label'),  desc: t('settings.sections.timezone.desc') },
+  { key: 'updates',   icon: 'refresh-cw', label: t('settings.sections.updates.label'),  desc: t('settings.sections.updates.desc') },
+  { key: 'companion', icon: 'share-2',   label: t('settings.sections.companion.label'), desc: t('settings.sections.companion.desc') },
+  { key: 'companionIos', icon: 'link',   label: t('settings.sections.companionIos.label'), desc: t('settings.sections.companionIos.desc') },
+  { key: 'account',   icon: 'user',      label: t('settings.sections.account.label'),   desc: t('settings.sections.account.desc') },
+  { key: 'backup',    icon: 'copy',      label: t('settings.sections.backup.label'),    desc: t('settings.sections.backup.desc') },
+  { key: 'language',  icon: 'globe',     label: t('settings.sections.language.label'),  desc: t('settings.sections.language.desc') },
+  { key: 'system',    icon: 'settings',  label: t('settings.sections.system.label'),    desc: t('settings.sections.system.desc') },
+  // OS-level knobs (CPU governor / security mitigations / hyper-threading) a
+  // listener can opt into to push server-side PCM->DSD harder. Off by default.
+  { key: 'systemTweaks', icon: 'settings', label: t('settings.sections.systemTweaks.label'), desc: t('settings.sections.systemTweaks.desc') },
   // What the device is made of and under which licenses: the project, Lyrion,
   // the third-party notices and every Debian package of the image.
-  { key: 'notices',   label: t('settings.sections.notices.label'),   desc: t('settings.sections.notices.desc') },
+  { key: 'notices',   icon: 'file',      label: t('settings.sections.notices.label'),   desc: t('settings.sections.notices.desc') },
   // Reached from System and Updates ("Check the network"), not listed itself.
-  { key: 'netCheck',  label: t('settings.sections.netCheck.label'),  desc: t('settings.sections.netCheck.desc'), hidden: true },
+  { key: 'netCheck',  icon: 'network',   label: t('settings.sections.netCheck.label'),  desc: t('settings.sections.netCheck.desc'), hidden: true },
 ]);
 const listedSections = computed(() => sections.value.filter(s => !s.hidden));
+
+// ── macro groups: the settings front page is a grid of square tiles, one per
+// group; a group opens a grid of its sections. Same scheme and names as the
+// kiosk (native-ui-qt/qml/SettingsTab.qml → groups). A section knows its
+// group by key; `grp` is the open group ('' = the front page of groups).
+const grp = ref('');
+const groups = [
+  { id: 'music',   icon: 'library',  secs: ['sources', 'cdRip', 'lyrion', 'playback'] },
+  { id: 'sound',   icon: 'volume-2', secs: ['audio', 'audioAdvanced', 'zones', 'btSpeakers', 'extPlayers'] },
+  { id: 'look',    icon: 'monitor',  secs: ['vuMeters', 'animations', 'display', 'language'] },
+  { id: 'control', icon: 'remote',   secs: ['remote', 'companion', 'companionIos'] },
+  { id: 'network', icon: 'wifi',     secs: ['network', 'tailscale', 'services', 'account'] },
+  { id: 'system',  icon: 'info',     secs: ['timezone', 'updates', 'backup', 'system', 'systemTweaks', 'notices'] },
+];
+function groupOf(key) { const g = groups.find((x) => x.secs.includes(key)); return g ? g.id : ''; }
+// the sections of a group that are listed right now, in the group's order
+function groupSecs(gid) {
+  const g = groups.find((x) => x.id === gid); if (!g) return [];
+  return g.secs.map((k) => listedSections.value.find((s) => s.key === k)).filter(Boolean);
+}
+// what the tile grid shows: the groups, or the open group's sections
+const tileModel = computed(() => grp.value === ''
+  ? groups.map((g) => ({ kind: 'group', key: g.id, icon: g.icon, label: t('settings.groups.' + g.id) }))
+  : groupSecs(grp.value).map((s) => ({ kind: 'sec', key: s.key, icon: s.icon, label: s.label })));
+// a group's tile shows a "new" dot when any store section inside it has news
+function groupNew(gid) { return gid === 'look' && (vuStoreNew.value || animStoreNew.value); }
 // 'multiroom' was this section's key before it became "Lyrion Music Server";
 // keep old bookmarks and the kiosk's deep links working. 'dsp' is held back
 // (see the sections list above) — redirect a hand-typed ?open=dsp back to the
@@ -77,7 +107,13 @@ const listedSections = computed(() => sections.value.filter(s => !s.hidden));
 // static, so those switches never took effect.
 const normalizeSection = (k) => (k === 'multiroom' ? 'lyrion' : (k === 'dsp' || k === 'debug') ? '' : (k || ''));
 const open = ref(normalizeSection(route.query.open));
-watch(() => route.query.open, (v) => { open.value = normalizeSection(v); });
+// opening a section (menu tap or deep link) remembers its group, so the
+// section's back-link returns to that group's tile grid, not the groups page
+if (open.value) grp.value = groupOf(open.value) || grp.value;
+watch(() => route.query.open, (v) => {
+  open.value = normalizeSection(v);
+  if (open.value) grp.value = groupOf(open.value) || grp.value;
+});
 function goto(k) { router.replace({ query: k ? { open: k } : {} }); }
 // the network check's back link returns to the section it was opened from
 function goBack() { goto(open.value === 'netCheck' ? normalizeSection(route.query.from) : ''); }
@@ -261,6 +297,39 @@ async function sqCall(path, body, okMsg) {
 const setSq = (patch) => sqCall('squeezelite_conf', patch, t('settings.audio.sqSaved'));
 const resetSq = () => sqCall('squeezelite_conf/reset', {}, t('settings.audio.sqReset'));
 
+// Toggle an ALSA playback switch of the output card (e.g. the onboard S/PDIF
+// IEC958 transmitter, muted by default). The backend returns the fresh switch
+// states, so we patch sq.switches in place without reloading the whole model.
+async function setSwitch(name, on) {
+  sqBusy.value = true;
+  try {
+    const r = await api.sysPost('mixer_switch', { name, on });
+    const ok = r.ok && r.data.success !== false;
+    if (ok && r.data.switches && sq.value) sq.value = { ...sq.value, switches: r.data.switches };
+    say(bodyMsg(r, ok ? t('settings.audio.sqSaved') : t('settings.audio.saveFailed')), !ok);
+  } finally { sqBusy.value = false; }
+}
+
+// ── System tweaks: OS-level knobs (CPU governor / security / SMT) ─
+// api_server.py /system_tweaks. Governor + hyper-threading apply at once to
+// /sys; CPU security (mitigations) is a kernel command-line change that only
+// takes effect after a reboot — the backend flags that with needs_reboot.
+const tw = ref(null); const twBusy = ref(false);
+async function loadTw() {
+  const r = await api.sys('system_tweaks');
+  if (r.ok && r.data.conf) tw.value = r.data;
+}
+watch(open, (v) => { if (v === 'systemTweaks') loadTw(); });
+async function setTw(patch) {
+  twBusy.value = true;
+  try {
+    const r = await api.sysPost('system_tweaks', patch);
+    const ok = r.ok && r.data.success !== false;
+    if (ok && r.data.conf) tw.value = r.data;
+    say(bodyMsg(r, ok ? t('settings.systemTweaks.saved') : t('settings.systemTweaks.saveFailed')), !ok);
+  } finally { twBusy.value = false; }
+}
+
 // ── Audio zones: one more player per further DAC ─────────────────
 // api_server.py get_zones / zone_add / zone_update / zone_remove. Each zone
 // is a Lyrion player of its own on its own DAC (hifi-zone@<id>), with the
@@ -304,6 +373,36 @@ function zoneState(z) {
   return z.running ? t('settings.zones.stateOn') : t('settings.zones.stateStarting');
 }
 watch(open, (v) => { if (v === 'zones') loadZones(); }, { immediate: true });
+
+// ── External Lyrion players: convert for squeezelites on this box's Lyrion ──
+// api_server.py get_external_convert / update_external_convert /
+// remove_external_convert. The list comes from Lyrion serverstatus (this box's
+// own players filtered out); each choice is sent to the Osmium Convert plugin
+// on this box's own Lyrion (no restart).
+const ext = ref(null); const extBusy = ref(false); const extOpen = ref('');
+// adapt the external info shape to what Pcm2Dsd expects (DSD fields at top level)
+const extInfo = computed(() => (ext.value && ext.value.info)
+  ? { ...ext.value.info.dsd, convert: ext.value.info.convert, upsample: ext.value.info.upsample } : { upsample: {} });
+async function loadExt() {
+  const r = await api.sys('external_convert');
+  if (r.ok) ext.value = r.data;
+}
+watch(open, (v) => { if (v === 'extPlayers') loadExt(); });
+async function extCall(path, body, okMsg) {
+  extBusy.value = true;
+  try {
+    const r = await api.sysPost(path, body);
+    const ok = r.ok && r.data.success !== false;
+    if (ok && r.data.players !== undefined) ext.value = r.data;
+    say(bodyMsg(r, ok ? okMsg : t('settings.audio.saveFailed')), !ok);
+    return ok;
+  } finally { extBusy.value = false; }
+}
+const extSet = (p, patch) => extCall('external_convert/update',
+  { mac: p.mac, name: p.name, pcm2dsd: p.conf.pcm2dsd, pcm2dsd_filter: p.conf.pcm2dsd_filter,
+    upsample: p.conf.upsample, upsample_cap: p.conf.upsample_cap, ...patch },
+  t('settings.audio.sqSaved'));
+const extRemove = (p) => extCall('external_convert/remove', { mac: p.mac }, t('settings.audio.sqSaved'));
 
 // ── Licenses & credits ─────────────────────────────────────────────
 // api_server.py get_credits: the project, Lyrion, the hand-kept third-party
@@ -544,12 +643,12 @@ async function saveShellAccount() {
 // the reconnecting), so everything here is: send a command, take the state
 // that comes back.
 const bt = reactive({
-  available: false, enabled: false, adapter: false, speakers: [], found: [],
+  available: false, enabled: false, adapter: false, adapterPresent: false, speakers: [], found: [],
   busy: false, scanning: false, open: '', name: '',
 });
 let btPoll = null;
 function applyBt(d) {
-  bt.available = !!d.available; bt.enabled = !!d.enabled; bt.adapter = !!d.adapter;
+  bt.available = !!d.available; bt.enabled = !!d.enabled; bt.adapter = !!d.adapter; bt.adapterPresent = !!d.adapterPresent;
   bt.speakers = d.speakers || []; bt.found = d.found || [];
 }
 async function loadBt() {
@@ -1865,19 +1964,26 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- section menu (kiosk-like) -->
+  <!-- section menu (kiosk-like): a grid of square tiles — the six macro groups,
+       and tapping one opens a grid of its sections (SettingsTab.qml) -->
   <template v-if="!open">
-    <RouterLink class="backlink" to="/">← {{ t('dashboard.title') }}</RouterLink>
-    <h2 class="page">{{ t('settings.title') }}</h2>
+    <RouterLink v-if="!grp" class="backlink" to="/">← {{ t('dashboard.title') }}</RouterLink>
+    <a v-else class="backlink" href="#" @click.prevent="grp = ''">← {{ t('settings.title') }}</a>
+    <h2 class="page">{{ grp ? t('settings.groups.' + grp) : t('settings.title') }}</h2>
     <div v-if="msg" class="msg" :class="{ err }">{{ msg }}</div>
-    <div class="card" style="padding: 6px 16px;">
-      <div v-for="s in listedSections" :key="s.key" class="net between" @click="goto(s.key)">
-        <span>
-          <span style="display:block;">{{ s.label }}<span v-if="(s.key === 'vuMeters' && vuStoreNew) || (s.key === 'animations' && animStoreNew)" class="dot-new"></span></span>
-          <span class="muted">{{ s.desc }}</span>
-        </span>
-        <span class="silver" style="font-size: 18px;">›</span>
-      </div>
+    <div class="tile-grid">
+      <button
+        v-for="tl in tileModel" :key="tl.key" type="button" class="tile"
+        :class="{ group: tl.kind === 'group' }"
+        @click="tl.kind === 'group' ? (grp = tl.key) : goto(tl.key)"
+      >
+        <span class="tile-badge"><Icon :name="tl.icon" :size="tl.kind === 'group' ? 26 : 22" /></span>
+        <span
+          v-if="(tl.kind === 'sec' && tl.key === 'vuMeters' && vuStoreNew) || (tl.kind === 'sec' && tl.key === 'animations' && animStoreNew) || (tl.kind === 'group' && groupNew(tl.key))"
+          class="tile-dot"
+        ></span>
+        <span class="tile-label">{{ tl.label }}</span>
+      </button>
     </div>
   </template>
 
@@ -2021,10 +2127,27 @@ onUnmounted(() => {
           </select>
         </template>
 
+        <!-- Playback switches of the output card: the onboard coax/optical
+             (S/PDIF, IEC958) transmitter is muted by default, so the digital
+             output stays silent until it is switched on. -->
+        <template v-if="sq.switches && sq.switches.length">
+          <label>{{ t('settings.audio.switchesLabel') }}</label>
+          <div v-for="s in sq.switches" :key="s.name" class="mixer-switch">
+            <span class="mixer-switch-name">{{ s.name }}</span>
+            <span class="seg">
+              <button :disabled="sqBusy" :class="{ active: s.on }" @click="setSwitch(s.name, true)">{{ t('settings.audio.on') }}</button>
+              <button :disabled="sqBusy" :class="{ active: !s.on }" @click="setSwitch(s.name, false)">{{ t('settings.audio.off') }}</button>
+            </span>
+          </div>
+          <p class="muted">{{ t('settings.audio.switchesHelp') }}</p>
+        </template>
+
         <!-- Every PCM track turned into DSD by Lyrion on its way to this player. -->
         <div v-if="sq.pcm2dsd" style="margin-top: 18px; padding: 16px 0; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1);">
           <p class="sub">{{ t('settings.pcm2dsd.title') }}</p>
-          <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :state="sq.pcm2dsd.state"
+          <Pcm2Dsd :mode="sq.conf.pcm2dsd" :filter="sq.conf.pcm2dsd_filter" :upsample="sq.conf.upsample"
+                   :upsample-cap="sq.conf.upsample_cap" :output-rate="sq.output_rate"
+                   :state="sq.pcm2dsd.state" :upsample-state="sq.pcm2dsd.upsample.state"
                    :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
         </div>
 
@@ -2096,7 +2219,9 @@ onUnmounted(() => {
               <button :disabled="zBusy || !z.mixers.length" :class="{ active: z.conf.volume === 'hardware' }" @click="zoneSet(z, { volume: 'hardware' })">{{ t('settings.audio.volumeHardware') }}</button>
             </span>
             <p class="muted">{{ z.mixers.length ? t('settings.audio.volumeHelp') : t('settings.audio.volumeNoMixer') }}</p>
-            <Pcm2Dsd :mode="z.conf.pcm2dsd" :filter="z.conf.pcm2dsd_filter" :state="z.pcm2dsd_state"
+            <Pcm2Dsd :mode="z.conf.pcm2dsd" :filter="z.conf.pcm2dsd_filter" :upsample="z.conf.upsample"
+                     :upsample-cap="z.conf.upsample_cap"
+                     :state="z.pcm2dsd_state" :upsample-state="z.upsample_state"
                      :info="zones.pcm2dsd" :volume="z.conf.volume" :busy="zBusy" zone @set="(p) => zoneSet(z, p)" />
             <button class="danger" style="margin-top: 12px;" :disabled="zBusy" @click="zoneRemove(z)">{{ t('settings.zones.remove') }}</button>
           </div>
@@ -2117,6 +2242,38 @@ onUnmounted(() => {
       </template>
     </div>
 
+    <!-- External Lyrion players: any squeezelite on this box's Lyrion server,
+         other than this box's own players, can be converted too. The listener's
+         own DAC decides whether it can play what it receives. -->
+    <div class="card" v-if="open === 'extPlayers'">
+      <p class="sub">{{ t('settings.extPlayers.help') }}</p>
+      <template v-if="ext && !ext.lyrion">
+        <p class="msg err">{{ t('settings.extPlayers.noLyrion') }}</p>
+      </template>
+      <template v-else-if="ext">
+        <p class="muted">{{ t('settings.extPlayers.caveat') }}</p>
+        <p class="sub" v-if="!ext.players.length">{{ t('settings.extPlayers.none') }}</p>
+        <template v-for="p in ext.players" :key="p.mac">
+          <div class="net between" @click="extOpen = extOpen === p.mac ? '' : p.mac">
+            <span>
+              <span style="display:block;">{{ p.name }}</span>
+              <span class="muted">{{ p.model || p.mac }} · {{ p.connected ? t('settings.extPlayers.online') : t('settings.extPlayers.offline') }}</span>
+            </span>
+            <span class="check">{{ extOpen === p.mac ? '▾' : '▸' }}</span>
+          </div>
+          <div v-if="extOpen === p.mac" style="padding: 0 4px 10px;">
+            <Pcm2Dsd :mode="p.conf.pcm2dsd" :filter="p.conf.pcm2dsd_filter" :upsample="p.conf.upsample"
+                     :state="p.conf.pcm2dsd === 'off' ? 'off' : 'active'"
+                     :upsample-state="p.conf.upsample === 'off' ? 'off' : 'active'"
+                     :info="extInfo" :busy="extBusy" external @set="(patch) => extSet(p, patch)" />
+            <button class="danger" style="margin-top: 12px;" v-if="p.conf.pcm2dsd !== 'off' || p.conf.upsample !== 'off'"
+                    :disabled="extBusy" @click="extRemove(p)">{{ t('settings.extPlayers.clear') }}</button>
+          </div>
+        </template>
+        <button class="secondary" style="margin-top: 8px;" :disabled="extBusy" @click="loadExt">{{ t('settings.zones.refresh') }}</button>
+      </template>
+    </div>
+
     <!-- Bluetooth speakers: pair one and it turns into a player of its own,
          next to the built-in one. The DAC is untouched throughout. -->
     <div class="card" v-if="open === 'btSpeakers'">
@@ -2127,12 +2284,13 @@ onUnmounted(() => {
           <span>{{ t('settings.btSpeakers.enable') }}
             <span class="muted">{{ t('settings.btSpeakers.enableHint') }}</span>
           </span>
-          <Toggle :model-value="bt.enabled" :disabled="bt.busy" @update:model-value="setBt" />
+          <Toggle :model-value="bt.enabled" :disabled="bt.busy || !bt.adapterPresent" @update:model-value="setBt" />
         </div>
 
-        <template v-if="bt.enabled">
-          <p class="sub" v-if="!bt.adapter">{{ t('settings.btSpeakers.noAdapter') }}</p>
-          <template v-else>
+        <!-- No radio in the box: say so and leave the switch greyed, on or off (#121) -->
+        <p class="sub" v-if="!bt.adapterPresent">{{ t('settings.btSpeakers.noAdapter') }}</p>
+        <template v-else-if="bt.enabled">
+          <template>
             <label>{{ t('settings.btSpeakers.yours') }}</label>
             <p class="sub" v-if="!bt.speakers.length">{{ t('settings.btSpeakers.none') }}</p>
             <template v-for="sp in bt.speakers" :key="sp.mac">
@@ -3075,6 +3233,45 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- System tweaks: OS-level knobs for more server-side PCM->DSD headroom.
+         Off by default; governor + SMT apply at once, CPU security needs a
+         reboot (the backend returns needs_reboot). SMT control is hidden where
+         the CPU exposes no SMT toggle (smt_available). See loadTw()/setTw(). -->
+    <div class="card" v-if="open === 'systemTweaks'">
+      <p class="sub">{{ t('settings.systemTweaks.intro') }}</p>
+      <p class="muted" v-if="!tw">{{ t('common.loading') }}</p>
+      <template v-if="tw">
+        <div v-if="tw.needs_reboot" class="net" style="border-color: rgba(224,180,90,0.4); margin-bottom: 14px;">
+          <span class="muted">{{ t('settings.systemTweaks.rebootPending') }}</span>
+        </div>
+
+        <label>{{ t('settings.systemTweaks.governorLabel') }}</label>
+        <span class="seg" v-if="tw.governors_available.length">
+          <button v-for="g in tw.governors_available" :key="g" :disabled="twBusy"
+                  :class="{ active: tw.conf.cpu_governor === g }" @click="setTw({ cpu_governor: g })">{{ g }}</button>
+        </span>
+        <p class="muted" v-else>{{ t('settings.systemTweaks.governorNone') }}</p>
+        <p class="muted">{{ t('settings.systemTweaks.governorHelp') }}</p>
+
+        <label>{{ t('settings.systemTweaks.mitigationsLabel') }}</label>
+        <span class="seg">
+          <button :disabled="twBusy" :class="{ active: tw.conf.cpu_mitigations === 'on' }" @click="setTw({ cpu_mitigations: 'on' })">{{ t('settings.systemTweaks.secure') }}</button>
+          <button :disabled="twBusy" :class="{ active: tw.conf.cpu_mitigations === 'off' }" @click="setTw({ cpu_mitigations: 'off' })">{{ t('settings.systemTweaks.fast') }}</button>
+        </span>
+        <p class="muted">{{ t('settings.systemTweaks.mitigationsHelp') }}</p>
+
+        <template v-if="tw.smt_available">
+          <label>{{ t('settings.systemTweaks.smtLabel') }}</label>
+          <div class="between item">
+            <span>{{ t('settings.systemTweaks.smtToggle') }}</span>
+            <Toggle :model-value="tw.conf.hyperthreading === 'on'" :disabled="twBusy"
+                    @update:model-value="(v) => setTw({ hyperthreading: v ? 'on' : 'off' })" />
+          </div>
+          <p class="muted">{{ t('settings.systemTweaks.smtHelp') }}</p>
+        </template>
+      </template>
+    </div>
+
     <!-- Debug: boot / kernel-panic troubleshooting flags -->
     <!-- Licenses & credits: see loadCredits() above -->
     <div class="card wide" v-if="open === 'notices'">
@@ -3129,3 +3326,72 @@ onUnmounted(() => {
     </div>
   </template>
 </template>
+
+<style scoped>
+/* One playback switch row (Settings → Audio → Advanced): control name on the
+   left, the On/Off segmented toggle on the right. */
+.mixer-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0;
+}
+.mixer-switch-name {
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+
+/* Settings front page: a grid of square-ish tiles, mirroring the kiosk's
+   Flow of tiles (native-ui-qt/qml/SettingsTab.qml). Group tiles are a touch
+   bigger and bolder than section tiles. */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+}
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 108px;
+  padding: 14px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.15s, background 0.15s;
+}
+.tile.group { min-height: 124px; }
+.tile:hover { background: var(--light); border-color: var(--gold); }
+.tile-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--gold-dim);
+  color: var(--gold);
+}
+.tile.group .tile-badge { width: 52px; height: 52px; }
+.tile-label {
+  font-size: 15px;
+  line-height: 1.25;
+  color: var(--text);
+}
+.tile.group .tile-label { font-size: 18px; font-weight: 700; }
+.tile-dot {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+</style>

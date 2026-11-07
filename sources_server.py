@@ -1293,7 +1293,10 @@ def _samba_share_block(share, path, group):
 
 def regen_samba_shares():
     """Rewrite the included shares file and start/stop smbd accordingly."""
-    disks = _adopted_disk_sources()
+    # `shared: false` opts an adopted disk out of SMB while it stays a normal,
+    # mounted music source (and CD-rip destination). The key is absent on every
+    # source adopted before this existed, so the default is unchanged: shared.
+    disks = [s for s in _adopted_disk_sources() if s.get("shared") is not False]
     group = _share_group_name()
     lines = []
     seen = set()
@@ -6158,9 +6161,9 @@ def _ownership_ours(path):
 # The top level of the file manager is the allowed roots themselves. Showing
 # them as raw paths ("/mnt/hifi-sources") is the sort of thing this whole
 # redesign is against, so the ones we own get a name in the owner's language.
-# The `kind` is what tells the two look-alikes apart on screen: "Music on this
-# player" is the appliance's OWN storage (a folder on the data partition, a
-# few gigabytes, the one shared over SMB), while "Internal disks" is only the
+# The `kind` is what tells the two look-alikes apart on screen: "System disk"
+# is the appliance's OWN storage (a folder on the data partition, a
+# few gigabytes, the one shared over SMB), while "Second disk" is only the
 # place extra disks get mounted -- so the first is answered with how much room
 # is left and the second with how many disks are actually there. Named
 # side by side with nothing else, they read as the same thing.
@@ -6373,9 +6376,14 @@ def _file_worker(jid, op, paths, dest, exists="keep"):
     _file_job_set(jid, total=total)
     state = {"done": 0}
     budget = hdg.Budget(dest) if counted and dest else None
-    if budget is not None and budget.active:
-        # What lands on the system disk: everything copied, and what a move
-        # brings from another disk (a move within it only renames).
+    if counted and dest:
+        # Make sure it fits before copying a byte. On the system disk this keeps
+        # the reserve free; on any other disk (the second disk, a USB stick) it
+        # is a plain free-space check -- without one, a copy too big for the
+        # second disk started and gave no warning at all (issue #118).
+        # What actually grows the destination disk: everything a copy writes,
+        # and what a move brings from another disk (a move within it only
+        # renames).
         try:
             dest_dev = os.stat(dest).st_dev
         except OSError:
@@ -6388,7 +6396,7 @@ def _file_worker(jid, op, paths, dest, exists="keep"):
             except OSError:
                 return True
         try:
-            hdg.check(dest, sum(n for p, n in sizes.items() if grows(p)))
+            hdg.check_any(dest, sum(n for p, n in sizes.items() if grows(p)))
         except hdg.NoRoom as e:
             _file_job_set(jid, state="error", code="disk.noRoom", need=e.need, room=e.room,
                           reserve=e.reserve, finished=time.time())
@@ -6496,6 +6504,8 @@ def api_list():
         elif t in ("internal", "usb"):
             item["mounted"] = _mount_depth(s.get("mountpoint", ""), table) > 0
             item["share"] = s.get("share")
+            # Absent means shared (disks adopted before the opt-out existed).
+            item["shared"] = s.get("shared") is not False
         else:
             item["exists"] = bool(_fs_probe(os.path.isdir, s.get("path", ""), False, table))
         if item.get("mounted") or item.get("exists"):
@@ -7090,7 +7100,7 @@ def api_files_list():
                     "entries": entries})
 
 
-def _file_op_targets(data, need_dest):
+def _file_op_targets(data, need_dest, op=None):
     """Validate one copy/move/delete request. Returns (paths, dest, error) --
     every path resolved and confined by _local_path_allowed(), nothing that is
     a source's own mountpoint, and a destination that can really be written."""
@@ -7099,7 +7109,11 @@ def _file_op_targets(data, need_dest):
         raw = [raw]
     if not isinstance(raw, list) or not raw or len(raw) > _FILE_MAX_ITEMS:
         return None, None, _err("msg.pathMissing", 400)
-    protected = _protected_paths()
+    # A copy reads the source and leaves it untouched, so copying a source's own
+    # mountpoint elsewhere is harmless and allowed; only the operations that
+    # would remove or rename the original (delete/move/rename) are refused on a
+    # protected path (issue #127).
+    protected = set() if op == "copy" else _protected_paths()
     paths = []
     for item in raw:
         p = _file_entry_allowed(item)
@@ -7138,7 +7152,7 @@ def _files_start(op):
     if denied:
         return denied
     data = request.get_json(silent=True) or {}
-    paths, dest, err = _file_op_targets(data, need_dest=op in ("copy", "move"))
+    paths, dest, err = _file_op_targets(data, need_dest=op in ("copy", "move"), op=op)
     if err:
         return err
     if op == "move":
@@ -7247,6 +7261,34 @@ def api_set_smb_rw(sid):
         src["rw"] = rw
         save_state(state)
     return jsonify({"success": True, "message": _m("msg.rebootRequired")})
+
+
+@app.route("/api/sources/<sid>/share", methods=["POST"])
+def api_set_disk_share(sid):
+    """Turn the SMB network share of an adopted internal/USB disk on or off.
+    The disk stays mounted as a local music source (and CD-rip destination)
+    either way; only its Samba export changes. Unlike the CIFS read-write flag
+    this is live: adding or dropping a share section and reloading smbd needs
+    no reboot. `shared: false` is persisted and honoured by
+    regen_samba_shares(); its absence means shared, so disks adopted before
+    this feature keep their share."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    shared = bool(data.get("shared"))
+    with _lock:
+        state = load_state()
+        src = next((s for s in state["sources"]
+                    if s.get("id") == sid and s.get("type") in ("internal", "usb")), None)
+        if not src:
+            return _err("msg.sourceNotFound", 404)
+        if (src.get("shared") is not False) == shared:
+            return jsonify({"success": True, "message": _m("msg.noChange")})
+        src["shared"] = shared
+        save_state(state)
+        regen_samba_shares()
+    return jsonify({"success": True, "shared": shared})
 
 
 @app.route("/api/sources/<sid>/subpath", methods=["POST"])
@@ -7436,6 +7478,10 @@ def api_internal_adopt():
         return denied
     data = request.get_json(silent=True) or {}
     device = (data.get("device") or "").strip()
+    # Share over SMB by default (unchanged behaviour); `shared: false` adopts
+    # the disk as a plain local music source without a network share.
+    shared = data.get("shared")
+    shared = True if shared is None else bool(shared)
     if not _path_ok(device):
         return _err("msg.badDevice", 400)
 
@@ -7486,6 +7532,7 @@ def api_internal_adopt():
         "model": model,
         "mountpoint": mountpoint,
         "share": share,
+        "shared": shared,
     }
     ok, msg = mount_internal(src)
     if not ok:
@@ -7501,7 +7548,8 @@ def api_internal_adopt():
     # lyrionmusicserver, which would cut off whatever is playing — exactly
     # what adopting a second disk should not do.
     _lyrion_push_live(add_paths=[src["mountpoint"]])
-    return jsonify({"success": True, "source_id": src["id"], "share": share})
+    return jsonify({"success": True, "source_id": src["id"], "share": share,
+                    "shared": shared})
 
 
 def _adopt_usb_partition(part):
@@ -8314,6 +8362,9 @@ def api_cd_info():
         "auto_start": settings["auto_start"],
         "discid": toc["discid"],
         "mbid": meta["mbid"],
+        # ready-made URL for the disc cover (Cover Art Archive via /api/cd/cover),
+        # so the kiosk can show it on the CDplayer album without rebuilding it
+        "cover": ("/api/cd/cover?release=" + meta["mbid"]) if meta["mbid"] else "",
         "artist": meta["artist"],
         "album": meta["album"],
         "year": meta["year"],
@@ -8327,6 +8378,53 @@ def api_cd_info():
         ],
         "ripping": _rip_running(),
     })
+
+
+# MusicBrainz release id, validated so it is only ever used inside a cache
+# filename (never a path component the caller controls).
+_MBID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
+
+
+@app.route("/api/cd/cover", methods=["GET"])
+def api_cd_cover():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    mbid = (request.args.get("release") or "").strip()
+    if not mbid:
+        # no release given: use the disc currently in the drive
+        toc = _cd_toc()
+        if toc:
+            mbid = str(_cd_metadata(toc).get("mbid") or "")
+    if not _MBID_RE.match(mbid):
+        return Response(status=404)
+    path = os.path.join(hmeta.CACHE_DIR, "cover-" + mbid + ".jpg")
+    if not os.path.exists(path):
+        # Cover Art Archive redirects /front-500 to the CDN; urllib follows it.
+        try:
+            req = urllib.request.Request(
+                "https://coverartarchive.org/release/" + mbid + "/front-500",
+                headers={"User-Agent": hmeta.user_agent()})
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                data = resp.read(5 * 1024 * 1024)
+        except Exception:
+            data = b""
+        if not data:
+            return Response(status=404)
+        try:
+            os.makedirs(hmeta.CACHE_DIR, exist_ok=True)
+            tmp = path + ".tmp"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, path)
+        except OSError:
+            # serve the bytes even if the cache write failed
+            return Response(data, mimetype="image/jpeg")
+    try:
+        with open(path, "rb") as f:
+            return Response(f.read(), mimetype="image/jpeg")
+    except OSError:
+        return Response(status=404)
 
 
 def _cd_settings():
@@ -8663,6 +8761,8 @@ def api_internal_smb():
             pass
     shares = []
     for s in _adopted_disk_sources():
+        if s.get("shared") is False:
+            continue
         shares.append({
             "name": s.get("share") or "Musica",
             "mountpoint": s.get("mountpoint") or s.get("path"),
@@ -8923,9 +9023,9 @@ SOURCES_I18N = {
         "msg.unsafeFolderName": "This folder's name contains characters that cannot be used here (a line break, a backslash, or a % followed by a letter): rename the folder first.",
         "msg.fileOpFailed": "The operation did not finish: {detail}",
         "msg.jobNotFound": "This operation is no longer available.",
-        "files.rootMusic": "Music on this player",
+        "files.rootMusic": "System disk",
         "files.rootNetwork": "Network folders",
-        "files.rootInternal": "Internal disks",
+        "files.rootInternal": "Second disk",
         "files.rootUsb": "USB drives",
         "files.rootPlaylists": "Playlists",
         "files.rootHome": "Personal folders",
@@ -9104,9 +9204,9 @@ SOURCES_I18N = {
         "msg.unsafeFolderName": "Il nome di questa cartella contiene caratteri che qui non si possono usare (un a capo, una barra rovesciata o un % seguito da una lettera): rinomina prima la cartella.",
         "msg.fileOpFailed": "L'operazione non è stata completata: {detail}",
         "msg.jobNotFound": "Questa operazione non è più disponibile.",
-        "files.rootMusic": "Musica su questo apparecchio",
+        "files.rootMusic": "Disco di sistema",
         "files.rootNetwork": "Cartelle di rete",
-        "files.rootInternal": "Dischi interni",
+        "files.rootInternal": "Secondo disco",
         "files.rootUsb": "Chiavette USB",
         "files.rootPlaylists": "Playlist",
         "files.rootHome": "Cartelle personali",

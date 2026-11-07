@@ -47,15 +47,29 @@ Item {
     signal openSettings()
 
     readonly property real pad: 20
-    readonly property real leftW: (root.width - pad * 2) * 0.44
+    readonly property real leftW: Theme.npLeftW
     readonly property real bodyY: 52
     readonly property real bodyH: root.height - bodyY - pad
-    readonly property real artSide: Math.min(leftW, 320)
+    readonly property real artSide: Math.min(leftW, Theme.wide ? Math.min(380, bodyH - 32 - ledH - 8) : 320)
     readonly property real ledW: Math.min(leftW, 368)
     readonly property real ledH: ledW * 175 / 897
     readonly property real artY: bodyY + (bodyH - (artSide + 32 + ledH)) / 2
     readonly property real rx: pad + leftW + 24
-    readonly property real rw: root.width - rx - pad
+    // bar panel: the album (cover and pill) sits on the right
+    readonly property real leftX: Theme.bar ? root.width - pad - leftW : pad
+    readonly property real rw: Theme.npInfoW
+    // The box under the info (VU / animation / lyrics); on a wide canvas it is the
+    // third column, as tall as the body
+    // (wide: header on top, the box in the middle, the controls along the bottom)
+    // Bar panel (440 points tall): not enough height to stack, so title and controls
+    // keep a column of their own and the VU / animation / lyrics take the whole right side.
+    readonly property real barColW: 440
+    // bar panel order: title and controls | VU / animation / lyrics | album
+    readonly property real barColX: pad
+    readonly property real boxX: Theme.bar ? pad + barColW + 24 : rx
+    readonly property real boxW: Theme.bar ? leftX - 24 - boxX : rw
+    readonly property real boxY: Theme.bar ? 60 : Theme.wide ? col.y + col.height + 8 : ctl.y + ctl.height
+    readonly property real boxH: Theme.bar ? root.height - pad - boxY : Theme.wide ? ctl.y - boxY - 8 : root.height - pad - boxY
 
     // ─── dal telecomando ───────────────────────────────────────────────────
     // Lo stesso che fanno i pulsanti dell'intestazione, per i tasti che
@@ -69,6 +83,9 @@ Item {
     }
     // il prossimo skin dei VU / la prossima animazione, senza aprire la scelta
     function cycleLook(kind) { chooser.cycle(kind) }
+    // CD changer DISC +/- when the changer is not the on-screen animation:
+    // a plain jump to the next/previous album in the queue (NpAnimation.changeDisc)
+    function changeDisc(dir) { npAnim.changeDisc(dir) }
 
     // Con i VU in movimento la scena si ridisegna ~30 volte al secondo: tutto
     // cio' che non si muove sta in uno strato cotto una volta (layer), cosi'
@@ -111,7 +128,7 @@ Item {
         }
         Image {
             id: bgSrc
-            source: Player.artworkUrl
+            source: Ui.npArtwork
             asynchronous: true; visible: false
             sourceSize.width: 400; sourceSize.height: 400
             width: 400; height: 400
@@ -125,10 +142,12 @@ Item {
         }
         MultiEffect {
             source: bgSrc.status === Image.Ready ? bgSrc : bgPrev
-            visible: Player.artworkUrl !== "" && (bgSrc.status === Image.Ready || bgPrev.status === Image.Ready)
+            visible: Ui.npArtwork !== "" && (bgSrc.status === Image.Ready || bgPrev.status === Image.Ready)
             width: 400; height: 400
-            x: root.width / 2 - 640; y: root.height / 2 - 640
-            scale: 3.2
+            // wide enough to cover ultrawide canvases (3.2 = the old 1280 square)
+            readonly property real fillScale: Math.max(3.2, Math.max(root.width, root.height) / 400 * 1.02)
+            x: root.width / 2 - 200 * fillScale; y: root.height / 2 - 200 * fillScale
+            scale: fillScale
             transformOrigin: Item.TopLeft
             // blur-lg (16) e' applicato PRIMA di scale-125: 20 punti effettivi a schermo
             blurEnabled: true; blur: 0.41; blurMax: 16
@@ -159,7 +178,8 @@ Item {
     // are one block, centred on the cover underneath (the cover and the LED
     // plate sit on the same axis). The lit one says what plays on screen.
     Row {
-        x: root.pad + (root.leftW - width) / 2
+        // bar panel: the album is on the right, under the buttons, so the clock goes next to the left ones
+        x: Theme.bar ? root.pad + 46 + 38 + 14 : root.leftX + (root.leftW - width) / 2
         y: 31 - 18
         spacing: 10
         Rectangle {                               // l'orologio: tocco = salvaschermo
@@ -230,7 +250,7 @@ Item {
     // ─── copertina con ombra 0 20px 60px rgba(0,0,0,.7) e targa LED ────────
     Rectangle {
         id: artShadowSrc
-        x: root.pad + (root.leftW - root.artSide) / 2; y: root.artY + 20
+        x: root.leftX + (root.leftW - root.artSide) / 2; y: root.artY + 20
         width: root.artSide; height: root.artSide; radius: 16
         color: Qt.rgba(0, 0, 0, 0.7)
         visible: false
@@ -244,9 +264,9 @@ Item {
     }
     Cover {
         id: art
-        x: root.pad + (root.leftW - root.artSide) / 2; y: root.artY
+        x: root.leftX + (root.leftW - root.artSide) / 2; y: root.artY
         width: root.artSide; height: root.artSide
-        source: Player.artworkUrl
+        source: Ui.npArtwork
         radius: 16; devScale: root.devScale
         // Electron chiede `border-white/8`, che Tailwind 3.3 NON genera (la scala
         // va di 5 in 5): resta il colore di preflight, un filo grigio chiaro pieno.
@@ -254,7 +274,7 @@ Item {
         border: "#e5e7eb"
     }
     LedBar {
-        x: root.pad + (root.leftW - root.ledW) / 2; y: root.artY + root.artSide + 32
+        x: root.leftX + (root.leftW - root.ledW) / 2; y: root.artY + root.artSide + 32
         width: root.ledW; devScale: root.devScale
         // BitPerfect / ReplayGain follow the player being driven, like the
         // format LEDs and the volume slider: the prefs behind ledMode are
@@ -267,13 +287,14 @@ Item {
     // ─── colonna di destra ─────────────────────────────────────────────────
     Column {
         id: col
-        x: root.rx; y: root.bodyY + 1
-        width: root.rw
+        x: Theme.bar ? root.barColX : root.rx; y: root.bodyY + 1 + (Theme.bar ? 18 : 0)
+        width: Theme.bar ? root.barColW : root.rw
         Text {
             id: titleText
             width: parent.width
             text: Player.title || Tr.t("player.noTrack")
             color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true
+            horizontalAlignment: Theme.bar ? Text.AlignHCenter : Text.AlignLeft
             wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
             lineHeight: 30; lineHeightMode: Text.FixedHeight
         }
@@ -284,17 +305,21 @@ Item {
         Item { width: 1; height: 6 }
         Text {
             width: parent.width; height: 28; verticalAlignment: Text.AlignVCenter
+            horizontalAlignment: Theme.bar ? Text.AlignHCenter : Text.AlignLeft
             text: Player.artist || (Player.stationName !== "" ? "" : Tr.t("player.unknownArtist"))   // a radio with no song yet: nothing
             color: npArtistTap.mix(Theme.gold, Theme.white); font.family: Theme.font; font.pixelSize: 18; elide: Text.ElideRight
             // the artist's page (library tracks only)
             Tap { id: npArtistTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
+                  x: Theme.bar ? (parent.width - width) / 2 : 0
                   enabled: Player.artistId !== ""; onClicked: Ui.app.openArtist(Player.artistId, Player.artist) }
         }
         Text {
             width: parent.width; height: 20; verticalAlignment: Text.AlignVCenter
+            horizontalAlignment: Theme.bar ? Text.AlignHCenter : Text.AlignLeft
             text: Player.album
             color: npAlbumTap.mix(Theme.silverA(0.7), Theme.white); font.family: Theme.font; font.pixelSize: 14; elide: Text.ElideRight
             Tap { id: npAlbumTap; width: Math.min(parent.width, parent.implicitWidth); anchors.fill: undefined; height: parent.height
+                  x: Theme.bar ? (parent.width - width) / 2 : 0
                   enabled: Player.albumId !== ""; onClicked: Ui.app.openAlbum(Player.albumId, Player.album) }
         }
         Item { width: 1; height: 6; visible: Player.chip !== "" }
@@ -303,6 +328,7 @@ Item {
             // labels: it opens the signal path. 4 px taller, so 4 px less
             // below it: the times, the bar and the controls stay where they were.
             visible: Player.chip !== ""
+            x: Theme.bar ? (parent.width - width) / 2 : 0
             width: chipRow.implicitWidth + 20; height: 26; radius: 5
             color: chipTap.mix(Theme.wa(0.05), Theme.wa(0.10)); border.width: 1; border.color: Theme.wa(0.08)
             Row {
@@ -317,6 +343,12 @@ Item {
             // the signal path, as from the format lights under the cover
             Tap { id: chipTap; grow: 8; navRadius: 5; onClicked: root.openSignalPath() }
         }
+    }
+    // times, seek bar and controls: under the header on a normal canvas, along the bottom on a wide one
+    Column {
+        id: ctl
+        x: Theme.bar ? root.barColX : root.rx; y: Theme.wide ? root.height - root.pad - height : col.y + col.height
+        width: Theme.bar ? root.barColW : Theme.wide ? Math.min(root.rw, 760) : root.rw
         Item { width: 1; height: Player.chip !== "" ? 4 : 8 }
         Item {                                     // tempi
             width: parent.width; height: 16
@@ -347,27 +379,31 @@ Item {
         Item { width: 1; height: 12 }
         Item {                                     // comandi
             id: controls
-            width: parent.width; height: 56
+            width: parent.width; height: Theme.bar ? 90 : 56
             readonly property real cy: 28
+            // bar panel: the play button (centre at 118 in the group) sits under the middle of the column and the volume gets its own centred row
+            readonly property real tx: Theme.bar ? width / 2 - 118 : 0
+            readonly property real vx: Theme.bar ? (width - 180) / 2 : width - 180
+            readonly property real vy: Theme.bar ? 76 : cy
             // 🚨 i cinque comandi erano attaccati (centri a 9/42/94/146/179 punti,
             // come in Electron): su un touchscreen si toccava il vicino. Ora c'e'
             // un passo di respiro in piu' fra uno e l'altro.
             readonly property real g: 12
             Item {                                 // shuffle
-                x: 9 - 20; y: controls.cy - 20; width: 40; height: 40
+                x: controls.tx + 9 - 20; y: controls.cy - 20; width: 40; height: 40
                 Icon { anchors.centerIn: parent; name: "shuffle"; size: 18; scale: shTap.tapScale
                        color: Player.shuffle > 0 ? Theme.gold : Theme.silverA(0.6)
                        pressColor: Theme.white; press: Player.shuffle > 0 ? 0 : shTap.pressAnim }
                 Tap { id: shTap; tap: 0.88; onClicked: Player.cycleShuffle() }
             }
             Item {                                 // precedente (whileTap .9)
-                x: 30 + 12 - 22 + controls.g; y: controls.cy - 22; width: 44; height: 44
+                x: controls.tx + 30 + 12 - 22 + controls.g; y: controls.cy - 22; width: 44; height: 44
                 Icon { anchors.centerIn: parent; name: "skip-back"; size: 24; color: Theme.silver; scale: prevTap.tapScale }
                 Tap { id: prevTap; tap: 0.9; onClicked: Ui.app ? Ui.app.skipTrack(-1) : Player.prev() }
             }
             Item {                                 // play, con alone 0 0 24px oro/40
                 id: playBtn
-                x: 66 + 2 * controls.g; y: controls.cy - 28; width: 56; height: 56
+                x: controls.tx + 66 + 2 * controls.g; y: controls.cy - 28; width: 56; height: 56
                 Glow { anchors.centerIn: parent; radius: 28; blur: 24; color: Theme.goldA(0.4) }
                 Rectangle { anchors.fill: parent; radius: 28; color: Theme.gold; scale: playTap.tapScale }
                 // Due icone che si scambiano in dissolvenza: cambiare `name` di
@@ -388,12 +424,12 @@ Item {
                 Tap { id: playTap; tap: 0.95; grow: 4; onClicked: if (!(Ui.app && Ui.app.changerTakesPlay())) Player.togglePlay() }
             }
             Item {                                 // successivo
-                x: 134 + 12 - 22 + 3 * controls.g; y: controls.cy - 22; width: 44; height: 44
+                x: controls.tx + 134 + 12 - 22 + 3 * controls.g; y: controls.cy - 22; width: 44; height: 44
                 Icon { anchors.centerIn: parent; name: "skip-forward"; size: 24; color: Theme.silver; scale: nextTap.tapScale }
                 Tap { id: nextTap; tap: 0.9; onClicked: Ui.app ? Ui.app.skipTrack(1) : Player.next() }
             }
             Item {                                 // ripeti
-                x: 170 + 9 - 20 + 4 * controls.g; y: controls.cy - 20; width: 40; height: 40
+                x: controls.tx + 170 + 9 - 20 + 4 * controls.g; y: controls.cy - 20; width: 40; height: 40
                 Icon { anchors.centerIn: parent; name: Player.repeat === 1 ? "repeat-1" : "repeat"; size: 18; scale: rpTap.tapScale
                        color: Player.repeat > 0 ? Theme.gold : Theme.silverA(0.6)
                        pressColor: Theme.white; press: Player.repeat > 0 ? 0 : rpTap.pressAnim }
@@ -401,7 +437,7 @@ Item {
             }
             Item {                                 // preferito (Lyrion Favorites): cuore pieno e oro se il brano lo e'
                 id: favBox
-                x: 170 + 9 - 20 + 4 * controls.g + 45; y: controls.cy - 20; width: 40; height: 40   // same pitch as next -> repeat
+                x: controls.tx + 170 + 9 - 20 + 4 * controls.g + 45; y: controls.cy - 20; width: 40; height: 40   // same pitch as next -> repeat
                 visible: Player.favoritesAvailable && Player.trackUrl !== ""
                 // lo scoppio quando si AGGIUNGE: 0 -> 1 -> 0 in poco piu' di
                 // un quarto di secondo, e finisce li'
@@ -432,7 +468,7 @@ Item {
             }
             // volume, a destra: icona + barra 155 px
             Item {
-                x: parent.width - 180 + 8.5 - 18; y: controls.cy - 18; width: 36; height: 36
+                x: controls.vx + 8.5 - 18; y: controls.vy - 18; width: 36; height: 36
                 Icon { anchors.centerIn: parent; name: Player.muted || Player.volume === 0 ? "volume-x" : "volume-2"; size: 17; scale: muteTap.tapScale
                        color: Player.volumeFixed ? Theme.silverA(0.21) : Theme.silverA(0.7)
                        pressColor: Theme.white; press: Player.volumeFixed ? 0 : muteTap.pressAnim }
@@ -440,7 +476,7 @@ Item {
             }
             Item {
                 id: volBar
-                x: parent.width - 180 + 25; y: controls.cy - 3; width: 155; height: 6
+                x: controls.vx + 25; y: controls.vy - 3; width: 155; height: 6
                 readonly property real frac: Math.max(0, Math.min(100, Player.volume)) / 100
                 // <input type=range> con appearance-none: traccia uniforme e pomello, NESSUNA parte riempita
                 Rectangle { anchors.fill: parent; radius: 3; color: Player.volumeFixed ? Theme.wa(0.05) : Theme.wa(0.10) }
@@ -460,21 +496,22 @@ Item {
 
     // ─── testi (nello strato: non si muovono da soli) ──────────────────────
     Lyrics {
-        x: root.rx; y: col.y + col.height; width: root.rw; height: root.height - root.pad - y
+        x: root.boxX; y: root.boxY; width: root.boxW; height: root.boxH
         visible: !root.effVu && !root.effAnim; active: root.shown && !root.effVu && !root.effAnim
     }
     }   // fine dello strato statico
 
     // ─── VU: fuori dallo strato, sono l'unica cosa che si muove ────────────
     VuPanel {
-        x: root.rx; y: col.y + col.height; width: root.rw; height: root.height - root.pad - y
+        x: root.boxX; y: root.boxY; width: root.boxW; height: root.boxH
         visible: root.effVu && !root.staged; devScale: root.devScale
     }
     // the animation in the same box, also outside the layer. Loaded while the
     // VU meters are off and one is chosen (so switching to the lyrics and back
     // does not reload the pictures); it runs only while visible on screen.
     NpAnimation {
-        x: root.rx; y: col.y + col.height; width: root.rw; height: root.height - root.pad - y
+        id: npAnim
+        x: root.boxX; y: root.boxY; width: root.boxW; height: root.boxH
         // unloaded while the full-screen stage runs its own copy
         kind: Player.vuEnabled || root.staged ? "" : Player.npAnimation
         visible: root.effAnim && !root.staged

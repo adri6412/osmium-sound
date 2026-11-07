@@ -178,6 +178,7 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
     QVariantList params;
     QString s1 = p1.typeId() == QMetaType::QVariantList ? QString() : p1.toString();
     QString s2 = p2.toString();
+    m_pluginCmd = view == PluginItems ? s1 : QString();
     // server order only where Lyrion's ordering is the point (new music,
     // random, search results); the alphabetical views sort here
     m_serverOrder = view == NewMusic || view == Search || (view == Albums && s2.contains("sort:"));
@@ -207,6 +208,12 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
     case PluginItems: params = {s1, "items", "0", "9999"};
         if (!s2.isEmpty()) params << "item_id:" + s2;
         if (!input.isEmpty()) params << "search:" + input;
+        // A library favorite (album, artist, genre…) is stored as a `db:` query
+        // URL that `favorites items` cannot expand and `favorites playlist play`
+        // cannot stream. Without want_url the entry arrives with no url at all,
+        // so the kiosk cannot even tell it is a db: one -- ask for the url and
+        // resolve it back to the real object on tap/play (issue #125).
+        if (s1 == "favorites") params << "want_url:1";
         break;
     default:
         beginResetModel(); m_items.clear(); m_order.clear(); endResetModel();
@@ -262,8 +269,24 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
     for (const QString &n : loopNames) if (res.contains(n)) { loop = res.value(n).toList(); break; }
     QVariantMap base = res.value("base").toMap();
     m_items.reserve(loop.size());
+    // The CDplayer plugin's root lists the same disc read several ways (two
+    // metadata matches, CD-Text, raw tracks) plus Eject. Show the disc once:
+    // keep only the first (best) album entry and the non-album actions (Eject).
+    const bool cdMenu = view == PluginItems && cmd == "cdplayer";
+    bool cdAlbumKept = false;
     for (const QVariant &v : loop) {
         QVariantMap it = v.toMap();
+        // CDplayer root: keep only the single disc album and drop everything
+        // else. The disc readings are containers (hasitems=1); the "Eject CD"
+        // action is the only non-container (type="audio", hasitems=0) — older
+        // plugin builds tagged it with a Command=eject url, newer ones send no
+        // url at all, so match it structurally. The eject action itself stays
+        // in the plugin — this only hides it from the kiosk browse.
+        if (cdMenu) {
+            if (it.value("hasitems").toInt() != 1) continue;   // Eject + non-disc entries
+            if (cdAlbumKept) continue;                          // extra readings of the same disc
+            cdAlbumKept = true;
+        }
         LibItem o;
         switch (view) {
         case Artists: case Composers: o.id = str(it, "id"); o.text = str(it, "artist"); o.favUrl = str(it, "favorites_url"); break;
@@ -283,6 +306,12 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
             break;
         case Folders:
             o.id = str(it, "id"); o.text = str(it, "filename"); if (o.text.isEmpty()) o.text = str(it, "title");
+            // Lyrion's musicfolder does a Perl `$name || $fullpath` fallback, and
+            // Perl counts the string "0" as false -- so a folder named exactly
+            // "0" comes back as its full path, while every other name is fine. A
+            // folder's display name never holds a slash, so one means a path
+            // leaked in: keep only the last component.
+            if (o.text.contains('/')) { QString b = o.text.section('/', -1, -1, QString::SectionSkipEmpty); if (!b.isEmpty()) o.text = b; }
             o.isDir = str(it, "type") == "folder";
             break;
         case Playlists: o.id = str(it, "id"); o.text = str(it, "playlist"); o.url = str(it, "url"); o.favUrl = str(it, "favorites_url"); if (o.favUrl.isEmpty()) o.favUrl = o.url; break;
@@ -294,7 +323,13 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
             bool hasAct = acts.contains("go") || acts.contains("do") || it.contains("input");
             bool excl = id == "myMusic" || id == "radios" || id == "playerpower";
             QString go0 = acts.value("go").toMap().value("cmd").toList().value(0).toString();
-            if (!okNode || !hasAct || excl || go0 == "favorites") continue;
+            // The streaming services (Qobuz/Tidal/Spotify) and the CD player are
+            // already shown as tiles on the Music root, so hide them here to keep
+            // the Apps tab free of duplicates (match the app command or its id).
+            static const QStringList musicRootApps = {
+                "qobuz", "tidal", "wimp", "spotify", "spotty", "cdplayer" };
+            if (!okNode || !hasAct || excl || go0 == "favorites"
+                || musicRootApps.contains(go0) || musicRootApps.contains(id)) continue;
             o.id = id; o.text = str(it, "text"); if (o.text.isEmpty()) o.text = str(it, "name");
             o.icon = menuIcon(it);
             o.go = resolveAction({}, it, "go"); o.play = resolveAction({}, it, "play"); o.doact = resolveAction({}, it, "do");
@@ -316,7 +351,15 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
         case PluginItems: {
             o.id = str(it, "id"); if (o.id.isEmpty()) o.id = str(it, "play");
             o.text = str(it, "name"); if (o.text.isEmpty()) o.text = str(it, "title");
-            o.icon = str(it, "icon");
+            // CDplayer tags its metadata reads with a trailing " [data]"; drop it
+            // so the disc shows its plain album title.
+            if (cdMenu && o.text.endsWith(" [data]")) o.text.chop(7);
+            // 🚨 plugin items (Qobuz, Tidal...) carry their artwork in `image`,
+            // not `icon`: album/track covers come as `/imageproxy/...` and menu
+            // nodes as `html/images/*.png`, while `icon` is usually empty. Read
+            // the same ladder as the Jive menus (menuIcon: icon-id, window
+            // icon-id, icon, image) or every plugin tile shows no art.
+            o.icon = menuIcon(it);
             QString type = str(it, "type"); o.ptype = type;
             // 🚨 Lyrion marca il nodo di ricerca con type:"search" ma gli mette
             // ANCHE hasitems:1 (il suo ripiego "Bug 7684"): non e' un vero
@@ -341,6 +384,29 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
     }
     if (view == MenuHome)
         std::stable_sort(m_items.begin(), m_items.end(), [](const LibItem &a, const LibItem &b) { return a.weight < b.weight; });
+
+    // Is this plugin list, in fact, a grid of albums? (so the browser can offer
+    // Cover Flow and the CD changer for it, like the local library.) Generic
+    // heuristic: most rows are navigable containers carrying real cover art —
+    // not the search box, not plain tracks, not Lyrion's theme glyphs.
+    m_pluginAlbumList = false;
+    if (view == PluginItems) {
+        int albums = 0, total = 0;
+        for (const LibItem &o : m_items) {
+            if (o.hasInput) continue;           // a search box is not an album
+            total++;
+            const bool cover = o.icon.contains("imageproxy") || o.icon.contains("/cover")
+                               || o.icon.contains("/music/");
+            // a streaming album/playlist is a container (hasitems) with real
+            // cover art AND a container type ("album"/"playlist"…). It is also
+            // flagged isaudio (the whole album plays), so isAudio does NOT tell
+            // it apart from a plain track — a track leaf instead carries no type
+            // even though it, too, is audio with a cover. Key on the type.
+            const bool container = o.hasItems && !o.ptype.isEmpty() && o.ptype != QLatin1String("audio");
+            if (container && cover) albums++;
+        }
+        m_pluginAlbumList = total >= 3 && albums * 5 >= total * 3;   // ≥60% album-like
+    }
 }
 
 void LibraryModel::applyOrderFilter() {

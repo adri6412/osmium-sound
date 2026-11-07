@@ -7,16 +7,24 @@ import Hifi.Ui
 Item {
     id: root
     property real devScale: 1
-    property int tab: 0                       // 0 musica 1 radio 2 app 3 scopri 4 impostazioni
-    property var nav: [{ view: LibraryModel.Home, title: Tr.t("player.titles.home"), p1: "", p2: "", input: "" }]
+    property int tab: 0                       // 0 musica 1 app 2 scopri 3 impostazioni
+    // Pseudo-view (not in LibraryModel's C++ enum): the root of the Music tab,
+    // the tiles of the music sources (Qobuz/Tidal/Spotify/Radio/Local library).
+    // A large number so it never collides with a real LibraryModel.View value.
+    readonly property int sourcesRoot: 1000
+    property var nav: [{ view: sourcesRoot, title: Tr.t("player.titles.sources"), p1: "", p2: "", input: "" }]
+    // where the last long-press menu opened, so a second-level menu (the native
+    // plugin context menu) can reopen in the same spot
+    property real menuX: 0
+    property real menuY: 0
     readonly property var cur: nav[nav.length - 1]
     readonly property int view: cur.view
-    readonly property bool hasCrumbs: tab !== 4 && tab !== 3
+    readonly property bool hasCrumbs: tab !== 3 && tab !== 2
     readonly property real contentTop: hasCrumbs ? 83 : 40
     readonly property bool hasSearch: tab === 0 && (view === LibraryModel.Artists || view === LibraryModel.Albums || view === LibraryModel.Composers)
     readonly property bool hasAz: hasSearch
     readonly property bool azShown: hasAz && !list.coverflow && !list.changer   // Cover Flow has its own slider, the changer its file
-    readonly property bool browsing: tab === 0 && view !== LibraryModel.Home
+    readonly property bool browsing: tab === 0 && view !== LibraryModel.Home && view !== sourcesRoot
     // the album and artist pages load their own data (AlbumPage.qml, ArtistPage.qml)
     readonly property bool isPage: view === LibraryModel.AlbumPage || view === LibraryModel.ArtistPage
     property bool msearchOpen: false
@@ -27,6 +35,55 @@ Item {
     property alias discoverTab: discoverTab
     readonly property var pageItem: pageLoader.item       // the album/artist page on screen, if any
     x: 341; width: parent ? parent.width - 341 : 683; height: parent ? parent.height : 600
+
+    // ─── copertina del CD scaricata dalla rete ──────────────────────────────
+    // Il plugin CDplayer non allega la copertina all'album della sua browse; il
+    // backend pero' conosce il release MusicBrainz del disco (/api/cd/info) e la
+    // scarica da Cover Art Archive (/api/cd/cover). Quando si entra nella vista
+    // CDplayer chiediamo l'info e teniamo l'URL, che LibraryList usa per l'album.
+    readonly property bool inCdPlayer: view === LibraryModel.PluginItems && String(cur.p1) === "cdplayer"
+    // The whole CD section: the CDplayer menu list and the CD album page reached
+    // from it (both carry cur.p1 === "cdplayer"). While we are in it we keep an
+    // eye on the drive, so a disc swapped or taken out by hand updates the view.
+    readonly property bool inCdSection: String(cur.p1) === "cdplayer"
+                                        && (view === LibraryModel.PluginItems || view === LibraryModel.AlbumPage)
+    property string cdCoverUrl: ""
+    // the disc id the CD view is drawn for, so a swap/removal can be told apart
+    // from the same disc still sitting in the drive (CdRip owns the polling).
+    property string cdDiscId: ""
+    onInCdSectionChanged: refreshCdInfo()
+    // One /api/cd/info on entry: the cover (the CDplayer plugin ships none) and
+    // the current disc id as our baseline. CdRip already polls the drive every
+    // few seconds when one is present, so we do NOT start a second poll here
+    // (every /api/cd/info spins cd-discid — see CdRip.qml).
+    function refreshCdInfo() {
+        if (!inCdSection) { cdCoverUrl = ""; cdDiscId = ""; return }
+        Api.get(Api.srcBase + "/api/cd/info", function(ok, d) {
+            if (!root.inCdSection) return
+            var has = ok && d && typeof d === "object" && !d.no_disc
+            root.cdDiscId = has ? String(d.discid || "") : ""
+            if (has && d.cover) root.cdCoverUrl = Api.srcBase + String(d.cover)
+            else if (has && d.mbid) root.cdCoverUrl = Api.srcBase + "/api/cd/cover?release=" + encodeURIComponent(String(d.mbid))
+            else root.cdCoverUrl = ""
+        })
+    }
+    // React to the disc being swapped or removed while we sit in the CD section.
+    // CdRip (Ui.cdrip) keeps `discid` fresh from its own drive poll: a disc gone
+    // sends us to the Music root (never a dead CD page), a new disc reloads the
+    // CD view so it shows the one now in the drive instead of the old/empty one.
+    Connections {
+        target: Ui.cdrip
+        function onDiscidChanged() {
+            if (!root.inCdSection || !Ui.cdrip) return
+            var id = String(Ui.cdrip.discid)
+            if (id === root.cdDiscId) return
+            root.cdDiscId = id
+            if (id === "") { root.navSources(); return }
+            root.refreshCdInfo()
+            if (root.view === LibraryModel.AlbumPage) root.navBack()   // menu reloads and shows the new disc
+            else root.loadTop()
+        }
+    }
 
     // ─── "Aggiornamento disponibile" sul tab delle impostazioni ────────────
     // Come nel kiosk Electron: si guardano i tre componenti (interfaccia,
@@ -51,9 +108,16 @@ Item {
     Timer { interval: 15 * 60 * 1000; repeat: true; triggeredOnStart: true; running: true; onTriggered: root.checkUpdates() }
 
     readonly property var tabs: [
-        { icon: "music", key: "player.tabs.music" }, { icon: "radio", key: "player.tabs.radio" },
+        { icon: "music", key: "player.tabs.music" },
         { icon: "app-window", key: "player.tabs.apps" }, { icon: "compass", key: "player.tabs.discover" },
         { icon: "settings", key: "" }]
+    // Home tiles: 3 columns on a normal canvas, 5 on ultrawide, one row of 9 on a very long bar
+    readonly property int homeCols: width >= 2700 ? 9 : width >= 1500 ? 5 : 3
+    readonly property int homeRows: Math.ceil(9 / homeCols)
+    readonly property real homeTw: (width - 32 - 12 * (homeCols - 1)) / homeCols
+    // 117 is the tile of the classic 3 rows; with fewer rows they share the height (up to 200)
+    readonly property real homeTh: homeRows === 3 ? 117 + Math.max(0, height - 600) / 3
+                                                  : Math.min(200, (height - 83 - 62 - 12 - 12 * (homeRows - 1)) / homeRows)
     readonly property var tiles: [
         { icon: "heart", key: "player.titles.favorites", view: LibraryModel.PluginItems },
         { icon: "user", key: "player.titles.artists", view: LibraryModel.Artists },
@@ -65,9 +129,153 @@ Item {
         { icon: "folder", key: "player.titles.folders", view: LibraryModel.Folders },
         { icon: "list-music", key: "player.titles.playlists", view: LibraryModel.Playlists }]
 
+    // ─── tessere delle sorgenti (radice del tab Musica) ─────────────────────
+    // "Libreria locale" (le tessere qui sopra) e "Radio" sono sempre presenti;
+    // i servizi di streaming (Qobuz/Tidal/Spotify) compaiono solo se il plugin
+    // e' installato, scoperti dalla lista `apps` di Lyrion. Ogni tessera porta:
+    //  - library → la home della libreria (le 9 tessere);
+    //  - radio   → l'elenco delle stazioni;
+    //  - app     → la radice del servizio (PluginItems con il suo `cmd`).
+    property var sourceTiles: []
+    property bool sourcesProbed: false
+    // whether the CDplayer plugin is loaded (a home-menu plugin, not an app):
+    // when true the Music root shows a CD tile. Probed with the `can` command.
+    property bool cdAvailable: false
+    // login state of the streaming services (key -> {available, loggedIn}),
+    // fetched from the backend; and the reverse map plugin cmd -> service key,
+    // so a service opened from its tile knows whether it still needs a login.
+    property var svcStatus: ({})
+    property var svcByCmd: ({})
+    // the streaming services we promote to a tile, matched case-insensitively
+    // on the app's name (Spotty is the Spotify bridge plugin). `key` is the
+    // backend's service id for /services/* (login state + login flows).
+    // Osmium-drawn marks for the services (icons/svc-*.svg), so the Music root
+    // looks like Osmium and not Lyrion's default theme (the `srvIcon` images
+    // Lyrion ships are no longer shown on these tiles — see the tile below).
+    readonly property var sourceServices: [
+        { label: "Qobuz", key: "qobuz", match: ["qobuz"], icon: "svc-qobuz" },
+        { label: "Tidal", key: "tidal", match: ["tidal", "wimp"], icon: "svc-tidal" },
+        { label: "Spotify", key: "spotty", match: ["spotify", "spotty"], icon: "svc-spotify" }]
+    function rebuildSources(apps) {
+        var out = []
+        var byCmd = {}
+        // Favourites and the local library come first, then the streaming
+        // services, then radio. "favorites" is the global Lyrion favourites
+        // menu (opened as a plugin item with cmd "favorites").
+        out.push({ kind: "favorites", label: Tr.t("player.titles.favorites"), icon: "heart", srvIcon: "", cmd: "favorites" })
+        out.push({ kind: "library", label: Tr.t("player.titles.localLibrary"), icon: "library", srvIcon: "", cmd: "" })
+        // streaming services, in the order declared, only if available
+        for (var s = 0; s < sourceServices.length; s++) {
+            var svc = sourceServices[s]
+            for (var i = 0; i < apps.length; i++) {
+                var nm = String(apps[i].name || "").toLowerCase()
+                var hit = false
+                for (var m = 0; m < svc.match.length; m++) if (nm.indexOf(svc.match[m]) >= 0) { hit = true; break }
+                if (hit) { out.push({ kind: "app", key: svc.key, label: svc.label || apps[i].name, icon: svc.icon, srvIcon: apps[i].icon || "", cmd: apps[i].id }); byCmd[String(apps[i].id)] = svc.key; break }
+            }
+        }
+        // the CD player, if the plugin is installed (opened as a plugin item
+        // with cmd "cdplayer", i.e. the home-menu `go` action ['cdplayer','items'])
+        if (root.cdAvailable)
+            out.push({ kind: "cd", label: Tr.t("player.titles.cdPlayer"), icon: "disc", srvIcon: "", cmd: "cdplayer" })
+        out.push({ kind: "radio", label: Tr.t("player.titles.radio"), icon: "radio", srvIcon: "", cmd: "" })
+        sourceTiles = out
+        svcByCmd = byCmd
+    }
+    function loadSources() {
+        if (!Player.connected) return
+        sourcesProbed = true
+        Player.query(["apps", "0", "9999"], function(ok, r) {
+            var apps = []
+            if (ok && r) {
+                var loop = r.appss_loop || r.apps_loop || r.item_loop || []
+                for (var i = 0; i < loop.length; i++) apps.push({ name: loop[i].name, id: loop[i].cmd, icon: loop[i].icon })
+            }
+            // the CD player is a home-menu plugin, not an app: probe it with
+            // `can` (drive-free) so the tile only appears when it is loaded.
+            Player.query(["can", "cdplayer", "items", "?"], function(ok2, r2) {
+                root.cdAvailable = !!(ok2 && r2 && r2._can)
+                root.rebuildSources(apps)
+                root.loadServiceStatus()
+            })
+        })
+    }
+    // login state of Qobuz/Tidal/Spotify, from the backend (never secrets)
+    function loadServiceStatus() {
+        Api.get(Api.apiBase + "/services/status", function(ok, d) {
+            if (ok && d && d.services) root.svcStatus = d.services
+        })
+    }
+    // the service key of the plugin currently open (empty if not a known
+    // streaming service), its label, and whether its root still needs a login
+    readonly property string curSvcKey: view === LibraryModel.PluginItems ? (svcByCmd[String(cur.p1)] || "") : ""
+    readonly property string curSvcLabel: {
+        for (var i = 0; i < sourceServices.length; i++) if (sourceServices[i].key === curSvcKey) return sourceServices[i].label
+        return ""
+    }
+    readonly property bool curSvcNeedsLogin: curSvcKey !== "" && String(cur.p2 || "") === ""
+                                             && !!svcStatus[curSvcKey] && svcStatus[curSvcKey].loggedIn === false
+    // ─── accesso ai servizi di streaming dal kiosk ──────────────────────────
+    // Qobuz: box utente+password (il plugin fa lui l'md5). Tidal/Spotify:
+    // approvazione da telefono (QR del link + polling finche' il servizio
+    // conferma). Tutta l'autenticazione vive nei plugin, pilotata dal backend.
+    function serviceLogin(key, label) {
+        if (key === "qobuz") qobuzLogin(label, "")
+        else deviceLogin(key, label)
+    }
+    function qobuzLogin(label, error) {
+        Ui.dialogs.login(Tr.tf("services.signInTitle", "name", label), Tr.t("services.qobuz.hint"),
+                         "", error, function(u, p) {
+            if (u === null) return
+            Api.post(Api.apiBase + "/services/qobuz/login", { username: u, password: p }, function(ok, d) {
+                if (ok && d && d.success) root.afterServiceLogin()
+                else root.qobuzLogin(label, Tr.t("services.loginFailed"))
+            }, 40000)
+        })
+    }
+    function deviceLogin(key, label) {
+        // Spotty signs in over Spotify Connect (pick a device in the Spotify
+        // app), the others via a QR link: the opening hint differs
+        var hint = key === "spotty" ? Tr.t("services.spotty.preparing") : Tr.t("services.device.scanHint")
+        Ui.dialogs.deviceAuth(Tr.tf("services.signInTitle", "name", label), hint,
+                              function(ok) { root._stopSvcPoll() })
+        Api.post(Api.apiBase + "/services/" + key + "/auth/start", {}, function(ok, d) {
+            if (!Ui.dialogs.active || Ui.dialogs.kind !== 8) return
+            if (!ok || !d || !d.success) { Ui.dialogs.deviceAuthError(Tr.t("services.loginFailed")); return }
+            if (d.connect) Ui.dialogs.deviceAuthConnect(d.device || "")       // Spotify Connect
+            else if (d.link) Ui.dialogs.deviceAuthUpdate(d.link, d.deviceCode || "", d.qr || "")
+            else { Ui.dialogs.deviceAuthError(Tr.t("services.loginFailed")); return }
+            root._startSvcPoll(key, d.deviceCode || "")
+        }, 30000)
+    }
+    function _startSvcPoll(key, code) { svcPoll.stop(); svcPoll.svcKey = key; svcPoll.devCode = code || ""; svcPoll.start() }
+    function _stopSvcPoll() { svcPoll.stop() }
+    function afterServiceLogin() {
+        _stopSvcPoll()
+        if (Ui.dialogs.active) Ui.dialogs.close()
+        loadServiceStatus()
+        loadTop()
+    }
+    Timer {
+        id: svcPoll
+        property string svcKey: ""
+        property string devCode: ""
+        interval: 3000; repeat: true; running: false
+        onTriggered: {
+            if (!Ui.dialogs.active || Ui.dialogs.kind !== 8) { stop(); return }
+            var url = Api.apiBase + "/services/" + svcKey + "/auth/poll"
+            if (devCode !== "") url += "?deviceCode=" + encodeURIComponent(devCode)
+            Api.get(url, function(ok, d) { if (ok && d && Number(d.hasCredentials) === 1) root.afterServiceLogin() }, 12000)
+        }
+    }
+    Component.onCompleted: { rebuildSources([]); if (Player.connected) loadSources() }
+    Connections { target: Player; function onConnectedChanged() { if (Player.connected) root.loadSources() } }
+    // a new Lyrion (multiroom follow / external server) has its own apps
+    Connections { target: Api; function onLmsBaseChanged() { root.sourcesProbed = false; root.loadSources() } }
+
     // ─── navigazione ───────────────────────────────────────────────────────
     function loadTop() {
-        if (cur.view === LibraryModel.Home) return
+        if (cur.view === LibraryModel.Home || cur.view === root.sourcesRoot) return
         if (cur.view === LibraryModel.AlbumPage || cur.view === LibraryModel.ArtistPage) {
             // a fresh page every time, also from one album page to another
             pageLoader.sourceComponent = null
@@ -76,11 +284,22 @@ Item {
         }
         pageLoader.sourceComponent = null
         Library.request(cur.view, cur.p1, cur.p2, cur.input)
-        list.scrollTop()
+        // back to a list we had scrolled (cur.scroll, set in goView): restore
+        // it once the rows land (onLoaded below); a fresh view starts at the top
+        if (cur.scroll) pendingScroll = cur.scroll
+        else { pendingScroll = null; list.scrollTop() }
     }
-    function goView(view, title, p1, p2, input, replace) {
+    // the scroll position of the list we are leaving, waiting to be put back
+    property var pendingScroll: null
+    function goView(view, title, p1, p2, input, replace, cover) {
         var n = nav.slice()
-        var e = { view: view, title: title || "…", p1: p1 || "", p2: p2 || "", input: input || "" }
+        // remember where this list was before we dive into an album/artist, so
+        // Back lands us there instead of at the top (#…)
+        if (!replace && !isPage && view !== LibraryModel.Home && n.length && n[n.length - 1].view !== LibraryModel.Home)
+            n[n.length - 1].scroll = list.scrollAnchor()
+        // `cover` carries a plugin album's cover URL to AlbumPage (local albums
+        // build theirs from album_id, so it stays empty for them)
+        var e = { view: view, title: title || "…", p1: p1 || "", p2: p2 || "", input: input || "", cover: cover || "" }
         if (replace) n[n.length - 1] = e; else { if (n.length >= 16) return; n.push(e) }
         nav = n
         navDir = 1
@@ -95,8 +314,9 @@ Item {
     // (Nav.land): the content, never the bars above it. `from` is the entry
     // one came back from, so the home lights the tile that had been opened.
     function landing(from) {
-        if (tab === 4) return { box: settingsTab, pick: null }
-        if (tab === 3) return { box: discoverTab, pick: null }
+        if (tab === 3) return { box: settingsTab, pick: null }
+        if (tab === 2) return { box: discoverTab, pick: null }
+        if (view === root.sourcesRoot) return { box: sourcesBox, pick: function() { return sourcesBox.tileFor(from) } }
         if (view === LibraryModel.Home) return { box: tilesBox, pick: function() { return tilesBox.tileFor(from) } }
         if (isPage) return { box: pageLoader, pick: function() { return pageLoader.item ? pageLoader.item.navFirst : null } }
         return { box: list, pick: null }
@@ -104,12 +324,24 @@ Item {
     function landNav(from) { var l = landing(from); Nav.land(l.box, l.pick) }
     // 🚨 Se l'apparecchio passa a un altro Lyrion (multiroom "segui", o server
     // esterno), quello che si sta guardando e' l'elenco del server di prima:
-    // si riparte dalla home di quello nuovo.
-    Connections { target: Api; function onLmsBaseChanged() { root.navHome() } }
+    // si riparte dalla radice delle sorgenti del nuovo.
+    Connections { target: Api; function onLmsBaseChanged() { root.navSources() } }
 
+    // the Music tab's root: the source tiles, above the library home
+    function navSources() {
+        nav = [{ view: root.sourcesRoot, title: Tr.t("player.titles.sources"), p1: "", p2: "", input: "" }]
+        navDir = -1
+        msearchOpen = false; ctx.close(); search.text = ""
+        pageLoader.sourceComponent = null
+        appear()
+        landNav(null)
+    }
+    // the library home (the 9 tiles), one level under the sources root so Back
+    // from it returns to the tiles
     function navHome() {
-        var from = nav.length > 1 ? nav[1] : null
-        nav = [{ view: LibraryModel.Home, title: Tr.t("player.titles.home"), p1: "", p2: "", input: "" }]
+        var from = nav.length > 2 ? nav[2] : null
+        nav = [{ view: root.sourcesRoot, title: Tr.t("player.titles.sources"), p1: "", p2: "", input: "" },
+               { view: LibraryModel.Home, title: Tr.t("player.titles.localLibrary"), p1: "", p2: "", input: "" }]
         navDir = -1
         msearchOpen = false; ctx.close(); search.text = ""
         pageLoader.sourceComponent = null
@@ -117,6 +349,8 @@ Item {
         landNav(from)
     }
     function navBack() {
+        // in Settings the remote's Back steps up its own levels first
+        if (tab === 3 && settingsTab.backStep()) return
         if (nav.length <= 1) return
         var from = nav[nav.length - 1]
         var n = nav.slice(); n.pop(); nav = n
@@ -137,16 +371,22 @@ Item {
     function openTab(i) {
         navDir = i > tab ? 1 : i < tab ? -1 : 0
         tab = i; ctx.close()
-        if (i === 1) { navHome(); goView(LibraryModel.Radios, Tr.t("player.titles.radio")) }
-        else if (i === 2) { navHome(); goView(LibraryModel.MenuHome, Tr.t("player.titles.apps")) }
+        if (i === 1) {
+            // "Apps · CD": the Jive home menu stands as its own root
+            nav = [{ view: LibraryModel.MenuHome, title: Tr.t("player.titles.apps"), p1: "", p2: "", input: "" }]
+            navDir = -1; msearchOpen = false; search.text = ""; pageLoader.sourceComponent = null
+            loadTop()
+        }
         else if (i === 0) {
+            // back to Music: keep a library view in place, otherwise show the
+            // sources root (never land on a service/apps plugin view)
             var v = view
-            if (!(v === LibraryModel.Home || v === LibraryModel.Artists || v === LibraryModel.Albums || v === LibraryModel.Tracks ||
+            if (!(v === root.sourcesRoot || v === LibraryModel.Home || v === LibraryModel.Artists || v === LibraryModel.Albums || v === LibraryModel.Tracks ||
                   v === LibraryModel.Folders || v === LibraryModel.Playlists || v === LibraryModel.PlaylistTracks ||
                   v === LibraryModel.Genres || v === LibraryModel.Years || v === LibraryModel.Composers ||
-                  v === LibraryModel.NewMusic || v === LibraryModel.Search || v === LibraryModel.AlbumPage || v === LibraryModel.ArtistPage)) navHome()
-        } else if (i === 4) settingsTab.enter()
-        else if (i === 3) discoverTab.enter()
+                  v === LibraryModel.NewMusic || v === LibraryModel.Search || v === LibraryModel.AlbumPage || v === LibraryModel.ArtistPage)) navSources()
+        } else if (i === 3) settingsTab.enter()
+        else if (i === 2) discoverTab.enter()
         appear()
         landNav(null)
     }
@@ -170,9 +410,75 @@ Item {
         goView(LibraryModel.PluginItems, Tr.t("player.titles.favorites"), "favorites")
     }
     function openAlbum(id, title) { if (!id) return; showMusicTab(); goView(LibraryModel.AlbumPage, title, String(id)) }
+    // a plugin album opens the same AlbumPage as a local one, but in plugin mode:
+    // p1 = plugin command, p2 = item id (marks plugin mode), cover = its artwork.
+    // The page drills [cmd,"items",…,"item_id:"+item] for the tracks (AlbumPage.qml).
+    function openPluginAlbum(cmd, item, title, cover, favUrl) {
+        if (!cmd || !item) return
+        // favUrl rides in `input` (an album page has no search input of its own)
+        showMusicTab(); goView(LibraryModel.AlbumPage, title, String(cmd), String(item), favUrl || "", false, cover || "")
+    }
     function openArtist(id, name) { if (!id) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, String(id)) }
     function openPerson(mbid, name) { if (!mbid) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, "", "mbid:" + mbid) }
     function openMenu(items, x, y) { ctx.open(items, x, y) }
+
+    // ── db: library favorites ─────────────────────────────────────────────
+    // Lyrion saves an album/artist/genre favorite as a `db:` query URL
+    // (e.g. db:album.title=X&contributor.name=Y), not a playable stream. The
+    // plain `favorites items`/`favorites playlist play` path drills into
+    // nothing and refuses to play it ("Cannot request non-HTTP URL db:…"); only
+    // menu mode would expand it, which is how Material shows it. Rather than
+    // teach the whole plugin browser menu mode, we resolve such a favorite back
+    // to the real library object and reuse the album/artist page and
+    // playlistcontrol, which work. (issue #125)
+    function dbFavField(url, key) {
+        var m = String(url).match(new RegExp("(?:^db:|&)" + key + "=([^&]*)"))
+        return m ? decodeURIComponent(m[1].replace(/\+/g, " ")) : ""
+    }
+    function dbFavKind(url) {
+        if (String(url).indexOf("db:") !== 0) return ""
+        if (dbFavField(url, "album\\.title")) return "album"
+        if (dbFavField(url, "contributor\\.name")) return "artist"
+        return ""                                   // genre/year/…: leave as is
+    }
+    // resolve the db: query to an id, then act: mode "open" navigates to the
+    // page, "load"/"add"/"insert" feed the queue through playlistcontrol.
+    function dbFavAct(it, mode) {
+        var url = it.url, kind = dbFavKind(url)
+        if (!kind) return false
+        var feed = function(type, id) {
+            if (!id) { say("alert-triangle", "player.queueFailed"); return }
+            if (mode === "open") { if (type === "album_id") openAlbum(id, it.text); else openArtist(id, it.text); return }
+            Player.query(["playlistcontrol", "cmd:" + mode, type + ":" + id], function(ok) {
+                Player.refresh()
+                if (!ok) say("alert-triangle", "player.queueFailed")
+                else if (mode === "add") say("list-plus", "player.addedToQueue")
+                else if (mode === "insert") say("list-start", "player.playingNext")
+            })
+        }
+        if (kind === "album") {
+            var at = dbFavField(url, "album\\.title"), aa = dbFavField(url, "contributor\\.name")
+            Player.query(["albums", "0", "20", "search:" + at, "tags:la"], function(ok, r) {
+                var loop = (ok && r) ? r.albums_loop : null, pick = ""
+                for (var i = 0; loop && i < loop.length; i++) {
+                    if (!pick) pick = String(loop[i].id)
+                    if (aa && String(loop[i].artist || "").toLowerCase() === aa.toLowerCase()) { pick = String(loop[i].id); break }
+                }
+                feed("album_id", pick)
+            })
+        } else {
+            var cn = dbFavField(url, "contributor\\.name")
+            Player.query(["artists", "0", "20", "search:" + cn], function(ok, r) {
+                var loop = (ok && r) ? r.artists_loop : null, pick = ""
+                for (var i = 0; loop && i < loop.length; i++) {
+                    if (!pick) pick = String(loop[i].id)
+                    if (String(loop[i].artist || "").toLowerCase() === cn.toLowerCase()) { pick = String(loop[i].id); break }
+                }
+                feed("artist_id", pick)
+            })
+        }
+        return true
+    }
     function closeMenu() { ctx.close() }
     readonly property bool menuOpen: ctx.visible
     // Il tasto "cerca" del telecomando: il campo di questa schermata se ce
@@ -202,7 +508,8 @@ Item {
     function tutorialMenuRect() {
         if (view !== LibraryModel.Albums || Library.state !== 2 || Library.count < 1 || list.coverflow || list.changer) return null
         var cw = list.cardW, top = (cdBanner.visible ? 48 : 0)
-        ctx.open(ctxItems(0), list.x + cw / 2, list.y + cw / 2 + top)
+        menuX = list.x + cw / 2; menuY = list.y + cw / 2 + top
+        ctx.open(ctxItems(0), menuX, menuY)
         if (!ctx.visible) return null
         // the card and its menu together
         var x0 = Math.min(list.x, ctx.boxX), y0 = Math.min(list.y + top, ctx.boxY)
@@ -278,13 +585,51 @@ Item {
         L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: q("add") })
         L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: q("insert") })
     }
+    // The native context menu of a plugin item (Qobuz, Tidal...): Material's
+    // "more". A plugin item carries no favorites_url of its own, so the only way
+    // to add a Qobuz album/track to favourites — or jump to its artist/credits —
+    // is to ask the plugin for the item's context menu (`isContextMenu:1`), which
+    // returns rows whose `go` action does the deed. `nextWindow:"parent"` (and
+    // kin) means the action is a one-shot (add to favourites) and leaves the list
+    // where it is; anything else drills into a submenu, so we browse into it.
+    function openNativeCtx(cmd, id) {
+        Player.query([cmd, "items", "0", "100", "item_id:" + id, "isContextMenu:1", "menu:" + cmd], function(ok, r) {
+            if (!ok || !r) { say("alert-triangle", "player.ctxError"); return }
+            var loop = r.item_loop || r.loop_loop || [], items = []
+            for (var i = 0; i < loop.length; i++) {
+                var it = loop[i], a = it.actions
+                if (!a || !a.go || !a.go.cmd || !a.go.params || !a.go.params.item_id) continue
+                var iid = String(a.go.params.item_id), label = String(it.text || "").split("\n")[0]
+                if (!label) continue
+                var nw = String(a.go.nextWindow || "")
+                var terminal = nw === "parent" || nw === "grandparent" || nw === "refresh" || nw === "refreshOrigin" || nw === "home"
+                var isFav = /favor/i.test(label)
+                var ic = isFav ? "heart" : /artist/i.test(label) ? "user" : terminal ? "list-plus" : "chevron-right"
+                items.push((function(c, i2, lab, term, fav) { return { icon: ic, label: lab, cb: function() {
+                    if (term) Player.query([c, "items", "0", "10", "item_id:" + i2, "menu:" + c], function(ok2) {
+                        // plugin native ctx (Qobuz/Tidal…) → the service's own My Favourites
+                        say(fav ? "heart" : "check", ok2 ? (fav ? "player.addedToStreamingServiceFavorites" : "player.actionDone") : "player.favoriteError")
+                        if (ok2 && fav && cur.view === LibraryModel.PluginItems && cur.p1 === "favorites") loadTop()
+                    })
+                    else root.goView(LibraryModel.PluginItems, lab, c, i2)
+                } } })(cmd, iid, label, terminal, isFav))
+            }
+            if (!items.length) { say("info", "player.noActions"); return }
+            ctx.open(items, root.menuX, root.menuY)
+        })
+    }
     function favoriteMenu(it, row) {
         var L = []
         // un preferito e' musica quanto la riga da cui e' nato: stessa coda,
         // piu' le voci che valgono solo qui (rinomina, sposta, togli)
         var isDir = it.hasItems && !it.isAudio
         if (it.isAudio || isDir) {
-            pluginQueueItems(L, "favorites", it.id)
+            // a db: library favorite is resolved to its object; the plugin's own
+            // `favorites playlist add` cannot queue a db: query (issue #125)
+            if (dbFavKind(it.url)) {
+                L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { dbFavAct(it, "add") } })
+                L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: function() { dbFavAct(it, "insert") } })
+            } else pluginQueueItems(L, "favorites", it.id)
             L.push({ icon: "pencil", label: Tr.t("player.rename"), cb: function() {
                 Ui.overlays.prompt(Tr.t("player.renameTitle"), it.text, function(name) {
                     if (!name || name === it.text) return
@@ -357,6 +702,11 @@ Item {
                 L.push({ icon: "disc-3", label: Tr.t("player.changer.putIn"), cb: function() {
                     Ui.app.changerPut({ title: it.text, artUrl: list.iconUrl(it.icon), url: it.favUrl, cmd: cur.p1, item: it.id })
                 } })
+            // the plugin's own context menu (Material's "more"): add to the
+            // service's favourites, go to the artist, credits... Shown for real
+            // music items (an album, a track) since navigation nodes have none.
+            if (!it.hasInput && (it.isAudio || it.ptype === "playlist"))
+                L.push({ icon: "list", label: Tr.t("player.moreActions"), cb: function() { root.openNativeCtx(cur.p1, it.id) } })
             break
         case LibraryModel.MenuHome: case LibraryModel.Menu:
             // i menu Jive portano le proprie azioni: `add` accoda, `add-hold`
@@ -429,12 +779,27 @@ Item {
             if (onPlay && it.play && it.play.length) Player.cmd(it.play); else menuItemTap(it); break
         case LibraryModel.PluginItems: {
             var cmd = cur.p1
+            // a db: library favorite is resolved to its real object (issue #125)
+            if (cmd === "favorites" && dbFavKind(it.url) && dbFavAct(it, onPlay ? "load" : "open")) break
             if (!onPlay && it.hasInput) {          // nodo di ricerca del plugin: si chiede il testo
                 msearchOpen = true; msearch.text = ""
                 msearchTitle = it.text || Tr.t("player.titles.search")
                 msearchGo = []; msearchPlugin = { cmd: cmd, item: it.id }
                 msearch.takeFocus()
             }
+            // in an album list (grid / Cover Flow / changer) a tap on an album
+            // container opens the same AlbumPage as the local library, in plugin
+            // mode; otherwise a container drills further into the plugin menu
+            // an album/playlist container (type set, not a plain track) with a
+            // real cover: a streaming album is flagged isaudio too, so key on
+            // the type + cover, not on isAudio, exactly like the C++ heuristic.
+            else if (!onPlay && Library.pluginAlbumList && it.hasItems && it.ptype
+                     && it.ptype !== "audio" && list.isRemoteCover(it.icon))
+                openPluginAlbum(cmd, it.id, it.text, list.iconUrl(it.icon), it.favUrl)
+            // the CD disc is an album: its cover rides in cdCoverUrl (not in the
+            // item icon), so open the same AlbumPage with that cover
+            else if (!onPlay && root.inCdPlayer && it.hasItems)
+                openPluginAlbum(cmd, it.id, it.text, root.cdCoverUrl, it.favUrl)
             else if (!onPlay && it.hasItems) goView(LibraryModel.PluginItems, it.text, cmd, it.id)
             else if (it.isAudio || onPlay) Player.cmd([cmd, "playlist", "play", "item_id:" + it.id])
             break
@@ -477,7 +842,11 @@ Item {
     // 🚨 appear() comes twice, once on the navigation and once when the data
     // lands: with the fade alone it did not show, with the slide it would be a
     // jolt. The second is dropped while the first is still running.
-    Connections { target: Library; function onLoaded() { if (!slideAnim.running && !paintGate.running) root.appear() } }
+    Connections { target: Library; function onLoaded() {
+        // the rows are in: put the list back where it was before we dived in
+        if (root.pendingScroll) { var a = root.pendingScroll; root.pendingScroll = null; list.restoreAnchor(a) }
+        if (!slideAnim.running && !paintGate.running) root.appear()
+    } }
 
     // ─── barra dei tab ─────────────────────────────────────────────────────
     Rectangle {
@@ -630,11 +999,23 @@ Item {
         Item {
             x: 12; y: 8; width: 27; height: 27
             Icon { anchors.centerIn: parent; name: "home"; size: 15; color: Theme.silverA(0.6) }
-            Tap { onClicked: root.navHome() }
+            Tap { onClicked: root.tab === 1 ? root.openTab(1) : root.navSources() }
         }
-        Row {
-            x: 43; height: parent.height
+        // the trail stops short of the buttons on the right and keeps its end
+        // in view, so a long chain of pages never runs under "Back"
+        Item {
+            id: crumbClip
+            // anchor the right edge straight to whichever button sits on the
+            // right, so the trail is always clipped before it instead of
+            // running over "Back" (issue #113); x-arithmetic got this wrong.
+            anchors.left: parent.left; anchors.leftMargin: 43
+            anchors.right: viewPick.visible ? viewPick.left : backBtn.visible ? backBtn.left : parent.right
+            anchors.rightMargin: 8
+            height: parent.height; clip: true
             visible: root.nav.length > 1
+        Row {
+            id: crumbRow
+            x: Math.min(0, crumbClip.width - width); height: parent.height
             Repeater {
                 model: root.nav.length
                 Item {
@@ -654,10 +1035,12 @@ Item {
                 }
             }
         }
+        }
         Rectangle {                                     // "Indietro"
             id: backBtn
             visible: root.nav.length > 1
-            x: parent.width - 12 - width; y: 21.5 - 11; width: backText.implicitWidth + 24; height: 22; radius: 8
+            anchors.right: parent.right; anchors.rightMargin: 12
+            y: 21.5 - 11; width: backText.implicitWidth + 24; height: 22; radius: 8
             color: backTap.mix(Theme.wa(0.05), Theme.wa(0.1))
             Text { id: backText; anchors.centerIn: parent; text: Tr.t("common.back"); color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
             Tap { id: backTap; onClicked: root.navBack() }
@@ -666,13 +1049,15 @@ Item {
         // Settings → Library): the view on screen, a tap drops the list down
         Rectangle {
             id: viewPick
-            visible: list.grid && !root.isPage
+            visible: list.albumGrid && !root.isPage
             readonly property string view: Ui.app ? Ui.app.albumView : "grid"
             readonly property var views: [{ id: "grid", icon: "layout-grid", label: "player.view.grid" },
                                           { id: "coverflow", icon: "gallery-horizontal", label: "player.view.coverflow" },
                                           { id: "changer", icon: "disc-3", label: "player.view.changer" }]
             readonly property var cur: views[Math.max(0, ["grid", "coverflow", "changer"].indexOf(view))]
-            x: (backBtn.visible ? backBtn.x : parent.width - 12) - 8 - width; y: 21.5 - 11
+            anchors.right: backBtn.visible ? backBtn.left : parent.right
+            anchors.rightMargin: backBtn.visible ? 8 : 12
+            y: 21.5 - 11
             width: 8 + 13 + 6 + viewText.implicitWidth + 6 + 12 + 8; height: 22; radius: 8
             color: viewTap.mix(view !== "grid" ? Theme.goldA(0.15) : Theme.wa(0.05), Theme.wa(0.12))
             Icon { x: 8; anchors.verticalCenter: parent.verticalCenter; name: viewPick.cur.icon; size: 13; color: viewPick.view !== "grid" ? Theme.gold : Theme.silverA(0.7) }
@@ -701,13 +1086,13 @@ Item {
         Item {
             id: pane
             anchors.fill: parent
-            SettingsTab { id: settingsTab; anchors.fill: parent; visible: root.tab === 4; devScale: root.devScale }
-            DiscoverTab { id: discoverTab; anchors.fill: parent; visible: root.tab === 3; devScale: root.devScale }
+            SettingsTab { id: settingsTab; anchors.fill: parent; visible: root.tab === 3; devScale: root.devScale }
+            DiscoverTab { id: discoverTab; anchors.fill: parent; visible: root.tab === 2; devScale: root.devScale }
 
             Item {
                 id: libArea
                 anchors.fill: parent
-                visible: root.tab !== 4 && root.tab !== 3
+                visible: root.tab !== 3 && root.tab !== 2
 
                 // non ancora collegati a Lyrion (LyrionServer.jsx:1267)
                 Column {
@@ -726,6 +1111,73 @@ Item {
 
                 // fascia "CD rilevato" in cima alla scheda Musica
                 CdBanner { id: cdBanner; visible: root.tab === 0 && Ui.cdrip && Ui.cdrip.bannerVisible; width: parent.width }
+                // la radice delle sorgenti: le tessere dei servizi, della radio e
+                // della libreria locale (dove si atterra aprendo il tab Musica)
+                Item {
+                    anchors.fill: parent
+                    anchors.topMargin: cdBanner.visible ? 48 : 0
+                    visible: root.view === root.sourcesRoot && Player.connected
+                    Item {
+                        id: sourcesBox
+                        anchors.fill: parent
+                        // the tile the spotlight returns to, coming back from `e`
+                        function tileFor(e) {
+                            if (!e) return null
+                            for (var i = 0; i < children.length; i++) {
+                                var c = children[i]; var m = c.modelData
+                                if (!m) continue
+                                if (m.kind === "library" && e.view === LibraryModel.Home) return c.navTap
+                                if (m.kind === "radio" && e.view === LibraryModel.Radios) return c.navTap
+                                if (m.kind === "favorites" && e.view === LibraryModel.PluginItems && String(e.p1) === "favorites") return c.navTap
+                                if (m.kind === "app" && e.view === LibraryModel.PluginItems && String(e.p1) === String(m.cmd)) return c.navTap
+                                if (m.kind === "cd" && e.view === LibraryModel.PluginItems && String(e.p1) === "cdplayer") return c.navTap
+                            }
+                            return null
+                        }
+                        Repeater {
+                            model: root.sourceTiles
+                            Rectangle {
+                                required property var modelData
+                                required property int index
+                                property alias navTap: srcTap
+                                readonly property real tw: root.homeTw
+                                readonly property real th: root.homeTh
+                                // a streaming service whose account is not set up yet
+                                readonly property bool notConnected: modelData.kind === "app" && !!modelData.key
+                                                                     && !!root.svcStatus[modelData.key]
+                                                                     && root.svcStatus[modelData.key].loggedIn === false
+                                x: 16 + (index % root.homeCols) * (tw + 12); y: 62 + Math.floor(index / root.homeCols) * (th + 12)
+                                width: tw; height: th; radius: 12
+                                color: srcTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
+                                // always the Osmium mark (icons/*.svg), never the
+                                // image Lyrion's default theme ships for the service
+                                Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (parent.th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
+                                Text { anchors.horizontalCenter: parent.horizontalCenter; y: 69 + (parent.th - 117) / 2; height: 20; verticalAlignment: Text.AlignVCenter; text: modelData.label; color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                                // badge "non connesso": pallino muto + etichetta
+                                Rectangle {
+                                    visible: parent.notConnected
+                                    x: parent.width - width - 10; y: 10
+                                    width: ncRow.width + 14; height: 20; radius: 10
+                                    color: Theme.wa(0.08)
+                                    Row {
+                                        id: ncRow; anchors.centerIn: parent; spacing: 5
+                                        Rectangle { width: 7; height: 7; radius: 3.5; color: Theme.silverA(0.55); anchors.verticalCenter: parent.verticalCenter }
+                                        Text { text: Tr.t("services.notConnected"); color: Theme.silverA(0.75); font.family: Theme.font; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                                    }
+                                }
+                                Tap {
+                                    id: srcTap
+                                    onClicked: {
+                                        if (modelData.kind === "library") root.goView(LibraryModel.Home, Tr.t("player.titles.localLibrary"))
+                                        else if (modelData.kind === "radio") root.goView(LibraryModel.Radios, Tr.t("player.titles.radio"))
+                                        else if (modelData.kind === "favorites") root.goView(LibraryModel.PluginItems, Tr.t("player.titles.favorites"), "favorites")
+                                        else root.goView(LibraryModel.PluginItems, modelData.label, modelData.cmd)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 // la home: ricerca in tutta la libreria, poi le tessere
                 Item {
                     anchors.fill: parent
@@ -767,12 +1219,12 @@ Item {
                                 required property var modelData
                                 required property int index
                                 property alias navTap: tileTap
-                                readonly property real tw: (root.width - 32 - 24) / 3
+                                readonly property real tw: root.homeTw
                                 // py-7 (28) + icona 30 + mb-2.5 (10) + riga text-sm (20) + py-7 (28)
                                 // + 2 di bordo = 117: misurato 140 px a 720p in Electron (113 era 4 in meno).
                                 // A taller canvas (16:10: 640) shares its extra height among the rows.
-                                readonly property real th: 117 + Math.max(0, root.height - 600) / 3
-                                x: 16 + (index % 3) * (tw + 12); y: 62 + Math.floor(index / 3) * (th + 12)
+                                readonly property real th: root.homeTh
+                                x: 16 + (index % root.homeCols) * (tw + 12); y: 62 + Math.floor(index / root.homeCols) * (th + 12)
                                 width: tw; height: th; radius: 12
                                 color: tileTap.mix(Theme.surface, Theme.light); border.width: 1; border.color: Theme.border
                                 Icon { anchors.horizontalCenter: parent.horizontalCenter; y: 29 + (th - 117) / 2; name: modelData.icon; size: 30; color: Theme.silver }
@@ -793,7 +1245,7 @@ Item {
                 Item {
                     anchors.fill: parent
                     anchors.topMargin: cdBanner.visible ? 48 : 0
-                    visible: root.view !== LibraryModel.Home && Player.connected
+                    visible: root.view !== LibraryModel.Home && root.view !== root.sourcesRoot && Player.connected
                     property real y0: 0
                     // ricerca dei menu Jive (Cerca…)
                     Rectangle {
@@ -851,7 +1303,17 @@ Item {
                     }
                     Component {
                         id: albumPageComp
-                        AlbumPage { browser: root; albumId: String(root.cur.p1); devScale: root.devScale }
+                        // plugin album: p2 is the item id (marks plugin mode),
+                        // p1 the plugin command; a local album has p1 = album_id
+                        AlbumPage {
+                            browser: root; devScale: root.devScale
+                            albumId: String(root.cur.p2) !== "" ? "" : String(root.cur.p1)
+                            pluginCmd: String(root.cur.p2) !== "" ? String(root.cur.p1) : ""
+                            pluginItemId: String(root.cur.p2 || "")
+                            pluginCover: String(root.cur.cover || "")
+                            pluginFavUrl: String(root.cur.input || "")
+                            pluginTitle: root.cur.title === "…" ? "" : String(root.cur.title || "")
+                        }
                     }
                     Component {
                         id: artistPageComp
@@ -865,13 +1327,43 @@ Item {
                     LibraryList {
                         id: list
                         x: 12; y: parent.listY + 4
-                        width: (root.azShown ? root.width - 32 - 12 : root.width - 12) - 12
+                        // a plugin grid has no A-Z strip, but still reserve the
+                        // same 32 px gutter the alphabet uses in the library so a
+                        // plugin tile comes out the exact same cardW (same columns,
+                        // same shape) as a local-library tile — not wider.
+                        width: ((root.azShown || list.grid) ? root.width - 32 - 12 : root.width - 12) - 12
                         height: root.height - root.contentTop - y - 12
-                        visible: Library.state === 2 && Library.count > 0 && !root.isPage
+                        // navigation menus (radio, app, plugin nodes, Jive menus)
+                        // use the same wide icon+label tile as the local-library
+                        // home, so a plugin menu matches it in shape and size.
+                        menuTileH: root.homeTh
+                        visible: Library.state === 2 && Library.count > 0 && !root.isPage && !root.curSvcNeedsLogin
+                        cdCoverUrl: root.inCdPlayer ? root.cdCoverUrl : ""
+                        inCdPlayer: root.inCdPlayer
                         onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
                         // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
-                        onRowLongPress: (row, x, y) => ctx.open(root.ctxItems(row), list.x + x, list.y + y + (cdBanner.visible ? 48 : 0))
+                        onRowLongPress: (row, x, y) => { root.menuX = list.x + x; root.menuY = list.y + y + (cdBanner.visible ? 48 : 0); ctx.open(root.ctxItems(row), root.menuX, root.menuY) }
                         onExpandAlbum: (row, x, y, size, src) => hero.fly(row, list.x + x, list.y + y, size, src)
+                    }
+                    // il riquadro "Accedi" quando si apre un servizio di streaming
+                    // senza account (al posto della sola riga "richiede credenziali")
+                    Rectangle {
+                        visible: root.curSvcNeedsLogin && !root.isPage
+                        x: 12; y: parent.listY + 4
+                        width: (root.width - 12) - 12; height: 132; radius: 12
+                        color: Theme.surface; border.width: 1; border.color: Theme.border
+                        Column {
+                            anchors.centerIn: parent; spacing: 12; width: parent.width - 48
+                            Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                                   text: Tr.tf("services.signInTitle", "name", root.curSvcLabel)
+                                   color: Theme.white; font.family: Theme.font; font.pixelSize: 17; font.bold: true }
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 176; height: 46; radius: 8; color: accTap.mix(Theme.gold, "#ca8a04")
+                                Text { anchors.centerIn: parent; text: Tr.t("services.signIn"); color: "#1a1a1a"; font.family: Theme.font; font.pixelSize: 15; font.bold: true }
+                                Tap { id: accTap; onClicked: root.serviceLogin(root.curSvcKey, root.curSvcLabel) }
+                            }
+                        }
                     }
                     // The album that opens from Cover Flow: a copy of its cover
                     // swells over the row, then settles where the page keeps its
@@ -947,7 +1439,7 @@ Item {
                         Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t("player.connectionErrorTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
                     }
                     Text {
-                        visible: Library.state === 2 && Library.count === 0 && !root.isPage
+                        visible: Library.state === 2 && Library.count === 0 && !root.isPage && !root.curSvcNeedsLogin
                         x: list.x; y: list.y + 32; width: list.width; horizontalAlignment: Text.AlignHCenter
                         text: Tr.t("common.noResults"); color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 14
                     }

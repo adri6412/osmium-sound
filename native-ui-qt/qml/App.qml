@@ -101,6 +101,14 @@ Item {
         else if (dir > 0) Player.next()
         else Player.prev()
     }
+    // CD changer DISC +/- : with the changer on screen the music waits for the
+    // disc to seat (NpAnimation.changerJump); otherwise a plain jump to the
+    // next/previous album in the queue. Reuses NpAnimation.changeDisc, which
+    // groups the queue by album.
+    function changeDisc(dir) {
+        if (changerScreen) changerScreen.changeDisc(dir)
+        else np.changeDisc(dir)
+    }
     function changerTakesPlay() {
         if (Player.playing) return false
         if (changerPending && changerDiscs.length > 0) {
@@ -312,6 +320,8 @@ Item {
     // the owner chose (put back when the tour ends), and the long-press menu
     function tutorialAlbums(mode) { setExpanded(false); albumView = mode; mainScreen.browser.tutorialAlbums(mode) }
     function tutorialListRect() { return mainScreen.browser.tutorialListRect() }
+    // the home tile grid's height as the tour lights it (rows follow the canvas width)
+    function tutorialHomeTilesH() { var b = mainScreen.browser; return b.homeRows * (b.homeTh + 12) }
     function tutorialMenuRect() { return mainScreen.browser.tutorialMenuRect() }
     function tutorialRestore() { mainScreen.browser.closeMenu(); albumView = albumViewOf(Sys.conf("album-view", "grid")) }
     // the tour's home steps: the main screen, Music tab, at its home
@@ -385,6 +395,9 @@ Item {
         // libreria: il riquadro dice il nome di quello che e' venuto su
         case "nextVu": if (Player.isOwn) np.cycleLook("vu"); return
         case "nextAnimation": np.cycleLook("anim"); return
+        // CD changer disc +/- : jump to the next / previous loaded disc
+        case "nextDisc": app.changeDisc(1); return
+        case "prevDisc": app.changeDisc(-1); return
         case "queue": if (overlays.busy) overlays.close(); else overlays.openQueue(); return
         case "search": setExpanded(false); mainScreen.browser.focusSearch(); return
         case "favorite": if (Player.favoritesAvailable) Player.toggleFavorite(); return
@@ -442,7 +455,7 @@ Item {
         if (overlays.busy) overlays.close()
         setExpanded(false)
         mainScreen.browser.showMusicTab()
-        mainScreen.browser.navHome()                      // and the spotlight on the first tile
+        mainScreen.browser.navSources()                   // the sources root, as just turned on
     }
 
     // per il canale di collaudo (eval): app.settings.openSection(n) ecc.
@@ -468,7 +481,7 @@ Item {
     // the signal path)
     function openPlaybackSetting(which) {
         app.setExpanded(false)
-        mainScreen.browser.openTab(4)
+        mainScreen.browser.openTab(3)
         Ui.settings.openSection("playback", which)
     }
 
@@ -498,7 +511,7 @@ Item {
         onStartScreensaver: screensaver.show(true)
         onToggleView: { app.viewVu = !app.viewVu; Sys.setConf("nowplaying-view", app.viewVu ? "vu" : "lyrics") }
         // the ReplayGain light and the signal path open Settings → Playback on that setting
-        onOpenSettings: { app.setExpanded(false); mainScreen.browser.openTab(4) }
+        onOpenSettings: { app.setExpanded(false); mainScreen.browser.openTab(3) }
         onOpenPlaybackSetting: (which) => app.openPlaybackSetting(which)
         onOpenSignalPath: overlays.openSignalPath()
     }
@@ -573,6 +586,13 @@ Item {
         onEnded: remoteIntro.check()                       // another known remote may be waiting for its map
     }
     Toast { id: toast; anchors.fill: parent }             // z-[10050]: sopra CD (z-70) e aggiornamento
+    // the background CD-rip notification, bottom-right: follows the rip from
+    // anywhere once the CdRip window has closed (hidden while it is open)
+    CdRipProgress {
+        id: cdRipProgress; anchors.fill: parent
+        blocked: wizard.active || screensaver.covering || dialogs.active || vk.active || ota.active
+                 || tutorial.active || remoteTour.active || remotePair.active
+    }
     // The system disk filling up (hifi_diskguard.py, /system_disk): a notice
     // when it passes 90 %, and every half hour while it sits at the reserve
     // kept for Lyrion, where copies to it are refused.

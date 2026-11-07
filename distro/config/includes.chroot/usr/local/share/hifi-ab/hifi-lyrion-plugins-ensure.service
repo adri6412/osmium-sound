@@ -1,0 +1,18 @@
+[Unit]
+Description=Osmium Sound — bundled Lyrion plugins into the local server on every boot
+ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
+ConditionKernelCommandLine=!boot=live
+ConditionPathExists=!/etc/hifi-player/provisioning-pending
+# Before the server scans its plugins, and after hifi-lyrion-ensure has had its
+# chance to (re)install the server itself. Purely local filesystem work: no
+# network ordering needed.
+Before=lyrionmusicserver.service
+After=hifi-lyrion-ensure.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-lyrion-plugins-ensure.sh
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

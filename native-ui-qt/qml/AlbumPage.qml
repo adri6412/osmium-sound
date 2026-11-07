@@ -14,6 +14,21 @@ Item {
     property var browser: null
     property string albumId: ""
     property real devScale: 1
+    // plugin mode: the same page for a streaming service's album. The tracks come
+    // from a plugin drill ([cmd,"items",…,"item_id:"+itemId]) instead of album_id,
+    // the cover is the one the plugin gave, and there is no MusicBrainz/Wikipedia
+    // meta (those sections stay hidden). Credits appear only if the service sends
+    // role tags on its tracks, which most do not.
+    property string pluginCmd: ""
+    property string pluginItemId: ""
+    property string pluginCover: ""
+    property string pluginFavUrl: ""
+    property string pluginTitle: ""
+    readonly property bool pluginMode: pluginCmd !== "" && pluginItemId !== ""
+    // the inserted audio CD opens this same page through the CDplayer plugin.
+    // For it the queue/favourite buttons make no sense (there is one disc, it is
+    // not a library album you save) -- it gets an Eject button instead.
+    readonly property bool isCd: pluginCmd === "cdplayer"
 
     property int state_: 0              // 0 loading 2 ready 3 error
     property var album: ({})
@@ -21,11 +36,25 @@ Item {
     property real totalDur: 0
     property string chip: ""
     property var localCredits: []
+    // a streaming album's extra rows, shown below the tracks like a local album:
+    // pluginInfo = "key: value" metadata lines, pluginCreditsId = the drillable
+    // Credits node's item_id (parsed into localCredits in loadPlugin)
+    property var pluginInfo: []
+    property string pluginCreditsId: ""
     property var meta: null
     property string metaStatus: ""      // "", pending, ok, nomatch, offline, disabled, error
     property int metaTries: 0
     property bool aboutOpen: false
     property bool byTrack: false
+    // the heart reflects the real state and toggles add/remove (issue #125):
+    // favIndex is the favourite's position, needed to delete it
+    property bool isFav: false
+    property string favIndex: ""
+    // a streaming album's own "Add/Remove Release … to <service> favourites"
+    // action, captured from the plugin drill: { cmd: [...], params: {...} }.
+    // Toggling it puts the album in the service's My Favourites (which Lyrion
+    // then imports into the library) instead of a generic Lyrion folder.
+    property var pluginFavAction: null
     readonly property int discs: Math.max(1, Number(album.disccount || 1))
     // the cover is on screen: the Cover Flow's flying copy can go (Browser)
     readonly property bool coverReady: state_ === 2 && cover.ready
@@ -35,12 +64,14 @@ Item {
 
     function load() {
         state_ = 0; meta = null; metaStatus = ""; metaTries = 0; aboutOpen = false; byTrack = false
+        if (pluginMode) { loadPlugin(); return }
         // the album first: the tracks' second line compares with its artist
         Player.query(["albums", "0", "1", "album_id:" + albumId, "tags:alyqwaaSSjW"], function(ok, r) {
             if (!root) return          // the page was closed meanwhile
             var a = ok && r && r.albums_loop && r.albums_loop.length ? r.albums_loop[0] : null
             if (!a) { root.state_ = 3; return }
             root.album = a
+            root.checkFav()
             if (root.browser) root.browser.setPageTitle(LibraryModel.AlbumPage, root.albumId, String(a.album || ""))
             Player.query(["titles", "0", "999", "album_id:" + albumId, "tags:dtiqASeoTIu", "sort:tracknum"], function(ok2, r2) {
                 if (!root) return          // the page was closed meanwhile
@@ -49,6 +80,122 @@ Item {
             })
         })
         loadMeta()
+    }
+    // a streaming service's album: drill its item for the tracks. The album
+    // header is what the grid already knew (title + cover + favourite url); no
+    // meta lookup, so About / edition / online-source stay hidden.
+    function loadPlugin() {
+        // the title the grid passed (goView set it as the page title)
+        album = { album: pluginTitle, favorites_url: pluginFavUrl }
+        // the favourite state comes from the drill's "Add/Remove Release …"
+        // row (parsePluginTracks), not from a generic favourites folder
+        isFav = false; favIndex = ""; pluginFavAction = null
+        // menu:1 gives a clean two-line text ("Title\nArtist - Album"), the real
+        // track item_id in params, and favorites_url in presetParams — far better
+        // than the flat form, which collapses the title into one "Title di … da …".
+        Player.query([pluginCmd, "items", "0", "9999", "item_id:" + pluginItemId, "menu:1"], function(ok, r) {
+            if (!root) return          // the page was closed meanwhile
+            // the plugin's loop key varies (loop_loop / item_loop / <cmd>_loop),
+            // same set LibraryModel tries for PluginItems
+            var loop = ok && r ? (r.loop_loop || r.item_loop || r[pluginCmd + "_loop"] || []) : []
+            if (ok && r) parsePluginTracks(loop)
+            root.state_ = ok && r ? 2 : 3
+        })
+    }
+    // the drilled items as tracks: a service rarely sends role tags, so credits
+    // stay empty and only the track list shows. Titles/subtitles come from the
+    // menu item's fields (name/title/text, line1/line2, artist).
+    // A drilled plugin item is a real track only if it is music: it carries a
+    // play/add action or a saveable (favorites_url) / audio leaf. An album's
+    // metadata rows (Artist Credits, Description, Label, Awards, Copyright) and
+    // the "Add Release to … favourites" action are go-only navigation with a
+    // nextWindow and none of those — they must not show up as fake tracks.
+    function isPluginTrack(t) {
+        var a = t.actions || {}, pre = t.presetParams || {}
+        // a track plays (its own play action, or the base's via goAction:"play"
+        // / style:"itemplay") or is saveable music (favorites_url / audio).
+        if (String(t.goAction) === "play" || String(t.style) === "itemplay") return true
+        if (a.play || a["add"] || a["add-hold"]) return true
+        if (pre.favorites_url || t.url) return true
+        if (t.isaudio == 1 || String(t.type) === "audio") return true
+        return false
+    }
+    function parsePluginTracks(loop) {
+        var out = [], total = 0, info = [], credId = ""
+        for (var i = 0; i < loop.length; i++) {
+            var t = loop[i]
+            if (isPluginTrack(t)) {
+                var pp = t.params || {}, pre = t.presetParams || {}
+                var two = String(t.text || "").split("\n")
+                var title = String(two[0] || t.name || t.title || t.line1 || "")
+                var sub = String(t.artist || t.line2 || (two.length > 1 ? two[1] : "") || "")
+                var dur = Number(t.duration || t.tracklength || 0)
+                var tid = String(pp.item_id || t.id || t.item_id || "")
+                var turl = String(pre.favorites_url || t.url || "")
+                out.push({ id: tid, n: Number(t.tracknum || (out.length + 1)), disc: 1,
+                           title: title, dur: dur, url: turl, sub: sub })
+                total += dur
+                continue
+            }
+            // a non-track row: shown like a local album's credits/info, not dropped.
+            // The Credits node (type:"actions") drills into a people-by-role list;
+            // "key: value" rows (Genre, Duration, Label, …) are inline info lines;
+            // the "Add/Remove Release … favourites" service action is captured so
+            // the heart can toggle the service's own My Favourites.
+            var txt = String(t.text || t.name || "")
+            var gp = (t.actions && t.actions.go && t.actions.go.params) || t.params || {}
+            var low = txt.toLowerCase()
+            if (low.indexOf("favorite") >= 0 || low.indexOf("favourite") >= 0) {
+                var go = t.actions && t.actions.go
+                if (go && go.cmd) {
+                    root.pluginFavAction = { cmd: go.cmd, params: go.params || {} }
+                    // the label tells the current state: "Remove … from" = is a
+                    // favourite, "Add … to" = not yet
+                    root.isFav = /\bremove\b|\brimuov|\btogli/i.test(txt)
+                }
+                continue
+            }
+            if (String(t.type) === "actions") { if (!credId) credId = String(gp.item_id || ""); continue }
+            if (String(t.type) === "text" || txt.indexOf(": ") > 0) { if (txt) info.push(txt) }
+        }
+        tracks = out; totalDur = total; pluginInfo = info; pluginCreditsId = credId
+        localCredits = []; chip = ""
+        if (credId) loadPluginCredits(credId)
+    }
+    // the Credits node drills into flat "Name: Role ( 1, 3, 5-6 )" strings; turn
+    // them into the local credit-entry shape so CreditRows renders them like a
+    // local album (people carry no id here → not tappable, which CreditRows allows)
+    function loadPluginCredits(credId) {
+        Player.query([pluginCmd, "items", "0", "200", "item_id:" + credId, "menu:1"], function(ok, r) {
+            if (!root) return
+            var loop = ok && r ? (r.loop_loop || r.item_loop || r[pluginCmd + "_loop"] || []) : []
+            var byRole = {}, order = []
+            for (var i = 0; i < loop.length; i++) {
+                var s = String(loop[i].text || loop[i].name || "").replace(/\n/g, " ").trim()
+                if (!s) continue
+                var ci = s.indexOf(":")
+                if (ci < 0) continue                       // a bare artist/header line
+                var name = s.slice(0, ci).trim()
+                var rest = s.slice(ci + 1).trim()
+                var trk = ""                               // optional "( 1, 3, 5-6 )"
+                var m = rest.match(/\(([^)]*)\)\s*$/)
+                if (m) { trk = m[1].trim(); rest = rest.slice(0, m.index).trim() }
+                var role = rest || "performer"
+                var key = role.toLowerCase()
+                if (!byRole[key]) { byRole[key] = { group: root.pluginRoleGroup(key), role: key, attr: "", people: [], tracks: null }; order.push(key) }
+                byRole[key].people.push({ name: name, id: "", credit: trk })
+            }
+            var c = []
+            for (var o = 0; o < order.length; o++) c.push(byRole[order[o]])
+            root.localCredits = c
+        })
+    }
+    // map a Qobuz role word to one of CreditRows' groups
+    function pluginRoleGroup(r) {
+        if (/compos|writ|lyric|author|songwriter/.test(r)) return "composition"
+        if (/produc|engineer|mix|master|mastering/.test(r)) return "production"
+        if (/perform|vocal|guitar|bass|drum|piano|key|band|feat|artist|orchestr|conduct/.test(r)) return "performer"
+        return "other"
     }
     function loadMeta() {
         Api.get(Meta.url("/album?album_id=" + albumId), function(ok, d) {
@@ -134,15 +281,133 @@ Item {
         else if (p.mbid && browser) browser.openPerson(String(p.mbid), String(p.name || ""))
     }
     function play(mode, index) {
+        if (pluginMode) { playPlugin(mode, index); return }
         var c = ["playlistcontrol", "cmd:" + mode, "album_id:" + albumId]
         if (index !== undefined && index >= 0) c.push("play_index:" + index)
-        Player.cmd(c)
+        if (mode !== "add" && mode !== "insert") { Player.cmd(c); return }
+        // "add" and "insert" change the queue out of sight (issue #120): ask
+        // Lyrion for the answer, so the toast says what really happened and a
+        // refused command is said too, not left looking like a dead button.
+        Player.query(c, function(ok) {
+            if (!root) return          // the page was closed meanwhile
+            Player.refresh()
+            if (!browser) return
+            if (!ok) browser.say("alert-triangle", "player.queueFailed")
+            else if (mode === "add") browser.say("list-plus", "player.addedToQueue")
+            else browser.say("list-start", "player.playingNext")
+        })
     }
-    function shuffle() { if (browser) browser.loadShuffled("album_id", albumId) }
+    // plugin play: a track plays/queues by its own item id, the Play button the
+    // whole album by its item id. Verbs are the plugin's (play / add / insert).
+    function playPlugin(mode, index) {
+        var verb = mode === "load" ? "play" : mode === "insert" ? "insert" : "add"
+        var itemId = (index !== undefined && index >= 0 && tracks[index]) ? tracks[index].id : pluginItemId
+        if (!itemId) return
+        var c = [pluginCmd, "playlist", verb, "item_id:" + itemId]
+        if (verb === "play") { Player.cmd(c); return }
+        Player.query(c, function(ok) {
+            if (!root) return          // the page was closed meanwhile
+            Player.refresh()
+            if (!browser) return
+            if (!ok) browser.say("alert-triangle", "player.queueFailed")
+            else if (verb === "add") browser.say("list-plus", "player.addedToQueue")
+            else browser.say("list-start", "player.playingNext")
+        })
+    }
+    // plugin albums (CD, Qobuz, Tidal…) have no album_id to shuffle through
+    // playlistcontrol: load the whole album by its item id, then turn on song
+    // shuffle so it plays in a shuffled order
+    function shuffle() {
+        if (pluginMode) { play("load"); Player.cmd(["playlist", "shuffle", "1"]); return }
+        if (browser) browser.loadShuffled("album_id", albumId)
+    }
+    // ── eject (CD only) ───────────────────────────────────────────────────
+    // Stop playback, tell the backend to open the drive, then leave for the
+    // Music root (not just Back, which would land on the now-stale CD menu):
+    // the next disc put in is shown fresh when the CD tile is opened again,
+    // never an empty CD page. Mirrors CdRip.eject()'s backend call.
+    function eject() {
+        Player.cmd(["stop"])
+        Api.post(Api.srcBase + "/api/cd/eject", {}, function(ok) {
+            if (!ok && browser) browser.say("alert-triangle", "player.cdEjectFailed")
+        })
+        if (browser) { browser.say("eject", "player.cdEjected"); browser.navSources() }
+    }
+    // ── favourite heart (add / remove, with its real state) ───────────────
+    // re-read the plugin drill's "Add/Remove Release …" row and refresh the
+    // favourite state from its label (its item_id toggles the same way)
+    function refreshPluginFav() {
+        Player.query([pluginCmd, "items", "0", "9999", "item_id:" + pluginItemId, "menu:1"], function(ok, r) {
+            if (!root || !ok || !r) return
+            var loop = r.loop_loop || r.item_loop || r[pluginCmd + "_loop"] || []
+            for (var i = 0; i < loop.length; i++) {
+                var txt = String(loop[i].text || loop[i].name || "")
+                if (txt.toLowerCase().indexOf("favorite") < 0 && txt.toLowerCase().indexOf("favourite") < 0) continue
+                var go = loop[i].actions && loop[i].actions.go
+                if (go && go.cmd) {
+                    root.pluginFavAction = { cmd: go.cmd, params: go.params || {} }
+                    root.isFav = /\bremove\b|\brimuov|\btogli/i.test(txt)
+                }
+                return
+            }
+        })
+    }
+    function checkFav() {
+        if (pluginMode) return     // state comes from the drill (refreshPluginFav)
+        var url = String(album.favorites_url || "")
+        if (!url) { isFav = false; favIndex = ""; return }
+        Player.favoriteExists(url, function(ex, idx) {
+            if (!root) return
+            root.isFav = !!ex; root.favIndex = ex ? String(idx) : ""
+        })
+    }
+    function toggleFav() {
+        if (pluginMode) {
+            // invoke the service's own "Add/Remove Release …" action: the album
+            // lands in the service's My Favourites (Lyrion imports it into the
+            // library), not in a generic Lyrion favourites folder
+            if (!pluginFavAction || !pluginFavAction.cmd) return
+            var p = pluginFavAction.params || {}
+            var args = pluginFavAction.cmd.slice()
+            if (p.item_id !== undefined) args.push("item_id:" + p.item_id)
+            if (p.menu !== undefined) args.push("menu:" + p.menu)
+            var wasFav = isFav
+            Player.query(args, function(ok) {
+                if (!root) return
+                if (!ok) { if (root.browser) root.browser.say("alert-triangle", "player.favoriteError"); return }
+                root.isFav = !wasFav
+                if (!wasFav) favBtn.burst()
+                // plugin favourite → the service's own My Favourites, not a generic folder
+                if (root.browser) root.browser.say("heart", wasFav ? "player.removedFromFavorites" : "player.addedToStreamingServiceFavorites")
+                // re-read the row: its label (and item_id) flips add<->remove
+                root.refreshPluginFav()
+            })
+            return
+        }
+        var url = String(album.favorites_url || "")
+        if (!url) return
+        if (isFav) {
+            if (!favIndex) return
+            Player.favoriteDelete(favIndex, function(ok) {
+                if (!root) return
+                if (ok) { root.isFav = false; root.favIndex = ""; if (root.browser) root.browser.say("heart", "player.removedFromFavorites") }
+                else if (root.browser) root.browser.say("alert-triangle", "player.favoriteError")
+            })
+        } else {
+            Player.favoriteAdd(url, String(album.album || ""), "playlist", "", function(ok) {
+                if (!root) return
+                if (ok) { root.isFav = true; favBtn.burst(); if (root.browser) root.browser.say("heart", "player.addedToFavorites"); root.checkFav() }
+                else if (root.browser) root.browser.say("alert-triangle", "player.favoriteError")
+            })
+        }
+    }
     function trackMenu(i, x, y) {
         var t = tracks[i]
         if (!t || !browser) return
-        var L = [
+        var L = root.pluginMode ? [
+            { icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { Player.cmd([pluginCmd, "playlist", "add", "item_id:" + t.id]) } },
+            { icon: "list-start", label: Tr.t("player.playNext"), cb: function() { Player.cmd([pluginCmd, "playlist", "insert", "item_id:" + t.id]) } }
+        ] : [
             { icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { Player.cmd(["playlistcontrol", "cmd:add", "track_id:" + t.id]) } },
             { icon: "list-start", label: Tr.t("player.playNext"), cb: function() { Player.cmd(["playlistcontrol", "cmd:insert", "track_id:" + t.id]) } }
         ]
@@ -190,7 +455,8 @@ Item {
                 Cover {
                     id: cover
                     width: 164; height: 164; radius: 12; devScale: root.devScale
-                    source: root.album.artwork_track_id ? Api.lmsBase + "/music/" + root.album.artwork_track_id + "/cover?size=" + Theme.coverPx(164 * 2) : ""
+                    source: root.pluginMode ? root.pluginCover
+                          : root.album.artwork_track_id ? Api.lmsBase + "/music/" + root.album.artwork_track_id + "/cover?size=" + Theme.coverPx(164 * 2) : ""
                 }
                 Column {
                     id: info
@@ -236,9 +502,11 @@ Item {
                 spacing: 10
                 PageButton { id: playBtn; icon: "play"; filled: true; primary: true; label: Tr.t("player.page.play"); onClicked: root.play("load") }
                 PageButton { icon: "shuffle"; label: Tr.t("player.page.shuffle"); onClicked: root.shuffle() }
-                PageButton { icon: "list-plus"; onClicked: root.play("add") }
-                PageButton { icon: "list-start"; onClicked: root.play("insert") }
-                PageButton { id: favBtn; icon: "heart"; visible: !!root.album.favorites_url; onClicked: { burst(); if (root.browser) root.browser.addFavorite(String(root.album.favorites_url), String(root.album.album || ""), "playlist") } }
+                PageButton { icon: "list-plus"; visible: !root.isCd; onClicked: root.play("add") }
+                PageButton { icon: "list-start"; visible: !root.isCd; onClicked: root.play("insert") }
+                PageButton { id: favBtn; icon: "heart"; filled: root.isFav
+                    visible: !root.isCd && (!!root.album.favorites_url || (root.pluginMode && root.tracks.length > 0)); onClicked: root.toggleFav() }
+                PageButton { icon: "eject"; visible: root.isCd; label: Tr.t("player.page.eject"); onClicked: root.eject() }
             }
 
             // ── state of the online lookup ─────────────────────────────────
@@ -325,6 +593,19 @@ Item {
                 places: root.metaOk ? (root.meta.places || []) : []
                 discs: root.discs
                 onPerson: (p) => root.openPerson(p)
+            }
+            // a streaming album's "key: value" metadata (genre, label, …), listed
+            // like a local album's details — the service already localised them
+            Item { width: 1; height: root.pluginInfo.length ? 12 : 0 }
+            SectionTitle { visible: root.pluginInfo.length > 0; text: Tr.t("player.page.info") }
+            Repeater {
+                model: root.pluginInfo
+                Text {
+                    required property var modelData
+                    width: col.width; wrapMode: Text.Wrap; bottomPadding: 4
+                    text: String(modelData)
+                    color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 13; lineHeight: 18; lineHeightMode: Text.FixedHeight
+                }
             }
             // per-track detail, on request (a big box set has hundreds of lines)
             Item {

@@ -473,7 +473,7 @@ function payload(overrides = {}) {
     verification_token: TOKEN,
     message_id: `msg-${donation}`,
     timestamp: new Date(Date.UTC(2026, 8, 1, 0, donation)).toISOString(),
-    type: "Donation",
+    type: "Tip",
     is_public: true,
     from_name: `Supporter ${donation}`,
     message: "Lovely player!",

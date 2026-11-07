@@ -25,7 +25,10 @@ Item {
     clip: true
     property bool opening: false
     onVisibleChanged: if (visible) opening = false
-    function srcOf(it) { return it && it.art ? Api.lmsBase + "/music/" + it.art + "/cover?size=" + px : "" }
+    // local albums carry an artwork_track_id (art); plugin albums carry their
+    // cover as a Lyrion icon string (icon) that Api.imageUrl resolves to a URL
+    function srcOf(it) { return it && it.art ? Api.lmsBase + "/music/" + it.art + "/cover?size=" + px
+                              : it && it.icon ? Api.imageUrl(it.icon) : "" }
 
     // ─── geometry ──────────────────────────────────────────────────────────
     // the front cover's side, from the height (cover + reflection + the
@@ -37,7 +40,7 @@ Item {
     readonly property real halfTurned: cs / 2 * Math.cos(maxAngle * Math.PI / 180)   // a turned cover's projected half width
     readonly property real off: cs / 2 + halfTurned          // the first turned cover's centre
     readonly property real gap: cs * 0.2                     // between turned covers
-    readonly property int side: Math.max(0, Math.min(9, Math.ceil((width / 2 - off + halfTurned) / gap) + 1))   // turned covers per side
+    readonly property int side: Math.max(0, Math.min(16, Math.ceil((width / 2 - off + halfTurned) / gap) + 1))   // turned covers per side
     readonly property int slots: 2 * side + 1
     readonly property int px: Theme.coverPx(cs)
 

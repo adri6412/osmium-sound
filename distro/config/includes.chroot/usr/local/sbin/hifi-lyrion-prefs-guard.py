@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
-"""Lyrion's prefs: keep a last good copy, put it back when a file is broken.
+"""Lyrion's state: fix stray ownership, and keep a last good copy of each prefs
+file to put back when one is broken.
 
-Lyrion rewrites its .prefs files (YAML) in place. On a full disk the write
-fails half way and leaves an empty or cut file; at the next start Lyrion
-cannot read server.prefs ("Unable to read prefs … YAML::XS::LibYAML::Load")
-and gives up — so freeing the space did not bring it back (field report,
-2026-10). Run before every start of Lyrion (ExecStartPre):
+Run before every start of Lyrion (ExecStartPre, as root), it does two things.
+
+Ownership. Lyrion runs as the squeezeboxserver user (uid fixed at 900 by
+sysusers.d) and can only read, not create, inside a directory owned by root.
+A root-level operation can leave its cache or state tree owned by root — e.g.
+the /var graft at an image's first boot (initramfs cp -a from the image), or a
+backup restore — and then the first NEW plugin Lyrion is asked to install dies
+on `mkdir .../cache/InstalledPlugins/Plugins/<name>: Permission denied`, a fatal
+croak that keeps the service down for good (field report, 2026-10-23: Spotty on
+a device born as an image, where hifi-ab-firstboot's one-off chown never ran).
+So every start we chown back to squeezeboxserver:nogroup anything under its
+cache, prefs and log trees that is owned by someone else. The playlist folder is
+left alone on purpose (hifimusic:hifishare, setgid — see _make_playlist_folder
+in sources_server.py, which re-asserts it on every start).
+
+Prefs. Lyrion rewrites its .prefs files (YAML) in place. On a full disk the
+write fails half way and leaves an empty or cut file; at the next start Lyrion
+cannot read server.prefs ("Unable to read prefs … YAML::XS::LibYAML::Load") and
+gives up — so freeing the space did not bring it back (field report, 2026-10):
 
   * every prefs file that reads well is copied to prefs/.osmium-good/;
   * every one that is empty or does not parse is replaced by its good copy,
@@ -20,8 +35,19 @@ import shutil
 import sys
 
 PREFS = os.environ.get('PREFSDIR', '/var/lib/squeezeboxserver/prefs')
+CACHE = os.environ.get('CACHEDIR', '/var/lib/squeezeboxserver/cache')
 GOOD = '.osmium-good'
 USER = 'squeezeboxserver'
+# The state trees to re-own on every start. BASE covers prefs and the usual
+# cache (and the rest of /var/lib/squeezeboxserver); the log dir lives apart,
+# and CACHE is added only when it has been pointed somewhere outside BASE.
+BASE = os.path.dirname(PREFS)
+_cache = os.path.normpath(CACHE)
+_under_base = _cache == BASE or _cache.startswith(BASE.rstrip('/') + '/')
+OWN_TREES = (BASE, '/var/log/squeezeboxserver') + (() if _under_base else (_cache,))
+# Never re-owned: the playlist folder belongs to the share user with the shared
+# group and the setgid bit, so Lyrion and Samba can both write in it.
+OWN_SKIP = (os.path.join(BASE, 'playlists'),)
 
 try:
     import yaml
@@ -71,6 +97,44 @@ def _owner():
         return pw.pw_uid, pw.pw_gid
     except KeyError:
         return None
+
+
+def own_tree(trees, owner, skip=(), lstat=os.lstat, chown=os.lchown):
+    """chown back to `owner` every entry under `trees` that belongs to someone
+    else, skipping the subtrees in `skip`. Conditional, so once a tree is right
+    the next start touches nothing (cheap even on a large cache). Symlinks are
+    chowned as themselves, not followed. Returns how many entries were fixed;
+    a per-entry error is logged, never raised — the start must not depend on it."""
+    if not owner:
+        return 0
+    uid, gid = owner
+    skip = tuple(os.path.normpath(s) for s in skip)
+    fixed = 0
+
+    def fix(path):
+        nonlocal fixed
+        try:
+            st = lstat(path)
+        except OSError:
+            return
+        if st.st_uid == uid and st.st_gid == gid:
+            return
+        try:
+            chown(path, uid, gid)
+            fixed += 1
+        except OSError as e:
+            log(f'cannot set owner of {path}: {e}')
+
+    for tree in trees:
+        if os.path.normpath(tree) in skip or not os.path.lexists(tree):
+            continue
+        fix(tree)
+        for dirpath, dirnames, filenames in os.walk(tree):
+            dirnames[:] = [d for d in dirnames
+                           if os.path.normpath(os.path.join(dirpath, d)) not in skip]
+            for name in dirnames + filenames:
+                fix(os.path.join(dirpath, name))
+    return fixed
 
 
 def _copy(src, dst, owner):
@@ -126,8 +190,10 @@ def guard(root=PREFS):
 
 def main():
     try:
+        owned = own_tree(OWN_TREES, _owner(), OWN_SKIP)
         saved, restored, moved = guard()
-        log(f'{len(saved)} saved, {len(restored)} restored, {len(moved)} moved aside')
+        log(f'{len(saved)} saved, {len(restored)} restored, '
+            f'{len(moved)} moved aside, {owned} owner fixed')
     except Exception as e:                 # never stop Lyrion from starting
         log(f'error: {e}')
     return 0

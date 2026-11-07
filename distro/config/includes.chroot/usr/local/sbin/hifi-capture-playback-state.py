@@ -15,6 +15,12 @@ docstring) and they're debounced to a 10s autosave that a fast power-off can
 miss entirely; capturing explicitly here, synchronously, before shutdown
 proceeds, avoids both problems.
 
+Only this box's own internal player resumes on boot. Every Bluetooth speaker
+also has a squeezelite of its own here (hifi-bt-player@), and those must NOT
+come back playing on their own (issue #124: an internal player left paused and
+a speaker left playing both came back playing) — so each of them is paused and
+has its playingAtPowerOff cleared here, the same way, before shutdown.
+
 Best-effort only: any failure (LMS not reachable, unexpected response shape)
 just means nothing gets captured — the appliance simply won't resume on next
 boot, same as today. Never worth delaying/blocking a shutdown over.
@@ -98,12 +104,34 @@ def own_player_id(players):
     return None
 
 
+def quiesce_bluetooth_speakers(players, own):
+    """Pause every local player that is not our own internal one (i.e. the
+    Bluetooth speakers' squeezelites) and clear its playingAtPowerOff, so none
+    of them resumes playing on its own after a reboot. Best-effort per player:
+    a failure on one must not skip the rest."""
+    for p in players:
+        pid = p.get('playerid')
+        if not pid or pid == own:
+            continue
+        if not str(p.get('ip', '')).startswith('127.0.0.1:'):
+            continue
+        for command in (['pause', '1'], ['playerpref', 'playingAtPowerOff', '0']):
+            try:
+                lms_request(pid, command)
+            except Exception:
+                pass
+
+
 def main():
     try:
         result = lms_request('-', ['serverstatus', 0, 999]) or {}
     except Exception:
         return
-    playerid = own_player_id(result.get('players_loop', []))
+    players = result.get('players_loop', [])
+    playerid = own_player_id(players)
+    # Keep the speakers quiet regardless of whether the internal player is
+    # found or has anything worth capturing.
+    quiesce_bluetooth_speakers(players, playerid)
     if not playerid:
         return
     try:

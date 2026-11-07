@@ -274,7 +274,14 @@ class TestRender(unittest.TestCase):
         self.sb = Sandbox()
         self.sb.card('D50s', STREAM_NATIVE_BE)
         self.sb.card('Gen', STREAM_PCM_ONLY)
+        # render()'s output fallback reads card presence from the global
+        # PROC_ASOUND; point it at the sandbox so chosen cards count as present.
+        self._saved_proc = sq.PROC_ASOUND
+        sq.PROC_ASOUND = self.sb.asound
         self.base = sq.normalize({'output': 'hw:CARD=D50s,DEV=0'})
+
+    def tearDown(self):
+        sq.PROC_ASOUND = self._saved_proc
 
     def r(self, **changes):
         m = dict(self.base)
@@ -283,15 +290,17 @@ class TestRender(unittest.TestCase):
         return sq.render(m, self.sb.probe)
 
     def test_legacy_line_round_trips(self):
-        # a device imported from the stock line renders the stock line, with
-        # the only intended change: native DSD where the DAC declares it
-        self.assertEqual(sq.render(sq.parse_args(LEGACY), self.sb.probe), LEGACY.replace('-D', '-D :u32be'))
-        self.assertEqual(sq.render(sq.parse_args(LEGACY_MAC), self.sb.probe), LEGACY_MAC.replace('-D', '-D :u32be'))
+        # a device imported from the stock line renders the stock line, with the
+        # intended changes: native DSD where the DAC declares it, and the large
+        # ALSA buffer the built-in player always takes (USB DAC isoc jitter).
+        BUF = ' -a ' + sq.ALSA_LARGE
+        self.assertEqual(sq.render(sq.parse_args(LEGACY), self.sb.probe), LEGACY.replace('-D', '-D :u32be') + BUF)
+        self.assertEqual(sq.render(sq.parse_args(LEGACY_MAC), self.sb.probe), LEGACY_MAC.replace('-D', '-D :u32be') + BUF)
         gen = LEGACY.replace('D50s', 'Gen')
-        self.assertEqual(sq.render(sq.parse_args(gen), self.sb.probe), gen)
+        self.assertEqual(sq.render(sq.parse_args(gen), self.sb.probe), gen + BUF)
         # the stock line had `-D` on `default` too: auto no longer sends DoP there
         stock = "-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium"
-        self.assertEqual(sq.render(sq.parse_args(stock), self.sb.probe), stock.replace(' -D', ''))
+        self.assertEqual(sq.render(sq.parse_args(stock), self.sb.probe), stock.replace(' -D', '') + BUF)
 
     def test_dsd_modes(self):
         self.assertIn(' -D :u32be ', self.r(dsd='auto'))
@@ -309,8 +318,8 @@ class TestRender(unittest.TestCase):
         self.assertIn(' -V PCM', self.r(volume='hardware', mixer='PCM'))
         self.assertNotIn(' -V ', self.r(volume='software', mixer='PCM'))
         self.assertNotIn(' -V ', self.r(volume='hardware', mixer=''))
-        self.assertIn(' -a 200:8', self.r(alsa_buffer='large'))
-        self.assertIn(' -b 16384:8192', self.r(stream_buffer='large'))
+        self.assertIn(' -a ' + sq.ALSA_LARGE, self.r(alsa_buffer='large'))
+        self.assertIn(' -b ' + sq.STREAM_LARGE, self.r(stream_buffer='large'))
         self.assertIn(' -p 45', self.r(realtime=True))
         self.assertTrue(self.r(extra='-R -u vE').endswith(' -R -u vE'))
 
@@ -339,6 +348,12 @@ class TestDsdAuto(unittest.TestCase):
         self.sb.card('Gen', STREAM_PCM_ONLY)
         self.sb.hda('PCH', 0, {0: 'ALC269VC Analog', 3: 'HDMI 0', 7: 'HDMI 1', 8: 'HDMI 2'})
         self.sb.hda('NVidia', 1, {3: 'HDMI 0'})
+        # The output fallback reads card presence from the global PROC_ASOUND.
+        self._saved_proc = sq.PROC_ASOUND
+        sq.PROC_ASOUND = self.sb.asound
+
+    def tearDown(self):
+        sq.PROC_ASOUND = self._saved_proc
 
     def r(self, output, dsd='auto'):
         return sq.render(sq.normalize({'output': output, 'dsd': dsd}), self.sb.probe)
@@ -384,11 +399,71 @@ class TestDsdAuto(unittest.TestCase):
         model, args, changed = sq.apply(self.sb.conf, self.sb.default, self.sb.dsp_target, self.sb.probe,
                                         None, os.path.join(self.sb.dir, 'no-machine-id'))
         self.assertEqual(model['dsd'], 'auto')
-        self.assertEqual(args, '-o hw:CARD=PCH,DEV=3 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium')
+        self.assertEqual(args, '-o hw:CARD=PCH,DEV=3 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -a ' + sq.ALSA_LARGE)
+
+
+class TestOutputFallback(unittest.TestCase):
+    """The built-in player falls back to `default` when its chosen card is gone,
+    so a USB DAC unplugged after it was selected does not leave squeezelite
+    crash-looping on a missing device (field bundle 2026-10-30: 4000+ restarts
+    on hw:CARD=Lite,DEV=0 after the DAC was unplugged)."""
+
+    def setUp(self):
+        self.sb = Sandbox()
+        self.sb.card('D50s', STREAM_NATIVE_BE)
+        self._saved_proc = sq.PROC_ASOUND
+        sq.PROC_ASOUND = self.sb.asound
+
+    def tearDown(self):
+        sq.PROC_ASOUND = self._saved_proc
+
+    def test_available_output(self):
+        self.assertEqual(sq.available_output('hw:CARD=D50s,DEV=0'), 'hw:CARD=D50s,DEV=0')
+        self.assertEqual(sq.available_output('default'), 'default')     # not a hw: card
+        self.assertEqual(sq.available_output('null'), 'null')           # not a hw: card
+        self.assertEqual(sq.available_output('hw:CARD=Lite,DEV=0'), 'null')   # card gone: silent
+
+    def test_present_card_is_kept(self):
+        line = sq.render(sq.normalize({'output': 'hw:CARD=D50s,DEV=0'}), self.sb.probe)
+        self.assertIn('-o hw:CARD=D50s,DEV=0 ', line)
+
+    def test_missing_card_falls_back_to_null(self):
+        line = sq.render(sq.normalize({'output': 'hw:CARD=Lite,DEV=0'}), self.sb.probe)
+        self.assertTrue(line.startswith('-o null '), line)
+        self.assertNotIn('Lite', line)
+        self.assertNotIn('default', line)
+
+    def test_fallback_drops_the_hardware_mixer(self):
+        # -V names a control on the chosen card, which is gone on fallback.
+        present = sq.render(sq.normalize(
+            {'output': 'hw:CARD=D50s,DEV=0', 'volume': 'hardware', 'mixer': 'PCM'}), self.sb.probe)
+        self.assertIn('-V PCM', present)
+        gone = sq.render(sq.normalize(
+            {'output': 'hw:CARD=Lite,DEV=0', 'volume': 'hardware', 'mixer': 'PCM'}), self.sb.probe)
+        self.assertNotIn('-V', gone)
+
+    def test_stored_choice_is_not_rewritten(self):
+        # The fallback is only in the rendered line; the JSON keeps the DAC so it
+        # is used again when the card returns.
+        self.sb.write_default('-o hw:CARD=Lite,DEV=0 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium')
+        model, args, _ = sq.apply(self.sb.conf, self.sb.default, self.sb.dsp_target, self.sb.probe,
+                                  None, os.path.join(self.sb.dir, 'no-machine-id'))
+        self.assertEqual(model['output'], 'hw:CARD=Lite,DEV=0')
+        self.assertEqual(self.sb.conf_json()['output'], 'hw:CARD=Lite,DEV=0')
+        self.assertTrue(args.startswith('-o null '), args)
+
+    def test_a_zone_keeps_its_output(self):
+        # A zone does not fall back: run_zone() waits for the card, and a zone on
+        # `default` would collide with the built-in player.
+        argv = sq.render_argv(sq.normalize({'output': 'hw:CARD=Lite,DEV=0'}),
+                              self.sb.probe, visualizer=False, zone=True)
+        self.assertIn('hw:CARD=Lite,DEV=0', argv)
+        self.assertNotIn('default', argv)
 
 
 def _append_token(conf, default, asound, token, count):
     """One writer of TestConcurrency: `count` updates, each adding a token."""
+    sq.PROC_ASOUND = asound   # a forked child does not inherit the parent's patch
     probe = lambda d: sq.probe(d, asound)   # noqa: E731
     for i in range(count):
         sq.update(lambda m: m.update(extra=(m['extra'] + f' {token}{i}').strip()),
@@ -397,6 +472,7 @@ def _append_token(conf, default, asound, token, count):
 
 def _apply_loop(conf, default, asound, count):
     """The ExecStartPre of a crash-looping squeezelite, sped up."""
+    sq.PROC_ASOUND = asound   # a forked child does not inherit the parent's patch
     for _ in range(count):
         sq.apply(conf, default, os.path.join(os.path.dirname(conf), 'no-dsp-target'),
                  lambda d: sq.probe(d, asound), None, '/nonexistent-machine-id')
@@ -410,6 +486,13 @@ class TestConcurrency(unittest.TestCase):
         self.sb = Sandbox()
         self.sb.card('D50s', STREAM_NATIVE_BE)
         self.sb.write_default(LEGACY)
+        # render()'s output fallback reads card presence from the global
+        # PROC_ASOUND; point it at the sandbox so D50s counts as present.
+        self._saved_proc = sq.PROC_ASOUND
+        sq.PROC_ASOUND = self.sb.asound
+
+    def tearDown(self):
+        sq.PROC_ASOUND = self._saved_proc
 
     def tokens(self):
         return set(self.sb.conf_json()['extra'].split())
@@ -487,6 +570,13 @@ class TestFiles(unittest.TestCase):
     def setUp(self):
         self.sb = Sandbox()
         self.sb.card('D50s', STREAM_NATIVE_BE)
+        # render()'s output fallback reads card presence from the global
+        # PROC_ASOUND; point it at the sandbox so D50s counts as present.
+        self._saved_proc = sq.PROC_ASOUND
+        sq.PROC_ASOUND = self.sb.asound
+
+    def tearDown(self):
+        sq.PROC_ASOUND = self._saved_proc
 
     def apply(self, out=None, machine_id=None):
         return sq.apply(self.sb.conf, self.sb.default, self.sb.dsp_target, self.sb.probe, out,
@@ -519,7 +609,7 @@ class TestFiles(unittest.TestCase):
         out = io.StringIO()
         model, args, changed = self.apply(out)
         self.assertTrue(changed)
-        self.assertEqual(args, LEGACY_MAC.replace('-D', '-D :u32be'))
+        self.assertEqual(args, LEGACY_MAC.replace('-D', '-D :u32be') + ' -a ' + sq.ALSA_LARGE)
         self.assertEqual(self.sb.args(), args)
         self.assertEqual(self.sb.conf_json()['mac'], '02:ab:cd:ef:01:23')
         self.assertIn('GENERATED FILE', self.sb.read_default())
@@ -530,7 +620,7 @@ class TestFiles(unittest.TestCase):
     def test_no_file_no_json_gives_defaults(self):
         model, args, changed = self.apply()
         self.assertTrue(changed)
-        self.assertEqual(args, "-o default -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium")
+        self.assertEqual(args, "-o default -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -a " + sq.ALSA_LARGE)
 
     def test_hand_edit_of_the_file_is_overwritten(self):
         self.sb.write_default(LEGACY)
@@ -634,7 +724,7 @@ class TestApiServer(unittest.TestCase):
     def test_set_audio_device(self):
         r = self.api.set_audio_device('hw:CARD=Gen,DEV=0')
         self.assertTrue(r['success'], r)
-        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen'))
+        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen') + ' -a ' + sq.ALSA_LARGE)
         self.assertEqual(self.sb.conf_json()['output'], 'hw:CARD=Gen,DEV=0')
         self.assertEqual(len(self.restarts()), 1)
         r = self.api.set_audio_device('hw:CARD=D50s,DEV=0')
@@ -660,7 +750,7 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(g['mixers'], ['PCM'])
         # `args` is what the model renders now (what the next start gets); the
         # file itself is rendered by the service's ExecStartPre or by a change
-        self.assertEqual(g['args'], LEGACY.replace('-D', '-D :u32be'))
+        self.assertEqual(g['args'], LEGACY.replace('-D', '-D :u32be') + ' -a ' + sq.ALSA_LARGE)
         r = self.api.set_squeezelite_conf({'dsd': 'dop', 'max_rate': 96000, 'volume': 'hardware'})
         self.assertTrue(r['success'], r)
         self.assertEqual(r['conf']['mixer'], 'PCM')            # picked for the owner
@@ -688,7 +778,7 @@ class TestApiServer(unittest.TestCase):
         self.assertTrue(r['success'])
         self.assertEqual(r['conf']['dsd'], 'auto')
         self.assertEqual(r['conf']['output'], 'hw:CARD=Gen,DEV=0')
-        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen'))
+        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen') + ' -a ' + sq.ALSA_LARGE)
 
     def test_concurrent_requests_keep_every_change(self):
         # three requests on three fields at once, many times over: each one
@@ -720,7 +810,8 @@ class TestApiServer(unittest.TestCase):
             with self.api._dsp_apply_lock:
                 self.api._apply_dsp_on_locked('hw:CARD=D50s,DEV=0', [], False, False, 0.0, {'devices': {}})
             self.assertEqual(self.sb.args(),
-                             "-o hw:CARD=Loopback,DEV=0 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -r 48000 -R")
+                             "-o hw:CARD=Loopback,DEV=0 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -r 48000 -R"
+                             " -a " + sq.ALSA_LARGE)
             self.assertEqual(self.api._current_audio_device(), 'hw:CARD=Loopback,DEV=0')
             self.assertEqual(self.api._current_real_dac(), 'hw:CARD=D50s,DEV=0')
             self.assertEqual(len(self.restarts()), 1)
@@ -729,8 +820,58 @@ class TestApiServer(unittest.TestCase):
                 self.api._apply_dsp_on_locked('hw:CARD=D50s,DEV=0', [], False, False, 0.0, {'devices': {}})
             self.assertEqual(len(self.restarts()), 1)
             self.api._apply_dsp_off()
-        self.assertEqual(self.sb.args(), LEGACY.replace('-D', '-D :u32be') + ' -r 192000')
+        self.assertEqual(self.sb.args(), LEGACY.replace('-D', '-D :u32be') + ' -r 192000 -a ' + sq.ALSA_LARGE)
         self.assertEqual(self.api._current_audio_device(), 'hw:CARD=D50s,DEV=0')
+
+
+STREAM_PCM_768 = """Fancy USB DAC at usb-0000:00:14.0-5, super speed : USB Audio
+
+Playback:
+  Status: Stop
+  Interface 1
+    Altset 1
+    Format: S32_LE
+    Channels: 2
+    Rates: 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000
+"""
+
+
+class TestPlayerUpsampleRate(unittest.TestCase):
+    """Player-side upsampling (`squeezelite -r <rate> -R`): squeezelite has one
+    static rate, so the chosen absolute cap wins; 0 (Auto) climbs to the DAC's
+    own ceiling; the DAC's declared max always clamps the result."""
+
+    def setUp(self):
+        self.sb = Sandbox()
+        self.sb.card('X768', STREAM_PCM_768)   # declares PCM up to 768000
+        self.sb.card('D50s', STREAM_NATIVE_BE)  # declares PCM up to 384000
+
+    def rate(self, device, cap):
+        model = {'output': device, 'upsample': 'max', 'upsample_cap': cap}
+        return sq.player_upsample_rate(model, device, proc_asound=self.sb.asound)
+
+    def test_cap_wins_below_dac_ceiling(self):
+        # 768k-capable DAC, user picks 192k → exactly 192k, not the DAC max.
+        self.assertEqual(self.rate('hw:CARD=X768,DEV=0', 192000), 192000)
+
+    def test_auto_climbs_to_dac_ceiling(self):
+        # Auto (cap 0) → the DAC's declared ceiling (768k here).
+        self.assertEqual(self.rate('hw:CARD=X768,DEV=0', 0), 768000)
+
+    def test_dac_max_clamps_a_higher_cap(self):
+        # D50s tops at 384k; asking 768k is clamped down to 384k.
+        self.assertEqual(self.rate('hw:CARD=D50s,DEV=0', 768000), 384000)
+
+    def test_auto_on_d50s_is_384(self):
+        self.assertEqual(self.rate('hw:CARD=D50s,DEV=0', 0), 384000)
+
+    def test_cap_at_or_below_dac_is_honored(self):
+        self.assertEqual(self.rate('hw:CARD=D50s,DEV=0', 96000), 96000)
+        self.assertEqual(self.rate('hw:CARD=D50s,DEV=0', 384000), 384000)
+
+    def test_no_evidence_leaves_it_to_squeezelite(self):
+        # 'default' (unknown rates) and no cap → force nothing (return 0).
+        self.assertEqual(self.rate('default', 0), 0)
 
 
 if __name__ == '__main__':

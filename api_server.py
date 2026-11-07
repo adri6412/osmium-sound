@@ -27,6 +27,7 @@ from hifi_i18n import t as _t
 from hifi_i18n import MESSAGES as _I18N_MESSAGES
 import hifi_squeezelite as sq
 import hifi_signal_path
+import hifi_system_tweaks as stw
 import hifi_diskguard
 
 app = Flask(__name__)
@@ -2073,6 +2074,51 @@ def _sq_update(change):
     _, changed = sq.update(change, SQUEEZELITE_CONF, SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
     return changed
 
+PROC_ASOUND = '/proc/asound'
+
+
+def _alsa_cards(root):
+    """[(index, id)] from /proc/asound/cards — '0 [Audio   ]: ...' -> (0, 'Audio')."""
+    out = []
+    try:
+        with open(os.path.join(root, 'cards'), encoding='utf-8', errors='replace') as f:
+            text = f.read()
+    except OSError:
+        return out
+    for m in re.finditer(r'^\s*(\d+)\s+\[([^\]]+)\]', text, re.M):
+        out.append((int(m.group(1)), m.group(2).strip()))
+    return out
+
+
+def _alsa_pcm_name(root, idx, dev):
+    """The 'name:' line of /proc/asound/card<idx>/pcm<dev>p/info, or ''."""
+    try:
+        with open(os.path.join(root, f'card{idx}', f'pcm{dev}p', 'info'),
+                  encoding='utf-8', errors='replace') as f:
+            for line in f:
+                if line.startswith('name:'):
+                    return line.split(':', 1)[1].strip()
+    except OSError:
+        pass
+    return ''
+
+
+def _alsa_playback_devices(root):
+    """[(card_index, card_id, dev_index, name)] for every ALSA *playback* device,
+    read straight from /proc/asound so it does not depend on how `aplay -l`
+    formats its lines. The Loopback card is left out."""
+    out = []
+    for idx, cid in _alsa_cards(root):
+        if cid == 'Loopback':
+            continue
+        for p in sorted(glob.glob(os.path.join(root, f'card{idx}', 'pcm*p'))):
+            m = re.search(r'pcm(\d+)p$', p)
+            if m:
+                dev = int(m.group(1))
+                out.append((idx, cid, dev, _alsa_pcm_name(root, idx, dev)))
+    return out
+
+
 def list_audio_devices():
     """List ALSA playback devices (cards) usable as squeezelite output.
 
@@ -2109,6 +2155,26 @@ def list_audio_devices():
                     'dsd': 'native' if sq.is_native(dsd_fmt) else 'dop',
                     'dsd_format': dsd_fmt,
                 })
+        # aplay -l's device line varies by driver: some onboard codecs (Intel
+        # Cherry Trail cht-bsw-rt5645) print an empty [] description the regex
+        # above skips, so a card with real playback devices would vanish from
+        # the list. Backfill from /proc/asound so every usable output stays
+        # selectable, keeping the readable names aplay -l already gave.
+        have = {d['id'] for d in devices}
+        for idx, cid, dev, pname in _alsa_playback_devices(PROC_ASOUND):
+            dev_id = f'hw:CARD={cid},DEV={dev}'
+            if dev_id in have:
+                continue
+            dsd_fmt = sq.probe(dev_id)
+            devices.append({
+                'id': dev_id,
+                'name': pname or cid,
+                'card': idx,
+                'device': dev,
+                'dsd': 'native' if sq.is_native(dsd_fmt) else 'dop',
+                'dsd_format': dsd_fmt,
+            })
+        devices.sort(key=lambda d: (d['id'] != 'default', d.get('card') or 0, d.get('device') or 0))
     except Exception:
         log.exception("list_audio_devices failed")
         return {'devices': devices, 'current': _current_real_dac(),
@@ -2161,7 +2227,15 @@ def set_audio_device(device):
         log.exception("set_audio_device: write config failed")
         return {'success': False, 'code': 'audio.writeConfigFailed',
                 'message': _t('audio.writeConfigFailed', _lang())}
-    _pcm2dsd_resync()
+    # An onboard coax/optical (S/PDIF) output boots with its IEC958 transmitter
+    # muted on a clean ALSA state: squeezelite would open the card and play into
+    # silence. Unmute the digital switch(es) of the chosen card so it is audible
+    # straight away (a USB DAC has no such switch, so this is a no-op there).
+    try:
+        sq.unmute_digital_output(device)
+    except Exception:
+        log.exception("set_audio_device: unmute digital output failed")
+    _convert_resync()
 
     try:
         r = _restart_squeezelite_if_enabled()
@@ -2172,6 +2246,24 @@ def set_audio_device(device):
         log.exception("set_audio_device: squeezelite restart failed")
         return {'success': True, 'message': _t('audio.deviceSetRestartFailed', _lang(), device=device)}
     return {'success': True, 'message': _t('audio.outputSet', _lang(), device=device)}
+
+def set_mixer_switch(name, on):
+    """Toggle one ALSA playback switch of the current output card -- the onboard
+    S/PDIF (IEC958) transmitter above all, which boots muted. `name` is checked
+    against the card's actual switches so only real controls are driven."""
+    device = _sq_load().get('output')
+    valid = {s['name'] for s in sq.mixer_switches(device)}
+    if name not in valid:
+        return {'success': False, 'code': 'audio.invalidMixerSwitch',
+                'message': _t('audio.invalidMixerSwitch', _lang(), name=name)}
+    try:
+        switches = sq.set_mixer_switch(device, name, bool(on))
+    except Exception:
+        log.exception("set_mixer_switch failed")
+        return {'success': False, 'code': 'audio.mixerSwitchFailed',
+                'message': _t('audio.mixerSwitchFailed', _lang())}
+    return {'success': True, 'switches': switches or [],
+            'message': _t('audio.mixerSwitchSet', _lang())}
 
 # ── Settings → Audio: the rest of the squeezelite model ────────────
 # The fields in hifi_squeezelite.TUNABLE (DSD mode, switching pause, rate
@@ -2188,15 +2280,24 @@ def get_squeezelite_conf():
         'dsd_detected': 'native' if sq.is_native(fmt) else ('pcm' if fmt == sq.PCM_ONLY else 'dop'),
         'dsd_format': fmt,
         'mixers': sq.mixer_controls(model['output']),
+        # Playback switches of the chosen card (IEC958/S/PDIF, Master, …) the UI
+        # can toggle -- the onboard digital output is muted by default, see
+        # set_mixer_switch() and sq.unmute_digital_output().
+        'switches': sq.mixer_switches(model['output']),
+        # The rate the DAC is receiving right now (0 when nothing is playing);
+        # player-side upsampling lands on a synchronous rate under the cap, so
+        # the UI reports this, not the cap. See sq.current_output_rate().
+        'output_rate': sq.current_output_rate(model['output']),
         'choices': {'dsd': list(sq.DSD_MODES), 'dsd_delay_ms': list(sq.DSD_DELAYS),
-                    'max_rate': [0, 96000, 192000, 384000]},
+                    'max_rate': [0, 96000, 192000, 384000, 768000, 1536000],
+                    'upsample': list(sq.UPSAMPLE_MODES)},
         'defaults': {k: sq.DEFAULTS[k] for k in sq.TUNABLE},
         'pcm2dsd': _pcm2dsd_info(model, fmt),
     }
 
 def set_squeezelite_conf(changes):
     def change(model):
-        _check_pcm2dsd_mode(changes)
+        _check_convert_mode(changes)
         model = sq.set_fields(model, changes)
         if model['volume'] == 'hardware' and not model['mixer']:
             mixers = sq.mixer_controls(model['output'])
@@ -2222,9 +2323,16 @@ def _apply_squeezelite_conf(change, msg_key):
         return {'success': False, 'code': 'audio.writeConfigFailed',
                 'message': _t('audio.writeConfigFailed', _lang())}
     result = {'success': True, 'message': _t(msg_key, _lang())}
-    if _pcm2dsd_resync():
-        result['lyrion_restarted'] = True
-        result['message'] = _t('squeezelite.savedLyrionRestart', _lang())
+    _convert_resync()
+    # Keep the player-side converter (hifi-pcm2dsd-player) in step with the
+    # model on every change, not only when squeezelite's ARGS line changes:
+    # a new DSD rate or filter leaves the Loopback ARGS untouched, so no
+    # restart fires and ExecStartPre's apply never runs. Idempotent, and a
+    # no-op (stops the unit) whenever the built-in player does not convert.
+    try:
+        sq.sync_player(_sq_load())
+    except Exception:
+        log.exception("player-side convert: sync failed")
     if changed:
         try:
             r = _restart_squeezelite_if_enabled()
@@ -2236,15 +2344,58 @@ def _apply_squeezelite_conf(change, msg_key):
     result.update(get_squeezelite_conf())
     return result
 
-# ── PCM → DSD ──────────────────────────────────────────────────────
-# Lyrion converts every PCM track for a player whose model asks for it (see
-# hifi_squeezelite.pcm2dsd_state and hifi-pcm2dsd.py). Its rules are read
-# only when Lyrion starts, so turning the conversion on or off for a player —
-# or anything that makes it stop applying, like another DAC or another Lyrion
-# server — rewrites them and restarts Lyrion. A new rate or filter does not:
-# the wrapper reads them at every track.
+# ── Settings → System tweaks (CPU governor / security / hyper-threading) ──
+# Three OS-level knobs a listener can opt into to push a server-side PCM→DSD
+# converter harder (Daphile's "Power" section does the same). Defaults stay
+# low-power/secure; hifi_system_tweaks owns the model and the /sys side.
+def get_system_tweaks():
+    model = stw.load()
+    return {
+        'conf': model,
+        'governors_available': stw.available_governors(),
+        'governor_live': stw.governor_live(),
+        'smt_available': stw.smt_available(),
+        'smt_live': stw.smt_live(),
+        # mitigations is a command-line change: it is live only after a reboot.
+        'needs_reboot': stw.needs_reboot(model),
+        'defaults': {k: stw.DEFAULTS[k] for k in stw.TUNABLE},
+    }
+
+def set_system_tweaks(changes):
+    try:
+        model = stw.update(lambda m: stw.set_fields(m, changes))
+    except stw.InvalidField as e:
+        return {'success': False, 'code': e.code,
+                'message': _t(e.code, _lang(), field=e.field, detail=e.detail)}
+    except Exception:
+        log.exception("system tweaks: write failed")
+        return {'success': False, 'code': 'systemTweaks.writeFailed',
+                'message': _t('systemTweaks.writeFailed', _lang())}
+    # Governor + SMT take effect at once; mitigations only on reboot.
+    try:
+        stw.apply_runtime(model)
+    except Exception:
+        log.exception("system tweaks: runtime apply failed")
+    try:
+        _apply_system_tweaks_to_boot()
+    except Exception:
+        log.exception("system tweaks: boot command line not updated")
+    result = get_system_tweaks()
+    result['success'] = True
+    key = 'systemTweaks.reboot' if result['needs_reboot'] else 'systemTweaks.saved'
+    result['message'] = _t(key, _lang())
+    return result
+
+# ── PCM → DSD and PCM upsampling ────────────────────────────────────
+# The Lyrion a player follows converts every PCM track for it when the model
+# asks (see hifi_squeezelite.pcm2dsd_state / upsample_state). The box drives
+# this through the Osmium Convert plugin (_convert_resync above): it sets or
+# clears the per-player rule on that Lyrion and the plugin reloads the tables
+# with no restart. A new rate or filter is just another `set`.
 ZONES_CONF = sq.ZONES_CONF
 PCM2DSD_MAP = sq.PCM2DSD_MAP
+UPSAMPLE_MAP = sq.UPSAMPLE_MAP
+EXTERNAL_CONVERT = sq.EXTERNAL_CONVERT
 LMS_CONVERT = sq.LMS_CONVERT
 PCM2DSD_BENCH_FILE = '/var/lib/hifi-player/pcm2dsd-bench.json'
 # The share of real time a DSD rate may take on this CPU and still be offered:
@@ -2329,15 +2480,16 @@ def _pcm2dsd_bench():
 def _pcm2dsd_modes():
     """(the choices this CPU can sustain, measured?). Until it is measured,
     DSD64 and DSD128 — what even a 1.5 GHz Celeron does — and not DSD256."""
-    bench = _pcm2dsd_bench()
-    if bench is None:
-        return ['off', 'dsd64', 'dsd128'], False
-    ok = [m for m in ('dsd64', 'dsd128', 'dsd256')
-          if isinstance(bench.get(m), (int, float)) and bench[m] <= PCM2DSD_MAX_LOAD]
-    return ['off'] + ok, True
+    # TRIAL (.133/.105): CPU gating disabled by request — every DSD mode,
+    # up to DSD512/DSD1024, is always offered regardless of measured cost.
+    return list(sq.PCM2DSD_MODES), True
 
 
-def _check_pcm2dsd_mode(changes):
+def _check_convert_mode(changes):
+    """The server-side conversion a change asks for must be one this CPU can
+    sustain. Only DSD is gated on the measured CPU cost; PCM upsampling is far
+    lighter and always offered. The DSD-xor-upsample invariant is enforced in
+    sq.set_fields, which raises before this matters."""
     mode = (changes or {}).get('pcm2dsd')
     if mode in (None, 'off'):
         return
@@ -2346,34 +2498,194 @@ def _check_pcm2dsd_mode(changes):
 
 
 def _pcm2dsd_info(model, fmt):
-    """What Settings → Audio needs to show the choice for one player."""
+    """What Settings → Audio needs to show the three-mode conversion control
+    for one player: the DSD choice (gated on this CPU) and PCM upsampling."""
     modes, measured = _pcm2dsd_modes()
+    # The built-in player converts on its own side now (PCM upsampling via
+    # squeezelite soxr, PCM → DSD via the Loopback + hifi-pcm2dsd-player), so the
+    # followed Lyrion's Osmium Convert plugin is not consulted here: DSD is gated
+    # on this box's local tools (`available`) and the measured CPU (`modes`), not
+    # on a server plugin. (Only external players still convert server-side.)
+    # The top DSD mode the built-in player's own DAC can take (dsd512 = no cap),
+    # so the UI can grey out a higher choice: a DAC that stops at DSD256 should
+    # not offer DSD512, which would fail track after track.
+    dac_ceiling = sq.dac_dsd_ceiling(model['output'], fmt)
     return {'state': sq.pcm2dsd_state(model, fmt), 'modes': modes, 'measured': measured,
+            'dac_ceiling': dac_ceiling,
             'filters': list(sq.PCM2DSD_FILTERS), 'available': sq.tools_present(),
-            'server_local': sq.server_is_local(model['server'])}
+            'server_local': sq.server_is_local(model['server']),
+            # Whether this box can convert PCM → DSD on the player side at all
+            # (converter daemon + Loopback). PCM → DSD for a player of this box
+            # always runs player-side now, so there is no server/player choice.
+            'player_available': sq.player_side_present(),
+            'upsample': {'state': sq.upsample_state(model),
+                         'modes': list(sq.UPSAMPLE_MODES),
+                         # Player-side: the UI picks an absolute target rate
+                         # (caps), not a x2/x4 multiple. See sq.UPSAMPLE_CAPS.
+                         'caps': list(sq.UPSAMPLE_CAPS),
+                         'available': sq.upsample_tools_present()}}
 
 
-def _pcm2dsd_resync():
-    """Bring Lyrion's rules in line with the models. True when they changed
-    and a running Lyrion was restarted to read them."""
+# ── External players: server-side conversion for squeezelites elsewhere ──
+# Any squeezelite on the LAN can play from this box's Lyrion. The same
+# per-MAC custom-convert.conf rules that convert for the built-in player and
+# the zones can convert for those external players too, when the user picks
+# them from Settings → External players. Their choices live in
+# external-convert.json (sq.load_external), read when Lyrion's rules are built
+# — at boot before Lyrion starts, so nothing is queried live there. The
+# serverstatus query below is only to show the list in the UI.
+def _external_default():
+    return {'name': '', 'pcm2dsd': 'off', 'pcm2dsd_filter': sq.DEFAULTS['pcm2dsd_filter'],
+            'upsample': 'off', 'upsample_cap': 0}
+
+
+def _own_box_macs(players):
+    """The lower-case MACs of every player this box runs itself — the built-in
+    player, its zones, and its Bluetooth speakers — which must not appear in
+    the external-players list."""
+    mine = {str(pid).lower() for pid in _own_player_ids(players) if pid}
     try:
-        changed = sq.sync_pcm2dsd(SQUEEZELITE_CONF, ZONES_CONF, PCM2DSD_MAP, LMS_CONVERT,
-                                  SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
+        for z in sq.load_zones(ZONES_CONF):
+            if z.get('mac'):
+                mine.add(str(z['mac']).lower())
     except Exception:
-        log.exception("pcm2dsd: writing Lyrion's rules failed")
-        return False
-    if not changed:
-        return False
+        log.exception("external_convert: reading zones")
     try:
-        if _run(['systemctl', 'is-active', '--quiet', 'lyrionmusicserver'], timeout=10).returncode != 0:
-            return False
-        log.info("pcm2dsd: rules changed, restarting Lyrion")
-        _run(['systemctl', 'reset-failed', 'lyrionmusicserver'], timeout=15)
-        _run(['systemctl', 'restart', 'lyrionmusicserver'], timeout=60)
-        return True
+        for s in (_bt_read_doc().get('speakers') or []):
+            if s.get('mac'):
+                mine.add(_bt_player_mac(str(s['mac'])).lower())
     except Exception:
-        log.exception("pcm2dsd: Lyrion restart failed")
-        return False
+        log.exception("external_convert: reading Bluetooth speakers")
+    return mine
+
+
+def _is_osmium_player(p):
+    """True for another Osmium device following this Lyrion (squeezelite started
+    with `-M Osmium`). It has its own Osmium UI (Settings -> Audio) to set
+    conversion, so it does not belong in the external-players list, which is for
+    third-party squeezelite clients that have no Osmium settings screen."""
+    name = str(p.get('modelname') or '').strip().lower()
+    return name == 'osmium' or name.startswith('osmium ')
+
+
+def _external_player_list():
+    """[{mac, name, connected, model}] of the third-party players on this box's
+    Lyrion -- not this box's own squeezelites and not other Osmium devices (they
+    configure conversion from their own UI) -- or None when Lyrion is
+    unreachable."""
+    try:
+        result = _lms_request('-', ['serverstatus', 0, 999]) or {}
+    except Exception:
+        return None
+    players = result.get('players_loop') or []
+    mine = _own_box_macs(players)
+    out = []
+    for p in players:
+        mac = str(p.get('playerid') or '').strip().lower()
+        if not mac or mac in mine or not sq._MAC_RE.match(mac) or _is_osmium_player(p):
+            continue
+        out.append({'mac': mac, 'name': str(p.get('name') or mac),
+                    'connected': bool(p.get('connected', 1)),
+                    'model': str(p.get('modelname') or p.get('model') or '')})
+    return out
+
+
+def _external_info():
+    modes, measured = _pcm2dsd_modes()
+    # External players convert on this box's own Lyrion (127.0.0.1), which
+    # always has the plugin and the SoX tools; `convert` reports it anyway so
+    # the UI reads capability the same way as for the built-in player.
+    return {'dsd': {'modes': modes, 'measured': measured, 'filters': list(sq.PCM2DSD_FILTERS),
+                    'available': sq.tools_present()},
+            'upsample': {'modes': list(sq.UPSAMPLE_MODES), 'available': sq.upsample_tools_present()},
+            'convert': _convert_caps('127.0.0.1'),
+            'caps': list(sq.UPSAMPLE_CAPS)}
+
+
+def get_external_convert():
+    """The external players the user may convert, each with its saved choice.
+    Players saved but not currently connected are still listed, flagged
+    offline, so the user can see and clear them."""
+    saved = sq.load_external(EXTERNAL_CONVERT)
+    players = _external_player_list()
+    info = _external_info()
+    if players is None:
+        return {'success': False, 'code': 'lms.unreachable', 'message': _t('lms.unreachable', _lang()),
+                'players': [], 'info': info, 'lyrion': False}
+    seen, rows = set(), []
+    for p in players:
+        seen.add(p['mac'])
+        rows.append({**p, 'conf': saved.get(p['mac']) or _external_default()})
+    for mac, conv in saved.items():
+        if mac not in seen:
+            rows.append({'mac': mac, 'name': conv.get('name') or mac,
+                         'connected': False, 'model': '', 'conf': conv})
+    return {'success': True, 'players': rows, 'info': info, 'lyrion': True}
+
+
+def _write_external(saved):
+    os.makedirs(os.path.dirname(EXTERNAL_CONVERT), exist_ok=True)
+    _write_file_atomic(EXTERNAL_CONVERT, json.dumps(saved, indent=2, sort_keys=True) + '\n')
+
+
+def _external_ok(result):
+    """Finish an external-convert write: push the rules to the plugin, then
+    return the refreshed list with the right message."""
+    _convert_resync()
+    refreshed = get_external_convert()
+    refreshed['message'] = _t('squeezelite.saved', _lang())
+    return refreshed
+
+
+def update_external_convert(changes):
+    changes = changes if isinstance(changes, dict) else {}
+    mac = str(changes.get('mac') or '').strip().lower()
+    if not sq._MAC_RE.match(mac):
+        return {'success': False, 'code': 'squeezelite.invalidValue',
+                'message': _t('squeezelite.invalidValue', _lang(), field='mac', detail=mac)}
+    fields = {k: changes[k] for k in ('pcm2dsd', 'pcm2dsd_filter', 'upsample', 'upsample_cap')
+              if k in changes}
+    try:
+        _check_convert_mode(fields)
+        model = sq.set_fields(sq.normalize({}), fields)
+    except sq.InvalidField as e:
+        return {'success': False, 'code': e.code,
+                'message': _t(e.code, _lang(), field=e.field, detail=e.detail)}
+    name = ' '.join(str(changes.get('name') or '').split())[:40]
+    saved = sq.load_external(EXTERNAL_CONVERT)
+    if model['pcm2dsd'] == 'off' and model['upsample'] == 'off':
+        saved.pop(mac, None)                       # nothing to convert: drop the row
+    else:
+        saved[mac] = {'name': name, 'pcm2dsd': model['pcm2dsd'],
+                      'pcm2dsd_filter': model['pcm2dsd_filter'],
+                      'upsample': model['upsample'], 'upsample_cap': model['upsample_cap']}
+    try:
+        _write_external(saved)
+    except Exception:
+        log.exception("external_convert: write failed")
+        return {'success': False, 'code': 'audio.writeConfigFailed',
+                'message': _t('audio.writeConfigFailed', _lang())}
+    return _external_ok(None)
+
+
+def remove_external_convert(changes):
+    mac = str((changes or {}).get('mac') or '').strip().lower()
+    saved = sq.load_external(EXTERNAL_CONVERT)
+    if mac in saved:
+        saved.pop(mac, None)
+        try:
+            _write_external(saved)
+        except Exception:
+            log.exception("external_convert: write failed")
+            return {'success': False, 'code': 'audio.writeConfigFailed',
+                    'message': _t('audio.writeConfigFailed', _lang())}
+        # The row is gone, so _convert_resync no longer owns this MAC and would
+        # not touch it: clear its rule on the local Lyrion explicitly.
+        try:
+            _push_convert('127.0.0.1', {mac}, {})
+        except Exception:
+            log.exception("external_convert: clearing %s", mac)
+    return _external_ok(None)
 
 
 # ── Audio zones: one more player per DAC ────────────────────────────
@@ -2381,7 +2693,8 @@ def _pcm2dsd_resync():
 # zones, run by hifi-zone@<id>.service). The built-in player keeps its DAC;
 # a DAC is either the built-in player's or one zone's, never both.
 ZONE_TUNABLE = ('dsd', 'dsd_delay_ms', 'max_rate', 'volume', 'mixer', 'alsa_buffer',
-                'stream_buffer', 'realtime', 'pcm2dsd', 'pcm2dsd_filter')
+                'stream_buffer', 'realtime', 'pcm2dsd', 'pcm2dsd_filter',
+                'upsample', 'upsample_cap')
 
 
 def _zones_fail(code, **kw):
@@ -2398,14 +2711,22 @@ def _zones_ok(code, **kw):
 
 
 def _zones_apply(restart=()):
-    """Rules first (a zone that converts to DSD needs them in Lyrion before it
-    asks for its first track), then the units. True when Lyrion restarted."""
-    restarted = _pcm2dsd_resync()
+    """Clear the box's plugin rules first (every box player converts player-side
+    now, so none keeps a server rule), then start/stop/restart the units."""
+    _convert_resync()
     try:
         sq.sync_zones(ZONES_CONF, restart=restart)
     except Exception:
         log.exception("zones: applying the units failed")
-    return restarted
+
+
+def _all_zone_ids():
+    """Every configured zone id -- used to restart them all when adding or
+    removing a zone reindexes the Loopback subdevices (see sq.zone_subdev)."""
+    try:
+        return {z['id'] for z in sq.load_zones(ZONES_CONF)}
+    except Exception:
+        return set()
 
 
 def get_zones():
@@ -2432,13 +2753,17 @@ def get_zones():
             'dsd_detected': 'native' if sq.is_native(fmt) else ('pcm' if fmt == sq.PCM_ONLY else 'dop'),
             'mixers': sq.mixer_controls(z['output']),
             'pcm2dsd_state': sq.pcm2dsd_state(with_server, fmt),
+            'upsample_state': sq.upsample_state(with_server, zone=True),
         })
     free = [{'id': d['id'], 'name': d['name'], 'dsd': d.get('dsd')} for d in devices
             if d['id'] not in used and sq.zone_id(d['id'])]
     return {'success': True, 'zones': out, 'free': free, 'max': sq.MAX_ZONES,
             'main_output': main['output'], 'main_output_name': names.get(main['output'], main['output']),
             'pcm2dsd': {'modes': modes, 'measured': measured, 'filters': list(sq.PCM2DSD_FILTERS),
-                        'available': sq.tools_present(), 'server_local': sq.server_is_local(main['server'])},
+                        'available': sq.tools_present(), 'server_local': sq.server_is_local(main['server']),
+                        'upsample': {'modes': list(sq.UPSAMPLE_MODES),
+                                     'caps': list(sq.UPSAMPLE_CAPS),
+                                     'available': sq.upsample_tools_present()}},
             'choices': {'dsd': list(sq.DSD_MODES)}}
 
 
@@ -2470,7 +2795,11 @@ def zone_add(output, name=''):
     except Exception:
         log.exception("zones: add failed")
         return _zones_fail('zones.saveFailed')
-    _zones_apply(restart={sq.zone_id(output)})
+    # Adding a zone reindexes the Loopback subdevices of the zones that convert
+    # player-side (sq.zone_subdev is an index over all zones sorted by id), so
+    # restart them all, not just the new one, to keep each one's squeezelite
+    # output and its converter instance on the same subdevice.
+    _zones_apply(restart=_all_zone_ids())
     return _zones_ok('zones.added', name=clean)
 
 
@@ -2480,7 +2809,7 @@ def zone_update(zid, changes):
     if unknown:
         return _zones_fail('squeezelite.unknownField', field=unknown[0], detail='')
     try:
-        _check_pcm2dsd_mode(changes)
+        _check_convert_mode(changes)
     except sq.InvalidField as e:
         return _zones_fail(e.code, field=e.field, detail=e.detail)
     name = None
@@ -2499,7 +2828,8 @@ def zone_update(zid, changes):
         z = sq.find_zone(zones, zid)
         if z is None:
             raise KeyError(zid)
-        argv['before'] = sq.zone_argv(z, server)
+        sub = sq.zone_subdev(zones, zid)
+        argv['before'] = sq.zone_argv(z, server, p2d_subdev=sub)
         if tunables:
             new = sq.set_fields(z, tunables)
             if new['volume'] == 'hardware' and not new['mixer']:
@@ -2513,7 +2843,7 @@ def zone_update(zid, changes):
             z['name'] = name
         if 'enabled' in changes:
             z['enabled'] = bool(changes['enabled'])
-        argv['after'] = sq.zone_argv(z, server)
+        argv['after'] = sq.zone_argv(z, server, p2d_subdev=sub)
     try:
         sq.update_zones(change, ZONES_CONF)
     except KeyError:
@@ -2523,12 +2853,11 @@ def zone_update(zid, changes):
     except Exception:
         log.exception("zones: update failed")
         return _zones_fail('zones.saveFailed')
-    # a new DSD rate or filter only changes what Lyrion sends: the zone's own
-    # command line is the same, and the music it is playing need not stop
-    restarted = _zones_apply(restart={zid} if argv.get('before') != argv.get('after') else set())
-    out = _zones_ok('squeezelite.savedLyrionRestart' if restarted else 'zones.saved')
-    out['lyrion_restarted'] = restarted
-    return out
+    # a new DSD rate or filter only changes what the plugin tells Lyrion to
+    # send: the zone's own command line is the same, and the music it is
+    # playing need not stop
+    _zones_apply(restart={zid} if argv.get('before') != argv.get('after') else set())
+    return _zones_ok('zones.saved')
 
 
 def zone_remove(zid):
@@ -2543,7 +2872,9 @@ def zone_remove(zid):
     except Exception:
         log.exception("zones: remove failed")
         return _zones_fail('zones.saveFailed')
-    _zones_apply()
+    # Removing a zone reindexes the remaining zones' Loopback subdevices, so
+    # restart the survivors (see zone_add) to keep each converter on its subdev.
+    _zones_apply(restart=_all_zone_ids())
     return _zones_ok('zones.removed')
 
 
@@ -2720,17 +3051,29 @@ def set_lms_role(mode, host):
         return {'success': False, 'code': 'lms.invalidMode',
                 'message': _t('lms.invalidMode', _lang(), mode=mode)}
 
+    # The server the internal player and the zones followed until now: its
+    # Osmium Convert plugin still holds their rules and must be cleared, since
+    # after the move those players convert on the new server instead.
+    old_host = _current_lms_host()
     try:
         _sq_update(lambda model: model.update(server=target))
     except Exception:
         log.exception("set_lms_role: write config failed")
         return {'success': False, 'code': 'lms.sqConfigMissing',
                 'message': _t('lms.sqConfigMissing', _lang())}
-    # PCM → DSD only converts on this device's own Lyrion: its rules follow
-    # the choice, written before that Lyrion is started or stopped below.
+    # Conversion is driven by the Osmium Convert plugin on whichever Lyrion the
+    # player follows. Clear the box's rules on the server it is leaving, then
+    # resync against the one it now follows.
     try:
-        sq.sync_pcm2dsd(SQUEEZELITE_CONF, ZONES_CONF, PCM2DSD_MAP, LMS_CONVERT,
-                        SQUEEZELITE_DEFAULT, DSP_TARGET_FILE)
+        if old_host and old_host != target:
+            zones = sq.load_zones(ZONES_CONF)
+            box_macs = ({main_mac} if (main_mac := _own_player_mac()) else set()) \
+                | {z['mac'] for z in zones if z.get('mac')}
+            _push_convert(old_host, box_macs, {})
+    except Exception:
+        log.exception("set_lms_role: clearing convert rules on the old server")
+    try:
+        _convert_resync()
     except Exception:
         log.exception("set_lms_role: PCM to DSD rules")
     # Before the player restart below, so squeezelite comes back up with the
@@ -3501,6 +3844,24 @@ def _support_audio_snapshot():
                 out += [f'== {path} ==', f.read().rstrip(), '']
         except OSError:
             continue
+    # The device list (Settings → Audio) is built from `aplay -l`; its exact
+    # output and the mixer state (is the onboard codec muted? which card is the
+    # real DAC vs HDMI?) are what a "no sound" report needs and the bundle used
+    # to miss -- an Intel Cherry Trail tablet reached us silent and neither was
+    # in the zip.
+    try:
+        r = subprocess.run(['aplay', '-l'], capture_output=True, text=True, timeout=10)
+        out += ['== aplay -l ==', (r.stdout or r.stderr or '').rstrip(), '']
+    except Exception as e:
+        out += [f'(aplay -l failed: {e})', '']
+    for _idx, cid in _alsa_cards(PROC_ASOUND):
+        if cid == 'Loopback':
+            continue
+        try:
+            r = subprocess.run(['amixer', '-c', cid, 'scontents'], capture_output=True, text=True, timeout=10)
+            out += [f'== amixer -c {cid} scontents ==', (r.stdout or r.stderr or '').rstrip(), '']
+        except Exception as e:
+            out += [f'(amixer -c {cid} failed: {e})', '']
     return '\n'.join(out) + '\n'
 
 
@@ -4473,6 +4834,12 @@ UI_ROTATION_FILE = '/etc/hifi-player/ui-rotation'
 UI_ROTATIONS = (0, 90, 180, 270)
 _PANEL_ORIENTATION = {90: 'right_side_up', 180: 'upside_down', 270: 'left_side_up'}
 _ROTATION_TOKEN_RE = re.compile(r'^(video=[^:=\s]+:panel_orientation=|hifi\.rotate=)')
+# Every kernel-cmdline token Osmium manages on hifi_cmdline: the rotation ones
+# plus System tweaks' mitigations=off. Both categories share the single
+# hifi_cmdline value, so a write for one must preserve the other's tokens — the
+# legacy path strips by this combined regex before re-adding the full set.
+_MANAGED_TOKEN_RE = re.compile(
+    r'^(video=[^:=\s]+:panel_orientation=|hifi\.rotate=|mitigations=)')
 DRM_SYSFS_DIR = '/sys/class/drm'
 BOOT_CMDLINE_ENV = '/boot/efi/EFI/debian/hifi-cmdline.env'
 
@@ -4515,12 +4882,18 @@ def _boot_rotation_env_value():
             return line.split('=', 1)[1]
     return ''
 
-def _apply_rotation_to_boot(deg):
-    """Put the rotation on the kernel command line for the boot splash.
-    True when the next boot will have it."""
-    tokens = _rotation_boot_tokens(deg)
-    if deg and not tokens:
-        return False                       # no display connector at all
+def _system_tweaks_boot_tokens():
+    """System tweaks' kernel-cmdline tokens (mitigations=off, or none).
+    Best-effort: a missing/bad config leaves the command line untouched."""
+    try:
+        return stw.boot_tokens(stw.load())
+    except Exception:
+        return []
+
+def _write_hifi_cmdline(tokens):
+    """Write the full managed token set to the one hifi_cmdline value this boot
+    reads (ESP env file on an A/B image, GRUB_CMDLINE_LINUX_DEFAULT on a legacy
+    root). True when the next boot will have exactly these tokens."""
     if _image_mode():
         if not os.path.isdir(os.path.dirname(BOOT_CMDLINE_ENV)):
             return False                   # ESP not mounted
@@ -4537,8 +4910,24 @@ def _apply_rotation_to_boot(deg):
     if _is_live_boot():
         return False                       # nothing on a live session survives the boot
     before = _grub_cmdline_default().split()
-    after = [t for t in before if not _ROTATION_TOKEN_RE.match(t)] + tokens
+    after = [t for t in before if not _MANAGED_TOKEN_RE.match(t)] + tokens
     return after == before or _set_grub_cmdline_default(after)
+
+def _apply_rotation_to_boot(deg):
+    """Put the rotation on the kernel command line for the boot splash,
+    preserving the System-tweaks tokens already there. True when the next boot
+    will have the rotation."""
+    rot = _rotation_boot_tokens(deg)
+    if deg and not rot:
+        return False                       # no display connector at all
+    return _write_hifi_cmdline(rot + _system_tweaks_boot_tokens())
+
+def _apply_system_tweaks_to_boot():
+    """Put (or clear) System tweaks' mitigations token on the kernel command
+    line, preserving the rotation tokens already there. True when the next boot
+    will carry the current System-tweaks choice."""
+    rot = _rotation_boot_tokens(get_ui_rotation()['rotation'])
+    return _write_hifi_cmdline(rot + _system_tweaks_boot_tokens())
 
 def set_ui_rotation(deg):
     """Save the rotation: the kiosk turns as soon as the file changes, the
@@ -6626,11 +7015,103 @@ def _current_real_dac():
 # companion app) triggered the change.
 LMS_RPC_URL = 'http://127.0.0.1:9000/jsonrpc.js'
 
-def _lms_request(playerid, command, timeout=5):
+def _lms_rpc(host, playerid, command, timeout=5):
+    """A jsonrpc.js slim.request to the Lyrion on `host` (port 9000). `host`
+    is the server a player follows -- 127.0.0.1 for the local Lyrion, or a
+    remote Osmium / third-party server for the built-in player when it is set
+    to follow one. Raises on a transport error; the caller decides what that
+    means."""
+    url = f'http://{host}:9000/jsonrpc.js'
     payload = json.dumps({'id': 1, 'method': 'slim.request', 'params': [playerid, command]}).encode()
-    req = urllib.request.Request(LMS_RPC_URL, data=payload, headers={'Content-Type': 'application/json'})
+    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read()).get('result')
+
+def _lms_request(playerid, command, timeout=5):
+    return _lms_rpc('127.0.0.1', playerid, command, timeout)
+
+# ── Osmium Convert plugin: the single mechanism for per-player conversion ──
+# The box no longer writes custom-convert.conf. It tells the Osmium Convert
+# plugin, over the CLI on the Lyrion each player follows, what that player's
+# conversion is; the plugin keeps the rule and reloads the tables with no
+# restart. The box sets or clears ONLY the MACs it owns (its built-in player,
+# its zones, its chosen external players), never a rule another box put on a
+# shared server.
+def _osmium_set(host, mac, entry, timeout=5):
+    if entry.get('kind') == 'dsd':
+        cmd = ['osmiumconvert', 'set', mac, 'dsd', entry['mode'], entry['filter']]
+    else:
+        cmd = ['osmiumconvert', 'set', mac, 'pcm', entry['mult'], str(entry.get('cap') or 0)]
+    return _lms_rpc(host, '-', cmd, timeout)
+
+def _osmium_clear(host, mac, timeout=5):
+    return _lms_rpc(host, '-', ['osmiumconvert', 'clear', mac], timeout)
+
+def _osmium_status(host, timeout=4):
+    return _lms_rpc(host, '-', ['osmiumconvert', 'status'], timeout)
+
+def _convert_caps(host):
+    """What the Osmium Convert plugin on `host` can do, for the UI to gate the
+    conversion control: `plugin` (does it answer at all), `dsd` (sox_ng + sdm
+    present), `upsample` (any sox present), and `why` — 'noPlugin' when the
+    server does not run the plugin, 'noServerTools' when it runs it but cannot
+    do DSD. A local Osmium always has the tools; a third-party server may not."""
+    try:
+        st = _osmium_status(host)
+    except Exception:
+        st = None
+    if not isinstance(st, dict):
+        return {'plugin': False, 'dsd': False, 'upsample': False, 'why': 'noPlugin'}
+    dsd = bool(st.get('dsd'))
+    return {'plugin': True, 'dsd': dsd, 'upsample': bool(st.get('upsample')),
+            'why': None if dsd else 'noServerTools'}
+
+def _push_convert(host, macs, desired):
+    """For every MAC the box owns on `host`, set its conversion (when it has
+    one now) or clear it (when it does not). Best-effort per MAC: a server that
+    is down, or lacks the plugin, just means that player is not converted."""
+    desired = {str(k).lower(): v for k, v in (desired or {}).items()}
+    for mac in sorted({str(m).lower() for m in macs}):
+        try:
+            entry = desired.get(mac)
+            if entry:
+                _osmium_set(host, mac, entry)
+            else:
+                _osmium_clear(host, mac)
+        except Exception:
+            log.debug("convert: %s on %s failed", mac, host, exc_info=True)
+
+def _convert_resync():
+    """Bring the Osmium Convert plugin(s) in line with the models. Every box
+    player -- the internal one and the zones -- converts on its own player side
+    now (PCM upsampling via squeezelite soxr, PCM->DSD via the Loopback +
+    hifi-pcm2dsd-player), so the followed Lyrion (`_current_lms_host`, local or
+    remote) must NOT convert for any box MAC: we clear them all. Only the
+    external players, which follow the local Lyrion, keep server-side plugin
+    conversion."""
+    try:
+        main = _sq_load()
+    except Exception:
+        log.exception("convert: loading the player model")
+        return
+    try:
+        zones = sq.load_zones(ZONES_CONF)
+    except Exception:
+        zones = []
+    # Clear every box MAC server-side: the box never converts on the server now.
+    # (The player-side conversion is driven by sync_player / sync_zone_player in
+    # the apply path and by render_argv's -r/-R and Loopback output.)
+    box_macs = set()
+    main_n = sq.normalize(main)
+    if main_n.get('mac'):
+        box_macs.add(main_n['mac'])
+    box_macs |= {z['mac'] for z in zones if z.get('mac')}
+    _push_convert(_current_lms_host(), box_macs, {})
+    try:
+        external = sq.load_external(EXTERNAL_CONVERT)
+    except Exception:
+        external = {}
+    _push_convert('127.0.0.1', set(external), sq.external_players(external))
 
 def _own_player_mac():
     """The player MAC this box's squeezelite runs with (`-m`, kept in
@@ -6891,7 +7372,7 @@ def _apply_dsp_on_locked(playback_dev, bands, crossfeed, room_correction, balanc
             model['output'] = playback_dev
         model['dsp']['enabled'] = True
     dsp_changed = _sq_update(dsp_on)
-    _pcm2dsd_resync()      # the DSP path plays PCM: no DSD conversion on it
+    _convert_resync()      # the DSP path plays PCM: no DSD conversion on it
     if dsp_changed:
         # squeezelite must release the real DAC (by restarting onto the
         # loopback) BEFORE CamillaDSP tries to open that same hw: device —
@@ -6924,7 +7405,7 @@ def _apply_dsp_off():
             model['output'] = dac or model['output'] or 'default'
             model['dsp']['enabled'] = False
         _sq_update(dsp_off)
-        _pcm2dsd_resync()
+        _convert_resync()
         subprocess.run(['sudo', 'systemctl', 'disable', '--now', DSP_UNIT],
                        capture_output=True, text=True, timeout=30)
         _restart_squeezelite_if_enabled()
@@ -7164,6 +7645,18 @@ def _bt_available():
             and bool(glob.glob(BT_ALSA_PLUGIN_GLOB)))
 
 
+def _bt_adapter_present():
+    """True when a Bluetooth radio exists at all -- powered or not, Bluetooth
+    on or off. The kernel lists an hciN under /sys/class/bluetooth for every
+    adapter it knows, so this answers before anyone turns Bluetooth on, which
+    `adapter` (the powered state, known only while enabled) cannot. The screens
+    use it to grey the switch out on a box that simply has no Bluetooth."""
+    try:
+        return bool(glob.glob('/sys/class/bluetooth/hci*'))
+    except Exception:
+        return False
+
+
 def _bt_read_doc():
     """The whole state document. Kept in the file the sink design already
     used, so backup/restore ("bluetooth" category, which also carries
@@ -7344,10 +7837,12 @@ def get_bt_speakers():
 
         return {'available': _bt_available(), 'enabled': enabled,
                 'adapter': bool(snap.get('adapter')) if enabled else False,
+                'adapterPresent': _bt_adapter_present(),
                 'speakers': speakers, 'found': found}
     except Exception:
         log.exception("get_bt_speakers failed")
         return {'available': False, 'enabled': False, 'adapter': False,
+                'adapterPresent': _bt_adapter_present(),
                 'speakers': [], 'found': [],
                 'error': _t('bluetooth.statusUnavailable', _lang())}
 
@@ -7370,6 +7865,11 @@ def set_bt_enabled(enable):
     can't interleave with itself."""
     if enable and not _bt_available():
         return _bt_fail('bluetooth.unavailableUpdate', **get_bt_speakers())
+    if enable and not _bt_adapter_present():
+        # No radio in the box: refuse at once instead of writing the switch on
+        # and waiting out the 15 s below for an adapter that never appears --
+        # that wait was the "delay before the button turns yellow" (issue #121).
+        return _bt_fail('bluetooth.noAdapter', **get_bt_speakers())
     with _bt_apply_lock:
         doc = _bt_read_doc()
         doc['enabled'] = bool(enable)
@@ -8061,7 +8561,8 @@ REMOTE_ACTIONS = [
     'playPause', 'play', 'pause', 'stop', 'next', 'prev', 'forward', 'rewind',
     'volumeUp', 'volumeDown', 'mute',
     'up', 'down', 'left', 'right', 'ok', 'back', 'home', 'menu', 'pageUp', 'pageDown',
-    'nowPlaying', 'fullScreen', 'nextVu', 'nextAnimation', 'queue', 'search',
+    'nowPlaying', 'fullScreen', 'nextVu', 'nextAnimation', 'nextDisc', 'prevDisc',
+    'queue', 'search',
     'favorite', 'openFavorites', 'shuffle', 'standby', 'powerMenu', 'eject', 'resetTouch',
 ]
 # i codici evdev che bastano a riconoscere un telecomando (linux/input-event-codes.h)
@@ -10812,6 +11313,11 @@ def api_set_audio_device():
     data = request.get_json(silent=True) or {}
     return jsonify(set_audio_device(data.get('device')))
 
+@app.route('/set_mixer_switch', methods=['POST'])
+def api_set_mixer_switch():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_mixer_switch(data.get('name'), data.get('on')))
+
 @app.route('/squeezelite_conf', methods=['GET'])
 def api_squeezelite_conf():
     return jsonify(get_squeezelite_conf())
@@ -10824,6 +11330,15 @@ def api_set_squeezelite_conf():
 @app.route('/squeezelite_conf/reset', methods=['POST'])
 def api_reset_squeezelite_conf():
     return jsonify(reset_squeezelite_conf())
+
+@app.route('/system_tweaks', methods=['GET'])
+def api_system_tweaks():
+    return jsonify(get_system_tweaks())
+
+@app.route('/system_tweaks', methods=['POST'])
+def api_set_system_tweaks():
+    data = request.get_json(silent=True) or {}
+    return jsonify(set_system_tweaks(data if isinstance(data, dict) else {}))
 
 # Now Playing → signal path: the kiosk passes what Lyrion says of the track
 # and of the player's prefs, this device adds what its DAC is really fed.
@@ -10883,6 +11398,222 @@ def api_zone_update():
 def api_zone_remove():
     data = request.get_json(silent=True) or {}
     return jsonify(zone_remove(str(data.get('id') or '')))
+
+@app.route('/external_convert', methods=['GET'])
+def api_external_convert():
+    return jsonify(get_external_convert())
+
+@app.route('/external_convert/update', methods=['POST'])
+def api_external_convert_update():
+    data = request.get_json(silent=True) or {}
+    return jsonify(update_external_convert(data))
+
+@app.route('/external_convert/remove', methods=['POST'])
+def api_external_convert_remove():
+    data = request.get_json(silent=True) or {}
+    return jsonify(remove_external_convert(data))
+
+# ── streaming-service sign-in from the kiosk ──────────────────────────────
+# The kiosk shows a tile per streaming service (Qobuz/Tidal/Spotify) found in
+# Lyrion's `apps` list. When a service has no account, browsing into it only
+# shows a lone "requires credentials" notice and the sign-in has to be done by
+# hand from Lyrion's own web UI on :9000. These endpoints let the kiosk sign in
+# in place: they drive each plugin's EXISTING web/auth handlers on the player's
+# Lyrion (the auth/token logic lives inside those external Perl plugins, not
+# here). Qobuz takes a username+password form; Tidal and Spotify are device/
+# OAuth flows the user approves on a phone (the kiosk shows a link + QR + polls).
+_STREAM_SERVICES = {
+    'qobuz':  {'cmd': 'qobuz',  'login': 'password'},
+    'tidal':  {'cmd': 'tidal',  'login': 'device'},
+    'spotty': {'cmd': 'spotty', 'login': 'oauth'},
+}
+
+def _lan_ip():
+    """This box's primary LAN IPv4, for a QR a phone on the same network can
+    reach (Api.apiBase is 127.0.0.1 on the device itself). No packet is sent."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('8.8.8.8', 80))
+            return s.getsockname()[0]
+        finally:
+            s.close()
+    except Exception:
+        return '127.0.0.1'
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    # Return the 3xx response as-is instead of following it, so we can read a
+    # plugin's OAuth "Location" (Spotty's accounts.spotify.com authorize URL).
+    def redirect_request(self, *a, **k):
+        return None
+
+
+def _lms_web(path, method='GET', form=None, follow=True, timeout=12):
+    """GET/POST a Lyrion WEB page on the player's server (:9000), returning
+    (body_text, status, headers). Unlike _lms_rpc (JSON-RPC), the plugin
+    settings/auth pages are HTML and want form-urlencoded bodies. follow=False
+    keeps a 3xx so its Location header can be read."""
+    host = _current_lms_host() or '127.0.0.1'
+    url = f'http://{host}:9000/{path.lstrip("/")}'
+    data = None
+    headers = {}
+    if form is not None:
+        data = urllib.parse.urlencode(form).encode()
+        headers['Content-Type'] = 'application/x-www-form-urlencoded'
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    opener = urllib.request.build_opener(_NoRedirect()) if not follow \
+        else urllib.request.build_opener()
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            return resp.read().decode('utf-8', 'replace'), resp.status, dict(resp.headers)
+    except urllib.error.HTTPError as e:
+        # A 3xx under _NoRedirect (and any 4xx/5xx) lands here; its headers
+        # still carry Location, which is what the Spotty flow needs.
+        try:
+            body = e.read().decode('utf-8', 'replace')
+        except Exception:
+            body = ''
+        return body, e.code, dict(e.headers)
+    except Exception as e:
+        log.warning("lms_web %s failed: %s", path, e)
+        return '', 0, {}
+
+
+def _service_login_state(key):
+    """available (plugin present) + loggedIn, uniform across services: a
+    signed-out streaming plugin returns a single `type:textarea` notice at its
+    root, a signed-in one returns its real menu. No secret is read."""
+    cfg = _STREAM_SERVICES.get(key)
+    if not cfg:
+        return {'available': False, 'loggedIn': False}
+    pid = _own_player_mac() or '-'
+    try:
+        res = _lms_request(pid, [cfg['cmd'], 'items', '0', '1'])
+    except Exception:
+        return {'available': False, 'loggedIn': False}
+    if not isinstance(res, dict):
+        return {'available': False, 'loggedIn': False}
+    loop = res.get('item_loop') or res.get('loop_loop') or []
+    cnt = int(res.get('count') or 0)
+    if cnt <= 0 and not loop:
+        return {'available': False, 'loggedIn': False}
+    not_logged = cnt <= 1 and any(str(i.get('type')) == 'textarea' for i in loop)
+    return {'available': True, 'loggedIn': not not_logged, 'cmd': cfg['cmd']}
+
+
+def _qobuz_login(username, password):
+    # Qobuz/Settings.pm hashes the password itself (md5); we pass it in the
+    # clear only over loopback to the local plugin, and never log it.
+    pid = _own_player_mac()
+    path = 'plugins/Qobuz/settings/basic.html'
+    if pid:
+        path += '?playerid=' + urllib.parse.quote(pid)
+    form = {'useAJAX': '0', 'page': 'PLUGIN_QOBUZ',
+            'username': username, 'password': password,
+            'add_account': 'Add', 'saveSettings': '1'}
+    if pid:
+        form['player'] = pid
+    body, status, _ = _lms_web(path, method='POST', form=form, timeout=30)
+    if status != 200:
+        return {'success': False, 'error': 'unreachable'}
+    if 'PLUGIN_QOBUZ_AUTH_FAILED' in body:
+        return {'success': False, 'error': 'authFailed'}
+    # Trust the real menu, not just the absence of the error string.
+    st = _service_login_state('qobuz')
+    ok = bool(st.get('loggedIn'))
+    return {'success': ok, 'error': None if ok else 'authFailed'}
+
+
+def _tidal_auth_start():
+    # Each GET of auth.html kicks off a fresh device flow server-side and
+    # renders the verification link + deviceCode; the plugin then polls TIDAL
+    # on its own. hasCredentials?deviceCode= flips to 1 once that completes.
+    body, status, _ = _lms_web('plugins/TIDAL/auth.html', timeout=20)
+    if status != 200:
+        return {'success': False, 'error': 'unreachable'}
+    link = code = None
+    m = re.search(r'href="(https://link\.tidal\.com/[^"]+)"', body)
+    if m:
+        link = m.group(1)
+    m = re.search(r'name="deviceCode"[^>]*value="([^"]+)"', body)
+    if m:
+        code = m.group(1)
+    if not link or not code:
+        return {'success': False, 'error': 'noFlow'}
+    return {'success': True, 'link': link, 'deviceCode': code}
+
+
+def _spotty_auth_start():
+    # Spotty authorises over Spotify Connect, not a browser OAuth flow: loading
+    # authentication.html starts the `spotty … --authenticate` helper, which
+    # advertises a "Spotify Authorization (<player>)" device over zeroconf on the
+    # LAN. The user picks that device in their own Spotify app (Premium required,
+    # and only the desktop/mobile apps — not the web player) to hand this box its
+    # credentials; the kiosk then polls until the Spotty menu goes live. So we
+    # don't return a link/QR: we return the device name to look for in the app.
+    pid = _own_player_mac()
+    q = ('?player=' + urllib.parse.quote(pid)) if pid else ''
+    _, status, _ = _lms_web('plugins/Spotty/settings/authentication.html' + q, timeout=20)
+    if status != 200:
+        return {'success': False, 'error': 'unreachable'}
+    name = _current_player_name() or ''
+    device = 'Spotify Authorization' + ((' (' + name + ')') if name else '')
+    return {'success': True, 'connect': True, 'device': device}
+
+
+def _poll_has_credentials(path):
+    body, _, _ = _lms_web(path, timeout=10)
+    try:
+        return int(json.loads(body).get('hasCredentials') or 0)
+    except Exception:
+        return 0
+
+
+@app.route('/services/status', methods=['GET'])
+def api_services_status():
+    return jsonify({'services': {k: _service_login_state(k)
+                                 for k in _STREAM_SERVICES}})
+
+
+@app.route('/services/qobuz/login', methods=['POST'])
+def api_qobuz_login():
+    d = request.get_json(silent=True) or {}
+    u = (d.get('username') or '').strip()
+    p = d.get('password') or ''
+    if not u or not p:
+        return jsonify({'success': False, 'error': 'missing'}), 400
+    return jsonify(_qobuz_login(u, p))
+
+
+@app.route('/services/tidal/auth/start', methods=['POST'])
+def api_tidal_start():
+    return jsonify(_tidal_auth_start())
+
+
+@app.route('/services/tidal/auth/poll', methods=['GET'])
+def api_tidal_poll():
+    code = request.args.get('deviceCode') or ''
+    path = 'plugins/TIDAL/settings/hasCredentials?deviceCode=' + urllib.parse.quote(code)
+    return jsonify({'hasCredentials': _poll_has_credentials(path)})
+
+
+@app.route('/services/spotty/auth/start', methods=['POST'])
+def api_spotty_start():
+    return jsonify(_spotty_auth_start())
+
+
+@app.route('/services/spotty/auth/poll', methods=['GET'])
+def api_spotty_poll():
+    # Spotty's settings/hasCredentials returns the credentials.json PATH as a
+    # string (e.g. ".../cache/spotty/__AUTHENTICATE__/credentials.json"), not a
+    # 0/1 flag like TIDAL, so int() always failed and the sign-in was never
+    # detected. Use the uniform menu-based check instead (same signal as
+    # /services/status): a signed-in Spotty returns its real menu, a signed-out
+    # one only a `type:textarea` notice.
+    st = _service_login_state('spotty')
+    return jsonify({'hasCredentials': 1 if st.get('loggedIn') else 0})
+
 
 @app.route('/lms_role', methods=['GET'])
 def api_lms_role():

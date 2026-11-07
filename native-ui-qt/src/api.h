@@ -35,6 +35,24 @@ public:
     QString srcBase() const { return "http://" + m_host + ":8080"; }
     QString lmsBase() const { return "http://" + m_lmsHost + ":9000"; }
 
+    // Resolve a Lyrion icon/cover string (a menu item's icon-id/image/cover) to
+    // a URL our Image can load: an absolute http on 127.0.0.1/localhost is
+    // rehosted on lmsBase, a relative path is appended to it. Same logic as the
+    // QML LibraryList.iconUrl (which now delegates here), shared so Cover Flow
+    // and the CD changer resolve a plugin album's cover exactly the same way.
+    Q_INVOKABLE QString imageUrl(const QString &icon) const {
+        if (icon.isEmpty()) return QString();
+        if (icon.startsWith("http")) {
+            int h = icon.indexOf("127.0.0.1");
+            if (h < 0) h = icon.indexOf("localhost");
+            if (h < 0) return QString();
+            int slash = icon.indexOf('/', h);
+            if (slash < 0) return QString();
+            return lmsBase() + icon.mid(slash);
+        }
+        return lmsBase() + "/" + (icon.startsWith('/') ? icon.mid(1) : icon);
+    }
+
     // Rilegge /lms_role e, se serve, sposta l'indirizzo di Lyrion. Da QML si
     // chiama subito dopo aver cambiato ruolo, per non aspettare il giro.
     Q_INVOKABLE void refreshLmsHost();

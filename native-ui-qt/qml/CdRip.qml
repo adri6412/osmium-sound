@@ -29,6 +29,13 @@ Item {
     property string release: ""
     property string pickedRelease: ""
     property bool refill: false
+    // the edition chooser overlay: `choosing` opens it, `chooseHi` is the
+    // highlighted edition whose tracklist is previewed on the right
+    property bool choosing: false
+    property int chooseHi: 0
+    readonly property var chooseTracks: (releases && chooseHi >= 0 && chooseHi < releases.length
+                                         && releases[chooseHi] && releases[chooseHi].tracks)
+                                        ? releases[chooseHi].tracks : []
     property var dests: []              // [{id,name}]
     property int destSel: 0
     // the folder picked in the browser below (absolute); "" = dests[destSel]
@@ -60,17 +67,22 @@ Item {
                                     && !autoWillStart && !open && !blocked && (state === "" || state === "idle")
     onWantAskChanged: if (wantAsk) ask()
     onHaveDiscChanged: if (!haveDisc && asking) close()
-    // the strip on the Music tab: only while a rip runs, or to eject after it
-    // (its own close, `bannerClosed`, is only for that last case)
+    // the strip on the Music tab: only to eject after a rip (its own close,
+    // `bannerClosed`, is only for that case). While a rip runs the progress is
+    // in the bottom-right notification (CdRipProgress), not here.
     property string bannerClosed: ""
-    readonly property bool bannerVisible: enabled && (ripping || (haveDisc && discid !== bannerClosed
-                                          && (state === "done" || state === "error" || state === "cancelled")))
+    readonly property bool bannerVisible: enabled && haveDisc && discid !== bannerClosed
+                                          && (state === "done" || state === "error" || state === "cancelled")
     // where the remote's spotlight starts: on Yes
     readonly property Item navFirst: asking ? yesTap : null
     anchors.fill: parent
-    visible: open
+    // Hidden while a blocking overlay is up (`blocked` includes dialogs.active):
+    // a Dialogs instance sits BELOW this window, so keeping this one visible
+    // would bury it. (The edition chooser is now an in-card overlay, not a
+    // Dialogs, so it is unaffected — see `choosing` / editionOverlay below.)
+    visible: open && !blocked
     // il telecomando resta qui dentro finche' questo strato e' aperto
-    NavScope { active: root.open && !root.closing }
+    NavScope { active: root.open && !root.closing && !root.blocked }
     Component.onCompleted: Ui.cdrip = root
 
     Spring { id: sc; stiffness: 550; damping: 30; rate: Theme.motionRate }
@@ -147,8 +159,8 @@ Item {
     Timer { interval: 7000; repeat: true; running: true; triggeredOnStart: true; onTriggered: if (root.checkDrive() || root.ripping) root.loadInfo() }
     Timer { interval: 2000; repeat: true; running: root.ripping; onTriggered: root.loadStatus() }
 
-    function openDialog() { open = true; closing = false; sc.set(0.94); sc.to = 1; closeScale = 1; fade = 1 }
-    function close() { if (!open || closing) return; closing = true; closeScale = 0.94; fade = 0 }
+    function openDialog() { open = true; closing = false; choosing = false; sc.set(0.94); sc.to = 1; closeScale = 1; fade = 1 }
+    function close() { choosing = false; if (!open || closing) return; closing = true; closeScale = 0.94; fade = 0 }
     Timer { interval: 40; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.open = false; root.closing = false; root.asking = false } }
     function dismissBanner() { bannerClosed = discid }
     function ask() { dismissed = discid; asking = true; openDialog() }
@@ -185,15 +197,22 @@ Item {
                 Number(r.disc_count) > 1 ? Tr.tf("player.cd.editionDisc", "n", String(r.disc_position)).replace("{total}", String(r.disc_count)) : ""]
                .filter(function(x) { return !!x }).join(" · ")
     }
+    // Opens the in-window edition chooser (the two-pane overlay below), highlighting
+    // the edition in use. It lives inside `card`, so it sits above the form without
+    // the z-order trouble a shared Dialogs instance would have (it renders under
+    // this window). Confirming applies the pick; cancelling leaves things as they are.
     function pickRelease() {
-        var cur = -1
-        for (var i = 0; i < releases.length; i++) if (String(releases[i].mbid) === release) cur = i
-        Ui.dialogs.pick(Tr.t("player.cd.edition"), releases.map(function(r) { return (r.title || "") + " — " + releaseLabel(r) }), cur, function(i) {
-            if (i < 0 || i >= root.releases.length) return
-            root.pickedRelease = String(root.releases[i].mbid)
-            root.refill = true
-            root.loadInfo()
-        })
+        var cur = 0
+        for (var i = 0; i < releases.length; i++) if (String(releases[i].mbid) === release) { cur = i; break }
+        chooseHi = cur
+        choosing = true
+    }
+    function applyRelease(i) {
+        if (i < 0 || i >= releases.length) { choosing = false; return }
+        pickedRelease = String(releases[i].mbid)
+        refill = true
+        choosing = false
+        loadInfo()
     }
     function startRip() {
         if ((!dests.length && !destPath) || !pickedCount) return
@@ -205,9 +224,14 @@ Item {
         if (release) body.release = release
         Api.post(Api.srcBase + "/api/cd/rip", body, function() { root.loadStatus() })
         state = "starting"; ripping = true; total = sel.length
+        // the rip runs in the background from here: close the window and let
+        // the bottom-right notification (CdRipProgress) follow the progress
+        close()
     }
 
-    Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, 0.7 * root.fade); MouseArea { anchors.fill: parent; onClicked: if (!root.ripping) root.close() } }
+    // tapping the backdrop closes the window; while ripping that just sends it
+    // back to the background (the rip keeps running, the corner notification stays)
+    Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, 0.7 * root.fade); MouseArea { anchors.fill: parent; onClicked: root.close() } }
     // ── the question, when a disc goes in ─────────────────────────────────
     Rectangle {
         id: askCard
@@ -258,8 +282,9 @@ Item {
         MouseArea { anchors.fill: parent }
         Icon { x: 20; y: 22; name: "disc"; size: 16; color: Theme.gold }
         Text { x: 44; y: 16; height: 28; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.ripTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+        // always available: while ripping it closes the window to the background
+        // (the rip keeps running), it does not cancel — Cancel is its own button
         Item {
-            visible: !root.ripping
             x: parent.width - 20 - 28; y: 16; width: 28; height: 28
             Icon { anchors.centerIn: parent; name: "x"; size: 16; color: Theme.silverA(0.6) }
             Tap { grow: 6; onClicked: root.close() }
@@ -385,6 +410,75 @@ Item {
                 opacity: root.dests.length && root.pickedCount ? 1 : 0.4   // disabled:opacity-40 su tutto, testo compreso
                 Text { anchors.centerIn: parent; text: Tr.t("player.cd.start"); color: Theme.black; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
                 Tap { id: stTap; enabled: root.dests.length > 0 && root.pickedCount > 0; onClicked: root.startRip() }
+            }
+        }
+        // ── edition chooser: editions on the left, the highlighted one's track
+        // list on the right, so you can see what each edition changes before
+        // picking it. Inside `card`, so it paints above the form. ───────────
+        Rectangle {
+            id: editionOverlay
+            visible: root.choosing
+            anchors.fill: parent
+            radius: 16; color: Theme.panel
+            MouseArea { anchors.fill: parent }   // swallow taps meant for the form beneath
+            Icon { x: 20; y: 22; name: "disc"; size: 16; color: Theme.gold }
+            Text { x: 44; y: 16; height: 28; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.chooseEdition"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+            Item {
+                x: parent.width - 20 - 28; y: 16; width: 28; height: 28
+                Icon { anchors.centerIn: parent; name: "x"; size: 16; color: Theme.silverA(0.6) }
+                Tap { grow: 6; onClicked: root.choosing = false }
+            }
+            // left: the plausible editions, best first
+            ListView {
+                id: edList
+                x: 20; y: 56; width: (parent.width - 40 - 12) * 0.46; height: parent.height - 56 - 20 - 54
+                clip: true; model: root.releases; boundsBehavior: Flickable.StopAtBounds
+                currentIndex: root.chooseHi
+                delegate: Rectangle {
+                    required property int index
+                    required property var modelData
+                    width: edList.width; height: 56; radius: 8
+                    color: index === root.chooseHi ? Theme.accent : "transparent"
+                    border.width: 1; border.color: index === root.chooseHi ? Theme.gold : "transparent"
+                    Text { x: 10; y: 8; width: parent.width - 20; elide: Text.ElideRight; text: modelData.title || Tr.t("player.cd.edition"); color: Theme.white; font.family: Theme.font; font.pixelSize: 13; font.bold: true }
+                    Text { x: 10; y: 28; width: parent.width - 20; height: 22; maximumLineCount: 1; elide: Text.ElideRight; text: root.releaseLabel(modelData); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 11 }
+                    Tap { onClicked: root.chooseHi = index }
+                }
+            }
+            // a hairline between the two panes
+            Rectangle { x: 20 + edList.width + 6; y: 56; width: 1; height: edList.height; color: Theme.border }
+            // right: the highlighted edition's tracklist (or a note when unknown)
+            Text {
+                visible: root.chooseTracks.length === 0
+                x: 20 + edList.width + 12; y: 56; width: parent.width - x - 20; height: 40
+                verticalAlignment: Text.AlignVCenter; wrapMode: Text.Wrap
+                text: Tr.t("player.cd.noTrackDetail"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12
+            }
+            ListView {
+                id: prevList
+                x: 20 + edList.width + 12; y: 56; width: parent.width - x - 20; height: edList.height
+                clip: true; model: root.chooseTracks; boundsBehavior: Flickable.StopAtBounds
+                delegate: Item {
+                    required property int index
+                    required property var modelData
+                    width: prevList.width; height: 26
+                    Text { x: 0; width: 22; height: parent.height; horizontalAlignment: Text.AlignRight; verticalAlignment: Text.AlignVCenter; text: String(index + 1); color: Theme.silverA(0.4); font.family: Theme.mono; font.pixelSize: 11 }
+                    Text { x: 30; width: parent.width - 30; height: parent.height; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; text: modelData || ("Track " + (index + 1)); color: Theme.silverA(0.85); font.family: Theme.font; font.pixelSize: 12 }
+                }
+            }
+            // footer: cancel (no change) / use the highlighted edition
+            Rectangle {
+                id: edCancel
+                x: 20; y: parent.height - 20 - 42; width: edCancelText.implicitWidth + 32; height: 42; radius: 8
+                color: edCancelTap.mix(Theme.light, Theme.accent)
+                Text { id: edCancelText; anchors.centerIn: parent; text: Tr.t("player.cd.cancel"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                Tap { id: edCancelTap; onClicked: root.choosing = false }
+            }
+            Rectangle {
+                x: edCancel.x + edCancel.width + 8; y: edCancel.y; width: parent.width - 20 - x; height: 42; radius: 8
+                color: edUseTap.mix(Theme.gold, "#ca8a04")
+                Text { anchors.centerIn: parent; text: Tr.t("player.cd.useEdition"); color: Theme.black; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+                Tap { id: edUseTap; onClicked: root.applyRelease(root.chooseHi) }
             }
         }
     }

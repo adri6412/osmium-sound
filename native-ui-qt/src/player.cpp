@@ -618,14 +618,15 @@ void Player::derive() {
     bool dva = m_prefDigVol == "1";
     bool fixed = m_prefDigVol == "0";
     bool trn = m_prefTrType != "0" && m_prefTrDur.toDouble() > 0;
-    // BitPerfect follows the signal path's verdict (hifi_signal_path.py): the
-    // DAC's own hw_params, a digital volume that only counts below 100 %, DSD
-    // that the volume never touches, PCM to DSD that is a conversion. Another
-    // device's player ("unknown") lights it when nothing Lyrion says changes
-    // the samples. Until the first answer, the same rules from the prefs alone.
+    // BitPerfect follows the signal path's verdict (hifi_signal_path.py): only a
+    // positive "bitperfect" verdict lights it -- the DAC's own hw_params confirm
+    // nothing touched the samples (volume at 100 % or fixed, no DSP, no resample,
+    // no DSD/PCM conversion). Another device's player ("unknown") runs on hardware
+    // we cannot see, so we never claim bit-perfect for it: the light stays off.
+    // Until the first answer (empty/idle), guess from the prefs alone.
     bool bit = m_pathVerdict.isEmpty() || m_pathVerdict == "idle"
         ? !rg && !trn && !(dva && m_volume < 100)
-        : m_pathVerdict == "bitperfect" || m_pathVerdict == "unknown";
+        : m_pathVerdict == "bitperfect";
     bit = m_playing && bit;
     int mode = !m_playing ? 0 : rg ? 2 : (bit ? 1 : 0);
     if (mode != m_ledMode || fixed != m_volumeFixed) { m_ledMode = mode; m_volumeFixed = fixed; emit modeChanged(); }

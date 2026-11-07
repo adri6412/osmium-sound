@@ -1,0 +1,7 @@
+PLUGIN_OSMIUMCONVERT
+	EN	Osmium Convert
+	IT	Osmium Convert
+
+PLUGIN_OSMIUMCONVERT_DESC
+	EN	Per-player audio conversion (PCM upsampling and PCM-to-DSD) driven by the Osmium player. DSD needs sox_ng with the sdm effect; PCM upsampling needs any sox.
+	IT	Conversione audio per singolo player (upsampling PCM e PCM-in-DSD) comandata dal player Osmium. Il DSD richiede sox_ng con l'effetto sdm; l'upsampling PCM richiede un sox qualunque.

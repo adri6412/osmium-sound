@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Self-hosted LMS plugin repository for third-party Lyrion servers. Add its URL
+  in Lyrion: Settings -> Plugins -> Additional Repositories, then install
+  "Osmium Convert". Update <url> to the real hosted ZIP and fill <sha> with its
+  SHA-1 before publishing (the package name inside the ZIP must stay
+  Plugins::OsmiumConvert, and the ZIP filename should carry the version).
+-->
+<extensions>
+	<details>
+		<title lang="EN">Osmium Sound</title>
+	</details>
+	<plugins>
+		<plugin name="OsmiumConvert" version="0.1.0" minTarget="7.9" maxTarget="9.*">
+			<title lang="EN">Osmium Convert</title>
+			<title lang="IT">Osmium Convert</title>
+			<desc lang="EN">Per-player audio conversion (PCM upsampling and PCM-to-DSD) driven by the Osmium player. DSD needs sox_ng with the sdm effect.</desc>
+			<desc lang="IT">Conversione audio per singolo player (upsampling PCM e PCM-in-DSD) comandata dal player Osmium. Il DSD richiede sox_ng con l'effetto sdm.</desc>
+			<url>https://downloads.osmium.audio/lms-plugins/OsmiumConvert-0.1.0.zip</url>
+			<sha>0000000000000000000000000000000000000000</sha>
+			<link>https://osmium.audio</link>
+			<creator>Osmium Sound</creator>
+		</plugin>
+	</plugins>
+</extensions>

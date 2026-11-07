@@ -33,7 +33,9 @@ static const KmsMode *preferredOf(const KmsOutput &o) {
 //  2. se non c'e' — pannelli 21:9 o 16:10, o monitor senza il 720p — il piu'
 //     PICCOLO tra quelli SOPRA al tetto, sempre con l'aspetto del pannello: e'
 //     comunque una frazione dei pixel del nativo (3440x1440 -> 2560x1080);
-//  3. solo se il pannello non espone nessun modo piu' piccolo del proprio, si
+//  3. se neppure cosi' c'e' un modo, il piu' grande sotto il tetto fra tutti
+//     quelli che il monitor elenca (qualunque aspetto);
+//  4. solo se il pannello non espone nessun modo piu' piccolo del proprio, si
 //     resta sul nativo.
 // nullptr = il nativo (ci pensa Qt).
 static const KmsMode *cappedMode(const KmsOutput &o, int capH) {
@@ -54,6 +56,16 @@ static const KmsMode *cappedMode(const KmsOutput &o, int capH) {
         }
     }
     if (!best) best = above;
+    // A panel with no smaller mode of its own aspect (the LG 34GK950F only has
+    // 3440x1440 at 21:9): any mode the monitor itself lists will do — the biggest
+    // under the cap — so the setting always changes something
+    if (!best) {
+        for (const KmsMode &mi : o.modes) {
+            if (mi.w < 1024 || mi.h < 600 || mi.h > capH) continue;
+            if (mi.w >= pre->w && mi.h >= pre->h) continue;
+            if (!best || mi.h > best->h || (mi.h == best->h && mi.hz > best->hz)) best = &mi;
+        }
+    }
     if (best && best->w == pre->w && best->h == pre->h) return nullptr;
     return best;
 }

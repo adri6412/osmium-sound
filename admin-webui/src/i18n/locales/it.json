@@ -188,6 +188,14 @@
   "settings": {
     "title": "Impostazioni",
     "backToSettings": "Impostazioni",
+    "groups": {
+      "music": "Musica e libreria",
+      "sound": "Audio e uscite",
+      "look": "Aspetto e schermo",
+      "control": "Controllo e telecomandi",
+      "network": "Rete e accesso",
+      "system": "Sistema e aggiornamenti"
+    },
     "sections": {
       "network": {
         "label": "Rete",
@@ -204,6 +212,10 @@
       "btSpeakers": {
         "label": "Altoparlanti Bluetooth",
         "desc": "Suona su un altoparlante o in cuffia"
+      },
+      "extPlayers": {
+        "label": "Player esterni",
+        "desc": "Converti per gli altri player di questo server"
       },
       "remote": {
         "label": "Telecomando",
@@ -281,6 +293,10 @@
         "label": "Sistema",
         "desc": "Riavvio, spegnimento, ripristino di fabbrica"
       },
+      "systemTweaks": {
+        "label": "Ottimizzazioni di sistema",
+        "desc": "Governor CPU, sicurezza, hyper-threading"
+      },
       "notices": {
         "label": "Licenze e crediti",
         "desc": "Di cosa è fatto l'apparecchio, e con quali licenze"
@@ -351,7 +367,12 @@
       "off": "Off",
       "on": "On",
       "dsdLabel": "File DSD",
-      "dsd": { "auto": "Automatico", "dop": "DoP", "native": "Nativo", "off": "Converti in PCM" },
+      "dsd": {
+        "auto": "Automatico",
+        "dop": "DoP",
+        "native": "Nativo",
+        "off": "Converti in PCM"
+      },
       "dsdDetectedNative": "Questo DAC dichiara il DSD nativo.",
       "dsdDetectedDop": "Questo DAC non dichiara il DSD nativo, quindi Automatico usa il DoP.",
       "dsdDetectedPcm": "Questa uscita non è un DAC USB (HDMI o l'audio integrato), quindi Automatico converte il DSD in PCM.",
@@ -384,7 +405,9 @@
       "changed": "Uscita audio cambiata",
       "changeFailed": "Cambio uscita fallito",
       "nameSaved": "Nome salvato",
-      "saveFailed": "Salvataggio fallito"
+      "saveFailed": "Salvataggio fallito",
+      "switchesLabel": "Interruttori uscita digitale",
+      "switchesHelp": "Accende o spegne un’uscita della scheda. L’uscita coassiale/ottica (S/PDIF) integrata è mutata di default: accendi IEC958 per sentirla. Un DAC USB non ne ha."
     },
     "notices": {
       "intro": "Di cosa è fatto questo apparecchio, e con quali licenze. Lo stesso elenco è mantenuto in THIRD-PARTY-NOTICES.md nel repository del progetto.",
@@ -593,6 +616,8 @@
         "fullScreen": "Schermo intero",
         "nextVu": "VU meter successivo",
         "nextAnimation": "Animazione successiva",
+        "nextDisc": "Caricatore: disco +",
+        "prevDisc": "Caricatore: disco −",
         "queue": "Apri / chiudi la coda",
         "search": "Cerca",
         "favorite": "Aggiungi ai preferiti",
@@ -1173,6 +1198,22 @@
       "factoryStarted": "Ripristino di fabbrica avviato — il dispositivo si riavvierà",
       "factoryFailed": "Ripristino fallito"
     },
+    "systemTweaks": {
+      "intro": "Alcune manopole della CPU per avere più margine quando il server converte il PCM in DSD o fa upsampling. Aumentano consumo, calore e — per la sicurezza CPU — il rischio, perciò sono disattivate di default: alzale solo quando ti serve più prestazione.",
+      "governorLabel": "Frequenza CPU",
+      "governorHelp": "\"performance\" tiene i core alla massima velocità (più stabile nelle conversioni pesanti); le altre lasciano scendere la CPU per risparmiare energia. Si applica subito.",
+      "governorNone": "Questa macchina non espone il controllo della frequenza CPU.",
+      "mitigationsLabel": "Sicurezza CPU",
+      "mitigationsHelp": "Le mitigazioni del kernel per le vulnerabilità della CPU. Disattivarle libera un po' di CPU per la conversione ma riduce la sicurezza: lasciale attive se non ti serve davvero il margine. Ha effetto dopo un riavvio.",
+      "secure": "Sicura (consigliata)",
+      "fast": "Più veloce (meno sicura)",
+      "smtLabel": "Hyper-threading",
+      "smtToggle": "Hyper-threading (SMT)",
+      "smtHelp": "Ogni core della CPU visto come due core logici. Attivo di solito aiuta; alcuni trovano la riproduzione più stabile con l'opzione disattivata. Si applica subito.",
+      "rebootPending": "Riavvia il player per applicare la modifica alla sicurezza CPU.",
+      "saved": "Salvato",
+      "saveFailed": "Impossibile salvare"
+    },
     "netCheck": {
       "open": "Controlla la rete",
       "openHelp": "Trova dove si ferma la connessione: cavo o Wi-Fi, router, internet o server degli aggiornamenti.",
@@ -1283,9 +1324,8 @@
     "pcm2dsd": {
       "title": "Conversione in DSD",
       "label": "Converti in DSD",
-      "help": "Ogni brano che non è già DSD (CD rippati, file ad alta risoluzione, radio, servizi di streaming) arriva al DAC in DSD, convertito mentre suona. I file DSD restano come sono: arrivano al DAC nativi o in DoP, come scelto in «File DSD». Solo quando la musica arriva da un altro server Lyrion e la conversione è accesa passano anche loro dalla conversione.",
+      "help": "Ogni brano che non è già DSD (CD rippati, file ad alta risoluzione, radio, servizi di streaming) arriva al DAC in DSD, convertito mentre suona. I file DSD restano come sono: arrivano al DAC nativi o in DoP, come scelto in «File DSD». La conversione avviene sul server Lyrion che questo player segue, così al player la musica arriva già in DSD.",
       "active": "Accesa: tutto arriva al DAC in {rate}.",
-      "player": "Accesa: la musica arriva da un altro server Lyrion, quindi la converte in {rate} questo apparecchio. Finché è accesa anche i file DSD passano da qui: vengono letti in PCM e riconvertiti in {rate}. Se la spegni tornano ad arrivare al DAC come sono, nativi o in DoP come scelto in «File DSD». Il volume di Osmium continua a funzionare.",
       "volumeWarning": "Il volume digitale non agisce sul DSD: usa il volume del DAC o dell'amplificatore. Abbassalo prima di cominciare.",
       "volumeConfirm": "Attenzione al volume. Con la conversione in DSD il volume di Osmium non agisce più: la musica esce sempre al massimo, e il volume si regola solo dal DAC o dall'amplificatore. Abbassa l'amplificatore prima di accendere. Se il tuo DAC ha un suo controllo di volume, puoi usarlo scegliendo «Mixer del DAC» in Controllo del volume.\n\nAccendo la conversione?",
       "measuring": "Sto misurando cosa regge questo processore: DSD256 compare qui se è abbastanza veloce.",
@@ -1298,10 +1338,40 @@
       },
       "why": {
         "noTools": "Questo apparecchio ha bisogno di un aggiornamento di sistema per convertire in DSD.",
-        "remoteServer": "Per una zona funziona solo quando questo apparecchio è il proprio server Lyrion: ora la musica arriva da un altro.",
+        "noPlugin": "L'altro server Lyrion non ha il plugin Osmium Convert, quindi non può convertire per questo player. Installalo lì, oppure fai seguire al player il server di questo apparecchio.",
+        "noServerTools": "L'altro server Lyrion può sovracampionare il PCM ma non può produrre DSD (manca sox_ng). L'upsampling PCM è disponibile; il DSD no.",
         "dsp": "Non disponibile mentre l'elaborazione del suono è accesa.",
         "noDsd": "A questo DAC non arriva DSD: scegli un DAC che lo accetti (nativo o DoP) e una modalità DSD diversa da \"Converti in PCM\"."
       }
+    },
+    "convert": {
+      "label": "Conversione",
+      "pcm": "Upsampling PCM",
+      "dsd": "DSD",
+      "help": "Converti ogni traccia PCM mentre arriva al player: alza la frequenza di campionamento (upsampling PCM) oppure trasformala in DSD. Le due cose non possono essere attive insieme.",
+      "extDsd": "Attivo: a questo player arriva tutto come {rate}, se è in grado di riprodurlo.",
+      "extPcm": "Attivo: a questo player arriva il PCM sovracampionato {rate}, se è in grado di riprodurlo."
+    },
+    "upsample": {
+      "label": "Upsampling",
+      "help": "Ogni traccia PCM viene portata a una frequenza più alta prima di arrivare al player — senza perdita, mentre suona. Il valore scelto è il massimo: la frequenza reale resta nella famiglia del brano, cioè un multiplo esatto (per materiale a 44.1 kHz il tap 768 dà 705.6 kHz, per il 48 kHz dà 768 kHz). Auto sale fino al massimo che il DAC accetta. I file DSD e le tracce già pari o superiori alla destinazione restano come sono.",
+      "active": "Attivo: le tracce PCM sono sovracampionate a {rate}.",
+      "atDacNow": "Al DAC: {rate}",
+      "auto": "Auto",
+      "max": "Max",
+      "why": {
+        "noTools": "Questo dispositivo ha bisogno di un aggiornamento di sistema prima di poter sovracampionare.",
+        "dsp": "Non disponibile mentre l'elaborazione del suono è attiva."
+      }
+    },
+    "extPlayers": {
+      "help": "Qualsiasi altro player collegato al server Lyrion di questo dispositivo, per esempio uno squeezelite su un altro computer, può avere la sua musica convertita qui.",
+      "caveat": "La conversione gira sul processore di questo dispositivo, ed è il DAC di chi ascolta a decidere se riesce a riprodurre quello che riceve. Osmium non può controllare il DAC remoto: scegli tu, a tuo rischio.",
+      "noLyrion": "Funziona solo quando questo dispositivo è il proprio server Lyrion. Ora ne segue un altro, quindi non ha player da elencare.",
+      "none": "Al momento non ci sono altri player collegati a questo server.",
+      "online": "collegato",
+      "offline": "non in linea",
+      "clear": "Disattiva la conversione per questo player"
     }
   },
   "files": {

@@ -118,6 +118,24 @@ def check(path, need):
         raise NoRoom(path, need, r, reserve_for(_vfs(path)[0]))
 
 
+def check_any(path, need):
+    """Like check() on the system disk, but also guards disks with no reserve
+    of ours (the second internal disk, a USB stick): there `need` must simply
+    fit in the free space. NoRoom.reserve is 0 for those, which the reader's
+    message turns into the plain 'this disk is full' wording."""
+    r = room(path)
+    if r is not None:                       # system disk: keep the reserve free
+        if need > r:
+            raise NoRoom(path, need, r, reserve_for(_vfs(path)[0]))
+        return
+    try:                                    # any other disk: plain free space
+        _total, free = _vfs(path)
+    except OSError:
+        return                              # can't measure it -- let the write try
+    if need > free:
+        raise NoRoom(path, need, free, 0)
+
+
 class Budget:
     """For a copy that goes chunk by chunk: `add(n)` after every chunk asks
     the filesystem again every RECHECK_BYTES and raises NoRoom as soon as the
@@ -162,10 +180,17 @@ def gb(n, lang='en'):
 
 def message(err, lang, stopped=False):
     """The reader's sentence for a NoRoom: 'disk.noRoom' before anything was
-    written, 'disk.noRoomStopped' when a copy had to stop half way."""
+    written, 'disk.noRoomStopped' when a copy had to stop half way. A disk with
+    no reserve of ours (reserve == 0: the second disk, a USB stick) gets the
+    plainer wording, with no mention of the reserve kept for Lyrion."""
     from hifi_i18n import t
+    plain = not err.reserve
     if stopped:
+        if plain:
+            return t('disk.noRoomStoppedPlain', lang)
         return t('disk.noRoomStopped', lang, reserve=gb(err.reserve, lang))
+    if plain:
+        return t('disk.noRoomPlain', lang, need=gb(err.need, lang), room=gb(err.room, lang))
     return t('disk.noRoom', lang, need=gb(err.need, lang), room=gb(err.room, lang),
              reserve=gb(err.reserve, lang))
 

@@ -1182,6 +1182,8 @@ _AUTH_ROUTES = {
     ('/api/system/ota_channel', 'POST'): '/ota_channel',
     ('/api/system/audio_devices', 'GET'): '/audio_devices',
     ('/api/system/audio_device', 'POST'): '/set_audio_device',
+    # Toggle an ALSA playback switch of the output card (onboard S/PDIF/IEC958).
+    ('/api/system/mixer_switch', 'POST'): '/set_mixer_switch',
     # The rest of the squeezelite command line (DSD mode, rate limit, hardware
     # volume, buffers, extra arguments): Settings → Audio → Advanced.
     ('/api/system/squeezelite_conf', 'GET'): '/squeezelite_conf',
@@ -1192,6 +1194,15 @@ _AUTH_ROUTES = {
     ('/api/system/zones/add', 'POST'): '/zones/add',
     ('/api/system/zones/update', 'POST'): '/zones/update',
     ('/api/system/zones/remove', 'POST'): '/zones/remove',
+    # Settings → Audio: per-player conversion (Off / PCM upsample / DSD) for
+    # external Lyrion players chosen from the server's player list.
+    ('/api/system/external_convert', 'GET'): '/external_convert',
+    ('/api/system/external_convert/update', 'POST'): '/external_convert/update',
+    ('/api/system/external_convert/remove', 'POST'): '/external_convert/remove',
+    # Settings → System tweaks: CPU governor / mitigations / SMT for CPU
+    # headroom on server-side DSD.
+    ('/api/system/system_tweaks', 'GET'): '/system_tweaks',
+    ('/api/system/system_tweaks', 'POST'): '/system_tweaks',
     # Settings → Licenses & credits: the project, Lyrion, the third-party
     # notices and every Debian package of the image with its license.
     ('/api/system/credits', 'GET'): '/credits',

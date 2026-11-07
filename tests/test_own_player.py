@@ -164,6 +164,22 @@ class CaptureScriptTestCase(unittest.TestCase):
                                lambda *a, **k: ({'mac': OWN.upper()}, False)):
             self.assertEqual(self.mod.own_player_mac(), OWN)
 
+    def test_speakers_are_paused_but_the_internal_player_is_only_captured(self):
+        lms = FakeLms(_players(BT, OTHER, OWN), {BT: 'play', OWN: 'play'})
+        self.mod.lms_request = lms
+        self.mod.own_player_mac = lambda: OWN
+        self.mod.main()
+        # The speaker is paused and its power-on resume cleared, so it does not
+        # come back playing on its own (issue #124).
+        self.assertIn(['pause', '1'], lms.sent_to(BT))
+        self.assertIn(['playerpref', 'playingAtPowerOff', '0'], lms.sent_to(BT))
+        # The internal player is captured for an exact resume, not paused.
+        self.assertNotIn(['pause', '1'], lms.sent_to(OWN))
+        with open(self.mod.STATE_FILE) as f:
+            self.assertEqual(json.load(f)['playerid'], OWN)
+        # A Squeezebox elsewhere on the LAN is left alone.
+        self.assertEqual(lms.sent_to(OTHER), [])
+
 
 if __name__ == '__main__':
     unittest.main()

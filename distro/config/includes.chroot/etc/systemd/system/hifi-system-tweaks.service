@@ -1,0 +1,21 @@
+[Unit]
+Description=HiFi Player - apply the System tweaks (CPU governor, hyper-threading) to /sys at boot
+# The /sys knobs (cpufreq scaling_governor, cpu/smt/control) reset to the
+# kernel defaults on every boot, so the user's choice in
+# /etc/hifi-player/system-tweaks.json (carried over by an A/B swap, like the
+# other hifi-player config) is re-applied here. The third knob, CPU
+# mitigations, is NOT set here: it is a kernel command-line change
+# (mitigations=off) that api_server writes to the ESP's hifi-cmdline.env and
+# that only takes effect on the next boot. Always on and idempotent: the choice
+# is the file, not the enablement (same pattern as hifi-zones / hifi-bt-out).
+After=basic.target
+# Governor matters most while audio runs; set it before the players come up.
+Before=squeezelite.service lyrionmusicserver.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /usr/local/bin/hifi_system_tweaks.py apply
+
+[Install]
+WantedBy=multi-user.target

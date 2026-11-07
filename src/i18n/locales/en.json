@@ -292,6 +292,25 @@
     "clear": "Clear",
     "confirm": "Confirm"
   },
+  "services": {
+    "notConnected": "Not connected",
+    "signIn": "Sign in",
+    "signInTitle": "Sign in to {name}",
+    "loginFailed": "Sign-in failed. Check your details and try again.",
+    "qobuz": {
+      "hint": "Enter your Qobuz email and password."
+    },
+    "device": {
+      "scanHint": "Scan the QR code with your phone, or open the link, and approve access.",
+      "preparing": "Preparing the sign-in link…",
+      "waiting": "Waiting for approval on your phone…"
+    },
+    "spotty": {
+      "preparing": "Preparing sign-in…",
+      "steps": "Spotify Premium is required.\n\n1. Open the Spotify app on your phone or computer\n2. Play a track\n3. Open the list of devices\n4. Pick the device below:",
+      "waiting": "Waiting for authorization from Spotify…"
+    }
+  },
   "player": {
     "muted": "Muted",
     "soundOn": "Sound on",
@@ -333,13 +352,16 @@
     },
     "titles": {
       "home": "Home",
-      "artists": "Artists",
+      "sources": "Music",
+      "localLibrary": "Local Library",
+      "artists": "Album Artists",
       "albums": "Albums",
       "folders": "Folders",
       "playlists": "Playlists",
       "radio": "Radio",
       "apps": "Apps",
       "favorites": "Favorites",
+      "cdPlayer": "CD",
       "search": "Search",
       "genres": "Genres",
       "years": "Years",
@@ -398,6 +420,11 @@
     "backToOwn": "Back to this device",
     "addToQueue": "Add to queue",
     "playNext": "Play next",
+    "addedToQueue": "Added to the queue",
+    "playingNext": "Playing next",
+    "queueFailed": "Could not change the queue",
+    "cdEjected": "CD ejected",
+    "cdEjectFailed": "Couldn't eject the CD",
     "saveAsPlaylist": "Save as playlist",
     "clearQueue": "Clear",
     "playlistNamePlaceholder": "Playlist name",
@@ -413,6 +440,7 @@
       "ripTitle": "Rip CD to library",
       "ripProgress": "Track {track} of {total}",
       "ripProgressShort": "In progress…",
+      "ripping": "Ripping CD…",
       "ripDone": "Rip complete! The album is in your library.",
       "ripError": "Rip failed. Check the disc and try again.",
       "artist": "Artist",
@@ -422,6 +450,9 @@
       "noDestination": "No writable destination: add a music folder or a disk in Settings → Music sources.",
       "edition": "Edition",
       "editionDisc": "disc {n} of {total}",
+      "chooseEdition": "Choose edition",
+      "useEdition": "Use this edition",
+      "noTrackDetail": "No track details",
       "askTitle": "Audio CD inserted",
       "askTracks": "{count} tracks",
       "askQuestion": "Do you want to copy it into your music library?",
@@ -441,8 +472,13 @@
     },
     "librarySearchPlaceholder": "Search the library: artist, album, track…",
     "addToFavorites": "Add to favourites",
+    "moreActions": "More actions",
+    "noActions": "No actions here",
+    "actionDone": "Done",
+    "ctxError": "Couldn't load the actions",
     "removeFromFavorites": "Remove from favourites",
     "addedToFavorites": "Added to favourites",
+    "addedToStreamingServiceFavorites": "Added to streaming service favourites",
     "removedFromFavorites": "Removed from favourites",
     "alreadyFavorite": "Already in favourites",
     "favoriteError": "Couldn't add to favourites",
@@ -473,8 +509,6 @@
       "crossfade": "Crossfade between tracks",
       "resampled": "Sample rate changed to {rate}",
       "pcmToDsd": "Converted to {dsd}, {filter} filter",
-      "conversion": "Conversion",
-      "convertHere": "On this device, after the player: sox_ng",
       "lyrionHere": "On this device",
       "lyrionOn": "On {host}",
       "otherDevice": "Another device: its DAC cannot be seen from here",
@@ -511,11 +545,13 @@
     "page": {
       "play": "Play",
       "shuffle": "Shuffle",
+      "eject": "Eject",
       "tracks": "Tracks",
       "oneTrack": "1 track",
       "tracksCount": "{count} tracks",
       "disc": "Disc {n}",
       "credits": "Credits",
+      "info": "Details",
       "creditsByTrack": "Credits by track",
       "onTracks": "tracks {list}",
       "about": "About this album",
@@ -567,12 +603,21 @@
     "subtitle": "Configure your Osmium Sound",
     "loadingSystem": "Loading system data...",
     "apiUnavailable": "⚠️ API server unavailable",
+    "groups": {
+      "music": "Music & library",
+      "sound": "Audio & outputs",
+      "look": "Look & screen",
+      "control": "Control & remotes",
+      "network": "Network & access",
+      "system": "System & updates"
+    },
     "sections": {
       "sources": "Music sources",
       "cdRip": "CD ripping",
       "audio": "Audio Output (DAC)",
       "audioAdvanced": "Advanced Audio Tweaks",
       "zones": "Audio zones",
+      "extPlayers": "External players",
       "playback": "Playback",
       "vuMeters": "VU Meters",
       "animations": "Animations",
@@ -594,6 +639,7 @@
       "systemInfo": "System Information",
       "updates": "Updates",
       "systemControls": "System Controls",
+      "systemTweaks": "System tweaks",
       "language": "Language",
       "thirdPartyNotices": "Third-Party Notices",
       "netCheck": "Network check",
@@ -660,7 +706,7 @@
         "none": "None"
       },
       "optionHelp": {
-        "full": "Recommended \u2014 buttons give way under a finger, panels slide in",
+        "full": "Recommended — buttons give way under a finger, panels slide in",
         "reduced": "The same movements, twice as quick",
         "none": "Nothing moves: everything changes at once"
       }
@@ -853,6 +899,8 @@
         "fullScreen": "Full screen",
         "nextVu": "Next VU meter",
         "nextAnimation": "Next animation",
+        "nextDisc": "CD changer: disc +",
+        "prevDisc": "CD changer: disc −",
         "queue": "Open / close the queue",
         "search": "Search",
         "favorite": "Add to favourites",
@@ -1245,13 +1293,12 @@
     },
     "pcm2dsd": {
       "label": "Convert to DSD",
-      "help": "Every track that is not DSD already (CD rips, high-resolution files, radio, streaming services) reaches the DAC as DSD, converted while it plays. DSD files are left as they are: they reach the DAC native or as DoP, as set under \"DSD files\". Only when the music comes from another Lyrion server and the conversion is on do they go through it too.",
+      "help": "Every track that is not DSD already (CD rips, high-resolution files, radio, streaming services) reaches the DAC as DSD, converted while it plays. DSD files are left as they are: they reach the DAC native or as DoP, as set under \"DSD files\". The conversion runs on the Lyrion server this player follows, so the player receives the music already as DSD.",
       "active": "On: everything reaches the DAC as {rate}.",
-      "player": "On: the music comes from another Lyrion server, so this device converts it to {rate} itself. While it is on, DSD files go through it too: read as PCM and converted again to {rate}. Turn it off and they reach the DAC as they are again, native or DoP as set under \"DSD files\". Osmium's volume keeps working.",
       "volumeWarning": "The digital volume has no effect on DSD: use the volume of the DAC or of the amplifier.",
       "volumeConfirm": "Mind the volume. With DSD conversion on, Osmium's volume control no longer does anything: the music always plays at full level, and the volume can only be set on the DAC or the amplifier. Turn the amplifier down before you switch it on. If your DAC has a volume control of its own, you can use it by turning on \"Volume from the DAC mixer\".",
       "confirmOk": "Turn DSD on",
-      "applying": "Applying… Lyrion may restart for a few seconds.",
+      "applying": "Applying…",
       "measuring": "Measuring what this processor can do: DSD256 shows up here if it is fast enough.",
       "tooSlow": "This processor is not fast enough to convert to DSD while the music plays.",
       "filterLabel": "Noise shaping",
@@ -1262,10 +1309,40 @@
       },
       "why": {
         "noTools": "This device needs a system update before it can convert to DSD.",
-        "remoteServer": "For a zone it only works when this device is its own Lyrion server: the music now comes from another one.",
+        "noPlugin": "The other Lyrion server does not have the Osmium Convert plugin, so it cannot convert for this player. Install it there, or point the player at this device's own server.",
+        "noServerTools": "The other Lyrion server can upsample PCM but cannot make DSD (it lacks sox_ng). PCM upsampling is available; DSD is not.",
         "dsp": "Not available while sound processing is on.",
         "noDsd": "No DSD reaches this DAC: choose a DAC that accepts it (natively or as DoP) and a DSD mode other than \"Convert to PCM\"."
       }
+    },
+    "convert": {
+      "label": "Conversion",
+      "pcm": "PCM upsampling",
+      "dsd": "DSD",
+      "help": "Convert every PCM track on its way to the player: raise its sample rate (PCM upsampling) or turn it into DSD. The two cannot be on at the same time.",
+      "extDsd": "On: this player receives everything as {rate}, as long as it can play it.",
+      "extPcm": "On: this player receives PCM upsampled {rate}, as long as it can play it."
+    },
+    "upsample": {
+      "label": "Upsampling",
+      "help": "Every PCM track is raised to a higher rate before it reaches the player — lossless, done while it plays. The value you pick is a maximum: the real rate stays in the track's family, an exact multiple (for 44.1 kHz material the 768 tap gives 705.6 kHz, for 48 kHz it gives 768 kHz). Auto goes as high as the DAC accepts. DSD files and tracks already at or above the target are left as they are.",
+      "active": "On: PCM tracks are upsampled to {rate}.",
+      "atDacNow": "To the DAC: {rate}",
+      "auto": "Auto",
+      "max": "Max",
+      "why": {
+        "noTools": "This device needs a system update before it can upsample.",
+        "dsp": "Not available while sound processing is on."
+      }
+    },
+    "extPlayers": {
+      "help": "Any other player connected to this device's Lyrion server, such as a squeezelite on another computer, can have its music converted here too.",
+      "caveat": "The conversion runs on this device's processor, and the listener's own DAC decides whether it can play what it receives. Osmium cannot check the remote DAC: you choose, at your own risk.",
+      "noLyrion": "This works only when this device is its own Lyrion server. It is now following another one, so it has no players to list.",
+      "none": "No other players are connected to this server right now.",
+      "online": "connected",
+      "offline": "offline",
+      "clear": "Turn conversion off"
     },
     "audio": {
       "help": "Choose the playback device (DAC). The selection is saved and kept across reboots. DSD playback is bit-perfect: native when the DAC accepts it that way, DoP otherwise.",
@@ -1278,7 +1355,12 @@
       "auto": "Automatic",
       "off": "Off",
       "dsdLabel": "DSD files",
-      "dsd": { "auto": "Automatic", "dop": "DoP", "native": "Native", "off": "Convert to PCM" },
+      "dsd": {
+        "auto": "Automatic",
+        "dop": "DoP",
+        "native": "Native",
+        "off": "Convert to PCM"
+      },
       "dsdDetectedNative": "This DAC declares native DSD. DoP wraps the same bits in PCM frames, usually up to DSD128. Convert to PCM is for outputs with no DSD at all, such as HDMI.",
       "dsdDetectedDop": "This DAC does not declare native DSD, so Automatic uses DoP. Convert to PCM is for outputs with no DSD at all, such as HDMI.",
       "dsdDetectedPcm": "This output is not a USB DAC (HDMI or the built-in audio), so Automatic converts DSD to PCM. Choose DoP only if a DAC that takes DoP is connected to it.",
@@ -1288,6 +1370,8 @@
       "volumeHardware": "Volume from the DAC mixer",
       "volumeHelp": "The volume in Lyrion moves the DAC's own control and the bits stay untouched. Off: software volume, bit-perfect at 100%.",
       "volumeNoMixer": "This output has no hardware volume control.",
+      "switchesLabel": "Digital output",
+      "switchesHelp": "A digital (S/PDIF/coax/optical) output can boot muted. Turn it on here if its amplifier stays silent.",
       "alsaBufferLarge": "Large ALSA buffer",
       "alsaBufferHelp": "For DACs that drop out or crackle.",
       "streamBufferLarge": "Large stream buffer",
@@ -1422,7 +1506,8 @@
       "shutdown": "Shut Down System",
       "powerTitle": "Power",
       "powerReboot": "Restart",
-      "powerShutdown": "Shut down"
+      "powerShutdown": "Shut down",
+      "powerHint": "Installing from a USB stick? Remove it before you restart, or the installer will start again."
     },
     "factory": {
       "help": "Erase all settings and return the device to its initial state (Wi-Fi networks, music sources, DSP/room correction, Bluetooth, companion pairing and the web-admin account are all cleared). The device restarts into the setup wizard.",
@@ -1436,6 +1521,22 @@
       "confirm": "This clears the web admin account so it can be recreated on the next web login. Other settings are unaffected. Continue?",
       "done": "Web interface credentials cleared.",
       "failed": "Could not reset the web interface credentials."
+    },
+    "systemTweaks": {
+      "intro": "A few CPU knobs for more headroom when the server converts PCM to DSD or upsamples. They raise power draw, heat and — for CPU security — risk, so they are off by default; turn them up only when you need the extra performance.",
+      "governorLabel": "CPU frequency",
+      "governorHelp": "\"performance\" pins the cores at their top speed (steadier for heavy conversion); the others let the CPU scale down to save power. Applies immediately.",
+      "governorNone": "This machine exposes no CPU frequency control.",
+      "mitigationsLabel": "CPU security",
+      "mitigationsHelp": "The kernel's CPU-vulnerability mitigations. Turning them off frees some CPU for conversion but lowers security — leave them on unless you know you need the headroom. Takes effect after a restart.",
+      "secure": "Secure",
+      "fast": "Faster",
+      "smtLabel": "Hyper-threading",
+      "smtToggle": "Hyper-threading (SMT)",
+      "smtHelp": "Every CPU core seen as two logical cores. On usually helps; some find playback steadier with it off. Applies immediately.",
+      "rebootPending": "Restart the player to apply the CPU security change.",
+      "saved": "Saved",
+      "saveFailed": "Could not save"
     },
     "about": {
       "builtWith": "Built with Electron, React, and Tailwind CSS",
@@ -1876,18 +1977,57 @@
     "skip": "Skip",
     "next": "Next",
     "finish": "Done",
-    "welcome": { "title": "Welcome to Osmium Sound", "body": "A quick tour of the screen: what is where, and what a touch does. It takes a minute, and you can see it again from Settings → System info." },
-    "miniPlayer": { "title": "What is playing", "body": "The left side always shows the current track: cover, title, play and skip keys, shuffle and repeat, the volume. Touch the artist or the album name to open their page." },
-    "expand": { "title": "The big player", "body": "This arrow opens the full Now Playing screen, with the VU meters or an animation. Swipe it down, or touch the arrow at its top left, to come back." },
-    "tabs": { "title": "Music, Radio, Apps, Discover, Settings", "body": "The tabs at the top: your library, internet radios, the Lyrion apps, music to discover, and the settings of the appliance. The power key is in the corner, and next to it the network icon: touch it to see whether the internet is reachable." },
-    "library": { "title": "Your library", "body": "Search the whole library from the box, or browse by artists, albums, genres, years, composers, folders and playlists. In any list, a long press on a row opens its menu: play next, add to the queue, favourites." },
-    "albumList": { "title": "The albums", "body": "Every album of the library, with its cover. A touch opens the album, the play button on the card plays it right away. Type in the box to filter, or jump with the letters on the right." },
-    "longPress": { "title": "Hold to get the menu", "body": "Keep a finger on an album, a track, an artist or a playlist for a moment: its menu opens, like this one. Play next, add to the queue, save among the favourites, go to the artist." },
-    "coverFlow": { "title": "Cover Flow", "body": "The same albums as a row of covers to flip through: drag with a finger, turn the mouse wheel, touch a cover at the side, hold the arrows, or slide the knob below. Switch between grid and Cover Flow with the button in the crumb bar, or in Settings → Library." },
-    "npLeft": { "title": "Clock, full screen, looks", "body": "The clock starts the screensaver. Next to it: full screen for the meters or the animation, then the two choosers: which VU meters, which animation (a CD, a record, a cassette)." },
-    "npRight": { "title": "Player, lyrics, queue, sleep", "body": "From the right: the player to control, meters or lyrics, the queue, the sleep timer, and the settings." },
-    "npInfo": { "title": "The track", "body": "Touch the artist or the album to open their page. The bar seeks, the heart saves the track among the favourites, the slider on the right is the volume." },
-    "npPanel": { "title": "Meters and animations", "body": "Here live the VU meters, or the animation you chose. The cassette deck and the CD players have working keys: play, stop, skip, eject, the track numbers." },
-    "done": { "title": "That is all", "body": "Enjoy the music. You can see this tour again any time from Settings → System info." }
+    "welcome": {
+      "title": "Welcome to Osmium Sound",
+      "body": "A quick tour of the screen: what is where, and what a touch does. It takes a minute, and you can see it again from Settings → System info."
+    },
+    "miniPlayer": {
+      "title": "What is playing",
+      "body": "The left side always shows the current track: cover, title, play and skip keys, shuffle and repeat, the volume. Touch the artist or the album name to open their page."
+    },
+    "expand": {
+      "title": "The big player",
+      "body": "This arrow opens the full Now Playing screen, with the VU meters or an animation. Swipe it down, or touch the arrow at its top left, to come back."
+    },
+    "tabs": {
+      "title": "Music, Apps, Discover, Settings",
+      "body": "The tabs at the top: Music opens your sources as tiles — the streaming services you have, internet radio and your local library; then the Lyrion apps, music to discover, and the settings of the appliance. The power key is in the corner, and next to it the network icon: touch it to see whether the internet is reachable."
+    },
+    "library": {
+      "title": "Your library",
+      "body": "Search the whole library from the box, or browse by artists, albums, genres, years, composers, folders and playlists. In any list, a long press on a row opens its menu: play next, add to the queue, favourites."
+    },
+    "albumList": {
+      "title": "The albums",
+      "body": "Every album of the library, with its cover. A touch opens the album, the play button on the card plays it right away. Type in the box to filter, or jump with the letters on the right."
+    },
+    "longPress": {
+      "title": "Hold to get the menu",
+      "body": "Keep a finger on an album, a track, an artist or a playlist for a moment: its menu opens, like this one. Play next, add to the queue, save among the favourites, go to the artist."
+    },
+    "coverFlow": {
+      "title": "Cover Flow",
+      "body": "The same albums as a row of covers to flip through: drag with a finger, turn the mouse wheel, touch a cover at the side, hold the arrows, or slide the knob below. Switch between grid and Cover Flow with the button in the crumb bar, or in Settings → Library."
+    },
+    "npLeft": {
+      "title": "Clock, full screen, looks",
+      "body": "The clock starts the screensaver. Next to it: full screen for the meters or the animation, then the two choosers: which VU meters, which animation (a CD, a record, a cassette)."
+    },
+    "npRight": {
+      "title": "Player, lyrics, queue, sleep",
+      "body": "From the right: the player to control, meters or lyrics, the queue, the sleep timer, and the settings."
+    },
+    "npInfo": {
+      "title": "The track",
+      "body": "Touch the artist or the album to open their page. The bar seeks, the heart saves the track among the favourites, the slider on the right is the volume."
+    },
+    "npPanel": {
+      "title": "Meters and animations",
+      "body": "Here live the VU meters, or the animation you chose. The cassette deck and the CD players have working keys: play, stop, skip, eject, the track numbers."
+    },
+    "done": {
+      "title": "That is all",
+      "body": "Enjoy the music. You can see this tour again any time from Settings → System info."
+    }
   }
 }

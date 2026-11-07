@@ -1538,6 +1538,11 @@ def cd_release_entry(choice):
         'track_count': int(m.get('track-count') or len(m.get('tracks') or [])),
         'disc_position': int(m.get('position') or 1),
         'disc_count': len(rel.get('media') or []),
+        # Track titles of this medium, for the edition chooser's preview. Already
+        # in hand from the discid lookup (DISCID_INC carries recordings), so no
+        # extra request is made to show them.
+        'tracks': [(t.get('title') or (t.get('recording') or {}).get('title') or '')
+                   for t in (m.get('tracks') or [])],
     }
 
 

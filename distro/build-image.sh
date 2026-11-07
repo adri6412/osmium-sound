@@ -215,7 +215,10 @@ for rel in "${lyrion_links[@]}"; do
 done
 install -m 0644 "$SHARE/lyrionmusicserver.service" "$CH/usr/lib/systemd/system/lyrionmusicserver.service"
 install -m 0644 "$SHARE/hifi-lyrion-ensure.service" "$CH/usr/lib/systemd/system/hifi-lyrion-ensure.service"
-in_chroot systemctl enable lyrionmusicserver.service hifi-lyrion-ensure.service >/dev/null 2>&1
+install -m 0644 "$SHARE/hifi-lyrion-plugins-ensure.service" "$CH/usr/lib/systemd/system/hifi-lyrion-plugins-ensure.service"
+install -m 0644 "$SHARE/hifi-cdplayer-tolerate.service" "$CH/usr/lib/systemd/system/hifi-cdplayer-tolerate.service"
+install -m 0644 "$SHARE/hifi-cdplayer-enable.service" "$CH/usr/lib/systemd/system/hifi-cdplayer-enable.service"
+in_chroot systemctl enable lyrionmusicserver.service hifi-lyrion-ensure.service hifi-lyrion-plugins-ensure.service hifi-cdplayer-tolerate.service hifi-cdplayer-enable.service >/dev/null 2>&1
 in_chroot systemctl enable hifi-rauc-config.service hifi-boot-health.service hifi-boot-watchdog.timer hifi-ab-firstboot.service >/dev/null 2>&1
 in_chroot systemctl disable hifi-ab-finish.service >/dev/null 2>&1 || true
 

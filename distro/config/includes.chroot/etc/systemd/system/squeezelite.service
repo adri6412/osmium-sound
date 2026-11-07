@@ -26,6 +26,13 @@ Type=simple
 ExecStartPre=-/usr/bin/python3 /usr/local/bin/hifi_squeezelite.py apply
 EnvironmentFile=-/etc/default/squeezelite
 ExecStart=/usr/bin/squeezelite $ARGS
+# After (re)start, follow the USB DAC's presence on Lyrion: when the chosen DAC
+# is gone, render fell back to the silent `null` device (no sound out of the
+# onboard analog output) — pause the player on Lyrion so playback truly stops
+# and holds its place; resume it when the DAC is back (62-hifi-audio-hotplug.rules
+# restarts this service on a USB card add/remove). `-` so a hiccup here never
+# fails the player's start.
+ExecStartPost=-/usr/bin/python3 /usr/local/bin/hifi_squeezelite.py dac-check
 Restart=always
 RestartSec=5
 
