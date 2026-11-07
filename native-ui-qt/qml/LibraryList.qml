@@ -473,10 +473,17 @@ Item {
                 onClicked: (m) => root.rowTap(card.index, card.playBtn && Math.abs(m.x - card.playCx) <= 18 && Math.abs(m.y - card.playCx) <= 18)
                 onLongPress: (x, y) => root.rowLongPress(card.index, card.mapToItem(root, x, y).x, card.mapToItem(root, x, y).y)
             }
-            // the card's play button as a remote stop, like the rows'
+            // the card's play button as a remote stop, like the rows'. Only on
+            // cards that actually draw the play circle (the square album art):
+            // 🚨 a menu tile has no play button, and `playCx` is a HORIZONTAL
+            // coordinate — on a landscape tile `y: playCx` drops this invisible
+            // navigable box one or two rows below its card, where it is clipped
+            // by the GridView. The spotlight then "lands" on it and the gold
+            // ring is drawn off-screen, so pressing down in the Favourites grid
+            // made the highlight vanish.
             Item {
                 property bool navigable: true
-                visible: card.playBtn
+                visible: card.playBtn && !root.menuTile
                 x: card.playCx - 18; y: card.playCx - 18; width: 36; height: 36
                 NavRing { radius: 18 }
             }
