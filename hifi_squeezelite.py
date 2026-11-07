@@ -36,7 +36,7 @@ Fields (the UI exposes the starred ones, the rest are set elsewhere):
   max_rate *     `-r <max>`, 0 = let the DAC say
   volume *       software | hardware (`-V <mixer>`, the DAC's own control)
   mixer *        the ALSA control `-V` drives (first playback volume if empty)
-  alsa_buffer *  auto | large (`-a 200:8`)
+  alsa_buffer *  auto | large (`-a 100:8`); the built-in player always takes it
   stream_buffer* auto | large (`-b 16384:8192`)
   realtime *     `-p 45` for the output thread
   extra *        anything else, one line, validated: no quotes, no `$`, and
@@ -179,7 +179,11 @@ DSD_MODES = ('auto', 'dop', 'native', 'off')
 RATES = (0, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000,
          1411200, 1536000)
 DSD_DELAYS = (0, 100, 250, 500)
-ALSA_LARGE = '200:8'
+ALSA_LARGE = '100:8'
+# Large ALSA presets recognized on import: the current value and older ones that
+# shipped before (e.g. 200:8), so a config written by an earlier build still maps
+# to 'large' instead of being dropped as a custom value.
+ALSA_LARGE_VALUES = (ALSA_LARGE, '200:8')
 STREAM_LARGE = '16384:8192'
 RT_PRIORITY = '45'
 # Options the model renders itself: refused in `extra` so they cannot appear twice.
@@ -848,7 +852,7 @@ def parse_args(args, dsp_target=None):
     if '-V' in got:
         m['volume'] = 'hardware'
         m['mixer'] = got['-V']
-    if got.get('-a') == ALSA_LARGE:
+    if got.get('-a') in ALSA_LARGE_VALUES:
         m['alsa_buffer'] = 'large'
     if got.get('-b') == STREAM_LARGE:
         m['stream_buffer'] = 'large'
@@ -1091,20 +1095,29 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
     # is gone and `-V` on a missing control would only warn.
     if not pcm_only and m['volume'] == 'hardware' and m['mixer'] and not fell_back:
         out += ['-V', m['mixer']]
-    if m['alsa_buffer'] == 'large':
+    # ALSA output buffer. The built-in player drives a USB DAC, whose isochronous
+    # audio slots jitter on this box (a shared USB2 controller, a weak CPU): the
+    # default ~40 ms ALSA buffer underruns at the USB endpoint and the audio
+    # crackles like dropped samples -- on local, streaming and CD alike, since
+    # they share the one process -- while squeezelite itself logs no xrun (the gap
+    # is downstream of its write). A larger ALSA buffer absorbs the jitter, so the
+    # built-in player always takes it. Unlike the stream buffer `-b`, this `-a`
+    # ring lives in the kernel, not squeezelite's heap, so it costs no process RAM.
+    # Zones only get it when configured, to stay out of the common case.
+    if not zone or m['alsa_buffer'] == 'large':
         out += ['-a', ALSA_LARGE]
-    # Stream buffer. The built-in player plays audio CDs through the LMS CD
-    # Player plugin, whose live transcode (cdda2wav | flac) is a non-seekable
-    # realtime pipe of unknown length: the default stream buffer underruns it
-    # and the audio crackles, like dropped samples, even though the very same
-    # track rips and then plays back clean (a seekable file squeezelite can read
-    # ahead from freely). A large stream buffer absorbs the pipe's burstiness, so
-    # the built-in player always takes it. Zones only get it when configured to,
-    # to keep their per-player memory down. (Player-side conversion streams plain
-    # PCM into the Loopback and needs no `-c dsd`; the converter daemon emits the
-    # DSD carrier to the DAC. Only external players advertise DSD alone,
-    # server-side, and they do not go through render_argv.)
-    if not zone or m['stream_buffer'] == 'large':
+    # Stream buffer, opt-in (stream_buffer == 'large'). Forcing the large buffer
+    # on every built-in-player stream fixed the audio-CD crackle but brought the
+    # same dropped-samples crackle back on local and streaming playback (16+8 MB
+    # per squeezelite is heavy on this RAM-tight box, and they share the one
+    # built-in process, so `-b` cannot be scoped per source). The CD's live,
+    # non-seekable transcode pipe is now fed by osmium-cdread (RAM read-ahead +
+    # concealment) instead, so it no longer needs the oversized squeezelite
+    # buffer. (Player-side conversion streams plain PCM into the Loopback and
+    # needs no `-c dsd`; the converter daemon emits the DSD carrier to the DAC.
+    # Only external players advertise DSD alone, server-side, and they do not go
+    # through render_argv.)
+    if m['stream_buffer'] == 'large':
         out += ['-b', STREAM_LARGE]
     if m['realtime']:
         out += ['-p', RT_PRIORITY]
