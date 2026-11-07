@@ -186,7 +186,7 @@ class TestModel(ToolsMixin, unittest.TestCase):
         self.assertNotIn('-c dsd', forced)
         # the legacy line is unchanged by the refactor, bar the large stream
         # buffer the built-in player always takes now (live CD transcode)
-        self.assertEqual(sq.render(sq.parse_args(LEGACY), lambda d: 'dop'), LEGACY + ' -a ' + sq.ALSA_LARGE)
+        self.assertEqual(sq.render(sq.parse_args(LEGACY), lambda d: 'dop'), LEGACY + ' -a ' + sq.ALSA_DEFAULT)
 
     def test_render_pcm_upsample_is_player_side(self):
         # PCM upsampling always runs player-side (squeezelite soxr, -r <rate> -R).

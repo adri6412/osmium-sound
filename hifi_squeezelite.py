@@ -36,7 +36,7 @@ Fields (the UI exposes the starred ones, the rest are set elsewhere):
   max_rate *     `-r <max>`, 0 = let the DAC say
   volume *       software | hardware (`-V <mixer>`, the DAC's own control)
   mixer *        the ALSA control `-V` drives (first playback volume if empty)
-  alsa_buffer *  auto | large (`-a 100:8`); the built-in player always takes it
+  alsa_buffer *  auto (`-a 200:8`) | large (`-a 400:8`); built-in player always takes one
   stream_buffer* auto | large (`-b 16384:8192`)
   realtime *     `-p 45` for the output thread
   extra *        anything else, one line, validated: no quotes, no `$`, and
@@ -179,11 +179,15 @@ DSD_MODES = ('auto', 'dop', 'native', 'off')
 RATES = (0, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000,
          1411200, 1536000)
 DSD_DELAYS = (0, 100, 250, 500)
-ALSA_LARGE = '100:8'
-# Large ALSA presets recognized on import: the current value and older ones that
-# shipped before (e.g. 200:8), so a config written by an earlier build still maps
-# to 'large' instead of being dropped as a custom value.
-ALSA_LARGE_VALUES = (ALSA_LARGE, '200:8')
+# The built-in player always takes an ALSA output buffer (see render_argv): a
+# baseline one by default, raised to the large one when the "large buffer" toggle
+# (alsa_buffer == 'large') is on.
+ALSA_DEFAULT = '200:8'
+ALSA_LARGE = '400:8'
+# ALSA `-a` values recognized on import as the "large buffer" toggle. Older builds
+# shipped 100:8 as the baseline and 200:8 as large; 200:8 is now the baseline, so
+# only the current large value flips the toggle (a baseline value imports as auto).
+ALSA_LARGE_VALUES = (ALSA_LARGE,)
 STREAM_LARGE = '16384:8192'
 RT_PRIORITY = '45'
 # Options the model renders itself: refused in `extra` so they cannot appear twice.
@@ -1101,10 +1105,14 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
     # crackles like dropped samples -- on local, streaming and CD alike, since
     # they share the one process -- while squeezelite itself logs no xrun (the gap
     # is downstream of its write). A larger ALSA buffer absorbs the jitter, so the
-    # built-in player always takes it. Unlike the stream buffer `-b`, this `-a`
-    # ring lives in the kernel, not squeezelite's heap, so it costs no process RAM.
-    # Zones only get it when configured, to stay out of the common case.
-    if not zone or m['alsa_buffer'] == 'large':
+    # built-in player always takes a baseline buffer (ALSA_DEFAULT), and the "large
+    # buffer" toggle raises it further (ALSA_LARGE). Unlike the stream buffer `-b`,
+    # this `-a` ring lives in the kernel, not squeezelite's heap, so it costs no
+    # process RAM. Zones only get a buffer when the toggle is on, to stay out of
+    # the common case.
+    if not zone:
+        out += ['-a', ALSA_LARGE if m['alsa_buffer'] == 'large' else ALSA_DEFAULT]
+    elif m['alsa_buffer'] == 'large':
         out += ['-a', ALSA_LARGE]
     # Stream buffer, opt-in (stream_buffer == 'large'). Forcing the large buffer
     # on every built-in-player stream fixed the audio-CD crackle but brought the
