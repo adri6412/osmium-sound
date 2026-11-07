@@ -184,8 +184,9 @@ class TestModel(ToolsMixin, unittest.TestCase):
         forced = sq.render(self.model(pcm2dsd='dsd64', dsd='off'), self.sb.probe)
         self.assertIn('-o ' + sq.P2D_PLAYBACK, forced)
         self.assertNotIn('-c dsd', forced)
-        # the legacy line is unchanged by the refactor
-        self.assertEqual(sq.render(sq.parse_args(LEGACY), lambda d: 'dop'), LEGACY)
+        # the legacy line is unchanged by the refactor, bar the large stream
+        # buffer the built-in player always takes now (live CD transcode)
+        self.assertEqual(sq.render(sq.parse_args(LEGACY), lambda d: 'dop'), LEGACY + ' -b ' + sq.STREAM_LARGE)
 
     def test_render_pcm_upsample_is_player_side(self):
         # PCM upsampling always runs player-side (squeezelite soxr, -r <rate> -R).

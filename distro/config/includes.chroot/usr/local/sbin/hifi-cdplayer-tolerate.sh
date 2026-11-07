@@ -24,6 +24,7 @@ CACHE_DIR="${HIFI_LMS_CACHE:-/var/lib/squeezeboxserver/cache}"
 INSTALLED_DIR="${HIFI_LMS_INSTALLED:-$CACHE_DIR/InstalledPlugins/Plugins}"
 LYRION_CURRENT="${HIFI_LYRION_CURRENT:-/data/lyrion/current}"
 OWNER="${HIFI_LMS_USER:-squeezeboxserver}"
+PREFS_DIR="${HIFI_LMS_PREFS:-/var/lib/squeezeboxserver/prefs}"
 CMDLINE="${HIFI_CMDLINE:-/proc/cmdline}"
 CONFIG_DIR="${HIFI_CONFIG_DIR:-/etc/hifi-player}"
 MARKER="# osmium: tolerate flaky USB drive status"
@@ -66,6 +67,76 @@ for handler in "$INSTALLED_DIR"/*/CDhandler.pm; do
             || rm -f "$tmp"
     fi
 done
+
+# True pause instead of stop-and-replay. The plugin's "pausestop" pref turns a
+# pause request into a STOP and, on resume, reopens the stream from scratch. On
+# our single cheap USB drive that reopen is a fresh capture racing the one still
+# holding the drive, so resume fails ("cannot open file") and playback skips —
+# the same contention osmium-cdread's lock guards against, here provoked by the
+# plugin itself. With osmium-cdread the live stream can simply be held instead:
+# squeezelite buffer-pauses it in place (the reader blocks on its full RAM ring)
+# and resumes from the exact position. So force pausestop off. The pref file
+# only exists once the plugin is installed; its name is the plugin's package
+# ("cdplayer"), independent of the unpack folder. Idempotent, and LMS reads prefs
+# at start while this runs Before=lyrionmusicserver, so it never races a write.
+CDPREFS="$PREFS_DIR/plugin/cdplayer.prefs"
+if [ -f "$CDPREFS" ] && ! grep -qx 'pausestop: 0' "$CDPREFS"; then
+    tmp="$CDPREFS.osmium.tmp"
+    awk '
+        /^pausestop:/ { print "pausestop: 0"; seen = 1; next }
+        { print }
+        END { if (!seen) print "pausestop: 0" }
+    ' "$CDPREFS" > "$tmp" 2>/dev/null \
+        && grep -qx 'pausestop: 0' "$tmp" \
+        && mv "$tmp" "$CDPREFS" \
+        && chown "$OWNER" "$CDPREFS" 2>/dev/null \
+        && { echo "[hifi-cdplayer-tolerate] forced pausestop off in $CDPREFS"; patched_any=1; } \
+        || rm -f "$tmp"
+fi
+
+# ESP-style CD playback: the plugin streams audio CDs in real time with cdda2wav
+# (icedax) at a fixed speed and NO error handling (see its custom-convert.conf).
+# When a USB optical drive stalls mid-track, icedax drops the samples it cannot
+# read in time — audible as a crackle ("prr"), like missing samples — while a
+# re-reading tool (cdparanoia) would instead stop and buffer. osmium-cdread does
+# neither: it reads ahead into a RAM cushion and conceals unrecoverable sectors
+# without ever pausing, like a real CD player. So swap the reader
+# (cdda2wav -> osmium-cdread) in every rule, keeping each pipeline's encoder tail
+# (| flac, | lame, or raw) and the $CDDEVICE$/$CDTRACK$/$CDOFFSET$ tokens LMS
+# fills in. $CDOFFSET$ (which the plugin expands to "-offset <sectors>" on a seek,
+# empty otherwise) must be kept or seeking breaks. We drop only $CDSPEED$ (the
+# reader fixes a cooperative 4x). --raw for the raw (pcm) rule, WAV otherwise.
+# Idempotent via the marker, same constraints as the patch above.
+CDREAD="$(command -v osmium-cdread 2>/dev/null || true)"
+CONVERT_MARKER="# osmium: ESP CD reader"
+if [ -n "$CDREAD" ]; then
+    for conf in "$INSTALLED_DIR"/*/custom-convert.conf; do
+        [ -f "$conf" ] || continue
+        grep -qF "$CONVERT_MARKER" "$conf" && continue     # already converted
+        grep -q '\[cdda2wav\]' "$conf" || continue         # nothing to convert
+        tmp="$conf.osmium.tmp"
+        # For each rule's reader line, emit an osmium-cdread equivalent: --raw for
+        # the raw (pcm) rule, WAV otherwise; preserve any "| ..." encoder tail.
+        awk -v cr="$CDREAD" -v marker="$CONVERT_MARKER" '
+            BEGIN { print marker }
+            /^[[:space:]]*\[cdda2wav\]/ {
+                raw = ($0 ~ /--output-format[[:space:]]+raw/) ? " --raw" : ""
+                tail = ""
+                i = index($0, "|")
+                if (i > 0) tail = " " substr($0, i)
+                printf "\t%s --device $CDDEVICE$ --track $CDTRACK$ $CDOFFSET$%s%s\n", cr, raw, tail
+                next
+            }
+            { print }
+        ' "$conf" > "$tmp" 2>/dev/null \
+            && grep -qF "$CONVERT_MARKER" "$tmp" \
+            && grep -qF "$CDREAD" "$tmp" \
+            && mv "$tmp" "$conf" \
+            && chown "$OWNER" "$conf" 2>/dev/null \
+            && { echo "[hifi-cdplayer-tolerate] converted $conf to osmium-cdread"; patched_any=1; } \
+            || rm -f "$tmp"
+    done
+fi
 
 [ "$patched_any" -eq 1 ] || exit 0
 exit 0

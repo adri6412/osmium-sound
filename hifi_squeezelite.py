@@ -1093,12 +1093,18 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
         out += ['-V', m['mixer']]
     if m['alsa_buffer'] == 'large':
         out += ['-a', ALSA_LARGE]
-    # Player-side conversion streams ordinary PCM into the Loopback, so it needs
-    # neither `-c dsd` nor the larger DSD stream buffer -- the converter daemon
-    # emits the DSD carrier to the DAC. No player of this box advertises DSD
-    # alone any more (only external players, server-side, do, and they do not go
-    # through render_argv).
-    if m['stream_buffer'] == 'large':
+    # Stream buffer. The built-in player plays audio CDs through the LMS CD
+    # Player plugin, whose live transcode (cdda2wav | flac) is a non-seekable
+    # realtime pipe of unknown length: the default stream buffer underruns it
+    # and the audio crackles, like dropped samples, even though the very same
+    # track rips and then plays back clean (a seekable file squeezelite can read
+    # ahead from freely). A large stream buffer absorbs the pipe's burstiness, so
+    # the built-in player always takes it. Zones only get it when configured to,
+    # to keep their per-player memory down. (Player-side conversion streams plain
+    # PCM into the Loopback and needs no `-c dsd`; the converter daemon emits the
+    # DSD carrier to the DAC. Only external players advertise DSD alone,
+    # server-side, and they do not go through render_argv.)
+    if not zone or m['stream_buffer'] == 'large':
         out += ['-b', STREAM_LARGE]
     if m['realtime']:
         out += ['-p', RT_PRIORITY]

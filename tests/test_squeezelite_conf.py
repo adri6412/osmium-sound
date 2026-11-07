@@ -290,15 +290,17 @@ class TestRender(unittest.TestCase):
         return sq.render(m, self.sb.probe)
 
     def test_legacy_line_round_trips(self):
-        # a device imported from the stock line renders the stock line, with
-        # the only intended change: native DSD where the DAC declares it
-        self.assertEqual(sq.render(sq.parse_args(LEGACY), self.sb.probe), LEGACY.replace('-D', '-D :u32be'))
-        self.assertEqual(sq.render(sq.parse_args(LEGACY_MAC), self.sb.probe), LEGACY_MAC.replace('-D', '-D :u32be'))
+        # a device imported from the stock line renders the stock line, with the
+        # intended changes: native DSD where the DAC declares it, and the large
+        # stream buffer the built-in player always takes (live CD transcode).
+        BUF = ' -b ' + sq.STREAM_LARGE
+        self.assertEqual(sq.render(sq.parse_args(LEGACY), self.sb.probe), LEGACY.replace('-D', '-D :u32be') + BUF)
+        self.assertEqual(sq.render(sq.parse_args(LEGACY_MAC), self.sb.probe), LEGACY_MAC.replace('-D', '-D :u32be') + BUF)
         gen = LEGACY.replace('D50s', 'Gen')
-        self.assertEqual(sq.render(sq.parse_args(gen), self.sb.probe), gen)
+        self.assertEqual(sq.render(sq.parse_args(gen), self.sb.probe), gen + BUF)
         # the stock line had `-D` on `default` too: auto no longer sends DoP there
         stock = "-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium"
-        self.assertEqual(sq.render(sq.parse_args(stock), self.sb.probe), stock.replace(' -D', ''))
+        self.assertEqual(sq.render(sq.parse_args(stock), self.sb.probe), stock.replace(' -D', '') + BUF)
 
     def test_dsd_modes(self):
         self.assertIn(' -D :u32be ', self.r(dsd='auto'))
@@ -397,7 +399,7 @@ class TestDsdAuto(unittest.TestCase):
         model, args, changed = sq.apply(self.sb.conf, self.sb.default, self.sb.dsp_target, self.sb.probe,
                                         None, os.path.join(self.sb.dir, 'no-machine-id'))
         self.assertEqual(model['dsd'], 'auto')
-        self.assertEqual(args, '-o hw:CARD=PCH,DEV=3 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium')
+        self.assertEqual(args, '-o hw:CARD=PCH,DEV=3 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -b ' + sq.STREAM_LARGE)
 
 
 class TestOutputFallback(unittest.TestCase):
@@ -607,7 +609,7 @@ class TestFiles(unittest.TestCase):
         out = io.StringIO()
         model, args, changed = self.apply(out)
         self.assertTrue(changed)
-        self.assertEqual(args, LEGACY_MAC.replace('-D', '-D :u32be'))
+        self.assertEqual(args, LEGACY_MAC.replace('-D', '-D :u32be') + ' -b ' + sq.STREAM_LARGE)
         self.assertEqual(self.sb.args(), args)
         self.assertEqual(self.sb.conf_json()['mac'], '02:ab:cd:ef:01:23')
         self.assertIn('GENERATED FILE', self.sb.read_default())
@@ -618,7 +620,7 @@ class TestFiles(unittest.TestCase):
     def test_no_file_no_json_gives_defaults(self):
         model, args, changed = self.apply()
         self.assertTrue(changed)
-        self.assertEqual(args, "-o default -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium")
+        self.assertEqual(args, "-o default -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -b " + sq.STREAM_LARGE)
 
     def test_hand_edit_of_the_file_is_overwritten(self):
         self.sb.write_default(LEGACY)
@@ -722,7 +724,7 @@ class TestApiServer(unittest.TestCase):
     def test_set_audio_device(self):
         r = self.api.set_audio_device('hw:CARD=Gen,DEV=0')
         self.assertTrue(r['success'], r)
-        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen'))
+        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen') + ' -b ' + sq.STREAM_LARGE)
         self.assertEqual(self.sb.conf_json()['output'], 'hw:CARD=Gen,DEV=0')
         self.assertEqual(len(self.restarts()), 1)
         r = self.api.set_audio_device('hw:CARD=D50s,DEV=0')
@@ -748,7 +750,7 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(g['mixers'], ['PCM'])
         # `args` is what the model renders now (what the next start gets); the
         # file itself is rendered by the service's ExecStartPre or by a change
-        self.assertEqual(g['args'], LEGACY.replace('-D', '-D :u32be'))
+        self.assertEqual(g['args'], LEGACY.replace('-D', '-D :u32be') + ' -b ' + sq.STREAM_LARGE)
         r = self.api.set_squeezelite_conf({'dsd': 'dop', 'max_rate': 96000, 'volume': 'hardware'})
         self.assertTrue(r['success'], r)
         self.assertEqual(r['conf']['mixer'], 'PCM')            # picked for the owner
@@ -776,7 +778,7 @@ class TestApiServer(unittest.TestCase):
         self.assertTrue(r['success'])
         self.assertEqual(r['conf']['dsd'], 'auto')
         self.assertEqual(r['conf']['output'], 'hw:CARD=Gen,DEV=0')
-        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen'))
+        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen') + ' -b ' + sq.STREAM_LARGE)
 
     def test_concurrent_requests_keep_every_change(self):
         # three requests on three fields at once, many times over: each one
@@ -808,7 +810,8 @@ class TestApiServer(unittest.TestCase):
             with self.api._dsp_apply_lock:
                 self.api._apply_dsp_on_locked('hw:CARD=D50s,DEV=0', [], False, False, 0.0, {'devices': {}})
             self.assertEqual(self.sb.args(),
-                             "-o hw:CARD=Loopback,DEV=0 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -r 48000 -R")
+                             "-o hw:CARD=Loopback,DEV=0 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -r 48000 -R"
+                             " -b " + sq.STREAM_LARGE)
             self.assertEqual(self.api._current_audio_device(), 'hw:CARD=Loopback,DEV=0')
             self.assertEqual(self.api._current_real_dac(), 'hw:CARD=D50s,DEV=0')
             self.assertEqual(len(self.restarts()), 1)
@@ -817,7 +820,7 @@ class TestApiServer(unittest.TestCase):
                 self.api._apply_dsp_on_locked('hw:CARD=D50s,DEV=0', [], False, False, 0.0, {'devices': {}})
             self.assertEqual(len(self.restarts()), 1)
             self.api._apply_dsp_off()
-        self.assertEqual(self.sb.args(), LEGACY.replace('-D', '-D :u32be') + ' -r 192000')
+        self.assertEqual(self.sb.args(), LEGACY.replace('-D', '-D :u32be') + ' -r 192000 -b ' + sq.STREAM_LARGE)
         self.assertEqual(self.api._current_audio_device(), 'hw:CARD=D50s,DEV=0')
 
 

@@ -1,0 +1,69 @@
+#!/bin/sh
+# HiFi Player appliance — osmium-cdread, the ESP-style audio-CD reader.
+#
+# The Lyrion "CD Player" plugin streams audio CDs in real time by piping a
+# capture tool into flac. cdda2wav drops samples on a USB drive stall (crackle)
+# and cdparanoia stops to re-read (buffering). osmium-cdread reads ahead into a
+# RAM cushion and conceals unrecoverable sectors instead of pausing, like a real
+# CD player. It is wired in place of cdda2wav by hifi-cdplayer-tolerate.sh.
+#
+# Built HERE from the in-tree source under
+# /usr/local/src/osmium-cdread (shipped via includes.chroot): libcdio's -dev
+# packages are not in the runtime image, so the toolchain is installed, the
+# binary linked, its runtime libraries marked manual so they survive, and the
+# build-only packages purged again (same pattern as 0420-broadcom-wl /
+# 0430-sox-ng). The source tree is removed afterwards (the root is read-only).
+set -e
+
+SRC_DIR="/usr/local/src/osmium-cdread"
+[ -f "$SRC_DIR/osmium-cdread.c" ] || { echo "I: [hifi] osmium-cdread source missing, skipping"; exit 0; }
+
+echo "I: [hifi] building osmium-cdread (ESP audio-CD reader)"
+before=$(mktemp)
+dpkg-query -W -f='${Package}\n' | sort > "$before"
+
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    gcc make libc6-dev pkg-config libcdio-dev libcdio-cdda-dev
+
+make -C "$SRC_DIR" clean >/dev/null 2>&1 || true
+make -C "$SRC_DIR"
+
+# Keep the libcdio runtime libraries the binary links against: resolve them from
+# ldd, map each .so back to its owning package, and mark those manual so the
+# purge below leaves them installed. This avoids hardcoding versioned package
+# names (libcdio-cdda2, libcdioN, …) that change between Debian releases.
+keep=""
+for so in $(ldd "$SRC_DIR/osmium-cdread" | awk '/=> \// { print $3 }'); do
+    case "$so" in
+        */libcdio*) ;;          # only the libcdio family comes from the -dev deps
+        *) continue ;;
+    esac
+    pkg=$(dpkg -S "$so" 2>/dev/null | head -1 | cut -d: -f1)
+    [ -n "$pkg" ] && keep="$keep $pkg"
+done
+for pkg in $keep; do
+    apt-mark manual "$pkg" >/dev/null
+done
+
+install -m 0755 -s "$SRC_DIR/osmium-cdread" /usr/local/bin/osmium-cdread
+
+# Purge what this hook pulled in, except the runtime libs kept above.
+after=$(mktemp)
+dpkg-query -W -f='${Package}\n' | sort > "$after"
+added=$(comm -13 "$before" "$after" | tr '\n' ' ')
+purge=""
+for pkg in $added; do
+    skip=0
+    for k in $keep; do [ "$pkg" = "$k" ] && skip=1; done
+    [ "$skip" = 0 ] && purge="$purge $pkg"
+done
+if [ -n "$purge" ]; then
+    echo "I: [hifi] purging build-only packages:$purge"
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y $purge
+    DEBIAN_FRONTEND=noninteractive apt-get autoremove --purge -y
+fi
+rm -f "$before" "$after"
+
+rm -rf "$SRC_DIR"
+ldd /usr/local/bin/osmium-cdread
+echo "I: [hifi] osmium-cdread hook done"
