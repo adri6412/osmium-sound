@@ -42,17 +42,47 @@ Item {
     // scarica da Cover Art Archive (/api/cd/cover). Quando si entra nella vista
     // CDplayer chiediamo l'info e teniamo l'URL, che LibraryList usa per l'album.
     readonly property bool inCdPlayer: view === LibraryModel.PluginItems && String(cur.p1) === "cdplayer"
+    // The whole CD section: the CDplayer menu list and the CD album page reached
+    // from it (both carry cur.p1 === "cdplayer"). While we are in it we keep an
+    // eye on the drive, so a disc swapped or taken out by hand updates the view.
+    readonly property bool inCdSection: String(cur.p1) === "cdplayer"
+                                        && (view === LibraryModel.PluginItems || view === LibraryModel.AlbumPage)
     property string cdCoverUrl: ""
-    onInCdPlayerChanged: {
-        if (!inCdPlayer) { cdCoverUrl = ""; return }
+    // the disc id the CD view is drawn for, so a swap/removal can be told apart
+    // from the same disc still sitting in the drive (CdRip owns the polling).
+    property string cdDiscId: ""
+    onInCdSectionChanged: refreshCdInfo()
+    // One /api/cd/info on entry: the cover (the CDplayer plugin ships none) and
+    // the current disc id as our baseline. CdRip already polls the drive every
+    // few seconds when one is present, so we do NOT start a second poll here
+    // (every /api/cd/info spins cd-discid — see CdRip.qml).
+    function refreshCdInfo() {
+        if (!inCdSection) { cdCoverUrl = ""; cdDiscId = ""; return }
         Api.get(Api.srcBase + "/api/cd/info", function(ok, d) {
-            if (!root.inCdPlayer) return
-            if (ok && d && typeof d === "object" && !d.no_disc) {
-                if (d.cover) root.cdCoverUrl = Api.srcBase + String(d.cover)
-                else if (d.mbid) root.cdCoverUrl = Api.srcBase + "/api/cd/cover?release=" + encodeURIComponent(String(d.mbid))
-                else root.cdCoverUrl = ""
-            } else root.cdCoverUrl = ""
+            if (!root.inCdSection) return
+            var has = ok && d && typeof d === "object" && !d.no_disc
+            root.cdDiscId = has ? String(d.discid || "") : ""
+            if (has && d.cover) root.cdCoverUrl = Api.srcBase + String(d.cover)
+            else if (has && d.mbid) root.cdCoverUrl = Api.srcBase + "/api/cd/cover?release=" + encodeURIComponent(String(d.mbid))
+            else root.cdCoverUrl = ""
         })
+    }
+    // React to the disc being swapped or removed while we sit in the CD section.
+    // CdRip (Ui.cdrip) keeps `discid` fresh from its own drive poll: a disc gone
+    // sends us to the Music root (never a dead CD page), a new disc reloads the
+    // CD view so it shows the one now in the drive instead of the old/empty one.
+    Connections {
+        target: Ui.cdrip
+        function onDiscidChanged() {
+            if (!root.inCdSection || !Ui.cdrip) return
+            var id = String(Ui.cdrip.discid)
+            if (id === root.cdDiscId) return
+            root.cdDiscId = id
+            if (id === "") { root.navSources(); return }
+            root.refreshCdInfo()
+            if (root.view === LibraryModel.AlbumPage) root.navBack()   // menu reloads and shows the new disc
+            else root.loadTop()
+        }
     }
 
     // ─── "Aggiornamento disponibile" sul tab delle impostazioni ────────────
@@ -577,7 +607,8 @@ Item {
                 var ic = isFav ? "heart" : /artist/i.test(label) ? "user" : terminal ? "list-plus" : "chevron-right"
                 items.push((function(c, i2, lab, term, fav) { return { icon: ic, label: lab, cb: function() {
                     if (term) Player.query([c, "items", "0", "10", "item_id:" + i2, "menu:" + c], function(ok2) {
-                        say(fav ? "heart" : "check", ok2 ? (fav ? "player.addedToFavorites" : "player.actionDone") : "player.favoriteError")
+                        // plugin native ctx (Qobuz/Tidal…) → the service's own My Favourites
+                        say(fav ? "heart" : "check", ok2 ? (fav ? "player.addedToStreamingServiceFavorites" : "player.actionDone") : "player.favoriteError")
                         if (ok2 && fav && cur.view === LibraryModel.PluginItems && cur.p1 === "favorites") loadTop()
                     })
                     else root.goView(LibraryModel.PluginItems, lab, c, i2)

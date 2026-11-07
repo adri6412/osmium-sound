@@ -478,6 +478,7 @@
     "ctxError": "Couldn't load the actions",
     "removeFromFavorites": "Remove from favourites",
     "addedToFavorites": "Added to favourites",
+    "addedToStreamingServiceFavorites": "Added to streaming service favourites",
     "removedFromFavorites": "Removed from favourites",
     "alreadyFavorite": "Already in favourites",
     "favoriteError": "Couldn't add to favourites",

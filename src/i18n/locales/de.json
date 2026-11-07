@@ -478,6 +478,7 @@
     "ctxError": "Aktionen konnten nicht geladen werden",
     "removeFromFavorites": "Aus Favoriten entfernen",
     "addedToFavorites": "Zu Favoriten hinzugefügt",
+    "addedToStreamingServiceFavorites": "Zu den Favoriten des Streamingdiensts hinzugefügt",
     "removedFromFavorites": "Aus Favoriten entfernt",
     "alreadyFavorite": "Bereits in Favoriten enthalten",
     "favoriteError": "Konnte nicht zu Favoriten hinzugefügt werden",

@@ -322,14 +322,16 @@ Item {
         if (browser) browser.loadShuffled("album_id", albumId)
     }
     // ── eject (CD only) ───────────────────────────────────────────────────
-    // Stop playback, tell the backend to open the drive, then leave the now
-    // empty CD page. Mirrors CdRip.eject()'s backend call (/api/cd/eject).
+    // Stop playback, tell the backend to open the drive, then leave for the
+    // Music root (not just Back, which would land on the now-stale CD menu):
+    // the next disc put in is shown fresh when the CD tile is opened again,
+    // never an empty CD page. Mirrors CdRip.eject()'s backend call.
     function eject() {
         Player.cmd(["stop"])
         Api.post(Api.srcBase + "/api/cd/eject", {}, function(ok) {
             if (!ok && browser) browser.say("alert-triangle", "player.cdEjectFailed")
         })
-        if (browser) { browser.say("eject", "player.cdEjected"); browser.navBack() }
+        if (browser) { browser.say("eject", "player.cdEjected"); browser.navSources() }
     }
     // ── favourite heart (add / remove, with its real state) ───────────────
     // re-read the plugin drill's "Add/Remove Release …" row and refresh the
@@ -375,7 +377,8 @@ Item {
                 if (!ok) { if (root.browser) root.browser.say("alert-triangle", "player.favoriteError"); return }
                 root.isFav = !wasFav
                 if (!wasFav) favBtn.burst()
-                if (root.browser) root.browser.say("heart", wasFav ? "player.removedFromFavorites" : "player.addedToFavorites")
+                // plugin favourite → the service's own My Favourites, not a generic folder
+                if (root.browser) root.browser.say("heart", wasFav ? "player.removedFromFavorites" : "player.addedToStreamingServiceFavorites")
                 // re-read the row: its label (and item_id) flips add<->remove
                 root.refreshPluginFav()
             })

@@ -478,6 +478,7 @@
     "ctxError": "Non sono riuscito a caricare le azioni",
     "removeFromFavorites": "Togli dai preferiti",
     "addedToFavorites": "Aggiunto ai preferiti",
+    "addedToStreamingServiceFavorites": "Aggiunto ai preferiti del servizio streaming",
     "removedFromFavorites": "Tolto dai preferiti",
     "alreadyFavorite": "È già nei preferiti",
     "favoriteError": "Non sono riuscito ad aggiungerlo ai preferiti",
