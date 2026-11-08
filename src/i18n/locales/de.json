@@ -280,7 +280,7 @@
     }
   },
   "sidebar": {
-    "library": "Lokale Bibliothek",
+    "library": "Alben",
     "settings": "Einstellungen",
     "hideKeyboard": "Tastatur ausblenden",
     "systemKeyboard": "Systemtastatur"
@@ -353,7 +353,7 @@
     "titles": {
       "home": "Home",
       "sources": "Musik",
-      "localLibrary": "Lokale Bibliothek",
+      "localLibrary": "Alben",
       "artists": "Künstler",
       "albums": "Alben",
       "folders": "Ordner",
