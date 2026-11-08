@@ -611,6 +611,14 @@
       "network": "Netzwerk & Zugriff",
       "system": "System & Updates"
     },
+    "groupHints": {
+      "music": "Bibliothek, Quellen und Wiedergabe",
+      "sound": "DAC, Zonen und Audioausgänge",
+      "look": "Anzeige, VU-Meter und Animationen",
+      "control": "Fernbedienungen und Companion-Apps",
+      "network": "WLAN, Netzwerk und SSH-Zugang",
+      "system": "Infos, Updates und Wartung"
+    },
     "sections": {
       "sources": "Musikquellen",
       "cdRip": "CD-Ripping",

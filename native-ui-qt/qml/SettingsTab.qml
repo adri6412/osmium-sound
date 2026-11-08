@@ -214,9 +214,12 @@ Item {
             }
         return out
     }
-    // a one-line hint of what a group holds, built from its section names, so
-    // it reads right in every language without any extra strings
+    // a one-line hint of what a group holds. A short hand-written phrase
+    // (settings.groupHints.<id>) keeps it from overrunning the two lines the
+    // tile allows; without one we fall back to the section names joined up.
     function groupPreview(gid) {
+        var hint = Tr.t("settings.groupHints." + gid)
+        if (hint !== "settings.groupHints." + gid) return hint
         for (var i = 0; i < groups.length; i++) if (groups[i].id === gid) {
             var out = []
             for (var k = 0; k < groups[i].secs.length; k++) {
