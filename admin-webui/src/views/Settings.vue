@@ -296,6 +296,32 @@ async function sqCall(path, body, okMsg) {
 }
 const setSq = (patch) => sqCall('squeezelite_conf', patch, t('settings.audio.sqSaved'));
 const resetSq = () => sqCall('squeezelite_conf/reset', {}, t('settings.audio.sqReset'));
+// Buffer sliders run 0..max; 0 = Auto (no flag). Snap a value that lands between
+// 0 and the field minimum up to the minimum, so what we POST is always Auto or a
+// buffer the backend accepts.
+const sqSnap = (v, field) => {
+  v = parseInt(v) || 0;
+  if (v <= 0) return 0;
+  const r = ((sq.value && sq.value.ranges) || {})[field] || { min: 0, max: 1e9 };
+  return Math.min(r.max, Math.max(r.min, v));
+};
+const setSqBuf = (field, v) => setSq({ [field]: sqSnap(v, field) });
+// Touch-friendly +/- stepper. hasAuto fields (the buffers) step between the
+// field minimum and 0 = Auto; the rest clamp inside [min, max].
+const stepSq = (field, dir, hasAuto) => {
+  const r = ((sq.value && sq.value.ranges) || {})[field] || { min: 0, max: 1e9, step: 1 };
+  const step = r.step || 1;
+  const cur = parseInt(((sq.value && sq.value.conf) || {})[field]) || 0;
+  let nv;
+  if (dir < 0) {
+    if (hasAuto && cur <= r.min) nv = 0;
+    else nv = Math.max(r.min, cur - step);
+  } else {
+    if (hasAuto && cur <= 0) nv = r.min;
+    else nv = Math.min(r.max, cur + step);
+  }
+  setSq({ [field]: nv });
+};
 
 // Toggle an ALSA playback switch of the output card (e.g. the onboard S/PDIF
 // IEC958 transmitter, muted by default). The backend returns the fresh switch
@@ -2151,18 +2177,28 @@ onUnmounted(() => {
                    :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
         </div>
 
-        <label>{{ t('settings.audio.alsaBufferLabel') }}</label>
-        <span class="seg">
-          <button :disabled="sqBusy" :class="{ active: sq.conf.alsa_buffer === 'auto' }" @click="setSq({ alsa_buffer: 'auto' })">{{ t('settings.audio.auto') }}</button>
-          <button :disabled="sqBusy" :class="{ active: sq.conf.alsa_buffer === 'large' }" @click="setSq({ alsa_buffer: 'large' })">{{ t('settings.audio.large') }}</button>
-        </span>
+        <label>{{ t('settings.audio.alsaBufferLabel') }}:</label>
+        <div class="stepper">
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('alsa_buffer', -1, true)">−</button>
+          <span class="stepval silver">{{ sq.conf.alsa_buffer ? sq.conf.alsa_buffer + ' ms' : t('settings.audio.auto') }}</span>
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('alsa_buffer', 1, true)">+</button>
+        </div>
         <p class="muted">{{ t('settings.audio.alsaBufferHelp') }}</p>
 
-        <label>{{ t('settings.audio.streamBufferLabel') }}</label>
-        <span class="seg">
-          <button :disabled="sqBusy" :class="{ active: sq.conf.stream_buffer === 'auto' }" @click="setSq({ stream_buffer: 'auto' })">{{ t('settings.audio.auto') }}</button>
-          <button :disabled="sqBusy" :class="{ active: sq.conf.stream_buffer === 'large' }" @click="setSq({ stream_buffer: 'large' })">{{ t('settings.audio.large') }}</button>
-        </span>
+        <label>{{ t('settings.audio.alsaPeriodsLabel') }}:</label>
+        <div class="stepper">
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('alsa_periods', -1, false)">−</button>
+          <span class="stepval silver">{{ sq.conf.alsa_periods || 3 }}</span>
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('alsa_periods', 1, false)">+</button>
+        </div>
+        <p class="muted">{{ t('settings.audio.alsaPeriodsHelp') }}</p>
+
+        <label>{{ t('settings.audio.streamBufferLabel') }}:</label>
+        <div class="stepper">
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('stream_buffer', -1, true)">−</button>
+          <span class="stepval silver">{{ sq.conf.stream_buffer ? sq.conf.stream_buffer + ' kB' : t('settings.audio.auto') }}</span>
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('stream_buffer', 1, true)">+</button>
+        </div>
         <p class="muted">{{ t('settings.audio.streamBufferHelp') }}</p>
 
         <label>{{ t('settings.audio.realtimeLabel') }}</label>
@@ -3328,6 +3364,26 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Touch-friendly +/- stepper (Settings → Audio): big minus/plus buttons with
+   the current value between them, replacing the old range sliders. */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 2px;
+}
+.stepper button {
+  width: 52px;
+  font-size: 20px;
+  line-height: 1;
+  padding: 10px 0;
+}
+.stepval {
+  min-width: 96px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 /* One playback switch row (Settings → Audio → Advanced): control name on the
    left, the On/Off segmented toggle on the right. */
 .mixer-switch {

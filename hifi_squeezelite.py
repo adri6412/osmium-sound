@@ -36,8 +36,12 @@ Fields (the UI exposes the starred ones, the rest are set elsewhere):
   max_rate *     `-r <max>`, 0 = let the DAC say
   volume *       software | hardware (`-V <mixer>`, the DAC's own control)
   mixer *        the ALSA control `-V` drives (first playback volume if empty)
-  alsa_buffer *  auto | large (`-a 100:8`); the built-in player always takes it
-  stream_buffer* auto | large (`-b 16384:8192`)
+  alsa_buffer *  ALSA output buffer in ms, 50–500 (`-a <ms>:<periods>`), 0 = Auto
+                 (no `-a`); built-in player defaults to 100 ms (Daphile baseline)
+  alsa_periods*  ALSA period count, 1–8 (the `:<periods>` half of `-a`); built-in
+                 player defaults to 3 (Daphile baseline)
+  stream_buffer* stream buffer in kB, 1024–8192 (`-b <kB>:<out>`, out ≈ kB*4/3),
+                 0 = Auto (no `-b`); built-in player defaults to 3072 kB
   realtime *     `-p 45` for the output thread
   extra *        anything else, one line, validated: no quotes, no `$`, and
                  none of the options handled above
@@ -160,8 +164,9 @@ DEFAULTS = {
     'max_rate': 0,
     'volume': 'software',
     'mixer': '',
-    'alsa_buffer': 'auto',
-    'stream_buffer': 'auto',
+    'alsa_buffer': 100,
+    'alsa_periods': 3,
+    'stream_buffer': 3072,
     'realtime': False,
     'extra': '',
     'pcm2dsd': 'off',
@@ -172,19 +177,28 @@ DEFAULTS = {
 }
 # What Settings → Audio may change and "Back to defaults" resets.
 TUNABLE = ('dsd', 'dsd_delay_ms', 'max_rate', 'volume', 'mixer',
-           'alsa_buffer', 'stream_buffer', 'realtime', 'extra',
+           'alsa_buffer', 'alsa_periods', 'stream_buffer', 'realtime', 'extra',
            'pcm2dsd', 'pcm2dsd_filter', 'upsample', 'upsample_cap')
 
 DSD_MODES = ('auto', 'dop', 'native', 'off')
 RATES = (0, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000,
          1411200, 1536000)
 DSD_DELAYS = (0, 100, 250, 500)
-ALSA_LARGE = '100:8'
-# Large ALSA presets recognized on import: the current value and older ones that
-# shipped before (e.g. 200:8), so a config written by an earlier build still maps
-# to 'large' instead of being dropped as a custom value.
-ALSA_LARGE_VALUES = (ALSA_LARGE, '200:8')
-STREAM_LARGE = '16384:8192'
+# ALSA output buffer (`-a <ms>:<periods>`) and stream buffer (`-b <kB>:<out>`) are
+# numeric: a buffer length the user sets with a slider, 0 = Auto (flag not emitted).
+# The built-in player defaults to Daphile's values (100 ms / 3 periods ALSA,
+# 3072 kB stream); the ALSA period count is user-set (1–8, default 3) and the
+# output stream buffer is derived from the stream size (3072 → 4096, as Daphile
+# ships). See render_argv.
+ALSA_PERIODS = 3          # default period count
+ALSA_MIN = 50
+ALSA_MAX = 500
+PERIODS_MIN = 1
+PERIODS_MAX = 8
+STREAM_MIN = 1024
+STREAM_MAX = 8192
+STREAM_OUT_NUM = 4
+STREAM_OUT_DEN = 3
 RT_PRIORITY = '45'
 # Options the model renders itself: refused in `extra` so they cannot appear twice.
 MANAGED_FLAGS = ('-o', '-n', '-s', '-m', '-M', '-D', '-r', '-V', '-a', '-b', '-p', '-v', '-C', '-c')
@@ -627,6 +641,57 @@ def check_extra(extra):
     return ' '.join(clean), bad, managed
 
 
+def buffer_range(field):
+    """(lo, hi) slider bounds for a numeric buffer field."""
+    if field == 'alsa_buffer':
+        return ALSA_MIN, ALSA_MAX
+    return STREAM_MIN, STREAM_MAX
+
+
+def norm_buffer(val, field):
+    """Coerce a buffer field to an int: 0 = Auto (no flag), else clamped to its
+    range. Migrates the old enum ('auto' → the default, 'large' → the maximum)
+    and tolerates a legacy 'ms:periods' / 'kB:out' string by taking the first
+    number. Junk falls back to the field default."""
+    lo, hi = buffer_range(field)
+    default = DEFAULTS[field]
+    if isinstance(val, bool):
+        return default
+    if isinstance(val, str):
+        s = val.strip().lower()
+        if s == 'large':
+            return hi
+        if s == 'auto' or s == '':
+            return default
+        s = s.split(':', 1)[0].strip()
+        val = s
+    try:
+        n = int(val)
+    except (TypeError, ValueError):
+        return default
+    if n <= 0:
+        return 0
+    return max(lo, min(hi, n))
+
+
+def norm_periods(val):
+    """Coerce the ALSA period count to an int clamped to 1–8. Tolerates a legacy
+    'ms:periods' string by taking the second number. Junk falls back to the
+    default (3)."""
+    default = DEFAULTS['alsa_periods']
+    if isinstance(val, bool):
+        return default
+    if isinstance(val, str):
+        parts = val.strip().split(':')
+        s = parts[1] if len(parts) > 1 else parts[0]
+        val = s.strip()
+    try:
+        n = int(val)
+    except (TypeError, ValueError):
+        return default
+    return max(PERIODS_MIN, min(PERIODS_MAX, n))
+
+
 def normalize(model):
     """A complete, clean model from whatever was read: every field present,
     every value one the renderer accepts. Lenient on purpose — this is what
@@ -659,8 +724,9 @@ def normalize(model):
     m['volume'] = 'hardware' if str(src.get('volume') or '') == 'hardware' else 'software'
     mixer = str(src.get('mixer') or '').strip()
     m['mixer'] = mixer if _MIXER_RE.match(mixer) else ''
-    m['alsa_buffer'] = 'large' if str(src.get('alsa_buffer') or '') == 'large' else 'auto'
-    m['stream_buffer'] = 'large' if str(src.get('stream_buffer') or '') == 'large' else 'auto'
+    m['alsa_buffer'] = norm_buffer(src.get('alsa_buffer'), 'alsa_buffer')
+    m['alsa_periods'] = norm_periods(src.get('alsa_periods'))
+    m['stream_buffer'] = norm_buffer(src.get('stream_buffer'), 'stream_buffer')
     m['realtime'] = bool(src.get('realtime'))
     m['extra'] = check_extra(src.get('extra'))[0]
     p2d = str(src.get('pcm2dsd') or '').strip().lower()
@@ -723,7 +789,13 @@ def set_fields(model, changes):
             if value and not _MIXER_RE.match(value):
                 raise InvalidField('squeezelite.invalidValue', key, value)
         elif key in ('alsa_buffer', 'stream_buffer'):
-            if value not in ('auto', 'large'):
+            lo, hi = buffer_range(key)
+            if not isinstance(value, int) or isinstance(value, bool) \
+                    or not (value == 0 or lo <= value <= hi):
+                raise InvalidField('squeezelite.invalidValue', key, str(value))
+        elif key == 'alsa_periods':
+            if not isinstance(value, int) or isinstance(value, bool) \
+                    or not (PERIODS_MIN <= value <= PERIODS_MAX):
                 raise InvalidField('squeezelite.invalidValue', key, str(value))
         elif key == 'realtime':
             if not isinstance(value, bool):
@@ -852,10 +924,12 @@ def parse_args(args, dsp_target=None):
     if '-V' in got:
         m['volume'] = 'hardware'
         m['mixer'] = got['-V']
-    if got.get('-a') in ALSA_LARGE_VALUES:
-        m['alsa_buffer'] = 'large'
-    if got.get('-b') == STREAM_LARGE:
-        m['stream_buffer'] = 'large'
+    if '-a' in got:
+        m['alsa_buffer'] = norm_buffer(got['-a'], 'alsa_buffer')
+        if ':' in got['-a']:
+            m['alsa_periods'] = norm_periods(got['-a'])
+    if '-b' in got:
+        m['stream_buffer'] = norm_buffer(got['-b'], 'stream_buffer')
     if '-p' in got:
         m['realtime'] = True
     # -R / -u: the DSP path's own resampling is implied by dsp.enabled; a
@@ -1095,30 +1169,33 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
     # is gone and `-V` on a missing control would only warn.
     if not pcm_only and m['volume'] == 'hardware' and m['mixer'] and not fell_back:
         out += ['-V', m['mixer']]
-    # ALSA output buffer. The built-in player drives a USB DAC, whose isochronous
-    # audio slots jitter on this box (a shared USB2 controller, a weak CPU): the
-    # default ~40 ms ALSA buffer underruns at the USB endpoint and the audio
-    # crackles like dropped samples -- on local, streaming and CD alike, since
-    # they share the one process -- while squeezelite itself logs no xrun (the gap
-    # is downstream of its write). A larger ALSA buffer absorbs the jitter, so the
-    # built-in player always takes it. Unlike the stream buffer `-b`, this `-a`
-    # ring lives in the kernel, not squeezelite's heap, so it costs no process RAM.
-    # Zones only get it when configured, to stay out of the common case.
-    if not zone or m['alsa_buffer'] == 'large':
-        out += ['-a', ALSA_LARGE]
-    # Stream buffer, opt-in (stream_buffer == 'large'). Forcing the large buffer
-    # on every built-in-player stream fixed the audio-CD crackle but brought the
-    # same dropped-samples crackle back on local and streaming playback (16+8 MB
-    # per squeezelite is heavy on this RAM-tight box, and they share the one
-    # built-in process, so `-b` cannot be scoped per source). The CD's live,
-    # non-seekable transcode pipe is now fed by osmium-cdread (RAM read-ahead +
-    # concealment) instead, so it no longer needs the oversized squeezelite
-    # buffer. (Player-side conversion streams plain PCM into the Loopback and
-    # needs no `-c dsd`; the converter daemon emits the DSD carrier to the DAC.
-    # Only external players advertise DSD alone, server-side, and they do not go
-    # through render_argv.)
-    if m['stream_buffer'] == 'large':
-        out += ['-b', STREAM_LARGE]
+    # ALSA output buffer (`-a <ms>:<periods>`). The built-in player drives a USB
+    # DAC, whose isochronous audio slots jitter on this box (a shared USB2
+    # controller, a weak CPU): too small an ALSA buffer underruns at the USB
+    # endpoint and the audio crackles like dropped samples -- on local, streaming
+    # and CD alike, since they share the one process -- while squeezelite itself
+    # logs no xrun (the gap is downstream of its write). A larger ALSA buffer
+    # absorbs the jitter, so the built-in player defaults to 100 ms (Daphile's
+    # baseline, tuned on .105). Unlike the stream buffer `-b`, this `-a` ring lives
+    # in the kernel, not squeezelite's heap, so it costs no process RAM. The value
+    # is user-set with a slider; 0 = Auto drops the flag. Zones default to 0, to
+    # stay out of the common case.
+    if m['alsa_buffer']:
+        out += ['-a', '%d:%d' % (m['alsa_buffer'], m['alsa_periods'])]
+    # Stream buffer (`-b <kB>:<out>`), user-set with a slider; 0 = Auto drops the
+    # flag. squeezelite's heap holds this buffer, so a large value is heavy on this
+    # RAM-tight box and it is shared by every built-in-player stream (local,
+    # streaming, CD -- `-b` cannot be scoped per source). The default (3072 kB,
+    # Daphile's baseline) stays modest; the output half is derived (~4096 kB). The
+    # CD's live, non-seekable transcode pipe is fed by osmium-cdread (RAM
+    # read-ahead + concealment), so it needs no oversized buffer of its own.
+    # (Player-side conversion streams plain PCM into the Loopback and needs no
+    # `-c dsd`; the converter daemon emits the DSD carrier to the DAC. Only
+    # external players advertise DSD alone, server-side, and they do not go through
+    # render_argv.)
+    if m['stream_buffer']:
+        out_kb = round(m['stream_buffer'] * STREAM_OUT_NUM / STREAM_OUT_DEN)
+        out += ['-b', '%d:%d' % (m['stream_buffer'], out_kb)]
     if m['realtime']:
         out += ['-p', RT_PRIORITY]
     if m['extra']:
@@ -1403,6 +1480,11 @@ def normalize_zone(src):
     z['name'] = clean_zone_name(src.get('name')) or zid
     z['enabled'] = bool(src.get('enabled', True))
     z['dsp'] = {'enabled': False}
+    # Zones stay out of the common case: they take an ALSA/stream buffer only when
+    # one was set for them explicitly, not the built-in player's defaults.
+    for field in ('alsa_buffer', 'stream_buffer'):
+        if field not in src:
+            z[field] = 0
     return z
 
 

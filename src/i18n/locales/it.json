@@ -280,7 +280,7 @@
     }
   },
   "sidebar": {
-    "library": "Libreria Locale",
+    "library": "Album",
     "settings": "Impostazioni",
     "hideKeyboard": "Nascondi Tastiera",
     "systemKeyboard": "Tastiera di Sistema"
@@ -353,7 +353,7 @@
     "titles": {
       "home": "Home",
       "sources": "Musica",
-      "localLibrary": "Libreria locale",
+      "localLibrary": "Album",
       "artists": "Artisti dell'album",
       "albums": "Album",
       "folders": "Cartelle",
@@ -610,6 +610,14 @@
       "control": "Controllo e telecomandi",
       "network": "Rete e accesso",
       "system": "Sistema e aggiornamenti"
+    },
+    "groupHints": {
+      "music": "Libreria, sorgenti e riproduzione",
+      "sound": "DAC, zone e uscite audio",
+      "look": "Schermo, VU meter e animazioni",
+      "control": "Telecomandi e app companion",
+      "network": "Wi-Fi, rete e accesso SSH",
+      "system": "Info, aggiornamenti e manutenzione"
     },
     "sections": {
       "sources": "Sorgenti musicali",
@@ -1367,15 +1375,19 @@
       "dsdDelayLabel": "Pausa al passaggio tra PCM e DSD",
       "maxRateLabel": "Frequenza massima",
       "maxRateHelp": "Quello che sta sopra viene ricampionato da Lyrion prima di arrivare al player. Automatico lascia decidere il DAC.",
+      "maxRateWarn": "Non impostare un valore superiore al sample rate massimo del tuo DAC.",
       "volumeHardware": "Volume dal mixer del DAC",
       "volumeHelp": "Il volume in Lyrion muove il controllo del DAC e i bit restano intatti. Off: volume software, bit-perfect al 100%.",
       "volumeNoMixer": "Questa uscita non ha un controllo di volume hardware.",
       "switchesLabel": "Uscita digitale",
       "switchesHelp": "Un'uscita digitale (S/PDIF/coassiale/ottica) può avviarsi disattivata. Attivala qui se il suo amplificatore resta muto.",
-      "alsaBufferLarge": "Buffer ALSA grande",
-      "alsaBufferHelp": "Per i DAC che si interrompono o gracchiano.",
-      "streamBufferLarge": "Buffer di flusso grande",
-      "streamBufferHelp": "Più musica tenuta in memoria prima della riproduzione, per una rete o un disco lenti.",
+      "alsaBufferLabel": "Buffer ALSA",
+      "alsaBufferHelp": "Dimensione del buffer di uscita in ms. Più alto elimina il gracchiare di un DAC USB; Auto lascia scegliere squeezelite.",
+      "alsaPeriodsLabel": "Periodi ALSA",
+      "alsaPeriodsHelp": "In quanti blocchi è suddiviso il buffer di uscita ALSA (1–8). Meno blocchi possono ridurre il gracchiare; il valore predefinito è 3.",
+      "streamBufferLabel": "Buffer di flusso",
+      "streamBufferHelp": "Quanta musica tenere in memoria prima della riproduzione, in kB. Auto lascia scegliere squeezelite.",
+      "bufferAuto": "Auto",
       "realtimeLabel": "Priorità in tempo reale",
       "realtimeHelp": "Il thread di uscita passa davanti a tutto il resto sull'apparecchio.",
       "extraLabel": "Argomenti aggiuntivi",

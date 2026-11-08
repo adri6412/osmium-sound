@@ -2,8 +2,21 @@
 # IMPORTANT: one package per line, NO inline comments. live-build passes
 # whole lines to apt, so a trailing "# ... a/b/c" becomes a bogus argument.
 
-# Kernel
-linux-image-amd64
+# Kernel — PINNED to 6.12.113, held back from 6.12.115 on purpose.
+# 6.12.115+deb13.1 (trixie-security) regressed USB isochronous output on the
+# Gemini Lake N4020 + Topping D50s: periodic audible crackle, invisible to
+# squeezelite (no xrun logged), proven live on the .105 by cross-testing the
+# dev.2 userspace against both kernels. We stay on the exact 6.12.113 ABI
+# (withdrawn from the live mirror, pulled from snapshot.debian.org) until the
+# kernel is bumped BY HAND — do not let apt/live-build move it automatically.
+#
+# To bump the kernel manually, change the version in ALL of these:
+#   1. this file (linux-image-<ver>-amd64, below)
+#   2. distro/config/archives/snapshot-kernel.list.chroot  (snapshot date/mirror)
+#   3. distro/config/archives/snapshot-kernel.pref.chroot  (pinned package names)
+#   4. distro/build-distro.sh                              (lb config --linux-packages)
+#   5. distro/config/hooks/normal/0400-pin-kernel.hook.chroot (purge pattern + check)
+linux-image-6.12.113+deb13-amd64
 
 # UEFI Secure Boot — the signed boot chain (all in Debian 'main', amd64):
 #   shim-signed (Microsoft-signed) → grub-efi-amd64-signed (Debian-signed) →

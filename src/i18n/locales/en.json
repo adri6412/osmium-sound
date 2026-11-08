@@ -280,7 +280,7 @@
     }
   },
   "sidebar": {
-    "library": "Local Library",
+    "library": "Album view",
     "settings": "Settings",
     "hideKeyboard": "Hide Keyboard",
     "systemKeyboard": "System Keyboard"
@@ -353,7 +353,7 @@
     "titles": {
       "home": "Home",
       "sources": "Music",
-      "localLibrary": "Local Library",
+      "localLibrary": "Album view",
       "artists": "Album Artists",
       "albums": "Albums",
       "folders": "Folders",
@@ -610,6 +610,14 @@
       "control": "Control & remotes",
       "network": "Network & access",
       "system": "System & updates"
+    },
+    "groupHints": {
+      "music": "Library, sources and playback",
+      "sound": "DAC, zones and audio outputs",
+      "look": "Display, VU meters and animations",
+      "control": "Remotes and companion apps",
+      "network": "Wi-Fi, network and SSH access",
+      "system": "Info, updates and maintenance"
     },
     "sections": {
       "sources": "Music sources",
@@ -1367,15 +1375,19 @@
       "dsdDelayLabel": "Pause when switching between PCM and DSD",
       "maxRateLabel": "Highest sample rate",
       "maxRateHelp": "Anything above it is resampled by Lyrion before it reaches the player. Automatic lets the DAC say.",
+      "maxRateWarn": "Don't set this above your DAC's maximum sample rate.",
       "volumeHardware": "Volume from the DAC mixer",
       "volumeHelp": "The volume in Lyrion moves the DAC's own control and the bits stay untouched. Off: software volume, bit-perfect at 100%.",
       "volumeNoMixer": "This output has no hardware volume control.",
       "switchesLabel": "Digital output",
       "switchesHelp": "A digital (S/PDIF/coax/optical) output can boot muted. Turn it on here if its amplifier stays silent.",
-      "alsaBufferLarge": "Large ALSA buffer",
-      "alsaBufferHelp": "For DACs that drop out or crackle.",
-      "streamBufferLarge": "Large stream buffer",
-      "streamBufferHelp": "More music kept in memory ahead of playback, for a slow network or disk.",
+      "alsaBufferLabel": "ALSA buffer",
+      "alsaBufferHelp": "Output buffer size in ms. Higher stops a USB DAC crackling; Auto lets squeezelite choose.",
+      "alsaPeriodsLabel": "ALSA periods",
+      "alsaPeriodsHelp": "How many chunks the ALSA output buffer is split into (1–8). Fewer can reduce crackling; the default is 3.",
+      "streamBufferLabel": "Stream buffer",
+      "streamBufferHelp": "How much music to keep in memory ahead of playback, in kB. Auto lets squeezelite choose.",
+      "bufferAuto": "Auto",
       "realtimeLabel": "Real-time priority",
       "realtimeHelp": "The output thread runs ahead of everything else on the device.",
       "extraLabel": "Extra arguments",

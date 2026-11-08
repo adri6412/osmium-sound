@@ -77,6 +77,7 @@ Column {
                     case "code": return cCode
                     case "confirm": return cConfirm
                     case "slider": return cSlider
+                    case "stepper": return cStepper
                     case "alarm": return cAlarm
                     case "band": return cBand
                     case "src": return cSrc
@@ -321,7 +322,11 @@ Column {
             Row {
                 anchors.centerIn: parent; spacing: 8
                 Icon { visible: !!ac.row.icon; name: ac.row.icon || ""; size: (ac.row.hh || 0) >= 56 ? 20 : 18; color: ac.fg; anchors.verticalCenter: parent.verticalCenter }
-                Text { visible: !!ac.row.label; text: ac.row.label || ""; color: ac.fg; font.family: Theme.font; font.pixelSize: ac.px; font.bold: !!ac.row.bold; anchors.verticalCenter: parent.verticalCenter }
+                Text { visible: !!ac.row.label; text: ac.row.label || ""; color: ac.fg; font.family: Theme.font; font.pixelSize: ac.px; font.bold: !!ac.row.bold; anchors.verticalCenter: parent.verticalCenter
+                    // Clamp long labels so the row stays inside the button and the icon
+                    // keeps its slot (issue #133: IT/DE "Advanced Audio Tweaks" overflowed).
+                    elide: Text.ElideRight
+                    width: Math.min(implicitWidth, ac.width - 16 - (ac.row.icon ? (((ac.row.hh || 0) >= 56 ? 20 : 18) + 8) : 0)) }
             }
             Tap { id: aTap; tap: 0.95; enabled: !ac.row.dim; onClicked: root.ctl.activate(ac.row, ac.row.act) }
         }
@@ -393,6 +398,62 @@ Column {
                 onPressed: (m) => at(m)
                 onPositionChanged: (m) => { if (pressed) at(m) }
                 onReleased: root.ctl.activate(sl.row, sl.row.act, String(sl.val))
+            }
+        }
+    }
+    // ─── stepper −/+ touch (sostituisce lo slider per i buffer) ───────────
+    //   props: smin, smax, sstep, sval, act, unit, autoLabel (truthy = 0 == Auto)
+    Component { id: cStepper
+        Item {
+            id: st
+            property var row: ({})
+            width: parent.width; height: 44
+            readonly property int sval: row.sval || 0
+            readonly property int smin: row.smin || 0
+            readonly property int smax: row.smax || 0
+            readonly property int sstep: row.sstep || 1
+            readonly property bool hasAuto: !!row.autoLabel
+            readonly property bool isAuto: hasAuto && st.sval <= 0
+            function down() {
+                if (st.hasAuto) {
+                    if (st.sval <= 0) return 0            // già Auto, resta Auto
+                    if (st.sval <= st.smin) return 0     // dal minimo scendo ad Auto
+                    return Math.max(st.smin, st.sval - st.sstep)
+                }
+                return Math.max(st.smin, st.sval - st.sstep)
+            }
+            function up() {
+                if (st.hasAuto && st.sval <= 0) return st.smin   // da Auto al minimo
+                return Math.min(st.smax, st.sval + st.sstep)
+            }
+            function commit(v) { if (v !== st.sval) root.ctl.activate(st.row, st.row.act, String(v)) }
+            // − a sinistra
+            Rectangle {
+                id: minus
+                width: 56; height: parent.height; radius: 8
+                anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                color: dnTap.mix(root.btnBg("", false), Theme.light)
+                Text { anchors.centerIn: parent; text: "−"; font.family: Theme.font; font.pixelSize: 22; color: root.btnFg("") }
+                scale: dnTap.tapScale
+                Tap { id: dnTap; tap: 0.95; grow: 4; onClicked: st.commit(st.down()) }
+            }
+            // valore al centro
+            Text {
+                anchors.centerIn: parent
+                text: st.isAuto ? (st.row.autoLabel || "Auto")
+                                : (String(st.sval) + (st.row.unit ? " " + st.row.unit : ""))
+                font.family: Theme.mono; font.pixelSize: 17
+                color: st.isAuto ? Theme.silverA(0.7) : Theme.white
+            }
+            // + a destra
+            Rectangle {
+                id: plus
+                width: 56; height: parent.height; radius: 8
+                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                color: upTap.mix(root.btnBg("", false), Theme.light)
+                Text { anchors.centerIn: parent; text: "+"; font.family: Theme.font; font.pixelSize: 22; color: root.btnFg("") }
+                scale: upTap.tapScale
+                Tap { id: upTap; tap: 0.95; grow: 4; onClicked: st.commit(st.up()) }
             }
         }
     }

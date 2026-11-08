@@ -214,9 +214,12 @@ Item {
             }
         return out
     }
-    // a one-line hint of what a group holds, built from its section names, so
-    // it reads right in every language without any extra strings
+    // a one-line hint of what a group holds. A short hand-written phrase
+    // (settings.groupHints.<id>) keeps it from overrunning the two lines the
+    // tile allows; without one we fall back to the section names joined up.
     function groupPreview(gid) {
+        var hint = Tr.t("settings.groupHints." + gid)
+        if (hint !== "settings.groupHints." + gid) return hint
         for (var i = 0; i < groups.length; i++) if (groups[i].id === gid) {
             var out = []
             for (var k = 0; k < groups[i].secs.length; k++) {
@@ -688,6 +691,16 @@ Item {
             return
         }
         post(cfg.api("/squeezelite_conf"), body, sqDone)
+    }
+    // Buffer sliders run 0..max; 0 = Auto (no flag). Snap anything the handle lands
+    // on between 0 and the field minimum up to the minimum, so a dragged value is
+    // always either Auto or a valid buffer the backend accepts.
+    function sqSnap(v, field) {
+        if (!(v > 0)) return 0
+        var r = ((cfg.sq || {}).ranges || {})[field] || { min: 0, max: 1000000 }
+        if (v < r.min) return r.min
+        if (v > r.max) return r.max
+        return v
     }
     // Audio zones: every /zones/* reply carries the whole list, unpacked in
     // one place (as btApply does for the speakers).
@@ -1664,6 +1677,7 @@ Item {
         var mr = ch.max_rate || [0, 96000, 192000, 384000, 768000, 1536000], mrc = []
         for (i = 0; i < mr.length; i++) mrc.push(cell(mr[i] ? (mr[i] / 1000) + " kHz" : Tr.t("settings.audio.auto"), String(mr[i]), c.max_rate === mr[i], "sq_rate", { hh: 44 }))
         grid(mrc)
+        help("settings.audio.maxRateWarn", 12)
         if (s.mixers && s.mixers.length) toggle(Tr.t("settings.audio.volumeHardware"), Tr.t("settings.audio.volumeHelp"), c.volume === "hardware", "sq_hwvol")
         else note(Tr.t("settings.audio.volumeNoMixer"), "dark")
         // Card playback switches: the onboard digital (S/PDIF/IEC958) output
@@ -1680,8 +1694,26 @@ Item {
                        s.pcm2dsd, String(c.volume || "software"), "", false, Number(c.upsample_cap || 0))
             sep()
         }
-        toggle(Tr.t("settings.audio.alsaBufferLarge"), Tr.t("settings.audio.alsaBufferHelp"), c.alsa_buffer === "large", "sq_abuf")
-        toggle(Tr.t("settings.audio.streamBufferLarge"), Tr.t("settings.audio.streamBufferHelp"), c.stream_buffer === "large", "sq_sbuf")
+        var abR = (s.ranges || {}).alsa_buffer || { min: 50, max: 500 }
+        var abV = Number(c.alsa_buffer || 0)
+        var abL = info(Tr.t("settings.audio.alsaBufferLabel"), abV ? (abV + " ms") : Tr.t("settings.audio.bufferAuto"))
+        abL.style = "seg"; abL.tone = "gold"; abL.mono = true; abL.hh = 20
+        help("settings.audio.alsaBufferHelp", 12)
+        push({ type: "stepper", smin: abR.min || 0, smax: abR.max, sstep: abR.step || 10, sval: abV,
+               unit: "ms", autoLabel: Tr.t("settings.audio.bufferAuto"), act: "sq_abuf" })
+        var apR = (s.ranges || {}).alsa_periods || { min: 1, max: 8, step: 1 }
+        var apV = Number(c.alsa_periods || apR.min || 1)
+        var apL = info(Tr.t("settings.audio.alsaPeriodsLabel"), String(apV))
+        apL.style = "seg"; apL.tone = "gold"; apL.mono = true; apL.hh = 20
+        help("settings.audio.alsaPeriodsHelp", 12)
+        push({ type: "stepper", smin: apR.min || 1, smax: apR.max || 8, sstep: apR.step || 1, sval: apV, act: "sq_aper" })
+        var sbR = (s.ranges || {}).stream_buffer || { min: 1024, max: 8192 }
+        var sbV = Number(c.stream_buffer || 0)
+        var sbL = info(Tr.t("settings.audio.streamBufferLabel"), sbV ? (sbV + " kB") : Tr.t("settings.audio.bufferAuto"))
+        sbL.style = "seg"; sbL.tone = "gold"; sbL.mono = true; sbL.hh = 20
+        help("settings.audio.streamBufferHelp", 12)
+        push({ type: "stepper", smin: sbR.min || 0, smax: sbR.max, sstep: sbR.step || 512, sval: sbV,
+               unit: "kB", autoLabel: Tr.t("settings.audio.bufferAuto"), act: "sq_sbuf" })
         toggle(Tr.t("settings.audio.realtimeLabel"), Tr.t("settings.audio.realtimeHelp"), !!c.realtime, "sq_rt")
         label("settings.audio.extraLabel", 14); help("settings.audio.extraHint", 12)
         input(Tr.t("settings.audio.extraPlaceholder"), sqExtraDirty ? sqExtraEdit : (c.extra || ""), "sq_extra", false).hh = 50
@@ -2814,8 +2846,9 @@ Item {
         // Card playback switches (e.g. the onboard S/PDIF/IEC958 mute): its own
         // endpoint, which answers with the fresh switches; post() reloads cfg.
         case "sq_switch": post(A("/set_mixer_switch"), { name: arg, on: !row.on }, sqDone); break
-        case "sq_abuf": sqSet({ alsa_buffer: row.on ? "auto" : "large" }); break
-        case "sq_sbuf": sqSet({ stream_buffer: row.on ? "auto" : "large" }); break
+        case "sq_abuf": sqSet({ alsa_buffer: sqSnap(parseInt(arg) || 0, "alsa_buffer") }); break
+        case "sq_sbuf": sqSet({ stream_buffer: sqSnap(parseInt(arg) || 0, "stream_buffer") }); break
+        case "sq_aper": sqSet({ alsa_periods: parseInt(arg) || 3 }); break
         case "sq_rt": sqSet({ realtime: !row.on }); break
         case "sq_extra_apply": sqSet({ extra: sqExtraDirty ? sqExtraEdit : String((cfg.sq.conf || {}).extra || "") }); break
         case "sq_reset": sqReset(); break

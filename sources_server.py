@@ -7418,7 +7418,29 @@ def api_remove(sid):
         return denied
     with _lock:
         state = load_state()
-        removed = [s for s in state.get("sources", []) if s.get("id") == sid]
+        sources = state.get("sources", [])
+        removed = [s for s in sources if s.get("id") == sid]
+        # #130: a `local` source whose folder resolves at or under the
+        # mountpoint of a source being removed belongs to that same share.
+        # It is usually a stale mediadir that _sync_from_lyrion() re-imported
+        # as `local` during a window when the share was unmounted. Removing
+        # only the source the user tapped leaves that `local` behind, and it
+        # resurfaces under "System Disk" (SourcesPage puts every orphan local
+        # there). Tear them down together so the removal sticks. No network
+        # here: mountpoints come from the table, paths resolve as written.
+        table = _mount_table()
+        mount_roots = [_resolve_mountpoint(s["mountpoint"], table)
+                       for s in removed
+                       if s.get("type") in ("smb", "internal", "usb") and s.get("mountpoint")]
+        if mount_roots:
+            removed_ids = {s.get("id") for s in removed}
+            for s in sources:
+                if s.get("id") in removed_ids or s.get("type") != "local" or not s.get("path"):
+                    continue
+                p = _resolve_quick(s["path"], table, mount_roots)
+                if any(p == r or p.startswith(r + os.sep) for r in mount_roots):
+                    removed.append(s)
+                    removed_ids.add(s.get("id"))
         for src in removed:
             # remember_ignored: the user asked for this one, and the device
             # may well still be plugged in — see _detach_source().

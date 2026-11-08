@@ -167,8 +167,8 @@ class TestModel(ToolsMixin, unittest.TestCase):
         self.assertNotIn('-c dsd', args)
         self.assertNotIn('-D', args)
         # a plain stream-buffer request is still honoured; -c dsd never appears
-        args = sq.render(self.model(pcm2dsd='dsd128', stream_buffer='large', extra='-W'), self.sb.probe)
-        self.assertIn('-b ' + sq.STREAM_LARGE, args)
+        args = sq.render(self.model(pcm2dsd='dsd128', stream_buffer=4096, extra='-W'), self.sb.probe)
+        self.assertIn('-b 4096:5461', args)
         self.assertNotIn('-c dsd', args)
         self.assertTrue(args.endswith('-W'), args)
         # following a remote server changes nothing: still player-side
@@ -186,7 +186,7 @@ class TestModel(ToolsMixin, unittest.TestCase):
         self.assertNotIn('-c dsd', forced)
         # the legacy line is unchanged by the refactor, bar the large stream
         # buffer the built-in player always takes now (live CD transcode)
-        self.assertEqual(sq.render(sq.parse_args(LEGACY), lambda d: 'dop'), LEGACY + ' -a ' + sq.ALSA_LARGE)
+        self.assertEqual(sq.render(sq.parse_args(LEGACY), lambda d: 'dop'), LEGACY + ' -a 100:3 -b 3072:4096')
 
     def test_render_pcm_upsample_is_player_side(self):
         # PCM upsampling always runs player-side (squeezelite soxr, -r <rate> -R).

@@ -155,7 +155,8 @@ Item {
     readonly property var sourceServices: [
         { label: "Qobuz", key: "qobuz", match: ["qobuz"], icon: "svc-qobuz" },
         { label: "Tidal", key: "tidal", match: ["tidal", "wimp"], icon: "svc-tidal" },
-        { label: "Spotify", key: "spotty", match: ["spotify", "spotty"], icon: "svc-spotify" }]
+        { label: "Spotify", key: "spotty", match: ["spotify", "spotty"], icon: "svc-spotify" },
+        { label: "Deezer", key: "deezer", match: ["deezer"], icon: "svc-deezer" }]
     function rebuildSources(apps) {
         var out = []
         var byCmd = {}

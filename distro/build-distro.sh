@@ -502,6 +502,12 @@ if [ "$STAGE" != "binary" ]; then
         --distribution "$DEBIAN_SUITE" \
         --architectures "$ARCH" \
         --archive-areas "main contrib non-free non-free-firmware" \
+        `# Kernel pin (see config/package-lists/hifi.list.chroot for why): install the` \
+        `# exact pinned kernel instead of the default linux-image-amd64 metapackage` \
+        `# (which resolves to 6.12.115 and regressed USB isoc output). Composes to` \
+        `# linux-image-6.12.113+deb13-amd64 with the amd64 flavour; pulled from the` \
+        `# snapshot mirror via config/archives/snapshot-kernel.*. Bump by hand only.` \
+        --linux-packages "linux-image-6.12.113+deb13" \
         --bootloaders "syslinux,grub-efi" \
         --bootappend-live "boot=live components quiet splash loglevel=0 systemd.show_status=0 rd.systemd.show_status=0 vt.global_cursor_default=0 hostname=hifiplayer noautologin" \
         --iso-application "$BRAND_NAME" \
