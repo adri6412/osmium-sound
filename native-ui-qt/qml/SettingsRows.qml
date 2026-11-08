@@ -322,7 +322,11 @@ Column {
             Row {
                 anchors.centerIn: parent; spacing: 8
                 Icon { visible: !!ac.row.icon; name: ac.row.icon || ""; size: (ac.row.hh || 0) >= 56 ? 20 : 18; color: ac.fg; anchors.verticalCenter: parent.verticalCenter }
-                Text { visible: !!ac.row.label; text: ac.row.label || ""; color: ac.fg; font.family: Theme.font; font.pixelSize: ac.px; font.bold: !!ac.row.bold; anchors.verticalCenter: parent.verticalCenter }
+                Text { visible: !!ac.row.label; text: ac.row.label || ""; color: ac.fg; font.family: Theme.font; font.pixelSize: ac.px; font.bold: !!ac.row.bold; anchors.verticalCenter: parent.verticalCenter
+                    // Clamp long labels so the row stays inside the button and the icon
+                    // keeps its slot (issue #133: IT/DE "Advanced Audio Tweaks" overflowed).
+                    elide: Text.ElideRight
+                    width: Math.min(implicitWidth, ac.width - 16 - (ac.row.icon ? (((ac.row.hh || 0) >= 56 ? 20 : 18) + 8) : 0)) }
             }
             Tap { id: aTap; tap: 0.95; enabled: !ac.row.dim; onClicked: root.ctl.activate(ac.row, ac.row.act) }
         }
