@@ -689,6 +689,16 @@ Item {
         }
         post(cfg.api("/squeezelite_conf"), body, sqDone)
     }
+    // Buffer sliders run 0..max; 0 = Auto (no flag). Snap anything the handle lands
+    // on between 0 and the field minimum up to the minimum, so a dragged value is
+    // always either Auto or a valid buffer the backend accepts.
+    function sqSnap(v, field) {
+        if (!(v > 0)) return 0
+        var r = ((cfg.sq || {}).ranges || {})[field] || { min: 0, max: 1000000 }
+        if (v < r.min) return r.min
+        if (v > r.max) return r.max
+        return v
+    }
     // Audio zones: every /zones/* reply carries the whole list, unpacked in
     // one place (as btApply does for the speakers).
     function zoneById(id) {
@@ -1680,8 +1690,18 @@ Item {
                        s.pcm2dsd, String(c.volume || "software"), "", false, Number(c.upsample_cap || 0))
             sep()
         }
-        toggle(Tr.t("settings.audio.alsaBufferLarge"), Tr.t("settings.audio.alsaBufferHelp"), c.alsa_buffer === "large", "sq_abuf")
-        toggle(Tr.t("settings.audio.streamBufferLarge"), Tr.t("settings.audio.streamBufferHelp"), c.stream_buffer === "large", "sq_sbuf")
+        var abR = (s.ranges || {}).alsa_buffer || { min: 50, max: 500 }
+        var abV = Number(c.alsa_buffer || 0)
+        var abL = info(Tr.t("settings.audio.alsaBufferLabel"), abV ? (abV + " ms") : Tr.t("settings.audio.bufferAuto"))
+        abL.style = "seg"; abL.tone = "gold"; abL.mono = true; abL.hh = 20
+        help("settings.audio.alsaBufferHelp", 12)
+        push({ type: "slider", smin: 0, smax: abR.max, sval: abV, act: "sq_abuf" })
+        var sbR = (s.ranges || {}).stream_buffer || { min: 1024, max: 8192 }
+        var sbV = Number(c.stream_buffer || 0)
+        var sbL = info(Tr.t("settings.audio.streamBufferLabel"), sbV ? (sbV + " kB") : Tr.t("settings.audio.bufferAuto"))
+        sbL.style = "seg"; sbL.tone = "gold"; sbL.mono = true; sbL.hh = 20
+        help("settings.audio.streamBufferHelp", 12)
+        push({ type: "slider", smin: 0, smax: sbR.max, sval: sbV, act: "sq_sbuf" })
         toggle(Tr.t("settings.audio.realtimeLabel"), Tr.t("settings.audio.realtimeHelp"), !!c.realtime, "sq_rt")
         label("settings.audio.extraLabel", 14); help("settings.audio.extraHint", 12)
         input(Tr.t("settings.audio.extraPlaceholder"), sqExtraDirty ? sqExtraEdit : (c.extra || ""), "sq_extra", false).hh = 50
@@ -2814,8 +2834,8 @@ Item {
         // Card playback switches (e.g. the onboard S/PDIF/IEC958 mute): its own
         // endpoint, which answers with the fresh switches; post() reloads cfg.
         case "sq_switch": post(A("/set_mixer_switch"), { name: arg, on: !row.on }, sqDone); break
-        case "sq_abuf": sqSet({ alsa_buffer: row.on ? "auto" : "large" }); break
-        case "sq_sbuf": sqSet({ stream_buffer: row.on ? "auto" : "large" }); break
+        case "sq_abuf": sqSet({ alsa_buffer: sqSnap(parseInt(arg) || 0, "alsa_buffer") }); break
+        case "sq_sbuf": sqSet({ stream_buffer: sqSnap(parseInt(arg) || 0, "stream_buffer") }); break
         case "sq_rt": sqSet({ realtime: !row.on }); break
         case "sq_extra_apply": sqSet({ extra: sqExtraDirty ? sqExtraEdit : String((cfg.sq.conf || {}).extra || "") }); break
         case "sq_reset": sqReset(); break

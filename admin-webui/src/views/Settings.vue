@@ -296,6 +296,16 @@ async function sqCall(path, body, okMsg) {
 }
 const setSq = (patch) => sqCall('squeezelite_conf', patch, t('settings.audio.sqSaved'));
 const resetSq = () => sqCall('squeezelite_conf/reset', {}, t('settings.audio.sqReset'));
+// Buffer sliders run 0..max; 0 = Auto (no flag). Snap a value that lands between
+// 0 and the field minimum up to the minimum, so what we POST is always Auto or a
+// buffer the backend accepts.
+const sqSnap = (v, field) => {
+  v = parseInt(v) || 0;
+  if (v <= 0) return 0;
+  const r = ((sq.value && sq.value.ranges) || {})[field] || { min: 0, max: 1e9 };
+  return Math.min(r.max, Math.max(r.min, v));
+};
+const setSqBuf = (field, v) => setSq({ [field]: sqSnap(v, field) });
 
 // Toggle an ALSA playback switch of the output card (e.g. the onboard S/PDIF
 // IEC958 transmitter, muted by default). The backend returns the fresh switch
@@ -2151,18 +2161,20 @@ onUnmounted(() => {
                    :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
         </div>
 
-        <label>{{ t('settings.audio.alsaBufferLabel') }}</label>
-        <span class="seg">
-          <button :disabled="sqBusy" :class="{ active: sq.conf.alsa_buffer === 'auto' }" @click="setSq({ alsa_buffer: 'auto' })">{{ t('settings.audio.auto') }}</button>
-          <button :disabled="sqBusy" :class="{ active: sq.conf.alsa_buffer === 'large' }" @click="setSq({ alsa_buffer: 'large' })">{{ t('settings.audio.large') }}</button>
-        </span>
+        <label>{{ t('settings.audio.alsaBufferLabel') }}:
+          <span class="silver">{{ sq.conf.alsa_buffer ? sq.conf.alsa_buffer + ' ms' : t('settings.audio.auto') }}</span></label>
+        <input type="range" min="0" :max="(sq.ranges && sq.ranges.alsa_buffer ? sq.ranges.alsa_buffer.max : 500)"
+               :step="(sq.ranges && sq.ranges.alsa_buffer ? sq.ranges.alsa_buffer.step : 10)" :value="sq.conf.alsa_buffer"
+               :disabled="sqBusy" style="width: 100%; accent-color: var(--gold);"
+               @change="setSqBuf('alsa_buffer', $event.target.value)" />
         <p class="muted">{{ t('settings.audio.alsaBufferHelp') }}</p>
 
-        <label>{{ t('settings.audio.streamBufferLabel') }}</label>
-        <span class="seg">
-          <button :disabled="sqBusy" :class="{ active: sq.conf.stream_buffer === 'auto' }" @click="setSq({ stream_buffer: 'auto' })">{{ t('settings.audio.auto') }}</button>
-          <button :disabled="sqBusy" :class="{ active: sq.conf.stream_buffer === 'large' }" @click="setSq({ stream_buffer: 'large' })">{{ t('settings.audio.large') }}</button>
-        </span>
+        <label>{{ t('settings.audio.streamBufferLabel') }}:
+          <span class="silver">{{ sq.conf.stream_buffer ? sq.conf.stream_buffer + ' kB' : t('settings.audio.auto') }}</span></label>
+        <input type="range" min="0" :max="(sq.ranges && sq.ranges.stream_buffer ? sq.ranges.stream_buffer.max : 8192)"
+               :step="(sq.ranges && sq.ranges.stream_buffer ? sq.ranges.stream_buffer.step : 256)" :value="sq.conf.stream_buffer"
+               :disabled="sqBusy" style="width: 100%; accent-color: var(--gold);"
+               @change="setSqBuf('stream_buffer', $event.target.value)" />
         <p class="muted">{{ t('settings.audio.streamBufferHelp') }}</p>
 
         <label>{{ t('settings.audio.realtimeLabel') }}</label>

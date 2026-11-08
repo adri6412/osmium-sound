@@ -2291,6 +2291,11 @@ def get_squeezelite_conf():
         'choices': {'dsd': list(sq.DSD_MODES), 'dsd_delay_ms': list(sq.DSD_DELAYS),
                     'max_rate': [0, 96000, 192000, 384000, 768000, 1536000],
                     'upsample': list(sq.UPSAMPLE_MODES)},
+        # Numeric buffer sliders: 0 = Auto (flag dropped), else min..max step.
+        'ranges': {'alsa_buffer': {'min': sq.ALSA_MIN, 'max': sq.ALSA_MAX,
+                                   'step': 10, 'unit': 'ms', 'auto': 0},
+                   'stream_buffer': {'min': sq.STREAM_MIN, 'max': sq.STREAM_MAX,
+                                     'step': 256, 'unit': 'kB', 'auto': 0}},
         'defaults': {k: sq.DEFAULTS[k] for k in sq.TUNABLE},
         'pcm2dsd': _pcm2dsd_info(model, fmt),
     }

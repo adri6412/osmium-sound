@@ -20,15 +20,15 @@ STATE = {
     "install": {"state": "idle"}, "cd": {"no_disc": True}, "cdrip": {"state": "idle"},
     "bt_remotes": {"available": True, "supported": True, "adapter": True, "remotes": [], "found": []},
     # Settings → Audio (squeezelite model) and Audio zones; MOCK_ZONES=0 starts with none
-    "sq": {"dsd": "auto", "dsd_delay_ms": 0, "max_rate": 0, "volume": "software", "mixer": "", "alsa_buffer": "auto",
-           "stream_buffer": "auto", "realtime": False, "extra": "", "pcm2dsd": "off", "pcm2dsd_filter": "clans-8",
+    "sq": {"dsd": "auto", "dsd_delay_ms": 0, "max_rate": 0, "volume": "software", "mixer": "", "alsa_buffer": 100,
+           "stream_buffer": 3072, "realtime": False, "extra": "", "pcm2dsd": "off", "pcm2dsd_filter": "clans-8",
            "upsample": "off", "upsample_cap": 0},
     "zones": [] if os.environ.get("MOCK_ZONES") == "0" else [
         {"id": "D50s-0", "name": "Studio", "output": "hw:CARD=D50s,DEV=0", "output_name": "Topping D50s — USB Audio",
          "enabled": True, "connected": True, "running": True, "dsd_detected": "native", "mixers": [], "pcm2dsd_state": "off",
          "upsample_state": "off",
-         "conf": {"dsd": "auto", "dsd_delay_ms": 0, "max_rate": 0, "volume": "software", "mixer": "", "alsa_buffer": "auto",
-                  "stream_buffer": "auto", "realtime": False, "pcm2dsd": "off", "pcm2dsd_filter": "clans-8",
+         "conf": {"dsd": "auto", "dsd_delay_ms": 0, "max_rate": 0, "volume": "software", "mixer": "", "alsa_buffer": 0,
+                  "stream_buffer": 0, "realtime": False, "pcm2dsd": "off", "pcm2dsd_filter": "clans-8",
                   "upsample": "off", "upsample_cap": 0}}],
     # Settings → External players: the saved conversion choices (api /external_convert)
     "external": {},
@@ -489,9 +489,14 @@ MOCK_FREE = [{"id": "hw:CARD=Kitchen,DEV=0", "name": "iFi Zen DAC — USB Audio"
 def mock_sq():
     c = STATE["sq"]
     return {"success": True, "conf": dict(c, output=STATE["audio"], name="Osmium", server="127.0.0.1"),
-            "args": "-o " + STATE["audio"] + " -D :u32be -v -C 5 -s 127.0.0.1 -n Osmium -M Osmium" + (" -b 16384:8192 -c dsd" if c["pcm2dsd"] != "off" else ""),
+            "args": "-o " + STATE["audio"] + " -D :u32be -v -C 5 -s 127.0.0.1 -n Osmium -M Osmium"
+                    + ("" if not c["alsa_buffer"] else " -a %d:3" % c["alsa_buffer"])
+                    + ("" if not c["stream_buffer"] else " -b %d:%d" % (c["stream_buffer"], round(c["stream_buffer"] * 4 / 3)))
+                    + (" -c dsd" if c["pcm2dsd"] != "off" else ""),
             "dsd_detected": "native", "dsd_format": "u32be", "mixers": ["PCM"],
             "choices": {"dsd": ["auto", "dop", "native", "off"], "dsd_delay_ms": [0, 100, 250, 500], "max_rate": [0, 96000, 192000, 384000, 768000, 1536000]},
+            "ranges": {"alsa_buffer": {"min": 50, "max": 500, "step": 10, "unit": "ms", "auto": 0},
+                       "stream_buffer": {"min": 1024, "max": 8192, "step": 256, "unit": "kB", "auto": 0}},
             "defaults": {}, "pcm2dsd": dict(MOCK_P2D, state="active" if c["pcm2dsd"] != "off" else "off",
                                             upsample=dict(MOCK_P2D["upsample"], state="active" if c.get("upsample", "off") != "off" else "off"))}
 

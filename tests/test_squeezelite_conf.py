@@ -178,7 +178,7 @@ class TestModel(unittest.TestCase):
         self.assertEqual(m['max_rate'], 0)
         self.assertEqual(m['volume'], 'software')
         self.assertEqual(m['mixer'], '')
-        self.assertEqual(m['alsa_buffer'], 'auto')
+        self.assertEqual(m['alsa_buffer'], 100)   # junk falls back to the default
         self.assertTrue(m['realtime'])
         # the safe tokens survive; the dangerous ones and the managed flag
         # (with its value) do not
@@ -188,11 +188,13 @@ class TestModel(unittest.TestCase):
     def test_set_fields_is_strict(self):
         base = sq.normalize({})
         m = sq.set_fields(base, {'dsd': 'dop', 'dsd_delay_ms': 250, 'max_rate': 192000,
-                                 'alsa_buffer': 'large', 'realtime': True, 'extra': '-R -u vE'})
+                                 'alsa_buffer': 400, 'stream_buffer': 0, 'realtime': True, 'extra': '-R -u vE'})
         self.assertEqual((m['dsd'], m['dsd_delay_ms'], m['max_rate']), ('dop', 250, 192000))
+        self.assertEqual((m['alsa_buffer'], m['stream_buffer']), (400, 0))
         self.assertEqual(m['extra'], '-R -u vE')
         for bad in ({'dsd': 'u32be'}, {'dsd_delay_ms': 5000}, {'dsd_delay_ms': '100'}, {'max_rate': 12345},
                     {'volume': 'loud'}, {'mixer': 'PCM Playback'}, {'alsa_buffer': 'huge'},
+                    {'alsa_buffer': 20}, {'alsa_buffer': 9000}, {'stream_buffer': 100}, {'alsa_buffer': True},
                     {'realtime': 1}, {'nope': 1}):
             with self.assertRaises(sq.InvalidField, msg=str(bad)):
                 sq.set_fields(base, bad)
@@ -243,16 +245,19 @@ class TestImport(unittest.TestCase):
         m = sq.parse_args(LEGACY + " -r 192000 -V PCM -a 400:8 -b 16384:8192 -p 45 -R -u v::3.1")
         self.assertEqual(m['max_rate'], 192000)
         self.assertEqual((m['volume'], m['mixer']), ('hardware', 'PCM'))
-        self.assertEqual((m['alsa_buffer'], m['stream_buffer'], m['realtime']), ('large', 'large', True))
+        # the buffer flags round-trip as numbers (ms / kB), the stream value clamped
+        # to its maximum (16384 -> 8192)
+        self.assertEqual((m['alsa_buffer'], m['stream_buffer'], m['realtime']), (400, 8192, True))
         self.assertEqual(m['extra'], '-R -u v::3.1')
 
     def test_unknown_values_of_managed_options_are_dropped(self):
-        # a rate range or a custom buffer has no field: gone, with no stray
-        # value left on the line; the unknown flags are kept as extra
+        # a rate range has no field: gone, with no stray value left on the line;
+        # the unknown flags are kept as extra. The buffer flags, in contrast, now
+        # import as numbers (the first value, clamped to the slider range).
         m = sq.parse_args(LEGACY + " -r 44100-96000 -a 80:4 -b 2048:1024 -W -Z")
         self.assertEqual(m['max_rate'], 0)
-        self.assertEqual(m['alsa_buffer'], 'auto')
-        self.assertEqual(m['stream_buffer'], 'auto')
+        self.assertEqual(m['alsa_buffer'], 80)
+        self.assertEqual(m['stream_buffer'], 2048)
         self.assertEqual(m['extra'], '-W -Z')
 
     def test_check_extra_drops_a_managed_flag_with_its_value(self):
@@ -293,7 +298,7 @@ class TestRender(unittest.TestCase):
         # a device imported from the stock line renders the stock line, with the
         # intended changes: native DSD where the DAC declares it, and the large
         # ALSA buffer the built-in player always takes (USB DAC isoc jitter).
-        BUF = ' -a ' + sq.ALSA_DEFAULT
+        BUF = ' -a 100:3 -b 3072:4096'
         self.assertEqual(sq.render(sq.parse_args(LEGACY), self.sb.probe), LEGACY.replace('-D', '-D :u32be') + BUF)
         self.assertEqual(sq.render(sq.parse_args(LEGACY_MAC), self.sb.probe), LEGACY_MAC.replace('-D', '-D :u32be') + BUF)
         gen = LEGACY.replace('D50s', 'Gen')
@@ -318,8 +323,10 @@ class TestRender(unittest.TestCase):
         self.assertIn(' -V PCM', self.r(volume='hardware', mixer='PCM'))
         self.assertNotIn(' -V ', self.r(volume='software', mixer='PCM'))
         self.assertNotIn(' -V ', self.r(volume='hardware', mixer=''))
-        self.assertIn(' -a ' + sq.ALSA_LARGE, self.r(alsa_buffer='large'))
-        self.assertIn(' -b ' + sq.STREAM_LARGE, self.r(stream_buffer='large'))
+        self.assertIn(' -a 400:3', self.r(alsa_buffer=400))
+        self.assertNotIn(' -a ', self.r(alsa_buffer=0))
+        self.assertIn(' -b 4096:5461', self.r(stream_buffer=4096))
+        self.assertNotIn(' -b ', self.r(stream_buffer=0))
         self.assertIn(' -p 45', self.r(realtime=True))
         self.assertTrue(self.r(extra='-R -u vE').endswith(' -R -u vE'))
 
@@ -399,7 +406,7 @@ class TestDsdAuto(unittest.TestCase):
         model, args, changed = sq.apply(self.sb.conf, self.sb.default, self.sb.dsp_target, self.sb.probe,
                                         None, os.path.join(self.sb.dir, 'no-machine-id'))
         self.assertEqual(model['dsd'], 'auto')
-        self.assertEqual(args, '-o hw:CARD=PCH,DEV=3 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -a ' + sq.ALSA_DEFAULT)
+        self.assertEqual(args, '-o hw:CARD=PCH,DEV=3 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -a 100:3 -b 3072:4096')
 
 
 class TestOutputFallback(unittest.TestCase):
@@ -609,7 +616,7 @@ class TestFiles(unittest.TestCase):
         out = io.StringIO()
         model, args, changed = self.apply(out)
         self.assertTrue(changed)
-        self.assertEqual(args, LEGACY_MAC.replace('-D', '-D :u32be') + ' -a ' + sq.ALSA_DEFAULT)
+        self.assertEqual(args, LEGACY_MAC.replace('-D', '-D :u32be') + ' -a 100:3 -b 3072:4096')
         self.assertEqual(self.sb.args(), args)
         self.assertEqual(self.sb.conf_json()['mac'], '02:ab:cd:ef:01:23')
         self.assertIn('GENERATED FILE', self.sb.read_default())
@@ -620,7 +627,7 @@ class TestFiles(unittest.TestCase):
     def test_no_file_no_json_gives_defaults(self):
         model, args, changed = self.apply()
         self.assertTrue(changed)
-        self.assertEqual(args, "-o default -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -a " + sq.ALSA_DEFAULT)
+        self.assertEqual(args, "-o default -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -a 100:3 -b 3072:4096")
 
     def test_hand_edit_of_the_file_is_overwritten(self):
         self.sb.write_default(LEGACY)
@@ -724,7 +731,7 @@ class TestApiServer(unittest.TestCase):
     def test_set_audio_device(self):
         r = self.api.set_audio_device('hw:CARD=Gen,DEV=0')
         self.assertTrue(r['success'], r)
-        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen') + ' -a ' + sq.ALSA_DEFAULT)
+        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen') + ' -a 100:3 -b 3072:4096')
         self.assertEqual(self.sb.conf_json()['output'], 'hw:CARD=Gen,DEV=0')
         self.assertEqual(len(self.restarts()), 1)
         r = self.api.set_audio_device('hw:CARD=D50s,DEV=0')
@@ -750,7 +757,7 @@ class TestApiServer(unittest.TestCase):
         self.assertEqual(g['mixers'], ['PCM'])
         # `args` is what the model renders now (what the next start gets); the
         # file itself is rendered by the service's ExecStartPre or by a change
-        self.assertEqual(g['args'], LEGACY.replace('-D', '-D :u32be') + ' -a ' + sq.ALSA_DEFAULT)
+        self.assertEqual(g['args'], LEGACY.replace('-D', '-D :u32be') + ' -a 100:3 -b 3072:4096')
         r = self.api.set_squeezelite_conf({'dsd': 'dop', 'max_rate': 96000, 'volume': 'hardware'})
         self.assertTrue(r['success'], r)
         self.assertEqual(r['conf']['mixer'], 'PCM')            # picked for the owner
@@ -778,7 +785,7 @@ class TestApiServer(unittest.TestCase):
         self.assertTrue(r['success'])
         self.assertEqual(r['conf']['dsd'], 'auto')
         self.assertEqual(r['conf']['output'], 'hw:CARD=Gen,DEV=0')
-        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen') + ' -a ' + sq.ALSA_DEFAULT)
+        self.assertEqual(self.sb.args(), LEGACY.replace('D50s', 'Gen') + ' -a 100:3 -b 3072:4096')
 
     def test_concurrent_requests_keep_every_change(self):
         # three requests on three fields at once, many times over: each one
@@ -811,7 +818,7 @@ class TestApiServer(unittest.TestCase):
                 self.api._apply_dsp_on_locked('hw:CARD=D50s,DEV=0', [], False, False, 0.0, {'devices': {}})
             self.assertEqual(self.sb.args(),
                              "-o hw:CARD=Loopback,DEV=0 -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium -r 48000 -R"
-                             " -a " + sq.ALSA_DEFAULT)
+                             " -a 100:3 -b 3072:4096")
             self.assertEqual(self.api._current_audio_device(), 'hw:CARD=Loopback,DEV=0')
             self.assertEqual(self.api._current_real_dac(), 'hw:CARD=D50s,DEV=0')
             self.assertEqual(len(self.restarts()), 1)
@@ -820,7 +827,7 @@ class TestApiServer(unittest.TestCase):
                 self.api._apply_dsp_on_locked('hw:CARD=D50s,DEV=0', [], False, False, 0.0, {'devices': {}})
             self.assertEqual(len(self.restarts()), 1)
             self.api._apply_dsp_off()
-        self.assertEqual(self.sb.args(), LEGACY.replace('-D', '-D :u32be') + ' -r 192000 -a ' + sq.ALSA_DEFAULT)
+        self.assertEqual(self.sb.args(), LEGACY.replace('-D', '-D :u32be') + ' -r 192000 -a 100:3 -b 3072:4096')
         self.assertEqual(self.api._current_audio_device(), 'hw:CARD=D50s,DEV=0')
 
 
