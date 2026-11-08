@@ -1674,6 +1674,7 @@ Item {
         var mr = ch.max_rate || [0, 96000, 192000, 384000, 768000, 1536000], mrc = []
         for (i = 0; i < mr.length; i++) mrc.push(cell(mr[i] ? (mr[i] / 1000) + " kHz" : Tr.t("settings.audio.auto"), String(mr[i]), c.max_rate === mr[i], "sq_rate", { hh: 44 }))
         grid(mrc)
+        help("settings.audio.maxRateWarn", 12)
         if (s.mixers && s.mixers.length) toggle(Tr.t("settings.audio.volumeHardware"), Tr.t("settings.audio.volumeHelp"), c.volume === "hardware", "sq_hwvol")
         else note(Tr.t("settings.audio.volumeNoMixer"), "dark")
         // Card playback switches: the onboard digital (S/PDIF/IEC958) output
