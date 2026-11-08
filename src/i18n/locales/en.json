@@ -280,7 +280,7 @@
     }
   },
   "sidebar": {
-    "library": "Album view",
+    "library": "Local Library",
     "settings": "Settings",
     "hideKeyboard": "Hide Keyboard",
     "systemKeyboard": "System Keyboard"
@@ -353,7 +353,7 @@
     "titles": {
       "home": "Home",
       "sources": "Music",
-      "localLibrary": "Album view",
+      "localLibrary": "Local Library",
       "artists": "Album Artists",
       "albums": "Albums",
       "folders": "Folders",

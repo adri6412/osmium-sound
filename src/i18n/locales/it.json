@@ -280,7 +280,7 @@
     }
   },
   "sidebar": {
-    "library": "Album",
+    "library": "Libreria Locale",
     "settings": "Impostazioni",
     "hideKeyboard": "Nascondi Tastiera",
     "systemKeyboard": "Tastiera di Sistema"
@@ -353,7 +353,7 @@
     "titles": {
       "home": "Home",
       "sources": "Musica",
-      "localLibrary": "Album",
+      "localLibrary": "Libreria locale",
       "artists": "Artisti dell'album",
       "albums": "Album",
       "folders": "Cartelle",
