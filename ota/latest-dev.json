@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.26-dev.1",
-  "name": "v2.5.26-dev.1",
-  "body": "## What's new in v2.5.26-dev.1\n\n- Minor fixes and internal improvements.\n",
+  "tag_name": "v2.5.26-dev.3",
+  "name": "v2.5.26-dev.3",
+  "body": "## What's new in v2.5.26-dev.3\n\n- ui(kiosk): shorten settings group-tile subtitles so they don't clip\n- fix(sources): removing a share also removes stray locals under its mount\n- ui(kiosk): show a Deezer source tile that opens the Deezer app\n- ui(kiosk): keep action-button labels from overrunning their icon\n- ui(kiosk): rename \"Local Library\" tile and sidebar entry to \"Album view\"\n- audio: drop Daphile mention from ALSA periods help, warn not to exceed DAC max rate\n- build: pin kernel to 6.12.113, hold back the 6.12.115 USB-isoc regression\n- audio: user-settable ALSA periods (1\u20138, default 3) with touch +/- steppers\n- audio: numeric buffer sliders with Daphile defaults (ALSA 100:3, stream 3072:4096)\n- audio: ALSA output buffer 200:8 baseline, 400:8 on the large-buffer toggle\n- feat(kiosk): streaming-service favourite toast + CD eject to root & disc watch\n- fix(kiosk): keep remote spotlight on the Favourites menu-tile grid\n- fix(audio): force large ALSA output buffer on the built-in player\n- feat(kiosk): Eject button on the CD album page; flush pending alpha30 work\n- feat(cd): ESP-style osmium-cdread replaces cdda2wav for live CD playback\n- fix(kiosk): album favourite button shows only the heart, no label\n- feat(kiosk): mappable CD-changer disc +/- remote actions + Qobuz album page polish\n- fix(kiosk): restore radio station logos in menu-tile lists\n- feat(kiosk): make the inserted CD a first-class album everywhere\n- feat(kiosk): polish first-class streaming plugins (menu tiles, album detection, tracklists)\n- feat(kiosk): make streaming plugins first-class like the local library\n- feat(kiosk): show the CD album cover and hide the plugin's Eject item\n- feat(kiosk): preview editions with tracklists in the CD rip window\n- feat(kiosk): run the CD rip in the background with a progress notification\n- feat(kiosk): add a CD Player tile and auto-install the CDplayer plugin\n- feat(website): refine the Quick start guide tutorial\n- feat(website): add a Quick start guide popup to the hero\n- ui(kiosk): add a Favourites tile and put Favourites + Local Library first\n- fix(kiosk): make the Spotify sign-in QR scannable (short LAN redirect)\n- feat(kiosk): sign in to streaming services from the kiosk\n- ui(kiosk): show plugin artwork and expose the native context menu (Qobuz parity)\n- ui(kiosk): fix CD changer side-by-side layout and source tile labels\n- ui(kiosk): sources tile home for the Music tab, remove the Radio tab\n- audio: make the DAC-gone pause on Lyrion authoritative with verify+retry\n- companion: release 1.0.18 (versionCode 41)\n- companion: add a gold search FAB on the kiosk Music tab\n- audio: pause the built-in player on Lyrion when its USB DAC is gone\n- gpu: skip nouveau only when an Intel display GPU is present\n- ui: toggle an adopted disk's network share from Sources (Qt + web admin)\n- sources: let an adopted internal/USB disk opt out of SMB sharing\n- wifi: bind Broadcom wl also to BCM4350 (43a3) and BCM43142 (4365)\n- website: make the 'general enquiries' contact line a visible callout\n- website: let the support form take several files (5 MB total)\n- website: send the support-form notice via Resend\n- website: replace the support mailto box with a report form\n- audio: real DAC-rate readout, glanceable upsample ceilings, onboard S/PDIF switches\n- ui: light the BitPerfect LED only on a positive bitperfect verdict\n- i18n: add German (de) as third UI language, with a QWERTZ on-screen keyboard\n- audio: absolute target-rate picker for player-side PCM upsampling\n- cd: tolerate flaky USB drives in the CD Player plugin; clear automounts before ripping\n- ci: pass HIFI_OS_NO_APT through sudo in the OTA idempotency test\n- os-update: mask bluetooth.service after bluez is installed, not before\n- audio: box players always convert PCM player-side; drop convert_where\n- audio: always upsample PCM player-side; clamp DSD to a per-DAC ceiling\n- web admin: forward the System tweaks route through webui_server\n- audio: PCM\u2192DSD conversion location, FLAC upsampling fix, DSD512 ceiling, system tweaks\n- audio: follow a USB DAC hotplugged in or out so the player stops crash-looping\n- audio: force a player's DSD mode to auto when it converts PCM to DSD\n- lms: install the bundled plugin into the vendor Plugins dir, not InstalledPlugins\n- web admin: keep only third-party players in the External players list\n- audio: drive per-player conversion entirely through the Osmium Convert plugin\n- lms: add Osmium Convert plugin (single mechanism for per-player conversion)\n- web admin: forward the external-player convert routes through webui_server\n- website: point companion download to 1.0.17\n- companion: promote 1.0.17 to stable (bespoke album page, Qt-aligned settings)\n- kiosk: make the settings group tiles the same size as the section tiles\n- audio: three-mode per-player conversion (Off / PCM upsample / DSD), external players too\n- companion: bundle native debug symbols (SYMBOL_TABLE) in release AAB\n- kiosk: make library favorites (db: queries) work in the Album view (#125)\n- boot: stop blocking Bluetooth-over-USB, blacklist only (#126)\n- sources: allow copying a music source onto the second disk (#127)\n- site: point companion download to 1.0.15\n- companion: promote 1.0.15 to stable (kiosk UI, dual-proxy)\n- companion: align Settings tree with the Qt kiosk\n- cleanup: drop the dead pre-kiosk UI (home-screen widget, old browse home)\n- kiosk: album library as a grid like Qt, Radio/Apps lists keep their icons\n- release: companion 1.0.17-svil1 (versionCode 38)\n- kiosk: bespoke album page, per-row play button, open animations\n- kiosk: show icons in the Radio/Apps lists built from radioss_loop/appss_loop\n- release: bump companion to 1.0.16-svil1 (versionCode 37)\n- kiosk: fill Radio/Apps tabs from radios/apps commands, not the home menu\n- companion: bump to 1.0.15-svil1 (versionCode 36) for a dev build\n- companion: open Radio and Apps from their real home-menu item\n- audio: list onboard codecs aplay -l hides, and dump aplay/mixer in the bundle\n- docs: add AGENTS.md with Graphiti memory protocol and working rules\n- tests: stub the Bluetooth radio probe in the speaker tests\n- companion: empty item lists show a message; settings as tile groups\n- kiosk: album/artist queue buttons confirm only what Lyrion accepted (#120)\n- ci: use GITHUB_REF_NAME for companion artifact name\n- Fix version extraction from GitHub tag\n- companion: open Radio and Apps tabs inside the kiosk shell\n- player: resume only the internal player on boot, keep speakers paused (#124)\n- kiosk: keep the breadcrumb trail from running over \"Back\" (#113)\n- kiosk: let a real keyboard type into the on-screen keyboard (#114)\n- player: pause all local players on shutdown instead of resuming on boot (#124)\n- bluetooth: don't offer the switch when there is no adapter\n- files: check free space when copying to the second disk too\n- kiosk: remind to remove the USB stick in the power dialog\n- kiosk: confirm the album/artist queue buttons with a toast\n- kiosk: show the basename for a folder literally named \"0\"\n- signal path: a remote player's path is unknown, not processed\n- files: name the roots System disk / Second disk in the folder picker\n- companion: browse the library inside the kiosk shell (M2)\n- companion: decouple browse row-stack from the concrete list activity\n- website: count Ko-fi \"Tip\" donations in the supporters strip\n- lyrion: repair stray ownership of the state tree on every start\n- companion: home tiles set an empty players array so browsing doesn't crash\n- companion: build tile header items via the record constructor (no NPE)\n- companion: don't crash the shell's mini player when there is no action bar\n- companion: land on the kiosk shell as home, not the old server menu\n- companion: kiosk-style shell with a tabbed home of category tiles (M1)\n- kiosk: rename the library \"Artists\" category to \"Album Artists\"\n- kiosk: return to where you were when leaving a section, and a working Back in Settings\n- signal path: decide lossless by codec, never from the absence of a lossy tag\n- web admin: settings front page is a grid of square tiles\n- kiosk: a real keyboard types into the on-screen keyboard (space, enter and backspace stay its own, #114); the breadcrumb trail stops short of the buttons and keeps its end in view (#113)\n- kiosk settings: front page is a grid of square tiles (six macro sections, each opening a grid of its sections); interface resolution falls back to the biggest mode the monitor lists when none matches its aspect (21:9 panels)\n- kiosk: adapt the interface to ultrawide and bar screens (canvas up to 6:1, 440-point canvas for bar panels, wide Now Playing, home, albums, CD changer, settings); original VU panel kept\n- kiosk (ultrawide test): fullscreen VU plate grows in width in 7 slices, meters grouped, title in a header\n- WIP ultrawide: fullscreen VU = long plate (stretched middle), track info on the plate\n- WIP ultrawide: bar Now Playing clock next to the left buttons\n- WIP ultrawide: CD changer big on the right in wide canvases; test-only ui-test-bar\n- WIP ultrawide: bar player text centred, play button under the title\n- WIP ultrawide: bar player controls centred, volume on its own row\n- WIP ultrawide: bar Now Playing = player | VU | album\n- WIP ultrawide: bar Now Playing = cover | VU | title and controls\n- WIP ultrawide: 440-point canvas for bar panels (home, panel, albums, Now Playing)\n- WIP ultrawide: Now Playing stacked right column (header, big VU, bottom controls)\n- WIP ultrawide test: ui-test-aspect override\n- WIP ultrawide test: canvas up to 6:1, wide/ultra levels, 3-column Now Playing, home/album columns\n- ci: a dev's changelog starts from the previous dev, not from its last alpha\n- website: a beta version to download, ISO and USB image\n- vu store: Blue Neon v2, the meter sits higher in Now Playing\n- vu store: Blue Neon, a backlit neon meter\n- ci: CodeQL once a night instead of on every push\n- ci: keep the A/B image artifact one day, not fourteen\n- website: the F-Droid index is not a download, only the APKs are counted\n- website: the same client fetching the same file within an hour counts once\n- companion: 1.0.14\n- companion: three crashes from the Play console fixed\n- ci: releases start the Cloudflare Pages deploy themselves\n- website: in line with main\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.26-dev.1.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1/hifi-qtui-v2.5.26-dev.1.tar.gz",
-      "size": 22821438
+      "name": "hifi-qtui-v2.5.26-dev.3.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.3/hifi-qtui-v2.5.26-dev.3.tar.gz",
+      "size": 22899531
     },
     {
-      "name": "hifi-qtui-v2.5.26-dev.1.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1/hifi-qtui-v2.5.26-dev.1.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.26-dev.3.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.3/hifi-qtui-v2.5.26-dev.3.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-system-v2.5.26-dev.1.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1/hifi-system-v2.5.26-dev.1.tar.gz",
-      "size": 2125273
+      "name": "hifi-system-v2.5.26-dev.3.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.3/hifi-system-v2.5.26-dev.3.tar.gz",
+      "size": 2171333
     },
     {
-      "name": "hifi-system-v2.5.26-dev.1.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1/hifi-system-v2.5.26-dev.1.tar.gz.sha256",
+      "name": "hifi-system-v2.5.26-dev.3.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.3/hifi-system-v2.5.26-dev.3.tar.gz.sha256",
       "size": 99
     },
     {
-      "name": "hifi-os-v2.5.26-dev.1.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1/hifi-os-v2.5.26-dev.1.tar.gz",
-      "size": 131033
+      "name": "hifi-os-v2.5.26-dev.3.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.3/hifi-os-v2.5.26-dev.3.tar.gz",
+      "size": 133741
     },
     {
-      "name": "hifi-os-v2.5.26-dev.1.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1/hifi-os-v2.5.26-dev.1.tar.gz.sha256",
+      "name": "hifi-os-v2.5.26-dev.3.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.3/hifi-os-v2.5.26-dev.3.tar.gz.sha256",
       "size": 95
     },
     {
-      "name": "hifi-os-v2.5.26-dev.1.tar.gz.sha256.sig",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1/hifi-os-v2.5.26-dev.1.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.26-dev.3.tar.gz.sha256.sig",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.3/hifi-os-v2.5.26-dev.3.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.26-dev.1.raucb",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1/hifi-image-v2.5.26-dev.1.raucb",
-      "size": 1029507733
+      "name": "hifi-image-v2.5.26-dev.3.raucb",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.3/hifi-image-v2.5.26-dev.3.raucb",
+      "size": 1029859989
     },
     {
-      "name": "hifi-image-v2.5.26-dev.1.raucb.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.1/hifi-image-v2.5.26-dev.1.raucb.sha256",
+      "name": "hifi-image-v2.5.26-dev.3.raucb.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.3/hifi-image-v2.5.26-dev.3.raucb.sha256",
       "size": 97
     }
   ]
