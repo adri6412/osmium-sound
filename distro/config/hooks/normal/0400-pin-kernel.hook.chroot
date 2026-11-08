@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+# Kernel pin, belt-and-suspenders (see config/package-lists/hifi.list.chroot for
+# why we hold 6.12.113 and how to bump by hand). On top of the lb config
+# --linux-packages pin: if anything still pulled the default linux-image-amd64
+# metapackage or the regressed 6.12.115 kernel, drop them so only the pinned
+# 6.12.113+deb13 ABI survives into the squashfs. Runs before the DKMS hooks
+# (0420/0440) so `ls /lib/modules` shows a single kernel.
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get purge -y linux-image-amd64 linux-headers-amd64 2>/dev/null || true
+apt-get purge -y '^linux-image-6\.12\.115.*' '^linux-headers-6\.12\.115.*' 2>/dev/null || true
+
+# Fail the build rather than ship the wrong kernel.
+if ! dpkg -l 'linux-image-6.12.113+deb13-amd64' 2>/dev/null | grep -q '^ii'; then
+    echo "FATAL: pinned kernel linux-image-6.12.113+deb13-amd64 not installed" >&2
+    exit 1
+fi
+echo "pin-kernel: /boot has $(ls /boot/vmlinuz-* 2>/dev/null | tr '\n' ' ')"

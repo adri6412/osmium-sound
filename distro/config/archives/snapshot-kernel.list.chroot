@@ -1,0 +1,7 @@
+# Kernel pin source (see distro/config/package-lists/hifi.list.chroot for why).
+# The pinned 6.12.113+deb13 kernel was withdrawn from the live trixie-security
+# mirror (superseded by 6.12.115+deb13.1), so pull it from a Debian snapshot
+# where it is still present. check-valid-until=no is required: snapshot Release
+# files are "expired" and apt would otherwise reject them. Signed by the
+# standard Debian keys already in debian-archive-keyring.
+deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261016T133910Z/ trixie-security main
