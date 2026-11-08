@@ -306,6 +306,22 @@ const sqSnap = (v, field) => {
   return Math.min(r.max, Math.max(r.min, v));
 };
 const setSqBuf = (field, v) => setSq({ [field]: sqSnap(v, field) });
+// Touch-friendly +/- stepper. hasAuto fields (the buffers) step between the
+// field minimum and 0 = Auto; the rest clamp inside [min, max].
+const stepSq = (field, dir, hasAuto) => {
+  const r = ((sq.value && sq.value.ranges) || {})[field] || { min: 0, max: 1e9, step: 1 };
+  const step = r.step || 1;
+  const cur = parseInt(((sq.value && sq.value.conf) || {})[field]) || 0;
+  let nv;
+  if (dir < 0) {
+    if (hasAuto && cur <= r.min) nv = 0;
+    else nv = Math.max(r.min, cur - step);
+  } else {
+    if (hasAuto && cur <= 0) nv = r.min;
+    else nv = Math.min(r.max, cur + step);
+  }
+  setSq({ [field]: nv });
+};
 
 // Toggle an ALSA playback switch of the output card (e.g. the onboard S/PDIF
 // IEC958 transmitter, muted by default). The backend returns the fresh switch
@@ -2161,20 +2177,28 @@ onUnmounted(() => {
                    :info="sq.pcm2dsd" :volume="sq.conf.volume" :busy="sqBusy" @set="setSq" />
         </div>
 
-        <label>{{ t('settings.audio.alsaBufferLabel') }}:
-          <span class="silver">{{ sq.conf.alsa_buffer ? sq.conf.alsa_buffer + ' ms' : t('settings.audio.auto') }}</span></label>
-        <input type="range" min="0" :max="(sq.ranges && sq.ranges.alsa_buffer ? sq.ranges.alsa_buffer.max : 500)"
-               :step="(sq.ranges && sq.ranges.alsa_buffer ? sq.ranges.alsa_buffer.step : 10)" :value="sq.conf.alsa_buffer"
-               :disabled="sqBusy" style="width: 100%; accent-color: var(--gold);"
-               @change="setSqBuf('alsa_buffer', $event.target.value)" />
+        <label>{{ t('settings.audio.alsaBufferLabel') }}:</label>
+        <div class="stepper">
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('alsa_buffer', -1, true)">−</button>
+          <span class="stepval silver">{{ sq.conf.alsa_buffer ? sq.conf.alsa_buffer + ' ms' : t('settings.audio.auto') }}</span>
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('alsa_buffer', 1, true)">+</button>
+        </div>
         <p class="muted">{{ t('settings.audio.alsaBufferHelp') }}</p>
 
-        <label>{{ t('settings.audio.streamBufferLabel') }}:
-          <span class="silver">{{ sq.conf.stream_buffer ? sq.conf.stream_buffer + ' kB' : t('settings.audio.auto') }}</span></label>
-        <input type="range" min="0" :max="(sq.ranges && sq.ranges.stream_buffer ? sq.ranges.stream_buffer.max : 8192)"
-               :step="(sq.ranges && sq.ranges.stream_buffer ? sq.ranges.stream_buffer.step : 256)" :value="sq.conf.stream_buffer"
-               :disabled="sqBusy" style="width: 100%; accent-color: var(--gold);"
-               @change="setSqBuf('stream_buffer', $event.target.value)" />
+        <label>{{ t('settings.audio.alsaPeriodsLabel') }}:</label>
+        <div class="stepper">
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('alsa_periods', -1, false)">−</button>
+          <span class="stepval silver">{{ sq.conf.alsa_periods || 3 }}</span>
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('alsa_periods', 1, false)">+</button>
+        </div>
+        <p class="muted">{{ t('settings.audio.alsaPeriodsHelp') }}</p>
+
+        <label>{{ t('settings.audio.streamBufferLabel') }}:</label>
+        <div class="stepper">
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('stream_buffer', -1, true)">−</button>
+          <span class="stepval silver">{{ sq.conf.stream_buffer ? sq.conf.stream_buffer + ' kB' : t('settings.audio.auto') }}</span>
+          <button class="secondary" :disabled="sqBusy" @click="stepSq('stream_buffer', 1, true)">+</button>
+        </div>
         <p class="muted">{{ t('settings.audio.streamBufferHelp') }}</p>
 
         <label>{{ t('settings.audio.realtimeLabel') }}</label>
@@ -3340,6 +3364,26 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Touch-friendly +/- stepper (Settings → Audio): big minus/plus buttons with
+   the current value between them, replacing the old range sliders. */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 2px;
+}
+.stepper button {
+  width: 52px;
+  font-size: 20px;
+  line-height: 1;
+  padding: 10px 0;
+}
+.stepval {
+  min-width: 96px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 /* One playback switch row (Settings → Audio → Advanced): control name on the
    left, the On/Off segmented toggle on the right. */
 .mixer-switch {

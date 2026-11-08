@@ -36,8 +36,10 @@ Fields (the UI exposes the starred ones, the rest are set elsewhere):
   max_rate *     `-r <max>`, 0 = let the DAC say
   volume *       software | hardware (`-V <mixer>`, the DAC's own control)
   mixer *        the ALSA control `-V` drives (first playback volume if empty)
-  alsa_buffer *  ALSA output buffer in ms, 50–500 (`-a <ms>:3`), 0 = Auto (no `-a`);
-                 built-in player defaults to 100 ms (Daphile baseline)
+  alsa_buffer *  ALSA output buffer in ms, 50–500 (`-a <ms>:<periods>`), 0 = Auto
+                 (no `-a`); built-in player defaults to 100 ms (Daphile baseline)
+  alsa_periods*  ALSA period count, 1–8 (the `:<periods>` half of `-a`); built-in
+                 player defaults to 3 (Daphile baseline)
   stream_buffer* stream buffer in kB, 1024–8192 (`-b <kB>:<out>`, out ≈ kB*4/3),
                  0 = Auto (no `-b`); built-in player defaults to 3072 kB
   realtime *     `-p 45` for the output thread
@@ -163,6 +165,7 @@ DEFAULTS = {
     'volume': 'software',
     'mixer': '',
     'alsa_buffer': 100,
+    'alsa_periods': 3,
     'stream_buffer': 3072,
     'realtime': False,
     'extra': '',
@@ -174,7 +177,7 @@ DEFAULTS = {
 }
 # What Settings → Audio may change and "Back to defaults" resets.
 TUNABLE = ('dsd', 'dsd_delay_ms', 'max_rate', 'volume', 'mixer',
-           'alsa_buffer', 'stream_buffer', 'realtime', 'extra',
+           'alsa_buffer', 'alsa_periods', 'stream_buffer', 'realtime', 'extra',
            'pcm2dsd', 'pcm2dsd_filter', 'upsample', 'upsample_cap')
 
 DSD_MODES = ('auto', 'dop', 'native', 'off')
@@ -183,12 +186,15 @@ RATES = (0, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 
 DSD_DELAYS = (0, 100, 250, 500)
 # ALSA output buffer (`-a <ms>:<periods>`) and stream buffer (`-b <kB>:<out>`) are
 # numeric: a buffer length the user sets with a slider, 0 = Auto (flag not emitted).
-# The built-in player defaults to Daphile's values (100 ms ALSA, 3072 kB stream);
-# the ALSA period count is fixed and the output stream buffer is derived from the
-# stream size (3072 → 4096, as Daphile ships). See render_argv.
-ALSA_PERIODS = 3
+# The built-in player defaults to Daphile's values (100 ms / 3 periods ALSA,
+# 3072 kB stream); the ALSA period count is user-set (1–8, default 3) and the
+# output stream buffer is derived from the stream size (3072 → 4096, as Daphile
+# ships). See render_argv.
+ALSA_PERIODS = 3          # default period count
 ALSA_MIN = 50
 ALSA_MAX = 500
+PERIODS_MIN = 1
+PERIODS_MAX = 8
 STREAM_MIN = 1024
 STREAM_MAX = 8192
 STREAM_OUT_NUM = 4
@@ -668,6 +674,24 @@ def norm_buffer(val, field):
     return max(lo, min(hi, n))
 
 
+def norm_periods(val):
+    """Coerce the ALSA period count to an int clamped to 1–8. Tolerates a legacy
+    'ms:periods' string by taking the second number. Junk falls back to the
+    default (3)."""
+    default = DEFAULTS['alsa_periods']
+    if isinstance(val, bool):
+        return default
+    if isinstance(val, str):
+        parts = val.strip().split(':')
+        s = parts[1] if len(parts) > 1 else parts[0]
+        val = s.strip()
+    try:
+        n = int(val)
+    except (TypeError, ValueError):
+        return default
+    return max(PERIODS_MIN, min(PERIODS_MAX, n))
+
+
 def normalize(model):
     """A complete, clean model from whatever was read: every field present,
     every value one the renderer accepts. Lenient on purpose — this is what
@@ -701,6 +725,7 @@ def normalize(model):
     mixer = str(src.get('mixer') or '').strip()
     m['mixer'] = mixer if _MIXER_RE.match(mixer) else ''
     m['alsa_buffer'] = norm_buffer(src.get('alsa_buffer'), 'alsa_buffer')
+    m['alsa_periods'] = norm_periods(src.get('alsa_periods'))
     m['stream_buffer'] = norm_buffer(src.get('stream_buffer'), 'stream_buffer')
     m['realtime'] = bool(src.get('realtime'))
     m['extra'] = check_extra(src.get('extra'))[0]
@@ -767,6 +792,10 @@ def set_fields(model, changes):
             lo, hi = buffer_range(key)
             if not isinstance(value, int) or isinstance(value, bool) \
                     or not (value == 0 or lo <= value <= hi):
+                raise InvalidField('squeezelite.invalidValue', key, str(value))
+        elif key == 'alsa_periods':
+            if not isinstance(value, int) or isinstance(value, bool) \
+                    or not (PERIODS_MIN <= value <= PERIODS_MAX):
                 raise InvalidField('squeezelite.invalidValue', key, str(value))
         elif key == 'realtime':
             if not isinstance(value, bool):
@@ -897,6 +926,8 @@ def parse_args(args, dsp_target=None):
         m['mixer'] = got['-V']
     if '-a' in got:
         m['alsa_buffer'] = norm_buffer(got['-a'], 'alsa_buffer')
+        if ':' in got['-a']:
+            m['alsa_periods'] = norm_periods(got['-a'])
     if '-b' in got:
         m['stream_buffer'] = norm_buffer(got['-b'], 'stream_buffer')
     if '-p' in got:
@@ -1150,7 +1181,7 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
     # is user-set with a slider; 0 = Auto drops the flag. Zones default to 0, to
     # stay out of the common case.
     if m['alsa_buffer']:
-        out += ['-a', '%d:%d' % (m['alsa_buffer'], ALSA_PERIODS)]
+        out += ['-a', '%d:%d' % (m['alsa_buffer'], m['alsa_periods'])]
     # Stream buffer (`-b <kB>:<out>`), user-set with a slider; 0 = Auto drops the
     # flag. squeezelite's heap holds this buffer, so a large value is heavy on this
     # RAM-tight box and it is shared by every built-in-player stream (local,

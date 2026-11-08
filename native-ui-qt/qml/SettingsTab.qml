@@ -1695,13 +1695,21 @@ Item {
         var abL = info(Tr.t("settings.audio.alsaBufferLabel"), abV ? (abV + " ms") : Tr.t("settings.audio.bufferAuto"))
         abL.style = "seg"; abL.tone = "gold"; abL.mono = true; abL.hh = 20
         help("settings.audio.alsaBufferHelp", 12)
-        push({ type: "slider", smin: 0, smax: abR.max, sval: abV, act: "sq_abuf" })
+        push({ type: "stepper", smin: abR.min || 0, smax: abR.max, sstep: abR.step || 10, sval: abV,
+               unit: "ms", autoLabel: Tr.t("settings.audio.bufferAuto"), act: "sq_abuf" })
+        var apR = (s.ranges || {}).alsa_periods || { min: 1, max: 8, step: 1 }
+        var apV = Number(c.alsa_periods || apR.min || 1)
+        var apL = info(Tr.t("settings.audio.alsaPeriodsLabel"), String(apV))
+        apL.style = "seg"; apL.tone = "gold"; apL.mono = true; apL.hh = 20
+        help("settings.audio.alsaPeriodsHelp", 12)
+        push({ type: "stepper", smin: apR.min || 1, smax: apR.max || 8, sstep: apR.step || 1, sval: apV, act: "sq_aper" })
         var sbR = (s.ranges || {}).stream_buffer || { min: 1024, max: 8192 }
         var sbV = Number(c.stream_buffer || 0)
         var sbL = info(Tr.t("settings.audio.streamBufferLabel"), sbV ? (sbV + " kB") : Tr.t("settings.audio.bufferAuto"))
         sbL.style = "seg"; sbL.tone = "gold"; sbL.mono = true; sbL.hh = 20
         help("settings.audio.streamBufferHelp", 12)
-        push({ type: "slider", smin: 0, smax: sbR.max, sval: sbV, act: "sq_sbuf" })
+        push({ type: "stepper", smin: sbR.min || 0, smax: sbR.max, sstep: sbR.step || 512, sval: sbV,
+               unit: "kB", autoLabel: Tr.t("settings.audio.bufferAuto"), act: "sq_sbuf" })
         toggle(Tr.t("settings.audio.realtimeLabel"), Tr.t("settings.audio.realtimeHelp"), !!c.realtime, "sq_rt")
         label("settings.audio.extraLabel", 14); help("settings.audio.extraHint", 12)
         input(Tr.t("settings.audio.extraPlaceholder"), sqExtraDirty ? sqExtraEdit : (c.extra || ""), "sq_extra", false).hh = 50
@@ -2836,6 +2844,7 @@ Item {
         case "sq_switch": post(A("/set_mixer_switch"), { name: arg, on: !row.on }, sqDone); break
         case "sq_abuf": sqSet({ alsa_buffer: sqSnap(parseInt(arg) || 0, "alsa_buffer") }); break
         case "sq_sbuf": sqSet({ stream_buffer: sqSnap(parseInt(arg) || 0, "stream_buffer") }); break
+        case "sq_aper": sqSet({ alsa_periods: parseInt(arg) || 3 }); break
         case "sq_rt": sqSet({ realtime: !row.on }); break
         case "sq_extra_apply": sqSet({ extra: sqExtraDirty ? sqExtraEdit : String((cfg.sq.conf || {}).extra || "") }); break
         case "sq_reset": sqReset(); break

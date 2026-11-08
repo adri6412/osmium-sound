@@ -167,7 +167,7 @@ class TestModel(unittest.TestCase):
     def test_normalize_is_lenient(self):
         m = sq.normalize({'output': "hw:CARD=X,DEV=0'; rm -rf /", 'name': 'has space', 'server': 'bad host',
                           'mac': 'zz', 'dsd': 'weird', 'dsd_delay_ms': 'x', 'max_rate': 12345,
-                          'volume': 'loud', 'mixer': 'My Control', 'alsa_buffer': 'huge',
+                          'volume': 'loud', 'mixer': 'My Control', 'alsa_buffer': 'huge', 'alsa_periods': 'huge',
                           'realtime': 'yes', 'extra': "-R -u v::3 $(reboot) 'x' -o hw:1,0", 'dsp': 'on'})
         self.assertEqual(m['output'], 'default')
         self.assertEqual(m['name'], 'OsmiumSound')
@@ -179,6 +179,7 @@ class TestModel(unittest.TestCase):
         self.assertEqual(m['volume'], 'software')
         self.assertEqual(m['mixer'], '')
         self.assertEqual(m['alsa_buffer'], 100)   # junk falls back to the default
+        self.assertEqual(m['alsa_periods'], 3)    # junk periods fall back to the default
         self.assertTrue(m['realtime'])
         # the safe tokens survive; the dangerous ones and the managed flag
         # (with its value) do not
@@ -188,13 +189,14 @@ class TestModel(unittest.TestCase):
     def test_set_fields_is_strict(self):
         base = sq.normalize({})
         m = sq.set_fields(base, {'dsd': 'dop', 'dsd_delay_ms': 250, 'max_rate': 192000,
-                                 'alsa_buffer': 400, 'stream_buffer': 0, 'realtime': True, 'extra': '-R -u vE'})
+                                 'alsa_buffer': 400, 'alsa_periods': 5, 'stream_buffer': 0, 'realtime': True, 'extra': '-R -u vE'})
         self.assertEqual((m['dsd'], m['dsd_delay_ms'], m['max_rate']), ('dop', 250, 192000))
-        self.assertEqual((m['alsa_buffer'], m['stream_buffer']), (400, 0))
+        self.assertEqual((m['alsa_buffer'], m['alsa_periods'], m['stream_buffer']), (400, 5, 0))
         self.assertEqual(m['extra'], '-R -u vE')
         for bad in ({'dsd': 'u32be'}, {'dsd_delay_ms': 5000}, {'dsd_delay_ms': '100'}, {'max_rate': 12345},
                     {'volume': 'loud'}, {'mixer': 'PCM Playback'}, {'alsa_buffer': 'huge'},
                     {'alsa_buffer': 20}, {'alsa_buffer': 9000}, {'stream_buffer': 100}, {'alsa_buffer': True},
+                    {'alsa_periods': 0}, {'alsa_periods': 9}, {'alsa_periods': True}, {'alsa_periods': '3'},
                     {'realtime': 1}, {'nope': 1}):
             with self.assertRaises(sq.InvalidField, msg=str(bad)):
                 sq.set_fields(base, bad)
@@ -248,6 +250,7 @@ class TestImport(unittest.TestCase):
         # the buffer flags round-trip as numbers (ms / kB), the stream value clamped
         # to its maximum (16384 -> 8192)
         self.assertEqual((m['alsa_buffer'], m['stream_buffer'], m['realtime']), (400, 8192, True))
+        self.assertEqual(m['alsa_periods'], 8)   # the second -a value now round-trips
         self.assertEqual(m['extra'], '-R -u v::3.1')
 
     def test_unknown_values_of_managed_options_are_dropped(self):
@@ -257,6 +260,7 @@ class TestImport(unittest.TestCase):
         m = sq.parse_args(LEGACY + " -r 44100-96000 -a 80:4 -b 2048:1024 -W -Z")
         self.assertEqual(m['max_rate'], 0)
         self.assertEqual(m['alsa_buffer'], 80)
+        self.assertEqual(m['alsa_periods'], 4)
         self.assertEqual(m['stream_buffer'], 2048)
         self.assertEqual(m['extra'], '-W -Z')
 
@@ -306,6 +310,9 @@ class TestRender(unittest.TestCase):
         # the stock line had `-D` on `default` too: auto no longer sends DoP there
         stock = "-o default -D -v -C 5 -s 127.0.0.1 -n OsmiumSound -M Osmium"
         self.assertEqual(sq.render(sq.parse_args(stock), self.sb.probe), stock.replace(' -D', '') + BUF)
+        # a hand-set period count comes out as the second -a value
+        m = sq.set_fields(sq.parse_args(LEGACY), {'alsa_periods': 5})
+        self.assertEqual(sq.render(m, self.sb.probe), LEGACY.replace('-D', '-D :u32be') + ' -a 100:5 -b 3072:4096')
 
     def test_dsd_modes(self):
         self.assertIn(' -D :u32be ', self.r(dsd='auto'))

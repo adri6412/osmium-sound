@@ -389,6 +389,8 @@
       "mixerLabel": "Mixer control",
       "alsaBufferLabel": "ALSA buffer",
       "alsaBufferHelp": "Output buffer size in ms. Higher stops a USB DAC crackling; 0 is Auto.",
+      "alsaPeriodsLabel": "ALSA periods",
+      "alsaPeriodsHelp": "How many chunks the ALSA output buffer is split into (1–8). Fewer can reduce crackling; the Daphile default is 3.",
       "streamBufferLabel": "Stream buffer",
       "streamBufferHelp": "How much music to keep in memory ahead of playback, in kB. 0 is Auto.",
       "realtimeLabel": "Real-time priority",

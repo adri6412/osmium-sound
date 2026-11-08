@@ -2291,9 +2291,12 @@ def get_squeezelite_conf():
         'choices': {'dsd': list(sq.DSD_MODES), 'dsd_delay_ms': list(sq.DSD_DELAYS),
                     'max_rate': [0, 96000, 192000, 384000, 768000, 1536000],
                     'upsample': list(sq.UPSAMPLE_MODES)},
-        # Numeric buffer sliders: 0 = Auto (flag dropped), else min..max step.
+        # Numeric buffer steppers: 0 = Auto (flag dropped), else min..max step.
+        # alsa_periods has no Auto (1..8, default 3).
         'ranges': {'alsa_buffer': {'min': sq.ALSA_MIN, 'max': sq.ALSA_MAX,
                                    'step': 10, 'unit': 'ms', 'auto': 0},
+                   'alsa_periods': {'min': sq.PERIODS_MIN, 'max': sq.PERIODS_MAX,
+                                    'step': 1, 'unit': '', 'auto': None},
                    'stream_buffer': {'min': sq.STREAM_MIN, 'max': sq.STREAM_MAX,
                                      'step': 256, 'unit': 'kB', 'auto': 0}},
         'defaults': {k: sq.DEFAULTS[k] for k in sq.TUNABLE},
@@ -2698,7 +2701,7 @@ def remove_external_convert(changes):
 # zones, run by hifi-zone@<id>.service). The built-in player keeps its DAC;
 # a DAC is either the built-in player's or one zone's, never both.
 ZONE_TUNABLE = ('dsd', 'dsd_delay_ms', 'max_rate', 'volume', 'mixer', 'alsa_buffer',
-                'stream_buffer', 'realtime', 'pcm2dsd', 'pcm2dsd_filter',
+                'alsa_periods', 'stream_buffer', 'realtime', 'pcm2dsd', 'pcm2dsd_filter',
                 'upsample', 'upsample_cap')
 
 
