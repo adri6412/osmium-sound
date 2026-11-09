@@ -308,7 +308,8 @@
     "spotty": {
       "preparing": "Preparazione dell'accesso…",
       "steps": "Serve Spotify Premium.\n\n1. Apri l'app Spotify sul telefono o sul computer\n2. Riproduci un brano\n3. Apri l'elenco dei dispositivi\n4. Scegli il dispositivo qui sotto:",
-      "waiting": "In attesa dell'autorizzazione da Spotify…"
+      "waiting": "In attesa dell'autorizzazione da Spotify…",
+      "pluginOnly": "Per accedere a Spotify, apri il plugin Spotty nelle impostazioni di Lyrion Music Server e completa l'accesso da lì. Poi torna qui."
     }
   },
   "player": {

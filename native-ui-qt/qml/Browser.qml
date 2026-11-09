@@ -222,6 +222,9 @@ Item {
     // conferma). Tutta l'autenticazione vive nei plugin, pilotata dal backend.
     function serviceLogin(key, label) {
         if (key === "qobuz") qobuzLogin(label, "")
+        // Spotify sign-in changes too often to drive from here; just point the
+        // user at the Spotty plugin in Lyrion, where the account is set up.
+        else if (key === "spotty") Ui.dialogs.notice(Tr.t("services.spotty.pluginOnly"))
         else deviceLogin(key, label)
     }
     function qobuzLogin(label, error) {

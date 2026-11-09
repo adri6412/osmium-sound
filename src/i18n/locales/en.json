@@ -308,7 +308,8 @@
     "spotty": {
       "preparing": "Preparing sign-in…",
       "steps": "Spotify Premium is required.\n\n1. Open the Spotify app on your phone or computer\n2. Play a track\n3. Open the list of devices\n4. Pick the device below:",
-      "waiting": "Waiting for authorization from Spotify…"
+      "waiting": "Waiting for authorization from Spotify…",
+      "pluginOnly": "To sign in to Spotify, open the Spotty plugin in your Lyrion Music Server settings and finish signing in there. Then come back here."
     }
   },
   "player": {

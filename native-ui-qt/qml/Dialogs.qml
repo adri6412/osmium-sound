@@ -28,6 +28,7 @@ Item {
     property string body: ""
     property string okLabel: ""
     property bool danger: false
+    property bool noticeOnly: false  // kind 1 shown as a single-button notice (no Cancel)
     property var cb: null
     property var items: []
     property int current: -1
@@ -69,12 +70,14 @@ Item {
 
     function openCommon(k) {
         kind = k; closing = false
-        wifiSel = -1; editingPass = false; err = ""
+        wifiSel = -1; editingPass = false; err = ""; noticeOnly = false
         sc.set(0.92); sc.to = 1.0
         closeScale = 1
         fadeAnim.duration = Theme.dur(300); fade = 1
     }
     function confirm(text, ok, dang, f) { openCommon(1); body = text || ""; okLabel = ok || Tr.t("common.confirm"); danger = !!dang; cb = f }
+    // a plain message with a single dismiss button (no Cancel), reusing kind 1
+    function notice(text, ok, f) { openCommon(1); body = text || ""; okLabel = ok || Tr.t("common.done"); danger = false; noticeOnly = true; cb = f }
     function pick(t, list, cur, f) {
         openCommon(2); title = t || ""; items = list || []; current = cur; cb = f; pickFirst = null
         // porta la voce corrente sotto gli occhi, come fa la select di Chromium
@@ -222,12 +225,13 @@ Item {
                 Row {
                     width: parent.width; spacing: 12
                     Rectangle {
+                        visible: !root.noticeOnly
                         width: (parent.width - 12) / 2; height: 48; radius: 8; color: cTap.mix(Theme.accent, Theme.dark)
                         Text { anchors.centerIn: parent; text: Tr.t("common.cancel"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16 }
                         Tap { id: cTap; onClicked: root.finishOk(false) }
                     }
                     Rectangle {
-                        width: (parent.width - 12) / 2; height: 48; radius: 8
+                        width: root.noticeOnly ? parent.width : (parent.width - 12) / 2; height: 48; radius: 8
                         color: oTap.mix(root.danger ? "#dc2626" : Theme.gold, root.danger ? "#b91c1c" : "#ca8a04")
                         Text { anchors.centerIn: parent; text: root.okLabel; color: root.danger ? Theme.white : Theme.black; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
                         Tap { id: oTap; onClicked: root.finishOk(true) }
