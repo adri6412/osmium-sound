@@ -1,51 +1,51 @@
 {
-  "tag_name": "v2.5.26-dev.4",
-  "name": "v2.5.26-dev.4",
-  "body": "## What's new in v2.5.26-dev.4\n\n- ui(kiosk): restore \"Local Library\" label (revert Album view rename)\n",
+  "tag_name": "v2.5.26-dev.5",
+  "name": "v2.5.26-dev.5",
+  "body": "## What's new in v2.5.26-dev.5\n\n- ui(kiosk): Spotify sign-in points to the Lyrion plugin, drop the in-app flow\n- fix(kiosk): route _lms_request to the followed Lyrion, not hardcoded localhost\n",
   "assets": [
     {
-      "name": "hifi-qtui-v2.5.26-dev.4.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.4/hifi-qtui-v2.5.26-dev.4.tar.gz",
-      "size": 22899374
+      "name": "hifi-qtui-v2.5.26-dev.5.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.5/hifi-qtui-v2.5.26-dev.5.tar.gz",
+      "size": 22899572
     },
     {
-      "name": "hifi-qtui-v2.5.26-dev.4.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.4/hifi-qtui-v2.5.26-dev.4.tar.gz.sha256",
+      "name": "hifi-qtui-v2.5.26-dev.5.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.5/hifi-qtui-v2.5.26-dev.5.tar.gz.sha256",
       "size": 97
     },
     {
-      "name": "hifi-system-v2.5.26-dev.4.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.4/hifi-system-v2.5.26-dev.4.tar.gz",
-      "size": 2171351
+      "name": "hifi-system-v2.5.26-dev.5.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.5/hifi-system-v2.5.26-dev.5.tar.gz",
+      "size": 2171505
     },
     {
-      "name": "hifi-system-v2.5.26-dev.4.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.4/hifi-system-v2.5.26-dev.4.tar.gz.sha256",
+      "name": "hifi-system-v2.5.26-dev.5.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.5/hifi-system-v2.5.26-dev.5.tar.gz.sha256",
       "size": 99
     },
     {
-      "name": "hifi-os-v2.5.26-dev.4.tar.gz",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.4/hifi-os-v2.5.26-dev.4.tar.gz",
-      "size": 133743
+      "name": "hifi-os-v2.5.26-dev.5.tar.gz",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.5/hifi-os-v2.5.26-dev.5.tar.gz",
+      "size": 133744
     },
     {
-      "name": "hifi-os-v2.5.26-dev.4.tar.gz.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.4/hifi-os-v2.5.26-dev.4.tar.gz.sha256",
+      "name": "hifi-os-v2.5.26-dev.5.tar.gz.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.5/hifi-os-v2.5.26-dev.5.tar.gz.sha256",
       "size": 95
     },
     {
-      "name": "hifi-os-v2.5.26-dev.4.tar.gz.sha256.sig",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.4/hifi-os-v2.5.26-dev.4.tar.gz.sha256.sig",
+      "name": "hifi-os-v2.5.26-dev.5.tar.gz.sha256.sig",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.5/hifi-os-v2.5.26-dev.5.tar.gz.sha256.sig",
       "size": 64
     },
     {
-      "name": "hifi-image-v2.5.26-dev.4.raucb",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.4/hifi-image-v2.5.26-dev.4.raucb",
-      "size": 1029855893
+      "name": "hifi-image-v2.5.26-dev.5.raucb",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.5/hifi-image-v2.5.26-dev.5.raucb",
+      "size": 1029859989
     },
     {
-      "name": "hifi-image-v2.5.26-dev.4.raucb.sha256",
-      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.4/hifi-image-v2.5.26-dev.4.raucb.sha256",
+      "name": "hifi-image-v2.5.26-dev.5.raucb.sha256",
+      "browser_download_url": "https://file.osmiumsound.it/ota/v2.5.26-dev.5/hifi-image-v2.5.26-dev.5.raucb.sha256",
       "size": 97
     }
   ]
