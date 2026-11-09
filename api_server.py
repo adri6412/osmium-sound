@@ -7036,7 +7036,11 @@ def _lms_rpc(host, playerid, command, timeout=5):
         return json.loads(resp.read()).get('result')
 
 def _lms_request(playerid, command, timeout=5):
-    return _lms_rpc('127.0.0.1', playerid, command, timeout)
+    # Talk to the Lyrion this box follows (its own 127.0.0.1 when local, the
+    # external server's host in follow mode), like _lms_web already does. A
+    # hardcoded 127.0.0.1 broke every kiosk query — streaming-service state,
+    # playback control, serverstatus — when following an external Lyrion.
+    return _lms_rpc(_current_lms_host() or '127.0.0.1', playerid, command, timeout)
 
 # ── Osmium Convert plugin: the single mechanism for per-player conversion ──
 # The box no longer writes custom-convert.conf. It tells the Osmium Convert
