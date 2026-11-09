@@ -308,7 +308,8 @@
     "spotty": {
       "preparing": "Anmeldung wird vorbereitet…",
       "steps": "Spotify Premium ist erforderlich.\n\n1. Öffne die Spotify-App auf dem Handy oder Computer\n2. Spiele einen Titel ab\n3. Öffne die Geräteliste\n4. Wähle das Gerät unten aus:",
-      "waiting": "Warten auf die Autorisierung durch Spotify…"
+      "waiting": "Warten auf die Autorisierung durch Spotify…",
+      "pluginOnly": "Um dich bei Spotify anzumelden, öffne das Spotty-Plugin in den Einstellungen deines Lyrion Music Servers und schließe die Anmeldung dort ab. Komm dann hierher zurück."
     }
   },
   "player": {
