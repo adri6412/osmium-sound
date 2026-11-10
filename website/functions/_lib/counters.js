@@ -33,6 +33,18 @@ export const DOWNLOADS_DAILY = {
   sketchCol: "downloaders_hll",
 };
 
+// The same served downloads, crossed with the country they came from, so the
+// dashboard can answer "which version, from where". Written with dailyStatement
+// (not dailyStatements): no "*" total row here, because downloads_daily already
+// holds the per-file total and site_breakdown the per-country one — this table
+// only adds the two together. Only SERVED is written to it.
+export const DOWNLOADS_GEO = {
+  table: "downloads_geo",
+  keyCols: ["file", "country"],
+  countCol: "hits",
+  sketchCol: "downloaders_hll",
+};
+
 export const SERVED = "served";
 export const CLICK = "click";
 // An appliance asking whether there is a new version. It is a fetch of a file

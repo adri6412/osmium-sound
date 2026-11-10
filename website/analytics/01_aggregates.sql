@@ -66,6 +66,29 @@ CREATE TABLE IF NOT EXISTS site_drops (
   PRIMARY KEY (day, reason, asn)
 );
 
+-- Downloads crossed with the country they came from, so "which version, from
+-- where" can be answered. downloads_daily already holds hits and unique
+-- downloaders per file (the version is in the file name), and site_breakdown
+-- holds the day's countries merged across every file: what neither can give is
+-- the two together. This table is that cross-tab, and nothing more — still a
+-- per-day counter with a HyperLogLog sketch, no row belongs to a visitor.
+--   hits            download starts of this file from this country that day
+--   downloaders_hll unique downloaders of this file from this country, so a
+--                   period is the union of its days and the same box counted
+--                   once (website/functions/_lib/hll.js)
+-- Only 'served' is written here: a click is a button on the site, not a place a
+-- file went to, and an update check is noise at this granularity. country is
+-- the Cloudflare edge country or 'XX' when unknown; a PRIMARY KEY column cannot
+-- be NULL and still deduplicate.
+CREATE TABLE IF NOT EXISTS downloads_geo (
+  day TEXT NOT NULL,
+  file TEXT NOT NULL,
+  country TEXT NOT NULL DEFAULT 'XX',
+  hits INTEGER NOT NULL DEFAULT 0,
+  downloaders_hll BLOB,
+  PRIMARY KEY (day, file, country)
+);
+
 -- ---------------------------------------------------------------- history
 --
 -- Two eras, never both for the same day, or every number would double:

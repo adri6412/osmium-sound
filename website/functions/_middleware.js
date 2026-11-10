@@ -27,8 +27,10 @@ import { classify, isDatacenter, parseUA, PROBE_PATHS } from "./_lib/traffic.js"
 import {
   CHECK,
   DOWNLOADS_DAILY,
+  DOWNLOADS_GEO,
   SERVED,
   breakdownStatement,
+  dailyStatement,
   dailyStatements,
   dropStatement,
   networkValue,
@@ -109,6 +111,9 @@ async function countDownload(db, { day, file, now, ip, userAgent, country, asn, 
   const hash = await visitorHash(db, now, ip, userAgent);
   if (isRepeat(`${hash}|${file}`, now)) return;
   const daily = await dailyStatements(db, DOWNLOADS_DAILY, { day, key: [file, SERVED], hash });
+  // The version-by-country cross-tab. dailyStatement, not dailyStatements: this
+  // table keeps no "*" total row (see counters.js).
+  const geo = await dailyStatement(db, DOWNLOADS_GEO, { day, key: [file, country], hash });
   const { browser, os } = parseUA(userAgent);
   // dl_ dimensions are counted per download, and kept apart from the ones
   // counted per page view so the two can never be added up by mistake.
@@ -120,6 +125,7 @@ async function countDownload(db, { day, file, now, ip, userAgent, country, asn, 
   };
   await db.batch([
     ...daily,
+    geo,
     ...Object.entries(dims).map(([dim, value]) => breakdownStatement(db, { day, dim, value })),
   ]);
 }
