@@ -609,7 +609,7 @@ void Player::pollSignalPath() {
 // ─── stato derivato (useLyrionPlayer.js / app.c derive()) ──────────────────
 void Player::derive() {
     QString t = m_type.toLower();
-    bool isDsd = t == "dsf" || t == "dsd";
+    bool isDsd = t == "dsf" || t == "dff" || t == "dsd";  // match DSD_TYPES in hifi_signal_path.py
     bool hiresPcm = !isDsd && (m_sampleRate > 44100 || m_sampleSize > 16);
     if (!m_type.isEmpty()) { m_qPcm = !isDsd; m_qHires = isDsd || hiresPcm; m_qDsd = isDsd; }
     else m_qPcm = m_qHires = m_qDsd = false;

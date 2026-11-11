@@ -200,6 +200,11 @@ STREAM_MAX = 8192
 STREAM_OUT_NUM = 4
 STREAM_OUT_DEN = 3
 RT_PRIORITY = '45'
+# Bounded wait for the configured USB DAC to enumerate before the first render,
+# so squeezelite's first HELO to Lyrion carries the DoP/DSD capability (see
+# wait_for_card). 0 disables it (the default, so tests and library callers never
+# block); the `apply` command sets it.
+DAC_WAIT_SECONDS = 10
 # Options the model renders itself: refused in `extra` so they cannot appear twice.
 MANAGED_FLAGS = ('-o', '-n', '-s', '-m', '-M', '-D', '-r', '-V', '-a', '-b', '-p', '-v', '-C', '-c')
 
@@ -1144,6 +1149,7 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
     up_player = (not dsp and state != 'active' and upsample_state(m, zone) == 'active')
     up_rate = player_upsample_rate(m, output, proc_asound) if up_player else 0
     pcm_only = dsp or player
+    dop = False
     out = []
     if m['mac']:
         out += ['-m', m['mac']]
@@ -1152,6 +1158,7 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
         tok = dsd_token(m, fmt)
         if tok:
             out += tok.split()
+            dop = ':' not in tok      # bare `-D` is DoP; `-D :<fmt>` is native DSD
     if visualizer:
         out.append('-v')
     out += ['-C', '5', '-s', m['server'], '-n', m['name'], '-M', m['model']]
@@ -1196,6 +1203,14 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
     if m['stream_buffer']:
         out_kb = round(m['stream_buffer'] * STREAM_OUT_NUM / STREAM_OUT_DEN)
         out += ['-b', '%d:%d' % (m['stream_buffer'], out_kb)]
+    elif dop:
+        # "Auto" (0) would drop `-b` and leave squeezelite's small built-in stream
+        # buffer. DoP carries DSD inside high-rate PCM (DSD128 DoP is ~2x DSD64):
+        # that byte rate underruns the tiny default and the stream stalls
+        # (field-confirmed on two DACs, fixed by the large setting). Give DoP a real
+        # floor -- the "Grande" value -- instead of nothing; a user-set value above
+        # this already took the branch above and wins.
+        out += ['-b', '%d:%d' % (STREAM_MAX, round(STREAM_MAX * STREAM_OUT_NUM / STREAM_OUT_DEN))]
     if m['realtime']:
         out += ['-p', RT_PRIORITY]
     if m['extra']:
@@ -1366,7 +1381,7 @@ def derived_mac(machine_id_path=MACHINE_ID):
 
 def apply(conf_path=CONF, default_path=DEFAULT, dsp_target_path=DSP_TARGET_FILE,
           probe_fn=None, out=None, machine_id_path=MACHINE_ID, lock_timeout=LOCK_TIMEOUT,
-          player_conf_path=None):
+          player_conf_path=None, wait_output=0):
     """Load (importing the file once if needed), render, write. Returns
     (model, args, changed). Under the model's lock like update(); a lock that
     cannot be had (a stuck writer, a read-only /etc) does not stop it: the
@@ -1379,14 +1394,14 @@ def apply(conf_path=CONF, default_path=DEFAULT, dsp_target_path=DSP_TARGET_FILE,
             print(f'hifi_squeezelite: going on without the lock: {e}', file=out)
     try:
         return _apply(conf_path, default_path, dsp_target_path, probe_fn, out, machine_id_path,
-                      player_conf_path)
+                      player_conf_path, wait_output)
     finally:
         if fd is not None:
             os.close(fd)
 
 
 def _apply(conf_path, default_path, dsp_target_path, probe_fn, out, machine_id_path,
-           player_conf_path=None):
+           player_conf_path=None, wait_output=0):
     model, imported = load(conf_path, default_path, dsp_target_path)
     new_mac = False
     if not model['mac']:
@@ -1406,6 +1421,10 @@ def _apply(conf_path, default_path, dsp_target_path, probe_fn, out, machine_id_p
         except OSError as e:
             if out is not None:
                 print(f'hifi_squeezelite: could not save {conf_path}: {e}', file=out)
+    if wait_output and not model['dsp']['enabled']:
+        # Give a still-enumerating USB DAC a moment so the first render keeps `-D`
+        # and the first HELO to Lyrion advertises DoP/DSD (wait_for_card).
+        wait_for_card(model['output'], wait_output, out)
     if out is not None and not model['dsp']['enabled']:
         eff = available_output(model['output'])
         if eff != model['output']:
@@ -1567,6 +1586,30 @@ def available_output(output, proc_asound=None):
     if card is None or card_present(output, proc_asound):
         return output
     return 'null'
+
+
+def wait_for_card(output, timeout, out=None, proc_asound=None):
+    """Bounded wait for the configured `hw:` card to appear in /proc/asound before
+    the first render. A USB DAC can still be enumerating when squeezelite.service
+    runs `apply` (ExecStartPre) right after a cold boot: render would then probe it
+    as absent, drop `-D`, and squeezelite would register with Lyrion *without* the
+    DoP/DSD capability -- so a server-side DSD plugin (e.g. the DSDPlayer plugin on
+    an external LMS) cannot build a transcode and logs "Couldn't create command
+    line" until Lyrion is restarted. Waiting here lets the first HELO carry the
+    right capabilities. Bounded: a DAC that is really gone just falls through to the
+    `null` fallback after `timeout`, exactly as before. Only `hw:` cards wait;
+    null / default / Loopback return at once. 62-hifi-audio-hotplug.rules still
+    covers a DAC plugged in later."""
+    card, _ = parse_device(output)
+    if card is None or timeout <= 0 or card_present(output, proc_asound):
+        return
+    deadline = time.monotonic() + timeout
+    while not card_present(output, proc_asound) and time.monotonic() < deadline:
+        time.sleep(0.5)
+    if out is not None:
+        here = card_present(output, proc_asound)
+        print(f'hifi_squeezelite: waited for {output} to enumerate '
+              f'({"present" if here else "still absent after %ds" % timeout})', file=out)
 
 
 # ── PCM → DSD: Lyrion's side ──────────────────────────────────────────
@@ -2187,7 +2230,7 @@ def run_zone(zid, zones_path=None, conf_path=CONF, poll=3.0, out=None):
 def main(argv):
     cmd = argv[1] if len(argv) > 1 else ''
     if cmd == 'apply' and len(argv) == 2:
-        apply(out=sys.stdout)
+        apply(out=sys.stdout, wait_output=DAC_WAIT_SECONDS)
         return 0
     if cmd == 'show' and len(argv) == 2:
         model, imported = load()

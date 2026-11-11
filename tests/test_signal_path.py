@@ -198,6 +198,23 @@ class VerdictTest(unittest.TestCase):
         self.assertEqual(r['player']['pcm2dsd']['state'], 'active')
         self.assertEqual(r['player']['pcm2dsd']['where'], 'player')
 
+    def test_dsd_source_through_our_converter_is_not_bitperfect(self):
+        # A DSD source with our own PCM->DSD conversion active is re-decoded to PCM
+        # (squeezelite feeds the Loopback with no -D) and re-modulated: the path is
+        # NOT bit-perfect, so the verdict must not be 'bitperfect' and the LED stays
+        # off. (A re-modulation done by a foreign Lyrion plugin is invisible here.)
+        orig_t, orig_p = sq.tools_present, sq.player_side_present
+        sq.tools_present = lambda: True
+        sq.player_side_present = lambda: True
+        try:
+            r = Tree(hw('DSD_U32_BE', 88200)).describe(DSF_64, main={'pcm2dsd': 'dsd128'})
+        finally:
+            sq.tools_present, sq.player_side_present = orig_t, orig_p
+        self.assertNotEqual(r['verdict'], 'bitperfect')
+        self.assertEqual(r['verdict'], 'processed')
+        self.assertIn('dsdToPcm', r['changes'])
+        self.assertEqual(r['player']['pcm2dsd']['state'], 'active')
+
     def test_pcm_to_dsd_without_the_player_side_is_not_active(self):
         # The tools for a server-side conversion are there, but the converter
         # daemon / Loopback are not: a box player cannot convert, so it stays

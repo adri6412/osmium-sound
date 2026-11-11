@@ -350,6 +350,26 @@ class TestZones(ToolsMixin, unittest.TestCase):
         self.assertFalse(sq.card_present('hw:CARD=Gone,DEV=0', self.sb.asound))
         self.assertFalse(sq.card_present('default', self.sb.asound))
 
+    def test_wait_for_card(self):
+        # Returns at once when the card is present, when the output is not a hw:
+        # card, and when the timeout is 0 -- never sleeping in those cases.
+        orig_sleep = sq.time.sleep
+        sq.time.sleep = lambda *_: (_ for _ in ()).throw(AssertionError('slept'))
+        try:
+            sq.wait_for_card('hw:CARD=D50s,DEV=0', 10, proc_asound=self.sb.asound)  # present
+            sq.wait_for_card('default', 10, proc_asound=self.sb.asound)             # not a hw: card
+            sq.wait_for_card('hw:CARD=Gone,DEV=0', 0, proc_asound=self.sb.asound)   # timeout 0
+        finally:
+            sq.time.sleep = orig_sleep
+        # An absent card with a real timeout does poll (and would fall back later).
+        slept = []
+        sq.time.sleep = lambda s: slept.append(s)
+        try:
+            sq.wait_for_card('hw:CARD=Gone,DEV=0', 1, proc_asound=self.sb.asound)
+        finally:
+            sq.time.sleep = orig_sleep
+        self.assertTrue(slept)
+
     def test_run_zone_refuses_unknown(self):
         self.assertEqual(sq.run_zone('../etc', self.sb.zones), 64)
         self.assertEqual(sq.run_zone('D50s-0', self.sb.zones), 64)

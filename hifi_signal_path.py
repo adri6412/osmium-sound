@@ -244,12 +244,16 @@ def describe(source, lyrion, player, main, zones, probe_fn=None, hw_fn=None, car
     out['dac'] = card_fn(model['output'])
     out['hw'] = hw
 
-    # A box player converts every PCM track to DSD on its own side (the Loopback
-    # + hifi-pcm2dsd-player) when its model asks for it.
+    # A box player converts to DSD on its own side (the Loopback + hifi-pcm2dsd-player)
+    # when its model asks for it. A PCM track is modulated straight to DSD; a DSD
+    # source is first re-decoded to PCM (squeezelite plays PCM into the Loopback,
+    # launched with no -D) and then re-modulated -- so with the converter active the
+    # path is never bit-perfect, DSD source included. Only our own converter is
+    # visible here; a re-modulation done upstream by a foreign Lyrion plugin is not.
     converted = False
-    if not src_dsd and p2d == 'active':
+    if p2d == 'active':
         converted = True
-        changes.append('pcmToDsd')
+        changes.append('dsdToPcm' if src_dsd else 'pcmToDsd')
     # software volume below 100 % is arithmetic on every PCM sample; a DSD
     # stream (native or DoP) goes past squeezelite's volume untouched
     dsd_out = hw['kind'] == 'dsd' or bool(hw.get('maybe_dop') and (src_dsd or converted)) if hw else \
