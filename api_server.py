@@ -4847,7 +4847,7 @@ _ROTATION_TOKEN_RE = re.compile(r'^(video=[^:=\s]+:panel_orientation=|hifi\.rota
 # hifi_cmdline value, so a write for one must preserve the other's tokens — the
 # legacy path strips by this combined regex before re-adding the full set.
 _MANAGED_TOKEN_RE = re.compile(
-    r'^(video=[^:=\s]+:panel_orientation=|hifi\.rotate=|mitigations=)')
+    r'^(video=[^:=\s]+:(panel_orientation=|\d+x\d+[MRD]*@?)|hifi\.rotate=|mitigations=)')
 DRM_SYSFS_DIR = '/sys/class/drm'
 BOOT_CMDLINE_ENV = '/boot/efi/EFI/debian/hifi-cmdline.env'
 
@@ -4879,6 +4879,32 @@ def _rotation_boot_tokens(deg):
         return []
     video = [f'video={c}:panel_orientation={orient}' for c in _drm_connectors()]
     return video + [f'hifi.rotate={deg}'] if video else []
+
+# #137 — UNTESTED, needs Gianfranco's 1024x600 panel.
+# A panel whose EDID never announces its real geometry (a 1024x600 touchscreen
+# that reports only a generic 1024x768, say) is pinned here as "WxH" or "WxH@R".
+# hifi-ui-resolution.sh injects the mode at runtime on X11; this puts the same
+# mode on the kernel command line so it survives A/B updates and covers Wayland
+# too (the issue asks for exactly this). `M` makes the kernel compute CVT
+# timings, matching the runtime modeline. No file -> no token, nothing changes.
+# CAVEAT (untested): if such a panel also needs rotation, the mode and
+# panel_orientation= belong in ONE video= option for that connector; that merge
+# is not done here -- revisit once the panel is in hand.
+PANEL_FORCE_MODE_FILE = '/etc/hifi-player/panel-force-mode'
+
+def _panel_force_mode_boot_tokens():
+    """`video=<conn>:<W>x<H>M@<R>` for every connector, or [] when unset/bad."""
+    try:
+        with open(PANEL_FORCE_MODE_FILE) as f:
+            spec = f.read().strip()
+    except Exception:
+        return []
+    m = re.match(r'^(\d+)x(\d+)(?:@(\d+))?$', spec)
+    if not m:
+        return []
+    w, h, r = m.group(1), m.group(2), m.group(3) or '60'
+    conns = _drm_connectors()
+    return [f'video={c}:{w}x{h}M@{r}' for c in conns] if conns else []
 
 def _boot_rotation_env_value():
     """What the A/B boot reads now, or None when there is no file."""
@@ -4928,14 +4954,16 @@ def _apply_rotation_to_boot(deg):
     rot = _rotation_boot_tokens(deg)
     if deg and not rot:
         return False                       # no display connector at all
-    return _write_hifi_cmdline(rot + _system_tweaks_boot_tokens())
+    return _write_hifi_cmdline(rot + _system_tweaks_boot_tokens()
+                               + _panel_force_mode_boot_tokens())
 
 def _apply_system_tweaks_to_boot():
     """Put (or clear) System tweaks' mitigations token on the kernel command
     line, preserving the rotation tokens already there. True when the next boot
     will carry the current System-tweaks choice."""
     rot = _rotation_boot_tokens(get_ui_rotation()['rotation'])
-    return _write_hifi_cmdline(rot + _system_tweaks_boot_tokens())
+    return _write_hifi_cmdline(rot + _system_tweaks_boot_tokens()
+                               + _panel_force_mode_boot_tokens())
 
 def set_ui_rotation(deg):
     """Save the rotation: the kiosk turns as soon as the file changes, the

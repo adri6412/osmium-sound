@@ -121,6 +121,21 @@ set -eu
 # selettore di risoluzione.
 RES_FILE=/etc/hifi-player/ui-resolution
 
+# #137 — UNTESTED, needs Gianfranco's 1024x600 panel.
+# Some small panels (notably 1024x600 touchscreens) ship an EDID that never
+# announces their real geometry — they expose a generic 1024x768 (or similar)
+# as "preferred" and nothing at 1024x600. Every mode this script could pick is
+# then wrong, so the picture is letterboxed and horizontally stretched. There
+# is no reliable way to tell such a panel apart from a genuine 1024x768 one, so
+# the real geometry is NOT auto-detected: an operator pins it in this file
+# (contents e.g. "1024x600" or "1024x600@60"). When set, X11 injects that mode
+# with a CVT modeline and drives it directly, bypassing the EDID list. Wayland
+# cannot add a custom mode at runtime (wlr-randr), so there it is covered only
+# by the boot cmdline `video=<connector>:<mode>` that api_server.py writes from
+# the same file. No marker file -> this whole path is inert and nothing else
+# changes for any other panel.
+FORCE_MODE_FILE=/etc/hifi-player/panel-force-mode
+
 # Modo NATIVO del pannello, memorizzato a runtime. Serve da quando `apply` può
 # cambiare davvero il modo video: il modo corrente non è più una fonte
 # affidabile per "quanto è grande il pannello", perché alla seconda esecuzione
@@ -349,6 +364,55 @@ target_width() {
     }'
 }
 
+# #137 — UNTESTED. Geometry pinned in FORCE_MODE_FILE, "WxH" or "WxH@R"; empty
+# string on failure so callers can test it.
+forced_mode() {
+    [ -r "$FORCE_MODE_FILE" ] || return 1
+    m="$(tr -d ' \t\r\n' < "$FORCE_MODE_FILE" 2>/dev/null)"
+    case "$m" in
+        [0-9]*x[0-9]*) printf '%s\n' "$m" ;;
+        *) return 1 ;;
+    esac
+}
+
+# CVT timing (the part after the mode name in an xrandr --newmode line) for a
+# forced geometry. Prefers the `cvt` tool when present; otherwise a built-in
+# table for the one geometry this is shipped for. 1024x600@60 below is the
+# standard CVT timing (`cvt 1024 600 60`).
+modeline_for() {
+    g="$1"; wh="${g%@*}"; w="${wh%x*}"; h="${wh#*x}"
+    r="${g#*@}"; [ "$r" = "$g" ] && r=60
+    if command -v cvt >/dev/null 2>&1; then
+        cvt "$w" "$h" "$r" 2>/dev/null | awk '/Modeline/{sub(/^[^0-9]*Modeline[^"]*"[^"]*"/,""); print; exit}'
+        return
+    fi
+    case "${w}x${h}" in
+        1024x600) echo '49.00  1024 1072 1168 1312  600 603 613 624 -hsync +vsync' ;;
+        *) return 1 ;;
+    esac
+}
+
+# X11 only: add the forced mode to OUT if missing, then make it active. Returns
+# success only when a forced mode was handled, so apply_pref can short-circuit
+# the normal EDID-driven path. Never fatal.
+inject_forced_mode() {
+    out="$1"
+    FM="$(forced_mode)" || return 1
+    [ "$(backend)" = x11 ] || return 1
+    command -v xrandr >/dev/null 2>&1 || return 1
+    geom="${FM%@*}"
+    name="${geom}_60"
+    if ! xrandr --query 2>/dev/null | grep -qw "$geom"; then
+        timing="$(modeline_for "$FM")" || return 1
+        # shellcheck disable=SC2086
+        xrandr --newmode "$name" $timing >/dev/null 2>&1 || true
+        xrandr --addmode "$out" "$name" >/dev/null 2>&1 || true
+    fi
+    xrandr --output "$out" --mode "$geom" --scale 1x1 >/dev/null 2>&1 \
+        || xrandr --output "$out" --mode "$name" --scale 1x1 >/dev/null 2>&1 || true
+    return 0
+}
+
 apply_pref() {
     BE="$(backend)"
     [ -n "$BE" ] || return 0
@@ -359,6 +423,12 @@ apply_pref() {
     # sessione di login e un errore qui non deve poter impedire l'avvio del
     # kiosk.
     [ -n "$OUT" ] || return 0
+
+    # #137 (UNTESTED): a pinned forced geometry overrides the EDID-driven path
+    # entirely. No marker file -> inert, falls through to the normal logic.
+    if inject_forced_mode "$OUT"; then
+        return 0
+    fi
 
     STATE="$(query_state "$BE" "$OUT")"
     CUR="$(state_field CUR)"
