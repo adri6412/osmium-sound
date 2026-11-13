@@ -171,5 +171,43 @@ class TestRunPcmEncoder(unittest.TestCase):
         self.assertEqual(self.m.run_pcm('wav', 'x2', 0), 3)
 
 
+class TestBrokenDecoderFix(unittest.TestCase):
+    """#140: Plugin.pm must always emit wildcard ffmpeg override rules for the
+    codecs whose stock decoders are missing/unstable on the image (WMA has no
+    wmadec; squeezelite's built-in ffmpeg busy-loops on WMA/ALAC). The caps must
+    use file input (F), not stdin (I): a piped MP4/M4A with a trailing moov atom
+    (ALAC) cannot be decoded and the player stops after a beat. Device-validated
+    on the Dell 2026-11-13; this guards the shape against regression."""
+
+    def setUp(self):
+        plugin = os.path.join(ROOT, 'distro', 'config', 'includes.chroot', 'usr',
+                              'local', 'share', 'osmium', 'lms-plugins',
+                              'OsmiumConvert', 'Plugin.pm')
+        with open(plugin) as f:
+            self.src = f.read()
+
+    def test_fix_block_is_wired_into_apply(self):
+        self.assertIn('_fixBlock() . _ruleBlock', self.src)
+
+    def test_fix_block_covers_the_broken_codecs(self):
+        import re
+        m = re.search(r'for my \$typ \(qw\(([^)]*)\)\)', self.src)
+        self.assertIsNotNone(m, 'could not find the _fixBlock type list')
+        types = set(m.group(1).split())
+        self.assertTrue({'wma', 'wmal', 'wmap', 'alc', 'alcx'} <= types, types)
+
+    def test_fix_caps_use_file_input_not_stdin(self):
+        m = [l for l in self.src.splitlines() if 'FIX_FFMPEG_CAPS' in l and '=' in l]
+        self.assertTrue(m, 'FIX_FFMPEG_CAPS not found')
+        caps = m[0].split('=', 1)[1]
+        self.assertIn('F', caps)
+        # The stdin flag (I) reintroduces the ALAC moov-at-end pipe failure.
+        self.assertNotRegex(caps, r"#\s*[A-Z]*I[A-Z]*:")
+
+    def test_fix_rule_decodes_with_ffmpeg(self):
+        self.assertIn('[ffmpeg]', self.src)
+        self.assertRegex(self.src, r"\$dst eq 'flc' \? '-c:a flac")
+
+
 if __name__ == '__main__':
     unittest.main()

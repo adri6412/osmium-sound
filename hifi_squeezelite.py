@@ -206,7 +206,7 @@ RT_PRIORITY = '45'
 # block); the `apply` command sets it.
 DAC_WAIT_SECONDS = 10
 # Options the model renders itself: refused in `extra` so they cannot appear twice.
-MANAGED_FLAGS = ('-o', '-n', '-s', '-m', '-M', '-D', '-r', '-V', '-a', '-b', '-p', '-v', '-C', '-c')
+MANAGED_FLAGS = ('-o', '-n', '-s', '-m', '-M', '-D', '-r', '-V', '-a', '-b', '-p', '-v', '-C', '-c', '-e')
 
 # PCM → DSD: the DSD rate for each choice. From 44.1 kHz material that is
 # 64, 128 and 256 times the CD rate; 48 kHz material is resampled on the way.
@@ -1213,6 +1213,15 @@ def render_argv(model, probe_fn=None, visualizer=True, name=None, zone=False, pr
         out += ['-b', '%d:%d' % (STREAM_MAX, round(STREAM_MAX * STREAM_OUT_NUM / STREAM_OUT_DEN))]
     if m['realtime']:
         out += ['-p', RT_PRIORITY]
+    # Never let the player decode WMA/ALAC itself. squeezelite's pinned build has
+    # a built-in ffmpeg (the `wma`/`alac` codecs) that busy-loops at a track
+    # boundary on these -- `Input packet size too small`, `av_send_packet` error
+    # -- freezing playback and wedging the whole process until it is restarted
+    # (#140). Excluding them from the advertised codecs forces Lyrion to
+    # transcode server-side instead, through the always-on ffmpeg override rules
+    # the OsmiumConvert plugin writes (_fixBlock: ffmpeg -> flc/pcm), because the
+    # stock wma rule needs [wmadec], which this image does not ship.
+    out += ['-e', 'wma,alac']
     if m['extra']:
         out += m['extra'].split()
     return out
