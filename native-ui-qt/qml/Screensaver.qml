@@ -36,7 +36,7 @@ Item {
         fade = 1
     }
     function hide() { if (!active || closing) return; closing = true; fade = 0 }
-    Timer { interval: 50; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.active = false; root.closing = false; root.manual = false } }
+    Timer { interval: 50; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.active = false; root.closing = false; root.manual = false; Sys.reapplyPointer() } }
     // Il minuto si conta dal piu' recente fra l'ultimo tocco e la fine della
     // musica: contato solo dal tocco, chi ascoltava senza toccare trovava
     // l'orologio appena messo in pausa (e durante il cambio disco del
@@ -44,14 +44,22 @@ Item {
     property real silentSince: Sys.now()
     readonly property bool playingNow: Player.playing
     onPlayingNowChanged: if (!playingNow) silentSince = Sys.now()
+    // Uno stream remoto acceso e caricato (radio / servizio) conta come
+    // "in riproduzione" per l'orologio automatico, anche quando `Player.playing`
+    // cade per qualche decina di secondi: una radio che ribuffera o uno status
+    // poll andato stantio (player.cpp) azzerano `playing` pur con lo stream vivo,
+    // e col minuto di inattivita' (idleMs 60 s) l'orologio saliva sopra la radio
+    // (#139B). `remote`/`url`/`power` vengono da metaChanged, indipendenti dal
+    // flag playing. L'orologio alzato a mano non e' toccato.
+    readonly property bool liveStream: Player.power && Player.remote && Player.url !== ""
     // un minuto di inattivita' senza riproduzione locale; se la musica riparte
     // da fuori si toglie da solo (tranne quello alzato a mano)
     Timer {
         interval: 5000; repeat: true; running: true
         onTriggered: {
             if (!root.active) {
-                if (!Player.playing && Sys.now() - Math.max(root.lastInput, root.silentSince) >= root.idleMs && !root.blocked) root.show(false)
-            } else if (!root.manual && Player.playing) root.hide()
+                if (!Player.playing && !root.liveStream && Sys.now() - Math.max(root.lastInput, root.silentSince) >= root.idleMs && !root.blocked) root.show(false)
+            } else if (!root.manual && (Player.playing || root.liveStream)) root.hide()
         }
     }
     // sfondo che si sposta: gli stessi 5 sfasamenti del JSX

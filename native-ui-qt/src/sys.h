@@ -56,6 +56,7 @@ public:
     void setWindow(QQuickWindow *w) { m_win = w; }
     bool pointerEnabled() const { return m_pointer; }
     void setPointerEnabled(bool on);
+    Q_INVOKABLE void reapplyPointer();
     int rotation() const { return m_rotation; }
     int hwRotation() const { return m_hwRotation; }
     // only the picture: saving the choice is api_server's job (/ui_rotation),

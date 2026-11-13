@@ -150,8 +150,16 @@ void Sys::setPointerEnabled(bool on) {
     if (m_pointer == on) return;
     m_pointer = on;
     emit pointerEnabledChanged();
+    reapplyPointer();
+}
+
+// Re-assert the override-cursor stack for the current pointer setting. The
+// screensaver's full-screen MouseArea blanks the cursor only while it holds
+// it; on exit the arrow could leak in a corner (issue #139) because nothing
+// re-applied the global BlankCursor. Called when the screensaver closes.
+void Sys::reapplyPointer() {
     while (QGuiApplication::overrideCursor()) QGuiApplication::restoreOverrideCursor();
-    if (!on) QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
+    if (!m_pointer) QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
 }
 
 QString Sys::readLine(const QString &path, const QString &fallback) const {
