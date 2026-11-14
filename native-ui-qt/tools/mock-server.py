@@ -598,7 +598,7 @@ def mock_rec_list():
         items = [x for x in items if x["album_key"] not in gone]
     if not STATE.setdefault("rec", dict(REC_DEFAULT))["enabled"]:
         state, items = "disabled", []
-    return {"state": state, "plays": 7 if state == "few_plays" else 240, "needed": 20, "running": running,
+    return {"state": state, "plays": 7 if state == "few_plays" else 240, "needed": 20, "needed_albums": 10, "running": running,
             "last_run": None if state == "never_run" else {"started": time.time() - 4000, "finished": time.time() - 3700, "outcome": "ok", "mode": "model"},
             "available": True, "items": items, "scheduled": True}
 
