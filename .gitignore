@@ -62,3 +62,8 @@ appliance-test/
 disk.img
 disk.img.zst
 osmium-appliance.vmdk
+
+# Recommended albums: build-time secrets (the project's Last.fm key) and the
+# model files build-distro.sh downloads into the image tree.
+distro/secrets/
+distro/config/includes.chroot/usr/local/share/hifi-recommend/

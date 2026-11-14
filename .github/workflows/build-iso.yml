@@ -131,6 +131,8 @@ jobs:
       - name: Build the system image (no bundle, no signing)
         env:
           INPUT_TAG: ${{ inputs.tag }}
+          # Recommended albums: the project's Last.fm key (optional, see build-distro.sh)
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -196,6 +198,8 @@ jobs:
       - name: Build the system image (no bundle, no signing)
         env:
           INPUT_TAG: ${{ inputs.tag }}
+          # Recommended albums: the project's Last.fm key (optional, see build-distro.sh)
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -210,6 +214,8 @@ jobs:
       - name: Build the disk image
         env:
           INPUT_TAG: ${{ inputs.tag }}
+          # Recommended albums: the project's Last.fm key (optional, see build-distro.sh)
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
         run: |
           set -euo pipefail
           mkdir -p /mnt/usb-out
@@ -357,6 +363,8 @@ jobs:
           ISO_NAME="hifi-player-${INPUT_TAG}.iso" IMAGE_VERSION="${INPUT_TAG}" ./build-distro.sh $ARGS
         env:
           INPUT_TAG: ${{ inputs.tag }}
+          # Recommended albums: the project's Last.fm key (optional, see build-distro.sh)
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           INPUT_SUITE: ${{ inputs.suite }}
           INPUT_LYRION_URL: ${{ inputs.lyrion_url }}
           INPUT_SINGLE: ${{ inputs.single_squashfs }}

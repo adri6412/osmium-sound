@@ -147,13 +147,15 @@ jobs:
 
       - name: Package system-components OTA bundle (tarball + sha256)
         id: packsys
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           ROOT=sysbundle
           rm -rf "$ROOT"
           mkdir -p "$ROOT/usr/local/bin" "$ROOT/usr/local/sbin" "$ROOT/etc/systemd/system"
           # Python API + daemons
-          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py hifi_i18n.py hifi_metadata.py hifi_tags.py hifi_squeezelite.py hifi_cdrip.py hifi_signal_path.py hifi_diskguard.py "$ROOT/usr/local/bin/"
+          cp api_server.py vu_meter_daemon.py sources_server.py webui_server.py hifi_logging.py hifi_backup.py hifi_i18n.py hifi_metadata.py hifi_tags.py hifi_squeezelite.py hifi_cdrip.py hifi_signal_path.py hifi_diskguard.py hifi_recommend.py "$ROOT/usr/local/bin/"
           # Web-admin Vue build (served by webui_server.py from /opt/hifi-webui/dist).
           # REQUIRED: a missing/empty dist here means every device that applies
           # this system bundle loses the web-admin UI, silently. Fail instead.
@@ -171,6 +173,17 @@ jobs:
           # into Lyrion's prefs by sources_server.py's lms_skin logic.
           mkdir -p "$ROOT/usr/local/share"
           cp -r distro/config/includes.chroot/usr/local/share/hifi-lms-skin "$ROOT/usr/local/share/"
+          # Recommended albums: the project's Last.fm API key, from the secret
+          # (never in git, never echoed). Without it the bundle is built all the
+          # same, and a device keeps the key its image came with: the installer
+          # only merges what a bundle carries.
+          if printf '%s' "${LASTFM_API_KEY:-}" | grep -Eq '^[0-9a-fA-F]{32}$'; then
+            mkdir -p "$ROOT/usr/local/share/hifi-recommend"
+            printf '%s\n' "$LASTFM_API_KEY" > "$ROOT/usr/local/share/hifi-recommend/lastfm.key"
+            chmod 644 "$ROOT/usr/local/share/hifi-recommend/lastfm.key"
+          else
+            echo "::warning::LASTFM_API_KEY not set (or not 32 hex digits): system bundle without the Last.fm project key"
+          fi
           # Schema A/B (RAUC): template del selettore GRUB e di system.conf, initrd
           # di conversione, keyring pubblica con cui l'apparecchio accetta i bundle.
           cp -r distro/config/includes.chroot/usr/local/share/hifi-ab "$ROOT/usr/local/share/"
@@ -290,7 +303,7 @@ jobs:
           echo "== A/B boot selector under grub-emu (shell; skips without grub-emu) =="
           bash tests/test-grub-selector.sh
           echo "== update plan (python) =="
-          python3 -m pip install --quiet flask flask-cors
+          python3 -m pip install --quiet flask flask-cors numpy
           python3 tests/test_update_plan.py
           echo "== what stays on file.osmiumsound.it (python) =="
           python3 tests/test_prune_ota_r2.py
@@ -316,6 +329,8 @@ jobs:
           python3 tests/test_csrf.py
           echo "== web admin: every call has a route through (python) =="
           python3 tests/test_webui_routes.py
+          echo "== recommended albums (python) =="
+          python3 tests/test_recommend.py
 
       - name: Stage LMS skin assets into the OS payload
         # apply.d/0048-lms-skin-assets.sh installs these; they are deliberately

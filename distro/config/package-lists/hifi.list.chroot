@@ -160,6 +160,10 @@ python3-yaml
 # back to pure Python if it's ever missing, but installing it keeps playback CPU
 # low on the mini-PC.
 python3-numpy
+# onnxruntime: runs the small sentence-embedding model behind Recommended
+# albums (hifi_recommend.py, model in /usr/local/share/hifi-recommend). When
+# it is missing the job falls back to plain tag vectors.
+python3-onnxruntime
 # mutagen: reads and writes the tags of every common audio format for the
 # web admin's Library editor (hifi_tags.py). Without it only FLAC can be
 # edited (through metaflac, from the flac package above).

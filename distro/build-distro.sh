@@ -123,6 +123,7 @@ if [ "$STAGE" != "binary" ]; then
     [ -f "$REPO_ROOT/hifi_cdrip.py" ]      || die "Missing $REPO_ROOT/hifi_cdrip.py"
     [ -f "$REPO_ROOT/hifi_signal_path.py" ] || die "Missing $REPO_ROOT/hifi_signal_path.py"
     [ -f "$REPO_ROOT/hifi_diskguard.py" ]  || die "Missing $REPO_ROOT/hifi_diskguard.py"
+    [ -f "$REPO_ROOT/hifi_recommend.py" ]  || die "Missing $REPO_ROOT/hifi_recommend.py"
 fi
 
 # ─────────────────────────── Normalise text files ──────────────────
@@ -299,8 +300,55 @@ cp -f "$REPO_ROOT/hifi_cdrip.py"      "$BIN_DEST/"
 cp -f "$REPO_ROOT/hifi_signal_path.py" "$BIN_DEST/"
 cp -f "$REPO_ROOT/hifi_diskguard.py"  "$BIN_DEST/"
 cp -f "$REPO_ROOT/hifi_system_tweaks.py" "$BIN_DEST/"
+cp -f "$REPO_ROOT/hifi_recommend.py"  "$BIN_DEST/"
 sed -i 's/\r$//' "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py" "$BIN_DEST/hifi_logging.py" "$BIN_DEST/hifi_backup.py" "$BIN_DEST/hifi_i18n.py" "$BIN_DEST/hifi_metadata.py" "$BIN_DEST/hifi_tags.py" "$BIN_DEST/hifi_squeezelite.py" "$BIN_DEST/hifi_cdrip.py" "$BIN_DEST/hifi_signal_path.py" "$BIN_DEST/hifi_diskguard.py" "$BIN_DEST/hifi_system_tweaks.py"
+sed -i 's/\r$//' "$BIN_DEST/hifi_recommend.py"
 chmod +x "$BIN_DEST/api_server.py" "$BIN_DEST/vu_meter_daemon.py" "$BIN_DEST/sources_server.py" "$BIN_DEST/webui_server.py"
+
+# Recommended albums (hifi_recommend.py): the sentence-embedding model and its
+# vocabulary, all-MiniLM-L6-v2 quantised to int8 (Apache-2.0, ~23 MB). Not in
+# git: fetched here once and kept, and checked against a pinned sha256 every
+# time, so a changed upstream file stops the build instead of shipping. A
+# device without the model still computes, with the tag-vector fallback — but
+# an image is meant to have it, so a failed download is an error here.
+REC_DEST="$CONFIG/includes.chroot/usr/local/share/hifi-recommend"
+REC_BASE="${HIFI_RECOMMEND_MODEL_BASE:-https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main}"
+mkdir -p "$REC_DEST"
+rec_fetch() {   # <file name in the image> <path under REC_BASE> <sha256>
+    if ! echo "$3  $REC_DEST/$1" | sha256sum -c --status 2>/dev/null; then
+        log "Fetching recommend model file $1"
+        curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$REC_DEST/$1.part" "$REC_BASE/$2" \
+            || die "Could not download $REC_BASE/$2"
+        echo "$3  $REC_DEST/$1.part" | sha256sum -c --status \
+            || die "Checksum mismatch for $2 (expected $3)"
+        mv -f "$REC_DEST/$1.part" "$REC_DEST/$1"
+    fi
+    chmod 644 "$REC_DEST/$1"
+}
+rec_fetch model.onnx onnx/model_quantized.onnx afdb6f1a0e45b715d0bb9b11772f032c399babd23bfc31fed1c170afc848bdb1
+rec_fetch vocab.txt  vocab.txt                 07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3
+
+# The project's Last.fm API key, for the tags and similar artists the
+# recommendations use. NEVER in git: it comes from $LASTFM_API_KEY (a CI
+# secret) or from distro/secrets/lastfm.key (git-ignored). Without one the
+# build goes on and Last.fm stays off on that image — which is what anyone
+# building from the public source gets. Only the API key, not the shared
+# secret: reading public data needs no more. The value is never printed.
+REC_KEY="${LASTFM_API_KEY:-}"
+if [ -z "$REC_KEY" ] && [ -f "$SCRIPT_DIR/secrets/lastfm.key" ]; then
+    REC_KEY="$(tr -d ' \t\r\n' < "$SCRIPT_DIR/secrets/lastfm.key")"
+fi
+rm -f "$REC_DEST/lastfm.key"
+if printf '%s' "$REC_KEY" | grep -Eq '^[0-9a-fA-F]{32}$'; then
+    printf '%s\n' "$REC_KEY" > "$REC_DEST/lastfm.key"
+    chmod 644 "$REC_DEST/lastfm.key"
+    log "Last.fm project key: included"
+elif [ -n "$REC_KEY" ]; then
+    log "WARNING: the Last.fm key is not 32 hex digits — left out, Last.fm off on this image"
+else
+    log "WARNING: no Last.fm key (LASTFM_API_KEY or distro/secrets/lastfm.key) — Last.fm off on this image"
+fi
+unset REC_KEY
 
 # Web-admin Vue build (built by CI before this script runs). REQUIRED: a
 # missing/empty dist here means every device installed from this ISO gets the
