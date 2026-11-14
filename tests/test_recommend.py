@@ -398,5 +398,326 @@ class StatusTestCase(unittest.TestCase):
         self.assertNotEqual(a['track'], b['track'])
 
 
+class FakeHttp:
+    """hifi_metadata.HttpClient's get_json, answered from canned replies."""
+
+    def __init__(self, known=(), offline=False):
+        self.known = {rec.norm_text(k): v for k, v in dict(known).items()}
+        self.offline = offline
+        self.urls = []
+
+    def get_json(self, url, group='mb', **kw):
+        import urllib.parse
+        self.urls.append(url)
+        if self.offline:
+            raise OSError('no route')
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        if group == 'mb':
+            name = q['query'][0][len('artist:"'):-1]
+            k = self.known.get(rec.norm_text(name))
+            if not k:
+                return {'artists': []}
+            return {'artists': [{'id': '00000000-0000-0000-0000-%012d' % k['n'],
+                                 'name': name, 'country': k.get('country', ''),
+                                 'type': 'Group', 'life-span': {'begin': k.get('begin', '')},
+                                 'tags': [{'name': t, 'count': 5} for t in k.get('mbtags', [])]}]}
+        if group == 'wikidata':
+            n = int(q['query'][0].split('wdt:P434 "')[1][24:36])
+            k = next(v for v in self.known.values() if v['n'] == n)
+            return {'results': {'bindings': [{
+                'genres': {'value': '|'.join(k.get('genres', []))},
+                'infl': {'value': '|'.join(k.get('influences', []))},
+                'd': {'value': k.get('about', '')}}]}}
+        if group == 'lastfm':
+            k = self.known.get(rec.norm_text(q['artist'][0])) or {}
+            if q['method'][0] == 'artist.gettoptags':
+                return {'toptags': {'tag': [{'name': t, 'count': 50} for t in k.get('lfm', [])]}}
+            return {'similarartists': {'artist': [{'name': s} for s in k.get('similar', [])]}}
+        raise AssertionError(group)
+
+
+KNOWN = {
+    'Pink Floyd': {'n': 1, 'country': 'GB', 'begin': '1965', 'mbtags': ['progressive rock'],
+                   'genres': ['psychedelic rock', 'art rock'], 'about': 'English rock band',
+                   'lfm': ['seen live', 'classic rock'], 'similar': ['Camel', 'Genesis']},
+    'Genesis': {'n': 2, 'country': 'GB', 'begin': '1967', 'mbtags': ['progressive rock'],
+                'genres': ['art rock'], 'about': 'English rock band'},
+    'Camel': {'n': 3, 'country': 'GB', 'begin': '1971', 'mbtags': ['progressive rock'],
+              'genres': ['art rock']},
+    'Miles Davis': {'n': 4, 'country': 'US', 'mbtags': ['jazz', 'cool jazz'],
+                    'genres': ['modal jazz'], 'about': 'American jazz trumpeter'},
+    'John Coltrane': {'n': 5, 'country': 'US', 'mbtags': ['jazz', 'hard bop'],
+                      'genres': ['modal jazz'], 'about': 'American jazz saxophonist'},
+}
+
+
+class ProfileTestCase(unittest.TestCase):
+    def test_sources_are_merged(self):
+        p, found = rec.fetch_profile('Pink Floyd', FakeHttp(KNOWN), key='abc')
+        self.assertTrue(found)
+        self.assertEqual(p['country'], 'GB')
+        self.assertEqual(p['decade'], '1960s')
+        self.assertEqual(p['genres'], ['psychedelic rock', 'art rock'])
+        self.assertEqual(p['tags'], ['progressive rock', 'classic rock'])   # no "seen live"
+        self.assertEqual(p['related'][:2], ['Camel', 'Genesis'])
+        self.assertEqual(p['about'], 'English rock band')
+
+    def test_no_key_no_lastfm(self):
+        http = FakeHttp(KNOWN)
+        p, _ = rec.fetch_profile('Pink Floyd', http)
+        self.assertFalse(any('audioscrobbler' in u for u in http.urls))
+        self.assertEqual(p['tags'], ['progressive rock'])
+
+    def test_noncommercial_switch_removes_those_sources(self):
+        old = rec.NONCOMMERCIAL_SOURCES
+        rec.NONCOMMERCIAL_SOURCES = False
+        try:
+            self.assertEqual(rec.lastfm_key({'lastfm_key': 'abc'}), '')
+            p, found = rec.fetch_profile('Pink Floyd', FakeHttp(KNOWN))
+            self.assertEqual(p['tags'], [])
+            self.assertEqual(p['genres'], ['psychedelic rock', 'art rock'])   # CC0 stays
+            self.assertTrue(found)
+        finally:
+            rec.NONCOMMERCIAL_SOURCES = old
+
+    def test_key_order_user_then_project_then_none(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(rec.lastfm_key({}, d), '')
+            with open(os.path.join(d, rec.LASTFM_KEY_FILE), 'w') as f:
+                f.write('00ff00ff\n')
+            self.assertEqual(rec.lastfm_key({}, d), '00ff00ff')
+            self.assertEqual(rec.lastfm_key({'lastfm_key': 'aa11'}, d), 'aa11')
+
+    def test_enrich_caches_limits_and_remembers_unknowns(self):
+        db = rec.open_db(':memory:')
+        http = FakeHttp(KNOWN)
+        have, n = rec.enrich(db, ['Pink Floyd', 'Nobody Band', 'Genesis'], http, limit=2, now=1000)
+        self.assertEqual((sorted(have), n), (['pink floyd'], 2))
+        calls = len(http.urls)
+        have, n = rec.enrich(db, ['Pink Floyd', 'Nobody Band', 'Genesis'], http, now=2000)
+        self.assertEqual((sorted(have), n), (['genesis', 'pink floyd'], 1))
+        self.assertEqual(len(http.urls), calls + 2)      # only Genesis: MB + Wikidata
+        late = 2000 + (rec.PROFILE_RETRY_DAYS + 1) * DAY
+        _, n = rec.enrich(db, ['Nobody Band'], http, now=late)
+        self.assertEqual(n, 1)                           # unknown: asked again later
+
+    def test_offline_stops_at_once_and_keeps_the_key_out_of_the_log(self):
+        db = rec.open_db(':memory:')
+        http = FakeHttp(KNOWN, offline=True)
+
+        class Log:
+            lines = []
+
+            def info(self, fmt, *a):
+                self.lines.append(fmt % a)
+        have, n = rec.enrich(db, ['Pink Floyd', 'Genesis'], http, key='SECRETKEY', log=Log())
+        self.assertEqual((have, n, len(http.urls)), ({}, 0, 1))
+        self.assertNotIn('SECRETKEY', ' '.join(Log.lines))
+        self.assertEqual(db.execute('SELECT COUNT(*) FROM artist_info').fetchone()[0], 0)
+
+    def test_describe(self):
+        p, _ = rec.fetch_profile('Pink Floyd', FakeHttp(KNOWN), key='k')
+        text = rec.describe('Pink Floyd', p, genres=['Rock'], year=1977)
+        self.assertEqual(text, 'Pink Floyd; rock, psychedelic rock, art rock, progressive rock, '
+                               'classic rock; 1960s; GB; related: Camel, Genesis; English rock band')
+        self.assertEqual(rec.describe('Unknown', None, ['Folk'], 1999), 'Unknown; folk; 1990s')
+        self.assertEqual(rec.describe('Unknown'), 'Unknown')
+
+
+class FakeLyrion:
+    """rpc(player, command) over a tiny library and two streaming plugins."""
+
+    def __init__(self, albums, signed_in=('qobuz', 'tidal')):
+        self.albums = albums             # (id, artist, album, genre)
+        self.signed_in = signed_in
+        self.qobuz_recent = ['halo']
+        self.calls = []
+        self.catalog = {
+            'Camel': ['Mirage', 'Moonmadness'],
+            'Pink Floyd': ['Animals', 'Meddle'],
+            'Genesis': ['Foxtrot'],
+        }
+
+    def __call__(self, player, cmd):
+        self.calls.append((player, list(cmd)))
+        if cmd[0] == 'players':
+            return {'players_loop': [{'playerid': 'aa:bb', 'ip': '127.0.0.1:4321'}]}
+        if cmd[0] == 'genres':
+            names = sorted({a[3] for a in self.albums})
+            return {'genres_loop': [{'id': i, 'genre': g} for i, g in enumerate(names)]}
+        if cmd[0] == 'albums':
+            names = sorted({a[3] for a in self.albums})
+            rows = self.albums
+            for c in cmd:
+                if str(c).startswith('genre_id:'):
+                    rows = [a for a in rows if a[3] == names[int(str(c)[9:])]]
+            return {'albums_loop': [{'id': a[0], 'artist': a[1], 'album': a[2], 'year': 1975,
+                                     'artwork_track_id': 'art%s' % a[0]} for a in rows]}
+        if cmd[0] == 'pref':
+            return {'_p2': list(self.qobuz_recent)}
+        if cmd[:2] == ['qobuz', 'recentsearches']:
+            del self.qobuz_recent[int(cmd[2].split(':')[1])]
+            return {}
+        if cmd[0] in ('qobuz', 'tidal', 'spotty', 'deezer') and cmd[1] == 'items':
+            return self.plugin(cmd[0], {str(c).split(':', 1)[0]: str(c).split(':', 1)[1]
+                                        for c in cmd[4:]})
+        raise AssertionError(cmd)
+
+    def plugin(self, service, a):
+        if service not in self.signed_in:
+            return {'loop_loop': [{'id': '0', 'name': 'Please sign in', 'type': 'textarea'}]}
+        item, term = a.get('item_id'), a.get('search')
+        if service == 'qobuz':
+            if item is None:
+                return {'loop_loop': [{'id': '0', 'name': 'Cerca', 'type': 'link'}]}
+            if item == '0':
+                return {'loop_loop': [{'id': '0.0', 'name': 'New search', 'type': 'search'}]}
+            if item == '0.0':
+                self.qobuz_recent.append(term)
+                self.term = term
+                return {'loop_loop': [{'id': 'q.albums', 'name': 'Uscite',
+                                       'image': 'html/images/albums.png'}]}
+            return {'item_loop': [
+                {'text': '%s\n%s (1974)' % (t, self.term), 'presetParams': None,
+                 'icon': '/imageproxy/https%%3A%%2F%%2Fstatic.qobuz.com%%2Fcovers%%2Fab%%2Fq%dx_600.jpg/image.jpg' % i}
+                for i, t in enumerate(self.catalog.get(self.term, []))]
+                + [{'text': 'Tribute\nSomebody Else', 'icon': '/x/zz9_600.jpg'}]}
+        if item is None:
+            return {'loop_loop': [{'id': '6', 'name': 'Artisti', 'type': 'link'},
+                                  {'id': '7', 'name': 'Cerca', 'type': 'search'}]}
+        if item == '7':
+            self.term = term
+            return {'loop_loop': [{'id': 't.all', 'name': 'Tutto'}, {'id': 't.pl', 'name': 'Playlist'},
+                                  {'id': 't.ar', 'name': 'Artisti'}, {'id': 't.al', 'name': 'Raccolte'}]}
+        assert item == 't.al', item
+        return {'item_loop': [
+            {'text': '%s [E]\n%s' % (t, self.term),
+             'presetParams': {'favorites_url': 'tidal://album:%d' % (100 + i), 'icon': 'http://img/%d.jpg' % i}}
+            for i, t in enumerate(self.catalog.get(self.term, []))]}
+
+
+class ServiceSearchTestCase(unittest.TestCase):
+    def test_tidal_gives_the_favourite_url(self):
+        ly = FakeLyrion([])
+        got = rec.ServiceSearch(ly, 'aa:bb', 'tidal').albums('Camel')
+        self.assertEqual([(a['album'], a['play_id'], a['cover']) for a in got],
+                         [('Mirage', 'tidal://album:100', 'http://img/0.jpg'),
+                          ('Moonmadness', 'tidal://album:101', 'http://img/1.jpg')])
+
+    def test_qobuz_url_from_cover_and_other_artists_dropped(self):
+        ly = FakeLyrion([])
+        got = rec.ServiceSearch(ly, 'aa:bb', 'qobuz').albums('Camel')
+        self.assertEqual([(a['artist'], a['album'], a['play_id']) for a in got],
+                         [('Camel', 'Mirage', 'qobuz://album:q0x.qbz'),
+                          ('Camel', 'Moonmadness', 'qobuz://album:q1x.qbz')])
+
+    def test_qobuz_recent_searches_are_left_as_found(self):
+        ly = FakeLyrion([])
+        s = rec.ServiceSearch(ly, 'aa:bb', 'qobuz')
+        s.albums('Camel')
+        self.assertEqual(ly.qobuz_recent, ['halo'])
+        self.assertEqual(s.albums('halo'), [])           # the owner's own term: hands off
+        self.assertEqual(ly.qobuz_recent, ['halo'])
+
+    def test_not_signed_in_is_not_usable(self):
+        s = rec.ServiceSearch(FakeLyrion([], signed_in=()), 'aa:bb', 'deezer')
+        self.assertEqual(s.albums('Camel'), [])
+        self.assertFalse(s.usable)
+
+    def test_unstreamable_and_urlless_rows_are_dropped(self):
+        f = rec._album_from_item
+        self.assertIsNone(f('tidal', {'text': '* Gone\nBand', 'presetParams': {'favorites_url': 'tidal://album:1'}}))
+        self.assertIsNone(f('spotty', {'text': 'Album\nBand'}))
+        self.assertIsNone(f('tidal', {'text': 'No artist line', 'presetParams': {'favorites_url': 'x'}}))
+
+
+LIBRARY = [(1, 'Pink Floyd', 'Animals', 'Rock'), (2, 'Pink Floyd', 'Meddle', 'Rock'),
+           (3, 'Genesis', 'Foxtrot', 'Rock'), (4, 'Genesis', 'Selling England by the Pound', 'Rock'),
+           (5, 'Miles Davis', 'Kind of Blue', 'Jazz'), (6, 'John Coltrane', 'Blue Train', 'Jazz'),
+           (7, 'John Coltrane', 'Giant Steps', 'Jazz')]
+
+
+class RunTestCase(unittest.TestCase):
+    def setUp(self):
+        self.db = rec.open_db(':memory:')
+        self.now = 1_000 * DAY
+
+    def listen(self, artist, album, n, days_ago=1):
+        for i in range(n):
+            rec.record_play(self.db, artist, album, 't%d' % i, 'library', self.now - days_ago * DAY)
+
+    def test_thin_history_changes_nothing(self):
+        rec.write_recommendations(self.db, [{'album': 'Old', 'artist': 'List', 'source': 'library',
+                                             'play_kind': 'album_id', 'play_id': '9',
+                                             'score': 1, 'cluster': 0}])
+        self.listen('Pink Floyd', 'Animals', 3)
+        got = rec.run(self.db, FakeLyrion(LIBRARY), now=self.now)
+        self.assertEqual(got['outcome'], 'few_plays')
+        self.assertEqual(len(rec.read_recommendations(self.db)), 1)
+
+    def test_disabled(self):
+        self.listen('Pink Floyd', 'Animals', 30)
+        got = rec.run(self.db, FakeLyrion(LIBRARY), settings={'enabled': False}, now=self.now)
+        self.assertEqual(got['outcome'], 'disabled')
+
+    def test_offline_library_only_run(self):
+        self.listen('Pink Floyd', 'Animals', 30)
+        got = rec.run(self.db, FakeLyrion(LIBRARY), http=None,
+                      settings={'sources': ['library']}, now=self.now)
+        self.assertEqual((got['outcome'], got['mode'], got['fetched']), ('ok', 'tfidf', 0))
+        rows = rec.read_recommendations(self.db)
+        albums = [r['album'] for r in rows]
+        self.assertNotIn('Animals', albums)                       # heard
+        self.assertEqual(rows[0]['album'], 'Meddle')              # same artist, same genre
+        self.assertEqual((rows[0]['source'], rows[0]['play_kind'], rows[0]['play_id'],
+                          rows[0]['cover']), ('library', 'album_id', '2', 'art2'))
+        rock = [i for i, a in enumerate(albums) if a in ('Foxtrot', 'Selling England by the Pound')]
+        jazz = [i for i, a in enumerate(albums) if a in ('Kind of Blue', 'Blue Train', 'Giant Steps')]
+        self.assertTrue(rock and (not jazz or max(rock) < min(jazz)))
+
+    def test_dismissed_album_stays_out_of_later_runs(self):
+        self.listen('Pink Floyd', 'Animals', 30)
+        rec.run(self.db, FakeLyrion(LIBRARY), settings={'sources': ['library']}, now=self.now)
+        rec.dismiss(self.db, rec.album_key('Pink Floyd', 'Meddle'))
+        rec.run(self.db, FakeLyrion(LIBRARY), settings={'sources': ['library']}, now=self.now + DAY)
+        self.assertNotIn('Meddle', [r['album'] for r in rec.read_recommendations(self.db)])
+
+    def test_streaming_brings_related_artists_and_stays_tidy(self):
+        self.listen('Pink Floyd', 'Animals', 30)
+        ly = FakeLyrion(LIBRARY, signed_in=('qobuz', 'tidal'))
+        got = rec.run(self.db, ly, http=FakeHttp(KNOWN), now=self.now,
+                      settings={'lastfm_key': 'abc', 'sources': list(rec.SOURCES)})
+        self.assertEqual(got['outcome'], 'ok')
+        rows = rec.read_recommendations(self.db)
+        camel = [r for r in rows if r['artist'] == 'Camel']
+        self.assertTrue(camel)
+        self.assertTrue(all(r['play_kind'] == 'url' and r['source'] in ('qobuz', 'tidal')
+                            for r in camel))
+        self.assertLessEqual(len(camel), rec.MAX_PER_ARTIST)
+        keys = [r['album_key'] for r in rows]
+        self.assertEqual(len(keys), len(set(keys)))               # one Meddle, not three
+        self.assertNotIn(rec.album_key('Pink Floyd', 'Animals'), keys)
+        self.assertEqual(ly.qobuz_recent, ['halo'])
+        self.assertLessEqual(got['searches'], 2 * rec.MAX_SEARCHES_PER_SERVICE)
+
+    def test_run_bookkeeping(self):
+        rid = rec.start_run(self.db, now=time_now())
+        self.assertTrue(rec.history_state(self.db)['running'])
+        rec.finish_run(self.db, rid, {'outcome': 'ok', 'mode': 'tfidf', 'items': 3})
+        st = rec.history_state(self.db)
+        self.assertFalse(st['running'])
+        self.assertEqual(st['last_run']['outcome'], 'ok')
+
+    def test_a_killed_run_does_not_look_running_forever(self):
+        rec.start_run(self.db, now=time_now() - rec.RUN_TIMEOUT - 60)
+        self.assertFalse(rec.history_state(self.db)['running'])
+
+
+def time_now():
+    import time
+    return time.time()
+
+
 if __name__ == '__main__':
     unittest.main()

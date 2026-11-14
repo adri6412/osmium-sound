@@ -63,6 +63,8 @@ K_MIN, K_MAX = 2, 5
 MIN_POINTS_PER_CLUSTER = 4
 UNIFORM_COHESION = 0.95   # mean cosine to the one centre above which k = 1
 
+RUN_TIMEOUT = 1800        # seconds; the same as the unit's TimeoutStartSec
+
 PLAY_MIN_SECONDS = 30.0   # a track counts once heard this long…
 PLAY_MIN_FRACTION = 0.5   # …or for half of its length, whichever comes first
 
@@ -630,7 +632,10 @@ def history_state(db, min_plays=MIN_PLAYS):
     last = db.execute(
         'SELECT started, finished, outcome, mode FROM runs '
         'ORDER BY id DESC LIMIT 1').fetchone()
-    running = bool(last and last['outcome'] == 'running')
+    # A job that was killed never closes its row: past the unit's own time
+    # limit a "running" row is a dead one.
+    running = bool(last and last['outcome'] == 'running'
+                   and time.time() - last['started'] < RUN_TIMEOUT)
     have = db.execute('SELECT COUNT(*) FROM recommendations').fetchone()[0]
     if plays < min_plays:
         state = 'few_plays'
@@ -770,3 +775,507 @@ def play_from_status(st):
         'title': str(t.get('title') or '').strip(),
         'source': source_of_url(url),
     }
+
+
+# ── Artist profiles (enrichment) ─────────────────────────────────────────────
+# One small record per artist — genres, tags, related names, country, decade,
+# a one-line description — fetched once and kept for PROFILE_TTL_DAYS. Free
+# sources always; non-commercial ones only behind NONCOMMERCIAL_SOURCES.
+#   MusicBrainz search   id, country, start year (CC0)      + tags (NC) 🚨
+#   Wikidata             genres, influences, description (CC0)
+#   Last.fm              top tags, similar artists (NC) 🚨, needs an API key
+# All calls go through hifi_metadata's throttled client (one request per
+# second per service, shared User-Agent, short circuit when offline), and a
+# run fetches at most MAX_NEW_PROFILES artists: the rest waits for the next.
+
+PROFILE_TTL_DAYS = 90
+PROFILE_RETRY_DAYS = 7        # an artist nobody knew: ask again after this
+MAX_NEW_PROFILES = 120
+MAX_TAGS = 8
+MAX_RELATED = 8
+LASTFM_BASE = 'https://ws.audioscrobbler.com/2.0/'
+WIKIDATA_SPARQL = 'https://query.wikidata.org/sparql'
+MB_ARTIST_SEARCH = 'https://musicbrainz.org/ws/2/artist'
+LASTFM_KEY_FILE = 'lastfm.key'
+
+PROFILE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS artist_info (
+    name_key TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    data TEXT NOT NULL,
+    found INTEGER NOT NULL,
+    fetched_at REAL NOT NULL
+);
+"""
+SCHEMA += PROFILE_SCHEMA
+
+# Tags that describe the tagger, not the music.
+_JUNK_TAGS = {'seen live', 'favorites', 'favourites', 'favorite', 'albums i own',
+              'spotify', 'all', 'beautiful', 'awesome', 'love', 'check out',
+              'under 2000 listeners', 'vinyl', 'cd'}
+
+
+def lastfm_key(settings, model_dir=None):
+    """The owner's key if they set one, else the project key the build put
+    next to the model, else '' (Last.fm is then skipped). Never logged."""
+    if not NONCOMMERCIAL_SOURCES:
+        return ''
+    key = (settings or {}).get('lastfm_key') or ''
+    if key:
+        return key
+    try:
+        with open(os.path.join(model_dir or MODEL_DIR, LASTFM_KEY_FILE)) as f:
+            return re.sub(r'[^0-9a-fA-F]', '', f.read())[:64]
+    except OSError:
+        return ''
+
+
+def _clean_tags(tags, limit=MAX_TAGS):
+    out = []
+    for t in tags:
+        t = ' '.join(str(t or '').lower().split())
+        if t and t not in _JUNK_TAGS and t not in out and len(t) <= 40:
+            out.append(t)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _qs(params):
+    import urllib.parse
+    return urllib.parse.urlencode(params)
+
+
+def fetch_profile(name, http, key=''):
+    """Ask the services about one artist. Returns (profile, found): `found`
+    is False when nobody knew the name. Raises whatever the client raises on
+    a dead network, so the caller can stop asking for this run."""
+    prof = {'genres': [], 'tags': [], 'related': [], 'country': '',
+            'decade': '', 'about': ''}
+    mbid = ''
+    query = 'artist:"%s"' % name.replace('\\', ' ').replace('"', ' ')
+    mb = http.get_json(MB_ARTIST_SEARCH + '?' + _qs(
+        {'query': query, 'limit': 3, 'fmt': 'json'}), group='mb')
+    for a in (mb or {}).get('artists') or []:
+        if norm_text(a.get('name')) != norm_text(name):
+            continue
+        mbid = a.get('id') or ''
+        prof['country'] = a.get('country') or (a.get('area') or {}).get('name') or ''
+        begin = str((a.get('life-span') or {}).get('begin') or '')[:4]
+        if begin.isdigit() and a.get('type') != 'Person':
+            prof['decade'] = begin[:3] + '0s'     # a band's start; a person's birth says little
+        prof['about'] = a.get('disambiguation') or ''
+        if NONCOMMERCIAL_SOURCES:
+            tags = sorted(a.get('tags') or [], key=lambda t: -int(t.get('count') or 0))
+            prof['tags'] = _clean_tags(t.get('name') for t in tags)
+        break
+    if mbid and re.match(r'^[0-9a-f-]{36}$', mbid):
+        sparql = (
+            'SELECT ?d (GROUP_CONCAT(DISTINCT ?g;separator="|") AS ?genres) '
+            '(GROUP_CONCAT(DISTINCT ?i;separator="|") AS ?infl) WHERE { '
+            '?a wdt:P434 "%s". '
+            'OPTIONAL{?a schema:description ?d FILTER(LANG(?d)="en")} '
+            'OPTIONAL{?a wdt:P136 ?gg. ?gg rdfs:label ?g FILTER(LANG(?g)="en")} '
+            'OPTIONAL{?a wdt:P737 ?ii. ?ii rdfs:label ?i FILTER(LANG(?i)="en")} '
+            '} GROUP BY ?d LIMIT 1' % mbid)
+        try:
+            wd = http.get_json(WIKIDATA_SPARQL + '?' + _qs(
+                {'format': 'json', 'query': sparql}), group='wikidata')
+            for b in ((wd or {}).get('results') or {}).get('bindings') or []:
+                prof['genres'] = _clean_tags((b.get('genres') or {}).get('value', '').split('|'))
+                prof['related'] = [x for x in (b.get('infl') or {}).get('value', '').split('|') if x][:MAX_RELATED]
+                prof['about'] = (b.get('d') or {}).get('value') or prof['about']
+        except Exception as e:
+            if type(e).__name__ == 'OfflineError':
+                raise
+    if key:
+        base = {'artist': name, 'api_key': key, 'format': 'json', 'autocorrect': 1}
+        try:
+            tt = http.get_json(LASTFM_BASE + '?' + _qs(
+                dict(base, method='artist.gettoptags')), group='lastfm')
+            tags = [t.get('name') for t in ((tt or {}).get('toptags') or {}).get('tag') or []
+                    if int(t.get('count') or 0) >= 10]
+            prof['tags'] = _clean_tags(prof['tags'] + tags)
+            sim = http.get_json(LASTFM_BASE + '?' + _qs(
+                dict(base, method='artist.getsimilar', limit=MAX_RELATED)), group='lastfm')
+            names = [s.get('name') for s in ((sim or {}).get('similarartists') or {}).get('artist') or []
+                     if s.get('name')]
+            prof['related'] = (names + [r for r in prof['related'] if r not in names])[:MAX_RELATED]
+        except Exception as e:
+            if type(e).__name__ == 'OfflineError':
+                raise
+    found = bool(mbid or prof['tags'] or prof['related'])
+    return prof, found
+
+
+def load_profiles(db, names, now=None):
+    """{name_key: profile} for the artists we already know (fresh or not),
+    plus the set of keys that need (re)fetching."""
+    import json
+    now = time.time() if now is None else now
+    keys = {norm_text(n) for n in names if norm_text(n)}
+    have, stale = {}, set(keys)
+    for row in db.execute('SELECT name_key, data, found, fetched_at FROM artist_info'):
+        k = row['name_key']
+        if k not in keys:
+            continue
+        ttl = PROFILE_TTL_DAYS if row['found'] else PROFILE_RETRY_DAYS
+        if row['found']:
+            have[k] = json.loads(row['data'])
+        if now - row['fetched_at'] < ttl * 86400:
+            stale.discard(k)
+    return have, stale
+
+
+def enrich(db, names, http, key='', limit=MAX_NEW_PROFILES, now=None, log=None):
+    """Fetch what is missing for `names` (most important first), at most
+    `limit` artists. Stops quietly when the network is down. Returns the
+    profiles known at the end, by name_key."""
+    import json
+    now = time.time() if now is None else now
+    have, stale = load_profiles(db, names, now)
+    done = 0
+    for name in names:
+        k = norm_text(name)
+        if k not in stale or http is None:
+            continue
+        if done >= limit:
+            break
+        stale.discard(k)
+        try:
+            prof, found = fetch_profile(name, http, key)
+        except Exception as e:
+            # Only the kind of error: a URL could carry the Last.fm key.
+            if log:
+                log.info('recommend: enrichment stopped (%s)', type(e).__name__)
+            break
+        done += 1
+        with db:
+            db.execute('INSERT OR REPLACE INTO artist_info '
+                       '(name_key, name, data, found, fetched_at) VALUES (?,?,?,?,?)',
+                       (k, name, json.dumps(prof), int(found), now))
+        if found:
+            have[k] = prof
+    return have, done
+
+
+def describe(artist, profile=None, genres=(), year=None):
+    """The text that stands for an album: who, what kind of music, when,
+    where, close to whom. This is what gets embedded (or TF-IDF'd)."""
+    p = profile or {}
+    kinds = _clean_tags(list(genres) + list(p.get('genres') or []) + list(p.get('tags') or []), 12)
+    decade = p.get('decade') or ''
+    try:
+        if not decade and year and 1900 < int(year) < 2100:
+            decade = str(int(year))[:3] + '0s'
+    except (TypeError, ValueError):
+        pass
+    parts = [str(artist or '').strip(), ', '.join(kinds), decade, p.get('country') or '']
+    if p.get('related'):
+        parts.append('related: ' + ', '.join(p['related'][:MAX_RELATED]))
+    if p.get('about'):
+        parts.append(str(p['about'])[:200])
+    return '; '.join(x for x in parts if x)
+
+
+# ── Candidates ───────────────────────────────────────────────────────────────
+
+MAX_SEARCHES_PER_SERVICE = 40
+ALBUMS_PER_SEARCH = 6
+MAX_LIBRARY_ALBUMS = 20000
+# Where each plugin keeps its album results, for when the name or the icon of
+# the category does not give it away (seen on Qobuz 3.x and TIDAL, 2026-11).
+_ALBUM_CATEGORY = {'qobuz': 0, 'tidal': 3}
+_ALBUM_WORDS = {'album', 'albums', 'releases', 'alben', 'albumes', 'álbumes'}
+
+
+def library_albums(rpc):
+    """Every album of the local library with its genres:
+    [{album, artist, id, cover, year, genres}]."""
+    out, at = {}, 0
+    while at < MAX_LIBRARY_ALBUMS:
+        r = rpc('', ['albums', at, 1000, 'tags:alyj']) or {}
+        loop = r.get('albums_loop') or []
+        for a in loop:
+            if a.get('id') is None or not a.get('album') or not a.get('artist'):
+                continue
+            out[str(a['id'])] = {
+                'album': a['album'], 'artist': a['artist'], 'id': str(a['id']),
+                'cover': str(a.get('artwork_track_id') or ''),
+                'year': a.get('year') or 0, 'genres': []}
+        at += 1000
+        if len(loop) < 1000:
+            break
+    for g in (rpc('', ['genres', 0, 500]) or {}).get('genres_loop') or []:
+        name = g.get('genre')
+        if not name or g.get('id') is None:
+            continue
+        r = rpc('', ['albums', 0, MAX_LIBRARY_ALBUMS, 'genre_id:%s' % g['id']]) or {}
+        for a in r.get('albums_loop') or []:
+            hit = out.get(str(a.get('id')))
+            if hit is not None:
+                hit['genres'].append(name)
+    return list(out.values())
+
+
+def _album_from_item(service, item):
+    """A plugin's album row (menu format) → {album, artist, cover, play_id},
+    or None when it carries nothing we could play later. The handle has to
+    outlive the browsing session, so item ids are no use: we want the URL the
+    plugin itself would save as a favourite."""
+    text = str(item.get('text') or '')
+    album, _, artist = text.partition('\n')
+    artist = re.sub(r'\s*\(\d{4}\)\s*$', '', artist).strip()
+    album = re.sub(r'\s*\[(E|AI)\]\s*$', '', album).strip()
+    if album.startswith('* ') or not album or not artist:
+        return None                       # '* ' marks "not streamable"
+    preset = item.get('presetParams') or {}
+    icon = str(item.get('icon') or preset.get('icon') or '')
+    url = str(preset.get('favorites_url') or '')
+    if not url and service == 'qobuz':
+        # Qobuz rows carry no favourite URL, but the cover file is named
+        # after the album id and qobuz://album:<id>.qbz is what the plugin's
+        # own protocol handler expands into the album's tracks.
+        import urllib.parse
+        m = re.search(r'/([0-9a-z]+)_\d+\.jpg', urllib.parse.unquote(icon))
+        if m:
+            url = 'qobuz://album:%s.qbz' % m.group(1)
+    if not url:
+        return None
+    return {'album': album, 'artist': artist, 'cover': icon, 'play_id': url}
+
+
+class ServiceSearch:
+    """Album search inside one streaming plugin, through Lyrion's own browse
+    commands (no direct call to the service, no credentials of ours)."""
+
+    def __init__(self, rpc, player, service):
+        self.rpc, self.player, self.service = rpc, player, service
+        self.node = None
+        self.usable = None
+
+    def _items(self, item_id=None, search=None, count=30, menu=False):
+        cmd = [self.service, 'items', 0, count]
+        if item_id is not None:
+            cmd.append('item_id:%s' % item_id)
+        if search is not None:
+            cmd.append('search:%s' % search)
+        if menu:
+            cmd.append('menu:1')
+        r = self.rpc(self.player, cmd) or {}
+        return r.get('item_loop' if menu else 'loop_loop') or []
+
+    def _find_node(self):
+        """The id of the plugin's "new search" entry, at the root or one
+        level down (Qobuz keeps it under its Search menu)."""
+        root = self._items()
+        for it in root:
+            if it.get('type') == 'search':
+                return str(it.get('id'))
+        for it in root[:3]:
+            if it.get('type') in ('link', None) and it.get('id') is not None:
+                for sub in self._items(it['id'], count=5):
+                    if sub.get('type') == 'search':
+                        return str(sub.get('id'))
+        return None
+
+    def available(self):
+        if self.usable is None:
+            try:
+                self.node = self._find_node()
+            except Exception:
+                self.node = None
+            self.usable = self.node is not None    # not signed in: no search entry
+        return self.usable
+
+    def _qobuz_history(self):
+        r = self.rpc('', ['pref', 'plugin.qobuz:qobuz_recent_search', '?']) or {}
+        return list(r.get('_p2') or []) if isinstance(r.get('_p2'), list) else []
+
+    def albums(self, artist):
+        """Up to ALBUMS_PER_SEARCH albums by `artist` on this service."""
+        if not self.available():
+            return []
+        before = None
+        if self.service == 'qobuz':
+            # Qobuz remembers every search in the owner's "recent searches".
+            # Ours must not show up there: skip a term that would reorder or
+            # push out one of theirs, and take ours back out afterwards.
+            before = self._qobuz_history()
+            if artist in before or len(before) >= 30:
+                return []
+        try:
+            cats = self._items(self.node, search=artist)
+            pick = None
+            for c in cats:
+                if norm_text(c.get('name')) in _ALBUM_WORDS or 'albums' in str(c.get('image') or ''):
+                    pick = c
+                    break
+            if pick is None:
+                i = _ALBUM_CATEGORY.get(self.service)
+                pick = cats[i] if i is not None and i < len(cats) else None
+            if pick is None:
+                return []
+            rows = self._items(pick.get('id'), count=40, menu=True)
+        finally:
+            if before is not None:
+                after = self._qobuz_history()
+                if len(after) == len(before) + 1 and after[-1] == artist:
+                    self.rpc(self.player, ['qobuz', 'recentsearches',
+                                           'delete:%d' % (len(after) - 1)])
+        out = []
+        for row in rows:
+            a = _album_from_item(self.service, row)
+            if a and norm_text(a['artist']) == norm_text(artist):
+                out.append(a)
+            if len(out) >= ALBUMS_PER_SEARCH:
+                break
+        return out
+
+
+def pick_player(rpc):
+    """A connected player to browse plugins with (they want one); this box's
+    own squeezelite if it is there."""
+    players = (rpc('', ['players', 0, 99]) or {}).get('players_loop') or []
+    players = [p for p in players if p.get('playerid')]
+    for p in players:
+        if str(p.get('ip') or '').startswith('127.0.0.1'):
+            return p['playerid']
+    return players[0]['playerid'] if players else ''
+
+
+# ── The run ──────────────────────────────────────────────────────────────────
+
+MAX_HISTORY_ARTISTS = 300
+SEEDS_PER_RUN = MAX_SEARCHES_PER_SERVICE
+
+
+def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
+        model_dir=None):
+    """One whole computation. `rpc(player, command)` talks to Lyrion; `http`
+    is hifi_metadata's client or None for "stay offline". Returns a summary
+    dict; the list itself goes to the recommendations table.
+
+    An empty or thin history writes nothing and leaves any earlier list
+    alone."""
+    now = time.time() if now is None else now
+    settings = clean_settings(settings)
+    summary = {'outcome': 'ok', 'mode': '', 'plays': play_count(db), 'items': 0,
+               'fetched': 0, 'searches': 0}
+    if not settings['enabled']:
+        return dict(summary, outcome='disabled')
+    if summary['plays'] < MIN_PLAYS:
+        return dict(summary, outcome='few_plays')
+
+    plays = [dict(r) for r in db.execute('SELECT ts, artist, album, album_key FROM plays')]
+    for p in plays:
+        p['artist_key'] = norm_text(p['artist'])
+    artist_w = play_weights(plays, now, key='artist_key')
+    names = {}
+    for p in plays:
+        names.setdefault(p['artist_key'], p['artist'])
+    top = sorted((k for k in artist_w if k), key=lambda k: -artist_w[k])[:MAX_HISTORY_ARTISTS]
+    exclude = heard_keys(db) | dismissed_keys(db)
+
+    # 1. What the library offers that has not been heard.
+    #    The genres its files carry also describe the listened artists, which
+    #    is all there is to go by when the network sources are out of reach.
+    cands, own_genres = [], {}
+    for a in library_albums(rpc):
+        seen_g = own_genres.setdefault(norm_text(a['artist']), [])
+        seen_g.extend(g for g in a.get('genres') or () if g not in seen_g)
+        if 'library' not in settings['sources']:
+            continue
+        if album_key(a['artist'], a['album']) in exclude:
+            continue
+        cands.append(dict(a, source='library', play_kind='album_id', play_id=a['id']))
+
+    # 2. Learn about the artists: the listened ones first, then the library's.
+    key = lastfm_key(settings, model_dir)
+    order = [names[k] for k in top]
+    seen = set(top)
+    for c in cands:
+        k = norm_text(c['artist'])
+        if k and k not in seen:
+            seen.add(k)
+            order.append(c['artist'])
+    profiles, summary['fetched'] = enrich(db, order, http, key, now=now, log=log)
+
+    # 3. Streaming: more by the artists listened to, and albums by the names
+    #    the sources put next to them.
+    services = [s for s in settings['sources'] if s != 'library']
+    if services:
+        seeds, seed_keys = [], set()
+        heard_artists = set(artist_w)
+        for k in top:
+            related = [r for r in (profiles.get(k) or {}).get('related') or []
+                       if norm_text(r) not in heard_artists]
+            for name in related[:2] + [names[k]]:
+                nk = norm_text(name)
+                if nk and nk not in seed_keys:
+                    seed_keys.add(nk)
+                    seeds.append(name)
+            if len(seeds) >= SEEDS_PER_RUN:
+                break
+        seeds = seeds[:SEEDS_PER_RUN]
+        new_names = [s for s in seeds if norm_text(s) not in profiles]
+        more, n = enrich(db, new_names, http, key,
+                         limit=max(0, MAX_NEW_PROFILES - summary['fetched']), now=now, log=log)
+        profiles.update(more)
+        summary['fetched'] += n
+        player = pick_player(rpc)
+        for service in services if player else []:
+            search = ServiceSearch(rpc, player, service)
+            for name in seeds:
+                try:
+                    found = search.albums(name)
+                except Exception as e:
+                    if log:
+                        log.info('recommend: %s search failed (%s)', service, type(e).__name__)
+                    break
+                if not search.usable:
+                    break
+                summary['searches'] += 1
+                for a in found:
+                    if album_key(a['artist'], a['album']) not in exclude:
+                        cands.append(dict(a, source=service, play_kind='url',
+                                          genres=[], year=None))
+
+    if not cands:
+        return dict(summary, outcome='no_candidates')
+
+    # 4. Vectors: listened artists and candidates through the same door.
+    hist_texts = [describe(names[k], profiles.get(k), own_genres.get(k, ())) for k in top]
+    cand_texts = [describe(c['artist'], profiles.get(norm_text(c['artist'])),
+                           c.get('genres') or (), c.get('year')) for c in cands]
+    X, summary['mode'] = vectors_for(db, hist_texts + cand_texts, embedder)
+    H, V = X[:len(top)], X[len(top):]
+    w = np.array([artist_w[k] for k in top], dtype=np.float64)
+    # An artist the fallback knows no word of has an all-zero row: no opinion.
+    keep = np.linalg.norm(H, axis=1) > 0
+    if not keep.any():
+        return dict(summary, outcome='no_profile')
+    C, _, cw = taste_clusters(H[keep], w[keep])
+
+    # 5. Rank and publish.
+    picked = rank(V, cands, C, cw, exclude=exclude)
+    picked = [(i, s, c) for i, s, c in picked if s > 0]
+    rows = [dict(cands[i], score=s, cluster=c) for i, s, c in picked]
+    write_recommendations(db, rows, now)
+    summary['items'] = len(rows)
+    return summary
+
+
+def start_run(db, now=None):
+    cur = db.execute('INSERT INTO runs (started) VALUES (?)',
+                     (time.time() if now is None else now,))
+    db.commit()
+    return cur.lastrowid
+
+
+def finish_run(db, run_id, summary, now=None):
+    import json
+    db.execute('UPDATE runs SET finished = ?, outcome = ?, mode = ?, detail = ? WHERE id = ?',
+               (time.time() if now is None else now, summary.get('outcome', 'error'),
+                summary.get('mode', ''), json.dumps(summary), run_id))
+    db.commit()
