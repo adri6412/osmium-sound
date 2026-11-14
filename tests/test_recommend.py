@@ -326,5 +326,77 @@ class VectorsForTestCase(unittest.TestCase):
         self.assertTrue(np.allclose(Y[2], X[0]))
 
 
+class SettingsTestCase(unittest.TestCase):
+    def test_defaults_are_complete(self):
+        s = rec.clean_settings(None)
+        self.assertTrue(s['enabled'])
+        self.assertEqual(s['schedule'], {'mode': 'daily', 'days': [], 'time': '18:00'})
+        self.assertEqual(s['sources'], list(rec.SOURCES))
+
+    def test_garbage_is_cleaned(self):
+        s = rec.clean_settings({'enabled': 0, 'sources': ['tidal', 'napster'],
+                                'schedule': {'mode': 'hourly', 'time': '25:99',
+                                             'days': [1, 1, 9, 'x', True]},
+                                'lastfm_key': ' ABCdef0123; rm '})
+        self.assertFalse(s['enabled'])
+        self.assertEqual(s['sources'], ['tidal'])
+        self.assertEqual(s['schedule'], {'mode': 'daily', 'days': [1], 'time': '18:00'})
+        self.assertEqual(s['lastfm_key'], 'ABCdef0123')
+
+    def test_schedule_expression(self):
+        mk = lambda **sch: {'schedule': sch}
+        self.assertEqual(rec.schedule_oncalendar(mk(mode='daily', time='07:30')),
+                         '*-*-* 07:30:00')
+        self.assertEqual(rec.schedule_oncalendar(mk(mode='days', days=[5, 0], time='21:05')),
+                         'Mon,Sat *-*-* 21:05:00')
+        self.assertIsNone(rec.schedule_oncalendar(mk(mode='manual')))
+        self.assertIsNone(rec.schedule_oncalendar(mk(mode='days', days=[])))
+        self.assertIsNone(rec.schedule_oncalendar({'enabled': False}))
+
+    def test_round_trip_on_disk(self):
+        import stat
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'sub', 'recommend.json')
+            self.assertEqual(rec.load_settings(path), rec.clean_settings({}))
+            rec.save_settings({'enabled': False, 'lastfm_key': 'ab12'}, path)
+            got = rec.load_settings(path)
+            self.assertEqual((got['enabled'], got['lastfm_key']), (False, 'ab12'))
+            self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+
+
+class StatusTestCase(unittest.TestCase):
+    def status(self, mode='play', **track):
+        base = {'artist': 'Pink Floyd', 'album': 'Animals', 'title': 'Dogs',
+                'duration': '1024.5', 'url': 'file:///music/dogs.flac', 'id': 7}
+        base.update(track)
+        return {'mode': mode, 'playlist_cur_index': '2', 'playlist_loop': [base]}
+
+    def test_album_track(self):
+        p = rec.play_from_status(self.status())
+        self.assertEqual((p['artist'], p['album'], p['title'], p['source']),
+                         ('Pink Floyd', 'Animals', 'Dogs', 'library'))
+        self.assertTrue(p['playing'])
+        self.assertEqual(p['duration'], 1024.5)
+        self.assertFalse(rec.play_from_status(self.status(mode='pause'))['playing'])
+
+    def test_sources(self):
+        for url, want in (('qobuz://123.flac', 'qobuz'), ('tidal://9.flc', 'tidal'),
+                          ('spotify://track:abc', 'spotty'), ('deezer://1.mp3', 'deezer'),
+                          ('cdplay://3', 'cd'), ('', '')):
+            self.assertEqual(rec.source_of_url(url), want)
+
+    def test_radio_and_stopped_are_not_plays(self):
+        self.assertIsNone(rec.play_from_status(self.status(album='', url='http://radio/x')))
+        self.assertIsNone(rec.play_from_status(self.status(mode='stop')))
+        self.assertIsNone(rec.play_from_status({'mode': 'play', 'playlist_loop': []}))
+        self.assertIsNone(rec.play_from_status(None))
+
+    def test_same_file_at_another_queue_position_is_another_listen(self):
+        a = rec.play_from_status(self.status())
+        b = rec.play_from_status(dict(self.status(), playlist_cur_index='5'))
+        self.assertNotEqual(a['track'], b['track'])
+
+
 if __name__ == '__main__':
     unittest.main()

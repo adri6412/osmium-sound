@@ -29,6 +29,10 @@ import hifi_squeezelite as sq
 import hifi_signal_path
 import hifi_system_tweaks as stw
 import hifi_diskguard
+try:
+    import hifi_recommend as rec
+except Exception:   # e.g. numpy missing on an old install: no Recommended, API still up
+    rec = None
 
 app = Flask(__name__)
 # This API is bound to 127.0.0.1 only (see the bottom of this file) and has no
@@ -11864,6 +11868,48 @@ def api_hide_global_keyboard():
     result = hide_global_keyboard()
     return jsonify({"message": result})
 
+# ── Recommended: listening history ───────────────────────────────────────────
+# Lyrion keeps no per-play log we can rely on (and it may be somebody else's
+# server), so the box keeps its own: every RECOMMEND_POLL seconds it looks at
+# what its own player is doing and hifi_recommend.PlayTracker decides when a
+# track has really been listened to. The history never leaves the device; the
+# scheduled job (hifi-recommend.service) is its only reader.
+RECOMMEND_POLL = 20
+RECOMMEND_PLAYERS_TTL = 300
+
+def _recommend_collector():
+    if rec is None:
+        return
+    tracker = rec.PlayTracker()
+    db = None
+    players, players_at = [], 0.0
+    time.sleep(60)
+    while True:
+        try:
+            now = time.monotonic()
+            play = None
+            if rec.load_settings()['enabled']:
+                if not players or now - players_at > RECOMMEND_PLAYERS_TTL:
+                    result = _lms_request('-', ['serverstatus', 0, 999]) or {}
+                    players = _own_player_ids(result.get('players_loop', []))
+                    players_at = now
+                if players:
+                    play = rec.play_from_status(_lms_request(
+                        players[0], ['status', '-', 1, 'tags:' + rec.STATUS_TAGS]))
+            if play is None:
+                tracker.feed(None, False, 0, now)
+            elif tracker.feed(play['track'], play['playing'], play['duration'], now):
+                if db is None:
+                    db = rec.open_db()
+                rec.record_play(db, play['artist'], play['album'], play['title'],
+                                play['source'])
+        except Exception as e:
+            # Lyrion not up yet, external server away, disk full: try again later.
+            log.debug("recommend: collector pass failed: %s", e)
+            players, db = [], None
+        time.sleep(RECOMMEND_POLL)
+
+
 if __name__ == '__main__':
     # Bind to loopback only. This API runs as root and exposes reboot/shutdown,
     # OS/system updates and network reconfiguration with NO authentication; it is
@@ -11878,4 +11924,5 @@ if __name__ == '__main__':
     threading.Thread(target=_vu_store_background, daemon=True, name='vu-store').start()
     threading.Thread(target=_anim_store_background, daemon=True, name='anim-store').start()
     threading.Thread(target=_bt_autopair_background, daemon=True, name='bt-autopair').start()
+    threading.Thread(target=_recommend_collector, daemon=True, name='recommend-plays').start()
     app.run(host='127.0.0.1', port=8000, threaded=True)

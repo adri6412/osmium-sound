@@ -641,3 +641,132 @@ def history_state(db, min_plays=MIN_PLAYS):
     return {'state': state, 'plays': plays, 'needed': min_plays,
             'running': running,
             'last_run': dict(last) if last else None}
+
+
+# ── Settings ─────────────────────────────────────────────────────────────────
+
+SETTINGS_PATH = os.environ.get('HIFI_RECOMMEND_SETTINGS',
+                               '/etc/hifi-player/recommend.json')
+SOURCES = ('library', 'qobuz', 'tidal', 'spotty', 'deezer')
+_DAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
+_TIME = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
+
+# The box is a hi-fi component, not a server: it is off at night. So the
+# default is an hour when it is likely on, and the timer catches up at the
+# next power-on when the hour was missed (Persistent=true in the unit).
+DEFAULT_SETTINGS = {
+    'enabled': True,
+    'schedule': {'mode': 'daily', 'days': [], 'time': '18:00'},
+    'sources': list(SOURCES),
+    'lastfm_key': '',
+}
+
+
+def clean_settings(data):
+    """Whatever came in, give back a complete and valid settings mapping."""
+    data = data if isinstance(data, dict) else {}
+    sch = data.get('schedule') if isinstance(data.get('schedule'), dict) else {}
+    mode = sch.get('mode')
+    if mode not in ('daily', 'days', 'manual'):
+        mode = DEFAULT_SETTINGS['schedule']['mode']
+    days = sorted({int(d) for d in (sch.get('days') or [])
+                   if isinstance(d, int) and not isinstance(d, bool)
+                   and 0 <= d <= 6})
+    when = sch.get('time') if _TIME.match(str(sch.get('time') or '')) \
+        else DEFAULT_SETTINGS['schedule']['time']
+    if mode == 'days' and not days:
+        mode = 'manual'            # "on chosen days" with no day chosen
+    sources = data.get('sources')
+    if not isinstance(sources, list):
+        sources = list(SOURCES)
+    return {
+        'enabled': bool(data.get('enabled', True)),
+        'schedule': {'mode': mode, 'days': days, 'time': when},
+        'sources': [s for s in SOURCES if s in sources],
+        'lastfm_key': re.sub(r'[^0-9a-fA-F]', '',
+                             str(data.get('lastfm_key') or ''))[:64],
+    }
+
+
+def load_settings(path=None):
+    import json
+    try:
+        with open(path or SETTINGS_PATH, encoding='utf-8') as f:
+            return clean_settings(json.load(f))
+    except (OSError, ValueError):
+        return clean_settings({})
+
+
+def save_settings(data, path=None):
+    import json
+    path = path or SETTINGS_PATH
+    clean = clean_settings(data)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + '.tmp'
+    # 0600: the file may hold the owner's own Last.fm key.
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        json.dump(clean, f, indent=2)
+    os.replace(tmp, path)
+    return clean
+
+
+def schedule_oncalendar(settings):
+    """The systemd OnCalendar= expression for these settings, or None when
+    nothing is to be scheduled (feature off, or "only when I ask")."""
+    s = clean_settings(settings)
+    sch = s['schedule']
+    if not s['enabled'] or sch['mode'] == 'manual':
+        return None
+    when = '*-*-* %s:00' % sch['time']
+    if sch['mode'] == 'days':
+        return ','.join(_DAYS[d] for d in sch['days']) + ' ' + when
+    return when
+
+
+# ── Reading the player ───────────────────────────────────────────────────────
+
+_SCHEME_SOURCE = {'file': 'library', 'spotify': 'spotty', 'cdplay': 'cd',
+                  'cdda': 'cd'}
+
+
+def source_of_url(url):
+    """Where a track comes from, by its Lyrion URL: 'library', 'qobuz',
+    'tidal', 'spotty', 'deezer', 'cd', or the bare scheme for anything else."""
+    scheme = str(url or '').split(':', 1)[0].lower() if ':' in str(url or '') else ''
+    return _SCHEME_SOURCE.get(scheme, scheme)
+
+
+STATUS_TAGS = 'aldu'      # artist, album, duration, url
+
+
+def play_from_status(st):
+    """What PlayTracker and record_play need out of a Lyrion `status` reply
+    (asked with tags STATUS_TAGS, one item at the current position).
+
+    None when nothing is loaded, or when what plays is not an album track: a
+    radio stream or a podcast has no artist/album pair and says nothing about
+    which albums the listener likes."""
+    if not isinstance(st, dict) or st.get('mode') not in ('play', 'pause'):
+        return None
+    loop = st.get('playlist_loop') or []
+    if not loop or not isinstance(loop[0], dict):
+        return None
+    t = loop[0]
+    artist = str(t.get('artist') or '').strip()
+    album = str(t.get('album') or '').strip()
+    if not artist or not album:
+        return None
+    url = str(t.get('url') or '')
+    try:
+        duration = float(t.get('duration') or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    return {
+        'track': (url or str(t.get('id') or ''), str(st.get('playlist_cur_index', ''))),
+        'playing': st.get('mode') == 'play',
+        'duration': duration,
+        'artist': artist, 'album': album,
+        'title': str(t.get('title') or '').strip(),
+        'source': source_of_url(url),
+    }
