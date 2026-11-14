@@ -3298,9 +3298,9 @@ Item {
             return
         }
         case "rec_min": {
-            var recMs = []; for (var recM = 0; recM < 12; recM++) recMs.push(String(recM * 5).padStart(2, "0"))
+            var recMs = []; for (var recM = 0; recM < 60; recM++) recMs.push(String(recM).padStart(2, "0"))
             var recT2 = String((cfg.rec.schedule || {}).time || "18:00").split(":")
-            Ui.dialogs.pick(Tr.t("settings.recommend.whenLabel"), recMs, Math.floor(parseInt(recT2[1]) / 5), function(i) { if (i >= 0) recSchedule({ time: recT2[0] + ":" + recMs[i] }) })
+            Ui.dialogs.pick(Tr.t("settings.recommend.whenLabel"), recMs, parseInt(recT2[1]) || 0, function(i) { if (i >= 0) recSchedule({ time: recT2[0] + ":" + recMs[i] }) })
             return
         }
         case "rec_src": {

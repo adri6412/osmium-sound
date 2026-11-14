@@ -98,7 +98,7 @@ onBeforeUnmount(() => { if (poll) clearInterval(poll); });
       </span>
       <div v-if="sched.mode === 'days'">
         <span class="seg">
-          <button v-for="d in 7" :key="d" :disabled="busy" :class="{ active: sched.days.includes(d - 1) }" @click="toggleDay(d - 1)">{{ t('settings.recommend.d' + (d - 1)) }}</button>
+          <button v-for="d in 7" :key="d" :disabled="busy" :class="{ active: sched.days.includes(d - 1) }" @click="toggleDay(d - 1)">{{ t(`settings.recommend.d${d - 1}`) }}</button>
         </span>
       </div>
       <div v-if="sched.mode !== 'manual'">
@@ -116,7 +116,7 @@ onBeforeUnmount(() => { if (poll) clearInterval(poll); });
 
       <template v-if="conf.lastfm !== 'off'">
         <label>{{ t('settings.recommend.lastfmLabel') }}</label>
-        <p class="muted">{{ t('settings.recommend.lastfm_' + conf.lastfm) }}</p>
+        <p class="muted">{{ t(`settings.recommend.lastfm_${conf.lastfm}`) }}</p>
         <div class="row" style="gap: 8px; flex-wrap: wrap;">
           <input v-model="key" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
                  :placeholder="t('settings.recommend.lastfmPlaceholder')" style="flex: 1; min-width: 220px;" />
