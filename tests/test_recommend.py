@@ -290,5 +290,41 @@ class VectorTestCase(unittest.TestCase):
         self.assertEqual(mask.tolist(), [[1, 1, 1, 0, 0], [1, 1, 1, 1, 1]])
 
 
+class FakeEmbedder:
+    """Stands in for the ONNX model: counts what it is asked to embed."""
+
+    def __init__(self):
+        self.seen = []
+
+    def embed(self, texts):
+        self.seen.extend(texts)
+        return rec.l2_normalize(np.array(
+            [[len(t), t.count('a') + 1, 1.0] for t in texts], dtype=np.float32))
+
+
+class VectorsForTestCase(unittest.TestCase):
+    def test_without_the_model_it_falls_back_to_tfidf(self):
+        db = rec.open_db(':memory:')
+        X, mode = rec.vectors_for(db, ['jazz trio', 'jazz quartet'], None)
+        self.assertEqual(mode, 'tfidf')
+        self.assertEqual(X.shape[0], 2)
+        self.assertEqual(db.execute('SELECT COUNT(*) FROM embeddings').fetchone()[0], 0)
+
+    def test_model_missing_means_no_embedder(self):
+        self.assertIsNone(rec.Embedder.load('/nonexistent/hifi-recommend'))
+
+    def test_each_text_is_embedded_once_ever(self):
+        db = rec.open_db(':memory:')
+        emb = FakeEmbedder()
+        X, mode = rec.vectors_for(db, ['alpha', 'banana', 'alpha'], emb)
+        self.assertEqual(mode, 'model')
+        self.assertEqual(sorted(emb.seen), ['alpha', 'banana'])
+        self.assertTrue(np.allclose(X[0], X[2]))
+        Y, _ = rec.vectors_for(db, ['banana', 'cherry', 'alpha'], emb)
+        self.assertEqual(sorted(emb.seen), ['alpha', 'banana', 'cherry'])
+        self.assertTrue(np.allclose(Y[0], X[1]))
+        self.assertTrue(np.allclose(Y[2], X[0]))
+
+
 if __name__ == '__main__':
     unittest.main()

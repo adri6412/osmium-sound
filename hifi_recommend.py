@@ -46,6 +46,14 @@ NONCOMMERCIAL_SOURCES = True
 DB_DIR = os.environ.get('HIFI_RECOMMEND_DIR', '/var/lib/hifi-player/recommend')
 DB_NAME = 'recommend.db'
 
+MODEL_DIR = os.environ.get('HIFI_RECOMMEND_MODEL_DIR',
+                           '/usr/local/share/hifi-recommend')
+MODEL_FILE = 'model.onnx'
+VOCAB_FILE = 'vocab.txt'
+MODEL_NAME = 'all-MiniLM-L6-v2-int8'   # part of the cache key: change with the model
+EMBED_DIM = 384
+EMBED_MAX_TOKENS = 64
+
 HALF_LIFE_DAYS = 90.0     # a play counts half after this long
 MIN_PLAYS = 20            # below this the history says too little: empty state
 MAX_RESULTS = 40
@@ -379,6 +387,98 @@ class WordPiece:
 
 def text_hash(text, model):
     return hashlib.sha256((model + '\0' + text).encode('utf-8')).hexdigest()
+
+
+class Embedder:
+    """The sentence-embedding model (all-MiniLM-L6-v2, int8 ONNX) on the CPU.
+
+    Use Embedder.load(): it returns None when onnxruntime or the model files
+    are not there, and the caller falls back to tfidf_vectors(). Two threads
+    and short inputs keep an Atom responsive while the job runs.
+    """
+
+    def __init__(self, session, tokenizer):
+        self.session = session
+        self.tok = tokenizer
+        self.inputs = {i.name for i in session.get_inputs()}
+
+    @classmethod
+    def load(cls, model_dir=None, threads=2):
+        model_dir = model_dir or MODEL_DIR
+        model = os.path.join(model_dir, MODEL_FILE)
+        vocab = os.path.join(model_dir, VOCAB_FILE)
+        if not (os.path.isfile(model) and os.path.isfile(vocab)):
+            return None
+        try:
+            import onnxruntime as ort
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = threads
+            opts.inter_op_num_threads = 1
+            opts.log_severity_level = 3
+            session = ort.InferenceSession(
+                model, sess_options=opts, providers=['CPUExecutionProvider'])
+            return cls(session, WordPiece(vocab))
+        except Exception:
+            return None
+
+    def embed(self, texts, batch=16, max_len=EMBED_MAX_TOKENS):
+        """One L2-normalised row per text (mean of the token vectors)."""
+        texts = list(texts)
+        out = [None] * len(texts)
+        # Similar lengths together: less padding, less work.
+        order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
+        for at in range(0, len(order), batch):
+            idx = order[at:at + batch]
+            ids, mask = self.tok.batch([texts[i] for i in idx], max_len)
+            feed = {'input_ids': ids, 'attention_mask': mask}
+            if 'token_type_ids' in self.inputs:
+                feed['token_type_ids'] = np.zeros_like(ids)
+            tokens = self.session.run(None, feed)[0]
+            m = mask[:, :, None].astype(np.float32)
+            pooled = (tokens * m).sum(axis=1) / np.maximum(m.sum(axis=1), 1.0)
+            for row, i in zip(l2_normalize(pooled), idx):
+                out[i] = row
+        if not out:
+            return np.zeros((0, EMBED_DIM), dtype=np.float32)
+        return np.vstack(out).astype(np.float32)
+
+
+def vectors_for(db, texts, embedder):
+    """Vectors for `texts`, and how they were made ('model' or 'tfidf').
+
+    With the model, each distinct text is embedded once ever: results are kept
+    in the `embeddings` table by hash, so a later run only pays for what is
+    new. Without it, TF-IDF over these same texts (they must all be passed
+    together: history and candidates share one vocabulary)."""
+    texts = list(texts)
+    if embedder is None:
+        return tfidf_vectors(texts), 'tfidf'
+    hashes = [text_hash(t, MODEL_NAME) for t in texts]
+    have = {}
+    wanted = sorted(set(hashes))
+    for at in range(0, len(wanted), 500):
+        part = wanted[at:at + 500]
+        for h, blob in db.execute(
+                'SELECT text_hash, vec FROM embeddings WHERE model = ? AND '
+                'text_hash IN (%s)' % ','.join('?' * len(part)),
+                [MODEL_NAME] + part):
+            have[h] = np.frombuffer(blob, dtype=np.float32)
+    todo = {}
+    for h, t in zip(hashes, texts):
+        if h not in have:
+            todo.setdefault(h, t)
+    if todo:
+        vecs = embedder.embed(list(todo.values()))
+        with db:
+            db.executemany(
+                'INSERT OR REPLACE INTO embeddings (text_hash, model, vec) '
+                'VALUES (?,?,?)',
+                [(h, MODEL_NAME, v.astype(np.float32).tobytes())
+                 for h, v in zip(todo, vecs)])
+        have.update(zip(todo, vecs))
+    if not texts:
+        return np.zeros((0, EMBED_DIM), dtype=np.float32), 'model'
+    return np.vstack([have[h] for h in hashes]).astype(np.float32), 'model'
 
 
 # ── Taste clusters ───────────────────────────────────────────────────────────
