@@ -11933,6 +11933,15 @@ def _recommend_running():
     return False
 
 
+def _recommend_library_size():
+    """Albums in the local library, 0 when Lyrion does not answer: with
+    enough of them the list can be computed before any play was counted."""
+    try:
+        return int((_lms_request('', ['albums', 0, 1]) or {}).get('count') or 0)
+    except Exception:
+        return 0
+
+
 @app.route('/recommendations', methods=['GET'])
 def api_recommendations():
     """What the Recommended screen shows: the list, or why there is none yet
@@ -11942,7 +11951,7 @@ def api_recommendations():
     settings = rec.load_settings()
     db = rec.open_db()
     try:
-        st = rec.history_state(db)
+        st = rec.history_state(db, library=_recommend_library_size())
         items = rec.read_recommendations(db) if settings['enabled'] else []
     finally:
         db.close()

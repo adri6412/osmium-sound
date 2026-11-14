@@ -686,6 +686,28 @@ class RunTestCase(unittest.TestCase):
         self.assertEqual(got['outcome'], 'few_plays')
         self.assertEqual(len(rec.read_recommendations(self.db)), 1)
 
+    def test_library_alone_is_a_profile(self):
+        # No play counted yet: a rock shelf at home, and a streaming service
+        # that has more by the same names.
+        shelf = [(i, 'Pink Floyd' if i % 2 else 'Genesis', 'Album %d' % i, 'Rock')
+                 for i in range(1, rec.MIN_LIBRARY_ALBUMS + 1)]
+        self.assertEqual(rec.history_state(self.db, library=len(shelf))['state'], 'never_run')
+        got = rec.run(self.db, FakeLyrion(shelf), http=None,
+                      settings={'sources': ['qobuz']}, now=self.now)
+        self.assertEqual((got['outcome'], got['plays'], got['library']), ('ok', 0, len(shelf)))
+        rows = rec.read_recommendations(self.db)
+        self.assertTrue(rows)
+        self.assertEqual({r['source'] for r in rows}, {'qobuz'})
+        self.assertLessEqual({r['artist'] for r in rows}, {'Pink Floyd', 'Genesis'})
+
+    def test_library_weights(self):
+        albums = [{'artist': 'Genesis'}] * 9 + [{'artist': 'Camel'}] + [{'artist': 'Various Artists'}] * 5
+        w = rec.library_weights(albums)
+        self.assertEqual(w, {'genesis': rec.LIBRARY_ALBUMS_CAP * rec.LIBRARY_ALBUM_WEIGHT,
+                             'camel': rec.LIBRARY_ALBUM_WEIGHT})
+        # a shelf never outweighs a handful of recent plays
+        self.assertLess(max(w.values()), 2 * rec.decay_weight(0))
+
     def test_disabled(self):
         self.listen('Pink Floyd', 'Animals', 30)
         got = rec.run(self.db, FakeLyrion(LIBRARY), settings={'enabled': False}, now=self.now)
@@ -702,9 +724,12 @@ class RunTestCase(unittest.TestCase):
         self.assertEqual(rows[0]['album'], 'Meddle')              # same artist, same genre
         self.assertEqual((rows[0]['source'], rows[0]['play_kind'], rows[0]['play_id'],
                           rows[0]['cover']), ('library', 'album_id', '2', 'art2'))
-        rock = [i for i, a in enumerate(albums) if a in ('Foxtrot', 'Selling England by the Pound')]
-        jazz = [i for i, a in enumerate(albums) if a in ('Kind of Blue', 'Blue Train', 'Giant Steps')]
-        self.assertTrue(rock and (not jazz or max(rock) < min(jazz)))
+        # The jazz on the shelf is taste too (library_weights), but thirty
+        # plays of rock say far more: every rock album scores above it. The
+        # order of the list is MMR's, which mixes for variety.
+        rock = [r['score'] for r in rows if r['album'] in ('Foxtrot', 'Selling England by the Pound')]
+        jazz = [r['score'] for r in rows if r['album'] in ('Kind of Blue', 'Blue Train', 'Giant Steps')]
+        self.assertTrue(rock and (not jazz or min(rock) > max(jazz)))
 
     def test_dismissed_album_stays_out_of_later_runs(self):
         self.listen('Pink Floyd', 'Animals', 30)

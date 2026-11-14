@@ -56,6 +56,13 @@ EMBED_MAX_TOKENS = 64
 
 HALF_LIFE_DAYS = 90.0     # a play counts half after this long
 MIN_PLAYS = 20            # below this the history says too little: empty state
+# The local library is taste too: an album someone bothered to own says what
+# they like before a single play was counted. Each album gives its artist
+# this much, up to LIBRARY_ALBUMS_CAP albums — a quarter of a play heard
+# today, so a few real plays soon weigh more than a shelf.
+LIBRARY_ALBUM_WEIGHT = 0.25
+LIBRARY_ALBUMS_CAP = 4
+MIN_LIBRARY_ALBUMS = 10   # a library this big is enough to start without plays
 MAX_RESULTS = 40
 MAX_PER_ARTIST = 2
 MMR_LAMBDA = 0.7          # 1 = pure relevance, 0 = pure diversity
@@ -265,6 +272,22 @@ def play_weights(plays, now=None, half_life=HALF_LIFE_DAYS, key='album_key'):
         w = decay_weight((now - p['ts']) / 86400.0, half_life)
         out[p[key]] = out.get(p[key], 0.0) + w
     return out
+
+
+_NOT_AN_ARTIST = {'various artists', 'various', 'va', 'artisti vari', 'aa vv',
+                  'verschiedene interpreten', 'unknown artist', 'no artist'}
+
+
+def library_weights(albums):
+    """Weight per artist key from the albums owned (see LIBRARY_ALBUM_WEIGHT).
+    Compilations say nothing about one artist and are left out."""
+    count = {}
+    for a in albums:
+        k = norm_text(a.get('artist') or '')
+        if k and k not in _NOT_AN_ARTIST:
+            count[k] = count.get(k, 0) + 1
+    return {k: min(n, LIBRARY_ALBUMS_CAP) * LIBRARY_ALBUM_WEIGHT
+            for k, n in count.items()}
 
 
 # ── Vectors ──────────────────────────────────────────────────────────────────
@@ -626,8 +649,10 @@ def rank(cand_vecs, cands, centroids, cluster_weights, exclude=(),
     return out
 
 
-def history_state(db, min_plays=MIN_PLAYS):
-    """What the screen should say before it shows a list."""
+def history_state(db, min_plays=MIN_PLAYS, library=0):
+    """What the screen should say before it shows a list. `library` is the
+    number of albums in the local library: a big enough one stands in for a
+    listening history that is still thin."""
     plays = play_count(db)
     last = db.execute(
         'SELECT started, finished, outcome, mode FROM runs '
@@ -637,7 +662,7 @@ def history_state(db, min_plays=MIN_PLAYS):
     running = bool(last and last['outcome'] == 'running'
                    and time.time() - last['started'] < RUN_TIMEOUT)
     have = db.execute('SELECT COUNT(*) FROM recommendations').fetchone()[0]
-    if plays < min_plays:
+    if plays < min_plays and (library or 0) < MIN_LIBRARY_ALBUMS:
         state = 'few_plays'
     elif not have:
         state = 'never_run' if not last or running else 'empty'
@@ -1191,15 +1216,18 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
     is hifi_metadata's client or None for "stay offline". Returns a summary
     dict; the list itself goes to the recommendations table.
 
-    An empty or thin history writes nothing and leaves any earlier list
-    alone."""
+    The taste profile is the listening history plus the albums of the local
+    library (library_weights). With neither — a thin history and next to no
+    library — nothing is written and any earlier list is left alone."""
     now = time.time() if now is None else now
     settings = clean_settings(settings)
     summary = {'outcome': 'ok', 'mode': '', 'plays': play_count(db), 'items': 0,
                'fetched': 0, 'searches': 0}
     if not settings['enabled']:
         return dict(summary, outcome='disabled')
-    if summary['plays'] < MIN_PLAYS:
+    library = library_albums(rpc)
+    summary['library'] = len(library)
+    if summary['plays'] < MIN_PLAYS and len(library) < MIN_LIBRARY_ALBUMS:
         return dict(summary, outcome='few_plays')
 
     plays = [dict(r) for r in db.execute('SELECT ts, artist, album, album_key FROM plays')]
@@ -1209,6 +1237,12 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
     names = {}
     for p in plays:
         names.setdefault(p['artist_key'], p['artist'])
+    # The albums owned count as well, whether or not the library is also
+    # offered as a source of recommendations.
+    for a in library:
+        names.setdefault(norm_text(a['artist']), a['artist'])
+    for k, w_lib in library_weights(library).items():
+        artist_w[k] = artist_w.get(k, 0.0) + w_lib
     top = sorted((k for k in artist_w if k), key=lambda k: -artist_w[k])[:MAX_HISTORY_ARTISTS]
     exclude = heard_keys(db) | dismissed_keys(db)
 
@@ -1216,7 +1250,7 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
     #    The genres its files carry also describe the listened artists, which
     #    is all there is to go by when the network sources are out of reach.
     cands, own_genres = [], {}
-    for a in library_albums(rpc):
+    for a in library:
         seen_g = own_genres.setdefault(norm_text(a['artist']), [])
         seen_g.extend(g for g in a.get('genres') or () if g not in seen_g)
         if 'library' not in settings['sources']:
