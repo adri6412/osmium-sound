@@ -15,6 +15,15 @@ for them anywhere in this file). Wikipedia text is CC BY-SA and always travels
 with its source, URL and licence so the screens can attribute it. No other
 metadata service (Last.fm, fanart.tv, TheAudioDB, AcoustID, Discogs) is used.
 
+One exception, and it is not in this file: Recommended albums
+(hifi_recommend.py) does ask MusicBrainz for genres and tags and Last.fm for
+tags and similar artists. Those are non-commercial sources, allowed because
+today Osmium is open source only and no commercial licence is sold. They all
+sit behind hifi_recommend.NONCOMMERCIAL_SOURCES: a commercial edition either
+licenses them or sets that to False, and the recommendations go on with the
+free sources. The rule above still holds for everything here — credits, album
+and artist pages, the CD ripper.
+
 Shape of the thing:
   * HttpClient — throttled JSON GETs: MusicBrainz at most one request every
     1.1 s, Wikimedia a little spacing, exponential back-off on 503/429, a

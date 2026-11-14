@@ -229,6 +229,82 @@ session-gated forward in `webui_server.py`) expose the same feature; the plain
 `GET /api/backup` link (no passphrase — an `<a href>` can't send one) stays
 the always-available "just get me a file" path used by both UIs.
 
+## Recommended albums
+
+A **Recommended** tile in the kiosk's Music tab opens a grid of albums that
+play at one touch. The list is computed by a scheduled job, never while the
+screen is open: the kiosk only reads a table. Everything is in
+`hifi_recommend.py` (numpy + stdlib; onnxruntime optional), tested by
+`tests/test_recommend.py`.
+
+**Pipeline** (`run()`):
+
+1. **Plays** — a thread in `api_server.py` (`_recommend_collector`) polls the
+   device's own player every 20 s and records a play once a track was heard
+   for 30 s or half its length. It works with an external Lyrion and with
+   streaming. Table `plays`.
+2. **Taste weights** — per artist, the sum of plays decayed with a 90-day
+   half-life, **plus the local library**: each album owned adds 0.25, up to
+   four albums per artist (`library_weights`). A library of ten albums is
+   enough to compute a list with no plays at all; below that the job waits
+   for 20 plays (`few_plays`).
+3. **Enrichment** — genres, tags and related artists per artist, through
+   `hifi_metadata.HttpClient` (one User-Agent, one rate limit, the `meta-online`
+   switch): Wikidata and MusicBrainz core data always; MusicBrainz genres/tags
+   and Last.fm only behind `NONCOMMERCIAL_SOURCES`. Cached in the database for
+   90 days, at most 120 new artists per run.
+4. **Vectors** — one short text per artist/album ("artist; genres; decade;
+   related…") embedded with all-MiniLM-L6-v2 (ONNX, int8, 64 tokens, own
+   WordPiece tokenizer), cached by text hash. Without onnxruntime or the model
+   the same pipeline runs on TF-IDF tag vectors (`mode` = `onnx` | `tfidf`).
+5. **Profile** — weighted k-means, k from 1 to 5 by silhouette.
+6. **Candidates** — unheard albums of the library, and albums found by
+   searching each signed-in streaming plugin (Qobuz, Tidal, Spotty, Deezer)
+   through Lyrion's JSON-RPC for the top artists and their related names, at
+   most 40 searches per service per run. Heard and dismissed albums are out.
+7. **Ranking** — cosine to the nearest centroid, then MMR (λ 0.7), two albums
+   per artist at most, a quota per cluster; 40 results.
+
+**Storage** — `/var/lib/hifi-player/recommend/recommend.db` (SQLite, WAL):
+`recommendations` (rewritten in one transaction), `plays`, `dismissed`, the
+profile and vector caches, `runs`. Settings in
+`/etc/hifi-player/recommend.json`. Both are in the backup (the database as a
+snapshot) and removed by a factory reset.
+
+**Scheduling** — the device is not a server and is off at night, so the owner
+picks the time. `hifi-recommend.timer` (default every day 18:00,
+`Persistent=true`: a missed run is caught up after the next power-on) starts
+`hifi-recommend.service` → `hifi-recommend-run.py`, at idle priority with
+`MemoryMax=900M`. Settings → Recommended writes the drop-in
+`hifi-recommend.timer.d/schedule.conf` through the API (every day / chosen
+days / only by hand, any hour and minute); `api_server` rewrites it at start,
+so a restored backup gets its schedule back. A scheduled run waits while music
+is playing; "Compute now" does not.
+
+**API** (`api_server.py`, proxied by the web admin as `/api/system/…`):
+`GET /recommendations` (state `ok | disabled | few_plays | never_run | empty`,
+`running`, last run, items), `POST /recommendations/dismiss`,
+`POST /recommendations/run`, `GET|POST /recommend_settings`. The Last.fm key
+is never returned, only whose it is (`own | project | none | off`).
+
+**Playing** — a library album by `album_id` (`playlistcontrol`), a streaming
+album by `playlist play <favorites_url> <title>`.
+
+**Packaging** — `python3-onnxruntime` in the image; the model and vocabulary
+are downloaded by `build-distro.sh` against pinned sha256 sums into
+`/usr/local/share/hifi-recommend/`. The project's Last.fm key is written
+there at build time from `LASTFM_API_KEY` or the git-ignored
+`distro/secrets/lastfm.key` — never committed; a build without it only
+switches Last.fm off. Devices updated without a new image get the module and
+the key with the System bundle and run in `tfidf` mode until they have the
+model; migration `0064` enables the timer.
+
+**Licensing** — MusicBrainz genres/tags (CC BY-NC-SA) and Last.fm
+(non-commercial terms) are used because no commercial licence is sold today.
+`NONCOMMERCIAL_SOURCES = False` removes them in one line; see the header of
+`hifi_recommend.py`. Credits to MusicBrainz, Wikidata and Last.fm are shown
+in the settings section.
+
 ## Pairing & security
 
 The Android companion pairs via a bearer token, not a password. Minting a
