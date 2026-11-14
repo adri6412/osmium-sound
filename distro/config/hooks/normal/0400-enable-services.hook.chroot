@@ -139,6 +139,12 @@ echo "I: [hifi] enabling the weekly backup timer"
 # the same on legacy installs.
 systemctl enable hifi-backup.timer || true
 
+echo "I: [hifi] enabling the Recommended albums timer"
+# On by default, every day at 18:00 with catch-up at power-on; the owner's
+# own days and time (Settings -> Recommended) arrive as a drop-in written by
+# the API, which also disables the timer for "only when I ask".
+systemctl enable hifi-recommend.timer || true
+
 echo "I: [hifi] making journald persistent across reboots"
 mkdir -p /var/log/journal
 systemd-tmpfiles --create --prefix /var/log/journal || true

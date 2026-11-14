@@ -729,6 +729,41 @@ def schedule_oncalendar(settings):
     return when
 
 
+def schedule_dropin(settings):
+    """The text of hifi-recommend.timer.d/schedule.conf for these settings,
+    or None when the timer is to be switched off. The empty OnCalendar= first
+    clears the unit's own default."""
+    spec = schedule_oncalendar(settings)
+    if not spec:
+        return None
+    return ('# Written by the API from Settings -> Recommended; do not edit.\n'
+            '[Timer]\nOnCalendar=\nOnCalendar=%s\n' % spec)
+
+
+def public_settings(settings, model_dir=None):
+    """The settings as a screen may see them: the Last.fm key never leaves
+    the device, only whether there is one and whose."""
+    s = clean_settings(settings)
+    own = bool(s.pop('lastfm_key'))
+    s['lastfm'] = ('off' if not NONCOMMERCIAL_SOURCES else 'own' if own
+                   else 'project' if lastfm_key({}, model_dir) else 'none')
+    return s
+
+
+def merge_settings(current, change):
+    """Settings after a screen's change: what it did not send stays, and so
+    does the Last.fm key unless it sent one ('' takes it away)."""
+    current = clean_settings(current)
+    change = change if isinstance(change, dict) else {}
+    out = dict(current)
+    for k in ('enabled', 'schedule', 'sources'):
+        if k in change:
+            out[k] = change[k]
+    if isinstance(change.get('lastfm_key'), str):
+        out['lastfm_key'] = change['lastfm_key']
+    return clean_settings(out)
+
+
 # ── Reading the player ───────────────────────────────────────────────────────
 
 _SCHEME_SOURCE = {'file': 'library', 'spotify': 'spotty', 'cdplay': 'cd',

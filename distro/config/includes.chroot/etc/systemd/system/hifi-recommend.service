@@ -1,0 +1,18 @@
+[Unit]
+Description=Osmium Recommended albums (scheduled computation)
+After=network-online.target lyrionmusicserver.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hifi-recommend-run.py --scheduled
+# Never in the way of playback: lowest CPU and disk priority, two threads,
+# and a hard ceiling on memory well under what a 4 GB Atom can spare. The
+# measured peak is about 130 MB (Celeron N4020, 400 albums).
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=20
+MemoryMax=900M
+# A run is a few minutes of polite, rate-limited lookups (about one request
+# a second); the limit also covers the wait after boot of a caught-up run.
+# hifi_recommend.RUN_TIMEOUT mirrors the run's share of it.
+TimeoutStartSec=2400

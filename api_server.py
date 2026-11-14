@@ -11874,12 +11874,166 @@ def api_hide_global_keyboard():
 # what its own player is doing and hifi_recommend.PlayTracker decides when a
 # track has really been listened to. The history never leaves the device; the
 # scheduled job (hifi-recommend.service) is its only reader.
+RECOMMEND_TIMER = 'hifi-recommend.timer'
+RECOMMEND_DROPIN = '/etc/systemd/system/hifi-recommend.timer.d/schedule.conf'
+RECOMMEND_MANUAL_UNIT = 'hifi-recommend-manual'
+RECOMMEND_RUNNER = '/usr/local/sbin/hifi-recommend-run.py'
+
+
+def _recommend_apply_schedule(settings):
+    """Make the timer say what the settings say: the owner's days and time as
+    a drop-in, or the timer off for "only when I ask" / feature off. Returns
+    '' or what went wrong. /etc is the overlay's upper layer on an image, so
+    the choice survives updates; it is re-applied at every API start anyway."""
+    text = rec.schedule_dropin(settings)
+    try:
+        if text is None:
+            try:
+                os.remove(RECOMMEND_DROPIN)
+            except FileNotFoundError:
+                pass
+            steps = [['systemctl', 'daemon-reload'],
+                     ['systemctl', 'disable', '--now', RECOMMEND_TIMER]]
+        else:
+            try:
+                with open(RECOMMEND_DROPIN, encoding='utf-8') as f:
+                    same = f.read() == text
+            except OSError:
+                same = False
+            if not same:
+                os.makedirs(os.path.dirname(RECOMMEND_DROPIN), exist_ok=True)
+                tmp = RECOMMEND_DROPIN + '.tmp'
+                with open(tmp, 'w', encoding='utf-8') as f:
+                    f.write(text)
+                os.replace(tmp, RECOMMEND_DROPIN)
+            steps = ([] if same else [['systemctl', 'daemon-reload']]) + [
+                ['systemctl', 'enable', RECOMMEND_TIMER],
+                # restart, not start: a running timer keeps its old schedule.
+                ['systemctl', 'start' if same else 'restart', RECOMMEND_TIMER]]
+        for cmd in steps:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if r.returncode != 0:
+                return (r.stderr or r.stdout or '').strip()[:300] or ' '.join(cmd)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return str(e)[:300] or 'systemctl'
+    return ''
+
+
+def _recommend_running():
+    """True while a computation is going: the scheduled unit or the one the
+    owner started by hand."""
+    for unit in ('hifi-recommend.service', RECOMMEND_MANUAL_UNIT + '.service'):
+        try:
+            r = subprocess.run(['systemctl', 'is-active', unit],
+                               capture_output=True, text=True, timeout=10)
+            if r.stdout.strip() in ('active', 'activating'):
+                return True
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return False
+
+
+@app.route('/recommendations', methods=['GET'])
+def api_recommendations():
+    """What the Recommended screen shows: the list, or why there is none yet
+    (state: ok | disabled | few_plays | never_run | empty)."""
+    if rec is None:
+        return jsonify({'state': 'disabled', 'available': False, 'items': []})
+    settings = rec.load_settings()
+    db = rec.open_db()
+    try:
+        st = rec.history_state(db)
+        items = rec.read_recommendations(db) if settings['enabled'] else []
+    finally:
+        db.close()
+    st['running'] = _recommend_running()
+    if not settings['enabled']:
+        st['state'] = 'disabled'
+    st.update(available=True, needed=rec.MIN_PLAYS, items=items,
+              scheduled=bool(rec.schedule_oncalendar(settings)))
+    return jsonify(st)
+
+
+@app.route('/recommendations/dismiss', methods=['POST'])
+def api_recommendations_dismiss():
+    key = str((request.get_json(silent=True) or {}).get('album_key') or '')[:400]
+    if rec is None or not key:
+        return jsonify({'success': False}), 400
+    db = rec.open_db()
+    try:
+        rec.dismiss(db, key)
+    finally:
+        db.close()
+    return jsonify({'success': True})
+
+
+@app.route('/recommendations/run', methods=['POST'])
+def api_recommendations_run():
+    """"Compute now": the same job as the scheduled one, started at once and
+    at the same low priority. Answers straight away; GET /recommendations
+    says when it is over."""
+    if rec is None:
+        return jsonify({'success': False}), 400
+    if _recommend_running():
+        return jsonify({'success': True, 'running': True, 'started': False})
+    try:
+        r = subprocess.run(
+            ['systemd-run', '--quiet', '--collect', '--unit', RECOMMEND_MANUAL_UNIT,
+             '-p', 'Nice=19', '-p', 'IOSchedulingClass=idle', '-p', 'CPUWeight=20',
+             '-p', 'MemoryMax=900M', '-p', 'RuntimeMaxSec=%d' % rec.RUN_TIMEOUT,
+             RECOMMEND_RUNNER],
+            capture_output=True, text=True, timeout=30)
+        ok = r.returncode == 0
+        if not ok:
+            log.warning('recommend: manual run not started: %s',
+                           (r.stderr or r.stdout or '').strip()[:300])
+    except (OSError, subprocess.TimeoutExpired) as e:
+        ok = False
+        log.warning('recommend: manual run not started: %s', e)
+    return jsonify({'success': ok, 'running': ok, 'started': ok}), (200 if ok else 500)
+
+
+@app.route('/recommend_settings', methods=['GET'])
+def api_recommend_settings():
+    if rec is None:
+        return jsonify({'available': False})
+    return jsonify(dict(rec.public_settings(rec.load_settings()), available=True,
+                        all_sources=list(rec.SOURCES)))
+
+
+@app.route('/recommend_settings', methods=['POST'])
+def api_set_recommend_settings():
+    if rec is None:
+        return jsonify({'success': False}), 400
+    previous = rec.load_settings()
+    settings = rec.save_settings(rec.merge_settings(previous, request.get_json(silent=True)))
+    detail = _recommend_apply_schedule(settings)
+    if detail:
+        # "Saved" with a timer that never fires would be a lie: put the old
+        # choice back so what the screen reloads is the truth.
+        log.warning('recommend: schedule not applied: %s', detail)
+        try:
+            rec.save_settings(previous)
+        except OSError:
+            pass
+        return jsonify(dict(rec.public_settings(previous), success=False,
+                            available=True, all_sources=list(rec.SOURCES))), 500
+    return jsonify(dict(rec.public_settings(settings), success=True,
+                        available=True, all_sources=list(rec.SOURCES)))
+
+
 RECOMMEND_POLL = 20
 RECOMMEND_PLAYERS_TTL = 300
 
 def _recommend_collector():
     if rec is None:
         return
+    try:
+        # The settings file is the truth; the timer follows it (a restored
+        # backup or a fresh image brings one without the other).
+        _recommend_apply_schedule(rec.load_settings())
+    except Exception:
+        pass
     tracker = rec.PlayTracker()
     db = None
     players, players_at = [], 0.0

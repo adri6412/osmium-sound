@@ -1,0 +1,18 @@
+[Unit]
+Description=Osmium Recommended albums (when the owner scheduled it)
+
+[Timer]
+# The default. The owner's choice (Settings → Recommended: days and time) is
+# written by the API as hifi-recommend.timer.d/schedule.conf.
+OnCalendar=*-*-* 18:00:00
+# This is not a server: at the chosen time the device may well be off. A
+# missed run is caught up at the next power-on (the runner waits for the
+# boot to settle first).
+Persistent=true
+# MusicBrainz blocks distributed applications that all call at the same
+# minute: spread the devices out.
+RandomizedDelaySec=900
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

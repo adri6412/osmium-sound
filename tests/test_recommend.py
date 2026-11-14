@@ -398,6 +398,36 @@ class StatusTestCase(unittest.TestCase):
         self.assertNotEqual(a['track'], b['track'])
 
 
+class ScreenSettingsTestCase(unittest.TestCase):
+    def test_dropin(self):
+        self.assertIsNone(rec.schedule_dropin({'enabled': False}))
+        self.assertIsNone(rec.schedule_dropin({'schedule': {'mode': 'manual'}}))
+        text = rec.schedule_dropin({'schedule': {'mode': 'days', 'days': [0, 5], 'time': '21:05'}})
+        self.assertIn('[Timer]\nOnCalendar=\nOnCalendar=Mon,Sat *-*-* 21:05:00\n', text)
+
+    def test_key_never_shown(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            pub = rec.public_settings({'lastfm_key': 'abcdef0123'}, d)
+            self.assertNotIn('lastfm_key', pub)
+            self.assertNotIn('abcdef0123', repr(pub))
+            self.assertEqual(pub['lastfm'], 'own')
+            self.assertEqual(rec.public_settings({}, d)['lastfm'], 'none')
+            with open(os.path.join(d, rec.LASTFM_KEY_FILE), 'w') as f:
+                f.write('00ff')
+            self.assertEqual(rec.public_settings({}, d)['lastfm'], 'project')
+
+    def test_merge_keeps_what_was_not_sent(self):
+        cur = {'enabled': True, 'lastfm_key': 'abc123', 'sources': ['library', 'tidal'],
+               'schedule': {'mode': 'daily', 'time': '07:30'}}
+        got = rec.merge_settings(cur, {'enabled': False})
+        self.assertEqual((got['enabled'], got['lastfm_key'], got['sources'], got['schedule']['time']),
+                         (False, 'abc123', ['library', 'tidal'], '07:30'))
+        self.assertEqual(rec.merge_settings(cur, {'lastfm_key': ''})['lastfm_key'], '')
+        self.assertEqual(rec.merge_settings(cur, {'lastfm_key': None})['lastfm_key'], 'abc123')
+        self.assertEqual(rec.merge_settings(cur, 'junk'), rec.clean_settings(cur))
+
+
 class FakeHttp:
     """hifi_metadata.HttpClient's get_json, answered from canned replies."""
 

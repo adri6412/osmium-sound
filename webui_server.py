@@ -1201,6 +1201,12 @@ _AUTH_ROUTES = {
     ('/api/system/external_convert/remove', 'POST'): '/external_convert/remove',
     # Settings → System tweaks: CPU governor / mitigations / SMT for CPU
     # headroom on server-side DSD.
+    # Settings → Recommended: the schedule, the services to look in, the
+    # Last.fm key (write-only) and "compute now".
+    ('/api/system/recommend_settings', 'GET'): '/recommend_settings',
+    ('/api/system/recommend_settings', 'POST'): '/recommend_settings',
+    ('/api/system/recommendations', 'GET'): '/recommendations',
+    ('/api/system/recommendations/run', 'POST'): '/recommendations/run',
     ('/api/system/system_tweaks', 'GET'): '/system_tweaks',
     ('/api/system/system_tweaks', 'POST'): '/system_tweaks',
     # Settings → Licenses & credits: the project, Lyrion, the third-party
