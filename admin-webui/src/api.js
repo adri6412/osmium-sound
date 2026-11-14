@@ -190,6 +190,11 @@ export const api = {
   sourcesAddLocal: (path, samba = false) => req('/api/system/sources/local', { method: 'POST', body: { path, samba } }),
   localBrowse: (path = '') => req('/api/system/local/browse?path=' + encodeURIComponent(path)),
   localMkdir: (path, name) => req('/api/system/local/mkdir', { method: 'POST', body: { path, name } }),
+  // Recommended albums — Settings → Recommended (api_server.py)
+  recommendSettings: () => req('/api/system/recommend_settings'),
+  recommendSettingsSet: (body) => req('/api/system/recommend_settings', { method: 'POST', body }),
+  recommendStatus: () => req('/api/system/recommendations'),
+  recommendRun: () => req('/api/system/recommendations/run', { method: 'POST', body: {} }),
   // CD ripping — Settings → CD ripping; lives on sources_server.py, forwarded
   // by webui_server's /api/system/cd/<rest> (session-gated).
   cdSettings: () => req('/api/system/cd/settings'),

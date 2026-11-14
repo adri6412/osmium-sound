@@ -7,6 +7,7 @@ import { useI18n } from '../i18n';
 import Toggle from '../components/Toggle.vue';
 import Icon from '../components/Icon.vue';
 import LanguageSelector from '../components/LanguageSelector.vue';
+import Recommend from '../components/Recommend.vue';
 import MusicSources from '../components/MusicSources.vue';
 import FolderPicker from '../components/FolderPicker.vue';
 import CdRipNow from '../components/CdRipNow.vue';
@@ -39,6 +40,8 @@ const sections = computed(() => [
   { key: 'sources',   icon: 'hard-drive', label: t('settings.sections.sources.label'),  desc: t('settings.sections.sources.desc') },
   // Daphile's CD Ripping page, field by field (sources_server /api/cd/settings)
   { key: 'cdRip',     icon: 'disc',      label: t('settings.sections.cdRip.label'),     desc: t('settings.sections.cdRip.desc') },
+  // Recommended albums: when the job runs, where it looks (Recommend.vue)
+  { key: 'recommend', icon: 'sparkles',  label: t('settings.sections.recommend.label'), desc: t('settings.sections.recommend.desc') },
   // 'dsp' is deliberately NOT listed here — the feature (and its room-correction
   // sub-flow) is being held back for a future paid tier. The card markup below
   // (v-if="open === 'dsp'") and all its backing code/API endpoints are left
@@ -80,7 +83,7 @@ const listedSections = computed(() => sections.value.filter(s => !s.hidden));
 // group by key; `grp` is the open group ('' = the front page of groups).
 const grp = ref('');
 const groups = [
-  { id: 'music',   icon: 'library',  secs: ['sources', 'cdRip', 'lyrion', 'playback'] },
+  { id: 'music',   icon: 'library',  secs: ['sources', 'cdRip', 'lyrion', 'playback', 'recommend'] },
   { id: 'sound',   icon: 'volume-2', secs: ['audio', 'audioAdvanced', 'zones', 'btSpeakers', 'extPlayers'] },
   { id: 'look',    icon: 'monitor',  secs: ['vuMeters', 'animations', 'display', 'language'] },
   { id: 'control', icon: 'remote',   secs: ['remote', 'companion', 'companionIos'] },
@@ -2594,6 +2597,11 @@ onUnmounted(() => {
         </div>
         <p class="muted">{{ t('settings.cdRip.ejectHelp') }}</p>
       </template>
+    </div>
+
+    <!-- Recommended albums: schedule, sources, Last.fm key (Recommend.vue) -->
+    <div class="card" v-if="open === 'recommend'">
+      <Recommend @say="say" />
     </div>
 
     <!-- Music sources, around the places the music lives in (MusicSources.vue) -->

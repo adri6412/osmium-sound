@@ -225,6 +225,10 @@
         "label": "Music sources",
         "desc": "Folders, USB, network shares, CD"
       },
+      "recommend": {
+        "label": "Recommended",
+        "desc": "Albums you may like: when to compute, where to look"
+      },
       "cdRip": {
         "label": "CD ripping",
         "desc": "Destination, format, retries, log, eject, drive offset"
@@ -423,6 +427,44 @@
       "generated": "List written when the image was built, on {date}. Each license comes from the package's own copyright file.",
       "filter": "Filter by name or license",
       "sourceOffer": "The GPL and LGPL components are unmodified binaries from Debian and from the LMS-Community. Their source code is at deb.debian.org (the suite named above) and on GitHub; a complete source archive matching this image can be requested from info@osmiumsound.it."
+    },
+    "recommend": {
+      "intro": "Albums you may like, chosen from what you listen to. They are worked out on this device from time to time, never while you browse, and shown under Music → Recommended.",
+      "unavailable": "Recommendations are not available on this system.",
+      "enable": "Show recommended albums",
+      "whenLabel": "When to compute",
+      "daily": "Every day",
+      "onDays": "On chosen days",
+      "manual": "Only by hand",
+      "d0": "Mon",
+      "d1": "Tue",
+      "d2": "Wed",
+      "d3": "Thu",
+      "d4": "Fri",
+      "d5": "Sat",
+      "d6": "Sun",
+      "whenHelp": "Pick a time when the device is usually on. If it is off at that time, the computation runs a few minutes after the next power-on. It waits while music is playing.",
+      "manualHelp": "Recommendations are refreshed only when you press “Compute now”.",
+      "sourcesLabel": "Where to look for albums",
+      "sourcesHelp": "A streaming service is used only if it is installed and signed in in Lyrion.",
+      "lastfmLabel": "Last.fm",
+      "lastfm_own": "Using your own Last.fm API key.",
+      "lastfm_project": "Using the key supplied with Osmium. You can enter your own.",
+      "lastfm_none": "No Last.fm key: similar artists come from the free sources only. You can enter your own key (last.fm/api).",
+      "lastfmPlaceholder": "Last.fm API key",
+      "lastfmSave": "Save key",
+      "lastfmRemove": "Remove my key",
+      "lastfmInvalid": "That does not look like a Last.fm API key",
+      "lastRun": "Last computation",
+      "lastRunFailed": "not completed",
+      "never": "never",
+      "saveFailed": "Could not save the setting",
+      "credits": "Genres and related artists: MusicBrainz, Wikidata and Last.fm.",
+      "computeNow": "Compute now",
+      "running": "Working out your recommendations… It takes a few minutes; you can keep listening.",
+      "runFailed": "The computation could not be started",
+      "fewPlays": "Keep listening a little: recommendations need at least {needed} plays (so far: {plays}).",
+      "srcLibrary": "Local library"
     },
     "cdRip": {
       "ripNow": "Rip the CD",

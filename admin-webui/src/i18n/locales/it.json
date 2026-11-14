@@ -225,6 +225,10 @@
         "label": "Sorgenti musicali",
         "desc": "Cartelle, USB, condivisioni di rete, CD"
       },
+      "recommend": {
+        "label": "Consigliati",
+        "desc": "Album che potrebbero piacerti: quando calcolarli, dove cercarli"
+      },
       "cdRip": {
         "label": "Rip dei CD",
         "desc": "Destinazione, formato, riletture, log, espulsione, offset del lettore"
@@ -423,6 +427,44 @@
       "generated": "Elenco scritto alla costruzione dell'immagine, il {date}. Ogni licenza viene dal file copyright del pacchetto.",
       "filter": "Filtra per nome o licenza",
       "sourceOffer": "I componenti GPL e LGPL sono binari non modificati di Debian e della LMS-Community. I loro sorgenti sono su deb.debian.org (la suite indicata sopra) e su GitHub; un archivio completo dei sorgenti di questa immagine si può richiedere a info@osmiumsound.it."
+    },
+    "recommend": {
+      "intro": "Album che potrebbero piacerti, scelti in base a quello che ascolti. Vengono calcolati su questo apparecchio ogni tanto, mai mentre sfogli, e li trovi in Musica → Consigliati.",
+      "unavailable": "I consigli non sono disponibili su questo sistema.",
+      "enable": "Mostra gli album consigliati",
+      "whenLabel": "Quando calcolare",
+      "daily": "Ogni giorno",
+      "onDays": "Nei giorni scelti",
+      "manual": "Solo a mano",
+      "d0": "Lun",
+      "d1": "Mar",
+      "d2": "Mer",
+      "d3": "Gio",
+      "d4": "Ven",
+      "d5": "Sab",
+      "d6": "Dom",
+      "whenHelp": "Scegli un'ora in cui l'apparecchio è di solito acceso. Se a quell'ora è spento, il calcolo parte qualche minuto dopo la prossima accensione. Aspetta se stai ascoltando musica.",
+      "manualHelp": "I consigli si aggiornano solo quando premi «Calcola ora».",
+      "sourcesLabel": "Dove cercare gli album",
+      "sourcesHelp": "Un servizio di streaming viene usato solo se è installato e collegato in Lyrion.",
+      "lastfmLabel": "Last.fm",
+      "lastfm_own": "In uso la tua chiave API Last.fm.",
+      "lastfm_project": "In uso la chiave fornita con Osmium. Puoi inserire la tua.",
+      "lastfm_none": "Nessuna chiave Last.fm: gli artisti simili arrivano solo dalle fonti libere. Puoi inserire la tua chiave (last.fm/api).",
+      "lastfmPlaceholder": "Chiave API Last.fm",
+      "lastfmSave": "Salva chiave",
+      "lastfmRemove": "Togli la mia chiave",
+      "lastfmInvalid": "Non sembra una chiave API Last.fm",
+      "lastRun": "Ultimo calcolo",
+      "lastRunFailed": "non completato",
+      "never": "mai",
+      "saveFailed": "Impostazione non salvata",
+      "credits": "Generi e artisti correlati: MusicBrainz, Wikidata e Last.fm.",
+      "computeNow": "Calcola ora",
+      "running": "Sto preparando i consigli… Servono alcuni minuti; puoi continuare ad ascoltare.",
+      "runFailed": "Non è stato possibile avviare il calcolo",
+      "fewPlays": "Ascolta ancora un po': per i consigli servono almeno {needed} ascolti (finora: {plays}).",
+      "srcLibrary": "Libreria locale"
     },
     "cdRip": {
       "ripNow": "Rippa il CD",
