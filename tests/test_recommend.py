@@ -593,6 +593,14 @@ class FakeLyrion:
         self.signed_in = signed_in
         self.qobuz_recent = ['halo']
         self.calls = []
+        # service -> {'albums': [(album, artist)], 'artists': [name],
+        #             'history': [(title, artist)]}: what the account marked
+        self.account = {}
+        self.strings = {'ALBUMS': 'Album', 'ARTISTS': 'Artisti',
+                        'PLUGIN_QOBUZ_USER_FAVORITES': 'I miei preferiti',
+                        'PLUGIN_QOBUZ_RELEASES': 'Uscite',
+                        'PLUGIN_DEEZER_COLLECTION': 'La mia raccolta',
+                        'PLUGIN_DEEZER_HISTORY': 'Cronologia di ascolto'}
         self.catalog = {
             'Camel': ['Mirage', 'Moonmadness'],
             'Pink Floyd': ['Animals', 'Meddle'],
@@ -616,6 +624,9 @@ class FakeLyrion:
                                      'artwork_track_id': 'art%s' % a[0]} for a in rows]}
         if cmd[0] == 'pref':
             return {'_p2': list(self.qobuz_recent)}
+        if cmd[0] == 'getstring':
+            # a token Lyrion does not know comes back as it went in
+            return {t: self.strings.get(t, t) for t in cmd[1].split(',')}
         if cmd[:2] == ['qobuz', 'recentsearches']:
             del self.qobuz_recent[int(cmd[2].split(':')[1])]
             return {}
@@ -628,9 +639,31 @@ class FakeLyrion:
         if service not in self.signed_in:
             return {'loop_loop': [{'id': '0', 'name': 'Please sign in', 'type': 'textarea'}]}
         item, term = a.get('item_id'), a.get('search')
+        mine = self.account.get(service, {})
+        albums = {'item_loop': [{'text': '%s\n%s' % row} for row in mine.get('albums', [])]}
+        artists = {'item_loop': [{'text': n} for n in mine.get('artists', [])]
+                   or [{'text': 'Nothing here yet', 'type': 'text'}]}
+        if service == 'deezer':
+            if item is None:
+                return {'loop_loop': [{'id': '0', 'name': 'Home', 'type': 'link'},
+                                      {'id': '3', 'name': 'La mia raccolta', 'type': 'outline'},
+                                      {'id': '8', 'name': 'Cronologia di ascolto', 'type': 'link'}]}
+            if item == '3':
+                return {'loop_loop': [{'id': '3.0', 'name': 'Playlist', 'type': 'link'},
+                                      {'id': '3.1', 'name': 'Album', 'type': 'link'},
+                                      {'id': '3.3', 'name': 'Artisti', 'type': 'link'}]}
+            if item == '8':
+                return {'item_loop': [{'text': '%s\n%s' % row} for row in mine.get('history', [])]}
+            return {'3.1': albums, '3.3': artists}[item]
         if service == 'qobuz':
             if item is None:
-                return {'loop_loop': [{'id': '0', 'name': 'Cerca', 'type': 'link'}]}
+                return {'loop_loop': [{'id': '0', 'name': 'Cerca', 'type': 'link'},
+                                      {'id': '5', 'name': 'I miei preferiti', 'type': 'link'}]}
+            if item == '5':
+                return {'loop_loop': [{'id': '5.0', 'name': 'Artisti'}, {'id': '5.1', 'name': 'Uscite'},
+                                      {'id': '5.2', 'name': 'Brani'}]}
+            if item in ('5.0', '5.1'):
+                return artists if item == '5.0' else albums
             if item == '0':
                 return {'loop_loop': [{'id': '0.0', 'name': 'New search', 'type': 'search'}]}
             if item == '0.0':
@@ -644,8 +677,11 @@ class FakeLyrion:
                 for i, t in enumerate(self.catalog.get(self.term, []))]
                 + [{'text': 'Tribute\nSomebody Else', 'icon': '/x/zz9_600.jpg'}]}
         if item is None:
-            return {'loop_loop': [{'id': '6', 'name': 'Artisti', 'type': 'link'},
+            return {'loop_loop': [{'id': '5', 'name': 'Album', 'type': 'link'},
+                                  {'id': '6', 'name': 'Artisti', 'type': 'link'},
                                   {'id': '7', 'name': 'Cerca', 'type': 'search'}]}
+        if item in ('5', '6'):
+            return albums if item == '5' else artists
         if item == '7':
             self.term = term
             return {'loop_loop': [{'id': 't.all', 'name': 'Tutto'}, {'id': 't.pl', 'name': 'Playlist'},
@@ -698,6 +734,67 @@ LIBRARY = [(1, 'Pink Floyd', 'Animals', 'Rock'), (2, 'Pink Floyd', 'Meddle', 'Ro
            (7, 'John Coltrane', 'Giant Steps', 'Jazz')]
 
 
+class AccountTasteTestCase(unittest.TestCase):
+    def setUp(self):
+        self.lms = FakeLyrion([], signed_in=('qobuz', 'tidal', 'deezer'))
+        self.lms.account = {
+            'qobuz': {'albums': [('Mirage', 'Camel (1974)'), ('Rain Dances [E]', 'Camel')],
+                      'artists': ['Caravan']},
+            'tidal': {'albums': [('Foxtrot', 'Genesis')], 'artists': []},
+            'deezer': {'albums': [('Animals', 'Pink Floyd')], 'artists': ['Gong'],
+                       'history': [('Echoes', 'Pink Floyd'), ('Dogs', 'Pink Floyd'), ('', '')]},
+        }
+
+    def test_menu_strings_come_from_lyrion_with_an_english_net(self):
+        del self.lms.strings['PLUGIN_DEEZER_HISTORY']      # plugin not installed
+        got = rec.menu_strings(self.lms)
+        self.assertEqual(got['ARTISTS'], 'artisti')
+        self.assertEqual(got['PLUGIN_DEEZER_HISTORY'], 'listening history')
+        self.assertEqual(rec.menu_strings(lambda p, c: None)['ALBUMS'], 'albums')
+
+    def test_favourites_under_their_own_menu(self):
+        got = rec.service_taste(self.lms, 'aa:bb', 'qobuz', rec.menu_strings(self.lms))
+        self.assertEqual(got['albums'], [{'album': 'Mirage', 'artist': 'Camel'},
+                                         {'album': 'Rain Dances', 'artist': 'Camel'}])
+        self.assertEqual((got['artists'], got['history']), (['Caravan'], []))
+
+    def test_favourites_on_the_first_page_and_an_empty_list(self):
+        got = rec.service_taste(self.lms, 'aa:bb', 'tidal', rec.menu_strings(self.lms))
+        self.assertEqual(got['albums'], [{'album': 'Foxtrot', 'artist': 'Genesis'}])
+        self.assertEqual(got['artists'], [])       # the "nothing here" row is no artist
+
+    def test_deezer_collection_and_listening_history(self):
+        got = rec.service_taste(self.lms, 'aa:bb', 'deezer', rec.menu_strings(self.lms))
+        self.assertEqual(got['albums'], [{'album': 'Animals', 'artist': 'Pink Floyd'}])
+        self.assertEqual(got['artists'], ['Gong'])
+        self.assertEqual(got['history'], ['Pink Floyd', 'Pink Floyd'])
+
+    def test_signed_out_or_unknown_gives_nothing(self):
+        strings = rec.menu_strings(self.lms)
+        empty = {'albums': [], 'artists': [], 'history': []}
+        self.assertEqual(rec.service_taste(self.lms, 'aa:bb', 'spotty', strings), empty)
+        self.assertEqual(rec.service_taste(self.lms, 'aa:bb', 'library', strings), empty)
+
+    def test_all_accounts_together_and_a_broken_plugin(self):
+        def rpc(player, cmd):
+            if cmd[0] == 'tidal':
+                raise OSError('gone')
+            return self.lms(player, cmd)
+        got = rec.account_taste(rpc)
+        self.assertEqual(sorted(a['album'] for a in got['albums']),
+                         ['Animals', 'Mirage', 'Rain Dances'])
+        self.assertEqual(got['artists'], ['Caravan', 'Gong'])
+        # no player to browse with: nothing, and nothing asked of the plugins
+        self.assertEqual(rec.account_taste(lambda p, c: {})['albums'], [])
+
+    def test_taste_weights(self):
+        w = rec.taste_weights(['Gong', 'gong', 'Various Artists'],
+                              ['Pink Floyd'] * (rec.SERVICE_PLAYS_CAP + 5) + ['Gong'])
+        self.assertEqual(set(w), {'gong', 'pink floyd'})
+        self.assertAlmostEqual(w['gong'], rec.FAVORITE_ARTIST_WEIGHT + rec.SERVICE_PLAY_WEIGHT)
+        self.assertAlmostEqual(w['pink floyd'], rec.SERVICE_PLAYS_CAP * rec.SERVICE_PLAY_WEIGHT)
+
+
 class RunTestCase(unittest.TestCase):
     def setUp(self):
         self.db = rec.open_db(':memory:')
@@ -729,6 +826,34 @@ class RunTestCase(unittest.TestCase):
         self.assertTrue(rows)
         self.assertEqual({r['source'] for r in rows}, {'qobuz'})
         self.assertLessEqual({r['artist'] for r in rows}, {'Pink Floyd', 'Genesis'})
+
+    def test_favourites_alone_are_a_profile(self):
+        # Nothing at home and nothing heard here: only an account's favourites.
+        lms = FakeLyrion([])
+        lms.account = {'qobuz': {
+            'albums': [('Mirage', 'Camel')] + [('Live %d' % i, 'Camel') for i in range(6)],
+            'artists': ['Pink Floyd', 'Genesis', 'Caravan']}}
+        got = rec.run(self.db, lms, http=None, settings={'sources': ['qobuz']}, now=self.now)
+        self.assertEqual((got['outcome'], got['library'], got['favorites']), ('ok', 0, 10))
+        rows = rec.read_recommendations(self.db)
+        self.assertTrue(rows)
+        # the favourite album itself is not news
+        self.assertNotIn(('Camel', 'Mirage'), {(r['artist'], r['album']) for r in rows})
+        self.assertIn(('Camel', 'Moonmadness'), {(r['artist'], r['album']) for r in rows})
+        self.assertEqual(rec.history_state(self.db)['state'], 'ok')
+
+    def test_a_few_favourites_are_not_enough(self):
+        lms = FakeLyrion([])
+        lms.account = {'qobuz': {'albums': [('Mirage', 'Camel')], 'artists': ['Genesis']}}
+        got = rec.run(self.db, lms, settings={'sources': ['qobuz']}, now=self.now)
+        self.assertEqual((got['outcome'], got['favorites']), ('few_plays', 2))
+
+    def test_owned_and_favourite_is_one_album(self):
+        shelf = [(i, 'Camel', 'Album %d' % i, 'Rock') for i in range(1, rec.MIN_LIBRARY_ALBUMS + 1)]
+        lms = FakeLyrion(shelf)
+        lms.account = {'tidal': {'albums': [('Album 1', 'Camel'), ('Foxtrot', 'Genesis')]}}
+        got = rec.run(self.db, lms, http=None, settings={'sources': ['library']}, now=self.now)
+        self.assertEqual(got['favorites'], 1)
 
     def test_library_weights(self):
         albums = [{'artist': 'Genesis'}] * 9 + [{'artist': 'Camel'}] + [{'artist': 'Various Artists'}] * 5

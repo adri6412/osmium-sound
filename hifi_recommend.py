@@ -63,6 +63,15 @@ MIN_PLAYS = 20            # below this the history says too little: empty state
 LIBRARY_ALBUM_WEIGHT = 0.25
 LIBRARY_ALBUMS_CAP = 4
 MIN_LIBRARY_ALBUMS = 10   # a library this big is enough to start without plays
+# What the owner marked on a streaming service is a shelf as well. A favourite
+# album counts like an owned one (same weight, same cap, counted together);
+# following an artist says a little more than keeping one of their albums.
+FAVORITE_ARTIST_WEIGHT = 0.5
+# A service's own listening history (Deezer has one) comes without dates:
+# each track counts as a play one half-life old, a few per artist at most,
+# since what was heard on this box is in our own log already.
+SERVICE_PLAY_WEIGHT = 0.5
+SERVICE_PLAYS_CAP = 10
 MAX_RESULTS = 40
 MAX_PER_ARTIST = 2
 MMR_LAMBDA = 0.7          # 1 = pure relevance, 0 = pure diversity
@@ -289,6 +298,24 @@ def library_weights(albums):
             count[k] = count.get(k, 0) + 1
     return {k: min(n, LIBRARY_ALBUMS_CAP) * LIBRARY_ALBUM_WEIGHT
             for k, n in count.items()}
+
+
+def taste_weights(artists=(), history=()):
+    """Weight per artist key from what a streaming account says beyond its
+    favourite albums: the artists followed and the tracks in the service's
+    listening history (one artist name per track)."""
+    out = {}
+    for k in {norm_text(a) for a in artists}:
+        if k and k not in _NOT_AN_ARTIST:
+            out[k] = FAVORITE_ARTIST_WEIGHT
+    count = {}
+    for a in history:
+        k = norm_text(a)
+        if k and k not in _NOT_AN_ARTIST:
+            count[k] = count.get(k, 0) + 1
+    for k, n in count.items():
+        out[k] = out.get(k, 0.0) + min(n, SERVICE_PLAYS_CAP) * SERVICE_PLAY_WEIGHT
+    return out
 
 
 # ── Vectors ──────────────────────────────────────────────────────────────────
@@ -699,7 +726,9 @@ def history_state(db, min_plays=MIN_PLAYS, library=0):
     running = bool(last and last['outcome'] == 'running'
                    and time.time() - last['started'] < RUN_TIMEOUT)
     have = db.execute('SELECT COUNT(*) FROM recommendations').fetchone()[0]
-    if plays < min_plays and (library or 0) < MIN_LIBRARY_ALBUMS:
+    # A list that exists is shown: a run may have started from the favourites
+    # of a streaming account, which this cheap check does not go and read.
+    if not have and plays < min_plays and (library or 0) < MIN_LIBRARY_ALBUMS:
         state = 'few_plays'
     elif not have:
         state = 'never_run' if not last or running else 'empty'
@@ -1230,6 +1259,121 @@ class ServiceSearch:
         return out
 
 
+# Where each plugin keeps the owner's favourites, as the string tokens of its
+# menu (read from the plugins' sources, 2026-11): (menu holding them or None
+# for the plugin's first page, albums entry, artists entry). Lyrion is asked
+# what the tokens read in its own language, so no translation is guessed here.
+_FAVORITES_MENU = {
+    'qobuz': ('PLUGIN_QOBUZ_USER_FAVORITES', 'PLUGIN_QOBUZ_RELEASES', 'ARTISTS'),
+    'tidal': (None, 'ALBUMS', 'ARTISTS'),
+    'spotty': (None, 'ALBUMS', 'ARTISTS'),
+    'deezer': ('PLUGIN_DEEZER_COLLECTION', 'ALBUMS', 'ARTISTS'),
+}
+# Only Deezer's plugin shows what the account listened to elsewhere.
+_HISTORY_MENU = {'deezer': 'PLUGIN_DEEZER_HISTORY'}
+MAX_FAVORITES = 500        # rows read per list
+_FALLBACK_STRINGS = {
+    'ALBUMS': 'Albums', 'ARTISTS': 'Artists',
+    'PLUGIN_QOBUZ_USER_FAVORITES': 'My Favorites', 'PLUGIN_QOBUZ_RELEASES': 'Releases',
+    'PLUGIN_DEEZER_COLLECTION': 'My Collection', 'PLUGIN_DEEZER_HISTORY': 'Listening history',
+}
+
+
+def menu_strings(rpc):
+    """{token: normalised text} of the menu entries above, in the language
+    Lyrion is set to; English where the server does not know a token (the
+    plugin is not installed)."""
+    tokens = sorted(_FALLBACK_STRINGS)
+    try:
+        got = rpc('', ['getstring', ','.join(tokens)]) or {}
+    except Exception:
+        got = {}
+    out = {}
+    for t in tokens:
+        v = got.get(t)
+        out[t] = norm_text(v if isinstance(v, str) and v and v != t else _FALLBACK_STRINGS[t])
+    return out
+
+
+def _two_lines(item):
+    """(title, artist) of an album or track row in menu format."""
+    title, _, artist = str(item.get('text') or '').partition('\n')
+    artist = re.sub(r'\s*\(\d{4}\)\s*$', '', artist).strip()
+    title = re.sub(r'\s*\[(E|AI)\]\s*$', '', title).strip()
+    return title, artist
+
+
+def service_taste(rpc, player, service, strings):
+    """What the owner's account on one streaming service says about their
+    taste, read from the plugin's own menus (no call to the service from
+    here): {'albums': [{artist, album}], 'artists': [name], 'history': [artist]}.
+    All empty when the plugin is missing, signed out or laid out differently."""
+    out = {'albums': [], 'artists': [], 'history': []}
+    spec = _FAVORITES_MENU.get(service)
+    if spec is None:
+        return out
+    browse = ServiceSearch(rpc, player, service)
+
+    def entry(rows, token):
+        want = strings.get(token)
+        for it in rows:
+            if it.get('id') is not None and want and norm_text(it.get('name')) == want \
+                    and it.get('type') not in ('search', 'text', 'textarea'):
+                return str(it['id'])
+        return None
+
+    root = browse._items()
+    home, albums_t, artists_t = spec
+    rows = root
+    if home is not None:
+        node = entry(root, home)
+        rows = browse._items(node) if node is not None else []
+    node = entry(rows, albums_t)
+    if node is not None:
+        for it in browse._items(node, count=MAX_FAVORITES, menu=True):
+            album, artist = _two_lines(it)
+            if album and artist:
+                out['albums'].append({'album': album, 'artist': artist})
+    node = entry(rows, artists_t)
+    if node is not None:
+        for it in browse._items(node, count=MAX_FAVORITES, menu=True):
+            name = str(it.get('text') or '').strip()
+            if name and '\n' not in name and it.get('type') not in ('text', 'textarea'):
+                out['artists'].append(name)
+    node = entry(root, _HISTORY_MENU.get(service))
+    if node is not None:
+        for it in browse._items(node, count=MAX_FAVORITES, menu=True):
+            _, artist = _two_lines(it)
+            if artist:
+                out['history'].append(artist)
+    return out
+
+
+def account_taste(rpc, log=None):
+    """service_taste of every streaming plugin, merged. A plugin that fails
+    is skipped: favourites refine the profile, they must never stop a run."""
+    out = {'albums': [], 'artists': [], 'history': []}
+    try:
+        player = pick_player(rpc)
+    except Exception:
+        player = ''
+    if not player:
+        return out
+    strings = menu_strings(rpc)
+    for service in SOURCES:
+        if service == 'library':
+            continue
+        try:
+            got = service_taste(rpc, player, service, strings)
+        except Exception as e:
+            if log:
+                log.info('recommend: %s favourites not read (%s)', service, type(e).__name__)
+            continue
+        for k in out:
+            out[k].extend(got[k])
+    return out
+
+
 def pick_player(rpc):
     """A connected player to browse plugins with (they want one); this box's
     own squeezelite if it is there."""
@@ -1253,9 +1397,12 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
     is hifi_metadata's client or None for "stay offline". Returns a summary
     dict; the list itself goes to the recommendations table.
 
-    The taste profile is the listening history plus the albums of the local
-    library (library_weights). With neither — a thin history and next to no
-    library — nothing is written and any earlier list is left alone."""
+    The taste profile is the listening history, the albums of the local
+    library (library_weights) and what the owner marked on the streaming
+    services: favourite albums, artists followed, Deezer's listening history
+    (account_taste). With none of them — a thin history, next to no library
+    and next to no favourites — nothing is written and any earlier list is
+    left alone."""
     now = time.time() if now is None else now
     settings = clean_settings(settings)
     summary = {'outcome': 'ok', 'mode': '', 'plays': play_count(db), 'items': 0,
@@ -1264,7 +1411,20 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
         return dict(summary, outcome='disabled')
     library = library_albums(rpc)
     summary['library'] = len(library)
-    if summary['plays'] < MIN_PLAYS and len(library) < MIN_LIBRARY_ALBUMS:
+    # The accounts count whether or not their service is offered as a source,
+    # like the library does.
+    taste = account_taste(rpc, log=log)
+    owned = {album_key(a['artist'], a['album']) for a in library}
+    shelf = list(library)
+    for a in taste['albums']:
+        k = album_key(a['artist'], a['album'])
+        if k not in owned:                # owned and favourite: one album
+            owned.add(k)
+            shelf.append(a)
+    summary['favorites'] = len(shelf) - len(library) + len(set(taste['artists']))
+    summary['service_plays'] = len(taste['history'])
+    if (summary['plays'] + summary['service_plays'] < MIN_PLAYS
+            and len(library) + summary['favorites'] < MIN_LIBRARY_ALBUMS):
         return dict(summary, outcome='few_plays')
 
     plays = [dict(r) for r in db.execute('SELECT ts, artist, album, album_key FROM plays')]
@@ -1278,12 +1438,18 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
     # offered as a source of recommendations.
     for a in library:
         names.setdefault(norm_text(a['artist']), a['artist'])
-    for k, w_lib in library_weights(library).items():
-        artist_w[k] = artist_w.get(k, 0.0) + w_lib
+    for a in shelf[len(library):]:
+        names.setdefault(norm_text(a['artist']), a['artist'])
+    for name in taste['artists'] + taste['history']:
+        names.setdefault(norm_text(name), name)
+    for weights in (library_weights(shelf),
+                    taste_weights(taste['artists'], taste['history'])):
+        for k, w_more in weights.items():
+            artist_w[k] = artist_w.get(k, 0.0) + w_more
     top = sorted((k for k in artist_w if k), key=lambda k: -artist_w[k])[:MAX_HISTORY_ARTISTS]
     exclude = heard_keys(db) | dismissed_keys(db)
-    # An album already in the library is not offered again from a service.
-    owned = {album_key(a['artist'], a['album']) for a in library}
+    # An album already in the library, or kept as a favourite on a service,
+    # is not offered again from a service (`owned`, above).
 
     # 1. What the library offers that has not been heard.
     #    The genres its files carry also describe the listened artists, which

@@ -247,7 +247,13 @@ screen is open: the kiosk only reads a table. Everything is in
    half-life, **plus the local library**: each album owned adds 0.25, up to
    four albums per artist (`library_weights`). A library of ten albums is
    enough to compute a list with no plays at all; below that the job waits
-   for 20 plays (`few_plays`).
+   for 20 plays (`few_plays`). **The streaming accounts count too**
+   (`account_taste`): favourite albums are counted with the owned ones,
+   each artist followed adds 0.5, and Deezer's listening history adds 0.5
+   per track (ten per artist at most; the plugin gives no dates). They are
+   read from the plugins' own menus through Lyrion, located by the menu's
+   string tokens (`getstring`), never from the services directly. Qobuz,
+   TIDAL and Spotify expose no listening history through their plugins.
 3. **Enrichment** — genres, tags and related artists per artist, through
    `hifi_metadata.HttpClient` (one User-Agent, one rate limit, the `meta-online`
    switch): Wikidata and MusicBrainz core data always; MusicBrainz genres/tags
