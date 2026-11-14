@@ -1553,6 +1553,8 @@
       "unavailable": "I consigli non sono disponibili su questo sistema.",
       "enable": "Mostra gli album consigliati",
       "whenLabel": "Quando calcolare",
+      "hour": "Ora",
+      "minute": "Minuti",
       "daily": "Ogni giorno",
       "onDays": "Nei giorni scelti",
       "manual": "Solo a mano",

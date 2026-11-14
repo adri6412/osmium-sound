@@ -402,7 +402,10 @@ Column {
         }
     }
     // ─── stepper −/+ touch (sostituisce lo slider per i buffer) ───────────
-    //   props: smin, smax, sstep, sval, act, unit, autoLabel (truthy = 0 == Auto)
+    //   props: smin, smax, sstep, sval, act, unit, autoLabel (truthy = 0 == Auto),
+    //          wrap (past an end, start again from the other: hours, minutes),
+    //          pad (digits, zero-filled), pickAct (a tap on the value runs it:
+    //          the list of every value, for a jump the +/- would make long)
     Component { id: cStepper
         Item {
             id: st
@@ -420,10 +423,12 @@ Column {
                     if (st.sval <= st.smin) return 0     // dal minimo scendo ad Auto
                     return Math.max(st.smin, st.sval - st.sstep)
                 }
+                if (st.row.wrap && st.sval - st.sstep < st.smin) return st.smax
                 return Math.max(st.smin, st.sval - st.sstep)
             }
             function up() {
                 if (st.hasAuto && st.sval <= 0) return st.smin   // da Auto al minimo
+                if (st.row.wrap && st.sval + st.sstep > st.smax) return st.smin
                 return Math.min(st.smax, st.sval + st.sstep)
             }
             function commit(v) { if (v !== st.sval) root.ctl.activate(st.row, st.row.act, String(v)) }
@@ -438,10 +443,19 @@ Column {
                 Tap { id: dnTap; tap: 0.95; grow: 4; onClicked: st.commit(st.down()) }
             }
             // valore al centro
+            Rectangle {
+                visible: !!st.row.pickAct
+                anchors.centerIn: parent
+                width: 96; height: parent.height; radius: 8
+                color: valTap.mix(Theme.dark, Theme.light)
+                border.width: 1; border.color: Theme.silverA(0.25)
+                scale: valTap.tapScale
+                Tap { id: valTap; tap: 0.95; enabled: !!st.row.pickAct; onClicked: root.ctl.activate(st.row, st.row.pickAct) }
+            }
             Text {
                 anchors.centerIn: parent
                 text: st.isAuto ? (st.row.autoLabel || "Auto")
-                                : (String(st.sval) + (st.row.unit ? " " + st.row.unit : ""))
+                                : (String(st.sval).padStart(st.row.pad || 0, "0") + (st.row.unit ? " " + st.row.unit : ""))
                 font.family: Theme.mono; font.pixelSize: 17
                 color: st.isAuto ? Theme.silverA(0.7) : Theme.white
             }

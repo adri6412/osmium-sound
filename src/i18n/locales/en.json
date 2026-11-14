@@ -1553,6 +1553,8 @@
       "unavailable": "Recommendations are not available on this system.",
       "enable": "Show recommended albums",
       "whenLabel": "When to compute",
+      "hour": "Hour",
+      "minute": "Minute",
       "daily": "Every day",
       "onDays": "On chosen days",
       "manual": "Only by hand",

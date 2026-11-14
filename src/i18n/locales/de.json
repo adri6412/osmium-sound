@@ -1553,6 +1553,8 @@
       "unavailable": "Empfehlungen sind auf diesem System nicht verfügbar.",
       "enable": "Empfohlene Alben anzeigen",
       "whenLabel": "Wann berechnen",
+      "hour": "Stunde",
+      "minute": "Minute",
       "daily": "Jeden Tag",
       "onDays": "An gewählten Tagen",
       "manual": "Nur von Hand",

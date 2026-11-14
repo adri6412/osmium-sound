@@ -2223,8 +2223,12 @@ Item {
         }
         if (sch.mode !== "manual") {
             var hm = String(sch.time || "18:00").split(":")
-            grid([cell(hm[0], "", false, "rec_hour", { style: "border", hh: 52, mono: true, outline: true }),
-                  cell(hm[1], "", false, "rec_min", { style: "border", hh: 52, mono: true, outline: true })])
+            // any hour and any minute: -/+ for a small move, a tap on the
+            // number for the whole list
+            var hl = info(Tr.t("settings.recommend.hour"), ""); hl.style = "seg"; hl.tone = "gold"; hl.hh = 20
+            push({ type: "stepper", smin: 0, smax: 23, sstep: 1, sval: parseInt(hm[0]) || 0, pad: 2, wrap: true, act: "rec_hour_set", pickAct: "rec_hour" })
+            var ml = info(Tr.t("settings.recommend.minute"), ""); ml.style = "seg"; ml.tone = "gold"; ml.hh = 20
+            push({ type: "stepper", smin: 0, smax: 59, sstep: 1, sval: parseInt(hm[1]) || 0, pad: 2, wrap: true, act: "rec_min_set", pickAct: "rec_min" })
             help("settings.recommend.whenHelp", 12)
         } else help("settings.recommend.manualHelp", 12)
         label("settings.recommend.sourcesLabel", 14)
@@ -3289,6 +3293,11 @@ Item {
             var recDays = ((cfg.rec.schedule || {}).days || []).slice(), recDn = parseInt(arg), recAt = recDays.indexOf(recDn)
             if (recAt >= 0) { if (recDays.length === 1) return; recDays.splice(recAt, 1) } else recDays.push(recDn)
             recSchedule({ days: recDays })
+            return
+        }
+        case "rec_hour_set": case "rec_min_set": {
+            var recP = String((cfg.rec.schedule || {}).time || "18:00").split(":"), recV = String(parseInt(arg) || 0).padStart(2, "0")
+            recSchedule({ time: act === "rec_hour_set" ? recV + ":" + recP[1] : recP[0] + ":" + recV })
             return
         }
         case "rec_hour": {
