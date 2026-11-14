@@ -25,6 +25,7 @@ Item {
                                || view === LibraryModel.Radios || view === LibraryModel.Apps
                                || view === LibraryModel.PluginItems
                                || view === LibraryModel.MenuHome || view === LibraryModel.Menu
+                               || view === LibraryModel.Recommended
     // la libreria album/novità e le liste di album dentro un plugin (Qobuz,
     // Tidal…) possono diventare Cover Flow o caricatore CD; gli altri menu di
     // app/servizi restano sempre a tessere quadrate
@@ -39,7 +40,7 @@ Item {
     // liste di album, quindi niente card quadrata con copertina ma la stessa
     // tessera larga (icona + etichetta) della home della libreria locale, così
     // i menu dei plugin hanno la STESSA forma e misura della libreria locale.
-    readonly property bool menuTile: grid && !albumGrid && !inCdPlayer
+    readonly property bool menuTile: grid && !albumGrid && !inCdPlayer && view !== LibraryModel.Recommended
     // altezza della tessera-menu, passata da Browser (homeTh) per essere
     // identica alle tessere della home; <= 0 = fallback compatto.
     property real menuTileH: 0
@@ -353,7 +354,9 @@ Item {
             readonly property int v: root.view
             // le tessere di app/servizi (radio, app, voci di plugin, menu Jive)
             // usano l'icona del server invece della copertina album
-            readonly property bool plugin: v >= LibraryModel.Radios
+            // (Recommended is a grid of albums: a local one shows its library
+            // cover, a streaming one the cover address the service gave)
+            readonly property bool plugin: v >= LibraryModel.Radios && v !== LibraryModel.Recommended
             // l'icona Osmium della voce (glifo di navigazione), condivisa dalla
             // card album (filigrana quando manca la copertina) e dalla tessera-menu
             readonly property string glyphName: !plugin ? "disc"
@@ -364,6 +367,7 @@ Item {
             // il pulsante play sulla scheda: sempre per gli album, e per le
             // voci di servizio solo quando sono riproducibili
             readonly property bool playBtn: v === LibraryModel.Albums || v === LibraryModel.NewMusic
+                || v === LibraryModel.Recommended
                 || ((v === LibraryModel.MenuHome || v === LibraryModel.Menu) && play && play.length > 0)
                 || (v === LibraryModel.PluginItems && isAudio)
             width: root.cardW; height: root.cardH
@@ -432,7 +436,8 @@ Item {
                         // Osmium look.
                         source: (card.plugin && card.hasItems && root.cdCoverUrl) ? root.cdCoverUrl
                               : card.plugin ? (root.isRemoteCover(card.icon) ? root.iconUrl(card.icon) : "")
-                              : card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px : ""
+                              : card.art ? Api.lmsBase + "/music/" + card.art + "/cover?size=" + px
+                              : (card.v === LibraryModel.Recommended && card.icon) ? root.iconUrl(card.icon) : ""
                         asynchronous: true; cache: true; fillMode: Image.PreserveAspectCrop
                         smooth: true
                         // 🚨 Si decodifica ESATTAMENTE alla misura che Lyrion serve

@@ -143,6 +143,59 @@ Item {
     property bool cdAvailable: false
     // login state of the streaming services (key -> {available, loggedIn}),
     // fetched from the backend; and the reverse map plugin cmd -> service key,
+    // ─── Recommended ────────────────────────────────────────────────────────
+    // The tile is there only while the feature is switched on in the settings.
+    // The albums come from the API (computed by the scheduled job, never here).
+    property bool recEnabled: false
+    property var lastApps: []
+    property bool recRunning: false      // a computation is under way
+    readonly property bool inRecommended: view === LibraryModel.Recommended
+    readonly property var recInfo: Library.info
+    function loadRecEnabled() {
+        Api.get(Api.apiBase + "/recommend_settings", function(ok, d) {
+            var on = !!(ok && d && d.available !== false && d.enabled)
+            if (on === root.recEnabled) return
+            root.recEnabled = on
+            root.rebuildSources(root.lastApps)
+        })
+    }
+    function recCompute() {
+        root.recRunning = true
+        Api.post(Api.apiBase + "/recommendations/run", {}, function(ok, d) {
+            if (!(ok && d && d.success)) { root.recRunning = false; root.say("alert-circle", "recommend.runFailed") }
+        })
+    }
+    function recDismiss(it) {
+        if (!it.key) return
+        Api.post(Api.apiBase + "/recommendations/dismiss", { album_key: it.key }, function(ok, d) {
+            if (ok && d && d.success && root.inRecommended) root.loadTop()
+        })
+    }
+    function recPlay(it, mode) {
+        if (it.kind === 0) playItem("album_id", it.id, mode)
+        else Player.cmd(["playlist", mode === "load" ? "play" : mode, it.url, it.text])
+    }
+    // why the grid is empty, in words
+    readonly property string recEmptyText: {
+        var i = recInfo || {}
+        if (recRunning) return Tr.t("recommend.running")
+        if (i.state === "few_plays") return Tr.tf("recommend.fewPlays", "needed", i.needed || 0).replace("{plays}", i.plays || 0)
+        if (i.state === "never_run") return Tr.t(i.scheduled ? "recommend.neverRunScheduled" : "recommend.neverRun")
+        if (i.state === "disabled") return Tr.t("recommend.disabled")
+        return Tr.t("recommend.empty")
+    }
+    Connections { target: Library; function onStateChanged() {
+        if (root.inRecommended && Library.state === 2) root.recRunning = !!(Library.info && Library.info.running)
+    } }
+    // while a computation runs, ask now and then whether it is over; the grid
+    // is loaded again only at the end, so it does not jump under the finger
+    Timer {
+        interval: 10000; repeat: true
+        running: root.recRunning && root.inRecommended && root.tab === 0
+        onTriggered: Api.get(Api.apiBase + "/recommendations", function(ok, d) {
+            if (ok && d && !d.running && root.recRunning) { root.recRunning = false; if (root.inRecommended) root.loadTop() }
+        })
+    }
     // so a service opened from its tile knows whether it still needs a login.
     property var svcStatus: ({})
     property var svcByCmd: ({})
@@ -165,11 +218,14 @@ Item {
         // menu (opened as a plugin item with cmd "favorites").
         out.push({ kind: "favorites", label: Tr.t("player.titles.favorites"), icon: "heart", srvIcon: "", cmd: "favorites" })
         out.push({ kind: "library", label: Tr.t("player.titles.localLibrary"), icon: "library", srvIcon: "", cmd: "" })
+        lastApps = apps
         // streaming services, in the order declared, only if available
         for (var s = 0; s < sourceServices.length; s++) {
             var svc = sourceServices[s]
             for (var i = 0; i < apps.length; i++) {
                 var nm = String(apps[i].name || "").toLowerCase()
+        if (root.recEnabled)
+            out.push({ kind: "recommended", label: Tr.t("player.titles.recommended"), icon: "sparkles", srvIcon: "", cmd: "" })
                 var hit = false
                 for (var m = 0; m < svc.match.length; m++) if (nm.indexOf(svc.match[m]) >= 0) { hit = true; break }
                 if (hit) { out.push({ kind: "app", key: svc.key, label: svc.label || apps[i].name, icon: svc.icon, srvIcon: apps[i].icon || "", cmd: apps[i].id }); byCmd[String(apps[i].id)] = svc.key; break }
@@ -211,6 +267,7 @@ Item {
     // streaming service), its label, and whether its root still needs a login
     readonly property string curSvcKey: view === LibraryModel.PluginItems ? (svcByCmd[String(cur.p1)] || "") : ""
     readonly property string curSvcLabel: {
+        loadRecEnabled()
         for (var i = 0; i < sourceServices.length; i++) if (sourceServices[i].key === curSvcKey) return sourceServices[i].label
         return ""
     }
@@ -388,7 +445,10 @@ Item {
             if (!(v === root.sourcesRoot || v === LibraryModel.Home || v === LibraryModel.Artists || v === LibraryModel.Albums || v === LibraryModel.Tracks ||
                   v === LibraryModel.Folders || v === LibraryModel.Playlists || v === LibraryModel.PlaylistTracks ||
                   v === LibraryModel.Genres || v === LibraryModel.Years || v === LibraryModel.Composers ||
-                  v === LibraryModel.NewMusic || v === LibraryModel.Search || v === LibraryModel.AlbumPage || v === LibraryModel.ArtistPage)) navSources()
+                  v === LibraryModel.NewMusic || v === LibraryModel.Search || v === LibraryModel.AlbumPage || v === LibraryModel.ArtistPage ||
+                  v === LibraryModel.Recommended)) navSources()
+            loadRecEnabled()        // it may have just been switched in the settings
+            if (v === LibraryModel.Recommended) loadTop()   // a run may have finished meanwhile
         } else if (i === 3) settingsTab.enter()
         else if (i === 2) discoverTab.enter()
         appear()
@@ -676,6 +736,12 @@ Item {
         case LibraryModel.Albums: case LibraryModel.NewMusic:
             queueItems("album_id"); fav(it.favUrl, "playlist")
             if (it.artistId) L.push({ icon: "user", label: Tr.t("player.page.goToArtist"), cb: function() { openArtist(it.artistId, it.sub) } })
+        case LibraryModel.Recommended:
+            L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { recPlay(it, "add") } })
+            L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: function() { recPlay(it, "insert") } })
+            if (it.kind === 0) L.push({ icon: "disc", label: Tr.t("player.page.goToAlbum"), cb: function() { openAlbum(it.id, it.text) } })
+            L.push({ icon: "eye-off", label: Tr.t("recommend.notInterested"), cb: function() { recDismiss(it) } })
+            break
             break
         case LibraryModel.Artists: case LibraryModel.Composers:
             queueItems("artist_id"); fav(it.favUrl, "playlist"); break
@@ -763,6 +829,8 @@ Item {
         var it = Library.get(row)
         switch (view) {
         case LibraryModel.Artists: case LibraryModel.Composers: if (onPlay) playItem("artist_id", it.id, "load"); else openArtist(it.id, it.text); break
+        // Recommended: one tap plays, wherever it lands on the card
+        case LibraryModel.Recommended: recPlay(it, "load"); break
         case LibraryModel.Albums: case LibraryModel.NewMusic: if (onPlay) playItem("album_id", it.id, "load"); else openAlbum(it.id, it.text); break
         case LibraryModel.Genres: if (onPlay) playItem("genre_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, "", "genre_id:" + it.id); break
         case LibraryModel.Years: if (onPlay) playItem("year", it.id, "load"); else goView(LibraryModel.Albums, it.text, "", "year:" + it.id); break
@@ -1131,6 +1199,7 @@ Item {
                                 var c = children[i]; var m = c.modelData
                                 if (!m) continue
                                 if (m.kind === "library" && e.view === LibraryModel.Home) return c.navTap
+                                if (m.kind === "recommended" && e.view === LibraryModel.Recommended) return c.navTap
                                 if (m.kind === "radio" && e.view === LibraryModel.Radios) return c.navTap
                                 if (m.kind === "favorites" && e.view === LibraryModel.PluginItems && String(e.p1) === "favorites") return c.navTap
                                 if (m.kind === "app" && e.view === LibraryModel.PluginItems && String(e.p1) === String(m.cmd)) return c.navTap
@@ -1173,6 +1242,7 @@ Item {
                                     id: srcTap
                                     onClicked: {
                                         if (modelData.kind === "library") root.goView(LibraryModel.Home, Tr.t("player.titles.localLibrary"))
+                                        else if (modelData.kind === "recommended") root.goView(LibraryModel.Recommended, Tr.t("player.titles.recommended"))
                                         else if (modelData.kind === "radio") root.goView(LibraryModel.Radios, Tr.t("player.titles.radio"))
                                         else if (modelData.kind === "favorites") root.goView(LibraryModel.PluginItems, Tr.t("player.titles.favorites"), "favorites")
                                         else root.goView(LibraryModel.PluginItems, modelData.label, modelData.cmd)
@@ -1443,9 +1513,33 @@ Item {
                         Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t("player.connectionErrorTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
                     }
                     Text {
-                        visible: Library.state === 2 && Library.count === 0 && !root.isPage && !root.curSvcNeedsLogin
+                        visible: Library.state === 2 && Library.count === 0 && !root.isPage && !root.curSvcNeedsLogin && !root.inRecommended
                         x: list.x; y: list.y + 32; width: list.width; horizontalAlignment: Text.AlignHCenter
                         text: Tr.t("common.noResults"); color: Theme.silverA(0.4); font.family: Theme.font; font.pixelSize: 14
+                    }
+                    // Recommended with nothing to show yet: say why, and offer
+                    // to compute now (the job is otherwise the scheduled one)
+                    Rectangle {
+                        visible: root.inRecommended && Library.state === 2 && Library.count === 0 && !root.isPage
+                        x: 12; y: list.y + 4
+                        width: (root.width - 12) - 12; height: recCol.implicitHeight + 40; radius: 12
+                        color: Theme.surface; border.width: 1; border.color: Theme.border
+                        Column {
+                            id: recCol
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            y: 20; spacing: 12; width: parent.width - 48
+                            Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "sparkles"; size: 30; color: Theme.gold }
+                            Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                                   text: root.recEmptyText
+                                   color: Theme.silverA(0.85); font.family: Theme.font; font.pixelSize: 14; lineHeight: 1.25 }
+                            Spinner { visible: root.recRunning; active: visible; anchors.horizontalCenter: parent.horizontalCenter }
+                            SBtn {
+                                visible: !root.recRunning && !!root.recInfo && root.recInfo.state !== "few_plays" && root.recInfo.state !== "disabled"
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                lead: true; glyph: "sparkles"; label: Tr.t("recommend.computeNow")
+                                onClicked: root.recCompute()
+                            }
+                        }
                     }
                     // indice A-Z (w-8)
                     AzIndex {

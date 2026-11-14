@@ -16,6 +16,7 @@ struct LibItem {
     QString ptype;              // plugin and Jive menu items: the type Lyrion gives them (audio, playlist, link, search)
     QString albumId, artistId;  // tracks and albums: where "go to album / artist" leads
     int kind = -1;              // search results only: 0 artist, 1 album, 2 track
+    QString key;                // Recommended only: the album key "not interested" sends back
     // Jive menus carry their own actions: `add` puts the item at the end of
     // the queue, `add-hold` plays it next — the same pair SqueezePlay binds to
     // a tap and a long press on ADD.
@@ -46,6 +47,9 @@ class LibraryModel : public QAbstractListModel {
     // Cover Flow and the CD changer can load a plugin album by cmd + item.
     Q_PROPERTY(QString pluginCmd READ pluginCmd NOTIFY stateChanged)
     Q_PROPERTY(QString playerId MEMBER m_playerId)
+    // Recommended only: what GET /recommendations says besides the albums
+    // (state, plays, needed, running, last_run), for the empty state.
+    Q_PROPERTY(QVariantMap info READ info NOTIFY stateChanged)
 public:
     // The new views sit at the end so the numbers the QML compares against
     // stay what they were. Artists is `artists` with the artist roles only
@@ -55,8 +59,10 @@ public:
     // see `kind`). Albums also takes a filter in p2 (genre_id:, year:, role_id:).
     // AlbumPage and ArtistPage are the album and artist pages: they load their
     // own data (AlbumPage.qml, ArtistPage.qml), this model stays empty for them.
+    // Recommended is not a Lyrion query: it reads the list the scheduled job
+    // left in the API (GET /recommendations), local and streaming albums mixed.
     enum View { Home, Artists, Albums, Tracks, Folders, Playlists, PlaylistTracks, Radios, Apps, MenuHome, Menu, PluginItems,
-                Genres, Years, Composers, NewMusic, Search, AlbumPage, ArtistPage };
+                Genres, Years, Composers, NewMusic, Search, AlbumPage, ArtistPage, Recommended };
     Q_ENUM(View)
     enum Roles { IdRole = Qt::UserRole + 1, TextRole, SubRole, ArtRole, IconRole, GoRole, PlayRole, DoRole,
                  IsDirRole, HasItemsRole, IsAudioRole, HasInputRole, DurationRole, LetterRole,
@@ -75,6 +81,7 @@ public:
     int rev() const { return m_rev; }
     bool pluginAlbumList() const { return m_pluginAlbumList; }
     QString pluginCmd() const { return m_pluginCmd; }
+    QVariantMap info() const { return m_info; }
     QString filter() const { return m_filter; }
     void setFilter(const QString &f);
 
@@ -98,6 +105,7 @@ signals:
 
 private:
     void parse(int view, const QString &cmd, const QVariantMap &result);
+    void requestRecommended(int seq);
     void applyOrderFilter();
     void bumpRev() { m_rev++; emit revChanged(); }
     static QString fold(const QString &s);
@@ -106,6 +114,7 @@ private:
     int m_state = 0, m_view = 0, m_seq = 0, m_rev = 0;
     bool m_pluginAlbumList = false; // see the pluginAlbumList property
     QString m_pluginCmd;            // the current PluginItems view's command (p1)
+    QVariantMap m_info;             // see the info property
     bool m_serverOrder = false;     // keep Lyrion's order (sort:new, search results)
     QString m_filter, m_playerId;
 };

@@ -54,7 +54,7 @@ QVariantMap LibraryModel::get(int row) const {
     m["addact"] = it.addact; m["addhold"] = it.addhold; m["ptype"] = it.ptype;
     m["isAudio"] = it.isAudio; m["hasInput"] = it.hasInput; m["duration"] = it.duration;
     m["url"] = it.url; m["favUrl"] = it.favUrl; m["kind"] = it.kind;
-    m["albumId"] = it.albumId; m["artistId"] = it.artistId;
+    m["albumId"] = it.albumId; m["artistId"] = it.artistId; m["key"] = it.key;
     return m;
 }
 
@@ -182,7 +182,9 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
     // server order only where Lyrion's ordering is the point (new music,
     // random, search results); the alphabetical views sort here
     m_serverOrder = view == NewMusic || view == Search || (view == Albums && s2.contains("sort:"));
+    if (view != Recommended) m_info.clear();
     switch (view) {
+    case Recommended: requestRecommended(seq); return;
     // artists only: without `role_id` Lyrion follows its own preferences,
     // whose defaults put every role in the list (composers, conductors,
     // bands); those keep their own view and their credits on the album page
@@ -231,6 +233,49 @@ void LibraryModel::request(int view, const QVariant &p1, const QVariant &p2, con
         emit stateChanged();
         emit loaded();
     }, 20000);
+}
+
+// The Recommended list comes ready from the API, best first. A local album
+// plays by its Lyrion id and shows the library cover; a streaming one plays by
+// its URL and carries the service's own cover address in `icon`.
+// `kind`: 0 local, 1 streaming.
+void LibraryModel::requestRecommended(int seq) {
+    Api *api = Api::instance();
+    api->request("GET", api->apiBase() + "/recommendations", QByteArray(), [this, seq](bool ok, const QVariant &data, int) {
+        if (seq != m_seq) return;
+        const QVariantMap res = data.toMap();
+        beginResetModel();
+        m_items.clear(); m_order.clear();
+        m_info = res;
+        m_info.remove("items");
+        if (ok) {
+            const QVariantList items = res.value("items").toList();
+            for (const QVariant &v : items) {
+                const QVariantMap it = v.toMap();
+                LibItem o;
+                o.text = it.value("album").toString();
+                o.sub = it.value("artist").toString();
+                o.key = it.value("album_key").toString();
+                const QString playId = it.value("play_id").toString();
+                if (it.value("play_kind").toString() == QLatin1String("album_id")) {
+                    o.kind = 0; o.id = playId; o.albumId = playId;
+                    o.art = it.value("cover").toString();
+                } else {
+                    o.kind = 1; o.url = playId; o.favUrl = playId;
+                    o.icon = it.value("cover").toString();
+                }
+                o.ptype = it.value("source").toString();
+                o.isAudio = true;
+                o.fold = fold(o.text + " " + o.sub);
+                if (!o.text.isEmpty() && !playId.isEmpty()) m_items.append(o);
+            }
+        }
+        endResetModel();
+        m_state = ok ? 2 : 3;
+        applyOrderFilter();
+        emit stateChanged();
+        emit loaded();
+    }, 15000);
 }
 
 void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {

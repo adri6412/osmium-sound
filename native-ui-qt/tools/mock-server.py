@@ -571,6 +571,37 @@ def mock_signal_path(q):
     return dict(r, success=True)
 
 
+# Recommended (MOCK_REC=few|never|empty for the empty states; default: a list
+# of local and streaming albums). "Compute now" runs for 15 seconds.
+REC_DEFAULT = {"enabled": True, "schedule": {"mode": "daily", "days": [], "time": "18:00"},
+               "sources": ["library", "qobuz", "tidal"], "lastfm": "project"}
+
+def mock_rec_settings():
+    r = STATE.setdefault("rec", dict(REC_DEFAULT))
+    return dict(r, available=True, all_sources=["library", "qobuz", "tidal", "spotty", "deezer"])
+
+def mock_rec_list():
+    scen = os.environ.get("MOCK_REC", "")
+    running = time.time() < STATE.get("rec_run_until", 0)
+    done = STATE.get("rec_run_until", 0) and not running
+    state = "ok" if (done or not scen) else {"few": "few_plays", "never": "never_run", "empty": "empty"}.get(scen, "ok")
+    gone = STATE.get("rec_dismissed", set())
+    items = []
+    if state == "ok":
+        for i in range(1, 13):
+            local = i % 3 != 0
+            items.append({"rank": i, "album": "Recommended album %d" % i, "artist": "Artist %d" % i,
+                          "cover": str(1000 + i) if local else "/imageproxy/https%%3A%%2F%%2Fexample.org%%2F%d.jpg/image.jpg" % i,
+                          "source": "library" if local else "qobuz", "play_kind": "album_id" if local else "url",
+                          "play_id": str(i) if local else "qobuz://album:%d.qbz" % i, "score": 1.0 - i / 20.0,
+                          "cluster": i % 3, "album_key": "k%d" % i, "created_at": time.time()})
+        items = [x for x in items if x["album_key"] not in gone]
+    if not STATE.setdefault("rec", dict(REC_DEFAULT))["enabled"]:
+        state, items = "disabled", []
+    return {"state": state, "plays": 7 if state == "few_plays" else 240, "needed": 20, "running": running,
+            "last_run": None if state == "never_run" else {"started": time.time() - 4000, "finished": time.time() - 3700, "outcome": "ok", "mode": "model"},
+            "available": True, "items": items, "scheduled": True}
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def _json(self, obj, code=200):
@@ -607,6 +638,8 @@ class H(BaseHTTPRequestHandler):
                 return self._json(VU_API.get_vu_store(summary="summary=1" in (u.query or "")))
             else:
                 return self._json(VU_API.get_vu_style())
+        if port == 8000 and u.path in ("/recommendations", "/recommend_settings"):
+            return self._json(mock_rec_list() if u.path == "/recommendations" else mock_rec_settings())
         if port == 8000:
             table = {
                 "/vu_meter": {"enabled": STATE["vu"]}, "/nowplaying_autoexpand": {"seconds": STATE["autoexpand"]},
@@ -759,6 +792,18 @@ class H(BaseHTTPRequestHandler):
                 mac = str(data.get("mac") or "")
                 r["remotes"] = [d for d in r["remotes"] if d["mac"] != mac]
                 return self._json(dict(r, success=True, message="Telecomando dimenticato"))
+        if port == 8000 and u.path == "/recommend_settings":
+            r = STATE.setdefault("rec", dict(REC_DEFAULT))
+            for k in ("enabled", "schedule", "sources"):
+                if k in data: r[k] = data[k]
+            if isinstance(data.get("lastfm_key"), str): r["lastfm"] = "own" if data["lastfm_key"] else "project"
+            return self._json(dict(mock_rec_settings(), success=True))
+        if port == 8000 and u.path == "/recommendations/run":
+            STATE["rec_run_until"] = time.time() + 15
+            return self._json({"success": True, "started": True, "running": True})
+        if port == 8000 and u.path == "/recommendations/dismiss":
+            STATE.setdefault("rec_dismissed", set()).add(data.get("album_key"))
+            return self._json({"success": True})
         if port == 8000 and u.path in ("/squeezelite_conf", "/squeezelite_conf/reset"):
             if "pcm2dsd" in data or "upsample" in data: time.sleep(1.5)   # Lyrion restarting
             STATE["sq"].update({k: v for k, v in data.items() if k in STATE["sq"]})

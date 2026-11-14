@@ -20,6 +20,7 @@ Item {
     // Audio → Advanced: the extra-arguments field, as typed; `dirty` tells a
     // cleared field from one not touched yet (which shows the saved value)
     property string sqExtraEdit: ""; property bool sqExtraDirty: false
+    property string recKeyEdit: ""
     // CD ripping: the offset field, as typed
     property string cdOffsetEdit: ""; property bool cdOffsetDirty: false
     property string sshUser: ""; property string sshPass: ""
@@ -167,6 +168,7 @@ Item {
         { id: "library", icon: "library", key: "settings.sections.library" },
         { id: "multiroom", icon: "speaker", key: "settings.sections.multiroom" },
         { id: "alarm", icon: "alarm-clock", key: "settings.sections.alarm" },
+        { id: "recommend", icon: "sparkles", key: "settings.sections.recommend" },
         { id: "network", icon: "wifi", key: "settings.sections.network" },
         { id: "webRemote", icon: "smartphone", key: "settings.sections.webRemote" },
         { id: "webRemoteIos", icon: "tablet", key: "settings.sections.webRemoteIos" },
@@ -194,7 +196,7 @@ Item {
     property real gridY: 0                                  // the tile grid's scroll, kept across a section visit
     onGrpChanged: page.contentY = 0                         // a different grid starts at its top
     readonly property var groups: [
-        { id: "music", icon: "library", secs: ["library", "sources", "cdRip", "playback", "multiroom", "alarm"] },
+        { id: "music", icon: "library", secs: ["library", "sources", "cdRip", "playback", "multiroom", "alarm", "recommend"] },
         { id: "sound", icon: "volume-2", secs: ["audio", "audioAdvanced", "zones", "btSpeakers", "extPlayers"] },
         { id: "look", icon: "monitor", secs: ["language", "uiMotion", "vuMeters", "animations", "uiResolution", "uiScreens", "uiRefresh", "displayMode", "pointer"] },
         { id: "control", icon: "remote", secs: ["remote", "webRemote", "webRemoteIos"] },
@@ -277,6 +279,16 @@ Item {
         // governors_available / smt_available gate the controls; needs_reboot is
         // true while the chosen CPU-security (mitigations) change awaits a reboot.
         property var tweaks: ({ loaded: false, conf: {}, governors_available: [], smt_available: false, needs_reboot: false })
+        // Recommended (api /recommend_settings + /recommendations): the switch,
+        // when the job runs, where it looks; `st` is how the last run went.
+        property var rec: ({ loaded: false, available: false, st: {} })
+        function loadRecStatus() {
+            Api.get(api("/recommendations"), function(ok, d) {
+                if (!ok || !d) return
+                var r = rec; r.st = { running: !!d.running, last_run: d.last_run || null, state: String(d.state || ""), plays: d.plays || 0, needed: d.needed || 0 }
+                rec = r; root.rebuild()
+            }, 8000)
+        }
         // Audio zones (api /zones): one more Lyrion player per further DAC.
         // Read only while the section is open, like the Bluetooth speakers.
         property var zones: ({ loaded: false, zones: [], free: [], max: 8, pcm2dsd: {}, choices: {}, main_output_name: "" })
@@ -508,6 +520,12 @@ Item {
             get(api("/system_tweaks"), function(d) {
                 tweaks = { loaded: !!d.conf, conf: d.conf || {}, governors_available: d.governors_available || [],
                            smt_available: !!d.smt_available, needs_reboot: !!d.needs_reboot }
+            })
+            get(api("/recommend_settings"), function(d) {
+                var st = rec.st || {}
+                rec = { loaded: true, available: d.available !== false && d.enabled !== undefined, enabled: !!d.enabled,
+                        schedule: d.schedule || { mode: "manual", days: [], time: "18:00" }, sources: d.sources || [],
+                        all_sources: d.all_sources || [], lastfm: String(d.lastfm || "off"), st: st }
             })
             get(api("/lms_role"), function(d) { lmsMode = str(d, "mode", "local"); lmsHost = str(d, "host") })
             get(api("/player_name"), function(d) { playerName = str(d, "name") })
@@ -856,6 +874,7 @@ Item {
         if (id === "zones") { zoneBusy = true; cfg.loadZones() }
         if (id === "extPlayers") { extBusy = true; extBand = -1; cfg.loadExt() }
         if (id === "remote") { remoteBusy = true; cfg.loadRemotes() }
+        if (id === "recommend") { recKeyEdit = ""; cfg.loadRecStatus() }
         if (id === "vuMeters") cfg.loadStore(true)
         if (id === "animations") cfg.loadAnimStore(true)
         if (id === "thirdPartyNotices" && !thirdParty) { try { thirdParty = JSON.parse(Sys.readFile(I18n.dir + "/third_party.json")) } catch (e) { thirdParty = null } }
@@ -1120,6 +1139,7 @@ Item {
             case "remote": secRemote(); break
             case "remoteKeys": secRemoteKeys(); break
             case "alarm": secAlarm(); break
+            case "recommend": secRecommend(); break
             case "network": secNetwork(); break
             case "webRemote": secWebremote(); break
             case "webRemoteIos": secWebremoteIos(); break
@@ -2180,6 +2200,78 @@ Item {
               cell(String(alarmM).padStart(2, "0"), "", false, "alarm_min", { style: "border", hh: 52, mono: true, outline: true }),   // border border-hifi-accent
               acell(Tr.t("settings.alarm.add"), "alarm_add", "gold", { bold: true, hh: 52, icon: "plus" })])
     }
+    // ─── Recommended: the switch, when the computation runs (the box is off
+    //     at night, so the owner picks the hour; a missed run is caught up at
+    //     the next power-on), where it looks for albums, the Last.fm key. ──
+    readonly property var recSrcLabels: ({ qobuz: "Qobuz", tidal: "Tidal", spotty: "Spotify", deezer: "Deezer" })
+    function secRecommend() {
+        help("settings.recommend.intro")
+        var r = cfg.rec, i
+        if (!r.loaded) { helpText(Tr.t("common.loading"), 13); return }
+        if (!r.available) { note(Tr.t("settings.recommend.unavailable"), "dark", "info", 12); return }
+        toggle(Tr.t("settings.recommend.enable"), "", r.enabled, "rec_enable")
+        if (!r.enabled) return
+        var sch = r.schedule, st = r.st || {}
+        label("settings.recommend.whenLabel", 14)
+        grid([cell(Tr.t("settings.recommend.daily"), "daily", sch.mode === "daily", "rec_mode", { hh: 44 }),
+              cell(Tr.t("settings.recommend.onDays"), "days", sch.mode === "days", "rec_mode", { hh: 44 }),
+              cell(Tr.t("settings.recommend.manual"), "manual", sch.mode === "manual", "rec_mode", { hh: 44 })])
+        if (sch.mode === "days") {
+            var dc = []
+            for (i = 0; i < 7; i++) dc.push(cell(Tr.t("settings.recommend.d" + i), String(i), sch.days.indexOf(i) >= 0, "rec_day", { hh: 44 }))
+            grid(dc)
+        }
+        if (sch.mode !== "manual") {
+            var hm = String(sch.time || "18:00").split(":")
+            grid([cell(hm[0], "", false, "rec_hour", { style: "border", hh: 52, mono: true, outline: true }),
+                  cell(hm[1], "", false, "rec_min", { style: "border", hh: 52, mono: true, outline: true })])
+            help("settings.recommend.whenHelp", 12)
+        } else help("settings.recommend.manualHelp", 12)
+        label("settings.recommend.sourcesLabel", 14)
+        for (i = 0; i < r.all_sources.length; i++) {
+            var k = r.all_sources[i]
+            toggle(k === "library" ? Tr.t("player.titles.localLibrary") : (recSrcLabels[k] || k), "", r.sources.indexOf(k) >= 0, "rec_src", k)
+        }
+        help("settings.recommend.sourcesHelp", 12)
+        if (r.lastfm !== "off") {
+            label("settings.recommend.lastfmLabel", 14)
+            note(Tr.t("settings.recommend.lastfm_" + r.lastfm), "dark", "info", 12)
+            input(Tr.t("settings.recommend.lastfmPlaceholder"), recKeyEdit, "rec_key", true).hh = 50
+            var kc = [acell(Tr.t("settings.recommend.lastfmSave"), "rec_key_save", "gold", { icon: "check", hh: 44 })]
+            if (r.lastfm === "own") kc.push(acell(Tr.t("settings.recommend.lastfmRemove"), "rec_key_clear", "light", { icon: "x", hh: 44 }))
+            grid(kc)
+        }
+        sep()
+        if (st.running) note(Tr.t("recommend.running"), "amber", "refresh-cw", 12)
+        else if (st.last_run && st.last_run.finished)
+            info(Tr.t("settings.recommend.lastRun"),
+                 Qt.formatDateTime(new Date(st.last_run.finished * 1000), "dd/MM/yyyy HH:mm")
+                 + (st.last_run.outcome && st.last_run.outcome !== "ok" ? " · " + Tr.t("settings.recommend.lastRunFailed") : ""))
+        else info(Tr.t("settings.recommend.lastRun"), Tr.t("settings.recommend.never"))
+        if (st.state === "few_plays")
+            helpText(Tr.tf("recommend.fewPlays", "needed", st.needed || 0).replace("{plays}", st.plays || 0), 12)
+        if (!st.running) grid([acell(Tr.t("recommend.computeNow"), "rec_run", "gold", { icon: "sparkles", hh: 44, bold: true })])
+        help("settings.recommend.credits", 11)
+    }
+    function recSet(body) {
+        Api.post(cfg.api("/recommend_settings"), body, function(ok, d) {
+            var good = ok && !(d && d.success === false)
+            if (!good) say(Tr.t("settings.recommend.saveFailed"), true)
+            cfg.load()
+        }, 15000)
+    }
+    function recSchedule(change) {
+        var sch = cfg.rec.schedule || {}
+        var n = { mode: sch.mode, days: (sch.days || []).slice(), time: sch.time }
+        for (var k in change) n[k] = change[k]
+        recSet({ schedule: n })
+    }
+    // while the section shows a run under way, look again until it is over
+    Timer {
+        interval: 10000; repeat: true
+        running: root.visible && root.active >= 0 && root.secs[root.active].id === "recommend" && !!(cfg.rec.st && cfg.rec.st.running)
+        onTriggered: cfg.loadRecStatus()
+    }
     function secNetwork() {
         label("settings.network.interfaceLabel")
         for (var i = 0; i < cfg.ifaces.length; i += 2) {
@@ -2550,6 +2642,7 @@ Item {
         case "player_name": nameEdit = text; break
         case "lms_host": hostEdit = text; break
         case "sq_extra": sqExtraEdit = text; sqExtraDirty = true; break
+        case "rec_key": recKeyEdit = text; break
         case "cd_offset": cdOffsetEdit = text; cdOffsetDirty = true; break
         case "pick_new": pickNew = text; break
         case "bt_name": btNameEdit = text; break
@@ -2956,7 +3049,7 @@ Item {
             break
         case "lms_skin": post(S("/api/lms_skin"), { skin: arg }); cfg.lmsSkin = arg; say(Tr.t("settings.lyrion.skinApplying")); break
         case "wiz_field": case "pick_new": case "ssh_user": case "ssh_pass": case "player_name": case "lms_host": case "sq_extra": case "cd_offset":
-        case "zone_name": case "zone_new_name": return
+        case "rec_key": case "zone_name": case "zone_new_name": return
         case "lms_role":
             if (arg !== "local") { cfg.lmsMode = "follow"; cfg.loadDiscover(); break }
             // Already on this device's own server: only the toggle moves back,
@@ -3184,6 +3277,50 @@ Item {
             Ui.dialogs.pick(Tr.t("settings.sections.alarm"), mins, alarmM / 5, function(i) { if (i >= 0) { alarmM = i * 5; rebuild() } })
             return
         }
+        case "rec_enable": recSet({ enabled: !row.on }); return
+        case "rec_mode": {
+            if (arg === (cfg.rec.schedule || {}).mode) return
+            // "on chosen days" needs a day to start from: today's
+            var recDs = (cfg.rec.schedule || {}).days || []
+            recSchedule(arg === "days" && !recDs.length ? { mode: arg, days: [(new Date().getDay() + 6) % 7] } : { mode: arg })
+            return
+        }
+        case "rec_day": {
+            var recDays = ((cfg.rec.schedule || {}).days || []).slice(), recDn = parseInt(arg), recAt = recDays.indexOf(recDn)
+            if (recAt >= 0) { if (recDays.length === 1) return; recDays.splice(recAt, 1) } else recDays.push(recDn)
+            recSchedule({ days: recDays })
+            return
+        }
+        case "rec_hour": {
+            var recHs = []; for (var recH = 0; recH < 24; recH++) recHs.push(String(recH).padStart(2, "0"))
+            var recT = String((cfg.rec.schedule || {}).time || "18:00").split(":")
+            Ui.dialogs.pick(Tr.t("settings.recommend.whenLabel"), recHs, parseInt(recT[0]), function(i) { if (i >= 0) recSchedule({ time: recHs[i] + ":" + recT[1] }) })
+            return
+        }
+        case "rec_min": {
+            var recMs = []; for (var recM = 0; recM < 12; recM++) recMs.push(String(recM * 5).padStart(2, "0"))
+            var recT2 = String((cfg.rec.schedule || {}).time || "18:00").split(":")
+            Ui.dialogs.pick(Tr.t("settings.recommend.whenLabel"), recMs, Math.floor(parseInt(recT2[1]) / 5), function(i) { if (i >= 0) recSchedule({ time: recT2[0] + ":" + recMs[i] }) })
+            return
+        }
+        case "rec_src": {
+            var recSrcs = (cfg.rec.sources || []).slice(), recSa = recSrcs.indexOf(arg)
+            if (recSa >= 0) recSrcs.splice(recSa, 1); else recSrcs.push(arg)
+            recSet({ sources: recSrcs })
+            return
+        }
+        case "rec_key_save":
+            if (recKeyEdit.trim().length < 8) { say(Tr.t("settings.recommend.lastfmInvalid"), true); return }
+            recSet({ lastfm_key: recKeyEdit.trim() }); recKeyEdit = ""
+            return
+        case "rec_key_clear": recSet({ lastfm_key: "" }); recKeyEdit = ""; return
+        case "rec_run":
+            Api.post(A("/recommendations/run"), {}, function(ok, d) {
+                if (!(ok && d && d.success)) say(Tr.t("recommend.runFailed"), true)
+                cfg.loadRecStatus()
+            }, 35000)
+            var recRr = cfg.rec; recRr.st = Object.assign({}, recRr.st || {}, { running: true }); cfg.rec = recRr; rebuild()
+            return
         case "alarm_add": lms(["alarm", "add", "time:" + (alarmH * 3600 + alarmM * 60), "dow:0,1,2,3,4,5,6", "enabled:1"]); break
         case "sync_toggle": lms(row.on ? ["sync", "-"] : ["sync", arg]); say(Tr.t("settings.multiroom.saved")); break
         default: return
