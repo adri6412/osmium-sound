@@ -102,7 +102,8 @@ for f in display-mode ui-resolution pointer-enabled dsp.json dsp-presets.json bl
          github-support-pat lyrion-channel lms-skin \
          ui-language ui-refresh nowplaying-view nowplaying-autoexpand-seconds \
          nowplaying-animation ota-autocheck player-enabled vu-meter-enabled \
-         meta-online meta-prefetch remote-keys.json zones.json pcm2dsd.json; do
+         meta-online meta-prefetch remote-keys.json zones.json pcm2dsd.json \
+         recommend.json; do
     rm -f "/etc/hifi-player/$f" 2>/dev/null || true
 done
 # Reset the OTA channel to the stable default (factory semantics).
@@ -155,6 +156,11 @@ rm -rf /var/lib/hifi-player/anim-scenes /var/lib/hifi-player/anim-store 2>/dev/n
 # choices, credit corrections, the journal of tag changes (hifi_tags.py).
 rm -rf /var/lib/hifi-player/metadata 2>/dev/null || true
 rm -rf /var/lib/hifi-player/metadata-edits 2>/dev/null || true
+# Recommended albums: the listening history, the "not interested" list and the
+# cached look-ups (hifi_recommend.py), and the hour the owner chose for the
+# job — api_server writes the default schedule again when it next starts.
+rm -rf /var/lib/hifi-player/recommend 2>/dev/null || true
+rm -rf /etc/systemd/system/hifi-recommend.timer.d 2>/dev/null || true
 # The owner may have moved that archive onto a disk of their own
 # (/etc/hifi-player/meta-cache-dir holds the mount point): take the folder we
 # made there too, and never anything else on their disk.

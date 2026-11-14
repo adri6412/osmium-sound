@@ -197,6 +197,9 @@ DENY_FILES = frozenset((
     "/var/lib/squeezeboxserver/prefs/persist.db-shm",
     "/var/lib/lyrionmusicserver/prefs/persist.db-wal",
     "/var/lib/lyrionmusicserver/prefs/persist.db-shm",
+    # And for the recommended-albums database (hifi_recommend.py).
+    "/var/lib/hifi-player/recommend/recommend.db-wal",
+    "/var/lib/hifi-player/recommend/recommend.db-shm",
 ))
 DENY_PREFIXES = (
     "/var/lib/hifi-player/backups/",   # no backups inside backups
@@ -212,6 +215,12 @@ DENY_PREFIXES = (
 METADATA_DB = "/var/lib/hifi-player/metadata/metadata.db"
 META_CACHE_DIR_SETTING = "/etc/hifi-player/meta-cache-dir"
 META_CACHE_FOLDER = "osmium-metadata"
+
+# Recommended albums (hifi_recommend.py): what was listened to and when, the
+# albums the owner said "not interested" to, and the downloaded tags and
+# computed vectors. The first two cannot be had again; the rest is hours of
+# rate-limited look-ups.
+RECOMMEND_DB = "/var/lib/hifi-player/recommend/recommend.db"
 
 
 def _metadata_db_real(root="/"):
@@ -241,7 +250,9 @@ def member_size_limit(logical):
     number decides what a backup leaves out and what a restore refuses."""
     # Lyrion's persist.db grows with the library (a row per track ever seen),
     # past the small-file limit on a big one.
-    if logical == METADATA_DB or logical in _LYRION_PERSIST_DBS:
+    # The recommended-albums database keeps a vector per album it ever looked
+    # at: the same order of size on a big library.
+    if logical in (METADATA_DB, RECOMMEND_DB) or logical in _LYRION_PERSIST_DBS:
         return MAX_METADATA_DB_SIZE
     return MAX_MEMBER_SIZE
 
@@ -329,6 +340,12 @@ CATEGORIES = {
             # (_metadata_db_real), archived under this one name, and taken as
             # a proper SQLite snapshot while the service goes on using it.
             ("file", METADATA_DB),
+            # Settings -> Recommended (on/off, when the job runs, which
+            # sources) and its database, as a SQLite snapshot. The owner's
+            # own Last.fm key is in the settings file: an API key for public
+            # read-only data, not a login.
+            ("file", "/etc/hifi-player/recommend.json"),
+            ("file", RECOMMEND_DB),
         ],
     },
     "sources": {
@@ -761,7 +778,7 @@ _LYRION_PERSIST_DBS = frozenset((
 
 
 def _transform_for(logical):
-    if logical in ("/etc/hifi-player/webui.db", METADATA_DB) or logical in _LYRION_PERSIST_DBS:
+    if logical in ("/etc/hifi-player/webui.db", METADATA_DB, RECOMMEND_DB) or logical in _LYRION_PERSIST_DBS:
         return _transform_sqlite
     if logical == "/etc/hifi-sources.json":
         return _transform_sources
