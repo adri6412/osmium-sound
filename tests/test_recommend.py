@@ -175,6 +175,36 @@ class RankTestCase(unittest.TestCase):
         self.assertEqual(names.count('Same'), 2)
         self.assertIn('Other', names)
 
+    def test_source_cap_leaves_room_for_the_services(self):
+        # The library sits closest to a taste read from the library itself.
+        C = unit([1, 0])[None, :]
+        cands = ([dict(cand(f'Own {i}', 'A'), source='library') for i in range(8)]
+                 + [dict(cand(f'New {i}', 'B'), source='tidal') for i in range(8)])
+        V = np.array([[1, 0.01 * i] for i in range(8)]
+                     + [[1, 0.5 + 0.01 * i] for i in range(8)], dtype=np.float32)
+        free = rec.rank(V, cands, C, [1.0], n=6)
+        self.assertEqual({cands[i]['source'] for i, _, _ in free}, {'library'})
+        caps = rec.source_caps(cands, n=6)
+        self.assertEqual(caps, {'library': 3})
+        got = [cands[i]['source'] for i, _, _ in rec.rank(V, cands, C, [1.0], n=6, source_caps=caps)]
+        self.assertEqual(got.count('library'), 3)
+        self.assertEqual(got.count('tidal'), 3)
+
+    def test_source_cap_gives_way_when_the_others_run_dry(self):
+        C = unit([1, 0])[None, :]
+        cands = ([dict(cand(f'Own {i}', 'A'), source='library') for i in range(6)]
+                 + [dict(cand('New', 'B'), source='qobuz')])
+        V = np.array([[1, 0.01 * i] for i in range(7)], dtype=np.float32)
+        got = rec.rank(V, cands, C, [1.0], n=6, source_caps=rec.source_caps(cands, n=6))
+        self.assertEqual(len(got), 6)
+
+    def test_source_caps(self):
+        lib, q, t = ({'source': s} for s in ('library', 'qobuz', 'tidal'))
+        self.assertEqual(rec.source_caps([lib, lib]), {})
+        self.assertEqual(rec.source_caps([q, q]), {})
+        self.assertEqual(rec.source_caps([lib, q, t], n=40), {'library': 20, 'qobuz': 10, 'tidal': 10})
+        self.assertEqual(rec.source_caps([q, t], n=40), {'qobuz': 20, 'tidal': 20})
+
     def test_mmr_prefers_something_different(self):
         C = unit([1, 1, 0])[None, :]
         cands = [cand('A', '1'), cand('B', '2'), cand('C', '3')]

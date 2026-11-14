@@ -66,6 +66,7 @@ MIN_LIBRARY_ALBUMS = 10   # a library this big is enough to start without plays
 MAX_RESULTS = 40
 MAX_PER_ARTIST = 2
 MMR_LAMBDA = 0.7          # 1 = pure relevance, 0 = pure diversity
+LIBRARY_SHARE = 0.5       # of the list, when streaming albums compete for it
 K_MIN, K_MAX = 2, 5
 MIN_POINTS_PER_CLUSTER = 4
 UNIFORM_COHESION = 0.95   # mean cosine to the one centre above which k = 1
@@ -588,7 +589,8 @@ def taste_clusters(X, weights, seed=0):
 # ── Ranking ──────────────────────────────────────────────────────────────────
 
 def rank(cand_vecs, cands, centroids, cluster_weights, exclude=(),
-         n=MAX_RESULTS, lam=MMR_LAMBDA, max_per_artist=MAX_PER_ARTIST):
+         n=MAX_RESULTS, lam=MMR_LAMBDA, max_per_artist=MAX_PER_ARTIST,
+         source_caps=None):
     """Choose up to `n` candidates.
 
     `cands` is a list of mappings with at least 'artist' and 'album', parallel
@@ -597,6 +599,8 @@ def rank(cand_vecs, cands, centroids, cluster_weights, exclude=(),
     Selection is MMR (relevance against similarity to what is already chosen),
     with at most `max_per_artist` albums per artist and a quota per cluster in
     proportion to its weight, relaxed only when the other clusters run dry.
+    `source_caps` ({source: most albums}) keeps one source from taking the
+    whole list; like the cluster quota it gives way when the others run dry.
     Albums whose key is in `exclude` (heard, dismissed) and duplicates of the
     same album from two sources never get in.
 
@@ -615,12 +619,15 @@ def rank(cand_vecs, cands, centroids, cluster_weights, exclude=(),
     quota = [max(1, int(round(n * float(cw)))) for cw in cluster_weights]
     taken_cluster = [0] * len(quota)
     taken_artist, taken_keys = {}, set()
+    caps = dict(source_caps or {})
+    sources = [c.get('source') for c in cands]
+    taken_source = {}
     chosen, out = [], []
     alive = [i for i in range(len(cands))
              if keys[i] not in exclude and np.isfinite(rel[i])]
     max_sim = np.zeros(len(cands), dtype=np.float32)
 
-    def pick(respect_quota):
+    def pick(respect_quota, respect_caps=True):
         best, best_score = None, -1e9
         for i in alive:
             if keys[i] in taken_keys:
@@ -628,6 +635,9 @@ def rank(cand_vecs, cands, centroids, cluster_weights, exclude=(),
             if taken_artist.get(artists[i], 0) >= max_per_artist:
                 continue
             if respect_quota and taken_cluster[cluster[i]] >= quota[cluster[i]]:
+                continue
+            if (respect_caps and sources[i] in caps
+                    and taken_source.get(sources[i], 0) >= caps[sources[i]]):
                 continue
             s = lam * rel[i] - (1.0 - lam) * max_sim[i]
             if s > best_score:
@@ -639,14 +649,41 @@ def rank(cand_vecs, cands, centroids, cluster_weights, exclude=(),
         if i is None:
             i = pick(False)
         if i is None:
+            i = pick(False, False)
+        if i is None:
             break
         out.append((i, float(rel[i]), int(cluster[i])))
+        taken_source[sources[i]] = taken_source.get(sources[i], 0) + 1
         chosen.append(i)
         taken_keys.add(keys[i])
         taken_artist[artists[i]] = taken_artist.get(artists[i], 0) + 1
         taken_cluster[cluster[i]] += 1
         max_sim = np.maximum(max_sim, V @ V[i])
     return out
+
+
+def source_caps(cands, n=MAX_RESULTS, library_share=None):
+    """How many of the `n` places each source may take. With streaming
+    candidates on the table the library keeps LIBRARY_SHARE of the list (the
+    albums owned are, by construction, the closest to a taste read from the
+    library, and would otherwise fill it all) and the services split the rest
+    evenly. A single source has no cap."""
+    share = LIBRARY_SHARE if library_share is None else library_share
+    present = []
+    for c in cands:
+        if c.get('source') not in present:
+            present.append(c.get('source'))
+    streaming = [s for s in present if s != 'library']
+    if not streaming or len(present) < 2:
+        return {}
+    caps, rest = {}, n
+    if 'library' in present:
+        caps['library'] = int(round(n * share))
+        rest = n - caps['library']
+    if len(streaming) > 1:
+        for s in streaming:
+            caps[s] = -(-rest // len(streaming))
+    return caps
 
 
 def history_state(db, min_plays=MIN_PLAYS, library=0):
@@ -1245,6 +1282,8 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
         artist_w[k] = artist_w.get(k, 0.0) + w_lib
     top = sorted((k for k in artist_w if k), key=lambda k: -artist_w[k])[:MAX_HISTORY_ARTISTS]
     exclude = heard_keys(db) | dismissed_keys(db)
+    # An album already in the library is not offered again from a service.
+    owned = {album_key(a['artist'], a['album']) for a in library}
 
     # 1. What the library offers that has not been heard.
     #    The genres its files carry also describe the listened artists, which
@@ -1306,7 +1345,8 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
                     break
                 summary['searches'] += 1
                 for a in found:
-                    if album_key(a['artist'], a['album']) not in exclude:
+                    k = album_key(a['artist'], a['album'])
+                    if k not in exclude and k not in owned:
                         cands.append(dict(a, source=service, play_kind='url',
                                           genres=[], year=None))
 
@@ -1327,7 +1367,7 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
     C, _, cw = taste_clusters(H[keep], w[keep])
 
     # 5. Rank and publish.
-    picked = rank(V, cands, C, cw, exclude=exclude)
+    picked = rank(V, cands, C, cw, exclude=exclude, source_caps=source_caps(cands))
     picked = [(i, s, c) for i, s, c in picked if s > 0]
     rows = [dict(cands[i], score=s, cluster=c) for i, s, c in picked]
     write_recommendations(db, rows, now)
