@@ -138,11 +138,6 @@ Item {
     //  - app     → la radice del servizio (PluginItems con il suo `cmd`).
     property var sourceTiles: []
     property bool sourcesProbed: false
-    // whether the CDplayer plugin is loaded (a home-menu plugin, not an app):
-    // when true the Music root shows a CD tile. Probed with the `can` command.
-    property bool cdAvailable: false
-    // login state of the streaming services (key -> {available, loggedIn}),
-    // fetched from the backend; and the reverse map plugin cmd -> service key,
     // ─── Recommended ────────────────────────────────────────────────────────
     // The tile is there only while the feature is switched on in the settings.
     // The albums come from the API (computed by the scheduled job, never here).
@@ -196,6 +191,11 @@ Item {
             if (ok && d && !d.running && root.recRunning) { root.recRunning = false; if (root.inRecommended) root.loadTop() }
         })
     }
+    // whether the CDplayer plugin is loaded (a home-menu plugin, not an app):
+    // when true the Music root shows a CD tile. Probed with the `can` command.
+    property bool cdAvailable: false
+    // login state of the streaming services (key -> {available, loggedIn}),
+    // fetched from the backend; and the reverse map plugin cmd -> service key,
     // so a service opened from its tile knows whether it still needs a login.
     property var svcStatus: ({})
     property var svcByCmd: ({})
@@ -213,19 +213,19 @@ Item {
     function rebuildSources(apps) {
         var out = []
         var byCmd = {}
+        lastApps = apps
         // Favourites and the local library come first, then the streaming
         // services, then radio. "favorites" is the global Lyrion favourites
         // menu (opened as a plugin item with cmd "favorites").
         out.push({ kind: "favorites", label: Tr.t("player.titles.favorites"), icon: "heart", srvIcon: "", cmd: "favorites" })
         out.push({ kind: "library", label: Tr.t("player.titles.localLibrary"), icon: "library", srvIcon: "", cmd: "" })
-        lastApps = apps
+        if (root.recEnabled)
+            out.push({ kind: "recommended", label: Tr.t("player.titles.recommended"), icon: "sparkles", srvIcon: "", cmd: "" })
         // streaming services, in the order declared, only if available
         for (var s = 0; s < sourceServices.length; s++) {
             var svc = sourceServices[s]
             for (var i = 0; i < apps.length; i++) {
                 var nm = String(apps[i].name || "").toLowerCase()
-        if (root.recEnabled)
-            out.push({ kind: "recommended", label: Tr.t("player.titles.recommended"), icon: "sparkles", srvIcon: "", cmd: "" })
                 var hit = false
                 for (var m = 0; m < svc.match.length; m++) if (nm.indexOf(svc.match[m]) >= 0) { hit = true; break }
                 if (hit) { out.push({ kind: "app", key: svc.key, label: svc.label || apps[i].name, icon: svc.icon, srvIcon: apps[i].icon || "", cmd: apps[i].id }); byCmd[String(apps[i].id)] = svc.key; break }
@@ -262,12 +262,12 @@ Item {
         Api.get(Api.apiBase + "/services/status", function(ok, d) {
             if (ok && d && d.services) root.svcStatus = d.services
         })
+        loadRecEnabled()
     }
     // the service key of the plugin currently open (empty if not a known
     // streaming service), its label, and whether its root still needs a login
     readonly property string curSvcKey: view === LibraryModel.PluginItems ? (svcByCmd[String(cur.p1)] || "") : ""
     readonly property string curSvcLabel: {
-        loadRecEnabled()
         for (var i = 0; i < sourceServices.length; i++) if (sourceServices[i].key === curSvcKey) return sourceServices[i].label
         return ""
     }
@@ -736,12 +736,12 @@ Item {
         case LibraryModel.Albums: case LibraryModel.NewMusic:
             queueItems("album_id"); fav(it.favUrl, "playlist")
             if (it.artistId) L.push({ icon: "user", label: Tr.t("player.page.goToArtist"), cb: function() { openArtist(it.artistId, it.sub) } })
+            break
         case LibraryModel.Recommended:
             L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { recPlay(it, "add") } })
             L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: function() { recPlay(it, "insert") } })
             if (it.kind === 0) L.push({ icon: "disc", label: Tr.t("player.page.goToAlbum"), cb: function() { openAlbum(it.id, it.text) } })
             L.push({ icon: "eye-off", label: Tr.t("recommend.notInterested"), cb: function() { recDismiss(it) } })
-            break
             break
         case LibraryModel.Artists: case LibraryModel.Composers:
             queueItems("artist_id"); fav(it.favUrl, "playlist"); break
@@ -829,9 +829,9 @@ Item {
         var it = Library.get(row)
         switch (view) {
         case LibraryModel.Artists: case LibraryModel.Composers: if (onPlay) playItem("artist_id", it.id, "load"); else openArtist(it.id, it.text); break
+        case LibraryModel.Albums: case LibraryModel.NewMusic: if (onPlay) playItem("album_id", it.id, "load"); else openAlbum(it.id, it.text); break
         // Recommended: one tap plays, wherever it lands on the card
         case LibraryModel.Recommended: recPlay(it, "load"); break
-        case LibraryModel.Albums: case LibraryModel.NewMusic: if (onPlay) playItem("album_id", it.id, "load"); else openAlbum(it.id, it.text); break
         case LibraryModel.Genres: if (onPlay) playItem("genre_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, "", "genre_id:" + it.id); break
         case LibraryModel.Years: if (onPlay) playItem("year", it.id, "load"); else goView(LibraryModel.Albums, it.text, "", "year:" + it.id); break
         case LibraryModel.Search:
@@ -1199,8 +1199,8 @@ Item {
                                 var c = children[i]; var m = c.modelData
                                 if (!m) continue
                                 if (m.kind === "library" && e.view === LibraryModel.Home) return c.navTap
-                                if (m.kind === "recommended" && e.view === LibraryModel.Recommended) return c.navTap
                                 if (m.kind === "radio" && e.view === LibraryModel.Radios) return c.navTap
+                                if (m.kind === "recommended" && e.view === LibraryModel.Recommended) return c.navTap
                                 if (m.kind === "favorites" && e.view === LibraryModel.PluginItems && String(e.p1) === "favorites") return c.navTap
                                 if (m.kind === "app" && e.view === LibraryModel.PluginItems && String(e.p1) === String(m.cmd)) return c.navTap
                                 if (m.kind === "cd" && e.view === LibraryModel.PluginItems && String(e.p1) === "cdplayer") return c.navTap
@@ -1242,8 +1242,8 @@ Item {
                                     id: srcTap
                                     onClicked: {
                                         if (modelData.kind === "library") root.goView(LibraryModel.Home, Tr.t("player.titles.localLibrary"))
-                                        else if (modelData.kind === "recommended") root.goView(LibraryModel.Recommended, Tr.t("player.titles.recommended"))
                                         else if (modelData.kind === "radio") root.goView(LibraryModel.Radios, Tr.t("player.titles.radio"))
+                                        else if (modelData.kind === "recommended") root.goView(LibraryModel.Recommended, Tr.t("player.titles.recommended"))
                                         else if (modelData.kind === "favorites") root.goView(LibraryModel.PluginItems, Tr.t("player.titles.favorites"), "favorites")
                                         else root.goView(LibraryModel.PluginItems, modelData.label, modelData.cmd)
                                     }
