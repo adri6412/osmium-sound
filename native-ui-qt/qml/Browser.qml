@@ -174,7 +174,7 @@ Item {
     readonly property string recEmptyText: {
         var i = recInfo || {}
         if (recRunning) return Tr.t("recommend.running")
-        if (i.state === "few_plays") return Tr.tf("recommend.fewPlays", "needed", i.needed || 0).replace("{plays}", i.plays || 0)
+        if (i.state === "few_plays") return Tr.tf("recommend.fewPlays", "needed", i.needed || 0).replace("{plays}", i.plays || 0).replace("{albums}", i.needed_albums || 0)
         if (i.state === "never_run") return Tr.t(i.scheduled ? "recommend.neverRunScheduled" : "recommend.neverRun")
         if (i.state === "disabled") return Tr.t("recommend.disabled")
         return Tr.t("recommend.empty")
@@ -1534,7 +1534,7 @@ Item {
                                    color: Theme.silverA(0.85); font.family: Theme.font; font.pixelSize: 14; lineHeight: 1.25 }
                             Spinner { visible: root.recRunning; active: visible; anchors.horizontalCenter: parent.horizontalCenter }
                             SBtn {
-                                visible: !root.recRunning && !!root.recInfo && root.recInfo.state !== "few_plays" && root.recInfo.state !== "disabled"
+                                visible: !root.recRunning && !!root.recInfo && root.recInfo.state !== "disabled"
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 lead: true; glyph: "sparkles"; label: Tr.t("recommend.computeNow")
                                 onClicked: root.recCompute()

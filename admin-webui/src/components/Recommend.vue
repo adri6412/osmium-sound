@@ -129,7 +129,7 @@ onBeforeUnmount(() => { if (poll) clearInterval(poll); });
         <span>{{ t('settings.recommend.lastRun') }}</span>
         <span class="muted">{{ lastRun }}</span>
       </div>
-      <p class="muted" v-if="st.state === 'few_plays'">{{ t('settings.recommend.fewPlays', { needed: st.needed, plays: st.plays }) }}</p>
+      <p class="muted" v-if="st.state === 'few_plays'">{{ t('settings.recommend.fewPlays', { needed: st.needed, plays: st.plays, albums: st.needed_albums }) }}</p>
       <p class="muted" v-if="st.running">{{ t('settings.recommend.running') }}</p>
       <button v-else class="fit" :disabled="busy" @click="runNow">{{ t('settings.recommend.computeNow') }}</button>
       <p class="muted" style="margin-top: 12px;">{{ t('settings.recommend.credits') }}</p>

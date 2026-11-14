@@ -848,6 +848,17 @@ class RunTestCase(unittest.TestCase):
         got = rec.run(self.db, lms, settings={'sources': ['qobuz']}, now=self.now)
         self.assertEqual((got['outcome'], got['favorites']), ('few_plays', 2))
 
+    def test_the_screen_knows_the_favourites_of_the_last_run(self):
+        # Ten favourites, a run that found no album to offer: the reason
+        # shown must not be "keep listening".
+        self.assertEqual(rec.history_state(self.db)['state'], 'few_plays')
+        for n, state in ((2, 'few_plays'), (rec.MIN_LIBRARY_ALBUMS, 'empty')):
+            rec.finish_run(self.db, rec.start_run(self.db),
+                           {'outcome': 'no_candidates', 'favorites': n, 'service_plays': 0})
+            st = rec.history_state(self.db)
+            self.assertEqual((st['state'], st['favorites'], st['needed_albums']),
+                             (state, n, rec.MIN_LIBRARY_ALBUMS))
+
     def test_owned_and_favourite_is_one_album(self):
         shelf = [(i, 'Camel', 'Album %d' % i, 'Rock') for i in range(1, rec.MIN_LIBRARY_ALBUMS + 1)]
         lms = FakeLyrion(shelf)

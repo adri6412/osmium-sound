@@ -463,7 +463,7 @@
       "computeNow": "Compute now",
       "running": "Working out your recommendations… It takes a few minutes; you can keep listening.",
       "runFailed": "The computation could not be started",
-      "fewPlays": "Keep listening a little: recommendations need at least {needed} plays (so far: {plays}).",
+      "fewPlays": "Not enough to go on yet: recommendations need at least {needed} plays (so far: {plays}), or at least {albums} albums between your library and your streaming favourites.",
       "srcLibrary": "Local library"
     },
     "cdRip": {

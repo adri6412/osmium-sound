@@ -463,7 +463,7 @@
       "computeNow": "Calcola ora",
       "running": "Sto preparando i consigli… Servono alcuni minuti; puoi continuare ad ascoltare.",
       "runFailed": "Non è stato possibile avviare il calcolo",
-      "fewPlays": "Ascolta ancora un po': per i consigli servono almeno {needed} ascolti (finora: {plays}).",
+      "fewPlays": "Ancora pochi dati per i consigli: servono almeno {needed} ascolti (finora: {plays}), oppure almeno {albums} album tra libreria e preferiti dei servizi streaming.",
       "srcLibrary": "Libreria locale"
     },
     "cdRip": {

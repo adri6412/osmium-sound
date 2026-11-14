@@ -2253,7 +2253,7 @@ Item {
                  + (st.last_run.outcome && st.last_run.outcome !== "ok" ? " · " + Tr.t("settings.recommend.lastRunFailed") : ""))
         else info(Tr.t("settings.recommend.lastRun"), Tr.t("settings.recommend.never"))
         if (st.state === "few_plays")
-            helpText(Tr.tf("recommend.fewPlays", "needed", st.needed || 0).replace("{plays}", st.plays || 0), 12)
+            helpText(Tr.tf("recommend.fewPlays", "needed", st.needed || 0).replace("{plays}", st.plays || 0).replace("{albums}", st.needed_albums || 0), 12)
         if (!st.running) grid([acell(Tr.t("recommend.computeNow"), "rec_run", "gold", { icon: "sparkles", hh: 44, bold: true })])
         help("settings.recommend.credits", 11)
     }

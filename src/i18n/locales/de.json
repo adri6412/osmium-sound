@@ -297,7 +297,7 @@
     "computeNow": "Jetzt berechnen",
     "running": "Die Empfehlungen werden berechnet… Das dauert einige Minuten; du kannst weiterhören.",
     "runFailed": "Die Berechnung konnte nicht gestartet werden",
-    "fewPlays": "Hör noch etwas weiter: Für Empfehlungen braucht es mindestens {needed} gehörte Titel (bisher: {plays}).",
+    "fewPlays": "Noch zu wenig Daten: Für Empfehlungen braucht es mindestens {needed} gehörte Titel (bisher: {plays}) oder mindestens {albums} Alben aus Bibliothek und Streaming-Favoriten.",
     "neverRun": "Noch nichts berechnet. Drücke „Jetzt berechnen“ für die ersten Empfehlungen.",
     "neverRunScheduled": "Noch nichts berechnet. Die erste Berechnung läuft zur eingestellten Zeit, oder drücke „Jetzt berechnen“.",
     "disabled": "Die Empfehlungen sind in den Einstellungen ausgeschaltet.",

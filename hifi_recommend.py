@@ -726,15 +726,30 @@ def history_state(db, min_plays=MIN_PLAYS, library=0):
     running = bool(last and last['outcome'] == 'running'
                    and time.time() - last['started'] < RUN_TIMEOUT)
     have = db.execute('SELECT COUNT(*) FROM recommendations').fetchone()[0]
-    # A list that exists is shown: a run may have started from the favourites
-    # of a streaming account, which this cheap check does not go and read.
-    if not have and plays < min_plays and (library or 0) < MIN_LIBRARY_ALBUMS:
+    # The favourites and the listening history of the streaming accounts are
+    # only read by a run, so they are known as of the last one. Before the
+    # first run they are not: the screens offer "compute now" all the same.
+    favorites = service_plays = 0
+    seen = db.execute("SELECT detail FROM runs WHERE detail != '' "
+                      'ORDER BY id DESC LIMIT 1').fetchone()
+    if seen:
+        try:
+            import json
+            detail = json.loads(seen['detail'])
+            favorites = int(detail.get('favorites') or 0)
+            service_plays = int(detail.get('service_plays') or 0)
+        except (ValueError, TypeError, AttributeError):
+            pass
+    # A list that exists is shown whatever the counts say.
+    if (not have and plays + service_plays < min_plays
+            and (library or 0) + favorites < MIN_LIBRARY_ALBUMS):
         state = 'few_plays'
     elif not have:
         state = 'never_run' if not last or running else 'empty'
     else:
         state = 'ok'
     return {'state': state, 'plays': plays, 'needed': min_plays,
+            'needed_albums': MIN_LIBRARY_ALBUMS, 'favorites': favorites,
             'running': running,
             'last_run': dict(last) if last else None}
 

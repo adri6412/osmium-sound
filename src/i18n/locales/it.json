@@ -297,7 +297,7 @@
     "computeNow": "Calcola ora",
     "running": "Sto preparando i consigli… Servono alcuni minuti; puoi continuare ad ascoltare.",
     "runFailed": "Non è stato possibile avviare il calcolo",
-    "fewPlays": "Ascolta ancora un po': per i consigli servono almeno {needed} ascolti (finora: {plays}).",
+    "fewPlays": "Ancora pochi dati per i consigli: servono almeno {needed} ascolti (finora: {plays}), oppure almeno {albums} album tra libreria e preferiti dei servizi streaming.",
     "neverRun": "Ancora nessun calcolo. Premi «Calcola ora» per avere i primi consigli.",
     "neverRunScheduled": "Ancora nessun calcolo. Il primo parte all'ora scelta nelle impostazioni, oppure premi «Calcola ora».",
     "disabled": "I consigli sono spenti nelle impostazioni.",
