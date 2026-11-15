@@ -1,0 +1,7 @@
+# Accept the Intel PRO/Wireless 2100/2200/2915 (ipw2x00) firmware licence
+# non-interactively. Without this, firmware-ipw2x00's preinst tries to ask the
+# EULA question during the live-build chroot (which has no debconf frontend)
+# and aborts with exit 2, failing the ISO/USB-image build. The RAUC image build
+# does not hit this because it does not install this package via live-build.
+# live-build collects config/preseed/*.cfg and config/preseed/*.cfg.chroot.
+firmware-ipw2x00 firmware-ipw2x00/license/accepted boolean true
