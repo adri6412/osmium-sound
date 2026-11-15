@@ -36,6 +36,10 @@ const dest = ref('');          // '__default__' or a source_id
 const destPath = ref('');      // a folder picked in the browser, overrides `dest`
 const picking = ref(false);
 const status = ref(null);
+// the finished rip's log, once fetched (null = panel closed)
+const logText = ref(null);
+const logBusy = ref(false);
+const hasLog = computed(() => !!(status.value && status.value.log));
 let timer = null;
 
 const ENDED = ['done', 'error', 'idle', 'cancelled'];
@@ -141,6 +145,14 @@ async function eject() {
   } finally { busy.value = false; }
 }
 function pickFolder(p) { destPath.value = p; picking.value = false; }
+async function viewLog() {
+  logBusy.value = true;
+  try {
+    const r = await api.cdRipLog();
+    logText.value = r.ok && r.text ? r.text : t('settings.cdRip.logUnavailable');
+  } finally { logBusy.value = false; }
+}
+function closeLog() { logText.value = null; }
 </script>
 
 <template>
@@ -167,7 +179,15 @@ function pickFolder(p) { destPath.value = p; picking.value = false; }
           <p class="muted" v-if="status.message && status.state !== 'cancelled'">{{ status.message }}</p>
           <div class="row" style="flex-wrap: wrap;">
             <button class="fit" :disabled="busy" @click="eject">{{ t('settings.cdRip.ejectNow') }}</button>
+            <button class="secondary fit" v-if="hasLog" :disabled="logBusy" @click="viewLog">{{ t('settings.cdRip.viewLog') }}</button>
             <button class="secondary fit" :disabled="busy || loading" @click="status = null; readDisc()">{{ t('settings.cdRip.ripReadAgain') }}</button>
+          </div>
+          <div v-if="logText !== null" class="logbox">
+            <div class="loghead">
+              <label>{{ t('settings.cdRip.logTitle') }}</label>
+              <button class="ghost fit" @click="closeLog">{{ t('settings.cdRip.logClose') }}</button>
+            </div>
+            <pre class="log">{{ logText }}</pre>
           </div>
         </template>
       </template>
@@ -239,4 +259,7 @@ function pickFolder(p) { destPath.value = p; picking.value = false; }
 .ok { color: var(--ok); }
 .bad { color: var(--danger); }
 select { max-width: 100%; }
+.logbox { margin-top: 12px; }
+.loghead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.log { margin: 6px 0 0; padding: 10px; max-height: 320px; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
 </style>

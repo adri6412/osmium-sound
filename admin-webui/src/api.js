@@ -159,6 +159,21 @@ export const api = {
   },
   dspFirRemove: () => req('/api/system/dsp_fir', { method: 'DELETE' }),
 
+  // External driver packs (firmware / kernel modules the developer signed and
+  // sent). Forwarded to sources_server.py, which verifies the Ed25519 OTA
+  // signature before trusting anything — see /api/drivers/* there and
+  // distro/.../usr/local/sbin/hifi-driverpack.sh.
+  driversUsbScan: () => req('/api/system/drivers/usb/scan', { method: 'POST' }),
+  driversInstallUsb: (packPath) => req('/api/system/drivers/install', { method: 'POST', body: { usb_pack: packPath } }),
+  driversInstallUpload: (packFile, sigFile) => {
+    const body = new FormData();
+    body.append('file', packFile);
+    body.append('sig', sigFile);
+    return upload('/api/system/drivers/install', body);
+  },
+  driversStatus: () => req('/api/system/drivers/status'),
+  driversList: () => req('/api/system/drivers/list'),
+
   // Backup/restore — files live on sources_server.py, forwarded raw through
   // webui_server (session-gated: see /api/system/backup* in webui_server.py).
   backupList: () => req('/api/system/backup/list'),
@@ -206,6 +221,16 @@ export const api = {
   cdInfo: (release = '') => req('/api/system/cd/info' + (release ? '?release=' + encodeURIComponent(release) : '')),
   cdRip: (body) => req('/api/system/cd/rip', { method: 'POST', body }),
   cdRipStatus: () => req('/api/system/cd/rip/status'),
+  // The last rip's EAC-style log is plain text, not JSON, so it skips req()
+  // (which always parses JSON) and reads the body as text.
+  cdRipLog: async () => {
+    try {
+      const res = await fetch('/api/system/cd/rip/log', { credentials: 'same-origin', cache: 'no-store', headers: { 'X-UI-Lang': lang.value } });
+      return { ok: res.ok, status: res.status, text: res.ok ? await res.text() : '' };
+    } catch (_) {
+      return { ok: false, status: 0, text: '' };
+    }
+  },
   sourcesAddSmb: ({ server, share, username, password, rw, defer_activation }) =>
     req('/api/system/sources/smb', { method: 'POST', body: { server, share, username, password, rw, defer_activation } }),
   // Guided "add a network folder": the appliance looks for file servers on the

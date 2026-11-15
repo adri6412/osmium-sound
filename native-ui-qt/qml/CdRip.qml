@@ -48,6 +48,14 @@ Item {
     property int total: 0
     property bool ripping: false
     property string err: ""
+    // the finished rip wrote an EAC-style log (served by /api/cd/rip/log), and
+    // whether some tracks could not be verified as accurate
+    property bool hasLog: false
+    property bool inaccurate: false
+    // the log viewer overlay (inside `card`): its text, and whether it is loading
+    property bool logOpen: false
+    property bool logLoading: false
+    property string logText: ""
     property bool open: false
     property bool closing: false
     // Settings → CD ripping → Enable: off, the disc is ignored altogether
@@ -138,7 +146,19 @@ Item {
             root.state = String(d.state || "idle"); root.msg = String(d.message || "")
             root.progress = Number(d.progress || 0); root.curTrack = Number(d.track || 0); root.total = Number(d.total || 0)
             root.ripping = root.state !== "done" && root.state !== "error" && root.state !== "idle" && root.state !== "cancelled"
+            root.hasLog = !!d.log; root.inaccurate = !!d.inaccurate
         }, 5000)
+    }
+    // Fetch the finished rip's log (text/plain from sources_server) and show it
+    // in the scrollable overlay. Opens the big window if it is closed, so the
+    // viewer has somewhere to paint (the corner card can trigger this too).
+    function showLog() {
+        if (!open) openDialog()
+        logOpen = true; logLoading = true; logText = ""
+        Api.get(Api.srcBase + "/api/cd/rip/log", function(ok, d) {
+            root.logLoading = false
+            root.logText = (ok && d) ? String(d) : Tr.t("player.cd.logUnavailable")
+        }, 8000)
     }
     // 🚨 Ogni /api/cd/info fa girare cd-discid: senza lettore (quasi tutti gli
     // apparecchi) non si chiede nulla. Il lettore si guarda da qui, con una
@@ -159,8 +179,8 @@ Item {
     Timer { interval: 7000; repeat: true; running: true; triggeredOnStart: true; onTriggered: if (root.checkDrive() || root.ripping) root.loadInfo() }
     Timer { interval: 2000; repeat: true; running: root.ripping; onTriggered: root.loadStatus() }
 
-    function openDialog() { open = true; closing = false; choosing = false; sc.set(0.94); sc.to = 1; closeScale = 1; fade = 1 }
-    function close() { choosing = false; if (!open || closing) return; closing = true; closeScale = 0.94; fade = 0 }
+    function openDialog() { open = true; closing = false; choosing = false; logOpen = false; sc.set(0.94); sc.to = 1; closeScale = 1; fade = 1 }
+    function close() { choosing = false; logOpen = false; if (!open || closing) return; closing = true; closeScale = 0.94; fade = 0 }
     Timer { interval: 40; repeat: true; running: root.closing; onTriggered: if (root.fade === 0) { root.open = false; root.closing = false; root.asking = false } }
     function dismissBanner() { bannerClosed = discid }
     function ask() { dismissed = discid; asking = true; openDialog() }
@@ -309,6 +329,19 @@ Item {
             }
             Text { visible: root.ripping; width: parent.width; y: parent.cy + 32; height: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Tr.tf("player.cd.ripProgress", "track", String(root.curTrack)).replace("{total}", String(root.total)); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
             Text { visible: root.state === "done"; width: parent.width; y: parent.cy + 16; height: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.ripDone"); color: "#34d399"; font.family: Theme.font; font.pixelSize: 14 }
+            Text { visible: root.state === "done" && root.inaccurate; x: 24; y: parent.cy + 42; width: parent.width - 48; height: 34; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.ripInaccurate"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 12 }
+            // View the EAC-style rip log (whenever the worker wrote one)
+            Rectangle {
+                visible: (root.state === "done" || root.state === "error") && root.hasLog
+                x: 20; y: parent.height - 20 - 42 - 12 - 42; width: parent.width - 40; height: 42; radius: 8
+                color: logTap.mix(Theme.light, Theme.accent)
+                Row {
+                    anchors.centerIn: parent; spacing: 8
+                    Icon { anchors.verticalCenter: parent.verticalCenter; name: "scroll-text"; size: 16; color: Theme.white }
+                    Text { anchors.verticalCenter: parent.verticalCenter; text: Tr.t("player.cd.viewLog"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14 }
+                }
+                Tap { id: logTap; onClicked: root.showLog() }
+            }
             Text { visible: root.state === "error" || root.state === "cancelled"; x: 24; y: parent.cy + 16; width: parent.width - 48; wrapMode: Text.Wrap; maximumLineCount: 2; horizontalAlignment: Text.AlignHCenter; text: root.state === "cancelled" ? Tr.t("player.cd.cancelled") : (root.msg || Tr.t("player.cd.ripError")); color: root.state === "cancelled" ? Theme.silver : Theme.red300; font.family: Theme.font; font.pixelSize: 14 }
             // Eject after the rip, however it ended: a drive without its own
             // button has no other way to give the disc back after a failure
@@ -479,6 +512,38 @@ Item {
                 color: edUseTap.mix(Theme.gold, "#ca8a04")
                 Text { anchors.centerIn: parent; text: Tr.t("player.cd.useEdition"); color: Theme.black; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
                 Tap { id: edUseTap; onClicked: root.applyRelease(root.chooseHi) }
+            }
+        }
+        // ── the rip log, read-only and scrollable. Inside `card`, above the ──
+        // result panel; the close button goes back to it. ──────────────────────
+        Rectangle {
+            id: logOverlay
+            visible: root.logOpen
+            anchors.fill: parent
+            radius: 16; color: Theme.panel
+            MouseArea { anchors.fill: parent }   // swallow taps meant for what is beneath
+            Icon { x: 20; y: 22; name: "scroll-text"; size: 16; color: Theme.gold }
+            Text { x: 44; y: 16; height: 28; verticalAlignment: Text.AlignVCenter; text: Tr.t("player.cd.logTitle"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+            Item {
+                x: parent.width - 20 - 28; y: 16; width: 28; height: 28
+                Icon { anchors.centerIn: parent; name: "x"; size: 16; color: Theme.silverA(0.6) }
+                Tap { grow: 6; onClicked: root.logOpen = false }
+            }
+            Text {
+                visible: root.logLoading
+                anchors.centerIn: parent; text: "…"; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 20
+            }
+            Flickable {
+                id: logFlick
+                visible: !root.logLoading
+                x: 20; y: 56; width: parent.width - 40; height: parent.height - 56 - 20
+                clip: true; contentWidth: width; contentHeight: logBody.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                Text {
+                    id: logBody
+                    width: logFlick.width; wrapMode: Text.Wrap
+                    text: root.logText; color: Theme.silverA(0.9); font.family: Theme.mono; font.pixelSize: 12; lineHeight: 1.3
+                }
             }
         }
     }

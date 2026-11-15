@@ -286,6 +286,11 @@ fi
 # after boot instead of holding multi-user.target back while it downloads.
 _out=$(in_chroot systemctl enable hifi-ext-refresh.timer 2>&1) \
     || die "systemctl enable hifi-ext-refresh.timer: $_out"
+# 🚨 The TIMER, not the service: hifi-driverpack-refresh.service has no [Install]
+# either. It re-pins developer driver packs after an OTA and insmods their
+# out-of-tree modules at boot.
+_out=$(in_chroot systemctl enable hifi-driverpack-refresh.timer 2>&1) \
+    || die "systemctl enable hifi-driverpack-refresh.timer: $_out"
 if ! _out=$(in_chroot systemctl enable systemd-sysext.service 2>&1); then
     # alcune build di systemd la distribuiscono senza sezione [Install]:
     # in quel caso il collegamento si fa a mano, il risultato è lo stesso
@@ -301,6 +306,8 @@ fi
 # il controllo fallisce anche quando l'unità è abilitata benissimo.
 [ -L "$CH/etc/systemd/system/timers.target.wants/hifi-ext-refresh.timer" ] \
     || die "hifi-ext-refresh.timer non abilitato: gli add-on non verrebbero ricostruiti dopo un aggiornamento"
+[ -L "$CH/etc/systemd/system/timers.target.wants/hifi-driverpack-refresh.timer" ] \
+    || die "hifi-driverpack-refresh.timer non abilitato: i driver pack non verrebbero ri-applicati dopo un aggiornamento"
 if ! in_chroot systemctl is-enabled systemd-sysext.service >/dev/null 2>&1 \
    && [ ! -L "$CH/etc/systemd/system/sysinit.target.wants/systemd-sysext.service" ]; then
     die "systemd-sysext.service non abilitata: gli add-on non verrebbero mai montati"

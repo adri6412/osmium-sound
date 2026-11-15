@@ -43,7 +43,7 @@ Rectangle {
     Component.onCompleted: Ui.sources = root
     onVisibleChanged: if (visible) { view = "home"; load() }
 
-    function lt(it, en) { return I18n.lang === "it" ? it : en }
+    function lt(it, en, de) { return I18n.lang === "it" ? it : (I18n.lang === "de" && de !== undefined ? de : en) }
     function su(p) { return Api.srcBase + p }
     function under(p, r) { p = String(p || ""); r = String(r || ""); return !!r && (p === r || p.indexOf(r + "/") === 0) }
     function gb(n) {
@@ -106,22 +106,22 @@ Rectangle {
             return { key: key, group: group, glyph: glyph, name: name, kind: kind, root: root, ok: true, rw: true, usage: null, src: null,
                      locals: [], lib: false, shared: false, playlist: false, rip: false, error: "", removable: false }
         }
-        var sys = mk("sys", "dev", "hard-drive", lt("Disco di sistema", "System disk"), lt("Qui è installato Osmium", "Osmium is installed here"), musicRoot)
+        var sys = mk("sys", "dev", "hard-drive", lt("Disco di sistema", "System disk", "Systemdatenträger"), lt("Qui è installato Osmium", "Osmium is installed here", "Hier ist Osmium installiert"), musicRoot)
         sys.usage = musicUsage
         out.push(sys)
         var internals = srcs.filter(function(s) { return s.type === "internal" })
         for (i = 0; i < internals.length; i++) {
             var s = internals[i]
-            var nm = internals.length === 1 ? lt("Secondo disco", "Second disk") : lt("Disco «", "Disk «") + (s.label || s.name) + "»"
-            var p = mk(String(s.id), "dev", "hard-drive", nm, (s.model ? String(s.model) + " · " : "") + lt("montato dentro l'apparecchio", "mounted inside the appliance"), String(s.mountpoint || ""))
+            var nm = internals.length === 1 ? lt("Secondo disco", "Second disk", "Zweiter Datenträger") : lt("Disco «", "Disk «", "Datenträger «") + (s.label || s.name) + "»"
+            var p = mk(String(s.id), "dev", "hard-drive", nm, (s.model ? String(s.model) + " · " : "") + lt("montato dentro l'apparecchio", "mounted inside the appliance", "im Gerät eingebaut"), String(s.mountpoint || ""))
             p.src = s; p.ok = !!s.mounted; p.usage = s.usage || null; p.removable = true
-            if (!p.ok) p.error = lt("Non montato", "Not mounted")
+            if (!p.ok) p.error = lt("Non montato", "Not mounted", "Nicht eingebunden")
             out.push(p)
         }
         for (i = 0; i < srcs.length; i++) {
             var u = srcs[i]
             if (u.type !== "usb") continue
-            var pu = mk(String(u.id), "usb", "usb", String(u.label || u.name || "USB"), lt("Chiavetta o disco USB", "USB stick or disk"), String(u.mountpoint || ""))
+            var pu = mk(String(u.id), "usb", "usb", String(u.label || u.name || "USB"), lt("Chiavetta o disco USB", "USB stick or disk", "USB-Stick oder -Datenträger"), String(u.mountpoint || ""))
             pu.src = u; pu.ok = !!u.mounted; pu.usage = u.usage || null; pu.removable = true
             if (!pu.ok) continue                // not connected: it does not exist here
             out.push(pu)
@@ -130,9 +130,9 @@ Rectangle {
             var n = srcs[i]
             if (n.type !== "smb") continue
             var pn = mk(String(n.id), "net", "network", String(n.server || "") + " › " + String(n.share || ""),
-                        lt("Cartella di rete", "Network folder") + " · //" + n.server + "/" + n.share, String(n.mountpoint || ""))
+                        lt("Cartella di rete", "Network folder", "Netzwerkordner") + " · //" + n.server + "/" + n.share, String(n.mountpoint || ""))
             pn.src = n; pn.ok = !!n.mounted; pn.usage = n.usage || null; pn.rw = !!n.rw; pn.removable = true
-            if (!pn.ok) pn.error = n.mount_error && n.mount_error.message ? String(n.mount_error.message) : lt("Non risponde: è acceso e sulla stessa rete?", "Not answering: is it on, and on the same network?")
+            if (!pn.ok) pn.error = n.mount_error && n.mount_error.message ? String(n.mount_error.message) : lt("Non risponde: è acceso e sulla stessa rete?", "Not answering: is it on, and on the same network?", "Antwortet nicht: ist es an und im selben Netzwerk?")
             out.push(pn)
         }
         // local folders: on the place that holds them, else the system disk
@@ -164,46 +164,46 @@ Rectangle {
     function post(path, body, msg, then) {
         Api.post(su(path), body || {}, function(ok, d) {
             if (ok && d && d.success !== false) { if (msg) say(msg); if (then) then(d) }
-            else fail(d, lt("Non è riuscito", "That did not work"))
+            else fail(d, lt("Non è riuscito", "That did not work", "Hat nicht geklappt"))
             load()
         }, 60000)
     }
     function removePlace(p) {
         if (!p || !p.src) return
         Ui.dialogs.confirm(lt("Togliere «" + p.name + "» dalla musica? I file restano dove sono.",
-                             "Remove «" + p.name + "» from your music? The files stay where they are."),
-                           lt("Togli", "Remove"), true, function(ok) {
+                             "Remove «" + p.name + "» from your music? The files stay where they are.", "Entferne «" + p.name + "» aus deiner Musik? Die Dateien bleiben, wo sie sind."),
+                           lt("Togli", "Remove", "Entfernen"), true, function(ok) {
             if (!ok) return
             Api.send("DELETE", su("/api/sources/" + p.src.id), {}, function() { root.view = "home"; root.load() }, 12000)
         })
     }
     function removeLocal(s) {
-        Ui.dialogs.confirm(lt("Togliere questa cartella dalla libreria? I file restano dove sono.", "Take this folder out of the library? The files stay where they are."),
-                           lt("Togli", "Remove"), true, function(ok) {
+        Ui.dialogs.confirm(lt("Togliere questa cartella dalla libreria? I file restano dove sono.", "Take this folder out of the library? The files stay where they are.", "Diesen Ordner aus der Bibliothek nehmen? Die Dateien bleiben, wo sie sind."),
+                           lt("Togli", "Remove", "Entfernen"), true, function(ok) {
             if (ok) Api.send("DELETE", su("/api/sources/" + s.id), {}, function() { root.load() }, 12000)
         })
     }
     function pick(start, label, fn) { if (Ui.folderChooser) Ui.folderChooser.openAt(start || "", label, fn) }
     function addFolderHere(p, samba) {
-        pick(p.root, samba ? lt("Condividi questa cartella", "Share this folder") : lt("Aggiungi alla libreria", "Add to the library"), function(path) {
-            post("/api/sources/local", { path: path, samba: !!samba }, samba ? lt("Cartella condivisa", "Folder shared") : lt("Aggiunta alla libreria", "Added to the library"))
+        pick(p.root, samba ? lt("Condividi questa cartella", "Share this folder", "Diesen Ordner freigeben") : lt("Aggiungi alla libreria", "Add to the library", "Zur Bibliothek hinzufügen"), function(path) {
+            post("/api/sources/local", { path: path, samba: !!samba }, samba ? lt("Cartella condivisa", "Folder shared", "Ordner freigegeben") : lt("Aggiunta alla libreria", "Added to the library", "Zur Bibliothek hinzugefügt"))
         })
     }
     function onlyOneFolder(p) {
-        pick(p.root, lt("Usa solo questa cartella", "Use only this folder"), function(path) {
+        pick(p.root, lt("Usa solo questa cartella", "Use only this folder", "Nur diesen Ordner verwenden"), function(path) {
             var rel = path === p.root ? "" : path.slice(p.root.length + 1)
-            post("/api/sources/" + p.src.id + "/subpath", { subpath: rel }, lt("Fatto", "Done"))
+            post("/api/sources/" + p.src.id + "/subpath", { subpath: rel }, lt("Fatto", "Done", "Fertig"))
         })
     }
     function playlistsHere(p) {
-        pick(p.root, lt("Salva qui le playlist", "Keep playlists here"), function(path) { post("/api/playlistdir", { path: path }, lt("Le playlist si salvano qui", "Playlists are kept here")) })
+        pick(p.root, lt("Salva qui le playlist", "Keep playlists here", "Playlists hier speichern"), function(path) { post("/api/playlistdir", { path: path }, lt("Le playlist si salvano qui", "Playlists are kept here", "Playlists werden hier gespeichert")) })
     }
     function ripHere(p) {
-        pick(p.root, lt("Salva qui i CD rippati", "Keep ripped CDs here"), function(path) { post("/api/cd/settings", { target: path }, lt("I CD rippati finiscono qui", "Ripped CDs go here")) })
+        pick(p.root, lt("Salva qui i CD rippati", "Keep ripped CDs here", "Gerippte CDs hier speichern"), function(path) { post("/api/cd/settings", { target: path }, lt("I CD rippati finiscono qui", "Ripped CDs go here", "Gerippte CDs landen hier")) })
     }
     function adoptDisk(d) {
         var dev = d.parts.length === 1 ? d.parts[0].path : d.path
-        post("/api/internal/adopt", { device: dev }, lt("Preparo il disco…", "Setting the disk up…"))
+        post("/api/internal/adopt", { device: dev }, lt("Preparo il disco…", "Setting the disk up…", "Datenträger wird eingerichtet…"))
     }
     // An adopted internal/USB disk can be used without exposing it on the
     // network: its share toggles live, unlike a folder share (which is added
@@ -211,16 +211,16 @@ Rectangle {
     // folders keep the old behaviour (reveal the password / share a folder).
     function isDiskPlace(p) { return !!p.src && (p.src.type === "internal" || p.src.type === "usb") }
     function shareAction(p) {
-        if (isDiskPlace(p)) return p.shared ? lt("Non condividere", "Stop sharing")
-                                            : lt("Condividi in rete", "Share on the network")
-        return p.shared ? (showPw ? lt("Nascondi", "Hide") : lt("Mostra password", "Show password"))
-                        : lt("Condividi una cartella…", "Share a folder…")
+        if (isDiskPlace(p)) return p.shared ? lt("Non condividere", "Stop sharing", "Freigabe beenden")
+                                            : lt("Condividi in rete", "Share on the network", "Im Netzwerk freigeben")
+        return p.shared ? (showPw ? lt("Nascondi", "Hide", "Verbergen") : lt("Mostra password", "Show password", "Passwort anzeigen"))
+                        : lt("Condividi una cartella…", "Share a folder…", "Einen Ordner freigeben…")
     }
     function shareAct(p) {
         if (isDiskPlace(p)) {
             post("/api/sources/" + p.src.id + "/share", { shared: !p.shared },
-                 p.shared ? lt("Non più condivisa in rete", "No longer shared on the network")
-                          : lt("Condivisa in rete", "Shared on the network"))
+                 p.shared ? lt("Non più condivisa in rete", "No longer shared on the network", "Nicht mehr im Netzwerk freigegeben")
+                          : lt("Condivisa in rete", "Shared on the network", "Im Netzwerk freigegeben"))
             return
         }
         if (p.shared) showPw = !showPw
@@ -257,10 +257,10 @@ Rectangle {
         }
         Text {
             x: 44; width: parent.width - 44 - (addBtn.visible ? addBtn.width + 12 : 0); height: 36; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
-            text: root.view === "home" ? root.lt("La tua musica", "Your music") : root.cur ? root.cur.name : ""
+            text: root.view === "home" ? root.lt("La tua musica", "Your music", "Deine Musik") : root.cur ? root.cur.name : ""
             color: Theme.white; font.family: Theme.font; font.pixelSize: 30; font.bold: true
         }
-        SBtn { id: addBtn; visible: root.view === "home"; x: parent.width - width; anchors.verticalCenter: parent.verticalCenter; lead: true; glyph: "plus"; label: root.lt("Aggiungi musica", "Add music")
+        SBtn { id: addBtn; visible: root.view === "home"; x: parent.width - width; anchors.verticalCenter: parent.verticalCenter; lead: true; glyph: "plus"; label: root.lt("Aggiungi musica", "Add music", "Musik hinzufügen")
                onClicked: if (Ui.addMusic) Ui.addMusic.open() }
     }
 
@@ -279,13 +279,13 @@ Rectangle {
                 readonly property int bad: root.places.filter(function(p) { return !p.ok }).length
                 Rectangle { x: 0; y: 13; width: 3; height: 32; radius: 2; color: parent.bad ? Theme.yellow400 : Theme.emerald }
                 Text { x: 18; y: 10; width: parent.width - 36; elide: Text.ElideRight
-                       text: !root.loaded ? root.lt("Guardo dove sta la musica…", "Looking where the music is…")
-                             : root.albums >= 0 ? root.lt(root.albums + " album nella libreria", root.albums + " albums in the library") + (root.songs >= 0 ? " · " + root.songs + root.lt(" brani", " tracks") : "")
-                             : root.lt("La libreria", "The library")
+                       text: !root.loaded ? root.lt("Guardo dove sta la musica…", "Looking where the music is…", "Suche, wo die Musik ist…")
+                             : root.albums >= 0 ? root.lt(root.albums + " album nella libreria", root.albums + " albums in the library", root.albums + " Alben in der Bibliothek") + (root.songs >= 0 ? " · " + root.songs + root.lt(" brani", " tracks", " Titel") : "")
+                             : root.lt("La libreria", "The library", "Die Bibliothek")
                        color: Theme.white; font.family: Theme.font; font.pixelSize: 15; font.bold: true }
                 Text { x: 18; y: 33; width: parent.width - 36; elide: Text.ElideRight
-                       text: parent.bad ? root.lt("Un posto non risponde: la sua musica torna quando si riaccende.", "One place is not answering: its music comes back when it is on again.")
-                                        : root.lt("Tutto funziona · la musica sta in ", "All working · the music is in ") + root.places.length + root.lt(root.places.length === 1 ? " posto" : " posti", root.places.length === 1 ? " place" : " places")
+                       text: parent.bad ? root.lt("Un posto non risponde: la sua musica torna quando si riaccende.", "One place is not answering: its music comes back when it is on again.", "Ein Ort antwortet nicht: seine Musik kommt zurück, sobald er wieder an ist.")
+                                        : root.lt("Tutto funziona · la musica sta in ", "All working · the music is in ", "Alles funktioniert · die Musik liegt an ") + root.places.length + root.lt(root.places.length === 1 ? " posto" : " posti", root.places.length === 1 ? " place" : " places", root.places.length === 1 ? " Ort" : " Orten")
                        color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 12 }
             }
             // a copy still going
@@ -293,7 +293,7 @@ Rectangle {
                 visible: !!root.jobId && !!root.job
                 width: parent.width; height: 52; radius: 12; color: Theme.panel; border.width: 1; border.color: Theme.goldA(0.4)
                 Icon { x: 14; anchors.verticalCenter: parent.verticalCenter; name: "copy"; size: 17; color: Theme.gold }
-                Text { x: 42; y: 9; width: parent.width - 60; elide: Text.ElideRight; text: root.lt("Sto copiando… ", "Copying… ") + (root.job ? (root.job.progress || 0) + "%" : ""); color: Theme.white; font.family: Theme.font; font.pixelSize: 13; font.bold: true }
+                Text { x: 42; y: 9; width: parent.width - 60; elide: Text.ElideRight; text: root.lt("Sto copiando… ", "Copying… ", "Kopiere… ") + (root.job ? (root.job.progress || 0) + "%" : ""); color: Theme.white; font.family: Theme.font; font.pixelSize: 13; font.bold: true }
                 Text { x: 42; y: 28; width: parent.width - 60; elide: Text.ElideMiddle; text: root.job ? String(root.job.current || "") : ""; color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
                 Tap { onClicked: if (Ui.importMusic) Ui.importMusic.follow(root.jobId) }
             }
@@ -304,11 +304,11 @@ Rectangle {
                     required property var modelData
                     width: homeCol.width; height: 92; radius: 14; color: Theme.panel; border.width: 1; border.color: Qt.rgba(0.98, 0.8, 0.08, 0.45)
                     Icon { x: 16; y: 16; name: "hard-drive"; size: 20; color: Theme.yellow400 }
-                    Text { x: 46; y: 13; width: parent.width - 60; elide: Text.ElideRight; text: root.lt("Un disco nuovo dentro l'apparecchio", "A new disk inside the appliance") + " · " + (modelData.model || modelData.path) + " · " + root.gb(modelData.size); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
-                    Text { x: 46; y: 34; width: parent.width - 60; elide: Text.ElideRight; text: modelData.hasData ? root.lt("Ha già dei file: puoi usarlo così, o prepararlo da capo (cancella tutto).", "It already has files: use it as it is, or set it up from scratch (erases everything).") : root.lt("È vuoto: va preparato prima di usarlo.", "It is empty: it needs setting up first."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 12 }
+                    Text { x: 46; y: 13; width: parent.width - 60; elide: Text.ElideRight; text: root.lt("Un disco nuovo dentro l'apparecchio", "A new disk inside the appliance", "Ein neuer Datenträger im Gerät") + " · " + (modelData.model || modelData.path) + " · " + root.gb(modelData.size); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+                    Text { x: 46; y: 34; width: parent.width - 60; elide: Text.ElideRight; text: modelData.hasData ? root.lt("Ha già dei file: puoi usarlo così, o prepararlo da capo (cancella tutto).", "It already has files: use it as it is, or set it up from scratch (erases everything).", "Er enthält schon Dateien: so verwenden oder neu einrichten (löscht alles).") : root.lt("È vuoto: va preparato prima di usarlo.", "It is empty: it needs setting up first.", "Er ist leer: er muss erst eingerichtet werden."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 12 }
                     Row { x: 46; y: 54; spacing: 8
-                        SBtn { small: true; visible: modelData.parts.length > 0; label: root.lt("Usalo così", "Use it as it is"); onClicked: root.adoptDisk(modelData) }
-                        SBtn { small: true; danger: true; label: root.lt("Preparalo (cancella tutto)", "Set it up (erases everything)"); onClicked: root.formatDisk(modelData) } }
+                        SBtn { small: true; visible: modelData.parts.length > 0; label: root.lt("Usalo così", "Use it as it is", "So verwenden"); onClicked: root.adoptDisk(modelData) }
+                        SBtn { small: true; danger: true; label: root.lt("Preparalo (cancella tutto)", "Set it up (erases everything)", "Einrichten (löscht alles)"); onClicked: root.formatDisk(modelData) } }
                 }
             }
             Repeater {
@@ -318,9 +318,9 @@ Rectangle {
                     width: homeCol.width; height: 70; radius: 14; color: Theme.panel; border.width: 1; border.color: Qt.rgba(0.98, 0.8, 0.08, 0.45)
                     Icon { x: 16; y: 16; name: "usb"; size: 20; color: Theme.yellow400 }
                     Text { x: 46; y: 13; width: parent.width - 170; elide: Text.ElideRight; text: String(modelData.label || modelData.model || "USB") + (modelData.size ? " · " + modelData.size : ""); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
-                    Text { x: 46; y: 36; width: parent.width - 170; elide: Text.ElideRight; text: modelData.needs_format ? root.lt("Non la so leggere: va formattata da un computer.", "I cannot read it: it needs formatting on a computer.") : root.lt("Non si è montata: ", "It did not mount: ") + String(modelData.error || ""); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 12 }
-                    SBtn { visible: !modelData.needs_format; small: true; x: parent.width - 14 - width; anchors.verticalCenter: parent.verticalCenter; label: root.lt("Riprova", "Try again")
-                           onClicked: root.post("/api/usb/adopt", { device: String(modelData.path || modelData.id || "") }, root.lt("Riprovo…", "Trying again…")) }
+                    Text { x: 46; y: 36; width: parent.width - 170; elide: Text.ElideRight; text: modelData.needs_format ? root.lt("Non la so leggere: va formattata da un computer.", "I cannot read it: it needs formatting on a computer.", "Ich kann ihn nicht lesen: er muss am Computer formatiert werden.") : root.lt("Non si è montata: ", "It did not mount: ", "Nicht eingebunden: ") + String(modelData.error || ""); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 12 }
+                    SBtn { visible: !modelData.needs_format; small: true; x: parent.width - 14 - width; anchors.verticalCenter: parent.verticalCenter; label: root.lt("Riprova", "Try again", "Erneut versuchen")
+                           onClicked: root.post("/api/usb/adopt", { device: String(modelData.path || modelData.id || "") }, root.lt("Riprovo…", "Trying again…", "Versuche erneut…")) }
                 }
             }
             Rectangle {
@@ -330,7 +330,7 @@ Rectangle {
             }
             // the cards, by group
             Repeater {
-                model: [["dev", root.lt("Questo apparecchio", "This appliance")], ["usb", root.lt("Collegati via USB", "Connected over USB")], ["net", root.lt("In rete", "On the network")]]
+                model: [["dev", root.lt("Questo apparecchio", "This appliance", "Dieses Gerät")], ["usb", root.lt("Collegati via USB", "Connected over USB", "Über USB verbunden")], ["net", root.lt("In rete", "On the network", "Im Netzwerk")]]
                 delegate: Column {
                     id: grp
                     required property var modelData
@@ -353,10 +353,10 @@ Rectangle {
                 Grid {
                     x: 16; y: 12; columns: 2; columnSpacing: 22; rowSpacing: 8
                     Repeater {
-                        model: [["music", root.lt("Libreria", "Library"), root.lt("compare in Musica", "shows in Music")],
-                                ["share-2", root.lt("Condivisa", "Shared"), root.lt("la vedi dal computer", "you see it from a computer")],
-                                ["list-music", root.lt("Playlist", "Playlists"), root.lt("qui si salvano le playlist", "playlists are kept here")],
-                                ["disc", root.lt("Rip CD", "CD rip"), root.lt("qui finiscono i CD copiati", "ripped CDs go here")]]
+                        model: [["music", root.lt("Libreria", "Library", "Bibliothek"), root.lt("compare in Musica", "shows in Music", "erscheint in Musik")],
+                                ["share-2", root.lt("Condivisa", "Shared", "Freigegeben"), root.lt("la vedi dal computer", "you see it from a computer", "du siehst sie vom Computer")],
+                                ["list-music", root.lt("Playlist", "Playlists", "Playlists"), root.lt("qui si salvano le playlist", "playlists are kept here", "Playlists werden hier gespeichert")],
+                                ["disc", root.lt("Rip CD", "CD rip", "CD-Rip"), root.lt("qui finiscono i CD copiati", "ripped CDs go here", "gerippte CDs landen hier")]]
                         delegate: Row {
                             required property var modelData
                             spacing: 7
@@ -382,7 +382,7 @@ Rectangle {
         Icon { x: parent.width - 30; y: 22; name: "chevron-right"; size: 16; color: Theme.silverA(0.4) }
         Row { x: 14; y: 64; spacing: 7
             Rectangle { anchors.verticalCenter: parent.verticalCenter; width: 8; height: 8; radius: 4; color: pc.place.ok ? Theme.emerald : Theme.red400 }
-            Text { width: pc.width - 44; elide: Text.ElideRight; text: pc.place.ok ? root.lt("Funziona", "Working") + (pc.place.rw ? root.lt(" · si può scrivere", " · writable") : root.lt(" · sola lettura", " · read only")) : pc.place.error
+            Text { width: pc.width - 44; elide: Text.ElideRight; text: pc.place.ok ? root.lt("Funziona", "Working", "Funktioniert") + (pc.place.rw ? root.lt(" · si può scrivere", " · writable", " · beschreibbar") : root.lt(" · sola lettura", " · read only", " · nur lesen")) : pc.place.error
                    color: pc.place.ok ? Theme.emerald : Theme.red400; font.family: Theme.font; font.pixelSize: 12; font.bold: true } }
         Item {
             visible: !!(pc.place.usage && pc.place.usage.total)
@@ -390,15 +390,15 @@ Rectangle {
             readonly property real used: pc.place.usage && pc.place.usage.total ? 1 - pc.place.usage.free / pc.place.usage.total : 0
             Rectangle { y: 2; width: parent.width; height: 5; radius: 3; color: Theme.wa(0.08)
                 Rectangle { width: parent.width * parent.parent.used; height: parent.height; radius: 3; color: parent.parent.used > 0.92 ? Theme.yellow400 : Theme.gold } }
-            Text { y: 11; text: pc.place.usage ? root.gb(pc.place.usage.free) + root.lt(" liberi su ", " free of ") + root.gb(pc.place.usage.total) : ""; color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
+            Text { y: 11; text: pc.place.usage ? root.gb(pc.place.usage.free) + root.lt(" liberi su ", " free of ", " frei von ") + root.gb(pc.place.usage.total) : ""; color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
         }
         Flow {
             x: 14; y: parent.height - 12 - 24; width: parent.width - 24; spacing: 4
-            SChip { visible: pc.place.lib; glyph: "music"; label: root.lt("Libreria", "Library") }
-            SChip { visible: pc.place.shared; glyph: "share-2"; label: root.lt("Condivisa", "Shared") }
-            SChip { visible: pc.place.playlist; glyph: "list-music"; label: root.lt("Playlist", "Playlists") }
-            SChip { visible: pc.place.rip; glyph: "disc"; label: root.lt("Rip CD", "CD rip") }
-            SChip { visible: !pc.place.lib && !pc.place.shared && !pc.place.playlist && !pc.place.rip; on: false; glyph: "music"; label: root.lt("Non ancora usato", "Not used yet") }
+            SChip { visible: pc.place.lib; glyph: "music"; label: root.lt("Libreria", "Library", "Bibliothek") }
+            SChip { visible: pc.place.shared; glyph: "share-2"; label: root.lt("Condivisa", "Shared", "Freigegeben") }
+            SChip { visible: pc.place.playlist; glyph: "list-music"; label: root.lt("Playlist", "Playlists", "Playlists") }
+            SChip { visible: pc.place.rip; glyph: "disc"; label: root.lt("Rip CD", "CD rip", "CD-Rip") }
+            SChip { visible: !pc.place.lib && !pc.place.shared && !pc.place.playlist && !pc.place.rip; on: false; glyph: "music"; label: root.lt("Non ancora usato", "Not used yet", "Noch nicht verwendet") }
         }
         Tap { id: pcTap; onClicked: { root.placeKey = pc.place.key; root.view = "place" } }
     }
@@ -418,27 +418,27 @@ Rectangle {
                 width: parent.width; height: 68; radius: 14; color: Theme.panel; border.width: 1; border.color: placeCol.p.ok ? Theme.border : Theme.redA(0.45)
                 Row { x: 16; y: 12; spacing: 7
                     Rectangle { anchors.verticalCenter: parent.verticalCenter; width: 8; height: 8; radius: 4; color: placeCol.p.ok ? Theme.emerald : Theme.red400 }
-                    Text { text: placeCol.p.ok ? root.lt("Funziona", "Working") + (placeCol.p.rw ? root.lt(" · si può scrivere", " · writable") : root.lt(" · sola lettura", " · read only")) : String(placeCol.p.error || "")
+                    Text { text: placeCol.p.ok ? root.lt("Funziona", "Working", "Funktioniert") + (placeCol.p.rw ? root.lt(" · si può scrivere", " · writable", " · beschreibbar") : root.lt(" · sola lettura", " · read only", " · nur lesen")) : String(placeCol.p.error || "")
                            color: placeCol.p.ok ? Theme.emerald : Theme.red400; font.family: Theme.font; font.pixelSize: 13; font.bold: true } }
                 Item { visible: !!(placeCol.p.usage && placeCol.p.usage.total); x: 16; y: 36; width: parent.width - 32; height: 24
                     readonly property real used: placeCol.p.usage && placeCol.p.usage.total ? 1 - placeCol.p.usage.free / placeCol.p.usage.total : 0
                     Rectangle { width: parent.width; height: 5; radius: 3; color: Theme.wa(0.08); Rectangle { width: parent.width * parent.parent.used; height: 5; radius: 3; color: Theme.gold } }
-                    Text { y: 9; text: placeCol.p.usage ? root.gb(placeCol.p.usage.free) + root.lt(" liberi su ", " free of ") + root.gb(placeCol.p.usage.total) : ""; color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 } }
-                SBtn { visible: !placeCol.p.ok; small: true; x: parent.width - 14 - width; y: 18; glyph: "refresh-cw"; label: root.lt("Ricontrolla", "Check again"); onClicked: root.load() }
+                    Text { y: 9; text: placeCol.p.usage ? root.gb(placeCol.p.usage.free) + root.lt(" liberi su ", " free of ", " frei von ") + root.gb(placeCol.p.usage.total) : ""; color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 } }
+                SBtn { visible: !placeCol.p.ok; small: true; x: parent.width - 14 - width; y: 18; glyph: "refresh-cw"; label: root.lt("Ricontrolla", "Check again", "Erneut prüfen"); onClicked: root.load() }
             }
             // in the library
-            Text { text: root.lt("Nella libreria", "In the library"); height: 24; verticalAlignment: Text.AlignBottom; color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 10; font.bold: true; font.capitalization: Font.AllUppercase; font.letterSpacing: 1 }
+            Text { text: root.lt("Nella libreria", "In the library", "In der Bibliothek"); height: 24; verticalAlignment: Text.AlignBottom; color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 10; font.bold: true; font.capitalization: Font.AllUppercase; font.letterSpacing: 1 }
             // the disk or share itself (second disk, USB, network)
             Rectangle {
                 visible: !!placeCol.p.src
                 width: parent.width; height: 56; radius: 12; color: Theme.panel; border.width: 1; border.color: Theme.border
                 readonly property string sub: placeCol.p.src ? String(placeCol.p.src.subpath || "") : ""
                 Icon { x: 14; anchors.verticalCenter: parent.verticalCenter; name: "music"; size: 17; color: Theme.gold }
-                Text { x: 42; y: 10; width: parent.width - 42 - 260; elide: Text.ElideRight; text: parent.sub ? root.lt("Solo la cartella «", "Only the folder «") + parent.sub + "»" : root.lt("Tutto il contenuto", "All of it"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+                Text { x: 42; y: 10; width: parent.width - 42 - 260; elide: Text.ElideRight; text: parent.sub ? root.lt("Solo la cartella «", "Only the folder «", "Nur der Ordner «") + parent.sub + "»" : root.lt("Tutto il contenuto", "All of it", "Alles davon"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
                 Text { x: 42; y: 30; width: parent.width - 42 - 260; elide: Text.ElideMiddle; text: placeCol.p.root + (parent.sub ? "/" + parent.sub : ""); color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 11 }
                 Row { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; spacing: 6
-                    SBtn { small: true; on: placeCol.p.ok; label: root.lt("Solo una cartella…", "Only one folder…"); onClicked: root.onlyOneFolder(placeCol.p) }
-                    SBtn { small: true; visible: !!parent.parent.sub; label: root.lt("Tutto", "All of it"); onClicked: root.post("/api/sources/" + placeCol.p.src.id + "/subpath", { subpath: "" }, root.lt("Fatto", "Done")) } }
+                    SBtn { small: true; on: placeCol.p.ok; label: root.lt("Solo una cartella…", "Only one folder…", "Nur ein Ordner…"); onClicked: root.onlyOneFolder(placeCol.p) }
+                    SBtn { small: true; visible: !!parent.parent.sub; label: root.lt("Tutto", "All of it", "Alles"); onClicked: root.post("/api/sources/" + placeCol.p.src.id + "/subpath", { subpath: "" }, root.lt("Fatto", "Done", "Fertig")) } }
             }
             // folders of this place added one by one
             Repeater {
@@ -448,51 +448,51 @@ Rectangle {
                     width: placeCol.width; height: 56; radius: 12; color: Theme.panel; border.width: 1; border.color: modelData.exists === false ? Theme.redA(0.45) : Theme.border
                     Icon { x: 14; anchors.verticalCenter: parent.verticalCenter; name: "folder"; size: 17; color: Theme.gold }
                     Text { x: 42; y: 10; width: parent.width - 42 - 150; elide: Text.ElideRight; text: String(modelData.path).split("/").pop(); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
-                    Text { x: 42; y: 30; width: parent.width - 42 - 150; elide: Text.ElideMiddle; text: (modelData.exists === false ? root.lt("Non la trovo più · ", "Not found any more · ") : "") + modelData.path + (modelData.samba ? root.lt(" · condivisa", " · shared") : ""); color: modelData.exists === false ? Theme.red300 : Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 11 }
-                    SBtn { small: true; danger: true; x: parent.width - 12 - width; anchors.verticalCenter: parent.verticalCenter; label: root.lt("Togli", "Remove"); onClicked: root.removeLocal(modelData) }
+                    Text { x: 42; y: 30; width: parent.width - 42 - 150; elide: Text.ElideMiddle; text: (modelData.exists === false ? root.lt("Non la trovo più · ", "Not found any more · ", "Nicht mehr gefunden · ") : "") + modelData.path + (modelData.samba ? root.lt(" · condivisa", " · shared", " · freigegeben") : ""); color: modelData.exists === false ? Theme.red300 : Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 11 }
+                    SBtn { small: true; danger: true; x: parent.width - 12 - width; anchors.verticalCenter: parent.verticalCenter; label: root.lt("Togli", "Remove", "Entfernen"); onClicked: root.removeLocal(modelData) }
                 }
             }
-            Text { visible: !placeCol.p.src && !placeCol.p.locals.length; width: parent.width; wrapMode: Text.WordWrap; text: root.lt("Niente di qui è nella libreria.", "Nothing from here is in the library."); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 13 }
-            SBtn { visible: !placeCol.p.src; on: placeCol.p.ok; glyph: "plus"; label: root.lt("Aggiungi una cartella di qui", "Add a folder from here"); onClicked: root.addFolderHere(placeCol.p, false) }
+            Text { visible: !placeCol.p.src && !placeCol.p.locals.length; width: parent.width; wrapMode: Text.WordWrap; text: root.lt("Niente di qui è nella libreria.", "Nothing from here is in the library.", "Nichts von hier ist in der Bibliothek."); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 13 }
+            SBtn { visible: !placeCol.p.src; on: placeCol.p.ok; glyph: "plus"; label: root.lt("Aggiungi una cartella di qui", "Add a folder from here", "Einen Ordner von hier hinzufügen"); onClicked: root.addFolderHere(placeCol.p, false) }
 
             // what else it is used for
-            Text { text: root.lt("Usi", "Uses"); height: 30; verticalAlignment: Text.AlignBottom; color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 10; font.bold: true; font.capitalization: Font.AllUppercase; font.letterSpacing: 1 }
+            Text { text: root.lt("Usi", "Uses", "Verwendung"); height: 30; verticalAlignment: Text.AlignBottom; color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 10; font.bold: true; font.capitalization: Font.AllUppercase; font.letterSpacing: 1 }
             UseRow {
                 glyph: "share-2"; on: placeCol.p.shared
-                title: placeCol.p.shared ? root.lt("Condivisa in rete", "Shared on the network") : root.lt("Non condivisa", "Not shared")
-                hint: placeCol.p.shared ? "\\\\" + (root.smbIp || root.smbHost) + root.lt("  · utente ", "  · user ") + root.smbUser + root.lt(" · password ", " · password ") + (root.showPw ? root.smbPass : "••••••")
-                                        : root.lt("Dal computer non la vedi.", "A computer does not see it.")
+                title: placeCol.p.shared ? root.lt("Condivisa in rete", "Shared on the network", "Im Netzwerk freigegeben") : root.lt("Non condivisa", "Not shared", "Nicht freigegeben")
+                hint: placeCol.p.shared ? "\\\\" + (root.smbIp || root.smbHost) + root.lt("  · utente ", "  · user ", "  · Benutzer ") + root.smbUser + root.lt(" · password ", " · password ", " · Passwort ") + (root.showPw ? root.smbPass : "••••••")
+                                        : root.lt("Dal computer non la vedi.", "A computer does not see it.", "Ein Computer sieht sie nicht.")
                 action: root.shareAction(placeCol.p)
                 onAct: root.shareAct(placeCol.p)
             }
             UseRow {
                 glyph: "list-music"; on: placeCol.p.playlist
-                title: placeCol.p.playlist ? root.lt("Le playlist si salvano qui", "Playlists are kept here") : root.lt("Le playlist si salvano altrove", "Playlists are kept elsewhere")
+                title: placeCol.p.playlist ? root.lt("Le playlist si salvano qui", "Playlists are kept here", "Playlists werden hier gespeichert") : root.lt("Le playlist si salvano altrove", "Playlists are kept elsewhere", "Playlists werden woanders gespeichert")
                 hint: root.pldir
-                action: placeCol.p.ok && placeCol.p.rw ? (placeCol.p.playlist ? root.lt("Cambia cartella", "Change folder") : root.lt("Salvale qui", "Keep them here")) : ""
+                action: placeCol.p.ok && placeCol.p.rw ? (placeCol.p.playlist ? root.lt("Cambia cartella", "Change folder", "Ordner ändern") : root.lt("Salvale qui", "Keep them here", "Hier speichern")) : ""
                 onAct: root.playlistsHere(placeCol.p)
             }
             UseRow {
                 glyph: "disc"; on: placeCol.p.rip
-                title: placeCol.p.rip ? root.lt("I CD rippati finiscono qui", "Ripped CDs go here") : root.lt("I CD rippati finiscono altrove", "Ripped CDs go elsewhere")
-                hint: String((root.cd && root.cd.target) || root.lt("cartella predefinita", "default folder"))
-                action: placeCol.p.ok && placeCol.p.rw ? (placeCol.p.rip ? root.lt("Cambia cartella", "Change folder") : root.lt("Salvali qui", "Keep them here")) : ""
+                title: placeCol.p.rip ? root.lt("I CD rippati finiscono qui", "Ripped CDs go here", "Gerippte CDs landen hier") : root.lt("I CD rippati finiscono altrove", "Ripped CDs go elsewhere", "Gerippte CDs landen woanders")
+                hint: String((root.cd && root.cd.target) || root.lt("cartella predefinita", "default folder", "Standardordner"))
+                action: placeCol.p.ok && placeCol.p.rw ? (placeCol.p.rip ? root.lt("Cambia cartella", "Change folder", "Ordner ändern") : root.lt("Salvali qui", "Keep them here", "Hier speichern")) : ""
                 onAct: root.ripHere(placeCol.p)
             }
             UseRow {
                 visible: placeCol.p.group === "net"
                 glyph: "pencil"; on: placeCol.p.rw
-                title: placeCol.p.rw ? root.lt("Si può scrivere", "Writable") : root.lt("Sola lettura", "Read only")
-                hint: root.lt("Vale dal prossimo riavvio.", "Takes effect at the next restart.")
-                action: placeCol.p.rw ? root.lt("Rendi sola lettura", "Make read only") : root.lt("Rendi scrivibile", "Make writable")
-                onAct: root.post("/api/sources/" + placeCol.p.src.id + "/rw", { rw: !placeCol.p.rw }, root.lt("Vale dal prossimo riavvio", "Takes effect at the next restart"))
+                title: placeCol.p.rw ? root.lt("Si può scrivere", "Writable", "Beschreibbar") : root.lt("Sola lettura", "Read only", "Nur lesen")
+                hint: root.lt("Vale dal prossimo riavvio.", "Takes effect at the next restart.", "Wird beim nächsten Neustart wirksam.")
+                action: placeCol.p.rw ? root.lt("Rendi sola lettura", "Make read only", "Nur lesen machen") : root.lt("Rendi scrivibile", "Make writable", "Beschreibbar machen")
+                onAct: root.post("/api/sources/" + placeCol.p.src.id + "/rw", { rw: !placeCol.p.rw }, root.lt("Vale dal prossimo riavvio", "Takes effect at the next restart", "Wird beim nächsten Neustart wirksam"))
             }
             Item { width: 1; height: 6 }
             Row {
                 spacing: 8
-                SBtn { lead: true; on: placeCol.p.ok; glyph: "folder"; label: root.lt("Sfoglia i file", "Browse the files"); onClicked: root.view = "files" }
-                SBtn { visible: placeCol.p.group === "usb" && placeCol.p.ok; glyph: "copy"; label: root.lt("Copia nell'apparecchio", "Copy into the appliance"); onClicked: if (Ui.importMusic) Ui.importMusic.openFor(placeCol.p) }
-                SBtn { visible: placeCol.p.removable; danger: true; glyph: "trash-2"; label: root.lt("Togli questo posto", "Remove this place"); onClicked: root.removePlace(placeCol.p) }
+                SBtn { lead: true; on: placeCol.p.ok; glyph: "folder"; label: root.lt("Sfoglia i file", "Browse the files", "Die Dateien durchsuchen"); onClicked: root.view = "files" }
+                SBtn { visible: placeCol.p.group === "usb" && placeCol.p.ok; glyph: "copy"; label: root.lt("Copia nell'apparecchio", "Copy into the appliance", "Ins Gerät kopieren"); onClicked: if (Ui.importMusic) Ui.importMusic.openFor(placeCol.p) }
+                SBtn { visible: placeCol.p.removable; danger: true; glyph: "trash-2"; label: root.lt("Togli questo posto", "Remove this place", "Diesen Ort entfernen"); onClicked: root.removePlace(placeCol.p) }
             }
         }
     }

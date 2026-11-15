@@ -114,7 +114,7 @@ _BODY_LIMIT = 1024 * 1024
 # 1.25 GiB: the downloaded-information archive can be large).
 _UPLOAD_BODY_LIMIT = 2 * 1024 * 1024 * 1024
 _UPLOAD_PATHS = ('/api/system/restore', '/api/provision/restore', '/api/system/dsp_fir',
-                 '/api/restore', '/api/dsp/fir')
+                 '/api/restore', '/api/dsp/fir', '/api/system/drivers/install')
 app.config['MAX_CONTENT_LENGTH'] = _BODY_LIMIT
 
 
@@ -2445,6 +2445,44 @@ def dsp_fir_proxy():
     if denied:
         return denied
     return _forward_to_sources('/api/dsp/fir')
+
+
+# ── Driver packs (.osmpack) — session-gated, forwarded raw to sources ──
+# Developer-signed firmware/kernel-module packs the user installs from a USB
+# stick or a web upload. Like dsp_fir, these live on sources_server (:8080) and
+# are reached from OUR authenticated Settings/Setup page, so the webui session
+# is the gate; the install upload (multipart, a .osmpack + its .sig) is relayed
+# raw. The signature is verified on sources' side, inside hifi-driverpack.sh.
+@app.route('/api/system/drivers/usb/scan', methods=['POST'])
+def drivers_usb_scan_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/drivers/usb/scan')
+
+
+@app.route('/api/system/drivers/install', methods=['POST'])
+def drivers_install_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/drivers/install')
+
+
+@app.route('/api/system/drivers/status', methods=['GET'])
+def drivers_status_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/drivers/status')
+
+
+@app.route('/api/system/drivers/list', methods=['GET'])
+def drivers_list_proxy():
+    denied = _require_session()
+    if denied:
+        return denied
+    return _forward_to_sources('/api/drivers/list')
 
 
 # ── LMS skin (Osmium / Material) — session-gated forward to sources_server ──

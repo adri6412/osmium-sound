@@ -277,6 +277,25 @@
       "useExternal": "Usa questo server",
       "externalApplied": "Questo dispositivo ora usa quel server.",
       "externalFailed": "Impossibile passare a quel server. Controlla l'indirizzo e riprova."
+    },
+    "driverpack": {
+      "button": "Carica driver da USB",
+      "hint": "Driver forniti da Osmium per far funzionare Wi-Fi o touch su alcuni portatili.",
+      "title": "Driver esterni",
+      "intro": "Inserisci la chiavetta con i driver che ti ha mandato Osmium, poi premi Cerca.",
+      "scan": "Cerca",
+      "scanning": "Ricerca sulla chiavetta…",
+      "noUsb": "Nessuna chiavetta USB rilevata. Inseriscila e riprova.",
+      "noPacks": "Nessun driver trovato sulla chiavetta.",
+      "found": "Driver trovati sulla chiavetta:",
+      "badSignature": "Non firmato da Osmium — questo pacchetto non verrà installato.",
+      "install": "Installa",
+      "installing": "Installazione…",
+      "done": "Driver installato. Riavvia per applicarlo.",
+      "failed": "Installazione non riuscita.",
+      "secureBoot": "Per caricare i moduli del kernel, spegni il Secure Boot nel BIOS.",
+      "reboot": "Riavvia ora",
+      "close": "Chiudi"
     }
   },
   "sidebar": {
@@ -307,6 +326,7 @@
     "notConnected": "Non connesso",
     "signIn": "Accedi",
     "signInTitle": "Accedi a {name}",
+    "signInViaLyrion": "Per accedere a {name}, apri il suo plugin nelle impostazioni del Lyrion Music Server e completa lì l'accesso. Al termine, {name} sarà disponibile qui.",
     "loginFailed": "Accesso non riuscito. Controlla i dati e riprova.",
     "qobuz": {
       "hint": "Inserisci email e password del tuo account Qobuz."
@@ -454,8 +474,12 @@
       "ripProgress": "Traccia {track} di {total}",
       "ripProgressShort": "In corso…",
       "ripping": "Copia del CD…",
-      "ripDone": "Rip completato! L'album è in libreria.",
+      "ripDone": "Rip completato! È in libreria.",
+      "ripInaccurate": "Alcuni brani non è stato possibile verificarli come accurati.",
       "ripError": "Rip fallito. Controlla il disco e riprova.",
+      "viewLog": "Vedi log",
+      "logTitle": "Log del rip",
+      "logUnavailable": "Nessun log disponibile per questo rip.",
       "artist": "Artista",
       "album": "Album",
       "start": "Avvia rip",

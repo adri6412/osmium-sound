@@ -24,7 +24,7 @@ Rectangle {
     property bool choosing: false
     color: Theme.panel; radius: 12; border.width: active ? 1.5 : 1; border.color: active ? Theme.goldA(0.6) : Theme.border
 
-    function lt(it, en) { return I18n.lang === "it" ? it : en }
+    function lt(it, en, de) { return I18n.lang === "it" ? it : (I18n.lang === "de" && de !== undefined ? de : en) }
     function openAt(p, top) { rootPath = top || p; load(p) }
     function load(p) {
         Api.get(Api.srcBase + "/api/local/list?path=" + encodeURIComponent(p || ""), function(ok, d) {
@@ -74,8 +74,8 @@ Rectangle {
         Icon { visible: root.canChangePlace; x: parent.width - 20; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 13; color: Theme.silverA(0.6) }
         Tap { id: plTap; enabled: root.canChangePlace; onClicked: { root.activated(); root.choosing = !root.choosing } }
     }
-    Text { x: root.selectable ? 42 : 14; y: 46; text: root.lt("Nome", "Name"); color: Theme.white; font.family: Theme.font; font.pixelSize: 10; font.bold: true }
-    Text { x: parent.width - 12 - width; y: 46; text: root.lt("Dimensione", "Size"); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 10 }
+    Text { x: root.selectable ? 42 : 14; y: 46; text: root.lt("Nome", "Name", "Name"); color: Theme.white; font.family: Theme.font; font.pixelSize: 10; font.bold: true }
+    Text { x: parent.width - 12 - width; y: 46; text: root.lt("Dimensione", "Size", "Größe"); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 10 }
     Rectangle { x: 10; y: 62; width: parent.width - 20; height: 1; color: Theme.border }
     ListView {
         id: lv
@@ -99,10 +99,10 @@ Rectangle {
             Icon { x: root.selectable ? 36 : 10; anchors.verticalCenter: parent.verticalCenter; name: root.glyph(modelData); size: 15; color: modelData.dir ? Theme.gold : Theme.silverA(0.6) }
             Text { id: nmT; x: root.selectable ? 58 : 32; width: Math.min(implicitWidth, parent.width - x - 76 - (thereT.visible ? thereT.width + 6 : 0)); anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; text: modelData.name; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
             Rectangle { id: thereT; visible: parent.there; x: nmT.x + nmT.width + 6; anchors.verticalCenter: parent.verticalCenter; width: thT.implicitWidth + 12; height: 17; radius: 9; color: "transparent"; border.width: 1; border.color: Theme.yellow400
-                Text { id: thT; anchors.centerIn: parent; text: root.lt("c'è già", "already there"); color: Theme.yellow400; font.family: Theme.font; font.pixelSize: 9 } }
+                Text { id: thT; anchors.centerIn: parent; text: root.lt("c'è già", "already there", "schon da"); color: Theme.yellow400; font.family: Theme.font; font.pixelSize: 9 } }
             Text { x: parent.width - 8 - width; anchors.verticalCenter: parent.verticalCenter; text: root.size(modelData); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 11 }
         }
-        Text { visible: !root.entries.length; y: 8; x: 8; text: root.lt("Cartella vuota", "Empty folder"); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 12 }
+        Text { visible: !root.entries.length; y: 8; x: 8; text: root.lt("Cartella vuota", "Empty folder", "Leerer Ordner"); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 12 }
     }
     // the places, to show another one in this pane
     Flickable {
@@ -119,15 +119,15 @@ Rectangle {
                     color: pcTap.mix(Theme.dark, Theme.light); border.width: 1; border.color: root.place && root.place.key === modelData.key ? Theme.goldA(0.5) : Theme.border
                     Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; name: modelData.glyph; size: 16; color: Theme.gold }
                     Text { x: 38; y: 6; width: parent.width - 50; elide: Text.ElideRight; text: modelData.name; color: Theme.white; font.family: Theme.font; font.pixelSize: 13; font.bold: true }
-                    Text { x: 38; y: 24; width: parent.width - 50; elide: Text.ElideRight; text: modelData.group === "dev" ? root.lt("Questo apparecchio", "This appliance") : modelData.group === "usb" ? "USB" : root.lt("Rete", "Network"); color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 10 }
+                    Text { x: 38; y: 24; width: parent.width - 50; elide: Text.ElideRight; text: modelData.group === "dev" ? root.lt("Questo apparecchio", "This appliance", "Dieses Gerät") : modelData.group === "usb" ? "USB" : root.lt("Rete", "Network", "Netzwerk"); color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 10 }
                     Tap { id: pcTap; onClicked: { root.choosing = false; root.openAt(modelData.root, modelData.root) } }
                 }
             }
         }
     }
     Text { x: 12; y: parent.height - 24; width: parent.width - 24; elide: Text.ElideRight
-           text: root.choosing ? root.lt("Scegli il posto da mostrare qui", "Pick the place to show here")
-                 : root.selectable && root.sel.length ? root.sel.length + root.lt(" selezionati", " selected") + (root.selBytes() ? " · " + Ui.sources.gb(root.selBytes()) : "")
-                 : root.entries.length + root.lt(" elementi", " items") + (root.place && root.place.usage ? " · " + Ui.sources.gb(root.place.usage.free) + root.lt(" liberi", " free") : "") + (root.path && !root.writable ? root.lt(" · sola lettura", " · read only") : "")
+           text: root.choosing ? root.lt("Scegli il posto da mostrare qui", "Pick the place to show here", "Wähle den Ort, der hier gezeigt wird")
+                 : root.selectable && root.sel.length ? root.sel.length + root.lt(" selezionati", " selected", " ausgewählt") + (root.selBytes() ? " · " + Ui.sources.gb(root.selBytes()) : "")
+                 : root.entries.length + root.lt(" elementi", " items", " Elemente") + (root.place && root.place.usage ? " · " + Ui.sources.gb(root.place.usage.free) + root.lt(" liberi", " free", " frei") : "") + (root.path && !root.writable ? root.lt(" · sola lettura", " · read only", " · nur lesen") : "")
            color: root.selectable && root.sel.length ? Theme.gold : Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
 }

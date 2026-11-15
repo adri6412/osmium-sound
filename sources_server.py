@@ -5234,6 +5234,140 @@ def api_dsp_fir_delete():
     return jsonify({"success": True, "removed": removed})
 
 
+# ─────────────────────────── Driver packs (.osmpack) ──────────────────
+# Developer-signed firmware / kernel-module packs the user installs after setup,
+# from a USB stick (offline — it is often the Wi-Fi that is dead) or a web
+# upload. hifi-driverpack.sh does the real work and, crucially, verifies the
+# Ed25519 signature (the OTA key) before unpacking anything: installing a kernel
+# module is root code execution, so the signature is the ONLY gate and it lives
+# in the script, never here. These routes just enumerate, hand a path over, and
+# report status. See distro/.../usr/local/sbin/hifi-driverpack.sh.
+DRIVERPACK_SCRIPT = "/usr/local/sbin/hifi-driverpack.sh"
+DRIVERPACK_STATUS = "/run/hifi-driverpack/status.json"
+DRIVERPACK_INCOMING = "/var/lib/hifi-player/driverpack/.incoming"
+DRIVERPACK_UPLOADS = "/var/lib/hifi-player/driverpack/.uploads"
+DRIVERPACK_UNIT = "hifi-driverpack-install"
+DRIVERPACK_MAX_SIZE = 512 * 1024 * 1024  # mirrors MAX_PACK_BYTES in the script
+
+
+def _driverpack_path_ok(path):
+    """A pack path install() may be handed: the staged copy of a USB scan, or an
+    upload this server just wrote. Both live on /data under our own dirs. The
+    signature is re-checked by the script regardless; this only stops the route
+    from pointing the installer at an arbitrary file on disk."""
+    try:
+        rp = os.path.realpath(path)
+    except Exception:
+        return False
+    for root in (DRIVERPACK_INCOMING, DRIVERPACK_UPLOADS):
+        base = os.path.realpath(root) + os.sep
+        if rp.startswith(base) and rp.endswith(".osmpack") and os.path.isfile(rp):
+            return True
+    return False
+
+
+@app.route("/api/drivers/usb/scan", methods=["POST"])
+def api_drivers_usb_scan():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    # Quick (mount ro / read / umount): run it synchronously and relay its JSON.
+    r = _run([DRIVERPACK_SCRIPT, "scan-usb"], timeout=60)
+    if r.returncode != 0:
+        print(f"[sources] driverpack scan-usb failed: {r.stderr.strip()[:300]}")
+        return _err("msg.saveFailed", 500)
+    try:
+        return app.response_class(r.stdout, mimetype="application/json")
+    except Exception:
+        return jsonify({"packs": []})
+
+
+@app.route("/api/drivers/install", methods=["POST"])
+def api_drivers_install():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+
+    pack_path = None
+    workdir = None
+    ctype = (request.content_type or "")
+    if ctype.startswith("multipart/"):
+        # Web upload of a .osmpack + its .sig, straight to disk on /data.
+        length = request.content_length
+        if length is not None and length > DRIVERPACK_MAX_SIZE + 1024 * 1024:
+            return _err("msg.fileTooLarge", 400)
+        workdir = hb.make_workdir("pack", store=DRIVERPACK_UPLOADS)
+        if length and not hb.free_space_ok(workdir, length):
+            shutil.rmtree(workdir, ignore_errors=True)
+            return _err("msg.noSpace", 507)
+        pack = request.files.get("file")
+        sig = request.files.get("sig")
+        if not pack or not pack.filename or not sig:
+            shutil.rmtree(workdir, ignore_errors=True)
+            return _err("msg.noFile", 400)
+        # Fixed names under our private workdir — never the client's filename.
+        pack_path = os.path.join(workdir, "pack.osmpack")
+        pack.save(pack_path)
+        sig.save(pack_path + ".sha256.sig")
+        if os.path.getsize(pack_path) > DRIVERPACK_MAX_SIZE:
+            shutil.rmtree(workdir, ignore_errors=True)
+            return _err("msg.fileTooLarge", 400)
+    else:
+        # A pack already staged on /data by a USB scan.
+        body = request.get_json(silent=True) or {}
+        pack_path = body.get("usb_pack") or body.get("path") or ""
+        if not _driverpack_path_ok(pack_path):
+            return _err("msg.noFile", 400)
+
+    # Reset the status file, then run the installer detached (verify + build the
+    # sysext + insmod). The script re-verifies the signature before trusting it.
+    try:
+        os.makedirs(os.path.dirname(DRIVERPACK_STATUS), exist_ok=True)
+        with open(DRIVERPACK_STATUS, "w") as f:
+            json.dump({"state": "verifying", "pct": 0,
+                       "message": _ht('common.starting', _hlang())}, f)
+    except Exception:
+        pass
+    r = _run(["systemd-run", "--no-block", "--collect", "--unit=" + DRIVERPACK_UNIT,
+              DRIVERPACK_SCRIPT, "install", pack_path], timeout=10)
+    if r.returncode != 0:
+        print(f"[sources] driverpack install launch failed: {r.stderr.strip()[:300]}")
+        if workdir:
+            shutil.rmtree(workdir, ignore_errors=True)
+        return _err("msg.saveFailed", 500)
+    return jsonify({"success": True, "started": True}), 202
+
+
+@app.route("/api/drivers/status", methods=["GET"])
+def api_drivers_status():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    status = {"state": "idle"}
+    if os.path.exists(DRIVERPACK_STATUS):
+        try:
+            with open(DRIVERPACK_STATUS) as f:
+                status = json.load(f)
+        except Exception:
+            pass
+    return jsonify(status)
+
+
+@app.route("/api/drivers/list", methods=["GET"])
+def api_drivers_list():
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    r = _run([DRIVERPACK_SCRIPT, "list"], timeout=15)
+    packs = []
+    for line in (r.stdout or "").splitlines():
+        parts = line.split(None, 2)
+        if len(parts) >= 2 and parts[0] != "no":
+            packs.append({"name": parts[0], "state": parts[1],
+                          "detail": parts[2] if len(parts) > 2 else ""})
+    return jsonify({"packs": packs})
+
+
 # ─────────────────────────── App pairing token ────────────────────────
 # The companion app's DSP controls are a live "control" surface (unlike the
 # FIR/backup/restore endpoints above, which are also reachable from a plain
@@ -8735,6 +8869,31 @@ def api_cd_rip_status():
     if denied:
         return denied
     return jsonify(_rip_state_for_reader())
+
+
+@app.route("/api/cd/rip/log", methods=["GET"])
+def api_cd_rip_log():
+    """The last rip's EAC-style log, as plain text. The worker records the
+    log's file name in the final status (hifi-rip-cd.py, `log=`); it lives in
+    the album's destination folder. 404 if there is no log yet (no rip has
+    finished, or the worker wrote none)."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    st = _rip_state()
+    name = st.get("log")
+    dest = st.get("dest")
+    if not name or not dest:
+        return "no rip log available", 404
+    path = os.path.join(dest, os.path.basename(name))
+    if not os.path.isfile(path):
+        return "rip log not found", 404
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return "could not read rip log", 404
+    return Response(text, mimetype="text/plain; charset=utf-8")
 
 
 def _rip_state_for_reader():

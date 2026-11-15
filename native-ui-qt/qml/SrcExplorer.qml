@@ -25,7 +25,7 @@ Item {
     property var job: null
     property string msg: ""
 
-    function lt(it, en) { return I18n.lang === "it" ? it : en }
+    function lt(it, en, de) { return I18n.lang === "it" ? it : (I18n.lang === "de" && de !== undefined ? de : en) }
     function su(p) { return Api.srcBase + p }
     function under(p, r) { return !!r && (p === r || p.indexOf(r + "/") === 0) }
     function places() { return Ui.sources ? Ui.sources.places : [] }
@@ -36,7 +36,7 @@ Item {
         loading = true
         Api.get(su("/api/local/list?path=" + encodeURIComponent(next || "")), function(ok, d) {
             root.loading = false
-            if (!ok || !d || d.success === false) { root.msg = d && d.message ? String(d.message) : lt("Cartella non raggiungibile", "Folder not reachable"); return }
+            if (!ok || !d || d.success === false) { root.msg = d && d.message ? String(d.message) : lt("Cartella non raggiungibile", "Folder not reachable", "Ordner nicht erreichbar"); return }
             var p = String(d.path || "")
             if (remember && root.path !== p) { var h = root.history.slice(); h.push(root.path); root.history = h }
             root.path = p; root.parentPath = String(d.parent || ""); root.writable = !!d.writable; root.ram = !!d.ram
@@ -67,7 +67,7 @@ Item {
         if (/\.(m3u8?|pls|xspf|cue)$/.test(n)) return "list-music"
         return "file"
     }
-    function fail(d) { msg = d && d.message ? String(d.message) : lt("Non è riuscito", "That did not work") }
+    function fail(d) { msg = d && d.message ? String(d.message) : lt("Non è riuscito", "That did not work", "Hat nicht geklappt") }
     function startJob(url, body) {
         Api.post(su(url), body, function(ok, d) {
             if (!ok || !d || d.success === false || !d.job) { root.fail(d); root.reload(); return }
@@ -79,14 +79,14 @@ Item {
             if (!ok || !d) { root.jobId = ""; return }
             root.job = d
             if (d.state === "done" || d.state === "error") {
-                root.msg = d.state === "error" ? String(d.message || root.lt("Non è riuscito", "That did not work")) : root.lt("Fatto", "Done") + (d.skipped ? root.lt(" · saltati ", " · skipped ") + d.skipped : "")
+                root.msg = d.state === "error" ? String(d.message || root.lt("Non è riuscito", "That did not work", "Hat nicht geklappt")) : root.lt("Fatto", "Done", "Fertig") + (d.skipped ? root.lt(" · saltati ", " · skipped ", " · übersprungen ") + d.skipped : "")
                 root.jobId = ""; root.reload()
             }
         }, 5000) }
 
     function newFolder() {
         if (!path || !writable || ram) return
-        Ui.vk.openText(lt("Nome della nuova cartella", "Name of the new folder"), "", false, function(ok, text) {
+        Ui.vk.openText(lt("Nome della nuova cartella", "Name of the new folder", "Name des neuen Ordners"), "", false, function(ok, text) {
             var name = String(text || "").trim()
             if (!ok || !name) return
             Api.post(root.su("/api/local/mkdir"), { path: root.path, name: name }, function(ok2, d) {
@@ -98,13 +98,13 @@ Item {
     function rename() {
         if (sel.length !== 1) return
         var p = sel[0], old = p.split("/").pop()
-        Ui.vk.openText(lt("Nuovo nome", "New name"), old, false, function(ok, text) {
+        Ui.vk.openText(lt("Nuovo nome", "New name", "Neuer Name"), old, false, function(ok, text) {
             var name = String(text || "").trim()
             if (!ok || !name || name === old) return
             Api.post(root.su("/api/local/rename"), { path: p, name: name }, function(ok2, d) { if (!ok2 || !d || d.success === false) root.fail(d); root.reload() }, 10000)
         })
     }
-    function copySel(op) { if (!sel.length) return; clip = { op: op, paths: sel.slice() }; msg = (op === "copy" ? lt("Copiati: ", "Copied: ") : lt("Tagliati: ", "Cut: ")) + sel.length + lt(" · vai dove vuoi e premi Incolla", " · go where you want and press Paste") }
+    function copySel(op) { if (!sel.length) return; clip = { op: op, paths: sel.slice() }; msg = (op === "copy" ? lt("Copiati: ", "Copied: ", "Kopiert: ") : lt("Tagliati: ", "Cut: ", "Ausgeschnitten: ")) + sel.length + lt(" · vai dove vuoi e premi Incolla", " · go where you want and press Paste", " · geh wohin du willst und drück Einfügen") }
     function paste() {
         if (!clip || !path || !writable) return
         startJob(clip.op === "copy" ? "/api/local/copy" : "/api/local/move", { paths: clip.paths, dest: path, exists: "keep" })
@@ -113,9 +113,9 @@ Item {
     function remove() {
         if (!sel.length) return
         var n = sel.length, paths = sel.slice()
-        Ui.dialogs.confirm(n === 1 ? lt("Eliminare «" + paths[0].split("/").pop() + "»? Non si può annullare.", "Delete «" + paths[0].split("/").pop() + "»? This cannot be undone.")
-                                   : lt("Eliminare " + n + " elementi? Non si può annullare.", "Delete " + n + " items? This cannot be undone."),
-                           lt("Elimina", "Delete"), true, function(ok) { if (ok) root.startJob("/api/local/delete", { paths: paths }) })
+        Ui.dialogs.confirm(n === 1 ? lt("Eliminare «" + paths[0].split("/").pop() + "»? Non si può annullare.", "Delete «" + paths[0].split("/").pop() + "»? This cannot be undone.", "Lösche «" + paths[0].split("/").pop() + "»? Das kann nicht rückgängig gemacht werden.")
+                                   : lt("Eliminare " + n + " elementi? Non si può annullare.", "Delete " + n + " items? This cannot be undone.", "Lösche " + n + " Elemente? Das kann nicht rückgängig gemacht werden."),
+                           lt("Elimina", "Delete", "Löschen"), true, function(ok) { if (ok) root.startJob("/api/local/delete", { paths: paths }) })
     }
 
     component Cmd: Rectangle {
@@ -148,12 +148,12 @@ Item {
     // ── command bar ───────────────────────────────────────────────────────
     Row {
         x: 32; y: 0; spacing: 6
-        Cmd { lead: true; glyph: "plus"; label: root.lt("Nuova cartella", "New folder"); on: !!root.path && root.writable && !root.ram; onClicked: root.newFolder() }
-        Cmd { visible: !root.picker; glyph: "scissors"; label: root.lt("Taglia", "Cut"); on: root.sel.length > 0 && root.writable; onClicked: root.copySel("move") }
-        Cmd { visible: !root.picker; glyph: "copy"; label: root.lt("Copia", "Copy"); on: root.sel.length > 0; onClicked: root.copySel("copy") }
-        Cmd { visible: !root.picker; glyph: "clipboard"; label: root.lt("Incolla", "Paste") + (root.clip ? " (" + root.clip.paths.length + ")" : ""); on: !!root.clip && !!root.path && root.writable && !root.ram; onClicked: root.paste() }
-        Cmd { visible: !root.picker; glyph: "pencil"; label: root.lt("Rinomina", "Rename"); on: root.sel.length === 1 && root.writable; onClicked: root.rename() }
-        Cmd { visible: !root.picker; glyph: "trash-2"; label: root.lt("Elimina", "Delete"); danger: true; on: root.sel.length > 0 && root.writable; onClicked: root.remove() }
+        Cmd { lead: true; glyph: "plus"; label: root.lt("Nuova cartella", "New folder", "Neuer Ordner"); on: !!root.path && root.writable && !root.ram; onClicked: root.newFolder() }
+        Cmd { visible: !root.picker; glyph: "scissors"; label: root.lt("Taglia", "Cut", "Ausschneiden"); on: root.sel.length > 0 && root.writable; onClicked: root.copySel("move") }
+        Cmd { visible: !root.picker; glyph: "copy"; label: root.lt("Copia", "Copy", "Kopieren"); on: root.sel.length > 0; onClicked: root.copySel("copy") }
+        Cmd { visible: !root.picker; glyph: "clipboard"; label: root.lt("Incolla", "Paste", "Einfügen") + (root.clip ? " (" + root.clip.paths.length + ")" : ""); on: !!root.clip && !!root.path && root.writable && !root.ram; onClicked: root.paste() }
+        Cmd { visible: !root.picker; glyph: "pencil"; label: root.lt("Rinomina", "Rename", "Umbenennen"); on: root.sel.length === 1 && root.writable; onClicked: root.rename() }
+        Cmd { visible: !root.picker; glyph: "trash-2"; label: root.lt("Elimina", "Delete", "Löschen"); danger: true; on: root.sel.length > 0 && root.writable; onClicked: root.remove() }
     }
     // ── back, up, path ────────────────────────────────────────────────────
     Row {
@@ -168,11 +168,11 @@ Item {
         Text {
             x: 36; width: parent.width - 48; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideLeft; textFormat: Text.StyledText
             text: {
-                if (!root.path) return root.lt("Tutti i posti", "All places")
+                if (!root.path) return root.lt("Tutti i posti", "All places", "Alle Orte")
                 var pl = parent.pl
                 if (!pl) return root.path
                 var rest = root.path.slice(pl.root.length).split("/").filter(function(x) { return x })
-                var head = (pl.group === "dev" ? root.lt("Questo apparecchio", "This appliance") + "  ›  " : "") + pl.name
+                var head = (pl.group === "dev" ? root.lt("Questo apparecchio", "This appliance", "Dieses Gerät") + "  ›  " : "") + pl.name
                 if (!rest.length) return "<font color='#d4af37'>" + head + "</font>"
                 var last = rest.pop()
                 return head + (rest.length ? "  ›  " + rest.join("  ›  ") : "") + "  ›  <font color='#d4af37'>" + last + "</font>"
@@ -196,7 +196,7 @@ Item {
                 width: parent.width; spacing: 1
                 Repeater {
                     model: {
-                        var out = [], ps = root.places(), groups = [["dev", root.lt("Questo apparecchio", "This appliance"), "speaker"], ["usb", "USB", "usb"], ["net", root.lt("Rete", "Network"), "network"]]
+                        var out = [], ps = root.places(), groups = [["dev", root.lt("Questo apparecchio", "This appliance", "Dieses Gerät"), "speaker"], ["usb", "USB", "usb"], ["net", root.lt("Rete", "Network", "Netzwerk"), "network"]]
                         var openPl = root.placeFor(root.path)
                         for (var g = 0; g < groups.length; g++) {
                             var items = ps.filter(function(p) { return p.group === groups[g][0] && p.ok && p.root })
@@ -240,9 +240,9 @@ Item {
             x: 226; y: 0; width: parent.width - 226 - 8; height: parent.height
             Item {
                 width: parent.width; height: 34
-                Text { x: root.picker ? 12 : 40; anchors.verticalCenter: parent.verticalCenter; text: root.lt("Nome", "Name"); color: Theme.white; font.family: Theme.font; font.pixelSize: 11; font.bold: true }
-                Text { x: parent.width - 170; anchors.verticalCenter: parent.verticalCenter; text: root.lt("Modificato", "Modified"); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
-                Text { x: parent.width - 80; width: 72; horizontalAlignment: Text.AlignRight; anchors.verticalCenter: parent.verticalCenter; text: root.lt("Dimensione", "Size"); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
+                Text { x: root.picker ? 12 : 40; anchors.verticalCenter: parent.verticalCenter; text: root.lt("Nome", "Name", "Name"); color: Theme.white; font.family: Theme.font; font.pixelSize: 11; font.bold: true }
+                Text { x: parent.width - 170; anchors.verticalCenter: parent.verticalCenter; text: root.lt("Modificato", "Modified", "Geändert"); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
+                Text { x: parent.width - 80; width: 72; horizontalAlignment: Text.AlignRight; anchors.verticalCenter: parent.verticalCenter; text: root.lt("Dimensione", "Size", "Größe"); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
                 Rectangle { y: 33; width: parent.width; height: 1; color: Theme.border }
             }
             ListView {
@@ -269,8 +269,8 @@ Item {
                              onClicked: { if (modelData.dir) root.load(modelData.path, true); else if (!root.picker) root.toggle(modelData.path) } }
                 }
                 // at the top level: the places themselves
-                Text { visible: !root.path && !root.loading; y: 10; x: 12; width: parent.width - 24; wrapMode: Text.WordWrap; text: root.lt("Scegli un posto a sinistra.", "Pick a place on the left."); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 13 }
-                Text { visible: !!root.path && !root.loading && !root.entries.length; y: 10; x: 12; text: root.lt("Cartella vuota", "Empty folder"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 13 }
+                Text { visible: !root.path && !root.loading; y: 10; x: 12; width: parent.width - 24; wrapMode: Text.WordWrap; text: root.lt("Scegli un posto a sinistra.", "Pick a place on the left.", "Wähle links einen Ort."); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 13 }
+                Text { visible: !!root.path && !root.loading && !root.entries.length; y: 10; x: 12; text: root.lt("Cartella vuota", "Empty folder", "Leerer Ordner"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 13 }
             }
         }
     }
@@ -280,16 +280,16 @@ Item {
         x: 36; y: root.height - 26; width: root.width - 72; height: 22
         Text {
             anchors.verticalCenter: parent.verticalCenter; width: parent.width - 200; elide: Text.ElideRight
-            text: root.jobId && root.job ? root.lt("Sto lavorando… ", "Working… ") + (root.job.progress || 0) + "%  " + String(root.job.current || "")
+            text: root.jobId && root.job ? root.lt("Sto lavorando… ", "Working… ", "Arbeite… ") + (root.job.progress || 0) + "%  " + String(root.job.current || "")
                   : root.msg ? root.msg
-                  : root.sel.length ? root.sel.length + root.lt(" selezionati", " selected") + (root.selSize() ? " · " + root.gb(root.selSize()) : "")
-                  : root.entries.length + root.lt(" elementi", " items") + (root.path && !root.writable ? root.lt(" · sola lettura", " · read only") : "") + (root.ram ? root.lt(" · nella memoria: sparisce al riavvio", " · in memory: gone at restart") : "")
+                  : root.sel.length ? root.sel.length + root.lt(" selezionati", " selected", " ausgewählt") + (root.selSize() ? " · " + root.gb(root.selSize()) : "")
+                  : root.entries.length + root.lt(" elementi", " items", " Elemente") + (root.path && !root.writable ? root.lt(" · sola lettura", " · read only", " · nur lesen") : "") + (root.ram ? root.lt(" · nella memoria: sparisce al riavvio", " · in memory: gone at restart", " · im Speicher: beim Neustart weg") : "")
             color: root.msg || root.sel.length || root.jobId ? Theme.gold : Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 12
         }
         Text {
             readonly property var pl: root.placeFor(root.path)
             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-            text: pl && pl.usage && pl.usage.total ? pl.name + ": " + root.gb(pl.usage.free) + root.lt(" liberi", " free") : ""
+            text: pl && pl.usage && pl.usage.total ? pl.name + ": " + root.gb(pl.usage.free) + root.lt(" liberi", " free", " frei") : ""
             color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 12
         }
     }

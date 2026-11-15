@@ -449,7 +449,16 @@ Item {
         // server that is slow to answer never holds the page in "loading".
         function loadLibrary() {
             var out = Object.assign({}, lib), left = 5
-            function done() { if (--left === 0) { lib = out; root.dataChanged() } }
+            function done() {
+                if (--left === 0) {
+                    // When Lyrion's scan finishes, drop the sticky "rescan started"
+                    // notice — it otherwise lingers until the page is left.
+                    var scanEnded = lib.scanning && !out.scanning
+                    lib = out
+                    if (scanEnded && root.msg === Tr.t("settings.lyrion.rescanStarted")) root.say("")
+                    root.dataChanged()
+                }
+            }
             Player.queryServer(["serverstatus", "0", "0"], function(ok, r) {
                 if (ok && r) {
                     out.lastScan = Number(r.lastscan || 0)
@@ -2356,7 +2365,7 @@ Item {
         help("settings.uiResolution.help")
         var OPT = ["auto", "720", "1080", "native"]
         for (var i = 0; i < 4; i++) {
-            var r = option(Tr.t("settings.uiResolution.option." + OPT[i]), Tr.t("settings.uiResolution.optionHelp." + OPT[i]), OPT[i], cfg.uiResolution === OPT[i], "uires")
+            var r = option(Tr.t("settings.uiResolution.option." + OPT[i]), Tr.t("settings.uiResolution.optionHelp." + OPT[i]), OPT[i], (pendAct === "uires" ? pendArg : cfg.uiResolution) === OPT[i], "uires")
             r.style = "border"; r.hh = 62
         }
         if (pendAct === "uires") confirmRow(Tr.t("settings.uiResolution.restartWarning"), Tr.t("settings.uiResolution.confirm"), "uires_confirm")
@@ -2365,13 +2374,13 @@ Item {
     // Never "extend": the interface is one window (kmsmode.cpp does the rest).
     function secUiscreens() {
         help("settings.uiScreens.help")
-        var m = option(Tr.t("settings.uiScreens.mirror"), Tr.t("settings.uiScreens.mirrorHelp"), "mirror", cfg.screensPref === "mirror", "uiscr")
+        var m = option(Tr.t("settings.uiScreens.mirror"), Tr.t("settings.uiScreens.mirrorHelp"), "mirror", (pendAct === "uiscr" ? pendArg : cfg.screensPref) === "mirror", "uiscr")
         m.style = "border"; m.hh = 62
         for (var i = 0; i < cfg.screens.length; i++) {
             var sc = cfg.screens[i]
             var r = option(Tr.tf("settings.uiScreens.only", "name", sc.label || sc.name),
                            (sc.label && sc.label !== sc.connector ? sc.connector + " · " : "") + Tr.t("settings.uiScreens.onlyHelp"),
-                           "only:" + sc.name, cfg.screensPref === "only:" + sc.name, "uiscr")
+                           "only:" + sc.name, (pendAct === "uiscr" ? pendArg : cfg.screensPref) === "only:" + sc.name, "uiscr")
             r.style = "border"; r.hh = 62
         }
         if (pendAct === "uiscr") confirmRow(Tr.t("settings.uiScreens.restartWarning"), Tr.t("settings.uiScreens.confirm"), "uiscr_confirm")
@@ -3446,8 +3455,8 @@ Item {
                             // group tile: title beside the icon, a preview of its sections under it
                             Text {
                                 visible: secRow.big
-                                x: 76; y: 16; width: parent.width - 76 - 16; height: 48
-                                verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                x: 76; y: 16; width: parent.width - 76 - 16; height: 50
+                                verticalAlignment: Text.AlignVCenter; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
                                 text: Tr.t(secRow.modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 19; font.bold: true
                             }
                             Text {
@@ -3459,7 +3468,9 @@ Item {
                             // section tile: the name along the bottom
                             Text {
                                 visible: !secRow.big
-                                x: 16; y: parent.height - 50; width: parent.width - 32; height: 36
+                                // two lines of px15 need ~42px: a 36px box clipped
+                                // long German names (e.g. "Erweiterte Audio-Einstellungen")
+                                x: 16; y: parent.height - 52; width: parent.width - 32; height: 44
                                 verticalAlignment: Text.AlignBottom; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
                                 text: Tr.t(secRow.modelData.key); color: Theme.white; font.family: Theme.font; font.pixelSize: 15
                             }

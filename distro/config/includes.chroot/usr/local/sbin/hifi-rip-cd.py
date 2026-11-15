@@ -570,6 +570,7 @@ def main():
     # Decided only now, with every track in hand: the folder may have been
     # filled by another rip (or from a PC) while this one was reading.
     dest = hifi_cdrip.unused_dir(dest)
+    log_name = ""
     if opt["log_file"]:
         log_name = hifi_cdrip.safe_name(f"{artist} - {album}", "rip", clean) + ".log"
         with open(os.path.join(work, log_name), "w", encoding="utf-8") as f:
@@ -583,7 +584,11 @@ def main():
     ejected = False
     if opt["eject"]:
         ejected = run(["eject", device], timeout=30).returncode == 0
-    write_status("done", total, total, 100, done, dest=dest, root=root, inaccurate=inaccurate, ejected=ejected)
+    # `log` lets sources_server serve the EAC-style rip log to the kiosk and the
+    # web admin (issue #131): it is the file name under `dest`, empty if the
+    # user turned the log off.
+    write_status("done", total, total, 100, done, dest=dest, root=root,
+                 inaccurate=inaccurate, ejected=ejected, log=log_name)
 
 
 if __name__ == "__main__":

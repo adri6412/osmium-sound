@@ -46,9 +46,14 @@ efibootmgr
 # image where the unit is not enabled.
 systemd-timesyncd
 
-# Firmware — broad coverage for all mainline-supported WiFi/Ethernet/etc.
+# Firmware — broad coverage for all mainline-supported WiFi/Ethernet/audio/etc.
 # (requires the non-free-firmware archive area, set in build-distro.sh).
-# MediaTek MT76xx firmware ships inside firmware-misc-nonfree on bookworm.
+# On trixie the firmware-nonfree source was split into many per-vendor binary
+# packages: MediaTek MT76xx WiFi/BT firmware is NO LONGER in firmware-misc-nonfree
+# but in firmware-mediatek (verified: it ships mediatek/mt7650e.bin, which the
+# mt76x0e driver needs for the MT7630E combo found e.g. in ASUS F554L — without
+# it the probe fails with -2 and no wlan interface comes up). Keep this list in
+# sync with the split; build-image.sh prunes only datacenter/discrete-GPU blobs.
 firmware-linux-free
 firmware-linux-nonfree
 firmware-misc-nonfree
@@ -56,9 +61,20 @@ firmware-realtek
 firmware-iwlwifi
 firmware-atheros
 firmware-brcm80211
+firmware-mediatek
 firmware-libertas
 firmware-ti-connectivity
+firmware-ipw2x00
 firmware-zd1211
+# Laptop audio codecs (this is an audio appliance): many Intel Tiger Lake+ and
+# AMD laptops have no sound without SOF / HDA / Cirrus firmware.
+firmware-intel-sound
+firmware-sof-signed
+firmware-cirrus
+firmware-intel-misc
+# Intel display firmware (DMC/GuC) was split out of firmware-misc-nonfree on
+# trixie; keep it so newer Intel iGPUs still get KMS/plymouth.
+firmware-intel-graphics
 wireless-regdb
 wpasupplicant
 
@@ -70,6 +86,28 @@ x11-xserver-utils
 xinit
 lightdm
 unclutter
+
+# Touchscreen / touchpad / digitizer input.
+# The kiosk compositor is Wayland (labwc/wlroots, below), so touch, touchpads,
+# gestures and pen/stylus all go through *libinput* directly — there is no
+# per-device X input driver to install; the panels themselves are driven by
+# in-kernel modules that the Debian kernel already ships and MODULES=most pulls
+# in (hid-multitouch and i2c-hid/i2c-hid-acpi for HID-over-I2C panels,
+# elan_i2c / silead / goodix / raydium_i2c_ts / fts / melfas for the common
+# controllers, synaptics/elantech via psmouse for PS2 touchpads, bcm5974 for
+# Apple, hid-asus/hid-ite/… for the quirky laptop keyboards+touchpads). Any
+# firmware those controllers need (e.g. Goodix) rides in firmware-misc-nonfree,
+# already above. xserver-xorg-input-libinput is kept explicit for the few X
+# clients left under XWayland. libinput-tools + evtest let the support bundle
+# capture why a panel is silent ("libinput list-devices", "evtest").
+# NOTE on the two cases a package CANNOT cover, both handled elsewhere:
+#   - Microsoft Surface (Intel Precise Touch, Pro 4/5/6/7, Book, Laptop): the
+#     ipts driver + iptsd are built out-of-tree by hook 0440-surface-ipts.
+#   - Silead gslX680 panels on cheap Bay/Cherry Trail 2-in-1s need a per-device
+#     silead/*.fw blob that Debian cannot redistribute — must be supplied per model.
+xserver-xorg-input-libinput
+libinput-tools
+evtest
 # Compositor Wayland della sessione kiosk (vedi os-update/files/kiosk-wayland-*):
 # la finestra a schermo intero va in scanout diretto, cosa che su X11 non
 # succede quando è attiva la scalatura del framebuffer. wlr-randr è il modo in

@@ -36,7 +36,7 @@ Item {
     Component.onCompleted: Ui.addMusic = root
     NavScope { active: root.visible }
 
-    function lt(it, en) { return I18n.lang === "it" ? it : en }
+    function lt(it, en, de) { return I18n.lang === "it" ? it : (I18n.lang === "de" && de !== undefined ? de : en) }
     function su(p) { return Api.srcBase + p }
     function open() { step = "where"; err = ""; busy = false; visible = true; scan(); if (src) src.load() }
     function close() { visible = false; scanPoll.stop() }
@@ -73,13 +73,13 @@ Item {
         if (canList) loadShares()
     }
     function typeHost() {
-        Ui.vk.openText(lt("Indirizzo del computer o NAS (es. 192.168.1.20)", "Address of the computer or NAS (e.g. 192.168.1.20)"), host, false, function(ok, t) {
+        Ui.vk.openText(lt("Indirizzo del computer o NAS (es. 192.168.1.20)", "Address of the computer or NAS (e.g. 192.168.1.20)", "Adresse des Computers oder NAS (z. B. 192.168.1.20)"), host, false, function(ok, t) {
             t = String(t || "").trim().replace(/^\\\\|^\/\//, "")
             if (ok && t) root.pickHost(t, t)
         })
     }
     function typeShare() {
-        Ui.vk.openText(lt("Nome della cartella condivisa", "Name of the shared folder"), share, false, function(ok, t) {
+        Ui.vk.openText(lt("Nome della cartella condivisa", "Name of the shared folder", "Name des freigegebenen Ordners"), share, false, function(ok, t) {
             t = String(t || "").trim()
             if (ok && t) root.pickShare(t)
         })
@@ -118,7 +118,7 @@ Item {
         Api.post(su("/api/sources/smb"), { server: host, share: share, username: user, password: pw, rw: rw }, function(ok, d) {
             root.busy = false
             if (ok && d && d.success !== false) { root.finish(lt("«" + share + "» di " + (hostName || host) + " è nella libreria: la musica compare in Musica man mano che la leggo.",
-                                                                 "«" + share + "» on " + (hostName || host) + " is in the library: its music shows up in Music as I read it.")); return }
+                                                                 "«" + share + "» on " + (hostName || host) + " is in the library: its music shows up in Music as I read it.", "«" + share + "» auf " + (hostName || host) + " ist in der Bibliothek: seine Musik erscheint in Musik, während ich sie lese.")); return }
             if (d && d.code === "msg.smbBadCredentials") { root.step = "netShares"; root.askAuth(root.user !== "", function() { root.pickShare(root.share) }); return }
             root.err = d && d.message ? String(d.message) : Tr.t("sources.wizard.openFailed")
         }, 60000)
@@ -131,7 +131,7 @@ Item {
         var dev = src ? src.places.filter(function(p) { return p.group === "dev" && p.ok && p.root }) : []
         var out = [], left = dev.length
         dev.forEach(function(p) {
-            out.push({ name: p.key === "sys" ? lt("Tutta la cartella della musica", "The whole music folder") : lt("Tutto il disco", "The whole disk"), place: p.name, path: p.root, inLib: inLib(p.root), whole: true })
+            out.push({ name: p.key === "sys" ? lt("Tutta la cartella della musica", "The whole music folder", "Der ganze Musikordner") : lt("Tutto il disco", "The whole disk", "Der ganze Datenträger"), place: p.name, path: p.root, inLib: inLib(p.root), whole: true })
             Api.get(su("/api/local/list?path=" + encodeURIComponent(p.root)), function(ok, d) {
                 if (ok && d && d.entries) d.entries.filter(function(e) { return e.dir }).forEach(function(e) {
                     out.push({ name: String(e.name), place: p.name, path: String(e.path), inLib: root.inLib(String(e.path)), whole: false })
@@ -150,8 +150,8 @@ Item {
         busy = true
         Api.post(su("/api/sources/local"), { path: path }, function(ok, d) {
             root.busy = false
-            if (ok && d && d.success !== false) root.finish(lt("La cartella è nella libreria: la musica compare in Musica man mano che la leggo.", "The folder is in the library: its music shows up in Music as I read it."))
-            else root.err = d && d.message ? String(d.message) : lt("Non è riuscito", "That did not work")
+            if (ok && d && d.success !== false) root.finish(lt("La cartella è nella libreria: la musica compare in Musica man mano che la leggo.", "The folder is in the library: its music shows up in Music as I read it.", "Der Ordner ist in der Bibliothek: seine Musik erscheint in Musik, während ich sie lese."))
+            else root.err = d && d.message ? String(d.message) : lt("Non è riuscito", "That did not work", "Hat nicht geklappt")
         }, 30000)
     }
 
@@ -204,7 +204,7 @@ Item {
         Row {
             x: 28; y: 22; spacing: 10
             Repeater {
-                model: [root.lt("Dove", "Where"), root.lt("Scegli", "Choose"), root.lt("Fatto", "Done")]
+                model: [root.lt("Dove", "Where", "Wohin"), root.lt("Scegli", "Choose", "Wählen"), root.lt("Fatto", "Done", "Fertig")]
                 delegate: Row {
                     required property var modelData
                     required property int index
@@ -226,12 +226,12 @@ Item {
             Rectangle { x: root.step === "folder" ? 3 : parent.width / 2; y: 3; width: parent.width / 2 - 3; height: 28; radius: 14; color: Theme.gold }
             Row { anchors.fill: parent
                 Item { width: parent.width / 2; height: parent.height
-                    Text { anchors.centerIn: parent; text: root.lt("Semplice", "Simple"); color: root.step === "folder" ? Theme.black : Theme.silver; font.family: Theme.font; font.pixelSize: 12; font.bold: root.step === "folder" }
+                    Text { anchors.centerIn: parent; text: root.lt("Semplice", "Simple", "Einfach"); color: root.step === "folder" ? Theme.black : Theme.silver; font.family: Theme.font; font.pixelSize: 12; font.bold: root.step === "folder" }
                     Tap { onClicked: { root.step = "folder"; root.loadCands() } } }
                 Item { width: parent.width / 2; height: parent.height
                     Row { anchors.centerIn: parent; spacing: 6
                         Icon { anchors.verticalCenter: parent.verticalCenter; name: "list"; size: 13; color: root.step === "adv" ? Theme.black : Theme.silver }
-                        Text { text: root.lt("Avanzate", "Advanced"); color: root.step === "adv" ? Theme.black : Theme.silver; font.family: Theme.font; font.pixelSize: 12; font.bold: root.step === "adv" } }
+                        Text { text: root.lt("Avanzate", "Advanced", "Erweitert"); color: root.step === "adv" ? Theme.black : Theme.silver; font.family: Theme.font; font.pixelSize: 12; font.bold: root.step === "adv" } }
                     Tap { onClicked: { root.step = "adv"; pickEx.openAt(root.src && root.src.places.length ? root.src.places[0].root : "") } } }
             }
         }
@@ -243,141 +243,141 @@ Item {
         Item {
             visible: root.step === "where"
             anchors.fill: parent
-            Text { x: 28; y: 60; text: root.lt("Dove si trova la tua musica?", "Where is your music?"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
-            Text { x: 28; y: 96; text: root.lt("Scegli la risposta che ti somiglia di più. Se non lo sai, nessun problema: cerco io.", "Pick the answer closest to yours. If you do not know, no problem: I will look."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
+            Text { x: 28; y: 60; text: root.lt("Dove si trova la tua musica?", "Where is your music?", "Wo ist deine Musik?"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
+            Text { x: 28; y: 96; text: root.lt("Scegli la risposta che ti somiglia di più. Se non lo sai, nessun problema: cerco io.", "Pick the answer closest to yours. If you do not know, no problem: I will look.", "Wähle die Antwort, die am besten passt. Wenn du es nicht weißt, kein Problem: ich suche."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
             Flow {
                 id: chGrid
                 x: 28; y: 126; width: parent.width - 56; spacing: 12
-                Choice { glyph: "usb"; title: root.lt("Su una chiavetta o disco USB", "On a USB stick or disk"); hint: root.lt("Collegala dietro all'apparecchio: la trovo da solo.", "Plug it in at the back: I will find it."); onPicked: root.toUsb(null) }
-                Choice { glyph: "network"; title: root.lt("Sul computer o sul NAS", "On a computer or NAS"); hint: root.lt("Una cartella condivisa in rete (Windows, Mac, NAS).", "A folder shared on the network (Windows, Mac, NAS)."); onPicked: root.step = "net" }
-                Choice { glyph: "speaker"; title: root.lt("Dentro questo apparecchio", "Inside this appliance"); hint: root.lt("Sul disco di sistema o su un secondo disco montato dentro.", "On the system disk or a second disk mounted inside."); onPicked: { root.step = "folder"; root.loadCands() } }
-                Choice { lead: true; glyph: "sparkles"; title: root.lt("Non lo so: cerca tu", "I don't know: look for me"); hint: root.lt("Guardo USB, rete e dischi e ti mostro cosa c'è.", "I look at USB, network and disks and show you what is there."); onPicked: { root.step = "found"; root.loadCands() } }
+                Choice { glyph: "usb"; title: root.lt("Su una chiavetta o disco USB", "On a USB stick or disk", "Auf einem USB-Stick oder -Datenträger"); hint: root.lt("Collegala dietro all'apparecchio: la trovo da solo.", "Plug it in at the back: I will find it.", "Hinten einstecken: ich finde ihn."); onPicked: root.toUsb(null) }
+                Choice { glyph: "network"; title: root.lt("Sul computer o sul NAS", "On a computer or NAS", "Auf einem Computer oder NAS"); hint: root.lt("Una cartella condivisa in rete (Windows, Mac, NAS).", "A folder shared on the network (Windows, Mac, NAS).", "Ein im Netzwerk freigegebener Ordner (Windows, Mac, NAS)."); onPicked: root.step = "net" }
+                Choice { glyph: "speaker"; title: root.lt("Dentro questo apparecchio", "Inside this appliance", "In diesem Gerät"); hint: root.lt("Sul disco di sistema o su un secondo disco montato dentro.", "On the system disk or a second disk mounted inside.", "Auf dem Systemdatenträger oder einem zweiten eingebauten Datenträger."); onPicked: { root.step = "folder"; root.loadCands() } }
+                Choice { lead: true; glyph: "sparkles"; title: root.lt("Non lo so: cerca tu", "I don't know: look for me", "Ich weiß es nicht: suche du"); hint: root.lt("Guardo USB, rete e dischi e ti mostro cosa c'è.", "I look at USB, network and disks and show you what is there.", "Ich schaue bei USB, Netzwerk und Datenträgern nach und zeige dir, was da ist."); onPicked: { root.step = "found"; root.loadCands() } }
             }
             Item {
                 x: 28; y: 334; width: parent.width - 56; height: 150; clip: true
                 Row { spacing: 8
                     Icon { anchors.verticalCenter: parent.verticalCenter; name: "search"; size: 12; color: Theme.silverA(0.5) }
-                    Head { text: root.scanState === "running" ? root.lt("Sto cercando… ", "Looking… ") + root.scanPct + "%" : root.lt("Trovato adesso, senza fare nulla", "Found just now, by itself") } }
+                    Head { text: root.scanState === "running" ? root.lt("Sto cercando… ", "Looking… ", "Suche… ") + root.scanPct + "%" : root.lt("Trovato adesso, senza fare nulla", "Found just now, by itself", "Gerade von selbst gefunden") } }
                 Column {
                     y: 22; width: parent.width; spacing: 8
                     Repeater { model: root.sticks().slice(0, 2)
-                        delegate: Line { required property var modelData; glyph: "usb"; title: modelData.name + (modelData.usage ? "  ·  " + root.src.gb(modelData.usage.total) : ""); hint: root.lt("collegata adesso", "plugged in"); action: root.lt("Cosa ne faccio?", "What do I do with it?"); onAct: root.toUsb(modelData) } }
+                        delegate: Line { required property var modelData; glyph: "usb"; title: modelData.name + (modelData.usage ? "  ·  " + root.src.gb(modelData.usage.total) : ""); hint: root.lt("collegata adesso", "plugged in", "eingesteckt"); action: root.lt("Cosa ne faccio?", "What do I do with it?", "Was soll ich damit machen?"); onAct: root.toUsb(modelData) } }
                     Repeater { model: root.hosts.slice(0, Math.max(0, 2 - root.sticks().length))
-                        delegate: Line { required property var modelData; glyph: "network"; title: (modelData.name || modelData.ip); hint: modelData.name ? modelData.ip : root.lt("dispositivo in rete", "network device"); action: root.lt("Aggiungi", "Add"); onAct: root.pickHost(modelData.ip, modelData.name) } }
-                    Text { visible: !root.sticks().length && !root.hosts.length && root.scanState !== "running"; text: root.lt("Per ora niente: collega una chiavetta o scegli qui sopra.", "Nothing yet: plug in a stick or pick above."); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 12 }
+                        delegate: Line { required property var modelData; glyph: "network"; title: (modelData.name || modelData.ip); hint: modelData.name ? modelData.ip : root.lt("dispositivo in rete", "network device", "Netzwerkgerät"); action: root.lt("Aggiungi", "Add", "Hinzufügen"); onAct: root.pickHost(modelData.ip, modelData.name) } }
+                    Text { visible: !root.sticks().length && !root.hosts.length && root.scanState !== "running"; text: root.lt("Per ora niente: collega una chiavetta o scegli qui sopra.", "Nothing yet: plug in a stick or pick above.", "Noch nichts: steck einen Stick ein oder wähle oben."); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 12 }
                 }
             }
             Rectangle { x: 28; y: parent.height - 64; width: parent.width - 56; height: 1; color: Theme.border }
             Row { x: 28; y: parent.height - 46; spacing: 8
                 Icon { anchors.verticalCenter: parent.verticalCenter; name: "list"; size: 16; color: Theme.gold }
-                Text { anchors.verticalCenter: parent.verticalCenter; text: root.lt("Sai già dove sta?", "Know where it is?"); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
-                Text { anchors.verticalCenter: parent.verticalCenter; text: root.lt("Avanzate: sfoglia tutte le cartelle", "Advanced: browse every folder"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 13; font.underline: true
+                Text { anchors.verticalCenter: parent.verticalCenter; text: root.lt("Sai già dove sta?", "Know where it is?", "Weißt du, wo sie ist?"); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
+                Text { anchors.verticalCenter: parent.verticalCenter; text: root.lt("Avanzate: sfoglia tutte le cartelle", "Advanced: browse every folder", "Erweitert: jeden Ordner durchsuchen"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 13; font.underline: true
                     Tap { grow: 8; onClicked: { root.step = "adv"; pickEx.openAt(root.src && root.src.places.length ? root.src.places[0].root : "") } } } }
-            SBtn { x: parent.width - 28 - width; y: parent.height - 54; label: root.lt("Annulla", "Cancel"); onClicked: root.close() }
+            SBtn { x: parent.width - 28 - width; y: parent.height - 54; label: root.lt("Annulla", "Cancel", "Abbrechen"); onClicked: root.close() }
         }
 
         // ── look for me: everything that was found ──────────────────────
         Item {
             visible: root.step === "found"
             anchors.fill: parent
-            Text { x: 28; y: 60; text: root.lt("Ecco cosa ho trovato", "Here is what I found"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
-            Text { x: 28; y: 96; text: root.scanState === "running" ? root.lt("Sto ancora guardando la rete… ", "Still looking at the network… ") + root.scanPct + "%" : root.lt("Tocca quello che vuoi aggiungere.", "Tap what you want to add."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
+            Text { x: 28; y: 60; text: root.lt("Ecco cosa ho trovato", "Here is what I found", "Das habe ich gefunden"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
+            Text { x: 28; y: 96; text: root.scanState === "running" ? root.lt("Sto ancora guardando la rete… ", "Still looking at the network… ", "Schaue noch im Netzwerk… ") + root.scanPct + "%" : root.lt("Tocca quello che vuoi aggiungere.", "Tap what you want to add.", "Tippe an, was du hinzufügen willst."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
             Flickable {
                 x: 28; y: 126; width: parent.width - 56; height: parent.height - 126 - 80; clip: true; contentHeight: fCol.height; boundsBehavior: Flickable.StopAtBounds
                 Column {
                     id: fCol; width: parent.width; spacing: 8
                     Repeater { model: root.sticks()
-                        delegate: Line { required property var modelData; glyph: "usb"; title: modelData.name; hint: root.lt("chiavetta USB collegata", "USB stick plugged in"); action: root.lt("Cosa ne faccio?", "What do I do with it?"); onAct: root.toUsb(modelData) } }
+                        delegate: Line { required property var modelData; glyph: "usb"; title: modelData.name; hint: root.lt("chiavetta USB collegata", "USB stick plugged in", "USB-Stick eingesteckt"); action: root.lt("Cosa ne faccio?", "What do I do with it?", "Was soll ich damit machen?"); onAct: root.toUsb(modelData) } }
                     Repeater { model: root.newDisks()
-                        delegate: Line { required property var modelData; glyph: "hard-drive"; title: root.lt("Disco nuovo dentro: ", "New disk inside: ") + (modelData.model || modelData.path); hint: root.src ? root.src.gb(modelData.size) : ""; action: root.lt("Preparalo", "Set it up")
+                        delegate: Line { required property var modelData; glyph: "hard-drive"; title: root.lt("Disco nuovo dentro: ", "New disk inside: ", "Neuer Datenträger im Gerät: ") + (modelData.model || modelData.path); hint: root.src ? root.src.gb(modelData.size) : ""; action: root.lt("Preparalo", "Set it up", "Einrichten")
                                          onAct: { root.close(); root.src.view = "home" } } }
                     Repeater { model: root.hosts
-                        delegate: Line { required property var modelData; glyph: "network"; title: modelData.name || modelData.ip; hint: modelData.name ? modelData.ip : root.lt("dispositivo in rete", "network device"); action: root.lt("Aggiungi", "Add"); onAct: root.pickHost(modelData.ip, modelData.name) } }
+                        delegate: Line { required property var modelData; glyph: "network"; title: modelData.name || modelData.ip; hint: modelData.name ? modelData.ip : root.lt("dispositivo in rete", "network device", "Netzwerkgerät"); action: root.lt("Aggiungi", "Add", "Hinzufügen"); onAct: root.pickHost(modelData.ip, modelData.name) } }
                     Repeater { model: root.cands.filter(function(c) { return !c.inLib && !c.whole })
-                        delegate: Line { required property var modelData; glyph: "folder"; title: modelData.name; hint: modelData.place; action: root.lt("Aggiungi", "Add"); onAct: root.addFolder(modelData.path) } }
+                        delegate: Line { required property var modelData; glyph: "folder"; title: modelData.name; hint: modelData.place; action: root.lt("Aggiungi", "Add", "Hinzufügen"); onAct: root.addFolder(modelData.path) } }
                 }
             }
             Rectangle { x: 28; y: parent.height - 72; width: parent.width - 56; height: 1; color: Theme.border }
-            SBtn { x: 28; y: parent.height - 56; glyph: "chevron-left"; label: root.lt("Indietro", "Back"); onClicked: root.step = "where" }
-            SBtn { x: parent.width - 28 - width; y: parent.height - 56; glyph: "refresh-cw"; label: root.lt("Cerca ancora", "Look again"); onClicked: { root.scan(); root.loadCands() } }
+            SBtn { x: 28; y: parent.height - 56; glyph: "chevron-left"; label: root.lt("Indietro", "Back", "Zurück"); onClicked: root.step = "where" }
+            SBtn { x: parent.width - 28 - width; y: parent.height - 56; glyph: "refresh-cw"; label: root.lt("Cerca ancora", "Look again", "Erneut suchen"); onClicked: { root.scan(); root.loadCands() } }
         }
 
         // ── USB: which stick, or plug one in ────────────────────────────
         Item {
             visible: root.step === "usb"
             anchors.fill: parent
-            Text { x: 28; y: 60; text: root.sticks().length ? root.lt("Quale chiavetta?", "Which stick?") : root.lt("Collega la chiavetta", "Plug the stick in"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
-            Text { x: 28; y: 96; width: parent.width - 56; wrapMode: Text.WordWrap; text: root.sticks().length ? "" : root.lt("Infilala in una presa USB dietro all'apparecchio: appena la vedo vado avanti da solo.", "Put it in a USB port at the back: as soon as I see it I go on by myself."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
+            Text { x: 28; y: 60; text: root.sticks().length ? root.lt("Quale chiavetta?", "Which stick?", "Welcher Stick?") : root.lt("Collega la chiavetta", "Plug the stick in", "Steck den Stick ein"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
+            Text { x: 28; y: 96; width: parent.width - 56; wrapMode: Text.WordWrap; text: root.sticks().length ? "" : root.lt("Infilala in una presa USB dietro all'apparecchio: appena la vedo vado avanti da solo.", "Put it in a USB port at the back: as soon as I see it I go on by myself.", "Steck ihn in einen USB-Anschluss hinten am Gerät: sobald ich ihn sehe, geht es von selbst weiter."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
             Column { x: 28; y: 130; width: parent.width - 56; spacing: 8
                 Repeater { model: root.sticks()
-                    delegate: Line { required property var modelData; glyph: "usb"; title: modelData.name; hint: modelData.usage ? root.src.gb(modelData.usage.total) : ""; action: root.lt("Questa", "This one"); onAct: root.toUsb(modelData) } }
+                    delegate: Line { required property var modelData; glyph: "usb"; title: modelData.name; hint: modelData.usage ? root.src.gb(modelData.usage.total) : ""; action: root.lt("Questa", "This one", "Dieser"); onAct: root.toUsb(modelData) } }
                 Repeater { model: root.src ? root.src.usbBad : []
-                    delegate: Line { required property var modelData; glyph: "alert-triangle"; title: String(modelData.label || modelData.model || "USB"); hint: modelData.needs_format ? root.lt("Non la so leggere: va formattata da un computer", "I cannot read it: format it on a computer") : String(modelData.error || ""); action: "" } }
+                    delegate: Line { required property var modelData; glyph: "alert-triangle"; title: String(modelData.label || modelData.model || "USB"); hint: modelData.needs_format ? root.lt("Non la so leggere: va formattata da un computer", "I cannot read it: format it on a computer", "Ich kann ihn nicht lesen: am Computer formatieren") : String(modelData.error || ""); action: "" } }
                 Row { visible: !root.sticks().length; spacing: 10
                     Spinner { active: root.visible && root.step === "usb"; radius: 9; thickness: 2; anchors.verticalCenter: parent.verticalCenter }
-                    Text { anchors.verticalCenter: parent.verticalCenter; text: root.lt("Aspetto la chiavetta…", "Waiting for the stick…"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 13 } }
+                    Text { anchors.verticalCenter: parent.verticalCenter; text: root.lt("Aspetto la chiavetta…", "Waiting for the stick…", "Warte auf den Stick…"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 13 } }
             }
             // as soon as one appears, on to it
             Timer { interval: 1000; repeat: true; running: root.visible && root.step === "usb" && root.sticks().length === 1 && !root.src.usbBad.length; onTriggered: root.toUsb(null) }
             Rectangle { x: 28; y: parent.height - 72; width: parent.width - 56; height: 1; color: Theme.border }
-            SBtn { x: 28; y: parent.height - 56; glyph: "chevron-left"; label: root.lt("Indietro", "Back"); onClicked: root.step = "where" }
+            SBtn { x: 28; y: parent.height - 56; glyph: "chevron-left"; label: root.lt("Indietro", "Back", "Zurück"); onClicked: root.step = "where" }
         }
 
         // ── network: which device ───────────────────────────────────────
         Item {
             visible: root.step === "net"
             anchors.fill: parent
-            Text { x: 28; y: 60; text: root.lt("Su quale computer o NAS?", "On which computer or NAS?"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
-            Text { x: 28; y: 96; text: root.scanState === "running" ? root.lt("Sto guardando la rete di casa… ", "Looking at the home network… ") + root.scanPct + "%" : root.lt("Questi sono i dispositivi che condividono cartelle.", "These are the devices sharing folders."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
+            Text { x: 28; y: 60; text: root.lt("Su quale computer o NAS?", "On which computer or NAS?", "Auf welchem Computer oder NAS?"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
+            Text { x: 28; y: 96; text: root.scanState === "running" ? root.lt("Sto guardando la rete di casa… ", "Looking at the home network… ", "Schaue im Heimnetzwerk… ") + root.scanPct + "%" : root.lt("Questi sono i dispositivi che condividono cartelle.", "These are the devices sharing folders.", "Das sind die Geräte, die Ordner freigeben."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
             Flickable {
                 x: 28; y: 126; width: parent.width - 56; height: parent.height - 126 - 80; clip: true; contentHeight: nCol.height; boundsBehavior: Flickable.StopAtBounds
                 Column { id: nCol; width: parent.width; spacing: 8
                     Repeater { model: root.hosts
-                        delegate: Line { required property var modelData; glyph: "network"; title: modelData.name || modelData.ip; hint: modelData.name ? modelData.ip : ""; action: root.lt("Questo", "This one"); onAct: root.pickHost(modelData.ip, modelData.name) } }
-                    Text { visible: !root.hosts.length && root.scanState !== "running"; text: root.lt("Non ho trovato niente. È acceso? Puoi anche scrivere l'indirizzo.", "I found nothing. Is it on? You can also type its address."); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 13 }
+                        delegate: Line { required property var modelData; glyph: "network"; title: modelData.name || modelData.ip; hint: modelData.name ? modelData.ip : ""; action: root.lt("Questo", "This one", "Dieses"); onAct: root.pickHost(modelData.ip, modelData.name) } }
+                    Text { visible: !root.hosts.length && root.scanState !== "running"; text: root.lt("Non ho trovato niente. È acceso? Puoi anche scrivere l'indirizzo.", "I found nothing. Is it on? You can also type its address.", "Ich habe nichts gefunden. Ist es an? Du kannst auch die Adresse eingeben."); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 13 }
                 }
             }
             Rectangle { x: 28; y: parent.height - 72; width: parent.width - 56; height: 1; color: Theme.border }
             Row { x: 28; y: parent.height - 56; spacing: 8
-                SBtn { glyph: "chevron-left"; label: root.lt("Indietro", "Back"); onClicked: root.step = "where" }
-                SBtn { glyph: "refresh-cw"; label: root.lt("Cerca ancora", "Look again"); on: root.scanState !== "running"; onClicked: root.scan() } }
-            SBtn { x: parent.width - 28 - width; y: parent.height - 56; glyph: "keyboard"; label: root.lt("Scrivi l'indirizzo", "Type the address"); onClicked: root.typeHost() }
+                SBtn { glyph: "chevron-left"; label: root.lt("Indietro", "Back", "Zurück"); onClicked: root.step = "where" }
+                SBtn { glyph: "refresh-cw"; label: root.lt("Cerca ancora", "Look again", "Erneut suchen"); on: root.scanState !== "running"; onClicked: root.scan() } }
+            SBtn { x: parent.width - 28 - width; y: parent.height - 56; glyph: "keyboard"; label: root.lt("Scrivi l'indirizzo", "Type the address", "Adresse eingeben"); onClicked: root.typeHost() }
         }
 
         // ── network: which shared folder ────────────────────────────────
         Item {
             visible: root.step === "netShares"
             anchors.fill: parent
-            Text { x: 28; y: 60; width: parent.width - 56; elide: Text.ElideRight; text: root.lt("Quale cartella di ", "Which folder on ") + (root.hostName || root.host) + "?"; color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
+            Text { x: 28; y: 60; width: parent.width - 56; elide: Text.ElideRight; text: root.lt("Quale cartella di ", "Which folder on ", "Welcher Ordner von ") + (root.hostName || root.host) + "?"; color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
             Text { x: 28; y: 96; width: parent.width - 56; elide: Text.ElideRight
-                   text: root.busy ? root.lt("Chiedo l'elenco delle cartelle…", "Asking for the list of folders…") : root.err ? root.err : root.user ? root.lt("Entrato come ", "Signed in as ") + root.user : root.lt("Le cartelle che condivide in rete.", "The folders it shares on the network.")
+                   text: root.busy ? root.lt("Chiedo l'elenco delle cartelle…", "Asking for the list of folders…", "Frage die Ordnerliste ab…") : root.err ? root.err : root.user ? root.lt("Entrato come ", "Signed in as ", "Angemeldet als ") + root.user : root.lt("Le cartelle che condivide in rete.", "The folders it shares on the network.", "Die Ordner, die es im Netzwerk freigibt.")
                    color: root.err ? Theme.red300 : Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
             Flickable {
                 x: 28; y: 126; width: parent.width - 56; height: parent.height - 126 - 80; clip: true; contentHeight: sCol.height; boundsBehavior: Flickable.StopAtBounds
                 Column { id: sCol; width: parent.width; spacing: 8
                     Repeater { model: root.smbShares
-                        delegate: Line { required property var modelData; glyph: "folder"; title: modelData.name; hint: modelData.comment; action: root.lt("Questa", "This one"); onAct: root.pickShare(modelData.name) } }
+                        delegate: Line { required property var modelData; glyph: "folder"; title: modelData.name; hint: modelData.comment; action: root.lt("Questa", "This one", "Dieser"); onAct: root.pickShare(modelData.name) } }
                 }
             }
             Rectangle { x: 28; y: parent.height - 72; width: parent.width - 56; height: 1; color: Theme.border }
             Row { x: 28; y: parent.height - 56; spacing: 8
-                SBtn { glyph: "chevron-left"; label: root.lt("Indietro", "Back"); onClicked: { root.step = "net"; root.err = "" } }
-                SBtn { glyph: "lock"; label: root.lt("Nome e password", "Name and password"); onClicked: root.askAuth(false, root.loadShares) } }
-            SBtn { x: parent.width - 28 - width; y: parent.height - 56; glyph: "keyboard"; label: root.lt("Scrivi il nome", "Type the name"); onClicked: root.typeShare() }
+                SBtn { glyph: "chevron-left"; label: root.lt("Indietro", "Back", "Zurück"); onClicked: { root.step = "net"; root.err = "" } }
+                SBtn { glyph: "lock"; label: root.lt("Nome e password", "Name and password", "Name und Passwort"); onClicked: root.askAuth(false, root.loadShares) } }
+            SBtn { x: parent.width - 28 - width; y: parent.height - 56; glyph: "keyboard"; label: root.lt("Scrivi il nome", "Type the name", "Namen eingeben"); onClicked: root.typeShare() }
         }
 
         // ── network: confirm ────────────────────────────────────────────
         Item {
             visible: root.step === "netConfirm"
             anchors.fill: parent
-            Text { x: 28; y: 60; text: root.lt("Aggiungo questa cartella?", "Add this folder?"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
+            Text { x: 28; y: 60; text: root.lt("Aggiungo questa cartella?", "Add this folder?", "Diesen Ordner hinzufügen?"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
             Column { x: 28; y: 110; width: parent.width - 56; spacing: 10
-                Line { glyph: "network"; title: root.share; hint: "//" + root.host + "/" + root.share + (root.user ? root.lt(" · utente ", " · user ") + root.user : "") }
+                Line { glyph: "network"; title: root.share; hint: "//" + root.host + "/" + root.share + (root.user ? root.lt(" · utente ", " · user ", " · Benutzer ") + root.user : "") }
                 Rectangle { width: parent.width; height: 64; radius: 10; color: root.rw ? Theme.goldA(0.08) : "transparent"; border.width: 1; border.color: root.rw ? Theme.goldA(0.5) : Theme.border
                     Rectangle { x: 14; anchors.verticalCenter: parent.verticalCenter; width: 22; height: 22; radius: 5; color: root.rw ? Theme.gold : Theme.dark; border.width: root.rw ? 0 : 1; border.color: Theme.light
                         Icon { visible: root.rw; anchors.centerIn: parent; name: "check"; size: 14; color: Theme.black } }
-                    Text { x: 50; y: 12; text: root.lt("Si può anche scrivere", "Allow writing too"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
-                    Text { x: 50; y: 34; width: parent.width - 64; elide: Text.ElideRight; text: root.lt("Serve per salvarci i CD rippati, le playlist, o per sistemare le cartelle da qui.", "Needed to keep ripped CDs or playlists there, or to tidy its folders from here."); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
+                    Text { x: 50; y: 12; text: root.lt("Si può anche scrivere", "Allow writing too", "Auch Schreiben erlauben"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+                    Text { x: 50; y: 34; width: parent.width - 64; elide: Text.ElideRight; text: root.lt("Serve per salvarci i CD rippati, le playlist, o per sistemare le cartelle da qui.", "Needed to keep ripped CDs or playlists there, or to tidy its folders from here.", "Nötig, um dort gerippte CDs oder Playlists zu speichern oder seine Ordner von hier zu verwalten."); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
                     Tap { onClicked: root.rw = !root.rw } }
                 Text { visible: !!root.err; width: parent.width; wrapMode: Text.WordWrap; text: root.err; color: Theme.red300; font.family: Theme.font; font.pixelSize: 13 }
                 Row { visible: root.busy; spacing: 10
@@ -385,55 +385,55 @@ Item {
                     Text { anchors.verticalCenter: parent.verticalCenter; text: Tr.t("sources.mounting"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 13 } }
             }
             Rectangle { x: 28; y: parent.height - 72; width: parent.width - 56; height: 1; color: Theme.border }
-            SBtn { x: 28; y: parent.height - 56; glyph: "chevron-left"; label: root.lt("Indietro", "Back"); onClicked: root.step = "netShares" }
-            SBtn { x: parent.width - 28 - width; y: parent.height - 56; lead: true; glyph: "plus"; on: !root.busy; label: root.lt("Aggiungi «", "Add «") + root.share + "»"; onClicked: root.addShare() }
+            SBtn { x: 28; y: parent.height - 56; glyph: "chevron-left"; label: root.lt("Indietro", "Back", "Zurück"); onClicked: root.step = "netShares" }
+            SBtn { x: parent.width - 28 - width; y: parent.height - 56; lead: true; glyph: "plus"; on: !root.busy; label: root.lt("Aggiungi «", "Add «", "Hinzufügen «") + root.share + "»"; onClicked: root.addShare() }
         }
 
         // ── a folder of this appliance, simple ──────────────────────────
         Item {
             visible: root.step === "folder"
             anchors.fill: parent
-            Text { x: 28; y: 64; text: root.lt("Quale cartella aggiungo?", "Which folder do I add?"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
-            Text { x: 28; y: 100; text: root.lt("Ho guardato dentro questo apparecchio: queste sono le sue cartelle.", "I looked inside this appliance: these are its folders."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
+            Text { x: 28; y: 64; text: root.lt("Quale cartella aggiungo?", "Which folder do I add?", "Welchen Ordner füge ich hinzu?"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
+            Text { x: 28; y: 100; text: root.lt("Ho guardato dentro questo apparecchio: queste sono le sue cartelle.", "I looked inside this appliance: these are its folders.", "Ich habe in diesem Gerät nachgeschaut: das sind seine Ordner."); color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
             Flickable {
                 x: 28; y: 130; width: parent.width - 56; height: parent.height - 130 - 80; clip: true; contentHeight: cCol.height; boundsBehavior: Flickable.StopAtBounds
                 Column { id: cCol; width: parent.width; spacing: 8
                     Repeater { model: root.newDisks()
-                        delegate: Line { required property var modelData; glyph: "hard-drive"; title: root.lt("Disco nuovo dentro: ", "New disk inside: ") + (modelData.model || modelData.path); hint: root.lt("va preparato dalla pagina La tua musica", "set it up from the Your music page"); action: root.lt("Vai", "Go"); onAct: { root.close(); root.src.view = "home" } } }
+                        delegate: Line { required property var modelData; glyph: "hard-drive"; title: root.lt("Disco nuovo dentro: ", "New disk inside: ", "Neuer Datenträger im Gerät: ") + (modelData.model || modelData.path); hint: root.lt("va preparato dalla pagina La tua musica", "set it up from the Your music page", "auf der Seite Deine Musik einrichten"); action: root.lt("Vai", "Go", "Los"); onAct: { root.close(); root.src.view = "home" } } }
                     Repeater { model: root.cands
                         delegate: Line { required property var modelData; radio: !modelData.inLib; done: modelData.inLib; chosen: root.chosen === modelData.path
                                          glyph: "folder"; title: modelData.name; hint: modelData.place + "  ›  " + modelData.path.split("/").pop()
-                                         action: modelData.inLib ? root.lt("già nella libreria", "already in the library") : ""; onAct: root.chosen = modelData.path } }
-                    Text { visible: !root.cands.length; text: root.lt("Guardo le cartelle…", "Looking at the folders…"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 13 }
+                                         action: modelData.inLib ? root.lt("già nella libreria", "already in the library", "schon in der Bibliothek") : ""; onAct: root.chosen = modelData.path } }
+                    Text { visible: !root.cands.length; text: root.lt("Guardo le cartelle…", "Looking at the folders…", "Schaue die Ordner an…"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 13 }
                     Rectangle {
                         width: parent.width; height: 56; radius: 12; color: "transparent"; border.width: 1; border.color: Theme.wa(0.16)
                         Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: "list"; size: 18; color: Theme.gold }
-                        Text { x: 46; y: 10; text: root.lt("Non è qui? Sfoglia tutte le cartelle", "Not here? Browse every folder"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
-                        Text { x: 46; y: 31; text: root.lt("Avanzate: albero, colonne, crea una cartella", "Advanced: tree, columns, make a folder"); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
+                        Text { x: 46; y: 10; text: root.lt("Non è qui? Sfoglia tutte le cartelle", "Not here? Browse every folder", "Nicht hier? Jeden Ordner durchsuchen"); color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+                        Text { x: 46; y: 31; text: root.lt("Avanzate: albero, colonne, crea una cartella", "Advanced: tree, columns, make a folder", "Erweitert: Baum, Spalten, Ordner anlegen"); color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 11 }
                         Icon { x: parent.width - 30; anchors.verticalCenter: parent.verticalCenter; name: "chevron-right"; size: 16; color: Theme.gold }
                         Tap { onClicked: { root.step = "adv"; pickEx.openAt(root.src && root.src.places.length ? root.src.places[0].root : "") } }
                     }
                 }
             }
             Rectangle { x: 28; y: parent.height - 72; width: parent.width - 56; height: 1; color: Theme.border }
-            SBtn { x: 28; y: parent.height - 56; glyph: "chevron-left"; label: root.lt("Indietro", "Back"); onClicked: root.step = "where" }
+            SBtn { x: 28; y: parent.height - 56; glyph: "chevron-left"; label: root.lt("Indietro", "Back", "Zurück"); onClicked: root.step = "where" }
             SBtn { x: parent.width - 28 - width; y: parent.height - 56; lead: true; glyph: "plus"; on: !!root.chosen && !root.busy
-                   label: root.chosen ? root.lt("Aggiungi «", "Add «") + root.chosen.split("/").pop() + "»" : root.lt("Aggiungi", "Add"); onClicked: root.addFolder(root.chosen) }
+                   label: root.chosen ? root.lt("Aggiungi «", "Add «", "Hinzufügen «") + root.chosen.split("/").pop() + "»" : root.lt("Aggiungi", "Add", "Hinzufügen"); onClicked: root.addFolder(root.chosen) }
         }
 
         // ── a folder, advanced: the explorer ────────────────────────────
         Item {
             visible: root.step === "adv"
             anchors.fill: parent
-            Text { x: 28; y: 62; text: root.lt("Scegli la cartella", "Pick the folder"); color: Theme.white; font.family: Theme.font; font.pixelSize: 22; font.bold: true }
+            Text { x: 28; y: 62; text: root.lt("Scegli la cartella", "Pick the folder", "Den Ordner wählen"); color: Theme.white; font.family: Theme.font; font.pixelSize: 22; font.bold: true }
             SrcExplorer { id: pickEx; picker: true; x: -4; y: 102; width: parent.width + 8; height: parent.height - 102 - 84 }
             Rectangle { x: 28; y: parent.height - 72; width: parent.width - 56; height: 1; color: Theme.border }
             Column { x: 28; y: parent.height - 58; width: parent.width - 470; spacing: 3
-                Head { text: root.lt("Cartella scelta", "Chosen folder") }
-                Text { width: parent.width; elide: Text.ElideLeft; text: pickEx.path || root.lt("scegline una a sinistra", "pick one on the left"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 13 } }
+                Head { text: root.lt("Cartella scelta", "Chosen folder", "Gewählter Ordner") }
+                Text { width: parent.width; elide: Text.ElideLeft; text: pickEx.path || root.lt("scegline una a sinistra", "pick one on the left", "wähle einen links"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 13 } }
             Row { x: parent.width - 28 - width; y: parent.height - 56; spacing: 8
-                SBtn { glyph: "chevron-left"; label: root.lt("Indietro", "Back"); onClicked: { root.step = "folder"; root.loadCands() } }
-                SBtn { lead: true; glyph: "plus"; on: !!pickEx.path && !root.busy; label: root.lt("Aggiungi questa cartella", "Add this folder"); onClicked: root.addFolder(pickEx.path) } }
+                SBtn { glyph: "chevron-left"; label: root.lt("Indietro", "Back", "Zurück"); onClicked: { root.step = "folder"; root.loadCands() } }
+                SBtn { lead: true; glyph: "plus"; on: !!pickEx.path && !root.busy; label: root.lt("Aggiungi questa cartella", "Add this folder", "Diesen Ordner hinzufügen"); onClicked: root.addFolder(pickEx.path) } }
         }
 
         // ── done ────────────────────────────────────────────────────────
@@ -442,9 +442,9 @@ Item {
             anchors.fill: parent
             Rectangle { x: parent.width / 2 - 36; y: 120; width: 72; height: 72; radius: 36; color: Theme.goldA(0.14)
                 Icon { anchors.centerIn: parent; name: "check"; size: 36; color: Theme.gold } }
-            Text { x: 60; y: 214; width: parent.width - 120; horizontalAlignment: Text.AlignHCenter; text: root.lt("Fatto", "Done"); color: Theme.white; font.family: Theme.font; font.pixelSize: 26; font.bold: true }
+            Text { x: 60; y: 214; width: parent.width - 120; horizontalAlignment: Text.AlignHCenter; text: root.lt("Fatto", "Done", "Fertig"); color: Theme.white; font.family: Theme.font; font.pixelSize: 26; font.bold: true }
             Text { x: 80; y: 258; width: parent.width - 160; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; text: root.doneText; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 14; lineHeight: 20; lineHeightMode: Text.FixedHeight }
-            SBtn { anchors.horizontalCenter: parent.horizontalCenter; y: parent.height - 80; lead: true; label: root.lt("Chiudi", "Close"); onClicked: root.close() }
+            SBtn { anchors.horizontalCenter: parent.horizontalCenter; y: parent.height - 80; lead: true; label: root.lt("Chiudi", "Close", "Schließen"); onClicked: root.close() }
         }
     }
 }

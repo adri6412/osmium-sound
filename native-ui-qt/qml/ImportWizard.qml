@@ -28,7 +28,7 @@ Item {
     Component.onCompleted: Ui.importMusic = root
     NavScope { active: root.visible }
 
-    function lt(it, en) { return I18n.lang === "it" ? it : en }
+    function lt(it, en, de) { return I18n.lang === "it" ? it : (I18n.lang === "de" && de !== undefined ? de : en) }
     function su(p) { return Api.srcBase + p }
     function defaultDest() {
         if (!src) return ""
@@ -53,14 +53,14 @@ Item {
         for (var i = 0; i < ps.length; i++) if (ps[i].root && src.under(p, ps[i].root) && (!best || ps[i].root.length > best.root.length)) best = ps[i]
         if (!best) return p
         var rest = p.slice(best.root.length).split("/").filter(function(x) { return x })
-        return (best.group === "dev" ? lt("Questo apparecchio", "This appliance") + "  ›  " : "") + best.name + (rest.length ? "  ›  " + rest.join("  ›  ") : "")
+        return (best.group === "dev" ? lt("Questo apparecchio", "This appliance", "Dieses Gerät") + "  ›  " : "") + best.name + (rest.length ? "  ›  " + rest.join("  ›  ") : "")
     }
     function start(op, paths, to, exists) {
         if (!paths.length || !to) return
         busy = true; err = ""
         Api.post(su("/api/local/" + op), { paths: paths, dest: to, exists: exists }, function(ok, d) {
             root.busy = false
-            if (!ok || !d || d.success === false || !d.job) { root.err = d && d.message ? String(d.message) : lt("Non è riuscito", "That did not work"); return }
+            if (!ok || !d || d.success === false || !d.job) { root.err = d && d.message ? String(d.message) : lt("Non è riuscito", "That did not work", "Hat nicht geklappt"); return }
             root.jobId = String(d.job); root.job = { state: "running", progress: 0 }; root.step = "progress"
             if (root.src) root.src.jobId = root.jobId
         }, 20000)
@@ -71,7 +71,7 @@ Item {
         busy = true
         Api.get(su("/api/local/list?path=" + encodeURIComponent(stick.root)), function(ok, d) {
             root.busy = false
-            if (!ok || !d || !d.entries) { root.err = lt("Non riesco a leggere la chiavetta", "I cannot read the stick"); return }
+            if (!ok || !d || !d.entries) { root.err = lt("Non riesco a leggere la chiavetta", "I cannot read the stick", "Ich kann den Stick nicht lesen"); return }
             root.start("copy", d.entries.map(function(e) { return String(e.path) }), root.dest, root.mode)
         }, 15000)
     }
@@ -99,7 +99,7 @@ Item {
         Text { x: 74; y: 39; width: parent.width - 90; wrapMode: Text.WordWrap; maximumLineCount: 2; text: wy.hint; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
         Text { x: 74; y: parent.height - 28; width: parent.width - 90; elide: Text.ElideRight; text: wy.foot; color: wy.chosen ? Theme.gold : Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 12 }
         Rectangle { id: bestR; visible: wy.best; x: parent.width - 14 - width; y: 16; width: bT.implicitWidth + 16; height: 22; radius: 11; color: Theme.gold
-            Text { id: bT; anchors.centerIn: parent; text: root.lt("consigliata", "recommended"); color: Theme.black; font.family: Theme.font; font.pixelSize: 11; font.bold: true } }
+            Text { id: bT; anchors.centerIn: parent; text: root.lt("consigliata", "recommended", "empfohlen"); color: Theme.black; font.family: Theme.font; font.pixelSize: 11; font.bold: true } }
         Tap { id: wyTap; onClicked: wy.picked() }
     }
     component Radio: Rectangle {
@@ -140,7 +140,7 @@ Item {
         Row {
             x: 28; y: 22; spacing: 10
             Repeater {
-                model: [root.lt("Dove", "Where"), root.lt("Cosa faccio", "What to do"), root.lt("Fatto", "Done")]
+                model: [root.lt("Dove", "Where", "Wohin"), root.lt("Cosa faccio", "What to do", "Was ich tue"), root.lt("Fatto", "Done", "Fertig")]
                 delegate: Row {
                     required property var modelData
                     required property int index
@@ -161,12 +161,12 @@ Item {
             Rectangle { x: root.step === "what" ? 3 : parent.width / 2; y: 3; width: parent.width / 2 - 3; height: 28; radius: 14; color: Theme.gold }
             Row { anchors.fill: parent
                 Item { width: parent.width / 2; height: parent.height
-                    Text { anchors.centerIn: parent; text: root.lt("Semplice", "Simple"); color: root.step === "what" ? Theme.black : Theme.silver; font.family: Theme.font; font.pixelSize: 12; font.bold: root.step === "what" }
+                    Text { anchors.centerIn: parent; text: root.lt("Semplice", "Simple", "Einfach"); color: root.step === "what" ? Theme.black : Theme.silver; font.family: Theme.font; font.pixelSize: 12; font.bold: root.step === "what" }
                     Tap { onClicked: root.step = "what" } }
                 Item { width: parent.width / 2; height: parent.height
                     Row { anchors.centerIn: parent; spacing: 6
                         Icon { anchors.verticalCenter: parent.verticalCenter; name: "copy"; size: 13; color: root.step === "adv" ? Theme.black : Theme.silver }
-                        Text { text: root.lt("Avanzate", "Advanced"); color: root.step === "adv" ? Theme.black : Theme.silver; font.family: Theme.font; font.pixelSize: 12; font.bold: root.step === "adv" } }
+                        Text { text: root.lt("Avanzate", "Advanced", "Erweitert"); color: root.step === "adv" ? Theme.black : Theme.silver; font.family: Theme.font; font.pixelSize: 12; font.bold: root.step === "adv" } }
                     Tap { onClicked: root.toAdv() } }
             }
         }
@@ -178,42 +178,42 @@ Item {
         Item {
             visible: root.step === "what"
             anchors.fill: parent
-            Text { x: 28; y: 62; width: parent.width - 56; elide: Text.ElideRight; text: (root.stick ? root.stick.name : "USB") + root.lt(": cosa ne faccio?", ": what do I do with it?"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
-            Text { x: 28; y: 98; text: root.stick && root.stick.usage ? root.lt("Contiene ", "It holds ") + root.src.gb(root.stick.usage.total - root.stick.usage.free) + root.lt(". Puoi ascoltarla da lì o copiarla dentro l'apparecchio.", ". Listen to it from there, or copy it into the appliance.") : ""; color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
+            Text { x: 28; y: 62; width: parent.width - 56; elide: Text.ElideRight; text: (root.stick ? root.stick.name : "USB") + root.lt(": cosa ne faccio?", ": what do I do with it?", ": was soll ich damit machen?"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
+            Text { x: 28; y: 98; text: root.stick && root.stick.usage ? root.lt("Contiene ", "It holds ", "Er enthält ") + root.src.gb(root.stick.usage.total - root.stick.usage.free) + root.lt(". Puoi ascoltarla da lì o copiarla dentro l'apparecchio.", ". Listen to it from there, or copy it into the appliance.", ". Hör sie von dort oder kopiere sie ins Gerät.") : ""; color: Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
             Row {
                 x: 28; y: 128; width: parent.width - 56; spacing: 12
-                Way { chosen: !root.copyIt; glyph: "usb"; title: root.lt("Ascoltala dalla chiavetta", "Listen from the stick"); hint: root.lt("Resta sulla chiavetta: si sente finché è collegata.", "It stays on the stick: it plays while it is plugged in.")
-                      foot: root.stick && root.stick.lib ? root.lt("È già nella libreria", "Already in the library") : root.lt("La aggiungo alla libreria", "I add it to the library"); onPicked: root.copyIt = false }
-                Way { chosen: root.copyIt; best: true; glyph: "copy"; title: root.lt("Copiala nell'apparecchio", "Copy it into the appliance"); hint: root.lt("Resta anche quando togli la chiavetta.", "It stays when the stick goes.")
-                      foot: { var p = root.src ? root.src.places.filter(function(x) { return x.root && root.src.under(root.dest, x.root) }) : []; return p.length && p[p.length - 1].usage ? p[p.length - 1].name + ": " + root.src.gb(p[p.length - 1].usage.free) + root.lt(" liberi", " free") : "" }
+                Way { chosen: !root.copyIt; glyph: "usb"; title: root.lt("Ascoltala dalla chiavetta", "Listen from the stick", "Vom Stick hören"); hint: root.lt("Resta sulla chiavetta: si sente finché è collegata.", "It stays on the stick: it plays while it is plugged in.", "Sie bleibt auf dem Stick: sie spielt, solange er eingesteckt ist.")
+                      foot: root.stick && root.stick.lib ? root.lt("È già nella libreria", "Already in the library", "Schon in der Bibliothek") : root.lt("La aggiungo alla libreria", "I add it to the library", "Ich füge sie zur Bibliothek hinzu"); onPicked: root.copyIt = false }
+                Way { chosen: root.copyIt; best: true; glyph: "copy"; title: root.lt("Copiala nell'apparecchio", "Copy it into the appliance", "Ins Gerät kopieren"); hint: root.lt("Resta anche quando togli la chiavetta.", "It stays when the stick goes.", "Sie bleibt, auch wenn der Stick weg ist.")
+                      foot: { var p = root.src ? root.src.places.filter(function(x) { return x.root && root.src.under(root.dest, x.root) }) : []; return p.length && p[p.length - 1].usage ? p[p.length - 1].name + ": " + root.src.gb(p[p.length - 1].usage.free) + root.lt(" liberi", " free", " frei") : "" }
                       onPicked: root.copyIt = true }
             }
-            Head { visible: root.copyIt; x: 28; y: 258; text: root.lt("Dove", "Where") }
+            Head { visible: root.copyIt; x: 28; y: 258; text: root.lt("Dove", "Where", "Wohin") }
             Rectangle {
                 visible: root.copyIt
                 x: 28; y: 274; width: parent.width - 56; height: 44; radius: 10; color: Theme.dark; border.width: 1; border.color: Theme.border
                 Icon { x: 14; anchors.verticalCenter: parent.verticalCenter; name: "folder"; size: 17; color: Theme.gold }
                 Text { x: 42; width: parent.width - 42 - 100; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideLeft; text: root.destName(root.dest); color: Theme.white; font.family: Theme.font; font.pixelSize: 13 }
-                SBtn { small: true; x: parent.width - 8 - width; anchors.verticalCenter: parent.verticalCenter; label: root.lt("Cambia", "Change")
-                       onClicked: if (Ui.folderChooser) Ui.folderChooser.openAt(root.dest, root.lt("Copia qui", "Copy here"), function(p) { root.dest = p }) }
+                SBtn { small: true; x: parent.width - 8 - width; anchors.verticalCenter: parent.verticalCenter; label: root.lt("Cambia", "Change", "Ändern")
+                       onClicked: if (Ui.folderChooser) Ui.folderChooser.openAt(root.dest, root.lt("Copia qui", "Copy here", "Hierher kopieren"), function(p) { root.dest = p }) }
             }
-            Head { visible: root.copyIt; x: 28; y: 332; text: root.lt("Cosa", "What") }
+            Head { visible: root.copyIt; x: 28; y: 332; text: root.lt("Cosa", "What", "Was") }
             Column {
                 visible: root.copyIt
                 x: 28; y: 348; width: parent.width - 56; spacing: 8
-                Radio { chosen: root.mode === "skip"; title: root.lt("Solo quello che manca", "Only what is missing"); hint: root.lt("quello che c'è già lo salto", "what is already there is skipped"); onPicked: root.mode = "skip" }
-                Radio { chosen: root.mode === "replace"; title: root.lt("Tutto", "Everything"); hint: root.lt("quello che c'è già lo sostituisco", "what is already there is replaced"); onPicked: root.mode = "replace" }
+                Radio { chosen: root.mode === "skip"; title: root.lt("Solo quello che manca", "Only what is missing", "Nur was fehlt"); hint: root.lt("quello che c'è già lo salto", "what is already there is skipped", "was schon da ist, überspringe ich"); onPicked: root.mode = "skip" }
+                Radio { chosen: root.mode === "replace"; title: root.lt("Tutto", "Everything", "Alles"); hint: root.lt("quello che c'è già lo sostituisco", "what is already there is replaced", "was schon da ist, ersetze ich"); onPicked: root.mode = "replace" }
             }
             Text { visible: !!root.err; x: 28; y: parent.height - 96; width: parent.width - 56; elide: Text.ElideRight; text: root.err; color: Theme.red300; font.family: Theme.font; font.pixelSize: 13 }
             Rectangle { x: 28; y: parent.height - 72; width: parent.width - 56; height: 1; color: Theme.border }
             Row { visible: root.copyIt; x: 28; y: parent.height - 48; spacing: 8
                 Icon { anchors.verticalCenter: parent.verticalCenter; name: "copy"; size: 15; color: Theme.gold }
-                Text { anchors.verticalCenter: parent.verticalCenter; text: root.lt("Avanzate: scegli tu cosa copiare e dove", "Advanced: pick what to copy and where"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 13; font.underline: true
+                Text { anchors.verticalCenter: parent.verticalCenter; text: root.lt("Avanzate: scegli tu cosa copiare e dove", "Advanced: pick what to copy and where", "Erweitert: wähle, was wohin kopiert wird"); color: Theme.gold; font.family: Theme.font; font.pixelSize: 13; font.underline: true
                     Tap { grow: 8; onClicked: root.toAdv() } } }
             Row { x: parent.width - 28 - width; y: parent.height - 56; spacing: 8
-                SBtn { glyph: "chevron-left"; label: root.lt("Indietro", "Back"); onClicked: { root.close(); if (Ui.addMusic) Ui.addMusic.open() } }
+                SBtn { glyph: "chevron-left"; label: root.lt("Indietro", "Back", "Zurück"); onClicked: { root.close(); if (Ui.addMusic) Ui.addMusic.open() } }
                 SBtn { lead: true; glyph: root.copyIt ? "copy" : "check"; on: !root.busy && (!root.copyIt || !!root.dest)
-                       label: !root.copyIt ? (root.stick && root.stick.lib ? root.lt("Va bene così", "Fine as it is") : root.lt("Aggiungi alla libreria", "Add to the library")) : root.lt("Copia", "Copy")
+                       label: !root.copyIt ? (root.stick && root.stick.lib ? root.lt("Va bene così", "Fine as it is", "Passt so") : root.lt("Aggiungi alla libreria", "Add to the library", "Zur Bibliothek hinzufügen")) : root.lt("Copia", "Copy", "Kopieren")
                        onClicked: if (root.copyIt) root.copyAll(); else root.listenOnly() } }
         }
 
@@ -221,25 +221,25 @@ Item {
         Item {
             visible: root.step === "adv"
             anchors.fill: parent
-            Text { x: 28; y: 62; text: root.lt("Scegli cosa copiare e dove", "Pick what to copy and where"); color: Theme.white; font.family: Theme.font; font.pixelSize: 22; font.bold: true }
-            SrcFileList { id: fromP; tag: root.lt("DA", "FROM"); active: true; x: 28; y: 104; width: (parent.width - 56 - 96) / 2; height: parent.height - 104 - 84 }
+            Text { x: 28; y: 62; text: root.lt("Scegli cosa copiare e dove", "Pick what to copy and where", "Wähle, was wohin kopiert wird"); color: Theme.white; font.family: Theme.font; font.pixelSize: 22; font.bold: true }
+            SrcFileList { id: fromP; tag: root.lt("DA", "FROM", "VON"); active: true; x: 28; y: 104; width: (parent.width - 56 - 96) / 2; height: parent.height - 104 - 84 }
             Column {
                 x: 28 + fromP.width + 10; y: fromP.y + fromP.height / 2 - height / 2; width: 76; spacing: 8
                 Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: 52; height: 52; radius: 26; color: Theme.gold
                     Icon { anchors.centerIn: parent; name: "chevron-right"; size: 26; color: Theme.black } }
-                Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.lt("va in", "goes to"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.lt("va in", "goes to", "geht nach"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
             }
-            SrcFileList { id: toP; tag: root.lt("A", "TO"); selectable: false; x: 28 + fromP.width + 96; y: 104; width: fromP.width; height: fromP.height
+            SrcFileList { id: toP; tag: root.lt("A", "TO", "NACH"); selectable: false; x: 28 + fromP.width + 96; y: 104; width: fromP.width; height: fromP.height
                           mark: fromP.sel.map(function(p) { return p.split("/").pop() }) }
             Rectangle { x: 28; y: parent.height - 72; width: parent.width - 56; height: 1; color: Theme.border }
             Column { x: 28; y: parent.height - 62; spacing: 4
-                Head { text: root.lt("Se c'è già", "If it is already there") }
-                Seg { items: [["skip", root.lt("Salta", "Skip")], ["replace", root.lt("Sostituisci", "Replace")], ["keep", root.lt("Tieni entrambi", "Keep both")]]
+                Head { text: root.lt("Se c'è già", "If it is already there", "Wenn schon vorhanden") }
+                Seg { items: [["skip", root.lt("Salta", "Skip", "Überspringen")], ["replace", root.lt("Sostituisci", "Replace", "Ersetzen")], ["keep", root.lt("Tieni entrambi", "Keep both", "Beide behalten")]]
                       value: root.mode; onPick: (v) => root.mode = v } }
             Row { x: parent.width - 28 - width; y: parent.height - 56; spacing: 8
-                SBtn { glyph: "chevron-left"; label: root.lt("Indietro", "Back"); onClicked: root.step = "what" }
-                SBtn { label: root.lt("Sposta", "Move"); on: fromP.sel.length > 0 && toP.writable && !root.busy; onClicked: root.start("move", fromP.sel, toP.path, root.mode) }
-                SBtn { lead: true; glyph: "copy"; on: fromP.sel.length > 0 && toP.writable && !root.busy; label: root.lt("Copia", "Copy"); onClicked: root.start("copy", fromP.sel, toP.path, root.mode) } }
+                SBtn { glyph: "chevron-left"; label: root.lt("Indietro", "Back", "Zurück"); onClicked: root.step = "what" }
+                SBtn { label: root.lt("Sposta", "Move", "Verschieben"); on: fromP.sel.length > 0 && toP.writable && !root.busy; onClicked: root.start("move", fromP.sel, toP.path, root.mode) }
+                SBtn { lead: true; glyph: "copy"; on: fromP.sel.length > 0 && toP.writable && !root.busy; label: root.lt("Copia", "Copy", "Kopieren"); onClicked: root.start("copy", fromP.sel, toP.path, root.mode) } }
         }
 
         // ── the copy, going on by itself ────────────────────────────────
@@ -248,24 +248,24 @@ Item {
             anchors.fill: parent
             readonly property var j: root.job || ({})
             readonly property bool over: j.state === "done" || j.state === "error"
-            Text { x: 28; y: 62; text: parent.j.state === "error" ? root.lt("La copia si è fermata", "The copy stopped") : parent.over ? root.lt("Copia finita", "Copy finished") : root.lt("Sto copiando la musica", "Copying the music"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
+            Text { x: 28; y: 62; text: parent.j.state === "error" ? root.lt("La copia si è fermata", "The copy stopped", "Das Kopieren wurde gestoppt") : parent.over ? root.lt("Copia finita", "Copy finished", "Kopieren fertig") : root.lt("Sto copiando la musica", "Copying the music", "Kopiere die Musik"); color: Theme.white; font.family: Theme.font; font.pixelSize: 24; font.bold: true }
             Text { x: 28; y: 98; width: parent.width - 56; wrapMode: Text.WordWrap
                    text: parent.j.state === "error" ? String(parent.j.message || "")
-                         : parent.over ? root.lt("La libreria si aggiorna da sola: i brani compaiono in Musica fra poco. Ora puoi togliere la chiavetta.", "The library updates by itself: the tracks show up in Music shortly. You can take the stick out now.")
-                         : root.lt("Puoi chiudere questa finestra: continuo da solo e i brani compaiono in Musica a copia finita. Non togliere la chiavetta finché non ho finito.", "You can close this window: I carry on by myself and the tracks show up in Music when it is done. Do not take the stick out before I am finished.")
+                         : parent.over ? root.lt("La libreria si aggiorna da sola: i brani compaiono in Musica fra poco. Ora puoi togliere la chiavetta.", "The library updates by itself: the tracks show up in Music shortly. You can take the stick out now.", "Die Bibliothek aktualisiert sich von selbst: die Titel erscheinen gleich in Musik. Du kannst den Stick jetzt abziehen.")
+                         : root.lt("Puoi chiudere questa finestra: continuo da solo e i brani compaiono in Musica a copia finita. Non togliere la chiavetta finché non ho finito.", "You can close this window: I carry on by myself and the tracks show up in Music when it is done. Do not take the stick out before I am finished.", "Du kannst dieses Fenster schließen: ich mache allein weiter und die Titel erscheinen in Musik, wenn es fertig ist. Zieh den Stick nicht ab, bevor ich fertig bin.")
                    color: parent.j.state === "error" ? Theme.red300 : Theme.silverA(0.65); font.family: Theme.font; font.pixelSize: 13 }
             Rectangle {
                 x: 28; y: 160; width: parent.width - 56; height: 96; radius: 12; color: Theme.dark; border.width: 1; border.color: Theme.border
                 id: pbox
                 readonly property var j: parent.j
-                Text { x: 16; y: 14; text: (pbox.j.progress || 0) + "%" + (pbox.j.total ? "  ·  " + root.src.gb(pbox.j.done || 0) + root.lt(" di ", " of ") + root.src.gb(pbox.j.total) : ""); color: Theme.white; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
-                Text { x: parent.width - 16 - width; y: 16; text: pbox.j.skipped ? root.lt("saltati perché c'erano già: ", "skipped, already there: ") + pbox.j.skipped : ""; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
+                Text { x: 16; y: 14; text: (pbox.j.progress || 0) + "%" + (pbox.j.total ? "  ·  " + root.src.gb(pbox.j.done || 0) + root.lt(" di ", " of ", " von ") + root.src.gb(pbox.j.total) : ""); color: Theme.white; font.family: Theme.font; font.pixelSize: 16; font.bold: true }
+                Text { x: parent.width - 16 - width; y: 16; text: pbox.j.skipped ? root.lt("saltati perché c'erano già: ", "skipped, already there: ", "übersprungen, schon da: ") + pbox.j.skipped : ""; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
                 Rectangle { x: 16; y: 46; width: parent.width - 32; height: 8; radius: 4; color: Theme.light
                     Rectangle { width: parent.width * Math.min(1, (pbox.j.progress || 0) / 100); height: parent.height; radius: 4; color: pbox.j.state === "error" ? Theme.red400 : Theme.gold } }
-                Text { x: 16; y: 66; width: parent.width - 32; elide: Text.ElideMiddle; text: pbox.j.current ? root.lt("Adesso: ", "Now: ") + pbox.j.current : ""; color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 12 }
+                Text { x: 16; y: 66; width: parent.width - 32; elide: Text.ElideMiddle; text: pbox.j.current ? root.lt("Adesso: ", "Now: ", "Jetzt: ") + pbox.j.current : ""; color: Theme.silverA(0.55); font.family: Theme.font; font.pixelSize: 12 }
             }
             Rectangle { x: 28; y: parent.height - 72; width: parent.width - 56; height: 1; color: Theme.border }
-            SBtn { x: parent.width - 28 - width; y: parent.height - 56; lead: true; label: parent.over ? root.lt("Chiudi", "Close") : root.lt("Chiudi, continua da solo", "Close, carry on by yourself"); onClicked: root.close() }
+            SBtn { x: parent.width - 28 - width; y: parent.height - 56; lead: true; label: parent.over ? root.lt("Chiudi", "Close", "Schließen") : root.lt("Chiudi, continua da solo", "Close, carry on by yourself", "Schließen, mach allein weiter"); onClicked: root.close() }
         }
     }
     function toAdv() {

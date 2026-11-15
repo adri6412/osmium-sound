@@ -1,0 +1,17 @@
+[Unit]
+Description=Osmium Sound — load driver-pack modules and re-pin after boot
+ConditionPathExists=/usr/lib/osmium/IMAGE_VERSION
+ConditionPathExists=/var/lib/hifi-player/driverpack
+ConditionKernelCommandLine=!boot=live
+
+[Timer]
+# Firmware from a pack is already merged by systemd-sysext at early boot; this
+# timer is for the rarer out-of-tree .ko (loaded by insmod) and for re-pinning
+# after an OTA. One minute in: the interface is up and nothing urgent waits on it.
+OnBootSec=1min
+AccuracySec=15s
+# A missed run is covered by the next boot's OnBootSec.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

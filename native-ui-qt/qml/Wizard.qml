@@ -39,6 +39,45 @@ Item {
     property string msg: ""
     property int progress: 0
     property int countdown: 0
+    // driver pack (firmware/kernel modules the developer signed and sent):
+    // installed here from a USB stick, offline — the common case is that it is
+    // the Wi-Fi firmware that is missing, so the network path is not available.
+    property bool dpOpen: false
+    property string dpStage: ""          // "" | scanning | noUsb | empty | list | installing | done | failed
+    property var dpPacks: []             // [{path,name,description,signature}]
+    property bool dpSecureBoot: false
+    function dpShow() { dpOpen = true; dpStage = ""; dpPacks = []; dpSecureBoot = false; dpScan() }
+    function dpScan() {
+        dpStage = "scanning"; dpPacks = []; dpSecureBoot = false
+        Api.post(Api.srcBase + "/api/drivers/usb/scan", {}, function(ok, d, st) {
+            if (!ok || st < 200 || st >= 300 || !d || typeof d !== "object") { dpStage = "noUsb"; return }
+            var out = (d.packs || []).map(function(p) {
+                return { path: String(p.path || ""), name: String(p.name || ""),
+                         description: String(p.description || ""), signature: String(p.signature || "") }
+            })
+            dpPacks = out
+            dpStage = out.length ? "list" : "empty"
+        }, 60000)
+    }
+    function dpInstall(i) {
+        if (i < 0 || i >= dpPacks.length) return
+        var p = dpPacks[i]
+        if (p.signature !== "valid" || !p.path) return   // the device re-verifies anyway
+        dpStage = "installing"; dpSecureBoot = false
+        Api.post(Api.srcBase + "/api/drivers/install", { usb_pack: p.path }, function(ok, d, st) {
+            // detached worker on the device; the status timer below drives the rest
+            if (!ok || st < 200 || st >= 300) dpStage = "failed"
+        }, 30000)
+    }
+    function dpPoll() {
+        Api.get(Api.srcBase + "/api/drivers/status", function(ok, d) {
+            if (!ok || !d || typeof d !== "object") return
+            dpSecureBoot = !!d.secure_boot
+            var s = String(d.state || "")
+            if (s === "done") dpStage = "done"
+            else if (s === "error" || s === "failed") dpStage = "failed"
+        }, 6000)
+    }
 
     Component.onCompleted: {
         if (Sys.forcedWizard) { dry = Sys.wizardDry; mode = Sys.forcedWizard === "install" ? 2 : 1; start(); return }
@@ -95,6 +134,8 @@ Item {
     Timer { interval: 1000; repeat: true; running: root.mode === 2; onTriggered: root.readInstall() }
     Timer { interval: 1000; repeat: true; running: root.mode === 2 && root.state === "done"
             onTriggered: { if (root.countdown === 0) root.countdown = 10; else if (root.countdown > 1) root.countdown--; else if (!root.dry) { root.countdown = 0; Api.post(Api.apiBase + "/reboot", {}) } } }
+    // while a driver pack is installing, poll its status file on :8080
+    Timer { interval: 1500; repeat: true; running: root.dpOpen && root.dpStage === "installing"; onTriggered: root.dpPoll() }
     // Quasi ogni router di casa trasmette lo stesso nome su 2.4 e 5 GHz: senza
     // sapere quali nomi sono doppi le due righe sarebbero indistinguibili, e
     // la banda scelta non avrebbe senso da mandare (si fissa il profilo su una
@@ -161,6 +202,19 @@ Item {
         Icon { x: 8; y: parent.height - 18; name: "smartphone"; size: 11; color: Theme.blackA(0.7) }   // icona Smartphone accanto all'indirizzo
         Text { x: 20; y: parent.height - 20; width: parent.width - 24; height: 16; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: parent.value; elide: Text.ElideMiddle; color: Qt.rgba(0, 0, 0, 0.7); font.family: Theme.font; font.pixelSize: 10 }
     }
+    // Compact top-right pill that opens the "load drivers from USB" flow. Lives
+    // under the QR in the installer, and stands alone at first boot (where a user
+    // with dead Wi-Fi is stuck and the QR address is not yet reachable).
+    component DriverCorner: Rectangle {
+        signal clicked()
+        width: dcLbl.implicitWidth + 24 + 18 + 8; height: 36; radius: 10
+        color: dcTap.mix(Theme.wa(0.08), Theme.wa(0.16)); border.width: 1; border.color: Theme.wa(0.14)
+        Row { anchors.centerIn: parent; spacing: 8
+              Icon { name: "usb"; size: 16; color: Theme.silverA(0.85); anchors.verticalCenter: parent.verticalCenter }
+              Text { id: dcLbl; text: Tr.t("wizard.driverpack.button"); color: Theme.silverA(0.85); font.family: Theme.font; font.pixelSize: 13; anchors.verticalCenter: parent.verticalCenter } }
+        scale: dcTap.tapScale
+        Tap { id: dcTap; tap: 0.97; onClicked: parent.clicked() }
+    }
 
     Rectangle { anchors.fill: parent; color: Theme.dark }
     Item {
@@ -170,6 +224,9 @@ Item {
         Item {
             visible: root.mode === 1
             anchors.fill: parent
+            // At first boot a user whose Wi-Fi firmware is missing can load the
+            // signed driver pack from a USB stick without any network.
+            DriverCorner { x: root.width - 16 - width; y: 64; onClicked: root.dpShow() }
             readonly property real headH: 64 + 24 + 30 + 8 + 40 + 16
             readonly property int shownNets: Math.min(5, Math.max(2, root.nets.length))
             readonly property real bh: root.connected ? headH + 74 + 16 + 110 : headH + 48 * (root.nets.length ? Math.min(5, root.nets.length) : 2) + (root.pick >= 0 ? 12 + 44 + 8 + 40 : 32)
@@ -283,6 +340,7 @@ Item {
                 }
             }
             QrCorner { visible: !parent.busy && root.step <= 1 }
+            DriverCorner { visible: !parent.busy && root.step <= 1; x: root.width - 16 - width; y: 64 + 144 + 12; onClicked: root.dpShow() }
             // avanzamento / esito
             Item {
                 visible: parent.busy
@@ -361,6 +419,87 @@ Item {
                             onClicked: { if (root.dry) { root.msg = "Forced preview — install not started."; return }
                                          Api.post(Api.apiBase + "/install/start", { device: parent.dk.path }); root.state = "running"; root.progress = 0 } }
                 Text { visible: root.dry && root.msg !== ""; y: parent.y0 + 274; width: parent.width; height: 20; horizontalAlignment: Text.AlignHCenter; text: root.msg; color: Theme.silverA(0.5); font.family: Theme.font; font.pixelSize: 12 }
+            }
+        }
+    }
+
+    // ── driver pack overlay (load signed firmware/modules from USB) ──────────
+    Item {
+        id: dpOverlay
+        anchors.fill: parent
+        visible: root.dpOpen
+        z: 100
+        // dim the wizard and swallow taps that miss the card
+        Rectangle { anchors.fill: parent; color: Theme.blackA(0.6)
+                    Tap { navigable: false; onClicked: {} } }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 480
+            height: dpCol.implicitHeight + 48
+            radius: 16; color: Theme.dark; border.width: 1; border.color: Theme.wa(0.12)
+            Column {
+                id: dpCol
+                x: 24; y: 24; width: parent.width - 48; spacing: 16
+                // title + close
+                Item {
+                    width: parent.width; height: 28
+                    Text { anchors.verticalCenter: parent.verticalCenter; text: Tr.t("wizard.driverpack.title"); color: Theme.white; font.family: Theme.font; font.pixelSize: 20; font.bold: true }
+                    Icon { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; name: "x"; size: 20; color: Theme.silverA(0.6)
+                           Tap { grow: 10; onClicked: root.dpOpen = false } }
+                }
+                // intro
+                Text { visible: root.dpStage === ""; width: parent.width; wrapMode: Text.Wrap; text: Tr.t("wizard.driverpack.intro"); color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 14; lineHeight: 20; lineHeightMode: Text.FixedHeight }
+                BigButton { visible: root.dpStage === ""; width: parent.width; color: Theme.gold; label: Tr.t("wizard.driverpack.scan"); trail: "search"; onClicked: root.dpScan() }
+                // scanning / installing: spinner + message
+                Row { visible: root.dpStage === "scanning" || root.dpStage === "installing"; spacing: 12
+                      Spinner { radius: 11; thickness: 3; active: dpOverlay.visible; anchors.verticalCenter: parent.verticalCenter }
+                      Text { anchors.verticalCenter: parent.verticalCenter; text: Tr.t(root.dpStage === "installing" ? "wizard.driverpack.installing" : "wizard.driverpack.scanning"); color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 14 } }
+                // nothing on the stick / no stick: message + retry
+                Text { visible: root.dpStage === "noUsb" || root.dpStage === "empty"; width: parent.width; wrapMode: Text.Wrap; text: Tr.t(root.dpStage === "noUsb" ? "wizard.driverpack.noUsb" : "wizard.driverpack.noPacks"); color: Theme.silverA(0.8); font.family: Theme.font; font.pixelSize: 14; lineHeight: 20; lineHeightMode: Text.FixedHeight }
+                BigButton { visible: root.dpStage === "noUsb" || root.dpStage === "empty"; width: parent.width; color: cTap3.mix(Theme.surface, Theme.light); fg: Theme.white; label: Tr.t("wizard.driverpack.scan"); trail: "refresh-cw"; onClicked: root.dpScan(); Tap { id: cTap3; onClicked: root.dpScan() } }
+                // the packs found on the stick
+                Text { visible: root.dpStage === "list"; width: parent.width; text: Tr.t("wizard.driverpack.found"); color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 13 }
+                Column {
+                    visible: root.dpStage === "list"; width: parent.width; spacing: 10
+                    Repeater {
+                        model: root.dpStage === "list" ? root.dpPacks : []
+                        Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: dpCol.width; height: 64; radius: 12; color: Theme.wa(0.05); border.width: 1; border.color: Theme.wa(0.1)
+                            readonly property bool good: modelData.signature === "valid" && modelData.path !== ""
+                            Column { x: 14; width: parent.width - 124; anchors.verticalCenter: parent.verticalCenter; spacing: 3
+                                     Text { width: parent.width; elide: Text.ElideRight; text: modelData.name; color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true }
+                                     Text { visible: parent.parent.good; width: parent.width; elide: Text.ElideRight; text: modelData.description; color: Theme.silverA(0.6); font.family: Theme.font; font.pixelSize: 12 }
+                                     Text { visible: !parent.parent.good; width: parent.width; wrapMode: Text.Wrap; maximumLineCount: 2; text: Tr.t("wizard.driverpack.badSignature"); color: Theme.red400; font.family: Theme.font; font.pixelSize: 12 } }
+                            Rectangle {
+                                visible: parent.good
+                                anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter
+                                width: 96; height: 36; radius: 10; color: insTap.mix(Theme.gold, Theme.wa(0.2))
+                                Text { anchors.centerIn: parent; text: Tr.t("wizard.driverpack.install"); color: Theme.black; font.family: Theme.font; font.pixelSize: 13; font.bold: true }
+                                scale: insTap.tapScale
+                                Tap { id: insTap; tap: 0.97; onClicked: root.dpInstall(index) }
+                            }
+                        }
+                    }
+                }
+                // done
+                Row { visible: root.dpStage === "done"; spacing: 10
+                      Icon { name: "check-circle"; size: 22; color: Theme.gold; anchors.verticalCenter: parent.verticalCenter }
+                      Text { anchors.verticalCenter: parent.verticalCenter; text: Tr.t("wizard.driverpack.done"); color: Theme.white; font.family: Theme.font; font.pixelSize: 15; font.bold: true } }
+                // failed
+                Text { visible: root.dpStage === "failed"; width: parent.width; wrapMode: Text.Wrap; text: Tr.t("wizard.driverpack.failed"); color: Theme.red400; font.family: Theme.font; font.pixelSize: 14 }
+                // Secure Boot note (modules refused by the kernel until it is off)
+                Rectangle { visible: root.dpSecureBoot && (root.dpStage === "done" || root.dpStage === "failed")
+                            width: parent.width; height: sbTxt.implicitHeight + 24; radius: 12; color: Theme.goldA(0.1); border.width: 1; border.color: Theme.goldA(0.3)
+                            Row { x: 14; y: 12; width: parent.width - 28; spacing: 10
+                                  Icon { name: "alert-triangle"; size: 18; color: Theme.gold; anchors.top: parent.top }
+                                  Text { id: sbTxt; width: parent.width - 28; wrapMode: Text.Wrap; text: Tr.t("wizard.driverpack.secureBoot"); color: Theme.wa(0.9); font.family: Theme.font; font.pixelSize: 13; lineHeight: 18; lineHeightMode: Text.FixedHeight } } }
+                // actions after done/failed
+                BigButton { visible: root.dpStage === "done"; width: parent.width; color: Theme.gold; label: Tr.t("wizard.driverpack.reboot"); onClicked: { if (!root.dry) Api.post(Api.apiBase + "/reboot", {}); root.dpOpen = false } }
+                Row { visible: root.dpStage === "done" || root.dpStage === "failed"; spacing: 12
+                      BigButton { visible: root.dpStage === "failed"; width: (dpCol.width - 12) / 2; color: cTap4.mix(Theme.surface, Theme.light); fg: Theme.white; label: Tr.t("wizard.driverpack.scan"); onClicked: root.dpScan(); Tap { id: cTap4; onClicked: root.dpScan() } }
+                      BigButton { width: root.dpStage === "failed" ? (dpCol.width - 12) / 2 : dpCol.width; color: cTap5.mix(Theme.surface, Theme.light); fg: Theme.white; label: Tr.t("wizard.driverpack.close"); onClicked: root.dpOpen = false; Tap { id: cTap5; onClicked: root.dpOpen = false } } }
             }
         }
     }

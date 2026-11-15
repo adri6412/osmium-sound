@@ -277,6 +277,25 @@
       "useExternal": "Use this server",
       "externalApplied": "This device now uses that server.",
       "externalFailed": "Could not switch to that server. Check the address and try again."
+    },
+    "driverpack": {
+      "button": "Load drivers from USB",
+      "hint": "Drivers from Osmium to get Wi-Fi or touch working on some laptops.",
+      "title": "External drivers",
+      "intro": "Insert the USB stick with the drivers Osmium sent you, then press Search.",
+      "scan": "Search",
+      "scanning": "Searching the USB stick…",
+      "noUsb": "No USB stick detected. Plug it in and try again.",
+      "noPacks": "No drivers found on the USB stick.",
+      "found": "Drivers found on the USB stick:",
+      "badSignature": "Not signed by Osmium — this pack won't be installed.",
+      "install": "Install",
+      "installing": "Installing…",
+      "done": "Driver installed. Restart to apply it.",
+      "failed": "Installation failed.",
+      "secureBoot": "To load kernel modules, turn Secure Boot off in the BIOS.",
+      "reboot": "Restart now",
+      "close": "Close"
     }
   },
   "sidebar": {
@@ -307,6 +326,7 @@
     "notConnected": "Not connected",
     "signIn": "Sign in",
     "signInTitle": "Sign in to {name}",
+    "signInViaLyrion": "To sign in to {name}, open its plugin in your Lyrion Music Server settings and finish signing in there. Once done, {name} will be available here.",
     "loginFailed": "Sign-in failed. Check your details and try again.",
     "qobuz": {
       "hint": "Enter your Qobuz email and password."
@@ -454,8 +474,12 @@
       "ripProgress": "Track {track} of {total}",
       "ripProgressShort": "In progress…",
       "ripping": "Ripping CD…",
-      "ripDone": "Rip complete! The album is in your library.",
+      "ripDone": "Rip complete! It's in your library.",
+      "ripInaccurate": "Some tracks could not be verified as accurate.",
       "ripError": "Rip failed. Check the disc and try again.",
+      "viewLog": "View log",
+      "logTitle": "Rip log",
+      "logUnavailable": "No log available for this rip.",
       "artist": "Artist",
       "album": "Album",
       "start": "Start rip",

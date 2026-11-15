@@ -244,6 +244,7 @@ const lmsUrl = computed(() => {
 onUnmounted(() => {
   if (lyrionPoll) clearInterval(lyrionPoll);
   if (skinPoll) clearInterval(skinPoll);
+  if (drvPoll) clearInterval(drvPoll);
 });
 
 onMounted(load);
@@ -284,6 +285,58 @@ async function finish() {
   await api.provisionFinalize();
   busy.value = false;
   router.push('/');
+}
+
+// External driver packs (firmware / kernel modules the developer signed and
+// sent). Two channels: scan a USB stick already in the device, or upload the
+// three files from this browser. Both go to the signature-checking device
+// script via /api/system/drivers/* — the signature is the only trust gate.
+const drv = reactive({ stage: '', packs: [], msg: '', secureBoot: false });
+let drvPoll = null;
+
+async function drvScan() {
+  drv.stage = 'scanning'; drv.packs = []; drv.secureBoot = false; drv.msg = '';
+  const { ok, data } = await api.driversUsbScan();
+  if (!ok || !data) { drv.stage = 'noUsb'; return; }
+  drv.packs = data.packs || [];
+  drv.stage = drv.packs.length ? 'list' : 'empty';
+}
+
+async function drvInstallUsb(pack) {
+  if (!pack || pack.signature !== 'valid' || !pack.path) return;
+  drv.stage = 'installing'; drv.secureBoot = false; drv.msg = '';
+  const { ok } = await api.driversInstallUsb(pack.path);
+  if (!ok) { drv.stage = 'failed'; return; }
+  drvStartPoll();
+}
+
+async function drvUpload(e) {
+  // The developer ships three files; we need the .osmpack and its signature
+  // (.osmpack.sha256.sig). Match by extension, whatever order they were picked.
+  let pack = null, sig = null;
+  for (const f of (e.target.files || [])) {
+    if (f.name.endsWith('.osmpack')) pack = f;
+    else if (f.name.endsWith('.sig')) sig = f;
+  }
+  e.target.value = '';
+  if (!pack || !sig) { drv.stage = 'failed'; drv.msg = t('setup.driversNeedBoth'); return; }
+  drv.stage = 'installing'; drv.secureBoot = false; drv.msg = '';
+  const { ok } = await api.driversInstallUpload(pack, sig);
+  if (!ok) { drv.stage = 'failed'; return; }
+  drvStartPoll();
+}
+
+function drvStartPoll() {
+  if (drvPoll) clearInterval(drvPoll);
+  drvPoll = setInterval(async () => {
+    const { ok, data } = await api.driversStatus();
+    if (!ok || !data) return;
+    drv.secureBoot = !!data.secure_boot;
+    if (data.state === 'done') { drv.stage = 'done'; clearInterval(drvPoll); drvPoll = null; }
+    else if (data.state === 'error' || data.state === 'failed') {
+      drv.stage = 'failed'; drv.msg = data.message || ''; clearInterval(drvPoll); drvPoll = null;
+    }
+  }, 1500);
 }
 </script>
 
@@ -416,6 +469,35 @@ async function finish() {
       </button>
       <p class="sub" v-if="rc.msg">{{ rc.msg }}</p>
       <p class="sub">{{ t('setup.remoteLater') }}</p>
+    </div>
+    <div class="card">
+      <h3><span class="dot"></span>{{ t('setup.driversTitle') }}</h3>
+      <p class="sub">{{ t('setup.driversHint') }}</p>
+      <div class="row" style="gap: 8px; flex-wrap: wrap;">
+        <button class="secondary" :disabled="drv.stage === 'scanning' || drv.stage === 'installing'" @click="drvScan">
+          {{ drv.stage === 'scanning' ? t('setup.driversScanning') : t('setup.driversScan') }}
+        </button>
+        <label class="upload-btn fit" :class="{ disabled: drv.stage === 'installing' }">
+          {{ t('setup.driversUpload') }}
+          <input type="file" accept=".osmpack,.sig" multiple :disabled="drv.stage === 'installing'" style="display: none;" @change="drvUpload" />
+        </label>
+      </div>
+      <p v-if="drv.stage === 'noUsb'" class="muted">{{ t('setup.driversNoUsb') }}</p>
+      <p v-else-if="drv.stage === 'empty'" class="muted">{{ t('setup.driversNoPacks') }}</p>
+      <p v-else-if="drv.stage === 'installing'" class="muted">{{ t('setup.driversInstalling') }}</p>
+      <template v-if="drv.stage === 'list'">
+        <p class="sub" style="margin-top: 10px;">{{ t('setup.driversFound') }}</p>
+        <div v-for="(p, i) in drv.packs" :key="i" class="net between">
+          <span>
+            <span style="display: block;">{{ p.name }}</span>
+            <span class="muted">{{ p.signature === 'valid' ? p.description : t('setup.driversBadSignature') }}</span>
+          </span>
+          <button v-if="p.signature === 'valid' && p.path" @click="drvInstallUsb(p)">{{ t('setup.driversInstall') }}</button>
+        </div>
+      </template>
+      <div v-if="drv.stage === 'done'" class="msg">{{ t('setup.driversDone') }}</div>
+      <div v-else-if="drv.stage === 'failed'" class="msg err">{{ drv.msg || t('setup.driversFailed') }}</div>
+      <p v-if="drv.secureBoot && (drv.stage === 'done' || drv.stage === 'failed')" class="sub" style="color: var(--gold);">{{ t('setup.driversSecureBoot') }}</p>
     </div>
     <button :disabled="busy" @click="finish">{{ busy ? t('setup.finishing') : t('setup.finishSetup') }}</button>
   </div>

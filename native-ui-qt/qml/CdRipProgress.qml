@@ -43,7 +43,7 @@ Item {
     Rectangle {
         id: box
         width: Math.min(340, root.width - 48)
-        height: root.ripping ? 96 : (72 + ejectBtn.height + 12)
+        height: root.ripping ? 96 : (15 + head.height + 12 + ejectBtn.height + 12)
         x: parent.width - 24 - width
         y: parent.height - 24 - height + (1 - rise.value) * 12
         radius: 12
@@ -66,13 +66,13 @@ Item {
         Text {
             id: head
             x: 46; y: 15; width: parent.width - 46 - (root.ripping ? 16 : 36)
-            height: 20; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+            height: root.ripping ? 20 : implicitHeight; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
             text: root.ripping ? root.title
                   : (root.cd && root.cd.state === "done" ? Tr.t("player.cd.ripDone")
                      : (root.cd && root.cd.state === "cancelled" ? Tr.t("player.cd.cancelled")
                         : (root.cd && root.cd.msg ? root.cd.msg : Tr.t("player.cd.ripError"))))
             wrapMode: root.ripping ? Text.NoWrap : Text.Wrap
-            maximumLineCount: root.ripping ? 1 : 2
+            maximumLineCount: root.ripping ? 1 : 3
             color: Theme.white; font.family: Theme.font; font.pixelSize: 14; font.bold: true
         }
 
@@ -111,10 +111,19 @@ Item {
         Rectangle {
             id: ejectBtn
             visible: !root.ripping
-            x: 46; y: 46; width: ejText.implicitWidth + 28; height: 32; radius: 8
+            x: 46; y: head.y + head.height + 12; width: ejText.implicitWidth + 28; height: 32; radius: 8
             color: ejTap.mix(Theme.gold, "#ca8a04")
             Text { id: ejText; anchors.centerIn: parent; text: Tr.t("player.cd.eject"); color: Theme.black; font.family: Theme.font; font.pixelSize: 13; font.bold: true }
             Tap { id: ejTap; onClicked: if (root.cd) root.cd.eject() }
+        }
+        // "View log" next to Eject, when the finished rip left a log
+        Rectangle {
+            id: logBtn
+            visible: !root.ripping && !!root.cd && root.cd.hasLog
+            x: ejectBtn.x + ejectBtn.width + 8; y: ejectBtn.y; width: logText.implicitWidth + 24; height: 32; radius: 8
+            color: logTap.mix(Theme.light, Theme.accent)
+            Text { id: logText; anchors.centerIn: parent; text: Tr.t("player.cd.viewLog"); color: Theme.white; font.family: Theme.font; font.pixelSize: 13 }
+            Tap { id: logTap; onClicked: if (root.cd) root.cd.showLog() }
         }
     }
 }

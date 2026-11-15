@@ -196,7 +196,8 @@ Column {
             MiniRow { id: mr; row: info.row; anchors.right: parent.right; anchors.rightMargin: info.seg ? 0 : 12; anchors.verticalCenter: parent.verticalCenter }
             readonly property real rightEdge: (info.row.mini && info.row.mini.length) ? mr.x - 12 : width - pad
             Text {
-                x: info.pad; y: info.ty; width: (info.rightEdge - info.pad) / 2; height: info.lineH; verticalAlignment: Text.AlignVCenter
+                id: lblText
+                x: info.pad; y: info.ty; width: Math.min(implicitWidth, (info.rightEdge - info.pad) / 2); height: info.lineH; verticalAlignment: Text.AlignVCenter
                 text: row.label || ""; elide: Text.ElideRight
                 color: row.tone === "gold" || row.tone === "tp" ? Theme.white : Theme.silver; font.family: Theme.font; font.pixelSize: row.px || 14
             }
@@ -208,7 +209,9 @@ Column {
             }
             Text {
                 id: valText
-                x: info.pad + (info.rightEdge - info.pad) / 2; y: info.ty; height: info.lineH; verticalAlignment: Text.AlignVCenter
+                // start right after the (content-width) label so a long value
+                // gets the full remaining width instead of a fixed half
+                x: lblText.x + lblText.width + (lblText.text ? 10 : 0); y: info.ty; height: info.lineH; verticalAlignment: Text.AlignVCenter
                 width: info.rightEdge - x - (extraSeg.visible ? extraSeg.width + 8 : 0)
                 horizontalAlignment: Text.AlignRight; elide: Text.ElideLeft
                 text: row.value || ""; color: (row.style === "row" || row.tone === "gold") ? Theme.gold : row.tone === "tp" ? Theme.silverA(0.8) : Theme.white
@@ -288,7 +291,12 @@ Column {
                 }
                 Text {
                     visible: !!op.row.value && op.row.style !== "row"
-                    x: 16; y: 32; width: parent.width - 16 - 40; height: 18; verticalAlignment: Text.AlignVCenter
+                    x: 16; y: 32; width: parent.width - 16 - 40
+                    // a "border" chooser (resolution, screens) may carry a long
+                    // help line: let it wrap to two lines within the tall row
+                    height: op.row.style === "border" ? op.height - 32 : 18
+                    wrapMode: op.row.style === "border" ? Text.WordWrap : Text.NoWrap
+                    maximumLineCount: 2; verticalAlignment: Text.AlignVCenter
                     text: op.row.value || ""; elide: Text.ElideRight
                     // opacity-75 (interfaccia di rete non scelta) / opacity-70 (versione canale, IP trovato): bianco attenuato, non silver
                     color: op.fill && op.sel ? Qt.rgba(0, 0, 0, 0.75) : (op.row.valueAlpha ? Theme.wa(op.row.valueAlpha) : Theme.silver)
@@ -542,6 +550,10 @@ Column {
             Row {
                 x: 12; y: sr.row.value || sr.row.sub2 ? 12 : 0; height: sr.row.value || sr.row.sub2 ? 20 : sr.height; spacing: 8
                 Text { id: nameText; anchors.verticalCenter: parent.verticalCenter; text: sr.row.label || ""; elide: Text.ElideRight
+                       // when the row carries no value/sub2 (e.g. the CD-rip
+                       // "not set" explanation), let a long label wrap to two
+                       // lines inside the row height instead of truncating
+                       wrapMode: (sr.row.value || sr.row.sub2) ? Text.NoWrap : Text.WordWrap; maximumLineCount: 2
                        width: Math.min(implicitWidth, sr.rgt - 12 - (tagText.visible ? tagText.width + 8 : 0)); color: Theme.white; font.family: Theme.font; font.pixelSize: sr.row.px || 14 }
                 Text { id: tagText; visible: !!sr.row.extra; anchors.verticalCenter: parent.verticalCenter; anchors.verticalCenterOffset: 1; text: (sr.row.extra || "").toUpperCase(); color: sr.row.extraTone === "green" ? "#4ade80" : sr.row.extraTone === "dim" ? Theme.silverA(0.6) : Theme.goldA(0.8); font.family: Theme.font; font.pixelSize: 10; font.letterSpacing: 0.25 }
             }

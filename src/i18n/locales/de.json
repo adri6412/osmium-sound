@@ -151,7 +151,7 @@
       "shareLabel": "Name des freigegebenen Ordners",
       "device": "Gerät",
       "folder": "Ordner",
-      "writeHint": "Ermöglicht es dem Player, Daten in diesen Ordner zu speichern – erforderlich, um CDs dorthin zu kopieren. Deaktiviere diese Option, wenn der Ordner ausschließlich zum Anhören von Inhalten dienen soll..",
+      "writeHint": "Ermöglicht es dem Player, Daten in diesen Ordner zu speichern – erforderlich, um CDs dorthin zu kopieren. Deaktiviere diese Option, wenn der Ordner ausschließlich zum Anhören von Inhalten dienen soll.",
       "allowWrite": "Erlaube dem Player, in diesen Ordner zu schreiben.",
       "addNow": "Diesen Ordner hinzufügen",
       "added": "{name} hinzugefügt — die Musik wird jetzt eingelesen.",
@@ -277,6 +277,25 @@
       "useExternal": "Diesen Server verwenden",
       "externalApplied": "Das Gerät verwendet nun diesen Server.",
       "externalFailed": "Es konnte nicht zu diesem Server gewechselt werden. Überprüfe die Adresse und versuche es erneut."
+    },
+    "driverpack": {
+      "button": "Treiber von USB laden",
+      "hint": "Treiber von Osmium, damit WLAN oder Touch auf einigen Laptops funktioniert.",
+      "title": "Externe Treiber",
+      "intro": "Stecke den USB-Stick mit den von Osmium gesendeten Treibern ein und drücke dann auf Suchen.",
+      "scan": "Suchen",
+      "scanning": "USB-Stick wird durchsucht…",
+      "noUsb": "Kein USB-Stick erkannt. Stecke ihn ein und versuche es erneut.",
+      "noPacks": "Keine Treiber auf dem USB-Stick gefunden.",
+      "found": "Auf dem USB-Stick gefundene Treiber:",
+      "badSignature": "Nicht von Osmium signiert — dieses Paket wird nicht installiert.",
+      "install": "Installieren",
+      "installing": "Wird installiert…",
+      "done": "Treiber installiert. Zum Anwenden neu starten.",
+      "failed": "Installation fehlgeschlagen.",
+      "secureBoot": "Um Kernelmodule zu laden, schalte Secure Boot im BIOS aus.",
+      "reboot": "Jetzt neu starten",
+      "close": "Schließen"
     }
   },
   "sidebar": {
@@ -307,6 +326,7 @@
     "notConnected": "Nicht verbunden",
     "signIn": "Anmelden",
     "signInTitle": "Bei {name} anmelden",
+    "signInViaLyrion": "Um dich bei {name} anzumelden, öffne dessen Plugin in den Einstellungen deines Lyrion Music Servers und schließe die Anmeldung dort ab. Danach ist {name} hier verfügbar.",
     "loginFailed": "Anmeldung fehlgeschlagen. Bitte Daten prüfen und erneut versuchen.",
     "qobuz": {
       "hint": "E-Mail und Passwort deines Qobuz-Kontos eingeben."
@@ -454,8 +474,12 @@
       "ripProgress": "Titel {track} von {total}",
       "ripProgressShort": "Einlesen läuft...",
       "ripping": "CD wird eingelesen…",
-      "ripDone": "Einlesen abgeschlossen! Das Album befindet sich in deiner Bibliothek.",
+      "ripDone": "Einlesen fertig! Es ist in deiner Bibliothek.",
+      "ripInaccurate": "Einige Titel konnten nicht als akkurat bestätigt werden.",
       "ripError": "Das Einlesen ist fehlgeschlagen. Prüfe die CD und versuche es erneut.",
+      "viewLog": "Protokoll ansehen",
+      "logTitle": "Einlese-Protokoll",
+      "logUnavailable": "Für dieses Einlesen ist kein Protokoll verfügbar.",
       "artist": "Künstler",
       "album": "Album",
       "start": "Einlesen starten",
@@ -1184,7 +1208,7 @@
       "preEmphasisHelp": "Frühe CDs mit Prä-Emphase: Ein Tag ermöglicht es dem Abspielgerät, dies zu korrigieren; der Filter nimmt die eigentliche Korrektur des Audiosignals vor.",
       "preEmphasis": {
         "ignore": "Ignorieren",
-        "tag": "Nor Tag",
+        "tag": "Nur Tag",
         "filter": "Mit Filter entfernen"
       },
       "flags": {
@@ -1374,14 +1398,14 @@
       "advancedHint": "Jede Zeile wird sofort wirksam und startet die Wiedergabe kurz neu. Die Einstellung „Automatisch“ ist für nahezu jeden DAC die richtige Wahl.",
       "advancedLink": "DSD, Umwandlung von PCM in DSD, Abtastraten-Begrenzung, Puffer und der Rest des Players: unter Erweiterte Audio-Einstellungen.",
       "zonesOwn": "Dies sind die Einstellungen des geräteeigenen Players. Jede Audio-Zone hat ihre eigenen, unter Audio-Zonen.",
-      "auto": "Automatisch",
+      "auto": "Auto",
       "off": "Aus",
       "dsdLabel": "DSD-Dateien",
       "dsd": {
         "auto": "Automatisch",
         "dop": "DoP",
         "native": "Nativ",
-        "off": "Umwandeln in PCM"
+        "off": "In PCM"
       },
       "dsdDetectedNative": "Dieser DAC unterstützt natives DSD. Bei DoP werden diese Daten in PCM-Frames verpackt – üblicherweise bis zu DSD128. Die Konvertierung in PCM ist für Ausgänge gedacht, die kein DSD unterstützen, wie etwa HDMI.",
       "dsdDetectedDop": "Dieser DAC unterstützt kein natives DSD; bei der Einstellung „Automatisch“ wird daher DoP verwendet. Die Option „In PCM konvertieren“ ist für Ausgänge gedacht, die überhaupt kein DSD unterstützen, wie etwa HDMI.",
