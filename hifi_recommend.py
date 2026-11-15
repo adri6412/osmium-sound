@@ -1284,6 +1284,8 @@ class ServiceSearch:
         self.rpc, self.player, self.service = rpc, player, service
         self.node = None
         self.usable = None
+        self._snap = None          # owner's Qobuz recent searches, as found
+        self._snapped = False
 
     def _items(self, item_id=None, search=None, count=30, menu=False):
         cmd = [self.service, 'items', 0, count]
@@ -1327,33 +1329,27 @@ class ServiceSearch:
         """Up to ALBUMS_PER_SEARCH albums by `artist` on this service."""
         if not self.available():
             return []
-        before = None
-        if self.service == 'qobuz':
-            # Qobuz remembers every search in the owner's "recent searches".
-            # Ours must not show up there: skip a term that would reorder or
-            # push out one of theirs, and take ours back out afterwards.
-            before = self._qobuz_history()
-            if artist in before or len(before) >= 30:
-                return []
-        try:
-            cats = self._items(self.node, search=artist)
-            pick = None
-            for c in cats:
-                if norm_text(c.get('name')) in _ALBUM_WORDS or 'albums' in str(c.get('image') or ''):
-                    pick = c
-                    break
-            if pick is None:
-                i = _ALBUM_CATEGORY.get(self.service)
-                pick = cats[i] if i is not None and i < len(cats) else None
-            if pick is None:
-                return []
-            rows = self._items(pick.get('id'), count=40, menu=True)
-        finally:
-            if before is not None:
-                after = self._qobuz_history()
-                if len(after) == len(before) + 1 and after[-1] == artist:
-                    self.rpc(self.player, ['qobuz', 'recentsearches',
-                                           'delete:%d' % (len(after) - 1)])
+        if self.service == 'qobuz' and not self._snapped:
+            # Qobuz records every search in the owner's "recent searches", capped
+            # at 30. The old code skipped searching once that list was full (or
+            # held the term) so as not to pollute it -- but a real Qobuz user is
+            # always at the cap, so streaming discovery never ran. Instead we
+            # search regardless, snapshot the list once, and put it back exactly
+            # as it was in restore(): the owner loses and reorders nothing.
+            self._snap = self._qobuz_history()
+            self._snapped = True
+        cats = self._items(self.node, search=artist)
+        pick = None
+        for c in cats:
+            if norm_text(c.get('name')) in _ALBUM_WORDS or 'albums' in str(c.get('image') or ''):
+                pick = c
+                break
+        if pick is None:
+            i = _ALBUM_CATEGORY.get(self.service)
+            pick = cats[i] if i is not None and i < len(cats) else None
+        if pick is None:
+            return []
+        rows = self._items(pick.get('id'), count=40, menu=True)
         out = []
         for row in rows:
             a = _album_from_item(self.service, row)
@@ -1362,6 +1358,20 @@ class ServiceSearch:
             if len(out) >= ALBUMS_PER_SEARCH:
                 break
         return out
+
+    def restore(self):
+        """Put the owner's Qobuz recent-search list back as we found it, after
+        a run's searches have pushed our terms into it. Idempotent and a no-op
+        for services other than Qobuz or when we never searched."""
+        if self.service != 'qobuz' or not self._snapped:
+            return
+        try:
+            if self._qobuz_history() != self._snap:
+                self.rpc('', ['pref', 'plugin.qobuz:qobuz_recent_search',
+                              self._snap])
+        finally:
+            self._snapped = False
+            self._snap = None
 
 
 # Where each plugin keeps the owner's favourites, as the string tokens of its
@@ -1494,6 +1504,59 @@ def pick_player(rpc):
 
 MAX_HISTORY_ARTISTS = 300
 SEEDS_PER_RUN = MAX_SEARCHES_PER_SERVICE
+TAGS_PER_RUN = 4              # dominant genres/tags to pull fresh artists from
+GENRE_ARTISTS_PER_TAG = 12    # top artists Last.fm lists under one tag
+GENRE_SEED_SLOTS = 10         # of SEEDS_PER_RUN, kept for genre finds (not just
+                              # the "similar artists" graph)
+
+
+def _lastfm_tag_artists(tag, http, key, limit=GENRE_ARTISTS_PER_TAG):
+    """The artists Last.fm files under a genre/tag, most representative first.
+    Best-effort: empty without a key/client, and empty (never raising) on any
+    network trouble -- genre seeds only enrich discovery, so the run goes on
+    through the local-player searches even if this is unreachable."""
+    if not (key and tag) or http is None:
+        return []
+    try:
+        r = http.get_json(LASTFM_BASE + '?' + _qs(
+            {'method': 'tag.gettopartists', 'tag': tag, 'api_key': key,
+             'format': 'json', 'limit': limit}), group='lastfm')
+    except Exception:
+        return []
+    return [a.get('name') for a in ((r or {}).get('topartists') or {}).get('artist') or []
+            if a.get('name')]
+
+
+def genre_seeds(top, profiles, artist_w, http, key, taken, want, log=None):
+    """Up to `want` artists drawn from the listener's dominant genres, to seed
+    streaming search beyond the "similar artists" graph. `taken` holds the
+    name_keys already heard or seeded. Weighs each tag by how much listening it
+    accounts for, then rounds robin over the tags' top artists for variety."""
+    if want <= 0 or not key or http is None:
+        return []
+    weight = {}
+    for k in top:
+        p = profiles.get(k) or {}
+        for t in (p.get('genres') or []) + (p.get('tags') or []):
+            if norm_text(t):
+                weight[t] = weight.get(t, 0.0) + artist_w.get(k, 0.0)
+    tags = [t for t, _ in sorted(weight.items(), key=lambda kv: -kv[1])[:TAGS_PER_RUN]]
+    pools = [_lastfm_tag_artists(t, http, key) for t in tags]
+    picks, seen = [], set(taken)
+    for i in range(max((len(p) for p in pools), default=0)):
+        for pool in pools:
+            if i < len(pool):
+                nk = norm_text(pool[i])
+                if nk and nk not in seen:
+                    seen.add(nk)
+                    picks.append(pool[i])
+                    if len(picks) >= want:
+                        break
+        if len(picks) >= want:
+            break
+    if log and picks:
+        log.info('recommend: %d genre seeds from %s', len(picks), ', '.join(tags))
+    return picks
 
 
 def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
@@ -1587,6 +1650,7 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
     if services:
         seeds, seed_keys = [], set()
         heard_artists = set(artist_w)
+        similar_cap = max(1, SEEDS_PER_RUN - GENRE_SEED_SLOTS)
         for k in top:
             related = [r for r in (profiles.get(k) or {}).get('related') or []
                        if norm_text(r) not in heard_artists]
@@ -1595,9 +1659,16 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
                 if nk and nk not in seed_keys:
                     seed_keys.add(nk)
                     seeds.append(name)
-            if len(seeds) >= SEEDS_PER_RUN:
+            if len(seeds) >= similar_cap:
                 break
-        seeds = seeds[:SEEDS_PER_RUN]
+        seeds = seeds[:similar_cap]
+        # Beyond the similar-artist graph: fresh artists of the genres listened
+        # to most, so the list can surface names nobody's "similar" list holds.
+        want = min(GENRE_SEED_SLOTS, SEEDS_PER_RUN - len(seeds))
+        for name in genre_seeds(top, profiles, artist_w, http, key,
+                                heard_artists | seed_keys, want, log):
+            seed_keys.add(norm_text(name))
+            seeds.append(name)
         new_names = [s for s in seeds if norm_text(s) not in profiles]
         more, n = enrich(db, new_names, http, key,
                          limit=max(0, MAX_NEW_PROFILES - summary['fetched']), now=now, log=log)
@@ -1606,21 +1677,24 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
         player = pick_player(rpc)
         for service in services if player else []:
             search = ServiceSearch(rpc, player, service)
-            for name in seeds:
-                try:
-                    found = search.albums(name)
-                except Exception as e:
-                    if log:
-                        log.info('recommend: %s search failed (%s)', service, type(e).__name__)
-                    break
-                if not search.usable:
-                    break
-                summary['searches'] += 1
-                for a in found:
-                    k = album_key(a['artist'], a['album'])
-                    if k not in exclude and k not in owned:
-                        cands.append(dict(a, source=service, play_kind='url',
-                                          genres=[], year=None))
+            try:
+                for name in seeds:
+                    try:
+                        found = search.albums(name)
+                    except Exception as e:
+                        if log:
+                            log.info('recommend: %s search failed (%s)', service, type(e).__name__)
+                        break
+                    if not search.usable:
+                        break
+                    summary['searches'] += 1
+                    for a in found:
+                        k = album_key(a['artist'], a['album'])
+                        if k not in exclude and k not in owned:
+                            cands.append(dict(a, source=service, play_kind='url',
+                                              genres=[], year=None))
+            finally:
+                search.restore()      # un-pollute the owner's Qobuz history
 
     if not cands:
         return dict(summary, outcome='no_candidates')
