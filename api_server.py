@@ -428,6 +428,12 @@ def _local_disks():
             continue
         if not name or name.startswith(('nbd', 'zram', 'ram', 'loop', 'dm-')):
             continue
+        # eMMC hardware boot areas (mmcblkNboot0/boot1) are separate ~4 MiB
+        # block devices, not real storage. lsblk lists them as type 'disk',
+        # so they slip past the filters above and show up as "0.0 GB" rows.
+        # The installer and native UI leave them out -- do the same here.
+        if re.match(r'^mmcblk\d+boot\d+$', name):
+            continue
         try:
             size = int(dev.get('size') or 0)
         except (TypeError, ValueError):
@@ -456,12 +462,14 @@ def _hardware_info():
             'has_wired': wired,
             'has_wireless': wireless,
             'has_bluetooth': _bt_adapter_present(),
+            'bt_connected': _bt_any_connected(),
             'disks': _local_disks(),
         }
     except Exception:
         log.exception("_hardware_info failed")
         return {'cpu': None, 'ram_total_mb': None, 'has_wired': False,
-                'has_wireless': False, 'has_bluetooth': False, 'disks': []}
+                'has_wireless': False, 'has_bluetooth': False,
+                'bt_connected': False, 'disks': []}
 
 
 # Funzione per ottenere le informazioni di sistema
@@ -7883,6 +7891,19 @@ def _bt_snapshot():
         return snap if isinstance(snap, dict) else {}
     except Exception:
         return {}
+
+
+def _bt_any_connected():
+    """True when at least one Bluetooth device -- a speaker or a remote --
+    is currently connected, read from the supervisor's snapshot (no
+    bluetoothctl). Used by the dashboard to show Bluetooth among the active
+    links only when something is actually on it."""
+    snap = _bt_snapshot()
+    for key in ('speakers', 'remotes'):
+        for dev in (snap.get(key) or []):
+            if dev.get('connected'):
+                return True
+    return False
 
 
 def _bt_player_mac(mac):

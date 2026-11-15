@@ -236,15 +236,17 @@ const ramTotal = computed(() => {
   return mb != null ? fmtGb(mb / 1024) : '';
 });
 
-// Which radios/ports the box physically has — Ethernet, Wi-Fi, Bluetooth —
-// whether or not they are in use right now. Nothing detected reads as "—".
+// The links actually in use right now, not the radios the box happens to
+// have: the network interface carrying the connection (Ethernet or Wi-Fi,
+// from network_status) and Bluetooth only while a device is connected to
+// it. Nothing active reads as "—".
 const conn = computed(() => {
   const i = info.value;
   if (i.has_wired === undefined) return '';   // info not loaded yet
   const parts = [];
-  if (i.has_wired) parts.push(t('dashboard.ethernet'));
-  if (i.has_wireless) parts.push(t('dashboard.wifi'));
-  if (i.has_bluetooth) parts.push(t('dashboard.bluetooth'));
+  if (net.value.type === 'wired') parts.push(t('dashboard.ethernet'));
+  else if (net.value.type === 'wireless') parts.push(t('dashboard.wifi'));
+  if (i.bt_connected) parts.push(t('dashboard.bluetooth'));
   return parts.length ? parts.join(' · ') : '—';
 });
 
