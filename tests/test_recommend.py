@@ -20,6 +20,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import hifi_recommend as rec  # noqa: E402
+from hifi_metadata import HttpError, OfflineError  # noqa: E402
 
 DAY = 86400.0
 
@@ -461,19 +462,24 @@ class ScreenSettingsTestCase(unittest.TestCase):
 class FakeHttp:
     """hifi_metadata.HttpClient's get_json, answered from canned replies."""
 
-    def __init__(self, known=(), offline=False):
+    def __init__(self, known=(), offline=False, http_fail=()):
         self.known = {rec.norm_text(k): v for k, v in dict(known).items()}
         self.offline = offline
+        # Artist names whose MusicBrainz lookup raises a transient HttpError,
+        # like the real client does on a 503 whose retries are exhausted.
+        self.http_fail = {rec.norm_text(n) for n in http_fail}
         self.urls = []
 
     def get_json(self, url, group='mb', **kw):
         import urllib.parse
         self.urls.append(url)
         if self.offline:
-            raise OSError('no route')
+            raise OfflineError('no route')
         q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
         if group == 'mb':
             name = q['query'][0][len('artist:"'):-1]
+            if rec.norm_text(name) in self.http_fail:
+                raise HttpError(503)
             k = self.known.get(rec.norm_text(name))
             if not k:
                 return {'artists': []}
@@ -574,6 +580,35 @@ class ProfileTestCase(unittest.TestCase):
         have, n = rec.enrich(db, ['Pink Floyd', 'Genesis'], http, key='SECRETKEY', log=Log())
         self.assertEqual((have, n, len(http.urls)), ({}, 0, 1))
         self.assertNotIn('SECRETKEY', ' '.join(Log.lines))
+        self.assertEqual(db.execute('SELECT COUNT(*) FROM artist_info').fetchone()[0], 0)
+
+    def test_enrich_skips_transient_http_error_and_continues(self):
+        db = rec.open_db(':memory:')
+        http = FakeHttp(KNOWN, http_fail=['Genesis'])
+        lines = []
+
+        class Log:
+            def info(self, fmt, *a):
+                lines.append(fmt % a)
+        have, n = rec.enrich(db, ['Pink Floyd', 'Genesis', 'Camel'], http, log=Log())
+        # Genesis' 503 is skipped; the others are still enriched, and the
+        # skipped artist stays stale (not written) so the next run retries it.
+        self.assertEqual((sorted(have), n), (['camel', 'pink floyd'], 3))
+        self.assertEqual(db.execute('SELECT COUNT(*) FROM artist_info').fetchone()[0], 2)
+        self.assertEqual(lines, [])                       # a transient error is not a stop
+
+    def test_enrich_stops_after_consecutive_failures(self):
+        db = rec.open_db(':memory:')
+        names = ['Fail%d' % i for i in range(rec.MAX_ENRICH_FAILS + 1)]
+        http = FakeHttp(KNOWN, http_fail=names)
+        lines = []
+
+        class Log:
+            def info(self, fmt, *a):
+                lines.append(fmt % a)
+        have, n = rec.enrich(db, names, http, log=Log())
+        self.assertEqual((have, n), ({}, rec.MAX_ENRICH_FAILS))
+        self.assertIn('recommend: enrichment stopped (HttpError)', lines)
         self.assertEqual(db.execute('SELECT COUNT(*) FROM artist_info').fetchone()[0], 0)
 
     def test_describe(self):

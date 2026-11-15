@@ -202,7 +202,7 @@ class HttpClient:
     timeout) opens a short circuit: for OFFLINE_HOLD seconds every call fails
     at once with OfflineError instead of hammering a dead link."""
 
-    SPACING = {'mb': MB_SPACING, 'wiki': WIKI_SPACING}
+    SPACING = {'mb': MB_SPACING, 'wiki': WIKI_SPACING, 'wikidata': WIKI_SPACING}
 
     def __init__(self, urlopen=None, clock=None, sleep=None):
         self._urlopen = urlopen or urllib.request.urlopen

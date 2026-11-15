@@ -944,7 +944,10 @@ def play_from_status(st):
 
 PROFILE_TTL_DAYS = 90
 PROFILE_RETRY_DAYS = 7        # an artist nobody knew: ask again after this
-MAX_NEW_PROFILES = 120
+MAX_NEW_PROFILES = 60         # artists enriched per run: a shorter burst is
+                             # gentler on MusicBrainz (shared User-Agent), the
+                             # rest waits for the next run
+MAX_ENRICH_FAILS = 6         # give up a run after this many HTTP errors in a row
 MAX_TAGS = 8
 MAX_RELATED = 8
 LASTFM_BASE = 'https://ws.audioscrobbler.com/2.0/'
@@ -1088,7 +1091,7 @@ def enrich(db, names, http, key='', limit=MAX_NEW_PROFILES, now=None, log=None):
     import json
     now = time.time() if now is None else now
     have, stale = load_profiles(db, names, now)
-    done = 0
+    done = fails = 0
     for name in names:
         k = norm_text(name)
         if k not in stale or http is None:
@@ -1100,10 +1103,19 @@ def enrich(db, names, http, key='', limit=MAX_NEW_PROFILES, now=None, log=None):
             prof, found = fetch_profile(name, http, key)
         except Exception as e:
             # Only the kind of error: a URL could carry the Last.fm key.
-            if log:
-                log.info('recommend: enrichment stopped (%s)', type(e).__name__)
-            break
+            # A dead link (OfflineError) is final — stop the run. A transient
+            # HTTP error (MusicBrainz 503/429, timeout, ...) is per-request:
+            # skip this artist (it stays stale, retried next run) and carry on,
+            # but give up once too many fail in a row (the host is hard-down).
+            if type(e).__name__ == 'OfflineError' or fails + 1 > MAX_ENRICH_FAILS:
+                if log:
+                    log.info('recommend: enrichment stopped (%s)', type(e).__name__)
+                break
+            done += 1          # the request was spent: keep the run's budget bounded
+            fails += 1
+            continue
         done += 1
+        fails = 0
         with db:
             db.execute('INSERT OR REPLACE INTO artist_info '
                        '(name_key, name, data, found, fetched_at) VALUES (?,?,?,?,?)',
