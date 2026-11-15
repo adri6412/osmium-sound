@@ -185,10 +185,10 @@ class RankTestCase(unittest.TestCase):
         free = rec.rank(V, cands, C, [1.0], n=6)
         self.assertEqual({cands[i]['source'] for i, _, _ in free}, {'library'})
         caps = rec.source_caps(cands, n=6)
-        self.assertEqual(caps, {'library': 3})
+        self.assertEqual(caps, {'library': 1})
         got = [cands[i]['source'] for i, _, _ in rec.rank(V, cands, C, [1.0], n=6, source_caps=caps)]
-        self.assertEqual(got.count('library'), 3)
-        self.assertEqual(got.count('tidal'), 3)
+        self.assertEqual(got.count('library'), 1)
+        self.assertEqual(got.count('tidal'), 5)
 
     def test_source_cap_gives_way_when_the_others_run_dry(self):
         C = unit([1, 0])[None, :]
@@ -202,7 +202,7 @@ class RankTestCase(unittest.TestCase):
         lib, q, t = ({'source': s} for s in ('library', 'qobuz', 'tidal'))
         self.assertEqual(rec.source_caps([lib, lib]), {})
         self.assertEqual(rec.source_caps([q, q]), {})
-        self.assertEqual(rec.source_caps([lib, q, t], n=40), {'library': 20, 'qobuz': 10, 'tidal': 10})
+        self.assertEqual(rec.source_caps([lib, q, t], n=40), {'library': 8, 'qobuz': 16, 'tidal': 16})
         self.assertEqual(rec.source_caps([q, t], n=40), {'qobuz': 20, 'tidal': 20})
 
     def test_mmr_prefers_something_different(self):

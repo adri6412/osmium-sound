@@ -76,7 +76,12 @@ SERVICE_PLAYS_CAP = 10
 MAX_RESULTS = 40
 MAX_PER_ARTIST = 2
 MMR_LAMBDA = 0.7          # 1 = pure relevance, 0 = pure diversity
-LIBRARY_SHARE = 0.5       # of the list, when streaming albums compete for it
+LIBRARY_SHARE = 0.2       # of the list, when streaming albums compete for it:
+                          # with a service connected the owned albums keep only
+                          # a small slice (~8 of 40) and new streaming albums
+                          # take the rest, so the list surfaces discoveries, not
+                          # the collection. With no service it fills the list
+                          # (source_caps returns no caps), as a fallback.
 K_MIN, K_MAX = 2, 5
 MIN_POINTS_PER_CLUSTER = 4
 UNIFORM_COHESION = 0.95   # mean cosine to the one centre above which k = 1
