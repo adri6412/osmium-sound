@@ -25,6 +25,14 @@ Item {
     property string pluginFavUrl: ""
     property string pluginTitle: ""
     readonly property bool pluginMode: pluginCmd !== "" && pluginItemId !== ""
+    // stored mode: a streaming recommendation whose tracklist was captured when
+    // it was computed (the live menu path is long gone). The whole album plays
+    // from its stable url (storedUrl); each track from its own url. No plugin
+    // drill, no meta; the Osmium favourite heart works by the album url
+    // (pluginFavUrl). storedTracks is [{title, sub, dur, url}].
+    property string storedUrl: ""
+    property var storedTracks: null
+    readonly property bool storedMode: storedUrl !== "" && storedTracks !== null
     // the inserted audio CD opens this same page through the CDplayer plugin.
     // For it the queue/favourite buttons make no sense (there is one disc, it is
     // not a library album you save) -- it gets an Eject button instead.
@@ -64,6 +72,7 @@ Item {
 
     function load() {
         state_ = 0; meta = null; metaStatus = ""; metaTries = 0; aboutOpen = false; byTrack = false
+        if (storedMode) { loadStored(); return }
         if (pluginMode) { loadPlugin(); return }
         // the album first: the tracks' second line compares with its artist
         Player.query(["albums", "0", "1", "album_id:" + albumId, "tags:alyqwaaSSjW"], function(ok, r) {
@@ -80,6 +89,25 @@ Item {
             })
         })
         loadMeta()
+    }
+    // a stored streaming recommendation: the header is what the grid knew
+    // (title + cover + album url) and the tracks were captured at compute time.
+    // Nothing is drilled; each stored track already carries a playable url.
+    function loadStored() {
+        album = { album: pluginTitle, favorites_url: pluginFavUrl }
+        var out = [], total = 0, src = storedTracks || []
+        for (var i = 0; i < src.length; i++) {
+            var t = src[i] || {}
+            var dur = Number(t.dur || 0)
+            out.push({ id: "", n: i + 1, disc: 1, title: String(t.title || ""),
+                       dur: dur, url: String(t.url || ""), sub: String(t.sub || "") })
+            total += dur
+        }
+        tracks = out; totalDur = total; pluginInfo = []; pluginCreditsId = ""
+        localCredits = []; chip = ""
+        // the heart is the Osmium/Lyrion favourite of the album url (pluginFavUrl)
+        checkFav()
+        state_ = 2
     }
     // a streaming service's album: drill its item for the tracks. The album
     // header is what the grid already knew (title + cover + favourite url); no
@@ -281,6 +309,7 @@ Item {
         else if (p.mbid && browser) browser.openPerson(String(p.mbid), String(p.name || ""))
     }
     function play(mode, index) {
+        if (storedMode) { playStored(mode, index); return }
         if (pluginMode) { playPlugin(mode, index); return }
         var c = ["playlistcontrol", "cmd:" + mode, "album_id:" + albumId]
         if (index !== undefined && index >= 0) c.push("play_index:" + index)
@@ -294,6 +323,25 @@ Item {
             if (!browser) return
             if (!ok) browser.say("alert-triangle", "player.queueFailed")
             else if (mode === "add") browser.say("list-plus", "player.addedToQueue")
+            else browser.say("list-start", "player.playingNext")
+        })
+    }
+    // stored play: the whole album plays from its saved url, a single track from
+    // its own url (both stable). Verbs match the plain playlist (play/add/insert).
+    function playStored(mode, index) {
+        var verb = mode === "load" ? "play" : mode === "insert" ? "insert" : "add"
+        var pickTrack = index !== undefined && index >= 0 && tracks[index]
+        var url = pickTrack ? tracks[index].url : storedUrl
+        if (!url) return
+        var title = pickTrack ? String(tracks[index].title || "") : String(album.album || "")
+        var c = ["playlist", verb, url, title]
+        if (verb === "play") { Player.cmd(c); return }
+        Player.query(c, function(ok) {
+            if (!root) return          // the page was closed meanwhile
+            Player.refresh()
+            if (!browser) return
+            if (!ok) browser.say("alert-triangle", "player.queueFailed")
+            else if (verb === "add") browser.say("list-plus", "player.addedToQueue")
             else browser.say("list-start", "player.playingNext")
         })
     }
@@ -318,7 +366,7 @@ Item {
     // playlistcontrol: load the whole album by its item id, then turn on song
     // shuffle so it plays in a shuffled order
     function shuffle() {
-        if (pluginMode) { play("load"); Player.cmd(["playlist", "shuffle", "1"]); return }
+        if (storedMode || pluginMode) { play("load"); Player.cmd(["playlist", "shuffle", "1"]); return }
         if (browser) browser.loadShuffled("album_id", albumId)
     }
     // ── eject (CD only) ───────────────────────────────────────────────────
@@ -404,7 +452,10 @@ Item {
     function trackMenu(i, x, y) {
         var t = tracks[i]
         if (!t || !browser) return
-        var L = root.pluginMode ? [
+        var L = root.storedMode ? [
+            { icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { if (t.url) Player.cmd(["playlist", "add", t.url, t.title]) } },
+            { icon: "list-start", label: Tr.t("player.playNext"), cb: function() { if (t.url) Player.cmd(["playlist", "insert", t.url, t.title]) } }
+        ] : root.pluginMode ? [
             { icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { Player.cmd([pluginCmd, "playlist", "add", "item_id:" + t.id]) } },
             { icon: "list-start", label: Tr.t("player.playNext"), cb: function() { Player.cmd([pluginCmd, "playlist", "insert", "item_id:" + t.id]) } }
         ] : [
@@ -455,7 +506,7 @@ Item {
                 Cover {
                     id: cover
                     width: 164; height: 164; radius: 12; devScale: root.devScale
-                    source: root.pluginMode ? root.pluginCover
+                    source: root.pluginMode || root.storedMode ? root.pluginCover
                           : root.album.artwork_track_id ? Api.lmsBase + "/music/" + root.album.artwork_track_id + "/cover?size=" + Theme.coverPx(164 * 2) : ""
                 }
                 Column {

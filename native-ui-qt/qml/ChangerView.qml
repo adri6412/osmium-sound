@@ -109,10 +109,16 @@ Item {
     // album_id): the chosen rows then carry a `disc` record App.changerLoad
     // plays with `[cmd, "playlist", …, "item_id:"+item]`, cover from its artUrl.
     readonly property bool pluginMode: Library.view === LibraryModel.PluginItems && Library.pluginAlbumList
+    // the Recommended grid mixes local albums (an album_id disc, like the
+    // library) and streaming ones (no id: a disc that rides on its stable url)
+    readonly property bool recMode: Library.view === LibraryModel.Recommended
     function discFor(it) {
-        return root.pluginMode ? { cmd: Library.pluginCmd, item: String(it.id), title: it.text || "",
-                                   artUrl: it.icon ? Api.imageUrl(it.icon) : "" }
-                               : null   // local album: the chosen row (id/text/art) is itself the disc
+        if (root.pluginMode) return { cmd: Library.pluginCmd, item: String(it.id), title: it.text || "",
+                                      artUrl: it.icon ? Api.imageUrl(it.icon) : "" }
+        // a streaming recommendation has no local album id: it rides on its url
+        if (root.recMode && !it.id && it.url) return { url: String(it.url), title: it.text || "",
+                                                       artUrl: it.icon ? Api.imageUrl(it.icon) : "" }
+        return null   // local album: the chosen row (id/text/art) is itself the disc
     }
     function fromChanger() {
         chosen = Ui.app ? Ui.app.changerDiscs.map(function(d) { return { id: d.id || "", text: d.title, art: d.art || "", disc: d } }) : []
@@ -148,8 +154,10 @@ Item {
     }
     function toggle(k) {
         var it = Library.get(k)
-        if (!it || !it.id) return
-        var id = String(it.id)
+        // a streaming recommendation carries no id, only a playable url: key it
+        // on that so the gold ring, flights and chosen list still track it
+        var id = it ? String(it.id || it.url || "") : ""
+        if (!it || !id) return
         if (flightOf(id) >= 0) return
         var i = chosenAt(id)
         if (i >= 0) { var c = chosen.slice(); c.splice(i, 1); chosen = c; return }
@@ -158,7 +166,8 @@ Item {
         if (changer.scene && changer.scene.prepare) changer.scene.prepare(chosen.length + flights.count)
         var d = discFor(it)
         flights.append({ albumId: id, text: it.text, art: it.art || "", sub: it.sub || "",
-                         artUrl: d && d.artUrl ? d.artUrl : "", cmd: d ? d.cmd : "", item: d ? d.item : "" })
+                         artUrl: d && d.artUrl ? d.artUrl : "", cmd: d ? (d.cmd || "") : "",
+                         item: d ? (d.item || "") : "", url: d ? (d.url || "") : "" })
     }
     // a disc reached the window: it is in the changer now
     function landed(id) {
@@ -172,6 +181,8 @@ Item {
         var rec = { id: it.albumId, text: it.text, art: it.art, sub: it.sub }
         // a plugin album rides on its own disc record (cmd + item, cover artUrl)
         if (it.cmd && it.item) rec.disc = { cmd: it.cmd, item: it.item, title: it.text, artUrl: it.artUrl || "" }
+        // a streaming recommendation rides on its stable url (no cmd/item)
+        else if (it.url) rec.disc = { url: it.url, title: it.text, artUrl: it.artUrl || "" }
         c.push(rec)
         chosen = c
         flights.remove(f)

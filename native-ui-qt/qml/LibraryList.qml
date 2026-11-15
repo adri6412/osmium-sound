@@ -30,6 +30,7 @@ Item {
     // Tidal…) possono diventare Cover Flow o caricatore CD; gli altri menu di
     // app/servizi restano sempre a tessere quadrate
     readonly property bool albumGrid: view === LibraryModel.Albums || view === LibraryModel.NewMusic
+                                    || view === LibraryModel.Recommended
                                     || (view === LibraryModel.PluginItems && Library.pluginAlbumList)
     // the albums as Cover Flow instead of the grid (Settings → Library, or
     // the button in the crumb bar)

@@ -32,6 +32,7 @@ data, Wikipedia text, the library's own tags).
 Only numpy and the standard library are required; onnxruntime is optional.
 """
 import hashlib
+import json
 import math
 import os
 import re
@@ -116,7 +117,8 @@ CREATE TABLE IF NOT EXISTS recommendations (
     score REAL NOT NULL,
     cluster INTEGER NOT NULL,
     album_key TEXT NOT NULL,
-    created_at REAL NOT NULL
+    created_at REAL NOT NULL,
+    tracks TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY,
@@ -168,6 +170,11 @@ def open_db(path=None):
         db.execute('PRAGMA journal_mode=WAL')
         db.execute('PRAGMA synchronous=NORMAL')
     db.executescript(SCHEMA)
+    # Migration: the `tracks` column was added later; older databases created
+    # before it need it back-filled (empty) so reads and writes line up.
+    cols = {r[1] for r in db.execute('PRAGMA table_info(recommendations)')}
+    if 'tracks' not in cols:
+        db.execute("ALTER TABLE recommendations ADD COLUMN tracks TEXT NOT NULL DEFAULT ''")
     return db
 
 
@@ -209,11 +216,12 @@ def write_recommendations(db, rows, now=None):
         db.execute('DELETE FROM recommendations')
         db.executemany(
             'INSERT INTO recommendations (rank, album, artist, cover, source, '
-            'play_kind, play_id, score, cluster, album_key, created_at) '
-            'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            'play_kind, play_id, score, cluster, album_key, created_at, tracks) '
+            'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
             [(i, r['album'], r['artist'], r.get('cover', ''), r['source'],
               r['play_kind'], r['play_id'], float(r['score']),
-              int(r['cluster']), album_key(r['artist'], r['album']), now)
+              int(r['cluster']), album_key(r['artist'], r['album']), now,
+              r.get('tracks', ''))
              for i, r in enumerate(rows)])
 
 
@@ -1159,6 +1167,66 @@ def library_albums(rpc):
     return list(out.values())
 
 
+def _tracks_from_loop(loop):
+    """Pull a compact tracklist out of a plugin album's drilled menu loop.
+
+    We keep only what the kiosk's AlbumPage needs to render and play a track
+    on its own: title, a subtitle line, the duration and a stable play URL.
+    The per-track menu ids are positional and session-bound, so they are not
+    kept; the URL (a favourites_url or the row's own url) stays playable."""
+    out = []
+    for t in loop:
+        pre = t.get('presetParams') or {}
+        acts = t.get('actions') or {}
+        is_track = (t.get('goAction') == 'play' or t.get('style') == 'itemplay'
+                    or bool(acts.get('play')) or bool(acts.get('add'))
+                    or bool(pre.get('favorites_url')) or bool(t.get('url'))
+                    or t.get('isaudio') == 1 or t.get('type') == 'audio')
+        if not is_track:
+            continue
+        two = str(t.get('text') or '').split('\n')
+        title = str(two[0] if two and two[0] else
+                    (t.get('name') or t.get('title') or '')).strip()
+        if not title:
+            continue
+        sub = str(t.get('artist') or (two[1] if len(two) > 1 else '') or '').strip()
+        try:
+            dur = float(t.get('duration') or t.get('tracklength') or 0) or 0.0
+        except (TypeError, ValueError):
+            dur = 0.0
+        url = str(pre.get('favorites_url') or t.get('url') or '')
+        out.append({'title': title, 'sub': sub, 'dur': dur, 'url': url})
+    return out
+
+
+def _capture_rec_tracks(rpc, player, rows, log=None):
+    """For each published streaming album, drill its live menu path once (this
+    run's browse is still warm) and store the tracklist as JSON on the row.
+
+    Local-library albums (play_kind 'album_id') already browse to a tracklist
+    on the device, so they are skipped. A failed or empty drill leaves tracks
+    empty: the kiosk then shows the album's actions without a tracklist."""
+    if not player:
+        return
+    for r in rows:
+        if r.get('play_kind') != 'url':
+            continue
+        bi = r.get('browse_item')
+        source = r.get('source')
+        if not bi or not source:
+            continue
+        try:
+            res = rpc(player, [source, 'items', 0, 200,
+                               'item_id:%s' % bi, 'menu:1']) or {}
+            tracks = _tracks_from_loop(res.get('item_loop') or [])
+            if tracks:
+                r['tracks'] = json.dumps(tracks, ensure_ascii=False)
+        except Exception as e:
+            if log:
+                log.info('recommend: track capture failed for %r (%s)',
+                         r.get('album'), type(e).__name__)
+
+
 def _album_from_item(service, item):
     """A plugin's album row (menu format) → {album, artist, cover, play_id},
     or None when it carries nothing we could play later. The handle has to
@@ -1183,7 +1251,12 @@ def _album_from_item(service, item):
             url = 'qobuz://album:%s.qbz' % m.group(1)
     if not url:
         return None
-    return {'album': album, 'artist': artist, 'cover': icon, 'play_id': url}
+    # The menu path of this album row (e.g. "6.0"): a live, session-only handle
+    # we can drill once, while this run's browse is still warm, to capture the
+    # tracklist. It is useless later (positional), so it is never persisted.
+    browse_item = str((item.get('params') or {}).get('item_id') or '')
+    return {'album': album, 'artist': artist, 'cover': icon, 'play_id': url,
+            'browse_item': browse_item}
 
 
 class ServiceSearch:
@@ -1493,6 +1566,7 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
     # 3. Streaming: more by the artists listened to, and albums by the names
     #    the sources put next to them.
     services = [s for s in settings['sources'] if s != 'library']
+    player = None
     if services:
         seeds, seed_keys = [], set()
         heard_artists = set(artist_w)
@@ -1551,6 +1625,9 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
     picked = rank(V, cands, C, cw, exclude=exclude, source_caps=source_caps(cands))
     picked = [(i, s, c) for i, s, c in picked if s > 0]
     rows = [dict(cands[i], score=s, cluster=c) for i, s, c in picked]
+    # Capture each streaming album's tracklist now, while this run's browse is
+    # still warm (the menu path in `browse_item` is live only for this session).
+    _capture_rec_tracks(rpc, player, rows, log)
     write_recommendations(db, rows, now)
     summary['items'] = len(rows)
     return summary

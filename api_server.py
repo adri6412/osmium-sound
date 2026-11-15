@@ -11955,6 +11955,14 @@ def api_recommendations():
         items = rec.read_recommendations(db) if settings['enabled'] else []
     finally:
         db.close()
+    # `tracks` is stored as a JSON string (captured for streaming albums); hand
+    # clients a real list so the kiosk can render a tracklist without parsing.
+    for it in items:
+        raw = it.get('tracks')
+        try:
+            it['tracks'] = json.loads(raw) if raw else []
+        except (ValueError, TypeError):
+            it['tracks'] = []
     st['running'] = _recommend_running()
     if not settings['enabled']:
         st['state'] = 'disabled'

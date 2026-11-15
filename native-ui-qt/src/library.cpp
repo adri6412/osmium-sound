@@ -12,7 +12,7 @@ QHash<int, QByteArray> LibraryModel::roleNames() const {
             {GoRole, "go"}, {PlayRole, "play"}, {DoRole, "doact"}, {IsDirRole, "isDir"}, {HasItemsRole, "hasItems"},
             {IsAudioRole, "isAudio"}, {HasInputRole, "hasInput"}, {DurationRole, "duration"}, {LetterRole, "letter"},
             {UrlRole, "url"}, {FavUrlRole, "favUrl"}, {KindRole, "kind"}, {SectionRole, "section"},
-            {AddRole, "addact"}, {AddHoldRole, "addhold"}, {PTypeRole, "ptype"}};
+            {AddRole, "addact"}, {AddHoldRole, "addhold"}, {PTypeRole, "ptype"}, {TracksRole, "tracks"}};
 }
 
 QVariant LibraryModel::data(const QModelIndex &idx, int role) const {
@@ -39,6 +39,7 @@ QVariant LibraryModel::data(const QModelIndex &idx, int role) const {
     case UrlRole: return it.url;
     case FavUrlRole: return it.favUrl;
     case KindRole: return it.kind;
+    case TracksRole: return it.tracks;
     // ListView sections of the search results: one per kind, in order
     case SectionRole: return m_view == Search ? QString::number(it.kind) : QString();
     }
@@ -55,6 +56,7 @@ QVariantMap LibraryModel::get(int row) const {
     m["isAudio"] = it.isAudio; m["hasInput"] = it.hasInput; m["duration"] = it.duration;
     m["url"] = it.url; m["favUrl"] = it.favUrl; m["kind"] = it.kind;
     m["albumId"] = it.albumId; m["artistId"] = it.artistId; m["key"] = it.key;
+    m["tracks"] = it.tracks;
     return m;
 }
 
@@ -262,7 +264,12 @@ void LibraryModel::requestRecommended(int seq) {
                     o.art = it.value("cover").toString();
                 } else {
                     o.kind = 1; o.url = playId; o.favUrl = playId;
+                    // A streaming cover is a remote Lyrion icon string, resolved
+                    // by Api.imageUrl — the grid, Cover Flow and the CD changer
+                    // all fall back to `icon` when `art` (a library cover id) is
+                    // empty, so it must stay in `icon`, not `art`.
                     o.icon = it.value("cover").toString();
+                    o.tracks = it.value("tracks").toList();
                 }
                 o.ptype = it.value("source").toString();
                 o.isAudio = true;

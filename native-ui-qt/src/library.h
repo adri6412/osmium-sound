@@ -17,6 +17,7 @@ struct LibItem {
     QString albumId, artistId;  // tracks and albums: where "go to album / artist" leads
     int kind = -1;              // search results only: 0 artist, 1 album, 2 track
     QString key;                // Recommended only: the album key "not interested" sends back
+    QVariantList tracks;        // Recommended streaming albums: the tracklist captured at compute time ({title,sub,dur,url})
     // Jive menus carry their own actions: `add` puts the item at the end of
     // the queue, `add-hold` plays it next — the same pair SqueezePlay binds to
     // a tap and a long press on ADD.
@@ -66,7 +67,7 @@ public:
     Q_ENUM(View)
     enum Roles { IdRole = Qt::UserRole + 1, TextRole, SubRole, ArtRole, IconRole, GoRole, PlayRole, DoRole,
                  IsDirRole, HasItemsRole, IsAudioRole, HasInputRole, DurationRole, LetterRole,
-                 UrlRole, FavUrlRole, KindRole, SectionRole, AddRole, AddHoldRole, PTypeRole };
+                 UrlRole, FavUrlRole, KindRole, SectionRole, AddRole, AddHoldRole, PTypeRole, TracksRole };
     explicit LibraryModel(QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;

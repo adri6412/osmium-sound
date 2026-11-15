@@ -107,10 +107,15 @@ Item {
     }
     Timer { interval: 15 * 60 * 1000; repeat: true; triggeredOnStart: true; running: true; onTriggered: root.checkUpdates() }
 
+    // The "Apps / CD" tab (index 1) has been removed (#138): the streaming
+    // services and the CD player already live as tiles on the Music root, so
+    // the duplicate Jive-home menu is gone. `tabIndex` is carried explicitly
+    // so Discover stays 2 and Settings stays 3 without renumbering every
+    // `tab === 2/3` elsewhere.
     readonly property var tabs: [
-        { icon: "music", key: "player.tabs.music" },
-        { icon: "app-window", key: "player.tabs.apps" }, { icon: "compass", key: "player.tabs.discover" },
-        { icon: "settings", key: "" }]
+        { icon: "music", key: "player.tabs.music", tabIndex: 0 },
+        { icon: "compass", key: "player.tabs.discover", tabIndex: 2 },
+        { icon: "settings", key: "", tabIndex: 3 }]
     // Home tiles: 3 columns on a normal canvas, 5 on ultrawide, one row of 9 on a very long bar
     readonly property int homeCols: width >= 2700 ? 9 : width >= 1500 ? 5 : 3
     readonly property int homeRows: Math.ceil(9 / homeCols)
@@ -432,13 +437,7 @@ Item {
     function openTab(i) {
         navDir = i > tab ? 1 : i < tab ? -1 : 0
         tab = i; ctx.close()
-        if (i === 1) {
-            // "Apps · CD": the Jive home menu stands as its own root
-            nav = [{ view: LibraryModel.MenuHome, title: Tr.t("player.titles.apps"), p1: "", p2: "", input: "" }]
-            navDir = -1; msearchOpen = false; search.text = ""; pageLoader.sourceComponent = null
-            loadTop()
-        }
-        else if (i === 0) {
+        if (i === 0) {
             // back to Music: keep a library view in place, otherwise show the
             // sources root (never land on a service/apps plugin view)
             var v = view
@@ -474,6 +473,18 @@ Item {
         goView(LibraryModel.PluginItems, Tr.t("player.titles.favorites"), "favorites")
     }
     function openAlbum(id, title) { if (!id) return; showMusicTab(); goView(LibraryModel.AlbumPage, title, String(id)) }
+    // A streaming recommendation has no browsable album id, only a stable play
+    // url and the tracklist captured when it was computed. openRecAlbum opens the
+    // same AlbumPage in "stored mode": the url plays the whole album, the saved
+    // tracks fill the list. recPage hands those to the page (only one is on
+    // screen at a time); the nav entry marks the page with p2 === "__rec__".
+    property var recPage: null
+    function openRecAlbum(it) {
+        if (!it || !it.url) return
+        showMusicTab()
+        recPage = { url: String(it.url), tracks: it.tracks || [] }
+        goView(LibraryModel.AlbumPage, it.text, "", "__rec__", String(it.favUrl || it.url), false, list.iconUrl(it.icon))
+    }
     // a plugin album opens the same AlbumPage as a local one, but in plugin mode:
     // p1 = plugin command, p2 = item id (marks plugin mode), cover = its artwork.
     // The page drills [cmd,"items",…,"item_id:"+item] for the tracks (AlbumPage.qml).
@@ -741,6 +752,11 @@ Item {
             L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { recPlay(it, "add") } })
             L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: function() { recPlay(it, "insert") } })
             if (it.kind === 0) L.push({ icon: "disc", label: Tr.t("player.page.goToAlbum"), cb: function() { openAlbum(it.id, it.text) } })
+            // a streaming album goes into the CD changer by its stable url, like
+            // a local album goes in by album_id (ChangerView handles both)
+            else L.push({ icon: "disc-3", label: Tr.t("player.changer.putIn"), cb: function() {
+                Ui.app.changerPut({ title: it.text, artUrl: list.iconUrl(it.icon), url: it.url })
+            } })
             L.push({ icon: "eye-off", label: Tr.t("recommend.notInterested"), cb: function() { recDismiss(it) } })
             break
         case LibraryModel.Artists: case LibraryModel.Composers:
@@ -830,8 +846,13 @@ Item {
         switch (view) {
         case LibraryModel.Artists: case LibraryModel.Composers: if (onPlay) playItem("artist_id", it.id, "load"); else openArtist(it.id, it.text); break
         case LibraryModel.Albums: case LibraryModel.NewMusic: if (onPlay) playItem("album_id", it.id, "load"); else openAlbum(it.id, it.text); break
-        // Recommended: one tap plays, wherever it lands on the card
-        case LibraryModel.Recommended: recPlay(it, "load"); break
+        // Recommended: the play circle plays; a tap on the card opens the album
+        // page (a local one by album_id, a streaming one from its stored tracks)
+        case LibraryModel.Recommended:
+            if (onPlay) recPlay(it, "load")
+            else if (it.kind === 0) openAlbum(it.id, it.text)
+            else openRecAlbum(it)
+            break
         case LibraryModel.Genres: if (onPlay) playItem("genre_id", it.id, "load"); else goView(LibraryModel.Albums, it.text, "", "genre_id:" + it.id); break
         case LibraryModel.Years: if (onPlay) playItem("year", it.id, "load"); else goView(LibraryModel.Albums, it.text, "", "year:" + it.id); break
         case LibraryModel.Search:
@@ -1032,7 +1053,7 @@ Item {
                     id: tabItem
                     required property var modelData
                     required property int index
-                    readonly property bool active: root.tab === index
+                    readonly property bool active: root.tab === modelData.tabIndex
                     readonly property string label: modelData.key ? Tr.t(modelData.key) : ""
                     readonly property bool badge: modelData.icon === "settings" && root.updateAvailable
                     width: 46 + (label ? 6 + tabText.implicitWidth : 0) + (badge && updText.visible ? 6 + updText.implicitWidth : 0); height: 40
@@ -1057,7 +1078,7 @@ Item {
                     // widths reads uX/uW, so there is no loop.
                     Binding { target: tabBar; property: "uX"; value: tabItem.x + 8;      when: tabItem.active; restoreMode: Binding.RestoreNone }
                     Binding { target: tabBar; property: "uW"; value: tabItem.width - 16; when: tabItem.active; restoreMode: Binding.RestoreNone }
-                    Tap { id: tabTap; onClicked: root.openTab(tabItem.index) }
+                    Tap { id: tabTap; onClicked: root.openTab(tabItem.modelData.tabIndex) }
                 }
             }
         }
@@ -1071,7 +1092,7 @@ Item {
         Item {
             x: 12; y: 8; width: 27; height: 27
             Icon { anchors.centerIn: parent; name: "home"; size: 15; color: Theme.silverA(0.6) }
-            Tap { onClicked: root.tab === 1 ? root.openTab(1) : root.navSources() }
+            Tap { onClicked: root.navSources() }
         }
         // the trail stops short of the buttons on the right and keeps its end
         // in view, so a long chain of pages never runs under "Back"
@@ -1381,9 +1402,15 @@ Item {
                         // p1 the plugin command; a local album has p1 = album_id
                         AlbumPage {
                             browser: root; devScale: root.devScale
-                            albumId: String(root.cur.p2) !== "" ? "" : String(root.cur.p1)
-                            pluginCmd: String(root.cur.p2) !== "" ? String(root.cur.p1) : ""
-                            pluginItemId: String(root.cur.p2 || "")
+                            // "__rec__" in p2 marks a stored streaming recommendation:
+                            // no album id and no plugin drill, the album plays from
+                            // its saved url and the tracklist comes from recPage.
+                            readonly property bool storedRec: String(root.cur.p2) === "__rec__"
+                            albumId: storedRec || String(root.cur.p2) !== "" ? "" : String(root.cur.p1)
+                            pluginCmd: !storedRec && String(root.cur.p2) !== "" ? String(root.cur.p1) : ""
+                            pluginItemId: storedRec ? "" : String(root.cur.p2 || "")
+                            storedUrl: storedRec && root.recPage ? String(root.recPage.url) : ""
+                            storedTracks: storedRec && root.recPage ? root.recPage.tracks : null
                             pluginCover: String(root.cur.cover || "")
                             pluginFavUrl: String(root.cur.input || "")
                             pluginTitle: root.cur.title === "…" ? "" : String(root.cur.title || "")
@@ -1419,24 +1446,25 @@ Item {
                         onRowLongPress: (row, x, y) => { root.menuX = list.x + x; root.menuY = list.y + y + (cdBanner.visible ? 48 : 0); ctx.open(root.ctxItems(row), root.menuX, root.menuY) }
                         onExpandAlbum: (row, x, y, size, src) => hero.fly(row, list.x + x, list.y + y, size, src)
                     }
-                    // il riquadro "Accedi" quando si apre un servizio di streaming
-                    // senza account (al posto della sola riga "richiede credenziali")
+                    // Streaming services are signed in from Lyrion, not from
+                    // the kiosk (#138): instead of a login button, the card
+                    // tells the user to finish signing in from the service's
+                    // plugin in the Lyrion Music Server.
                     Rectangle {
                         visible: root.curSvcNeedsLogin && !root.isPage
                         x: 12; y: parent.listY + 4
-                        width: (root.width - 12) - 12; height: 132; radius: 12
+                        width: (root.width - 12) - 12; height: svcCol.implicitHeight + 40; radius: 12
                         color: Theme.surface; border.width: 1; border.color: Theme.border
                         Column {
-                            anchors.centerIn: parent; spacing: 12; width: parent.width - 48
+                            id: svcCol
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            y: 20; spacing: 10; width: parent.width - 48
                             Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
                                    text: Tr.tf("services.signInTitle", "name", root.curSvcLabel)
                                    color: Theme.white; font.family: Theme.font; font.pixelSize: 17; font.bold: true }
-                            Rectangle {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: 176; height: 46; radius: 8; color: accTap.mix(Theme.gold, "#ca8a04")
-                                Text { anchors.centerIn: parent; text: Tr.t("services.signIn"); color: "#1a1a1a"; font.family: Theme.font; font.pixelSize: 15; font.bold: true }
-                                Tap { id: accTap; onClicked: root.serviceLogin(root.curSvcKey, root.curSvcLabel) }
-                            }
+                            Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                                   text: Tr.tf("services.signInViaLyrion", "name", root.curSvcLabel)
+                                   color: Theme.silverA(0.85); font.family: Theme.font; font.pixelSize: 14; lineHeight: 1.25 }
                         }
                     }
                     // The album that opens from Cover Flow: a copy of its cover
