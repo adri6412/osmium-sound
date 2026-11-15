@@ -61,8 +61,10 @@ KEYS = {
     'play': (137, 201, 191, 237), 'stop': (196, 201, 247, 237),
     'prev': (252, 201, 303, 237), 'next': (308, 201, 359, 237),
 }
-KNOB = (104, 225)
-KNOB_R = 8
+# the level fader (was a rotary knob): a recessed horizontal slot with the
+# sliding cap fader.png riding in it, moved by the QML to follow the volume.
+FADER = (80.0, 128.0, 225.0)         # x at volume 0, x at volume 100, y of the slot
+FADER_CAP = (9.0, 14.0)              # the cap, width x height in units (fader.png)
 
 # the window's insides
 LOADER_X = (GLASS[0] + GLASS[2]) / 2        # the loader's column: centred in the window
@@ -347,43 +349,43 @@ def base():
         size = 5.2 if k == 'eject' else 5.8
         keycap(img, b, label=labels.get(k), lsize=size, sym=syms.get(k), symk=2.2)
 
-    text(img, 'LEVEL', 60, KNOB[1], 5.2, INK, path=SANSB, spacing=0.15)
+    # the level fader: LEVEL at the left, then a recessed slot the cap rides in
+    fx0, fx1, fy = FADER
+    text(img, 'LEVEL', 55, fy, 5.0, INK, path=SANSB, spacing=0.15)
     d = ImageDraw.Draw(img)
-    # the knob's collar and shadow (the knob itself turns: knob.png)
-    kx, ky = KNOB
-    blur_shadow(img, (kx - KNOB_R, ky - KNOB_R + 1.2, kx + KNOB_R, ky + KNOB_R + 1.2), KNOB_R, 1.0, 170)
-    d.ellipse(box((kx - KNOB_R - 0.9, ky - KNOB_R - 0.9, kx + KNOB_R + 0.9, ky + KNOB_R + 0.9)), fill=(136, 131, 122, 255))
-    # scale ticks around the knob
+    # the slot: a dark groove with rounded ends, cut into the plate
+    d.rounded_rectangle(box((fx0 - 2.6, fy - 1.7, fx1 + 2.6, fy + 1.7)), px(1.7), fill=(36, 34, 31, 255))
+    # an inner top shadow and a lower lip catching the light, for depth
+    d.line([px(fx0 - 1.6), px(fy - 1.1), px(fx1 + 1.6), px(fy - 1.1)], fill=(20, 19, 17, 200), width=px(0.3))
+    d.line([px(fx0 - 1.6), px(fy + 1.9), px(fx1 + 1.6), px(fy + 1.9)], fill=(176, 170, 160, 150), width=px(0.3))
+    # eleven ticks above the slot, the ends and middle taller
     for i in range(11):
-        ang = math.radians(-135 + 27 * i - 90)
-        r0, r1 = KNOB_R + 1.4, KNOB_R + (2.6 if i in (0, 10) else 2.0)
-        d.line([px(kx + r0 * math.cos(ang)), px(ky + r0 * math.sin(ang)),
-                px(kx + r1 * math.cos(ang)), px(ky + r1 * math.sin(ang))], fill=INK_SOFT, width=px(0.3))
+        tx = fx0 + (fx1 - fx0) * i / 10
+        tl = 2.0 if i in (0, 5, 10) else 1.3
+        d.line([px(tx), px(fy - 3.2), px(tx), px(fy - 3.2 + tl)], fill=INK_SOFT, width=px(0.3))
     save(finish(img), 'base.png')
 
 
-def knob():
-    s = 2 * (KNOB_R + 0.4)
-    img = canvas(s, s)
-    w, h = img.size
-    c = s / 2
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    dx, dy = xx / SS - c, yy / SS - c
-    r = np.hypot(dx, dy)
-    ang = np.arctan2(dy, dx)
-    # a knurled skirt and a brushed (spun) cap
-    skirt = (r > KNOB_R * 0.80)
-    knurl = 0.5 + 0.5 * np.cos(ang * 48)
-    spun = np.sin(r * 9.0) * 0.5 + np.cos(ang * 2 + 0.6) * 0.5     # the turned finish catches the light
-    lum = np.where(skirt, 150 + 50 * knurl * (0.6 - dy / KNOB_R * 0.4),
-                   188 + 16 * spun - 22 * dy / KNOB_R + 10 * (dx / KNOB_R))
-    rgb = np.stack([lum * 1.02, lum, lum * 0.95], -1)
-    a = np.clip((KNOB_R - r) * SS, 0, 1) * 255
-    arr = np.dstack([np.clip(rgb, 0, 255), a]).astype(np.uint8)
-    img = Image.fromarray(arr, 'RGBA')
+def fader():
+    """The level fader's sliding cap: dark ribbed plastic with a bright pointer
+    line down the middle. The QML moves it along the slot to follow the volume."""
+    w, h = FADER_CAP
+    mw, mh = w + 2, h + 2
+    img = canvas(mw, mh)
+    # the body: a vertical gradient, dark plastic
+    g = vgrad(px(mw), px(mh), (84, 80, 75), (30, 28, 26), mid=(60, 57, 53))
+    m = shape_mask(img.size, (1, 1, 1 + w, 1 + h), 1.4)
+    paste_rgb(img, g, m)
     d = ImageDraw.Draw(img)
-    d.line([px(c), px(c - KNOB_R * 0.78), px(c), px(c - KNOB_R * 0.30)], fill=(40, 38, 35, 255), width=px(0.55))
-    save(finish(img, k=8), 'knob.png')
+    cx = 1 + w / 2
+    # a few moulded ribs, each a dark groove above a light lip
+    for ry in (0.26, 0.40, 0.60, 0.74):
+        yy = 1 + h * ry
+        d.line([px(1 + 1.4), px(yy), px(1 + w - 1.4), px(yy)], fill=(20, 19, 17, 150), width=px(0.25))
+        d.line([px(1 + 1.4), px(yy + 0.45), px(1 + w - 1.4), px(yy + 0.45)], fill=(150, 144, 135, 110), width=px(0.25))
+    # the pointer: a bright notch down the centre marking the position
+    d.line([px(cx), px(1 + 1.6), px(cx), px(1 + h - 1.6)], fill=(224, 218, 208, 255), width=px(0.7))
+    save(finish(img, k=8), 'fader.png')
 
 
 def standby_led(name, glow_rgb, core_rgb, hot_rgb):
@@ -903,7 +905,7 @@ def main():
     OUT = ap.parse_args().out
     os.makedirs(OUT, exist_ok=True)
     base()
-    knob()
+    fader()
     standby_led('led-standby.png', (255, 40, 30), (255, 70, 55), (255, 190, 170))
     standby_led('led-on.png', (40, 230, 90), (70, 240, 110), (200, 255, 210))
     interior()

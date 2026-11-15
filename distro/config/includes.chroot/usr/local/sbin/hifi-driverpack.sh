@@ -127,8 +127,13 @@ lock() {
 # changes the sidecar, and the signature no longer verifies. The distinct
 # ".osmpack" filename is the domain separator from the OS bundles
 # (hifi-os-*.tar.gz), so an OTA signature cannot pass as a driver pack.
-verify_pack() {  # <pack.osmpack> -> 0 ok, else die
+verify_pack() {  # <pack.osmpack> [signed-basename] -> 0 ok, else die
     _pack=$1
+    # make-driverpack signs "<sha>  <name>.osmpack" where <name> is the manifest
+    # name. A pack kept for refresh is stored as pack.osmpack, so its on-disk
+    # basename no longer matches the signed name — the caller passes the original
+    # "<name>.osmpack" then. Default to the file's own basename otherwise.
+    _signed=${2:-$(basename "$_pack")}
     [ -s "$_pack" ] || die "pack not found or empty: $_pack"
     _sig="$_pack.sha256.sig"
     [ -s "$_sig" ] || die "missing signature next to the pack: $(basename "$_sig")"
@@ -144,8 +149,8 @@ verify_pack() {  # <pack.osmpack> -> 0 ok, else die
 
     _sha=$(sha256sum "$_pack" | awk '{print $1}')
     _tmp=$(mktemp)
-    # EXACTLY the sidecar make-driverpack.sh signs: "<sha>  <basename>\n".
-    printf '%s  %s\n' "$_sha" "$(basename "$_pack")" > "$_tmp"
+    # EXACTLY the sidecar make-driverpack.sh signs: "<sha>  <name>.osmpack\n".
+    printf '%s  %s\n' "$_sha" "$_signed" > "$_tmp"
     if openssl pkeyutl -verify -pubin -inkey "$PUBKEY" \
             -rawin -in "$_tmp" -sigfile "$_sig" >/dev/null 2>&1; then
         rm -f "$_tmp"
@@ -166,6 +171,14 @@ manifest_field() {  # <manifest.json> <key>
 # Rule from hifi-ext.sh: an extension may only add files, never cover one the
 # image ships, or the next image's copy stays hidden forever. Firmware here is
 # almost always a MISSING blob, so add-only is both safe and what we want.
+#
+# A file the base image ALREADY ships is always a shadow — there is no self-copy
+# exemption. The caller drops our own overlay before this runs (build_from_pack),
+# so $SYSROOT/$_p reflects the real base image, not our merged extension. When a
+# pack's firmware is FULLY covered by the image, the caller retires it before we
+# get here (image_provides_all); reaching a shadow die therefore means a PARTIAL
+# overlap — the pack would cover a file the image ships (possibly a newer one) —
+# which is the regression we refuse.
 check_tree() {  # <unpacked firmware root under usr/> <extension dir>
     _root=$1; _self=$2
     _bad=""; _shadow=""
@@ -175,12 +188,45 @@ check_tree() {  # <unpacked firmware root under usr/> <extension dir>
             usr/lib/firmware/*|usr/lib/modules/"$KVER"/updates/*) ;;
             *) _bad="$_bad $_p"; continue ;;
         esac
-        if [ -e "$SYSROOT/$_p" ] && [ ! -e "$_self/$_p" ]; then
+        if [ -e "$SYSROOT/$_p" ]; then
             _shadow="$_shadow $_p"
         fi
     done
     [ -z "$_bad" ] || die "pack writes outside usr/lib/firmware and usr/lib/modules/$KVER/updates:$_bad"
     [ -z "$_shadow" ] || die "pack would cover files the system already ships:$_shadow"
+}
+
+# ── has the base image caught up? ────────────────────────────────────────────
+# True (0) when EVERY firmware file this pack carries already exists in the base
+# image (usr/lib/firmware/...): the image now ships this driver and the pack has
+# nothing left to add. A modules-only pack never matches — its files live under
+# .../updates/osmium-driverpack, a path the image never uses — so it is never
+# auto-retired. Reads only the payload LIST from the tar; the pack must have
+# passed verify_pack first. 🚨 The caller MUST ensure our own extension is NOT
+# merged, or the overlay would masquerade as the base image — cmd_refresh and
+# cmd_install only ask after an OTA (stale extension unmerged) or before a first
+# install (no overlay yet).
+image_provides_all() {  # <pack.osmpack>
+    _ip_files=$(tar tzf "$1" 2>/dev/null | sed -n 's#^firmware/\(.*[^/]\)$#\1#p')
+    [ -n "$_ip_files" ] || return 1
+    for _ip_rel in $_ip_files; do
+        [ -e "$SYSROOT/usr/lib/firmware/$_ip_rel" ] || return 1
+    done
+    return 0
+}
+
+# Drop a pack whose firmware the image now ships: unmerge+remove the extension
+# and mark it superseded so `list` can say where the driver went. Any modules
+# are left to a reboot (we do not reload them); apply_sysext re-merges whatever
+# extensions remain.
+retire_pack() {  # <name>
+    _rp_n=$1
+    [ -n "${HIFI_DRIVERPACK_TEST_ROOT:-}" ] || systemd-sysext unmerge >/dev/null 2>&1 || true
+    rm -rf "${EXT_DIR:?}/$EXT_PREFIX$_rp_n"
+    mkdir -p "$META_DIR/$_rp_n"
+    printf '{"name":"%s","state":"superseded","image":"%s","updated":"%s"}\n' \
+        "$_rp_n" "$(image_version)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        > "$META_DIR/$_rp_n/state.json"
 }
 
 write_release() {  # <extension dir> <name> — identical pin scheme to hifi-ext.sh
@@ -280,6 +326,13 @@ build_from_pack() {  # <name> <pack.osmpack> <scratch workdir>
              "the firmware is installed, the modules are skipped"
     fi
 
+    # If an earlier copy of THIS extension is still merged, its files show
+    # through /usr and check_tree would mistake them for base-image shadows.
+    # Drop every overlay first (apply_sysext re-merges them afterwards) so the
+    # guardian — and image_provides_all callers — see the real base image only.
+    if [ -d "$EXT_DIR/$EXT_PREFIX$_name" ] && [ -z "${HIFI_DRIVERPACK_TEST_ROOT:-}" ]; then
+        systemd-sysext unmerge >/dev/null 2>&1 || true
+    fi
     check_tree "$_tree" "$EXT_DIR/$EXT_PREFIX$_name"
     write_release "$_tree" "$EXT_PREFIX$_name"
 
@@ -328,6 +381,15 @@ cmd_install() {
     # the attacker-controlled filename.
     _name=$(manifest_name_of "$_pack")
     _name=$(sane_name "$_name") || die "pack manifest has no valid name"
+    # If the image already ships this firmware there is nothing to overlay. Trust
+    # this only for a pack not already installed — otherwise our own merged
+    # extension would read back as the base image.
+    if [ ! -d "$EXT_DIR/$EXT_PREFIX$_name" ] && image_provides_all "$_pack"; then
+        write_status done 100 "Il driver '$_name' è già incluso nell'immagine di sistema."
+        _dp_ok=1
+        log "driver pack '$_name' already provided by the image — nothing to install"
+        return 0
+    fi
     write_status installing 55 "Installazione driver '$_name'…"
     _w=$META_DIR/.work/$_name; rm -rf "$_w"; mkdir -p "$_w"
     _ext=$(build_from_pack "$_name" "$_pack" "$_w")
@@ -360,9 +422,13 @@ cmd_scan_usb() {
     _stage="$META_DIR/.incoming"; rm -rf "$_stage"; mkdir -p "$_stage"
     printf '{"packs":['
     _first=1
-    # lsblk gives us usb partitions with a filesystem.
-    for _dev in $(lsblk -rno NAME,TYPE,TRAN,FSTYPE 2>/dev/null \
-                    | awk '$2=="part" && $4!="" {print $1}'); do
+    # lsblk gives us every partition that has a filesystem; the per-device TRAN
+    # check below narrows it to USB. We must NOT ask lsblk for TRAN here: on a
+    # partition TRAN is empty (it is reported on the parent disk, see below), and
+    # with `-r` the empty column collapses, so NAME/TYPE/FSTYPE shift and the
+    # filter would reject every stick. Keep three populated columns only.
+    for _dev in $(lsblk -rno NAME,TYPE,FSTYPE 2>/dev/null \
+                    | awk '$2=="part" && $3!="" {print $1}'); do
         _tran=$(lsblk -rno TRAN "/dev/$_dev" 2>/dev/null | head -n1)
         # TRAN is reported on the disk, not the partition: check the parent.
         _pk=$(lsblk -rno PKNAME "/dev/$_dev" 2>/dev/null | head -n1)
@@ -406,8 +472,10 @@ cmd_list() {
     for _s in "$META_DIR"/*/state.json; do
         [ -f "$_s" ] || continue
         _n=$(json_get "$_s" name); _i=$(json_get "$_s" image); _t=$(json_get "$_s" type)
-        _tgt=$(json_get "$_s" target_kernel)
-        if [ ! -d "$EXT_DIR/$EXT_PREFIX$_n" ]; then
+        _tgt=$(json_get "$_s" target_kernel); _st=$(json_get "$_s" state)
+        if [ "$_st" = superseded ]; then
+            _state="superseded (now in image $_i)"
+        elif [ ! -d "$EXT_DIR/$EXT_PREFIX$_n" ]; then
             _state="missing"
         elif [ "$_i" = "$_cur" ]; then
             _state="active"
@@ -443,13 +511,25 @@ cmd_refresh() {
         _n=$(basename "$_d")
         _i=$(json_get "$_d/state.json" image)
         _pack="$_d/pack.osmpack"
-        # re-verify: the stored pack must still carry a valid signature.
-        if ! verify_pack "$_pack" >/dev/null 2>&1; then
+        # re-verify: the stored pack must still carry a valid signature. It was
+        # saved as pack.osmpack, so pass the ORIGINAL signed name "<name>.osmpack".
+        if ! verify_pack "$_pack" "$_n.osmpack" >/dev/null 2>&1; then
             warn "stored pack '$_n' no longer verifies — left disabled"
             rm -rf "${EXT_DIR:?}/$EXT_PREFIX$_n"
             continue
         fi
         _man="$_d/manifest.json"
+        # Has the image caught up? Only ask when something changed (an OTA, or
+        # the pack not currently applied): on a same-image reboot our overlay is
+        # merged and /usr would reflect it, not the base. After an OTA the stale
+        # extension is unmerged, so /usr is the true base image here.
+        if { [ "$_i" != "$_cur" ] || [ ! -d "$EXT_DIR/$EXT_PREFIX$_n" ]; } \
+             && image_provides_all "$_pack"; then
+            log "driver '$_n' is now carried by the system image — retiring the pack"
+            retire_pack "$_n"
+            _changed=1
+            continue
+        fi
         if [ "$_i" != "$_cur" ] || [ ! -d "$EXT_DIR/$EXT_PREFIX$_n" ]; then
             log "re-pinning driver pack '$_n' to image $_cur"
             _w=$META_DIR/.work/$_n; rm -rf "$_w"; mkdir -p "$_w"

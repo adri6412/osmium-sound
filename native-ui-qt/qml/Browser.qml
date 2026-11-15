@@ -27,6 +27,14 @@ Item {
     readonly property bool browsing: tab === 0 && view !== LibraryModel.Home && view !== sourcesRoot
     // the album and artist pages load their own data (AlbumPage.qml, ArtistPage.qml)
     readonly property bool isPage: view === LibraryModel.AlbumPage || view === LibraryModel.ArtistPage
+    // the album grid/Cover Flow/changer view picker belongs to the album lists
+    // only. Drive it from the navigation view (cur.view), NOT from Library.view
+    // via list.albumGrid: Library.view lags behind when we leave the Albums
+    // list for the Music root, which left the picker stuck on screen (#141).
+    readonly property bool albumGridView: !isPage
+                               && (view === LibraryModel.Albums || view === LibraryModel.NewMusic
+                                   || view === LibraryModel.Recommended
+                                   || (view === LibraryModel.PluginItems && Library.pluginAlbumList))
     property bool msearchOpen: false
     property string msearchTitle: ""
     property var msearchGo: []
@@ -1142,7 +1150,7 @@ Item {
         // Settings → Library): the view on screen, a tap drops the list down
         Rectangle {
             id: viewPick
-            visible: list.albumGrid && !root.isPage
+            visible: root.albumGridView
             readonly property string view: Ui.app ? Ui.app.albumView : "grid"
             readonly property var views: [{ id: "grid", icon: "layout-grid", label: "player.view.grid" },
                                           { id: "coverflow", icon: "gallery-horizontal", label: "player.view.coverflow" },

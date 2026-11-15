@@ -10,7 +10,7 @@
 // shows disc, track and time. The keys work: standby, play/pause, stop,
 // skip (held: search), disc -/+ (the album before or after in the queue),
 // open/close and unload (the disc goes back into the file until play),
-// random, repeat, and the level knob is the volume.
+// random, repeat, and the level fader is the volume.
 //
 // The albums loaded from the albums view "CD changer" (ChangerView.qml) are
 // `discs`: disc 1, 2, 3... in the order they were chosen, each with its
@@ -95,7 +95,10 @@ Item {
         prev: [252, 201, 303, 237], next: [308, 201, 359, 237]
     })
     readonly property var keyNames: ["power", "random", "repeat", "discm", "discp", "eject", "unload", "play", "stop", "prev", "next"]
-    readonly property var knob: [104, 225]
+    // the level fader (changer.py FADER): x at volume 0, x at volume 100, slot y
+    readonly property real faderX0: 80
+    readonly property real faderX1: 128
+    readonly property real faderY: 225
 
     // ── the mechanism ──────────────────────────────────────────────────────
     // drumAngle: the file's turn, in degrees; slot n is at the loader when
@@ -733,28 +736,31 @@ Item {
             Pic { x: 501; y: 230.5; width: 27.83; height: 6; source: root.assetsBase + "ind-random.png"; visible: root.live && root.shuffleMode > 0 }
         }
 
-        // ── the level knob: the volume ─────────────────────────────────────
+        // ── the level fader: the volume ────────────────────────────────────
+        // The cap (fader.png) rides the slot; drag it or touch the slot to send
+        // the volume there, and the wheel nudges it. Mirrors AnimCassette.
         Pic {
-            id: knobPic
-            x: root.knob[0] - 8.4; y: root.knob[1] - 8.4; width: 16.8; height: 16.8
-            source: root.assetsBase + "knob.png"
-            rotation: -135 + 270 * (knobArea.level >= 0 ? knobArea.level : root.volume >= 0 ? root.volume : 40) / 100
+            property real lvl: faderArea.level >= 0 ? faderArea.level
+                               : (root.volume >= 0 ? root.volume : 40)
+            x: root.faderX0 + (root.faderX1 - root.faderX0) * lvl / 100 - 5.5
+            y: root.faderY - 8; width: 11; height: 16
+            source: root.assetsBase + "fader.png"
             opacity: root.live && root.volumeFixed ? 0.6 : 1
         }
         MouseArea {
-            id: knobArea
-            x: root.knob[0] - 12; y: root.knob[1] - 12; width: 24; height: 24
+            id: faderArea
+            x: root.faderX0 - 6; y: root.faderY - 10
+            width: root.faderX1 - root.faderX0 + 12; height: 20
             enabled: root.live && !root.volumeFixed && root.volume >= 0 && root.power
             property int level: -1
-            property real fromY: 0
-            property int fromLevel: 0
-            onPressed: (m) => { fromY = m.y; fromLevel = root.volume; level = root.volume }
-            onPositionChanged: (m) => {
-                var v = Math.max(0, Math.min(100, Math.round(fromLevel + (fromY - m.y) * 2.5)))
-                if (v === level) return
+            function at(mx) { return Math.round(Math.max(0, Math.min(100, (mx - 6) * 100 / (root.faderX1 - root.faderX0)))) }
+            function send(v, fin) {
+                if (!fin && v === (level >= 0 ? level : root.volume)) return
                 level = v
-                root.action("volume", { level: v, final: false })
+                root.action("volume", { level: v, final: fin })
             }
+            onPressed: (m) => send(at(m.x), false)
+            onPositionChanged: (m) => send(at(m.x), false)
             onReleased: { if (level >= 0) root.action("volume", { level: level, final: true }); level = -1 }
             onCanceled: level = -1
             onWheel: (w) => {

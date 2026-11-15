@@ -342,6 +342,128 @@ def close_all_apps_and_restart():
         log.exception("close_all_apps_and_restart failed")
         return "Failed to close all apps and restart"
 
+# ──────────────────────────────────────────────────────────────────
+#  Hardware inventory for the dashboard "Status" card: the fixed facts
+#  about the box (CPU, RAM, which radios/ports it has, its disks), as
+#  opposed to the live figures in get_system_stats(). Every field is
+#  best-effort and independently None/empty-able: one unreadable sysfs
+#  node must never take the whole card down.
+# ──────────────────────────────────────────────────────────────────
+def _cpu_info():
+    """CPU model name and logical-core count. Falls back to the arch name
+    when /proc/cpuinfo has no 'model name' line (some ARM kernels)."""
+    model = None
+    try:
+        with open('/proc/cpuinfo', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                if line.startswith('model name'):
+                    model = line.split(':', 1)[1].strip()
+                    break
+                # ARM exposes the part as "Hardware"/"Model" instead
+                if model is None and line.split(':', 1)[0].strip() in ('Model', 'Hardware'):
+                    model = line.split(':', 1)[1].strip()
+    except OSError:
+        pass
+    return {'model': model or platform.machine(), 'cores': os.cpu_count() or 1}
+
+
+def _ram_total_mb():
+    """Installed RAM in MB from /proc/meminfo (MemTotal is in kB)."""
+    try:
+        with open('/proc/meminfo') as f:
+            for line in f:
+                if line.startswith('MemTotal:'):
+                    return round(int(line.split()[1]) / 1024)
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
+def _net_adapters_present():
+    """(has_wired, has_wireless): which kinds of network adapter the box
+    physically has, regardless of whether they are up or carrying a link.
+    A real adapter has a `device` symlink under /sys/class/net; a wireless
+    one also has a `wireless`/`phy80211` node. Virtual interfaces (lo,
+    bridges, veth, docker0, tailscale…) have neither and are skipped."""
+    wired = wireless = False
+    try:
+        for iface in os.listdir('/sys/class/net'):
+            if iface == 'lo':
+                continue
+            base = '/sys/class/net/' + iface
+            is_wifi = os.path.exists(base + '/wireless') or os.path.exists(base + '/phy80211')
+            if not is_wifi and not os.path.exists(base + '/device'):
+                continue  # virtual interface, not a real port
+            if is_wifi:
+                wireless = True
+            else:
+                wired = True
+    except OSError:
+        pass
+    return wired, wireless
+
+
+def _lsblk_truthy(v):
+    """lsblk -J reports rm/ro/rota as JSON booleans on util-linux ≥ 2.40
+    but as the strings "0"/"1" on older ones, where bool("0") is True."""
+    return v is True or str(v) in ('1', 'true', 'True')
+
+
+def _local_disks():
+    """The box's physical disks (one row per whole disk, no partitions):
+    model, size and how it is attached. Memory-backed and virtual block
+    devices (zram/ram/loop/nbd/dm) are left out, as in the installer."""
+    try:
+        r = _run(['lsblk', '-J', '-b', '-d', '-o', 'NAME,TYPE,SIZE,MODEL,TRAN,ROTA,RM'], timeout=10)
+        data = json.loads(r.stdout or '{}')
+    except Exception:
+        return []
+    disks = []
+    for dev in data.get('blockdevices', []):
+        name = dev.get('name') or ''
+        # Only real fixed/removable storage: no partitions, and no optical
+        # drive (type 'rom' -- shown as a CD, not a disk), no memory-backed
+        # or virtual devices.
+        if dev.get('type') != 'disk':
+            continue
+        if not name or name.startswith(('nbd', 'zram', 'ram', 'loop', 'dm-')):
+            continue
+        try:
+            size = int(dev.get('size') or 0)
+        except (TypeError, ValueError):
+            size = 0
+        if size <= 0:
+            continue
+        disks.append({
+            'name': name,
+            'size_gb': round(size / 1024 / 1024 / 1024, 1),
+            'model': (dev.get('model') or '').strip(),
+            'transport': (dev.get('tran') or '').strip(),
+            'rotational': _lsblk_truthy(dev.get('rota')),
+            'removable': _lsblk_truthy(dev.get('rm')),
+        })
+    return disks
+
+
+def _hardware_info():
+    """The hardware block merged into get_system_info(). Isolated so a
+    failure here degrades to empty fields, not a 500 on the whole route."""
+    try:
+        wired, wireless = _net_adapters_present()
+        return {
+            'cpu': _cpu_info(),
+            'ram_total_mb': _ram_total_mb(),
+            'has_wired': wired,
+            'has_wireless': wireless,
+            'has_bluetooth': _bt_adapter_present(),
+            'disks': _local_disks(),
+        }
+    except Exception:
+        log.exception("_hardware_info failed")
+        return {'cpu': None, 'ram_total_mb': None, 'has_wired': False,
+                'has_wireless': False, 'has_bluetooth': False, 'disks': []}
+
+
 # Funzione per ottenere le informazioni di sistema
 def get_system_info():
     try:
@@ -387,7 +509,8 @@ def get_system_info():
             'arch': platform.machine(),
             'version': _installed_ui_version(),
             'local_ip': local_ip,
-            'network_interfaces': network_interfaces
+            'network_interfaces': network_interfaces,
+            **_hardware_info(),
         }
     except Exception:
         log.exception("get_system_info failed")
@@ -398,7 +521,8 @@ def get_system_info():
             'version': _installed_ui_version(),
             'local_ip': 'Unknown',
             'network_interfaces': [],
-            'error': _t('system.infoFetchFailed', _lang())
+            'error': _t('system.infoFetchFailed', _lang()),
+            **_hardware_info(),
         }
 
 def _sysfs(path):

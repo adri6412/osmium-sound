@@ -132,6 +132,15 @@
     "onscreen": "Auf dem Bildschirm",
     "cpu": "CPU",
     "ram": "RAM",
+    "connectivity": "Konnektivität",
+    "processor": "Prozessor",
+    "cores": "{n} Kerne",
+    "ethernet": "Ethernet",
+    "bluetooth": "Bluetooth",
+    "disks": {
+      "title": "Datenträger",
+      "removable": "wechselbar"
+    },
     "disk": {
       "title": "Speicherplatz",
       "space": "Platz",
@@ -315,6 +324,10 @@
       "systemTweaks": {
         "label": "Systemoptimierungen",
         "desc": "CPU-Governor, Sicherheit, Hyper-Threading"
+      },
+      "drivers": {
+        "label": "Externe Treiber",
+        "desc": "Signiertes Treiber-/Firmware-Paket von USB oder per Upload installieren"
       },
       "notices": {
         "label": "Lizenzen und Credits",

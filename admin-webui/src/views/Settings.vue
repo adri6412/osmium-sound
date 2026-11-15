@@ -69,6 +69,10 @@ const sections = computed(() => [
   // OS-level knobs (CPU governor / security mitigations / hyper-threading) a
   // listener can opt into to push server-side PCM->DSD harder. Off by default.
   { key: 'systemTweaks', icon: 'settings', label: t('settings.sections.systemTweaks.label'), desc: t('settings.sections.systemTweaks.desc') },
+  // External driver/firmware packs the developer signed and sent (USB or web
+  // upload). A permanent door to the same flow the first-boot setup offers, so
+  // a missing driver can be added on an already-configured device.
+  { key: 'drivers',   icon: 'usb',       label: t('settings.sections.drivers.label'),   desc: t('settings.sections.drivers.desc') },
   // What the device is made of and under which licenses: the project, Lyrion,
   // the third-party notices and every Debian package of the image.
   { key: 'notices',   icon: 'file',      label: t('settings.sections.notices.label'),   desc: t('settings.sections.notices.desc') },
@@ -88,7 +92,7 @@ const groups = [
   { id: 'look',    icon: 'monitor',  secs: ['vuMeters', 'animations', 'display', 'language'] },
   { id: 'control', icon: 'remote',   secs: ['remote', 'companion', 'companionIos'] },
   { id: 'network', icon: 'wifi',     secs: ['network', 'tailscale', 'services', 'account'] },
-  { id: 'system',  icon: 'info',     secs: ['timezone', 'updates', 'backup', 'system', 'systemTweaks', 'notices'] },
+  { id: 'system',  icon: 'info',     secs: ['timezone', 'updates', 'backup', 'system', 'systemTweaks', 'drivers', 'notices'] },
 ];
 function groupOf(key) { const g = groups.find((x) => x.secs.includes(key)); return g ? g.id : ''; }
 // the sections of a group that are listed right now, in the group's order
@@ -1988,8 +1992,60 @@ onUnmounted(() => {
   if (lyrionPoll) clearInterval(lyrionPoll); if (skinPoll) clearInterval(skinPoll); if (tailscalePoll) clearInterval(tailscalePoll);
   if (timezonePoll) clearInterval(timezonePoll); if (vuStorePoll) clearInterval(vuStorePoll); if (animStorePoll) clearInterval(animStorePoll);
   if (btPoll) clearInterval(btPoll);
+  if (drvPoll) clearInterval(drvPoll);
   window.dispatchEvent(new CustomEvent('hifi-settings-active', { detail: false }));
 });
+
+// ── External driver packs (same flow as the first-boot setup). Scan a USB
+// stick already in the device, or upload the signed .osmpack + .sig from this
+// browser. Both go to the signature-checking device script via
+// /api/system/drivers/* — the signature is the only trust gate. Mirror of
+// Setup.vue's drv block; reuses the setup.drivers* strings.
+const drv = reactive({ stage: '', packs: [], msg: '', secureBoot: false });
+let drvPoll = null;
+
+async function drvScan() {
+  drv.stage = 'scanning'; drv.packs = []; drv.secureBoot = false; drv.msg = '';
+  const { ok, data } = await api.driversUsbScan();
+  if (!ok || !data) { drv.stage = 'noUsb'; return; }
+  drv.packs = data.packs || [];
+  drv.stage = drv.packs.length ? 'list' : 'empty';
+}
+
+async function drvInstallUsb(pack) {
+  if (!pack || pack.signature !== 'valid' || !pack.path) return;
+  drv.stage = 'installing'; drv.secureBoot = false; drv.msg = '';
+  const { ok } = await api.driversInstallUsb(pack.path);
+  if (!ok) { drv.stage = 'failed'; return; }
+  drvStartPoll();
+}
+
+async function drvUpload(e) {
+  let pack = null, sig = null;
+  for (const f of (e.target.files || [])) {
+    if (f.name.endsWith('.osmpack')) pack = f;
+    else if (f.name.endsWith('.sig')) sig = f;
+  }
+  e.target.value = '';
+  if (!pack || !sig) { drv.stage = 'failed'; drv.msg = t('setup.driversNeedBoth'); return; }
+  drv.stage = 'installing'; drv.secureBoot = false; drv.msg = '';
+  const { ok } = await api.driversInstallUpload(pack, sig);
+  if (!ok) { drv.stage = 'failed'; return; }
+  drvStartPoll();
+}
+
+function drvStartPoll() {
+  if (drvPoll) clearInterval(drvPoll);
+  drvPoll = setInterval(async () => {
+    const { ok, data } = await api.driversStatus();
+    if (!ok || !data) return;
+    drv.secureBoot = !!data.secure_boot;
+    if (data.state === 'done') { drv.stage = 'done'; clearInterval(drvPoll); drvPoll = null; }
+    else if (data.state === 'error' || data.state === 'failed') {
+      drv.stage = 'failed'; drv.msg = data.message || ''; clearInterval(drvPoll); drvPoll = null;
+    }
+  }, 1500);
+}
 </script>
 
 <template>
@@ -3275,6 +3331,37 @@ onUnmounted(() => {
         <label>{{ t('settings.system.adminPassword') }}</label><input v-model="resetPw" type="password" />
         <div style="margin-top: 12px;"><button class="danger" @click="factoryReset">{{ t('settings.system.factoryReset') }}</button></div>
       </div>
+    </div>
+
+    <!-- External driver/firmware packs: a permanent door to the same signed-pack
+         flow the first-boot setup offers (Setup.vue). USB scan or web upload. -->
+    <div class="card" v-if="open === 'drivers'">
+      <p class="sub">{{ t('setup.driversHint') }}</p>
+      <div class="row" style="gap: 8px; flex-wrap: wrap;">
+        <button class="secondary" :disabled="drv.stage === 'scanning' || drv.stage === 'installing'" @click="drvScan">
+          {{ drv.stage === 'scanning' ? t('setup.driversScanning') : t('setup.driversScan') }}
+        </button>
+        <label class="upload-btn fit" :class="{ disabled: drv.stage === 'installing' }">
+          {{ t('setup.driversUpload') }}
+          <input type="file" accept=".osmpack,.sig" multiple :disabled="drv.stage === 'installing'" style="display: none;" @change="drvUpload" />
+        </label>
+      </div>
+      <p v-if="drv.stage === 'noUsb'" class="muted">{{ t('setup.driversNoUsb') }}</p>
+      <p v-else-if="drv.stage === 'empty'" class="muted">{{ t('setup.driversNoPacks') }}</p>
+      <p v-else-if="drv.stage === 'installing'" class="muted">{{ t('setup.driversInstalling') }}</p>
+      <template v-if="drv.stage === 'list'">
+        <p class="sub" style="margin-top: 10px;">{{ t('setup.driversFound') }}</p>
+        <div v-for="(p, i) in drv.packs" :key="i" class="net between">
+          <span>
+            <span style="display: block;">{{ p.name }}</span>
+            <span class="muted">{{ p.signature === 'valid' ? p.description : t('setup.driversBadSignature') }}</span>
+          </span>
+          <button v-if="p.signature === 'valid' && p.path" @click="drvInstallUsb(p)">{{ t('setup.driversInstall') }}</button>
+        </div>
+      </template>
+      <div v-if="drv.stage === 'done'" class="msg">{{ t('setup.driversDone') }}</div>
+      <div v-else-if="drv.stage === 'failed'" class="msg err">{{ drv.msg || t('setup.driversFailed') }}</div>
+      <p v-if="drv.secureBoot && (drv.stage === 'done' || drv.stage === 'failed')" class="sub" style="color: var(--gold);">{{ t('setup.driversSecureBoot') }}</p>
     </div>
 
     <!-- System tweaks: OS-level knobs for more server-side PCM->DSD headroom.
