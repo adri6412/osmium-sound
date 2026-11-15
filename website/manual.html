@@ -48,6 +48,20 @@
   html[data-lang="it"] nav.toc[data-lang="it"],
   html[data-lang="it"] .content[data-lang="it"]{display:block}
 
+  /* ── channel toggling ───────────────────────────────────
+     Dev-only blocks carry [data-channel="dev"]. They are hidden only while
+     the Development channel is NOT active, so when it is active they keep
+     their own natural display (block section, list-item li, block TOC link)
+     without needing to be restored. Default (no data-channel on <html>) =
+     Production = dev blocks hidden. */
+  html:not([data-channel="dev"]) [data-channel="dev"]{display:none}
+  .chanswitch{margin-left:auto; display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:3px}
+  .chanswitch button{
+    background:transparent; border:0; color:var(--muted); font-size:12.5px; font-weight:600;
+    padding:5px 10px; border-radius:6px; cursor:pointer; letter-spacing:.02em;
+  }
+  .chanswitch button.active{background:var(--gold); color:#111}
+
   /* ── top bar ─────────────────────────────────────────── */
   header.top{
     position:sticky; top:0; z-index:50;
@@ -190,6 +204,10 @@
 <header class="top">
   <div class="dot"></div>
   <div class="brand">Osmium Sound<small id="brandSub">Installation & configuration manual</small></div>
+  <div class="chanswitch" role="group" aria-label="Release channel">
+    <button id="btnProd" onclick="setChannel('prod')">Prod</button>
+    <button id="btnDev" onclick="setChannel('dev')">Dev</button>
+  </div>
   <div class="langswitch">
     <button id="btnEn" onclick="setLang('en')">EN</button>
     <button id="btnIt" onclick="setLang('it')">IT</button>
@@ -219,10 +237,13 @@
     <a href="#en-sources">Music sources</a>
     <a href="#en-shares">Shared folders with Windows and Mac</a>
     <a href="#en-streaming">Streaming services</a>
+    <a href="#en-cd">CD player &amp; ripping</a>
+    <a href="#en-recommended" data-channel="dev">Recommended albums</a>
     <a href="#en-multiroom">External Lyrion server</a>
     <a href="#en-bluetooth">Bluetooth speakers</a>
     <a href="#en-backup">Backup & restore</a>
     <a href="#en-updates">OTA updates</a>
+    <a href="#en-driverpack" data-channel="dev">Osmium Driver Pack</a>
     <a href="#en-ssh">SSH & advanced access</a>
     <a href="#en-remote-access">Remote access (Tailscale)</a>
     <a href="#en-reset">Factory reset</a>
@@ -252,10 +273,13 @@
     <a href="#it-sorgenti">Sorgenti musicali</a>
     <a href="#it-condivisioni">Cartelle condivise con Windows e Mac</a>
     <a href="#it-streaming">Servizi di streaming</a>
+    <a href="#it-cd">Lettore CD e ripping</a>
+    <a href="#it-recommended" data-channel="dev">Album consigliati</a>
     <a href="#it-multiroom">Server Lyrion esterno</a>
     <a href="#it-bluetooth">Altoparlanti Bluetooth</a>
     <a href="#it-backup">Backup e ripristino</a>
     <a href="#it-aggiornamenti">Aggiornamenti OTA</a>
+    <a href="#it-driverpack" data-channel="dev">Osmium Driver Pack</a>
     <a href="#it-ssh">SSH e accesso avanzato</a>
     <a href="#it-remote-access">Accesso remoto (Tailscale)</a>
     <a href="#it-reset">Reset di fabbrica</a>
@@ -703,6 +727,45 @@
         </div>
       </section>
 
+      <section id="en-cd">
+        <h2>CD player &amp; ripping</h2>
+        <p>Plug in a USB CD drive and put in an audio CD: a <strong>CD</strong> tile appears in the <strong>Music</strong> tab. Open it to see the disc, with its cover and track list, and press play — it plays like any other album. The first time, the device sets up CD support on its own; just wait a moment.</p>
+        <h3>Copy a CD into the library (ripping)</h3>
+        <p>From the CD page choose <strong>Rip</strong> to copy the disc into your music library, so you can listen to it without the disc. The device looks up the album online and, if there is more than one edition, lets you pick the right one and check the track list before it starts. The copy runs in the background: you can keep listening and moving around while a small progress card keeps you posted, and a notice tells you when it is done.</p>
+        <p>Rips are saved as lossless files, with cover and track names filled in. They go onto the disk you keep your music on, or onto a shared folder you marked as writable (see <a href="#en-shares">Shared folders</a>).</p>
+        <h3>Taking the disc out</h3>
+        <p>Press <strong>Eject</strong> to let the disc out; the device goes back to the list of sources. If you pull a disc out without ejecting, the page updates by itself.</p>
+      </section>
+
+      <section id="en-recommended" data-channel="dev">
+        <h2>Recommended albums</h2>
+        <p>In the <strong>Music</strong> tab on the device's screen there is a <strong>Recommended</strong> tile: it opens a page of albums chosen for you. Touch one and it plays. They come from your own library (albums you have but have not listened to yet) and from the streaming services you signed in to.</p>
+        <h3>How the albums are chosen</h3>
+        <p>The device looks at three things: the albums in your library, the albums and artists you marked as favourites on the streaming services you signed in to, and what you actually listen to — what you played lately counts more than what you played months ago. From there it looks for albums by similar artists and of similar genres, and leaves out the ones you have already heard. Everything is worked out on the device itself: your listening history never leaves it.</p>
+        <p>With at least ten albums in the library the first list can be made straight away. With a smaller library the device waits until you have listened to about twenty tracks.</p>
+        <h3>When the list is made</h3>
+        <p>Making the list takes a few minutes, so it is not done while you browse: it is done once a day, at 18:00 unless you choose otherwise. In Settings → <strong>Recommended</strong> you choose:</p>
+        <ul>
+          <li><strong>Every day</strong>, or <strong>On chosen days</strong> of the week, at the hour and minute you want;</li>
+          <li><strong>Only by hand</strong>, if you prefer to decide yourself.</li>
+        </ul>
+        <p>If the device was off at that time, the list is made a few minutes after you next switch it on. You can also touch <strong>Compute now</strong> whenever you like.</p>
+        <h3>Not interested</h3>
+        <p>Hold your finger on an album and choose <strong>Not interested</strong>: it goes away and is not proposed again.</p>
+        <p>To stop seeing a whole artist, press the <strong>–</strong> button on their recommended tile and confirm: that artist is left out of future lists, from your library as well as from streaming. The artists you have left out are listed in Settings → Music → <strong>Recommended</strong> under <strong>Excluded artists</strong>, where <strong>Re-admit</strong> brings one back.</p>
+        <h3>Other settings</h3>
+        <ul>
+          <li><strong>Show recommended albums</strong> — switches the whole feature on or off.</li>
+          <li><strong>Where to look for albums</strong> — your library and each streaming service, one by one.</li>
+          <li><strong>Last.fm</strong> — if you have a Last.fm API key of your own you can enter it here; it is not needed.</li>
+        </ul>
+        <p>The same settings are in the web administration, under Settings → <strong>Recommended</strong>.</p>
+        <div class="box tip">
+          <span class="label">Where the information comes from</span>
+          <p>To know which artists and genres are close to each other the device asks MusicBrainz, Wikidata and Last.fm, sending only the artists' names. Without an internet connection the list is still made, from the genres written in your files.</p>
+        </div>
+      </section>
+
       <section id="en-multiroom">
         <h2>External Lyrion server</h2>
         <p>Each Osmium Sound device plays through its own Lyrion Music Server by default. From Settings → <strong>Lyrion Music Server</strong> you can switch between <em>Internal</em> and <em>External (on my network)</em>: the second one uses a Lyrion server already running on another device, found for you by a search of your network — you can also type its IP address or its name, such as <code>nas.local</code>. A name that can't be found is refused before anything changes. Switching restarts the device. The same section holds the player name, the Lyrion version and the web player look.</p>
@@ -749,10 +812,21 @@
           <tr><td><strong>Prod</strong> (default)</td><td>Stable releases, recommended for everyday use</td></tr>
           <tr><td><strong>Dev</strong></td><td>More frequent development builds, for trying new things early</td></tr>
         </table>
+        <div data-channel="dev">
+          <h3>Update at power-on</h3>
+          <p>On the Development channel the device can look for an update by itself. <strong>Update at power-on</strong> (Settings → Updates), on by default, checks once each time you switch the device on and, if there is something new, installs it quietly in the background; it skips the check if it already looked less than 12 hours ago. Turn it off to decide every update by hand.</p>
+          <p>If an update — or removing a music source — would stop a CD you are ripping or a copy in progress, the device asks you to confirm first, so nothing is interrupted by accident.</p>
+        </div>
         <div class="box tip">
           <span class="label">Reboot at the end</span>
           <p>Once every step of an update has been applied, the device reboots on its own to complete it — this is expected, and playback resumes automatically afterwards (see <a href="#en-daily-use">Daily use</a>).</p>
         </div>
+      </section>
+
+      <section id="en-driverpack" data-channel="dev">
+        <h2>Osmium Driver Pack</h2>
+        <p>Some computers need an extra driver or a piece of firmware for a part that Osmium doesn't recognise on its own — a Wi-Fi card, a sound chip. The <strong>Driver Pack</strong> lets you add these without connecting the device to the internet.</p>
+        <p>You get a small, signed pack and bring it to the device in one of two ways: copy it onto a USB stick and plug it in, or upload it from the web administration page. The device accepts only packs with a valid Osmium signature, installs what's inside next to the system, and asks for a restart if the new part needs one. Nothing permanent is changed in the system itself: an update never removes your drivers, and a factory reset clears them.</p>
       </section>
 
       <section id="en-ssh">
@@ -1276,6 +1350,45 @@
         </div>
       </section>
 
+      <section id="it-cd">
+        <h2>Lettore CD e ripping</h2>
+        <p>Collega un lettore CD USB e inserisci un CD audio: nella scheda <strong>Musica</strong> compare la tessera <strong>CD</strong>. Aprila per vedere il disco, con la copertina e l'elenco dei brani, e premi play — si ascolta come qualsiasi altro album. La prima volta il dispositivo prepara da solo il supporto ai CD; basta aspettare un momento.</p>
+        <h3>Copiare un CD in libreria (ripping)</h3>
+        <p>Dalla pagina del CD scegli <strong>Rip</strong> per copiare il disco nella tua libreria musicale e ascoltarlo senza il disco. Il dispositivo cerca l'album online e, se esiste più di un'edizione, ti fa scegliere quella giusta e controllare l'elenco dei brani prima di cominciare. La copia va avanti in background: puoi continuare ad ascoltare e a muoverti mentre una piccola scheda ti mostra l'avanzamento, e un avviso ti dice quando ha finito.</p>
+        <p>I rip vengono salvati come file senza perdita di qualità, con copertina e nomi dei brani già compilati. Finiscono sul disco dove tieni la musica, oppure in una cartella condivisa che hai reso scrivibile (vedi <a href="#it-condivisioni">Cartelle condivise</a>).</p>
+        <h3>Togliere il disco</h3>
+        <p>Premi <strong>Espelli</strong> per far uscire il disco; il dispositivo torna all'elenco delle sorgenti. Se togli un disco senza espellerlo, la pagina si aggiorna da sola.</p>
+      </section>
+
+      <section id="it-recommended" data-channel="dev">
+        <h2>Album consigliati</h2>
+        <p>Nella scheda <strong>Musica</strong> sullo schermo del dispositivo c'è la tessera <strong>Consigliati</strong>: apre una pagina di album scelti per te. Ne tocchi uno e parte. Vengono dalla tua libreria (album che hai ma non hai ancora ascoltato) e dai servizi di streaming a cui hai fatto l'accesso.</p>
+        <h3>Come vengono scelti gli album</h3>
+        <p>Il dispositivo guarda tre cose: gli album che hai in libreria, gli album e gli artisti che hai messo tra i preferiti nei servizi di streaming a cui hai fatto l'accesso, e quello che ascolti davvero — ciò che hai ascoltato di recente conta più di ciò che hai ascoltato mesi fa. Da lì cerca album di artisti simili e di generi simili, e lascia fuori quelli che hai già sentito. Tutto il calcolo avviene sul dispositivo: la cronologia dei tuoi ascolti non esce mai da lì.</p>
+        <p>Con almeno dieci album in libreria il primo elenco si può fare subito. Con una libreria più piccola il dispositivo aspetta che tu abbia ascoltato una ventina di brani.</p>
+        <h3>Quando viene fatto l'elenco</h3>
+        <p>Fare l'elenco richiede qualche minuto, quindi non avviene mentre sfogli: avviene una volta al giorno, alle 18:00 se non scegli altro. In Impostazioni → <strong>Consigliati</strong> scegli:</p>
+        <ul>
+          <li><strong>Ogni giorno</strong>, oppure <strong>Nei giorni scelti</strong> della settimana, all'ora e al minuto che vuoi;</li>
+          <li><strong>Solo a mano</strong>, se preferisci decidere tu.</li>
+        </ul>
+        <p>Se a quell'ora il dispositivo era spento, l'elenco viene fatto qualche minuto dopo la prossima accensione. Puoi anche toccare <strong>Calcola ora</strong> quando vuoi.</p>
+        <h3>Non mi interessa</h3>
+        <p>Tieni il dito su un album e scegli <strong>Non mi interessa</strong>: sparisce e non viene più proposto.</p>
+        <p>Per non vedere più un intero artista, premi il tasto <strong>–</strong> sulla sua tessera consigliata e conferma: quell'artista viene lasciato fuori dagli elenchi successivi, sia dalla libreria sia dallo streaming. Gli artisti che hai escluso sono elencati in Impostazioni → Musica → <strong>Consigliati</strong> sotto <strong>Artisti esclusi</strong>, dove <strong>Riammetti</strong> ne fa tornare uno.</p>
+        <h3>Altre impostazioni</h3>
+        <ul>
+          <li><strong>Mostra gli album consigliati</strong> — accende o spegne tutta la funzione.</li>
+          <li><strong>Dove cercare gli album</strong> — la tua libreria e ogni servizio di streaming, uno per uno.</li>
+          <li><strong>Last.fm</strong> — se hai una tua chiave API di Last.fm puoi inserirla qui; non è necessaria.</li>
+        </ul>
+        <p>Le stesse impostazioni sono nell'amministrazione web, in Impostazioni → <strong>Consigliati</strong>.</p>
+        <div class="box tip">
+          <span class="label">Da dove vengono le informazioni</span>
+          <p>Per sapere quali artisti e generi sono vicini tra loro il dispositivo chiede a MusicBrainz, Wikidata e Last.fm, inviando solo i nomi degli artisti. Senza connessione a internet l'elenco viene fatto lo stesso, con i generi scritti nei tuoi file.</p>
+        </div>
+      </section>
+
       <section id="it-multiroom">
         <h2>Server Lyrion esterno</h2>
         <p>Ogni dispositivo Osmium Sound suona di default attraverso il proprio Lyrion Music Server. Da Impostazioni → <strong>Lyrion Music Server</strong> puoi scegliere tra <em>Interno</em> ed <em>Esterno (sulla mia rete)</em>: il secondo usa un server Lyrion già in funzione su un altro dispositivo, trovato per te con una ricerca nella rete — puoi anche scriverne l'indirizzo IP o il nome, per esempio <code>nas.local</code>. Un nome che non si trova viene rifiutato prima di cambiare qualsiasi cosa. Il cambio riavvia il dispositivo. Nella stessa sezione ci sono il nome del player, la versione di Lyrion e l'aspetto del player web.</p>
@@ -1322,10 +1435,21 @@
           <tr><td><strong>Prod</strong> (predefinito)</td><td>Versioni stabili, consigliato per l'uso quotidiano</td></tr>
           <tr><td><strong>Dev</strong></td><td>Versioni di sviluppo più frequenti, per chi vuole provare le novità in anteprima</td></tr>
         </table>
+        <div data-channel="dev">
+          <h3>Aggiorna all'avvio</h3>
+          <p>Sul canale Sviluppo il dispositivo può cercare un aggiornamento da solo. <strong>Aggiorna all'avvio</strong> (Impostazioni → Aggiornamenti), attivo in automatico, controlla una volta a ogni accensione e, se c'è qualcosa di nuovo, lo installa in silenzio in background; salta il controllo se ha già guardato meno di 12 ore fa. Spegnilo per decidere ogni aggiornamento a mano.</p>
+          <p>Se un aggiornamento — o la rimozione di una sorgente musicale — fermerebbe un CD che stai copiando o una copia in corso, il dispositivo ti chiede prima conferma, così non si interrompe niente per sbaglio.</p>
+        </div>
         <div class="box tip">
           <span class="label">Riavvio finale</span>
           <p>Una volta applicati tutti i passaggi di un aggiornamento, il dispositivo si riavvia da solo per completarlo — è normale, e la riproduzione riprende automaticamente subito dopo (vedi <a href="#it-uso-quotidiano">Uso quotidiano</a>).</p>
         </div>
+      </section>
+
+      <section id="it-driverpack" data-channel="dev">
+        <h2>Osmium Driver Pack</h2>
+        <p>Alcuni computer hanno bisogno di un driver in più o di un firmware per una parte che Osmium non riconosce da solo — una scheda Wi-Fi, un chip audio. Il <strong>Driver Pack</strong> ti permette di aggiungerli senza collegare il dispositivo a internet.</p>
+        <p>Ricevi un piccolo pacchetto firmato e lo porti al dispositivo in due modi: lo copi su una chiavetta USB e la inserisci, oppure lo carichi dalla pagina di amministrazione web. Il dispositivo accetta solo pacchetti con una firma Osmium valida, installa ciò che contengono accanto al sistema e chiede un riavvio se la nuova parte lo richiede. Niente viene cambiato in modo permanente nel sistema: un aggiornamento non toglie mai i tuoi driver, e un reset di fabbrica li cancella.</p>
       </section>
 
       <section id="it-ssh">
@@ -1457,6 +1581,24 @@
       saved = (navigator.language || '').toLowerCase().indexOf('it') === 0 ? 'it' : 'en';
     }
     setLang(saved);
+  })();
+
+  function setChannel(ch){
+    if (ch !== 'dev') ch = 'prod';
+    if (ch === 'dev') document.documentElement.setAttribute('data-channel', 'dev');
+    else document.documentElement.removeAttribute('data-channel');
+    var p = document.getElementById('btnProd'); if (p) p.className = ch === 'prod' ? 'active' : '';
+    var d = document.getElementById('btnDev'); if (d) d.className = ch === 'dev' ? 'active' : '';
+    try { localStorage.setItem('osmiumManualChannel', ch); } catch (_) {}
+  }
+
+  (function initChannel(){
+    var ch = null;
+    var q = (location.search + ' ' + location.hash).toLowerCase();
+    if (q.indexOf('channel=dev') !== -1 || q.indexOf('#dev') !== -1) ch = 'dev';
+    else if (q.indexOf('channel=prod') !== -1) ch = 'prod';
+    if (!ch) { try { ch = localStorage.getItem('osmiumManualChannel'); } catch (_) {} }
+    setChannel(ch || 'prod');
   })();
 
   // Close the mobile TOC after tapping a link.
