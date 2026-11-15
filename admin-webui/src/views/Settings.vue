@@ -1619,6 +1619,21 @@ async function pollPlan(timeoutMs = 30 * 60 * 1000) {
 
 async function applyAll() {
   if (applying.active || !hasUpdates()) return;
+  // #128: an update reboots the box and stops anything in flight. Warn when a
+  // CD rip or a file copy is running, but let the user go ahead.
+  let rip = false, copy = false;
+  try {
+    const rs = await api.cdRipStatus();
+    rip = rs.ok && rs.data && !['idle', 'done', 'error', 'cancelled'].includes(String(rs.data.state || 'idle'));
+  } catch (e) { /* status unknown: do not block the update */ }
+  try {
+    const js = await api.filesJobsActive();
+    copy = js.ok && js.data && js.data.active === true;
+  } catch (e) { /* status unknown: do not block the update */ }
+  if (rip || copy) {
+    const key = rip && copy ? 'busyWarnBoth' : (rip ? 'busyWarnRip' : 'busyWarnCopy');
+    if (!window.confirm(t('settings.updates.' + key))) return;
+  }
   applying.active = true; applying.error = false; applying.doneList = [];
   applying.kind = ''; applying.label = ''; applying.state = 'starting';
   applying.progress = null; applying.message = '';

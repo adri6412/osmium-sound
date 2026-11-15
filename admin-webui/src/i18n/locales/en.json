@@ -1170,6 +1170,9 @@
       "kindOs": "Operating system",
       "kindImage": "System image",
       "updating": "Updating {label}",
+      "busyWarnRip": "Updating will stop the CD rip in progress. Continue?",
+      "busyWarnCopy": "Updating will stop the file copy in progress. Continue?",
+      "busyWarnBoth": "Updating will stop the CD rip and the file copy in progress. Continue?",
       "whatsNew": "What's new",
       "changelogTitle": "What's new in {version}",
       "progressState": {

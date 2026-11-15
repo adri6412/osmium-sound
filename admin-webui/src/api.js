@@ -250,6 +250,9 @@ export const api = {
   sourcesSetSubpath: (id, subpath) => req('/api/system/sources/' + id + '/subpath', { method: 'POST', body: { subpath } }),
   sourcesBrowse: (id, path = '') => req('/api/system/sources/' + id + '/browse?path=' + encodeURIComponent(path)),
   sourcesRemove: (id) => req('/api/system/sources/' + id, { method: 'DELETE' }),
+  // #128: is a file copy/move/delete currently touching this source? (warn
+  // before removing it, since that stops the copy).
+  sourceBusy: (id) => req('/api/system/sources/' + id + '/busy'),
   sourcesApply: () => req('/api/system/apply', { method: 'POST' }),
   // Playlist folder — a Lyrion pref, so it lives on sources_server.py behind
   // webui's session-gated /api/system/playlistdir forwarder.
@@ -277,4 +280,7 @@ export const api = {
   filesMove: (paths, dest, exists = 'keep') => req('/api/system/local/move', { method: 'POST', body: { paths, dest, exists } }),
   filesDelete: (paths) => req('/api/system/local/delete', { method: 'POST', body: { paths } }),
   filesJob: (id) => req('/api/system/local/job?id=' + encodeURIComponent(id)),
+  // #128: is any file copy/move/delete in progress? (warn before an OTA/update
+  // that would interrupt it).
+  filesJobsActive: () => req('/api/system/local/jobs/active'),
 };

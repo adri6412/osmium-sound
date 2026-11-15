@@ -1170,6 +1170,9 @@
       "kindOs": "Sistema operativo",
       "kindImage": "Immagine di sistema",
       "updating": "Aggiornamento {label}",
+      "busyWarnRip": "L'aggiornamento interromperà il rip del CD in corso. Continuare?",
+      "busyWarnCopy": "L'aggiornamento interromperà la copia in corso. Continuare?",
+      "busyWarnBoth": "L'aggiornamento interromperà il rip del CD e la copia in corso. Continuare?",
       "whatsNew": "Novità",
       "changelogTitle": "Novità in {version}",
       "progressState": {

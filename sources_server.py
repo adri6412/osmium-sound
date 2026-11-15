@@ -6400,7 +6400,8 @@ def _file_job_new(op):
             _FILE_JOBS.pop(k, None)
         _FILE_JOBS[jid] = {"id": jid, "op": op, "state": "running", "progress": 0,
                            "current": "", "total": 0, "done": 0, "code": "",
-                           "detail": "", "finished": 0.0, "skipped": 0}
+                           "detail": "", "finished": 0.0, "skipped": 0,
+                           "paths": [], "dest": ""}
     return jid
 
 
@@ -7295,6 +7296,10 @@ def _files_start(op):
                 return _err("msg.fileReadOnly", 400)   # the original has to go too
     exists = data.get("exists") if data.get("exists") in ("keep", "skip", "replace") else "keep"
     jid = _file_job_new(op)
+    # Record the filesystem endpoints so /api/sources/<sid>/busy and
+    # /api/local/jobs/active can tell whether a running job touches a given
+    # music source (issue #128: warn before an action interrupts it).
+    _file_job_set(jid, paths=list(paths), dest=dest or "")
     threading.Thread(target=_file_worker, args=(jid, op, paths, dest, exists), daemon=True).start()
     return jsonify({"success": True, "job": jid}), 202
 
@@ -7362,6 +7367,40 @@ def api_files_job():
     elif job.get("code"):
         job["message"] = _m(job["code"])
     return jsonify(job)
+
+
+def _running_file_jobs():
+    """Snapshot of the file jobs still in the running state (issue #128)."""
+    with _file_jobs_lock:
+        return [dict(j) for j in _FILE_JOBS.values() if j.get("state") == "running"]
+
+
+def _job_touches(job, roots):
+    """True if a file job reads from or writes to a path at or under any of
+    `roots` (already normalised absolute paths). Checks both the sources it
+    copies/moves/deletes and its destination."""
+    cands = list(job.get("paths") or [])
+    if job.get("dest"):
+        cands.append(job["dest"])
+    for c in cands:
+        if not c:
+            continue
+        cp = os.path.normpath(os.path.abspath(c))
+        for r in roots:
+            if cp == r or cp.startswith(r.rstrip("/") + os.sep):
+                return True
+    return False
+
+
+@app.route("/api/local/jobs/active", methods=["GET"])
+def api_files_jobs_active():
+    """Whether any file copy/move/delete is in progress -- the OTA/update
+    flows warn before interrupting one (issue #128)."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    running = _running_file_jobs()
+    return jsonify({"success": True, "active": bool(running), "count": len(running)})
 
 
 @app.route("/api/sources/<sid>/rw", methods=["POST"])
@@ -7543,6 +7582,25 @@ def api_browse_subpath(sid):
         if parent == ".":
             parent = ""
     return jsonify({"path": rel, "parent": parent, "dirs": dirs})
+
+
+@app.route("/api/sources/<sid>/busy", methods=["GET"])
+def api_source_busy(sid):
+    """Whether a file job is currently reading from or writing to this source
+    (issue #128): removing it would stop that copy, so the UI warns first."""
+    denied = _require_pair_token()
+    if denied:
+        return denied
+    state = load_state()
+    src = next((s for s in state["sources"] if s.get("id") == sid), None)
+    if not src:
+        return _err("msg.sourceNotFound", 404)
+    # current_paths() resolves a source to its real media directories, handling
+    # smb/internal/usb mountpoints and local paths with the same confinement.
+    roots = [os.path.normpath(os.path.abspath(p))
+             for p in current_paths({"sources": [dict(src)]})]
+    busy = bool(roots) and any(_job_touches(j, roots) for j in _running_file_jobs())
+    return jsonify({"success": True, "busy": busy})
 
 
 @app.route("/api/sources/<sid>", methods=["DELETE"])

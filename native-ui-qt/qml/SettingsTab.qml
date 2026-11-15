@@ -693,6 +693,22 @@ Item {
                            Tr.t("settings.controls.reboot"), false,
                            function(ok) { if (ok) apply() })
     }
+
+    // #128: an OTA/update reboots the box and stops anything in flight. Warn
+    // before applying it when a CD rip or a file copy is running, but let the
+    // user go ahead. The copy check is a GET to sources_server, so the POST
+    // that actually starts the update lives in its callback.
+    function applyUpdatesGuarded(A, S) {
+        var ripping = !!(Ui.cdrip && Ui.cdrip.ripping)
+        var go = function() { post(A("/update/apply_all"), {}); say(Tr.t("settings.updates.updating")) }
+        Api.get(S("/api/local/jobs/active"), function(ok, d) {
+            var copying = ok && d && d.active === true
+            if (!ripping && !copying) { go(); return }
+            var key = ripping && copying ? "busyWarnBoth" : (ripping ? "busyWarnRip" : "busyWarnCopy")
+            Ui.dialogs.confirm(Tr.t("settings.updates." + key), Tr.t("common.confirm"), true,
+                               function(okc) { if (okc) go() })
+        })
+    }
     Timer { id: reloadLater; interval: 400; onTriggered: cfg.load() }
     // while Lyrion scans, the Library rows follow it (only with that section open)
     Timer { interval: 2000; repeat: true; running: root.visible && cfg.lib.scanning && root.active >= 0 && root.secs[root.active].id === "multiroom"; onTriggered: cfg.loadLibrary() }
@@ -3157,7 +3173,7 @@ Item {
         case "netcheck_open": openNetCheck(); return
         case "netcheck_run": runNetCheck(); return
         case "netcheck_adv": ncAdvanced = !ncAdvanced; rebuild(); return
-        case "upd_apply": post(A("/update/apply_all"), {}); say(Tr.t("settings.updates.updating")); break
+        case "upd_apply": applyUpdatesGuarded(A, S); break
         case "upd_changelog":
             // il titolo porta la versione, come in Settings.jsx
             Ui.dialogs.text(Tr.tf("settings.updates.changelogTitle", "version", cfg.upd[0].latest || cfg.upd[0].cur), cfg.changelog)

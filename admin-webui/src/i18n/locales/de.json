@@ -1170,6 +1170,9 @@
       "kindOs": "Betriebssystem",
       "kindImage": "Systemabbild",
       "updating": "{label} wird aktualisiert",
+      "busyWarnRip": "Die Aktualisierung stoppt das laufende CD-Rippen. Fortfahren?",
+      "busyWarnCopy": "Die Aktualisierung stoppt das laufende Kopieren. Fortfahren?",
+      "busyWarnBoth": "Die Aktualisierung stoppt das laufende CD-Rippen und Kopieren. Fortfahren?",
       "whatsNew": "Neuigkeiten",
       "changelogTitle": "Neu in {version}",
       "progressState": {

@@ -168,20 +168,34 @@ Rectangle {
             load()
         }, 60000)
     }
-    function removePlace(p) {
-        if (!p || !p.src) return
-        Ui.dialogs.confirm(lt("Togliere «" + p.name + "» dalla musica? I file restano dove sono.",
-                             "Remove «" + p.name + "» from your music? The files stay where they are.", "Entferne «" + p.name + "» aus deiner Musik? Die Dateien bleiben, wo sie sind."),
-                           lt("Togli", "Remove", "Entfernen"), true, function(ok) {
-            if (!ok) return
-            Api.send("DELETE", su("/api/sources/" + p.src.id), {}, function() { root.view = "home"; root.load() }, 12000)
+    // #128: removing a source while a copy reads from or writes to it stops
+    // that copy. Ask sources_server whether this source is busy, and if so
+    // show a stronger warning before the DELETE (the user can still go ahead).
+    function confirmRemove(id, normalText, busyName, onDone) {
+        var del = function() { Api.send("DELETE", su("/api/sources/" + id), {}, onDone, 12000) }
+        Api.get(su("/api/sources/" + id + "/busy"), function(ok, d) {
+            var busy = ok && d && d.busy === true
+            var text = busy
+                ? lt("Una copia da questa sorgente è in corso e verrà interrotta. Togliere comunque " + busyName + "?",
+                      "A copy from this source is in progress and will be stopped. Remove " + busyName + " anyway?",
+                      "Ein Kopiervorgang von dieser Quelle läuft und wird gestoppt. " + busyName + " trotzdem entfernen?")
+                : normalText
+            Ui.dialogs.confirm(text, lt("Togli", "Remove", "Entfernen"), true, function(okc) { if (okc) del() })
         })
     }
+    function removePlace(p) {
+        if (!p || !p.src) return
+        confirmRemove(p.src.id,
+            lt("Togliere «" + p.name + "» dalla musica? I file restano dove sono.",
+               "Remove «" + p.name + "» from your music? The files stay where they are.", "Entferne «" + p.name + "» aus deiner Musik? Die Dateien bleiben, wo sie sind."),
+            "«" + p.name + "»",
+            function() { root.view = "home"; root.load() })
+    }
     function removeLocal(s) {
-        Ui.dialogs.confirm(lt("Togliere questa cartella dalla libreria? I file restano dove sono.", "Take this folder out of the library? The files stay where they are.", "Diesen Ordner aus der Bibliothek nehmen? Die Dateien bleiben, wo sie sind."),
-                           lt("Togli", "Remove", "Entfernen"), true, function(ok) {
-            if (ok) Api.send("DELETE", su("/api/sources/" + s.id), {}, function() { root.load() }, 12000)
-        })
+        confirmRemove(s.id,
+            lt("Togliere questa cartella dalla libreria? I file restano dove sono.", "Take this folder out of the library? The files stay where they are.", "Diesen Ordner aus der Bibliothek nehmen? Die Dateien bleiben, wo sie sind."),
+            lt("questa cartella", "this folder", "diesen Ordner"),
+            function() { root.load() })
     }
     function pick(start, label, fn) { if (Ui.folderChooser) Ui.folderChooser.openAt(start || "", label, fn) }
     function addFolderHere(p, samba) {

@@ -17,6 +17,8 @@ import { loadSources, setLang, gb, under } from '../sources-model.js';
 
 const { lang } = useI18n();
 const lt = (it, en) => (lang.value === 'it' ? it : en);
+// #128 warnings must carry German too (new UI strings are three-language).
+const lt3 = (it, en, de) => (lang.value === 'it' ? it : (lang.value === 'de' ? de : en));
 setLang(lt);
 const router = useRouter();
 
@@ -69,12 +71,29 @@ function onlyOne(p) {
 }
 function playlistsHere(p) { choose(p.root, lt('Salva qui le playlist', 'Keep playlists here'), (path) => run(api.playlistdirSet(path), lt('Le playlist si salvano qui', 'Playlists are kept here'))); }
 function ripHere(p) { choose(p.root, lt('Salva qui i CD rippati', 'Keep ripped CDs here'), (path) => run(api.cdSettingsSet({ target: path }), lt('I CD rippati finiscono qui', 'Ripped CDs go here'))); }
-function removePlace(p) {
-  if (!window.confirm(lt(`Togliere «${p.name}» dalla musica? I file restano dove sono.`, `Remove «${p.name}» from your music? The files stay where they are.`))) return;
+// #128: removing a source while a copy reads from/writes to it stops that
+// copy. Ask the server first and warn harder if so (the user can still go on).
+async function sourceBusy(id) {
+  try { const r = await api.sourceBusy(id); return r.ok && r.data && r.data.busy === true; } catch (e) { return false; }
+}
+async function removePlace(p) {
+  const busy = await sourceBusy(p.src.id);
+  const text = busy
+    ? lt3(`Una copia da questa sorgente è in corso e verrà interrotta. Togliere comunque «${p.name}»?`,
+          `A copy from this source is in progress and will be stopped. Remove «${p.name}» anyway?`,
+          `Ein Kopiervorgang von dieser Quelle läuft und wird gestoppt. «${p.name}» trotzdem entfernen?`)
+    : lt(`Togliere «${p.name}» dalla musica? I file restano dove sono.`, `Remove «${p.name}» from your music? The files stay where they are.`);
+  if (!window.confirm(text)) return;
   run(api.sourcesRemove(p.src.id)).then(() => { view.value = 'home'; });
 }
-function removeLocal(s) {
-  if (!window.confirm(lt('Togliere questa cartella dalla libreria? I file restano dove sono.', 'Take this folder out of the library? The files stay where they are.'))) return;
+async function removeLocal(s) {
+  const busy = await sourceBusy(s.id);
+  const text = busy
+    ? lt3('Una copia da questa cartella è in corso e verrà interrotta. Toglierla comunque dalla libreria?',
+          'A copy from this folder is in progress and will be stopped. Take it out of the library anyway?',
+          'Ein Kopiervorgang aus diesem Ordner läuft und wird gestoppt. Ihn trotzdem aus der Bibliothek nehmen?')
+    : lt('Togliere questa cartella dalla libreria? I file restano dove sono.', 'Take this folder out of the library? The files stay where they are.');
+  if (!window.confirm(text)) return;
   run(api.sourcesRemove(s.id));
 }
 function adopt(d) { run(api.internalAdopt(d.parts.length === 1 ? d.parts[0].path : d.path), lt('Preparo il disco…', 'Setting the disk up…')); }
