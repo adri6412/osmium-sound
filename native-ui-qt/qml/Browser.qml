@@ -179,6 +179,24 @@ Item {
             if (ok && d && d.success && root.inRecommended) root.loadTop()
         })
     }
+    // The "–" on a recommended album: blacklist its artist (never offered or
+    // seeded again) and drop the album now. Confirmed, because it is undone
+    // only from Settings → Recommended.
+    function recBlockArtist(it) {
+        if (!it || !it.sub) return
+        Ui.dialogs.confirm(Tr.tf("recommend.blockConfirm", "name", it.sub),
+                           Tr.t("recommend.blockArtist"), true, function(ok) {
+            if (!ok) return
+            Api.post(Api.apiBase + "/recommendations/block_artist",
+                     { artist: it.sub, album_key: it.key || "" }, function(ok2, d) {
+                if (ok2 && d && d.success && root.inRecommended) root.loadTop()
+            })
+        })
+    }
+    function recBlockRow(row) {
+        if (Library.state !== 2) return
+        recBlockArtist(Library.get(row))
+    }
     function recPlay(it, mode) {
         if (it.kind === 0) playItem("album_id", it.id, mode)
         else Player.cmd(["playlist", mode === "load" ? "play" : mode, it.url, it.text])
@@ -1450,6 +1468,7 @@ Item {
                         cdCoverUrl: root.inCdPlayer ? root.cdCoverUrl : ""
                         inCdPlayer: root.inCdPlayer
                         onRowTap: (row, onPlay) => root.rowTap(row, onPlay)
+                        onRowMinus: (row) => root.recBlockRow(row)
                         // list.y gia' comprende le barre di ricerca; la fascia del CD sposta tutto il contenitore
                         onRowLongPress: (row, x, y) => { root.menuX = list.x + x; root.menuY = list.y + y + (cdBanner.visible ? 48 : 0); ctx.open(root.ctxItems(row), root.menuX, root.menuY) }
                         onExpandAlbum: (row, x, y, size, src) => hero.fly(row, list.x + x, list.y + y, size, src)

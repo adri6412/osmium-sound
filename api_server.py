@@ -12129,7 +12129,120 @@ def api_recommendations_dismiss():
     return jsonify({'success': True})
 
 
+@app.route('/recommendations/block_artist', methods=['POST'])
+def api_recommendations_block_artist():
+    """The "–" on a recommended album: blacklist its artist (never offered or
+    seeded again) and drop the tapped album from the current list at once."""
+    body = request.get_json(silent=True) or {}
+    artist = str(body.get('artist') or '')[:300]
+    key = str(body.get('album_key') or '')[:400]
+    if rec is None or not artist:
+        return jsonify({'success': False}), 400
+    db = rec.open_db()
+    try:
+        rec.block_artist(db, artist)
+        if key:
+            rec.dismiss(db, key)
+    finally:
+        db.close()
+    return jsonify({'success': True})
+
+
+@app.route('/recommendations/blocked', methods=['GET'])
+def api_recommendations_blocked():
+    """The blacklist, for the management list in Settings → Recommended."""
+    if rec is None:
+        return jsonify({'available': False, 'artists': []})
+    db = rec.open_db()
+    try:
+        artists = rec.blocked_artist_list(db)
+    finally:
+        db.close()
+    return jsonify({'available': True, 'artists': artists})
+
+
+@app.route('/recommendations/unblock', methods=['POST'])
+def api_recommendations_unblock():
+    key = str((request.get_json(silent=True) or {}).get('key') or '')[:400]
+    if rec is None or not key:
+        return jsonify({'success': False}), 400
+    db = rec.open_db()
+    try:
+        rec.unblock_artist(db, key)
+    finally:
+        db.close()
+    return jsonify({'success': True})
+
+
 @app.route('/recommendations/run', methods=['POST'])
+def _recommend_start_manual():
+    """Start the compute job at once, at the same low priority as the scheduled
+    one. Returns True if it is now going (started here or already running)."""
+    if rec is None:
+        return False
+    if _recommend_running():
+        return True
+    try:
+        r = subprocess.run(
+            ['systemd-run', '--quiet', '--collect', '--unit', RECOMMEND_MANUAL_UNIT,
+             '-p', 'Nice=19', '-p', 'IOSchedulingClass=idle', '-p', 'CPUWeight=20',
+             '-p', 'MemoryMax=900M', '-p', 'RuntimeMaxSec=%d' % rec.RUN_TIMEOUT,
+             RECOMMEND_RUNNER],
+            capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            log.warning('recommend: manual run not started: %s',
+                           (r.stderr or r.stdout or '').strip()[:300])
+            return False
+        return True
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log.warning('recommend: manual run not started: %s', e)
+        return False
+
+
+# Set once per boot: /run is tmpfs, so it is gone after a real power-on but
+# stays across API restarts within the same boot, keeping the boot scan to one.
+RECOMMEND_BOOT_MARK = '/run/hifi-recommend-boot.done'
+# Don't scan at boot if a run already finished this recently (box was left on
+# and the scheduled run just did it): half a day.
+RECOMMEND_BOOT_FRESH = 12 * 3600
+
+
+def _recommend_boot_run_if_due():
+    """On the first API start of a boot, kick off a scan when "update at
+    power-on" is on, unless the feature is off or a recent run already covers
+    it. Called once, after LMS has had time to come up."""
+    if rec is None:
+        return
+    try:
+        if os.path.exists(RECOMMEND_BOOT_MARK):
+            return
+    except OSError:
+        pass
+    # claim the boot before anything can fail, so a restart cannot double-fire
+    try:
+        with open(RECOMMEND_BOOT_MARK, 'w'):
+            pass
+    except OSError:
+        pass
+    try:
+        s = rec.load_settings()
+    except Exception:
+        return
+    if not (s.get('enabled') and s.get('run_on_boot')):
+        return
+    if _recommend_running():
+        return
+    try:
+        db = rec.open_db()
+        last = rec.history_state(db).get('last_run') or {}
+        fin = last.get('finished')
+        if fin and time.time() - fin < RECOMMEND_BOOT_FRESH:
+            return
+    except Exception:
+        pass
+    _recommend_start_manual()
+
+
 def api_recommendations_run():
     """"Compute now": the same job as the scheduled one, started at once and
     at the same low priority. Answers straight away; GET /recommendations
@@ -12138,20 +12251,7 @@ def api_recommendations_run():
         return jsonify({'success': False}), 400
     if _recommend_running():
         return jsonify({'success': True, 'running': True, 'started': False})
-    try:
-        r = subprocess.run(
-            ['systemd-run', '--quiet', '--collect', '--unit', RECOMMEND_MANUAL_UNIT,
-             '-p', 'Nice=19', '-p', 'IOSchedulingClass=idle', '-p', 'CPUWeight=20',
-             '-p', 'MemoryMax=900M', '-p', 'RuntimeMaxSec=%d' % rec.RUN_TIMEOUT,
-             RECOMMEND_RUNNER],
-            capture_output=True, text=True, timeout=30)
-        ok = r.returncode == 0
-        if not ok:
-            log.warning('recommend: manual run not started: %s',
-                           (r.stderr or r.stdout or '').strip()[:300])
-    except (OSError, subprocess.TimeoutExpired) as e:
-        ok = False
-        log.warning('recommend: manual run not started: %s', e)
+    ok = _recommend_start_manual()
     return jsonify({'success': ok, 'running': ok, 'started': ok}), (200 if ok else 500)
 
 
@@ -12200,6 +12300,11 @@ def _recommend_collector():
     db = None
     players, players_at = [], 0.0
     time.sleep(60)
+    try:
+        # Once per boot, after LMS has had a minute to come up.
+        _recommend_boot_run_if_due()
+    except Exception:
+        pass
     while True:
         try:
             now = time.monotonic()

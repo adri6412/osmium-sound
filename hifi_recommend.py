@@ -106,6 +106,11 @@ CREATE TABLE IF NOT EXISTS dismissed (
     album_key TEXT PRIMARY KEY,
     ts REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS blocked_artists (
+    artist_key TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    ts REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS embeddings (
     text_hash TEXT PRIMARY KEY,
     model TEXT NOT NULL,
@@ -210,6 +215,36 @@ def dismiss(db, key, ts=None):
     db.execute('INSERT OR REPLACE INTO dismissed (album_key, ts) VALUES (?,?)',
                (key, time.time() if ts is None else ts))
     db.execute('DELETE FROM recommendations WHERE album_key = ?', (key,))
+    db.commit()
+
+
+def blocked_artist_keys(db):
+    return {r[0] for r in db.execute('SELECT artist_key FROM blocked_artists')}
+
+
+def blocked_artist_list(db):
+    """The blacklist as the kiosk shows it: display name + its key, A→Z."""
+    return [{'key': r[0], 'name': r[1]} for r in db.execute(
+        'SELECT artist_key, name FROM blocked_artists ORDER BY name COLLATE NOCASE')]
+
+
+def block_artist(db, name, ts=None):
+    """Blacklist an artist: never seeded or offered again, and anything of
+    theirs already in the current list is dropped now."""
+    key = norm_text(name)
+    if not key:
+        return
+    db.execute('INSERT OR REPLACE INTO blocked_artists (artist_key, name, ts) '
+               'VALUES (?,?,?)', (key, name, time.time() if ts is None else ts))
+    for ak, art in db.execute(
+            'SELECT album_key, artist FROM recommendations').fetchall():
+        if norm_text(art) == key:
+            db.execute('DELETE FROM recommendations WHERE album_key = ?', (ak,))
+    db.commit()
+
+
+def unblock_artist(db, key):
+    db.execute('DELETE FROM blocked_artists WHERE artist_key = ?', (key,))
     db.commit()
 
 
@@ -781,6 +816,7 @@ _TIME = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
 DEFAULT_SETTINGS = {
     'enabled': True,
     'schedule': {'mode': 'daily', 'days': [], 'time': '18:00'},
+    'run_on_boot': True,
     'sources': list(SOURCES),
     'lastfm_key': '',
 }
@@ -806,6 +842,7 @@ def clean_settings(data):
     return {
         'enabled': bool(data.get('enabled', True)),
         'schedule': {'mode': mode, 'days': days, 'time': when},
+        'run_on_boot': bool(data.get('run_on_boot', True)),
         'sources': [s for s in SOURCES if s in sources],
         'lastfm_key': re.sub(r'[^0-9a-fA-F]', '',
                              str(data.get('lastfm_key') or ''))[:64],
@@ -875,7 +912,7 @@ def merge_settings(current, change):
     current = clean_settings(current)
     change = change if isinstance(change, dict) else {}
     out = dict(current)
-    for k in ('enabled', 'schedule', 'sources'):
+    for k in ('enabled', 'schedule', 'run_on_boot', 'sources'):
         if k in change:
             out[k] = change[k]
     if isinstance(change.get('lastfm_key'), str):
@@ -1616,6 +1653,9 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
             artist_w[k] = artist_w.get(k, 0.0) + w_more
     top = sorted((k for k in artist_w if k), key=lambda k: -artist_w[k])[:MAX_HISTORY_ARTISTS]
     exclude = heard_keys(db) | dismissed_keys(db)
+    # Artists the user put on the blacklist (the "–" on a recommended album):
+    # never seeded, never offered — in or out of the library.
+    blocked = blocked_artist_keys(db)
     # An album already in the library, or kept as a favourite on a service,
     # is not offered again from a service (`owned`, above).
 
@@ -1629,6 +1669,8 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
         if 'library' not in settings['sources']:
             continue
         if album_key(a['artist'], a['album']) in exclude:
+            continue
+        if norm_text(a['artist']) in blocked:
             continue
         cands.append(dict(a, source='library', play_kind='album_id', play_id=a['id']))
 
@@ -1666,9 +1708,11 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
         # to most, so the list can surface names nobody's "similar" list holds.
         want = min(GENRE_SEED_SLOTS, SEEDS_PER_RUN - len(seeds))
         for name in genre_seeds(top, profiles, artist_w, http, key,
-                                heard_artists | seed_keys, want, log):
+                                heard_artists | seed_keys | blocked, want, log):
             seed_keys.add(norm_text(name))
             seeds.append(name)
+        # A blacklisted artist is never searched (not even if listened to).
+        seeds = [s for s in seeds if norm_text(s) not in blocked]
         new_names = [s for s in seeds if norm_text(s) not in profiles]
         more, n = enrich(db, new_names, http, key,
                          limit=max(0, MAX_NEW_PROFILES - summary['fetched']), now=now, log=log)
@@ -1690,7 +1734,8 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
                     summary['searches'] += 1
                     for a in found:
                         k = album_key(a['artist'], a['album'])
-                        if k not in exclude and k not in owned:
+                        if (k not in exclude and k not in owned
+                                and norm_text(a['artist']) not in blocked):
                             cands.append(dict(a, source=service, play_kind='url',
                                               genres=[], year=None))
             finally:

@@ -17,6 +17,7 @@ Item {
     // pluginAlbumList non scatta (un solo disco → troppo pochi item)
     property bool inCdPlayer: false
     signal rowTap(int row, bool onPlay)
+    signal rowMinus(int row)                                   // "–" on a recommended card: blacklist its artist
     signal rowLongPress(int row, real x, real y)
     signal expandAlbum(int row, real x, real y, real size, string src)   // Cover Flow: the front cover opens
     // Album e novità a griglia come sempre; i menu di app/servizi (radio, app,
@@ -379,6 +380,14 @@ Item {
             readonly property real playCx: root.cardW - 6 - 15
             readonly property bool playHit: Math.abs(cardTap.pressX - playCx) <= 18 && Math.abs(cardTap.pressY - playCx) <= 18
             readonly property real playF: playHit ? cardTap.pressAnim : 0
+            // the "–" circle, top-right of a recommended card: blacklist the
+            // artist. Hit-tested inside cardTap like the play circle (no touch
+            // area of its own), top (minusCy) vs the play circle at the bottom.
+            readonly property bool minusBtn: v === LibraryModel.Recommended
+            readonly property real minusCx: root.cardW - 6 - 15
+            readonly property real minusCy: 6 + 15
+            readonly property bool minusHit: Math.abs(cardTap.pressX - minusCx) <= 18 && Math.abs(cardTap.pressY - minusCy) <= 18
+            readonly property real minusF: minusHit ? cardTap.pressAnim : 0
             // the scale on the drawing, not on the delegate (see the list row)
             Item {
                 id: cardSkin
@@ -469,6 +478,14 @@ Item {
                         color: Theme.mix(Theme.blackA(0.6), Theme.gold, card.playF)      // active:bg-hifi-gold active:text-black
                         Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 14; color: Theme.white; pressColor: Theme.black; press: card.playF }
                     }
+                    // "–": blacklist the artist of a recommended album (top-right,
+                    // reddens on press). Hit-tested in cardTap, like the play circle.
+                    Rectangle {
+                        visible: card.minusBtn && !root.menuTile
+                        x: parent.width - 6 - 30; y: 6; width: 30; height: 30; radius: 15
+                        color: Theme.mix(Theme.blackA(0.6), Theme.red500, card.minusF)
+                        Icon { anchors.centerIn: parent; name: "minus"; size: 16; color: Theme.white; pressColor: Theme.white; press: card.minusF }
+                    }
                 }
                 Text { visible: !root.menuTile; x: 8; y: artBox.height + 8; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.text; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
                 Text { visible: !root.menuTile; x: 8; y: artBox.height + 24; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.sub; elide: Text.ElideRight; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
@@ -476,7 +493,10 @@ Item {
             RowTap {
                 id: cardTap
                 flick: gridView; tap: 0.98; holdRing: true
-                onClicked: (m) => root.rowTap(card.index, card.playBtn && Math.abs(m.x - card.playCx) <= 18 && Math.abs(m.y - card.playCx) <= 18)
+                onClicked: (m) => {
+                    if (card.minusBtn && Math.abs(m.x - card.minusCx) <= 18 && Math.abs(m.y - card.minusCy) <= 18) { root.rowMinus(card.index); return }
+                    root.rowTap(card.index, card.playBtn && Math.abs(m.x - card.playCx) <= 18 && Math.abs(m.y - card.playCx) <= 18)
+                }
                 onLongPress: (x, y) => root.rowLongPress(card.index, card.mapToItem(root, x, y).x, card.mapToItem(root, x, y).y)
             }
             // the card's play button as a remote stop, like the rows'. Only on

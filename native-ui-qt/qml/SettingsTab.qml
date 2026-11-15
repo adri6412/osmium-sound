@@ -281,12 +281,16 @@ Item {
         property var tweaks: ({ loaded: false, conf: {}, governors_available: [], smt_available: false, needs_reboot: false })
         // Recommended (api /recommend_settings + /recommendations): the switch,
         // when the job runs, where it looks; `st` is how the last run went.
-        property var rec: ({ loaded: false, available: false, st: {} })
+        property var rec: ({ loaded: false, available: false, st: {}, blocked: [] })
         function loadRecStatus() {
             Api.get(api("/recommendations"), function(ok, d) {
                 if (!ok || !d) return
                 var r = rec; r.st = { running: !!d.running, last_run: d.last_run || null, state: String(d.state || ""), plays: d.plays || 0, needed: d.needed || 0 }
                 rec = r; root.rebuild()
+            }, 8000)
+            Api.get(api("/recommendations/blocked"), function(ok, d) {
+                if (!ok || !d) return
+                var r = rec; r.blocked = d.artists || []; rec = r; root.rebuild()
             }, 8000)
         }
         // Audio zones (api /zones): one more Lyrion player per further DAC.
@@ -534,7 +538,8 @@ Item {
                 var st = rec.st || {}
                 rec = { loaded: true, available: d.available !== false && d.enabled !== undefined, enabled: !!d.enabled,
                         schedule: d.schedule || { mode: "manual", days: [], time: "18:00" }, sources: d.sources || [],
-                        all_sources: d.all_sources || [], lastfm: String(d.lastfm || "off"), st: st }
+                        run_on_boot: d.run_on_boot !== false,
+                        all_sources: d.all_sources || [], lastfm: String(d.lastfm || "off"), st: st, blocked: rec.blocked || [] }
             })
             get(api("/lms_role"), function(d) { lmsMode = str(d, "mode", "local"); lmsHost = str(d, "host") })
             get(api("/player_name"), function(d) { playerName = str(d, "name") })
@@ -2240,6 +2245,8 @@ Item {
             push({ type: "stepper", smin: 0, smax: 59, sstep: 1, sval: parseInt(hm[1]) || 0, pad: 2, wrap: true, act: "rec_min_set", pickAct: "rec_min" })
             help("settings.recommend.whenHelp", 12)
         } else help("settings.recommend.manualHelp", 12)
+        toggle(Tr.t("settings.recommend.runOnBoot"), "", r.run_on_boot, "rec_boot")
+        help("settings.recommend.runOnBootHelp", 12)
         label("settings.recommend.sourcesLabel", 14)
         for (i = 0; i < r.all_sources.length; i++) {
             var k = r.all_sources[i]
@@ -2264,6 +2271,14 @@ Item {
         if (st.state === "few_plays")
             helpText(Tr.tf("recommend.fewPlays", "needed", st.needed || 0).replace("{plays}", st.plays || 0).replace("{albums}", st.needed_albums || 0), 12)
         if (!st.running) grid([acell(Tr.t("recommend.computeNow"), "rec_run", "gold", { icon: "sparkles", hh: 44, bold: true })])
+        sep()
+        label("recommend.blockedArtists", 14)
+        var blk = r.blocked || []
+        if (!blk.length) note(Tr.t("recommend.blockedEmpty"), "dark", "info", 12)
+        else for (i = 0; i < blk.length; i++) {
+            var brow = info(blk[i].name, Tr.t("recommend.unblock"))
+            brow.style = "seg"; brow.hh = 44; brow.icon = "rotate-ccw"; brow.act = "rec_unblock"; brow.arg = blk[i].key
+        }
         help("settings.recommend.credits", 11)
     }
     function recSet(body) {
@@ -3291,6 +3306,7 @@ Item {
             return
         }
         case "rec_enable": recSet({ enabled: !row.on }); return
+        case "rec_boot": recSet({ run_on_boot: !row.on }); return
         case "rec_mode": {
             if (arg === (cfg.rec.schedule || {}).mode) return
             // "on chosen days" needs a day to start from: today's
@@ -3338,6 +3354,14 @@ Item {
                 cfg.loadRecStatus()
             }, 35000)
             var recRr = cfg.rec; recRr.st = Object.assign({}, recRr.st || {}, { running: true }); cfg.rec = recRr; rebuild()
+            return
+        case "rec_unblock":
+            if (!arg) return
+            Api.post(A("/recommendations/unblock"), { key: arg }, function(ok, d) {
+                if (!(ok && d && d.success)) say(Tr.t("settings.recommend.saveFailed"), true)
+                cfg.loadRecStatus()
+            }, 15000)
+            var recUb = cfg.rec; recUb.blocked = (recUb.blocked || []).filter(function(b) { return b.key !== arg }); cfg.rec = recUb; rebuild()
             return
         case "alarm_add": lms(["alarm", "add", "time:" + (alarmH * 3600 + alarmM * 60), "dow:0,1,2,3,4,5,6", "enabled:1"]); break
         case "sync_toggle": lms(row.on ? ["sync", "-"] : ["sync", arg]); say(Tr.t("settings.multiroom.saved")); break

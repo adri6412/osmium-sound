@@ -281,6 +281,36 @@ class DatabaseTestCase(unittest.TestCase):
         self.assertEqual([r['artist'] for r in rec.read_recommendations(self.db)], ['B'])
         self.assertIn(rec.album_key('a', '1 (Deluxe Edition)'), rec.dismissed_keys(self.db))
 
+    def test_block_artist_removes_now_and_is_remembered(self):
+        rec.write_recommendations(self.db, [self.row('Opeth', 'Blackwater Park'),
+                                            self.row('Opeth', 'Damnation'),
+                                            self.row('Tool', 'Lateralus')])
+        rec.block_artist(self.db, 'Opeth')
+        # every album by the blocked artist is gone at once, others stay
+        self.assertEqual([r['artist'] for r in rec.read_recommendations(self.db)], ['Tool'])
+        # the artist is remembered by its normalized key, with its display name
+        self.assertIn(rec.norm_text('Opeth'), rec.blocked_artist_keys(self.db))
+        self.assertEqual([a['name'] for a in rec.blocked_artist_list(self.db)], ['Opeth'])
+
+    def test_blocked_artist_matches_spelling_variants(self):
+        rec.block_artist(self.db, 'Opeth')
+        self.assertIn(rec.norm_text('OPETH'), rec.blocked_artist_keys(self.db))
+        rec.write_recommendations(self.db, [self.row('opeth', 'Watershed')])
+        # a later recommendation of the same artist (different casing) is pruned
+        rec.block_artist(self.db, 'Opeth')
+        self.assertEqual(rec.read_recommendations(self.db), [])
+
+    def test_unblock_artist_forgets_it(self):
+        rec.block_artist(self.db, 'Opeth')
+        key = rec.norm_text('Opeth')
+        rec.unblock_artist(self.db, key)
+        self.assertNotIn(key, rec.blocked_artist_keys(self.db))
+        self.assertEqual(rec.blocked_artist_list(self.db), [])
+
+    def test_blank_artist_is_never_blocked(self):
+        rec.block_artist(self.db, '   ')
+        self.assertEqual(rec.blocked_artist_keys(self.db), set())
+
     def test_states(self):
         self.assertEqual(rec.history_state(self.db)['state'], 'few_plays')
         for i in range(rec.MIN_PLAYS):
@@ -363,6 +393,16 @@ class SettingsTestCase(unittest.TestCase):
         self.assertTrue(s['enabled'])
         self.assertEqual(s['schedule'], {'mode': 'daily', 'days': [], 'time': '18:00'})
         self.assertEqual(s['sources'], list(rec.SOURCES))
+        self.assertTrue(s['run_on_boot'])
+
+    def test_run_on_boot_is_kept_and_toggled(self):
+        self.assertFalse(rec.clean_settings({'run_on_boot': False})['run_on_boot'])
+        self.assertFalse(rec.clean_settings({'run_on_boot': 0})['run_on_boot'])
+        cur = rec.clean_settings({})
+        self.assertFalse(rec.merge_settings(cur, {'run_on_boot': False})['run_on_boot'])
+        # an unrelated change leaves it untouched
+        self.assertTrue(rec.merge_settings(rec.clean_settings({'run_on_boot': True}),
+                                           {'enabled': False})['run_on_boot'])
 
     def test_garbage_is_cleaned(self):
         s = rec.clean_settings({'enabled': 0, 'sources': ['tidal', 'napster'],
