@@ -392,12 +392,19 @@ void Remote::rescan() {
         const QString path = devDir + "/" + evs.first();
 
         const QString key = hifiSysfsRead(dir + "/capabilities/key");
-        if (key.isEmpty()) continue;
         const QString rel = hifiSysfsRead(dir + "/capabilities/rel");
         const QString abs = hifiSysfsRead(dir + "/capabilities/abs");
         const int bus = hifiSysfsRead(dir + "/id/bustype").toInt(nullptr, 16);
         const Model *model = modelFor(bus, hifiSysfsRead(dir + "/id/vendor").toInt(nullptr, 16),
                                       hifiSysfsRead(dir + "/id/product").toInt(nullptr, 16));
+        // 🚨 Diagnostica: un modello noto (es. il Fire TV) espone due nodi input;
+        // ne gestiamo uno solo. Se un nodo di un modello noto viene scartato qui,
+        // lo registriamo con le sue capacita', cosi' il prossimo bundle riveli
+        // cos'e' il secondo nodo e se va preso anche lui.
+        if (model && key.isEmpty())
+            qInfo("remote: %s node %s skipped (no keys; rel=%s abs=%s)",
+                  model->label, qPrintable(path), qPrintable(rel.trimmed()), qPrintable(abs.trimmed()));
+        if (key.isEmpty()) continue;
         const bool anyKey = key.contains(QRegularExpression(QStringLiteral("[1-9a-fA-F]")));
 
         // tastiera completa: tutti i tasti da ESC a D (1..31), la stessa
@@ -413,7 +420,12 @@ void Remote::rescan() {
         const bool nav = hifiSysfsBit(key, KEY_UP) && hifiSysfsBit(key, KEY_DOWN)
                       && hifiSysfsBit(key, KEY_LEFT) && hifiSysfsBit(key, KEY_RIGHT)
                       && (hifiSysfsBit(key, KEY_ENTER) || hifiSysfsBit(key, KEY_OK) || hifiSysfsBit(key, KEY_SELECT));
-        if (!media && !(nav && !fullKeyboard) && !(model && anyKey)) continue;
+        if (!media && !(nav && !fullKeyboard) && !(model && anyKey)) {
+            if (model)
+                qInfo("remote: %s node %s skipped by gate (key=%s rel=%s abs=%s)", model->label,
+                      qPrintable(path), qPrintable(key.trimmed()), qPrintable(rel.trimmed()), qPrintable(abs.trimmed()));
+            continue;
+        }
 
         // 🚨 niente presa esclusiva su chi e' anche puntatore o tastiera: il
         // puntatore si fermerebbe e non si scriverebbe piu'. A known model is
@@ -464,6 +476,7 @@ void Remote::openDevice(const QString &path) {
     Dev dev;
     dev.path = path;
     dev.fd = fd;
+    dev.openedAt = m_clock.elapsed();
     dev.notifier = new QSocketNotifier(fd, QSocketNotifier::Read, this);
     connect(dev.notifier, &QSocketNotifier::activated, this, [this, path]() { readFrom(path); });
     m_open.insert(path, dev);
@@ -557,7 +570,27 @@ void Remote::readFrom(const QString &path) {
     }
 }
 
+// quanto a lungo, dopo l'apertura di un nodo, si scartano gli eventi: coerente
+// col debounce del rescan (600 ms), il tempo in cui un telecomando BT che si
+// riaggancia al risveglio consegna il suo burst di eventi stantii
+static constexpr qint64 kSettleMs = 400;
+
 void Remote::onKey(Dev &dev, int code, int value) {
+    // 🚨 Finestra di assestamento: appena (ri)aperto il nodo, un telecomando BT
+    // che si riconnette al risveglio puo' consegnare un burst di eventi stantii
+    // (lo stato della matrice tasti al riaggancio). Il grab esclusivo non aiuta:
+    // blocca gli altri consumer, non la consegna a noi. Li buttiamo.
+    if (m_clock.elapsed() - dev.openedAt < kSettleMs) {
+        if (value == 0) dev.down.remove(code);   // lo stato resta coerente
+        return;
+    }
+    // 🚨 Una ripetizione del nucleo (value 2) di un tasto che non abbiamo mai
+    // visto premere — tipicamente uno "tenuto" a cavallo di una disconnessione,
+    // i cui repeat riprendono al riaggancio — non deve agire da sola.
+    if (value == 2 && !dev.down.contains(code)) return;
+    if (value == 1) dev.down.insert(code);
+    else if (value == 0) dev.down.remove(code);
+
     const QString act = actionFor(code, dev.name);
 
     if (value == 0) {                       // rilasciato

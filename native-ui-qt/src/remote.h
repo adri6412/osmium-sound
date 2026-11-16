@@ -34,6 +34,7 @@
 #include <QFileSystemWatcher>
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QStringList>
 #include <QTimer>
 #include <QVariantList>
@@ -143,6 +144,14 @@ private:
         int model = -1;            // one of the known remotes (kModels), or -1
         int fd = -1;
         QSocketNotifier *notifier = nullptr;
+        // quando abbiamo aperto il fd: per una breve finestra di assestamento
+        // ignoriamo gli eventi (un telecomando BT che si riaggancia al risveglio
+        // consegna un burst di eventi stantii)
+        qint64 openedAt = 0;
+        // i tasti davvero premuti qui: una ripetizione (value 2) di un tasto che
+        // non abbiamo mai visto premere — uno "tenuto" a cavallo di una
+        // disconnessione — non deve agire da sola
+        QSet<int> down;
     };
 
     static QString groupKey(const QString &dir, const QString &fallback);
