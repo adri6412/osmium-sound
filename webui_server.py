@@ -49,13 +49,16 @@ Dev/local flags:
   HIFI_PROVISION_FAKE=1  stub every nmcli call (no real Wi-Fi), for a laptop
 """
 
+import base64
 import json
+import mimetypes
 import os
 import re
 import secrets
 import shutil
 import socket
 import sqlite3
+import struct
 import subprocess
 import threading
 import time
@@ -85,6 +88,39 @@ DISPLAY_MODE_FILE = os.path.join(STATE_DIR, 'display-mode')
 API_BASE = 'http://127.0.0.1:8000'
 LYRION_BASE = 'http://127.0.0.1:9000'
 SOURCES_BASE = 'http://127.0.0.1:8080'
+
+# The Now Playing-only web build (Qt→WASM, served from this device). Its static
+# files live under NP_DIST; the Qt code fetches the real backends same-origin
+# through the /device/{api,src,lms} proxies below and reads live DAC levels via
+# the /device/vu/stream SSE bridge (to vu_meter_daemon on ws://127.0.0.1:9001).
+NP_DIST = os.environ.get('HIFI_NP_DIST', '/opt/hifi-np')
+VU_WS_HOST = '127.0.0.1'
+VU_WS_PORT = 9001
+
+# The /np page keeps its OWN Now Playing look (VU on/off, VU skin, animation),
+# independent of the kiosk: changing it on the web must NOT change the device
+# screen. These three prefs live here, per-/np, instead of being written through
+# to api_server (whose files /etc/hifi-player/* ARE the kiosk's shared state).
+# On the data partition so the choice survives reboots and A/B image updates.
+NP_VIEW_FILE = os.environ.get('HIFI_NP_VIEW', '/var/lib/hifi-player/np-view.json')
+_NP_VIEW_LOCK = threading.Lock()
+# api path → (scalar key in the GET/POST reply, key in the POST request body)
+_NP_VIEW_FIELDS = {
+    'vu_meter':             ('enabled',   'enable'),
+    'vu_style':             ('style',     'style'),
+    'nowplaying_animation': ('animation', 'animation'),
+}
+# VU meter skins the user downloaded from the store live here (api_server's
+# VU_STORE_DIR). The /np page bundles only the built-in skins in its WASM pack,
+# so it pulls these over /device/vu-skins into its in-memory file system where
+# VuPanel.qml already reads them (Sys.vuStore → this same default path).
+VU_STORE_DIR = os.environ.get('HIFI_VU_STORE_DIR', '/var/lib/hifi-player/vu-skins')
+_VU_SKIN_ID_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,40}$')
+_VU_SKIN_FILE_RE = re.compile(r'^[a-z0-9][a-z0-9._-]*\.(png|jpg|json)$')
+
+# A manifest file needs its own type for the browser to accept it (the stdlib
+# does not know .webmanifest), so /np/manifest.webmanifest serves correctly.
+mimetypes.add_type('application/manifest+json', '.webmanifest')
 
 AP_CON_NAME = 'hifi-setup'
 AP_ADDR = '10.42.0.1'
@@ -1368,7 +1404,7 @@ def _guard():
     # setup page. Outside an AP window there is no Host gate: the appliance
     # is meant to be reachable under any hostname/IP (custom mDNS name,
     # Tailscale, LAN IP, ...), and mutations are already protected
-    # independently of Host by CSRF + the host-only, SameSite=Strict session
+    # independently of Host by CSRF + the host-only, SameSite=Lax session
     # cookie (see _set_csrf_cookie/_bootstrap below) -- a spoofed Host header
     # alone can't forge either. The only unauthenticated reads reachable here
     # are /api/auth/status's two booleans and /api/netrecovery/status, which
@@ -1395,10 +1431,21 @@ def _guard():
     #   * forwarded sources paths — authenticated by the pairing bearer token
     #     (not cookies), so they're CSRF-immune by construction; requiring our
     #     cookie-bound header would just break the embedded :8080 SPA.
+    #   * /device/* — the Now Playing web build's backend proxies. The Qt/WASM
+    #     client has no way to echo our double-submit cookie in a header, and it
+    #     doesn't need to: these routes require the admin session, whose cookie
+    #     is host-only + SameSite=Lax. Lax withholds the cookie on cross-site
+    #     subresource and fetch/XHR requests and on cross-site POST — the only
+    #     ways a cross-site page could *drive* these proxies — so such a request
+    #     still arrives session-less → _require_session 401s it. (Lax does send
+    #     the cookie on a cross-site top-level GET navigation, but that only
+    #     opens one of these routes as a document the other origin cannot read,
+    #     and they return/accept non-sensitive per-/np view state anyway.)
     if request.method in ('POST', 'PUT', 'DELETE', 'PATCH') \
             and request.remote_addr not in ('127.0.0.1', '::1') \
             and not request.path.startswith('/api/provision/') \
             and not request.path.startswith('/api/netrecovery/') \
+            and not request.path.startswith('/device/') \
             and not any(request.path == p or request.path.startswith(p + '/')
                         for p in _SOURCES_FWD_PREFIXES):
         cookie = request.cookies.get('csrf')
@@ -1413,7 +1460,7 @@ def _frame_ancestors():
     # carries an "Osmium Admin" entry that opens this admin in an iframe (see
     # the actions.json asset in distro/.../hifi-lms-skin). A different port is a
     # different *origin* — so it must be named here — but the same *site*, which
-    # is why the SameSite=Strict session cookie still travels into that frame.
+    # is why the SameSite=Lax session cookie still travels into that frame.
     host = request.host
     host = host[:host.index(']') + 1] if host.startswith('[') and ']' in host \
         else host.split(':')[0]
@@ -2851,6 +2898,285 @@ def _serve_spa(subpath):
     # No Vue build present yet — serve a tiny built-in fallback so the daemon is
     # still useful (auth + provisioning APIs work regardless).
     return Response(FALLBACK_HTML, mimetype='text/html')
+
+
+# ── Now Playing web build (Qt→WASM): backend proxies + VU bridge + serving ────
+# The /np page runs the real kiosk's Now Playing in the browser. Unlike the
+# public demo (which mocks /device/* in JS), here these are REAL same-origin
+# proxies to the device's own services, and the VU meters read the live DAC
+# levels off vu_meter_daemon. Everything is behind the admin session.
+_DEVICE_PROXY_BASES = {
+    'api': lambda: API_BASE,       # api_server  (:8000)
+    'src': lambda: SOURCES_BASE,   # sources_server (:8080)
+    'lms': _lyrion_base,           # the Lyrion this device actually plays from
+}
+
+
+def _np_view_load():
+    """The /np page's own VU/animation choices ({} when none made yet)."""
+    try:
+        with open(NP_VIEW_FILE) as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _np_view_pref(name):
+    """Serve one of the three look prefs for the /np page WITHOUT touching the
+    kiosk. GET forwards to api_server only to pick up the live skin/animation
+    catalogue, then overrides the selected value with the /np one; POST stores
+    the /np choice here and never reaches api_server."""
+    key, body_key = _NP_VIEW_FIELDS[name]
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        value = data.get(body_key)
+        if name == 'vu_meter':
+            value = bool(value)
+        else:
+            value = str(value or '').strip()
+            if not value:
+                return jsonify({'success': False, 'message': 'empty value'}), 400
+        with _NP_VIEW_LOCK:
+            d = _np_view_load()
+            d[name] = value
+            try:
+                os.makedirs(os.path.dirname(NP_VIEW_FILE), exist_ok=True)
+                tmp = NP_VIEW_FILE + '.tmp'
+                with open(tmp, 'w') as f:
+                    json.dump(d, f)
+                os.replace(tmp, NP_VIEW_FILE)
+            except Exception as e:
+                print(f'[webui] np-view persist failed: {e}')
+                return jsonify({'success': False, 'message': 'save failed'}), 500
+        return jsonify({'success': True, key: value})
+    # GET: read the live catalogue from api_server (styles / choices / store),
+    # then present the /np page's own selection in place of the kiosk's.
+    payload = {}
+    try:
+        req = urllib.request.Request(API_BASE + '/' + name, method='GET')
+        for h in ('Authorization', 'X-UI-Lang', 'Accept-Language'):
+            v = request.headers.get(h)
+            if v:
+                req.add_header(h, v)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            payload = json.loads(r.read().decode('utf-8'))
+    except Exception as e:
+        print(f'[webui] np-view api GET {name} failed: {e}')
+    if not isinstance(payload, dict):
+        payload = {}
+    override = _np_view_load().get(name)
+    if override is not None:
+        payload[key] = override
+    return jsonify(payload)
+
+
+@app.route('/device/<svc>/<path:rest>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def device_proxy(svc, rest):
+    """Transparent, session-gated reverse proxy for the NP web build. Streams
+    the raw response back (JSON, or binary like Lyrion cover art)."""
+    denied = _require_session()
+    if denied:
+        return denied
+    # The look prefs are the /np page's own, never the kiosk's: serve them from
+    # the per-/np store instead of forwarding to api_server (see _np_view_pref).
+    if svc == 'api' and rest in _NP_VIEW_FIELDS:
+        return _np_view_pref(rest)
+    base = _DEVICE_PROXY_BASES.get(svc)
+    if base is None:
+        return jsonify({'success': False, 'message': 'unknown device service'}), 404
+    # Lyrion's cometd long-poll holds the request open (~60 s) waiting for the
+    # next player event, so give /device/lms room; api/src answer promptly.
+    timeout = 120 if svc == 'lms' else 30
+    return _forward_to(base(), '/' + rest, timeout=timeout, service_label=f'device/{svc}')
+
+
+# ── VU bridge: vu_meter_daemon WebSocket (:9001) → SSE ────────────────────────
+# werkzeug's WSGI server can't upgrade a Flask view to a WebSocket, so the
+# browser reads the meters over Server-Sent Events instead and this daemon is
+# the WebSocket *client* of vu_meter_daemon. The client side is a small raw
+# RFC6455 reader (stdlib only — no `websockets` dependency in this process):
+# the daemon only ever sends us small one-line JSON text frames.
+def _vu_ws_send(sock, opcode, payload=b''):
+    """Send one masked client frame (client→server frames MUST be masked)."""
+    mask = os.urandom(4)
+    body = bytes(c ^ mask[i % 4] for i, c in enumerate(payload))
+    n = len(payload)
+    header = bytes([0x80 | opcode])
+    if n < 126:
+        header += bytes([0x80 | n])
+    elif n < 65536:
+        header += bytes([0x80 | 126]) + struct.pack('>H', n)
+    else:
+        header += bytes([0x80 | 127]) + struct.pack('>Q', n)
+    sock.sendall(header + mask + body)
+
+
+def _vu_ws_connect(timeout=5):
+    """Open a raw RFC6455 connection to vu_meter_daemon; return (sock, leftover)
+    once the 101 handshake is done (leftover = any frame bytes read early)."""
+    sock = socket.create_connection((VU_WS_HOST, VU_WS_PORT), timeout=timeout)
+    sock.settimeout(timeout)
+    key = base64.b64encode(os.urandom(16)).decode('ascii')
+    sock.sendall((
+        'GET / HTTP/1.1\r\n'
+        f'Host: {VU_WS_HOST}:{VU_WS_PORT}\r\n'
+        'Upgrade: websocket\r\n'
+        'Connection: Upgrade\r\n'
+        f'Sec-WebSocket-Key: {key}\r\n'
+        'Sec-WebSocket-Version: 13\r\n\r\n'
+    ).encode('ascii'))
+    buf = b''
+    while b'\r\n\r\n' not in buf:
+        chunk = sock.recv(1024)
+        if not chunk:
+            raise ConnectionError('vu daemon closed during handshake')
+        buf += chunk
+        if len(buf) > 16384:
+            raise ConnectionError('vu daemon handshake too large')
+    if b' 101 ' not in buf.split(b'\r\n', 1)[0]:
+        raise ConnectionError('vu daemon refused the upgrade')
+    return sock, buf.split(b'\r\n\r\n', 1)[1]
+
+
+def _vu_ws_frames(sock, leftover=b''):
+    """Yield decoded text payloads (str) from a connected WS socket, answering
+    pings and keeping the stream alive. Raises on close/EOF."""
+    buf = bytearray(leftover)
+
+    def need(n):
+        while len(buf) < n:
+            chunk = sock.recv(4096)
+            if not chunk:
+                raise ConnectionError('vu daemon closed')
+            buf.extend(chunk)
+
+    while True:
+        need(2)
+        b0, b1 = buf[0], buf[1]
+        opcode = b0 & 0x0f
+        masked = b1 & 0x80          # server→client is never masked; handle anyway
+        length = b1 & 0x7f
+        hdr = 2
+        if length == 126:
+            need(4); length = struct.unpack('>H', bytes(buf[2:4]))[0]; hdr = 4
+        elif length == 127:
+            need(10); length = struct.unpack('>Q', bytes(buf[2:10]))[0]; hdr = 10
+        mask = b''
+        if masked:
+            need(hdr + 4); mask = bytes(buf[hdr:hdr + 4]); hdr += 4
+        need(hdr + length)
+        payload = bytes(buf[hdr:hdr + length])
+        del buf[:hdr + length]
+        if masked:
+            payload = bytes(c ^ mask[i % 4] for i, c in enumerate(payload))
+        if opcode == 0x8:           # close
+            raise ConnectionError('vu daemon sent close')
+        if opcode == 0x9:           # ping → pong
+            _vu_ws_send(sock, 0xA, payload)
+            continue
+        if opcode == 0xA:           # pong
+            continue
+        if opcode in (0x0, 0x1):    # continuation / text (frames here are small+single)
+            try:
+                yield payload.decode('utf-8')
+            except UnicodeDecodeError:
+                continue
+
+
+@app.route('/device/vu/stream', methods=['GET'])
+def device_vu_stream():
+    denied = _require_session()
+    if denied:
+        return denied
+
+    def events():
+        sock = None
+        try:
+            sock, leftover = _vu_ws_connect()
+        except Exception as e:
+            print(f'[webui] vu bridge connect failed: {e}')
+            yield 'event: error\ndata: {"active":false}\n\n'
+            return
+        sock.settimeout(30)         # a frame at least every ~1 s, so 30 s = dead
+        try:
+            for msg in _vu_ws_frames(sock, leftover):
+                yield 'data: ' + msg + '\n\n'
+        except (ConnectionError, OSError) as e:
+            print(f'[webui] vu bridge ended: {e}')
+        finally:
+            try:
+                sock.close()
+            except Exception:
+                pass
+
+    resp = Response(events(), mimetype='text/event-stream')
+    resp.headers['Cache-Control'] = 'no-cache, no-transform'
+    resp.headers['X-Accel-Buffering'] = 'no'
+    return resp
+
+
+# ── store VU skins for the /np page ──────────────────────────────────────────
+# The web Now Playing bundles only the built-in skins, so it fetches the store
+# ones (their files) from here and writes them into its WASM file system before
+# Qt starts; VuPanel.qml then draws them with no change.
+@app.route('/device/vu-skins', methods=['GET'])
+def device_vu_skins_manifest():
+    denied = _require_session()
+    if denied:
+        return denied
+    out = {}
+    try:
+        for sid in sorted(os.listdir(VU_STORE_DIR)):
+            if not _VU_SKIN_ID_RE.match(sid):
+                continue
+            d = os.path.join(VU_STORE_DIR, sid)
+            if not os.path.isdir(d) or not os.path.isfile(os.path.join(d, 'skin.json')):
+                continue
+            files = sorted(f for f in os.listdir(d)
+                           if _VU_SKIN_FILE_RE.match(f) and os.path.isfile(os.path.join(d, f)))
+            if files:
+                out[sid] = files
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        print(f'[webui] vu-skins manifest failed: {e}')
+    return jsonify(out)
+
+
+@app.route('/device/vu-skins/<sid>/<fname>', methods=['GET'])
+def device_vu_skin_file(sid, fname):
+    denied = _require_session()
+    if denied:
+        return denied
+    if not _VU_SKIN_ID_RE.match(sid) or not _VU_SKIN_FILE_RE.match(fname):
+        return jsonify({'success': False, 'message': 'bad skin path'}), 404
+    d = os.path.join(VU_STORE_DIR, sid)
+    if not os.path.isfile(os.path.join(d, fname)):
+        return jsonify({'success': False, 'message': 'not found'}), 404
+    return send_from_directory(d, fname)
+
+
+@app.route('/np', methods=['GET'])
+@app.route('/np/', methods=['GET'])
+@app.route('/np/<path:subpath>', methods=['GET'])
+def np_page(subpath='index.html'):
+    """Serve the Now Playing web build from NP_DIST, session-gated. Any unknown
+    path falls back to index.html so the WASM loader's own routing works."""
+    denied = _require_session()
+    if denied:
+        return denied
+    if not subpath or subpath.endswith('/'):
+        subpath = 'index.html'
+    root = os.path.normpath(NP_DIST)
+    full = os.path.normpath(os.path.join(root, subpath))
+    if full.startswith(root + os.sep) and os.path.isfile(full):
+        return send_from_directory(NP_DIST, subpath)
+    index = os.path.join(NP_DIST, 'index.html')
+    if os.path.isfile(index):
+        return send_from_directory(NP_DIST, 'index.html')
+    return jsonify({'success': False,
+                    'message': 'Now Playing web build not installed'}), 404
 
 
 # Shared CSS for both captive templates below.
@@ -4844,7 +5170,16 @@ def _bootstrap():
     app.secret_key = _ensure_secret_key()
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SAMESITE='Strict',
+        # Lax, not Strict: the Now Playing web build (/np) is opened as a
+        # standalone/home-screen shortcut, a top-level navigation whose
+        # initiator the browser treats as cross-site -- Strict withholds the
+        # cookie there, so a logged-in user got a 401 unless they first passed
+        # through the admin page. Lax still sends the cookie on that top-level
+        # GET while continuing to withhold it on cross-site subresource/fetch
+        # and cross-site POST, which is what actually protects /device/* and
+        # the CSRF-guarded mutations (a cross-site page can only *drive* those
+        # through a subresource/POST, never a top-level navigation it can read).
+        SESSION_COOKIE_SAMESITE='Lax',
         # Not Secure: plain HTTP, no TLS -- see the module docstring's
         # security-model note. A Secure-flagged cookie would just get
         # silently dropped by the browser on every response.

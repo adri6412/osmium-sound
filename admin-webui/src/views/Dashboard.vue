@@ -275,6 +275,12 @@ function diskLine(d) {
       <span class="t gold">{{ t('dashboard.music') }}</span>
       <span class="muted">{{ t('dashboard.musicDesc') }}</span>
     </a>
+    <!-- The full-screen Now Playing web view, served by this appliance at /np
+         (same origin and session). A plain link, opened in its own tab. -->
+    <a class="tile" href="np" target="_blank">
+      <span class="t gold">{{ t('dashboard.nowPlaying') }}</span>
+      <span class="muted">{{ t('dashboard.nowPlayingDesc') }}</span>
+    </a>
     <RouterLink class="tile" to="/settings">
       <span class="t gold">{{ t('dashboard.settings') }}</span>
       <span class="muted">{{ t('dashboard.settingsDesc') }}</span>

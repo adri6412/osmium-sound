@@ -117,8 +117,10 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "music": "Musik",
-    "musicDesc": "Bibliothek und Wiedergabe (Lyrion)",
+    "music": "Lyrion",
+    "musicDesc": "Bibliothek und Wiedergabe",
+    "nowPlaying": "Now Playing",
+    "nowPlayingDesc": "Die Wiedergabeansicht im Vollbild",
     "settings": "Einstellungen",
     "settingsDesc": "Netzwerk, Audio, Updates…",
     "status": "Status",
