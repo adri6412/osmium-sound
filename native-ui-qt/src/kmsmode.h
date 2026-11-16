@@ -19,6 +19,8 @@
 
 struct KmsMode { int w = 0, h = 0, hz = 0; bool preferred = false; };
 struct KmsOutput { QString name; QList<KmsMode> modes; };
+// Un device DRM (/dev/dri/cardN) con le sue uscite collegate.
+struct KmsCard { QString device; QList<KmsOutput> outputs; };
 
 // Nome di un'uscita come lo scrive Qt (qkmsdevice.cpp): tipo + numero, con
 // HDMI-A/HDMI-B -> "HDMI" e tutti i DVI -> "DVI". La configurazione e'
@@ -29,6 +31,14 @@ QString kmsOutputName(uint32_t connectorType, uint32_t typeId);
 QJsonObject kmsPlan(const QList<KmsOutput> &outputs, const QString &resolutionPref,
                     const QString &screensPref, const QString &card = "/dev/dri/card0");
 
+// Fra piu' device DRM (portatili a grafica commutabile: una GPU col pannello
+// interno, un'altra con le uscite esterne) sceglie quale pilotare: preferisce
+// la card con un PANNELLO INTERNO collegato (uscita "eDP"/"LVDS"), altrimenti
+// la prima con almeno un'uscita collegata. Ritorna l'indice in `cards`, o -1
+// se nessuna ha uscite. Senza DRM (per i test).
+int pickKmsCard(const QList<KmsCard> &cards);
+
 // Ritorna il percorso del file JSON scritto, o vuoto se si lascia fare a Qt.
+// card vuoto = scelta automatica fra tutte le /dev/dri/card*.
 QString kmsConfigFor(const QString &pref, const QString &screens = "mirror",
-                     const QString &card = "/dev/dri/card0");
+                     const QString &card = "");

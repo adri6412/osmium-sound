@@ -11,6 +11,11 @@ static void expect(const char *what, const QString &got, const QString &want) {
     failures++;
     std::printf("FAIL %s\n  got:  %s\n  want: %s\n", what, qPrintable(got), qPrintable(want));
 }
+static void expectInt(const char *what, int got, int want) {
+    if (got == want) return;
+    failures++;
+    std::printf("FAIL %s\n  got:  %d\n  want: %d\n", what, got, want);
+}
 static QString js(const QJsonObject &o) { return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)); }
 
 static KmsMode M(int w, int h, int hz, bool pref = false) { KmsMode m; m.w = w; m.h = h; m.hz = hz; m.preferred = pref; return m; }
@@ -62,6 +67,25 @@ int main() {
     expect("only on a monitor that is gone: duplicate",
            js(kmsPlan({ tv("HDMI1"), wide("DP1") }, "auto", "only:HDMI2")),
            js(kmsPlan({ tv("HDMI1"), wide("DP1") }, "auto", "mirror")));
+
+    // switchable-graphics laptops: pick the GPU that drives the internal panel
+    // (eDP/LVDS). On the HP Pavilion DV6 the Radeon (card0) only has HDMI, the
+    // Intel i915 (card1) has the LVDS panel.
+    expectInt("pick card with LVDS panel (DV6)",
+              pickKmsCard({ { "/dev/dri/card0", { tv("HDMI1") } },
+                            { "/dev/dri/card1", { panel7("LVDS1") } } }), 1);
+    expectInt("pick card with eDP panel even if first",
+              pickKmsCard({ { "/dev/dri/card0", { panel7("eDP1") } },
+                            { "/dev/dri/card1", { tv("HDMI1") } } }), 0);
+    expectInt("skip a card with no connected output",
+              pickKmsCard({ { "/dev/dri/card0", {} },
+                            { "/dev/dri/card1", { panel7("LVDS1") } } }), 1);
+    expectInt("no internal panel anywhere: first card with an output",
+              pickKmsCard({ { "/dev/dri/card0", { tv("HDMI1") } },
+                            { "/dev/dri/card1", { wide("DP1") } } }), 0);
+    expectInt("single card with an output", pickKmsCard({ { "/dev/dri/card0", { tv("HDMI1") } } }), 0);
+    expectInt("all cards empty: none", pickKmsCard({ { "/dev/dri/card0", {} } }), -1);
+    expectInt("no cards: none", pickKmsCard({}), -1);
 
     // Qt's names, or the configuration is silently ignored
     expect("HDMI-A", kmsOutputName(11, 1), "HDMI1");

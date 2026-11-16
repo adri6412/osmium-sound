@@ -279,12 +279,51 @@ static void cmdfilePoll() {
     }
 }
 
+// Ripiego software per il rendering (llvmpipe). Su un portatile a grafica
+// commutabile la GPU che pilota il pannello (scelta da kmsmode) potrebbe non
+// avere un driver GL hardware nell'immagine (es. Intel Ironlake/i915): eglfs
+// fallisce la creazione del contesto EGL con un messaggio fatale. Non potendo
+// ritentare nello stesso processo (Qt chiama abort() dopo un fatale), lasciamo
+// un marker in /run e il servizio (Restart=on-failure) riparte in software.
+// /run e' tmpfs: il marker sparisce al reboot, cosi' l'hardware si ritenta a
+// ogni accensione (se un aggiornamento driver lo sistema, si recupera da solo).
+static const char kSoftwareGlMarker[] = "/run/hifi-qt-software-gl";
+static QtMessageHandler g_prevMsgHandler = nullptr;
+static void glWatchMsgHandler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg) {
+    if (type == QtFatalMsg &&
+        (msg.contains(QLatin1String("EGL")) || msg.contains(QLatin1String("OpenGL")) ||
+         msg.contains(QLatin1String("GL context"), Qt::CaseInsensitive))) {
+        QFile m(QString::fromLatin1(kSoftwareGlMarker));
+        m.open(QIODevice::WriteOnly); // best effort: il prossimo avvio va in software
+    }
+    if (g_prevMsgHandler) {
+        g_prevMsgHandler(type, ctx, msg);
+    } else {
+        const QByteArray out = qFormatLogMessage(type, ctx, msg).toLocal8Bit();
+        fputs(out.constData(), stderr);
+        fputc('\n', stderr);
+        fflush(stderr);
+    }
+}
+
 int main(int argc, char *argv[]) {
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "eglfs");
+    const bool onEglfs = qEnvironmentVariable("QT_QPA_PLATFORM") == "eglfs";
+    // Marker del ripiego software: se un avvio precedente ha fallito il contesto
+    // GL hardware, si parte subito in software; altrimenti si sorveglia il log
+    // per intercettare il fallimento e lasciare il marker.
+    if (onEglfs) {
+        if (QFile::exists(QString::fromLatin1(kSoftwareGlMarker))) {
+            qputenv("LIBGL_ALWAYS_SOFTWARE", "1");
+            qWarning("hifi-qt: contesto GL hardware non disponibile in un avvio precedente, uso il rendering software (llvmpipe)");
+        } else {
+            g_prevMsgHandler = qInstallMessageHandler(glWatchMsgHandler);
+        }
+    }
     // Modo video da /etc/hifi-player/ui-resolution e, con piu' monitor, cosa
     // mostra ciascuno da /etc/hifi-player/ui-screens (duplica di serie, o
     // "only:<uscita>"): prima che eglfs apra il DRM.
-    if (qEnvironmentVariable("QT_QPA_PLATFORM") == "eglfs" && qEnvironmentVariableIsEmpty("QT_QPA_EGLFS_KMS_CONFIG")) {
+    if (onEglfs && qEnvironmentVariableIsEmpty("QT_QPA_EGLFS_KMS_CONFIG")) {
         QString cdir = qEnvironmentVariable("HIFI_CONFIG_DIR");
         if (cdir.isEmpty()) cdir = "/etc/hifi-player";
         auto firstLine = [&](const QString &name, const QString &fallback) {

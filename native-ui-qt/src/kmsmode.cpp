@@ -202,12 +202,29 @@ QJsonObject kmsPlan(const QList<KmsOutput> &outputs, const QString &resolutionPr
     return root;
 }
 
-QString kmsConfigFor(const QString &pref, const QString &screens, const QString &card) {
-    int fd = open(card.toLocal8Bit().constData(), O_RDWR | O_CLOEXEC);
-    if (fd < 0) return QString();
-    drmModeRes *res = drmModeGetResources(fd);
-    if (!res) { close(fd); return QString(); }
+// Un'uscita e' il pannello interno di un portatile? Il nome lo dice (eDP/LVDS).
+static bool isInternalPanel(const KmsOutput &o) {
+    return o.name.startsWith("eDP") || o.name.startsWith("LVDS");
+}
+
+int pickKmsCard(const QList<KmsCard> &cards) {
+    int first = -1;
+    for (int i = 0; i < cards.size(); i++) {
+        if (cards[i].outputs.isEmpty()) continue;
+        if (first < 0) first = i;
+        for (const KmsOutput &o : cards[i].outputs)
+            if (isInternalPanel(o)) return i; // il pannello interno vince
+    }
+    return first; // nessun pannello interno: la prima card con un'uscita
+}
+
+// Apre un device DRM ed elenca le sue uscite collegate (vuoto se non apre).
+static QList<KmsOutput> enumerateCard(const QString &card) {
     QList<KmsOutput> outs;
+    int fd = open(card.toLocal8Bit().constData(), O_RDWR | O_CLOEXEC);
+    if (fd < 0) return outs;
+    drmModeRes *res = drmModeGetResources(fd);
+    if (!res) { close(fd); return outs; }
     for (int i = 0; i < res->count_connectors; i++) {
         drmModeConnector *c = drmModeGetConnector(fd, res->connectors[i]);
         if (!c) continue;
@@ -228,9 +245,41 @@ QString kmsConfigFor(const QString &pref, const QString &screens, const QString 
     }
     drmModeFreeResources(res);
     close(fd);
+    return outs;
+}
 
-    const QJsonObject plan = kmsPlan(outs, pref, screens, card);
-    if (plan.isEmpty()) return QString();
+QString kmsConfigFor(const QString &pref, const QString &screens, const QString &card) {
+    QString device = card;
+    QList<KmsOutput> outs;
+    if (!card.isEmpty()) {
+        // Device esplicito (override/test): com'era, una card sola.
+        outs = enumerateCard(card);
+    } else {
+        // Scelta automatica: su un portatile a grafica commutabile il pannello
+        // interno e la/le uscite esterne stanno su GPU diverse. Scorro le card
+        // in ordine numerico (card0 prima) e scelgo quella col pannello
+        // interno, o la prima con un'uscita.
+        QList<KmsCard> cards;
+        for (int n = 0; n < 16; n++) {
+            const QString path = QString("/dev/dri/card%1").arg(n);
+            if (!QFile::exists(path)) continue;
+            cards.append({ path, enumerateCard(path) });
+        }
+        int idx = pickKmsCard(cards);
+        if (idx < 0) return QString();
+        device = cards[idx].device;
+        outs = cards[idx].outputs;
+    }
+
+    QJsonObject plan = kmsPlan(outs, pref, screens, device);
+    if (plan.isEmpty()) {
+        // kmsPlan vuoto = "lascia fare a Qt" sul modo video. Ma se la card
+        // scelta non e' la card0, eglfs senza configurazione aprirebbe lui
+        // card0 (default): sui portatili switchable finirebbe di nuovo sulla
+        // GPU sbagliata. Pinno almeno il device, senza vincolare le uscite.
+        if (device.isEmpty() || device == "/dev/dri/card0") return QString();
+        plan = QJsonObject{ { "device", device } };
+    }
     QFile f("/tmp/hifi-qt-kms.json");
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return QString();
     const QByteArray json = QJsonDocument(plan).toJson(QJsonDocument::Compact);
