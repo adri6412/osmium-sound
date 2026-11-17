@@ -20,9 +20,7 @@ process so there is a single service to operate:
 
 Security model (see the plan's "Analisi di sicurezza"):
   * api_server is NEVER exposed directly; the proxy runs here, behind the
-    session, and calls api_server via a Unix socket (/run/hifi/api.sock,
-    mode 0600 in a root-only directory) so non-root processes on the appliance
-    cannot reach the root control plane even if compromised.
+    session, and calls 127.0.0.1:8000.
   * The cookie signing key is generated PER-DEVICE on first start and never
     shipped in the image (a shared key => forgeable sessions). Plain HTTP by
     design (no TLS): a per-device self-signed cert made every browser show a
@@ -87,10 +85,7 @@ DB_PATH = os.path.join(STATE_DIR, 'webui.db')
 SECRET_KEY_FILE = os.path.join(STATE_DIR, 'webui-secret.key')
 DISPLAY_MODE_FILE = os.path.join(STATE_DIR, 'display-mode')
 
-# api_server is reached via a Unix-domain socket (not TCP) so that filesystem
-# permissions prevent non-root processes from connecting to the root control
-# plane even if they are compromised.  See api_server.py and hifi-api.service.
-API_SOCK    = '/run/hifi/api.sock'
+API_BASE = 'http://127.0.0.1:8000'
 LYRION_BASE = 'http://127.0.0.1:9000'
 SOURCES_BASE = 'http://127.0.0.1:8080'
 
@@ -1133,7 +1128,7 @@ def _sync_shell_account(username, password):
     where api_server is old or useradd is unavailable — the Settings → SSH panel
     can provision the login later from the same endpoint."""
     try:
-        body, status = _proxy_api( '/shell_account', method='POST',
+        body, status = _proxy(API_BASE, '/shell_account', method='POST',
                               body={'username': username, 'password': password},
                               timeout=60)
         if status != 200 or not (body or {}).get('success'):
@@ -1187,48 +1182,6 @@ def _proxy(base, path, method='GET', body=None, timeout=15):
                     'message': _wt('proxy.serviceUnavailable', _lang())}, e.code
     except Exception as e:
         print(f'[webui] proxy {path} unreachable: {e}')
-        return {'success': False, 'code': 'proxy.serviceUnreachable',
-                'message': _wt('proxy.serviceUnreachable', _lang())}, 502
-
-
-import http.client as _http_client
-
-def _proxy_api(path, method='GET', body=None, timeout=15):
-    """Proxy a request to api_server via its Unix-domain socket.
-
-    Identical contract to _proxy_api( path, ...) but connects through
-    /run/hifi/api.sock instead of TCP loopback, so filesystem permissions on
-    the socket restrict access to root-owned processes only.
-    """
-    data = None
-    headers = {'X-UI-Lang': _lang()}
-    if body is not None:
-        data = json.dumps(body).encode('utf-8')
-        headers['Content-Type'] = 'application/json'
-    try:
-        conn = _http_client.HTTPConnection('localhost', timeout=timeout)
-        # Replace the TCP socket with a Unix-domain socket before the first
-        # request so http.client never dials TCP at all.
-        unix_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        unix_sock.settimeout(timeout)
-        unix_sock.connect(API_SOCK)
-        conn.sock = unix_sock
-        conn.request(method, path, body=data, headers=headers)
-        resp = conn.getresponse()
-        raw = resp.read().decode('utf-8')
-        status = resp.status
-        conn.close()
-        return json.loads(raw), status
-    except _http_client.HTTPException as e:
-        # HTTP-level error with a parseable body
-        try:
-            return json.loads(e.args[0]), 503
-        except Exception:
-            pass
-        return {'success': False, 'code': 'proxy.serviceUnavailable',
-                'message': _wt('proxy.serviceUnavailable', _lang())}, 503
-    except Exception as e:
-        print(f'[webui] proxy_api {path} unreachable: {e}')
         return {'success': False, 'code': 'proxy.serviceUnreachable',
                 'message': _wt('proxy.serviceUnreachable', _lang())}, 502
 
@@ -1736,7 +1689,7 @@ def provision_use_wired():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
     # api_server.wired_dhcp() runs `nmcli device connect <eth>` and returns the IP.
-    body, _ = _proxy_api( '/wired_dhcp', method='POST', body={}, timeout=50)
+    body, _ = _proxy(API_BASE, '/wired_dhcp', method='POST', body={}, timeout=50)
     body = body or {}
     ok = bool(body.get('success') and body.get('ip')) or _wired_connected()
     if not ok:
@@ -1837,7 +1790,7 @@ def provision_claim_mode():
     _set_display_mode('gui' if mode == 'gui' else 'headless', live=False)
     if mode == 'off':
         try:
-            _proxy_api( '/player_enabled', method='POST', body={'enabled': False})
+            _proxy(API_BASE, '/player_enabled', method='POST', body={'enabled': False})
         except Exception as e:
             print(f'[webui] provision claim_mode: player disable failed: {e}')
     return jsonify({'success': True, 'mode': mode})
@@ -1878,7 +1831,7 @@ def provision_finalize():
         # and _do_finalize() just removed the marker it checks — a second
         # request would always be rejected (this is why restore never
         # actually rebooted the box).
-        _proxy_api( '/reboot', method='POST', body={}, timeout=15)
+        _proxy(API_BASE, '/reboot', method='POST', body={}, timeout=15)
     return jsonify({'success': True})
 
 
@@ -1906,7 +1859,7 @@ def provision_pointer_get():
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy_api( '/pointer_status', method='GET')
+    body, status = _proxy(API_BASE, '/pointer_status', method='GET')
     return jsonify(body), status
 
 
@@ -1916,7 +1869,7 @@ def provision_pointer_set():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
-    body, status = _proxy_api( '/pointer_set', method='POST',
+    body, status = _proxy(API_BASE, '/pointer_set', method='POST',
                           body={'enable': bool(data.get('enable'))}, timeout=20)
     return jsonify(body), status
 
@@ -1926,7 +1879,7 @@ def provision_audio_devices():
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy_api( '/audio_devices', method='GET')
+    body, status = _proxy(API_BASE, '/audio_devices', method='GET')
     return jsonify(body), status
 
 
@@ -1936,7 +1889,7 @@ def provision_set_audio_device():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
-    body, status = _proxy_api( '/set_audio_device', method='POST',
+    body, status = _proxy(API_BASE, '/set_audio_device', method='POST',
                           body={'device': data.get('device')}, timeout=30)
     return jsonify(body), status
 
@@ -1946,7 +1899,7 @@ def provision_lyrion_mode_get():
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy_api( '/lms_role', method='GET')
+    body, status = _proxy(API_BASE, '/lms_role', method='GET')
     return jsonify(body), status
 
 
@@ -1956,7 +1909,7 @@ def provision_lyrion_mode_set():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
-    body, status = _proxy_api( '/lms_role', method='POST',
+    body, status = _proxy(API_BASE, '/lms_role', method='POST',
                           body={'mode': data.get('mode'), 'host': data.get('host')}, timeout=90)
     return jsonify(body), status
 
@@ -1966,7 +1919,7 @@ def provision_discover_lms():
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy_api( '/discover_lms', method='GET', timeout=20)
+    body, status = _proxy(API_BASE, '/discover_lms', method='GET', timeout=20)
     return jsonify(body), status
 
 
@@ -1976,7 +1929,7 @@ def provision_set_name():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
-    body, status = _proxy_api( '/device_name', method='POST',
+    body, status = _proxy(API_BASE, '/device_name', method='POST',
                           body={'name': (data.get('name') or '').strip()}, timeout=90)
     return jsonify(body), status
 
@@ -2008,7 +1961,7 @@ def provision_update_check():
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy_api( '/wizard_update_check', method='GET', timeout=25)
+    body, status = _proxy(API_BASE, '/wizard_update_check', method='GET', timeout=25)
     return jsonify(body), status
 
 
@@ -2018,7 +1971,7 @@ def provision_update_apply():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
-    body, status = _proxy_api( '/wizard_update_apply', method='POST',
+    body, status = _proxy(API_BASE, '/wizard_update_apply', method='POST',
                           body={'channel': data.get('channel')}, timeout=20)
     return jsonify(body), status
 
@@ -2028,7 +1981,7 @@ def provision_update_status():
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy_api( '/update/status', method='GET')
+    body, status = _proxy(API_BASE, '/update/status', method='GET')
     return jsonify(body), status
 
 
@@ -2044,7 +1997,7 @@ def provision_lyrion_check():
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy_api( '/lyrion_update/check', method='GET', timeout=20)
+    body, status = _proxy(API_BASE, '/lyrion_update/check', method='GET', timeout=20)
     return jsonify(body), status
 
 
@@ -2054,7 +2007,7 @@ def provision_lyrion_install():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
-    body, status = _proxy_api( '/lyrion_update/apply', method='POST',
+    body, status = _proxy(API_BASE, '/lyrion_update/apply', method='POST',
                           body={'channel': data.get('channel')}, timeout=30)
     return jsonify(body), status
 
@@ -2064,7 +2017,7 @@ def provision_lyrion_status():
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy_api( '/lyrion_update/status', method='GET')
+    body, status = _proxy(API_BASE, '/lyrion_update/status', method='GET')
     return jsonify(body), status
 
 
@@ -2160,8 +2113,8 @@ def provision_timezone_get():
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
-    tz, _ = _proxy_api( '/timezone', method='GET')
-    tzs, _ = _proxy_api( '/timezones', method='GET')
+    tz, _ = _proxy(API_BASE, '/timezone', method='GET')
+    tzs, _ = _proxy(API_BASE, '/timezones', method='GET')
     return jsonify({'timezone': (tz or {}).get('timezone'),
                     'timezones': (tzs or {}).get('timezones', [])})
 
@@ -2172,7 +2125,7 @@ def provision_set_timezone():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
     data = request.get_json(silent=True) or {}
-    body, status = _proxy_api( '/timezone', method='POST',
+    body, status = _proxy(API_BASE, '/timezone', method='POST',
                           body={'timezone': data.get('timezone')}, timeout=20)
     return jsonify(body), status
 
@@ -2187,7 +2140,7 @@ def provision_reboot():
     if not _provisioning():
         return jsonify({'success': False, 'code': 'provision.notInProgress',
                         'message': _wt('provision.notInProgress', _lang())}), 409
-    body, status = _proxy_api( '/reboot', method='POST', body={}, timeout=15)
+    body, status = _proxy(API_BASE, '/reboot', method='POST', body={}, timeout=15)
     return jsonify(body), status
 
 
@@ -2223,7 +2176,7 @@ def provision_install_disks():
     if _boot_mode() != 'installer':
         return jsonify({'success': False, 'code': 'provision.notInstaller',
                         'message': _wt('provision.notInstaller', _lang())}), 409
-    body, status = _proxy_api( '/install/disks', method='GET')
+    body, status = _proxy(API_BASE, '/install/disks', method='GET')
     return jsonify(body), status
 
 
@@ -2233,7 +2186,7 @@ def provision_install_start():
         return jsonify({'success': False, 'code': 'provision.notInstaller',
                         'message': _wt('provision.notInstaller', _lang())}), 409
     data = request.get_json(silent=True) or {}
-    body, status = _proxy_api( '/install/start', method='POST',
+    body, status = _proxy(API_BASE, '/install/start', method='POST',
                           body={'device': data.get('device')}, timeout=20)
     return jsonify(body), status
 
@@ -2243,7 +2196,7 @@ def provision_install_status():
     if _boot_mode() != 'installer':
         return jsonify({'success': False, 'code': 'provision.notInstaller',
                         'message': _wt('provision.notInstaller', _lang())}), 409
-    body, status = _proxy_api( '/install/status', method='GET')
+    body, status = _proxy(API_BASE, '/install/status', method='GET')
     return jsonify(body), status
 
 
@@ -2315,7 +2268,7 @@ def _handle_proxy(local_path, method):
         return jsonify({'success': False, 'code': 'proxy.endpointNotAllowed',
                         'message': _wt('proxy.endpointNotAllowed', _lang())}), 403
     body = request.get_json(silent=True) if method != 'GET' else None
-    data, status = _proxy_api( api_path, method=method, body=body,
+    data, status = _proxy(API_BASE, api_path, method=method, body=body,
                           timeout=200 if 'tailscale_install' in api_path
                           # Bluetooth talks to hardware that answers when it
                           # feels like it: a scan runs for its full window, and
@@ -2376,7 +2329,7 @@ def factory_reset():
     wrong = _password_check(data.get('password'))
     if wrong:
         return wrong
-    body, status = _proxy_api( '/factory_reset', method='POST', body={})
+    body, status = _proxy(API_BASE, '/factory_reset', method='POST', body={})
     return jsonify(body), status
 
 
@@ -2476,50 +2429,7 @@ def _forward_to_sources(path, timeout=120):
 
 
 def _forward_to_api(path, timeout=60):
-    """Transparent forward to api_server via its Unix-domain socket.
-
-    Mirrors _forward_to() but uses http.client over AF_UNIX instead of
-    urllib over TCP, so the socket's filesystem permissions (root-only)
-    apply.  Streams the raw response back just like _forward_to does,
-    preserving Content-Type and Content-Disposition for file downloads.
-    """
-    qs = request.query_string.decode('utf-8')
-    full_path = path + (f'?{qs}' if qs else '')
-    headers = {}
-    for h in ('Authorization', 'Content-Type', 'X-UI-Lang', 'Accept-Language'):
-        v = request.headers.get(h)
-        if v:
-            headers[h] = v
-    body = None
-    if request.method in ('POST', 'PUT', 'PATCH'):
-        length = request.content_length
-        if length is not None and 'chunked' not in request.headers.get('Transfer-Encoding', ''):
-            body = request.stream.read(length)
-            headers['Content-Length'] = str(length)
-        else:
-            body = request.get_data()
-    try:
-        conn = _http_client.HTTPConnection('localhost', timeout=timeout)
-        unix_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        unix_sock.settimeout(timeout)
-        unix_sock.connect(API_SOCK)
-        conn.sock = unix_sock
-        conn.request(request.method, full_path, body=body, headers=headers)
-        resp = conn.getresponse()
-        raw = resp.read()
-        status = resp.status
-        ct = resp.getheader('Content-Type', 'application/octet-stream')
-        out = Response(raw, status=status, content_type=ct)
-        for h in ('Content-Length', 'Content-Disposition'):
-            v = resp.getheader(h)
-            if v:
-                out.headers[h] = v
-        conn.close()
-        return out
-    except Exception as e:
-        print(f'[webui] sistema forward {path} failed: {e}')
-        return jsonify({'success': False,
-                        'message': _wt('proxy.serviceUnreachable', _lang())}), 502
+    return _forward_to(API_BASE, path, timeout=timeout, service_label='sistema')
 
 
 @app.route('/sources-app', methods=['GET'])
@@ -2812,7 +2722,7 @@ def support_bundle_proxy():
         return denied
     # The support bundle is a binary response, so use the same raw forwarder
     # that preserves download headers instead of the JSON-oriented proxy path.
-    out = _forward_to_api('/support_bundle', timeout=600)
+    out = _forward_to(API_BASE, '/support_bundle', timeout=600, service_label='sistema')
     out.headers['Cache-Control'] = 'no-store'
     out.headers['X-Content-Type-Options'] = 'nosniff'
     return out
@@ -2828,7 +2738,7 @@ def vu_skin_file_proxy(sid, name):
         return denied
     if not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,40}', sid) or not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,80}', name):
         return jsonify({'success': False}), 404
-    out = _forward_to_api(f'/vu_skin/{sid}/{name}', timeout=15)
+    out = _forward_to(API_BASE, f'/vu_skin/{sid}/{name}', timeout=15, service_label='sistema')
     out.headers['X-Content-Type-Options'] = 'nosniff'
     return out
 
@@ -2875,7 +2785,7 @@ def _lyrion_base():
     while music was playing. api_server's /lms_role reads squeezelite's -s,
     which is what the player really connects to.
     """
-    role, status = _proxy_api( '/lms_role', timeout=5)
+    role, status = _proxy(API_BASE, '/lms_role', timeout=5)
     if status != 200 or not isinstance(role, dict):
         return LYRION_BASE
     host = role.get('host')
@@ -2996,7 +2906,7 @@ def _serve_spa(subpath):
 # proxies to the device's own services, and the VU meters read the live DAC
 # levels off vu_meter_daemon. Everything is behind the admin session.
 _DEVICE_PROXY_BASES = {
-    'api': None,                   # api_server — routed via Unix socket, see _device_proxy()
+    'api': lambda: API_BASE,       # api_server  (:8000)
     'src': lambda: SOURCES_BASE,   # sources_server (:8080)
     'lms': _lyrion_base,           # the Lyrion this device actually plays from
 }
@@ -3044,9 +2954,13 @@ def _np_view_pref(name):
     # then present the /np page's own selection in place of the kiosk's.
     payload = {}
     try:
-        data, _ = _proxy_api('/' + name, method='GET', timeout=10)
-        if isinstance(data, dict):
-            payload = data
+        req = urllib.request.Request(API_BASE + '/' + name, method='GET')
+        for h in ('Authorization', 'X-UI-Lang', 'Accept-Language'):
+            v = request.headers.get(h)
+            if v:
+                req.add_header(h, v)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            payload = json.loads(r.read().decode('utf-8'))
     except Exception as e:
         print(f'[webui] np-view api GET {name} failed: {e}')
     if not isinstance(payload, dict):
@@ -3068,16 +2982,13 @@ def device_proxy(svc, rest):
     # the per-/np store instead of forwarding to api_server (see _np_view_pref).
     if svc == 'api' and rest in _NP_VIEW_FIELDS:
         return _np_view_pref(rest)
-    base_fn = _DEVICE_PROXY_BASES.get(svc)
-    if base_fn is None and svc != 'api':
+    base = _DEVICE_PROXY_BASES.get(svc)
+    if base is None:
         return jsonify({'success': False, 'message': 'unknown device service'}), 404
     # Lyrion's cometd long-poll holds the request open (~60 s) waiting for the
     # next player event, so give /device/lms room; api/src answer promptly.
     timeout = 120 if svc == 'lms' else 30
-    if svc == 'api':
-        # api_server lives on a Unix socket, not TCP — use the socket-aware forwarder.
-        return _forward_to_api('/' + rest, timeout=timeout)
-    return _forward_to(base_fn(), '/' + rest, timeout=timeout, service_label=f'device/{svc}')
+    return _forward_to(base(), '/' + rest, timeout=timeout, service_label=f'device/{svc}')
 
 
 # ── VU bridge: vu_meter_daemon WebSocket (:9001) → SSE ────────────────────────

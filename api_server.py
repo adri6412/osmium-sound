@@ -6,7 +6,7 @@ import shutil
 import signal
 import sys
 import socket
-import socketserver
+
 import ssl
 import errno
 import email.utils
@@ -19,7 +19,7 @@ import urllib.parse
 import urllib.error
 import time
 import threading
-from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
+
 import queue
 import zipfile
 import io
@@ -12341,57 +12341,7 @@ def _recommend_collector():
         time.sleep(RECOMMEND_POLL)
 
 
-# Unix socket path. Only processes running on the appliance itself can reach
-# this socket; unlike TCP loopback (127.0.0.1:8000), filesystem permissions
-# on the socket file and its parent directory prevent unprivileged services
-# (squeezeboxserver, squeezelite, …) from connecting even if they are
-# compromised. The directory is created by systemd's RuntimeDirectory= with
-# mode 0700 so only root can enter it.
-API_SOCK = '/run/hifi/api.sock'
-
-
-class _ThreadingUnixWSGI(socketserver.ThreadingMixIn, WSGIServer):
-    """Threaded WSGI server over a Unix-domain socket."""
-    address_family = socket.AF_UNIX
-    # Prevent TIME_WAIT accumulation (irrelevant for Unix sockets but harmless).
-    allow_reuse_address = True
-
-    def server_bind(self):
-        # WSGIServer.server_bind sets self.server_name / self.server_port from
-        # the address; AF_UNIX has no port, so patch after calling super().
-        WSGIServer.server_bind(self)
-        self.server_port = 0
-
-    def get_request(self):
-        # AF_UNIX accept() returns (socket, '') — WSGI needs a 2-tuple.
-        conn, _ = self.socket.accept()
-        return conn, ('127.0.0.1', 0)
-
-
-def _serve_unix(sock_path):
-    """Start the WSGI server on `sock_path` with restricted permissions."""
-    # Remove a stale socket from a previous (crashed) run.
-    try:
-        os.unlink(sock_path)
-    except FileNotFoundError:
-        pass
-    server = _ThreadingUnixWSGI(sock_path, WSGIRequestHandler)
-    # Restrict to root-only: no world- or group-read on the socket file.
-    os.chmod(sock_path, 0o600)
-    server.set_app(app)
-    print(f'[api] serving on unix:{sock_path}')
-    server.serve_forever()
-
-
 if __name__ == '__main__':
-    # Serve on a Unix-domain socket instead of TCP loopback.  A Unix socket
-    # is restricted by filesystem permissions: mode 0600 in a directory owned
-    # by root (RuntimeDirectory=hifi in hifi-api.service, mode 0700) means
-    # only root-owned processes can connect.  squeezeboxserver, squeezelite
-    # and any other non-root service on the appliance cannot reach the socket
-    # even if compromised, eliminating the loopback-pivot path to root.
-    # webui_server.py connects via _proxy_api() which uses http.client over
-    # the same socket path — no other caller exists.
     _startup_network_recovery()
     threading.Thread(target=_resume_playback_after_boot, daemon=True).start()
     threading.Thread(target=_reconcile_rotation_boot, daemon=True, name='rotation-boot').start()
@@ -12399,4 +12349,4 @@ if __name__ == '__main__':
     threading.Thread(target=_anim_store_background, daemon=True, name='anim-store').start()
     threading.Thread(target=_bt_autopair_background, daemon=True, name='bt-autopair').start()
     threading.Thread(target=_recommend_collector, daemon=True, name='recommend-plays').start()
-    _serve_unix(API_SOCK)
+    app.run(host='127.0.0.1', port=8000, threaded=True)
