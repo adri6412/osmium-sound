@@ -4,10 +4,15 @@ After=network.target
 
 [Service]
 Type=simple
-# Runs as root so it can manage the OS (reboot/shutdown/update/network),
-# matching the existing api_server.py behaviour.
+# Runs as root so it can manage the OS (reboot/shutdown/update/network).
 User=root
 WorkingDirectory=/usr/local/bin
+# Create /run/hifi/ owned by root with mode 0700 before the process starts,
+# so the Unix socket placed inside it (/run/hifi/api.sock, mode 0600) is only
+# reachable by root-owned processes.  Non-root services (squeezeboxserver,
+# squeezelite, …) cannot enter the directory at all.
+RuntimeDirectory=hifi
+RuntimeDirectoryMode=0700
 ExecStart=/usr/bin/python3 /usr/local/bin/api_server.py
 Restart=always
 RestartSec=3
