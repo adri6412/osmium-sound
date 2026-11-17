@@ -1,0 +1,3 @@
+# Build output (the Qt->WebAssembly Now Playing payload) and generated sources.
+build/
+qt/wasm/imports.generated.qml

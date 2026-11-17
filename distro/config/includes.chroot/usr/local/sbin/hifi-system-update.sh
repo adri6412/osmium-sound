@@ -167,6 +167,7 @@ apply)
     # dell'intero pacchetto — una cartella nuova che non compare qui viene
     # scaricata, verificata e poi silenziosamente buttata via.
     [ -d "$NEWROOT/opt/hifi-qt" ]        && { mkdir -p /opt/hifi-qt; cp -af "$NEWROOT/opt/hifi-qt/." /opt/hifi-qt/; }
+    [ -d "$NEWROOT/opt/hifi-np" ]        && { mkdir -p /opt/hifi-np; cp -af "$NEWROOT/opt/hifi-np/." /opt/hifi-np/; }
 
     # normalise CRLF + perms for the things we just shipped
     for f in /usr/local/bin/api_server.py /usr/local/bin/vu_meter_daemon.py \
@@ -273,6 +274,7 @@ full)
     [ -d "$NEWROOT/usr/local/share" ]    && { mkdir -p /usr/local/share; cp -af "$NEWROOT/usr/local/share/." /usr/local/share/; }
     [ -d "$NEWROOT/opt/hifi-webui" ]     && { mkdir -p /opt/hifi-webui; cp -af "$NEWROOT/opt/hifi-webui/." /opt/hifi-webui/; }
     [ -d "$NEWROOT/opt/hifi-qt" ]        && { mkdir -p /opt/hifi-qt; cp -af "$NEWROOT/opt/hifi-qt/." /opt/hifi-qt/; }
+    [ -d "$NEWROOT/opt/hifi-np" ]        && { mkdir -p /opt/hifi-np; cp -af "$NEWROOT/opt/hifi-np/." /opt/hifi-np/; }
 
     for f in /usr/local/bin/api_server.py /usr/local/bin/vu_meter_daemon.py \
              /usr/local/bin/sources_server.py /usr/local/bin/webui_server.py \

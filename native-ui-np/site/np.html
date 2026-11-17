@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- served at /np (no trailing slash): pin the base so the relative asset URLs
+     (qtloader.js, hifi-qt.js, client/np-device.js, app.pack.*) resolve under /np/ -->
+<base href="/np/">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Osmium — Now Playing</title>
+<meta name="description" content="The Osmium Sound Now Playing screen, served by the player itself.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0a0a; color: #f1f0ea;
+               font-family: "DejaVu Sans", system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  /* the player screen fills the viewport: no discovery bar, nothing to leave to */
+  #screen { position: fixed; inset: 0; }
+  #cover { position: fixed; inset: 0; z-index: 4; background: #0a0a0a; display: flex;
+           flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 0 16px; box-sizing: border-box; }
+  #cover .mark { color: #d4af37; letter-spacing: .2em; font-size: 13px; }
+  #cover .mark span { color: #f1f0ea; }
+  #loadWrap { width: 200px; max-width: 70vw; height: 4px; background: #222; border-radius: 2px; overflow: hidden; }
+  #loadBar { display: block; height: 100%; width: 0; background: #f5b820; transition: width .2s; }
+  #err { color: #ff8a7a; font-size: .9rem; max-width: 320px; text-align: center; line-height: 1.5; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<div id="cover">
+  <div class="mark">OSMIUM <span>SOUND</span></div>
+  <div id="loadWrap"><i id="loadBar"></i></div>
+  <div id="err" hidden></div>
+</div>
+
+<!-- /np has nothing to type into: never let the device's on-screen keyboard
+     appear. Qt for WebAssembly takes keystrokes through a hidden input element
+     it focuses; on a touch device that focus pops the soft keyboard. Force
+     inputmode="none" on any such element (now and as Qt re-creates it) so the
+     virtual keyboard stays down — physical keys and the app are unaffected. -->
+<script>
+(() => {
+  const mute = (n) => {
+    if (!n || n.nodeType !== 1) return;
+    if ((n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') && n.getAttribute('inputmode') !== 'none') {
+      try { n.setAttribute('inputmode', 'none'); } catch (e) {}
+    }
+    if (n.querySelectorAll) n.querySelectorAll('input,textarea').forEach(mute);
+  };
+  try {
+    document.querySelectorAll('input,textarea').forEach(mute);
+    new MutationObserver((muts) => { for (const m of muts) m.addedNodes.forEach(mute); })
+      .observe(document.documentElement, { childList: true, subtree: true });
+    document.addEventListener('focusin', (e) => mute(e.target), true);
+  } catch (e) {}
+})();
+</script>
+
+<!-- served by the appliance: np-device.js is the only host bridge (VU levels +
+     language); the Qt code reaches /device/{api,src,lms} same-origin (webui_server). -->
+<script src="client/np-device.js"></script>
+<script src="qtloader.js"></script>
+<script src="hifi-qt.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const lang = window.osmiumDevice.lang();
+  document.documentElement.lang = lang;
+  const fail = (msg) => { const e = $('err'); e.textContent = msg; e.hidden = false; };
+
+  // ── the interface's files, unpacked into the WASM filesystem under /app ──
+  const packReady = (async () => {
+    const meta = await (await fetch('app.pack.json')).json();
+    const chunks = []; let got = 0;
+    for (const part of meta.parts) {
+      const res = await fetch(part);
+      if (!res.ok) throw new Error(part + ': HTTP ' + res.status);
+      const reader = res.body.getReader();
+      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; $('loadBar').style.width = Math.round(got / meta.size * 100) + '%'; }
+    }
+    const pack = new Uint8Array(got); let o = 0;
+    for (const c of chunks) { pack.set(c, o); o += c.length; }
+    const hlen = new DataView(pack.buffer).getUint32(0, true);
+    return { index: JSON.parse(new TextDecoder().decode(pack.subarray(4, 4 + hlen))), data: pack.subarray(4 + hlen) };
+  })();
+
+  // ── VU skins the user downloaded from the store ──
+  // The pack only carries the built-in skins; these live on the device, so we
+  // pull them into the WASM file system at the path VuPanel.qml already reads
+  // (Sys.vuStore → /var/lib/hifi-player/vu-skins). Best-effort: a failure here
+  // just means the store skins fall back to "classic", never a broken page.
+  const skinsReady = (async () => {
+    const out = [];
+    try {
+      const manifest = await (await fetch('/device/vu-skins')).json();
+      for (const [id, names] of Object.entries(manifest || {})) {
+        for (const name of names) {
+          const res = await fetch('/device/vu-skins/' + id + '/' + name);
+          if (!res.ok) continue;
+          out.push({ path: '/var/lib/hifi-player/vu-skins/' + id + '/' + name,
+                     data: new Uint8Array(await res.arrayBuffer()) });
+        }
+      }
+    } catch (e) { /* no store skins, or offline: keep the built-ins only */ }
+    return out;
+  })();
+
+  (async () => {
+    let index, data, skins = [];
+    try { ({ index, data } = await packReady); }
+    catch (e) { fail(lang === 'it' ? 'Non riesco a caricare l’interfaccia.' : 'Could not load the interface.'); return; }
+    try { skins = await skinsReady; } catch (e) { skins = []; }
+    // the kiosk is drawn for a 720p screen: never render more than 1080p worth
+    const realDpr = window.devicePixelRatio || 1;
+    Object.defineProperty(window, 'devicePixelRatio', { configurable: true,
+      get: () => Math.max(1, Math.min(realDpr, Math.sqrt((1920 * 1080) / (innerWidth * innerHeight)))) });
+    try {
+      await qtLoad({
+        preRun: [(m) => {
+          const FS = m.FS;
+          for (const f of index) { FS.mkdirTree('/app/' + f.p.split('/').slice(0, -1).join('/')); FS.writeFile('/app/' + f.p, data.subarray(f.o, f.o + f.n)); }
+          // store VU skins, where Sys.vuStore reads them (built-ins stay in /app)
+          for (const s of skins) { FS.mkdirTree(s.path.split('/').slice(0, -1).join('/')); FS.writeFile(s.path, s.data); }
+          FS.mkdirTree('/app/config'); FS.writeFile('/app/config/ui-language', lang + '\n');
+          // no first-run tour on the web Now Playing
+          FS.mkdirTree('/data'); FS.writeFile('/data/hifi-tutorial-shown', '1\n');
+        }],
+        qt: { entryFunction: window.hifi_qt_entry, containerElements: [$('screen')], onLoaded: () => $('cover').remove() },
+      });
+    } catch (e) { fail(lang === 'it' ? 'Non riesco ad avviare l’interfaccia.' : 'Could not start the interface.'); }
+  })();
+
+  // Installable as an app (PWA): the service worker makes /np meet the install
+  // criteria. It only passes requests through — it never caches /device/* (live
+  // player/VU data). Needs a secure context (https), so it is a no-op on http.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js', { scope: '/np/' }).catch(() => {});
+    });
+  }
+})();
+</script>
+</body>
+</html>

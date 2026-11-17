@@ -78,6 +78,40 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # 🚨 Come qt-payload, sul runner nudo: compila la pagina web "Now Playing"
+  # (/np) in Qt→WebAssembly dai sorgenti vendorizzati in native-ui-np/, per
+  # /opt/hifi-np nell'immagine. Qui la toolchain e' quella WASM (emsdk 3.1.56 +
+  # Qt 6.8.2), con cache dedicata: il primo run e' lungo, i successivi veloci.
+  np-payload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install build tools (cmake is preinstalled on the runner)
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ninja-build fonts-dejavu-core
+      - name: Cache the WASM toolchain (emsdk + Qt)
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/../toolchain
+          key: toolchain-emsdk-3.1.56-qt-6.8.2-${{ hashFiles('native-ui-np/scripts/setup-toolchain.sh', 'native-ui-np/scripts/fix-qt-static.py') }}
+      - name: Set up the WASM toolchain (cached after the first run)
+        run: TOOLCHAIN="$GITHUB_WORKSPACE/../toolchain" bash native-ui-np/scripts/setup-toolchain.sh
+      - name: Build the Now Playing web payload (/opt/hifi-np)
+        run: |
+          cd native-ui-np
+          OSMIUM="$GITHUB_WORKSPACE" TOOLCHAIN="$GITHUB_WORKSPACE/../toolchain" bash scripts/build-np.sh
+          [ -f build/np/index.html ] || { echo "::error::Now Playing web build produced no index.html" >&2; exit 1; }
+      - name: Upload the Now Playing web payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: np-payload
+          path: native-ui-np/build/np
+          retention-days: 1
+          if-no-files-found: error
+
   # The system image that the installer writes into slot A. Built in its own
   # chroot (trixie, privileged) exactly like the OTA one: it CANNOT be carved
   # out of the ISO's live filesystem, which keeps live-boot and is
@@ -89,10 +123,10 @@ jobs:
     # live-build lo comprime una volta sola.
     if: ${{ !inputs.single_squashfs }}
     runs-on: ubuntu-latest
-    # 🚨 It consumes the qt-payload artifact, so it cannot start beside the job
-    # that produces it: without this the download fails with "Artifact not
-    # found" a minute into the run.
-    needs: qt-payload
+    # 🚨 It consumes the qt-payload and np-payload artifacts, so it cannot start
+    # beside the jobs that produce them: without this the download fails with
+    # "Artifact not found" a minute into the run.
+    needs: [qt-payload, np-payload]
     timeout-minutes: 120
     defaults:
       run:
@@ -126,6 +160,10 @@ jobs:
           name: qt-payload
           path: qtui
       - run: chmod 755 qtui/hifi-qt
+      - uses: actions/download-artifact@v8
+        with:
+          name: np-payload
+          path: npout
       - name: Build web-admin (Vue)
         run: (cd admin-webui && npm ci && npm run build)
       - name: Build the system image (no bundle, no signing)
@@ -142,6 +180,7 @@ jobs:
           cd distro
           ./build-distro.sh --stage image --suite trixie --no-bundle \
             --qt-dir "$GITHUB_WORKSPACE/qtui" \
+            --np-dir "$GITHUB_WORKSPACE/npout" \
             --app-version "${INPUT_TAG#v}"
           ls -lh /mnt/image-out
       - uses: actions/upload-artifact@v4
@@ -158,7 +197,7 @@ jobs:
   usb-image:
     if: ${{ inputs.usb_image }}
     runs-on: ubuntu-latest
-    needs: qt-payload
+    needs: [qt-payload, np-payload]
     timeout-minutes: 150
     defaults:
       run:
@@ -193,6 +232,10 @@ jobs:
           name: qt-payload
           path: qtui
       - run: chmod 755 qtui/hifi-qt
+      - uses: actions/download-artifact@v8
+        with:
+          name: np-payload
+          path: npout
       - name: Build web-admin (Vue)
         run: (cd admin-webui && npm ci && npm run build)
       - name: Build the system image (no bundle, no signing)
@@ -209,6 +252,7 @@ jobs:
           cd distro
           ./build-distro.sh --stage image --suite trixie --no-bundle \
             --qt-dir "$GITHUB_WORKSPACE/qtui" \
+            --np-dir "$GITHUB_WORKSPACE/npout" \
             --app-version "${INPUT_TAG#v}"
           ls -lh /mnt/image-out
       - name: Build the disk image
@@ -259,8 +303,8 @@ jobs:
 
   build-iso:
     runs-on: ubuntu-latest
-    needs: [qt-payload, image]
-    if: ${{ always() && needs.qt-payload.result == 'success' && (inputs.single_squashfs || needs.image.result == 'success') }}
+    needs: [qt-payload, np-payload, image]
+    if: ${{ always() && needs.qt-payload.result == 'success' && needs.np-payload.result == 'success' && (inputs.single_squashfs || needs.image.result == 'success') }}
     timeout-minutes: 120
     # The debian:bookworm container defaults `run:` steps to sh (dash), which
     # lacks `set -o pipefail`. Force bash for every step.
@@ -306,6 +350,12 @@ jobs:
           name: qt-payload
           path: qtui
 
+      - name: Fetch the Now Playing web build (/opt/hifi-np) from the np-payload job
+        uses: actions/download-artifact@v8
+        with:
+          name: np-payload
+          path: npout
+
       - name: Restore the executable bit (artifacts do not carry it)
         run: |
           set -eux
@@ -348,6 +398,8 @@ jobs:
           ARGS="--app-version ${INPUT_TAG#v} --suite $INPUT_SUITE"
           # the Qt interface is the only one: build-distro.sh refuses to go on without it
           ARGS="$ARGS --qt-dir $GITHUB_WORKSPACE/qtui"
+          # the Now Playing web build (/opt/hifi-np): build-distro.sh refuses to go on without it
+          ARGS="$ARGS --np-dir $GITHUB_WORKSPACE/npout"
           if [ -n "${INPUT_LYRION_URL}" ]; then
             ARGS="$ARGS --lyrion-url ${INPUT_LYRION_URL}"
           fi

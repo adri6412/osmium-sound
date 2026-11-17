@@ -16,8 +16,48 @@ permissions:
   contents: write
 
 jobs:
+  # 🚨 Lavoro a parte, sul runner nudo (niente container): compila la pagina web
+  # "Now Playing" (/np) in Qt→WebAssembly, dai sorgenti vendorizzati in
+  # native-ui-np/, e la impacchetta come artefatto np-payload per /opt/hifi-np.
+  # Non puo' stare dentro build-ui-ota perche' la toolchain WASM (emsdk 3.1.56 +
+  # Qt 6.8.2) pesa ~GB: qui ha la sua cache dedicata (chiave sugli script della
+  # toolchain) e, dopo il primo run, riparte veloce.
+  np-payload:
+    runs-on: ubuntu-24.04
+    if: ${{ !contains(github.ref, 'companion') }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install build tools (cmake is preinstalled on the runner)
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ninja-build fonts-dejavu-core
+      - name: Cache the WASM toolchain (emsdk + Qt)
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/../toolchain
+          key: toolchain-emsdk-3.1.56-qt-6.8.2-${{ hashFiles('native-ui-np/scripts/setup-toolchain.sh', 'native-ui-np/scripts/fix-qt-static.py') }}
+      - name: Set up the WASM toolchain (cached after the first run)
+        run: TOOLCHAIN="$GITHUB_WORKSPACE/../toolchain" bash native-ui-np/scripts/setup-toolchain.sh
+      - name: Build the Now Playing web payload (/opt/hifi-np)
+        run: |
+          cd native-ui-np
+          OSMIUM="$GITHUB_WORKSPACE" TOOLCHAIN="$GITHUB_WORKSPACE/../toolchain" bash scripts/build-np.sh
+          [ -f build/np/index.html ] || { echo "::error::Now Playing web build produced no index.html" >&2; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: np-payload
+          path: native-ui-np/build/np
+          retention-days: 1
+          if-no-files-found: error
+
   build-ui-ota:
     runs-on: ubuntu-latest
+    # Consuma l'artefatto np-payload (la pagina web Now Playing): deve attendere
+    # il lavoro che lo produce, altrimenti il download fallisce con "Artifact
+    # not found".
+    needs: np-payload
     # Without this a hung step (an apt mirror that never answers, say) keeps the
     # job alive for the 6h default instead of failing fast enough to rerun.
     timeout-minutes: 30
@@ -145,6 +185,11 @@ jobs:
           sha256sum "$TAR" > "${TAR}.sha256"
           echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
 
+      - name: Fetch the Now Playing web build (/opt/hifi-np) from the np-payload job
+        uses: actions/download-artifact@v8
+        with:
+          name: np-payload
+          path: npout
       - name: Package system-components OTA bundle (tarball + sha256)
         id: packsys
         env:
@@ -164,6 +209,19 @@ jobs:
             cp -r admin-webui/dist/. "$ROOT/opt/hifi-webui/dist/"
           else
             echo "::error::admin-webui/dist missing or empty (no index.html) — refusing to package a system bundle without the web-admin UI" >&2
+            exit 1
+          fi
+          # Now Playing web build (/opt/hifi-np), compiled by the np-payload job.
+          # REQUIRED: without it a device that applies this bundle answers /np
+          # with "Now Playing web build not installed". Fail instead of shipping
+          # that silently. The allowlist in hifi-system-update.sh now copies
+          # /opt/hifi-np, and apply.d/0065-np-files.sh closes the first-update
+          # gap (same trap as /opt/hifi-qt, see 0057).
+          if [ -f npout/index.html ]; then
+            mkdir -p "$ROOT/opt/hifi-np"
+            cp -r npout/. "$ROOT/opt/hifi-np/"
+          else
+            echo "::error::Now Playing web build (npout/index.html) missing — refusing to package a system bundle whose /np answers 'not installed'" >&2
             exit 1
           fi
           # Helper / OTA scripts (sh + python workers)
@@ -579,7 +637,7 @@ jobs:
   # ignorano.
   image:
     runs-on: ubuntu-latest
-    needs: build-ui-ota
+    needs: [build-ui-ota, np-payload]
     if: ${{ !contains(github.ref, 'companion') }}
     timeout-minutes: 120
     defaults:
@@ -614,6 +672,10 @@ jobs:
           name: qt-payload
           path: qtui
       - run: chmod 755 qtui/hifi-qt
+      - uses: actions/download-artifact@v8
+        with:
+          name: np-payload
+          path: npout
       - name: Build web-admin (Vue)
         run: (cd admin-webui && npm ci && npm run build)
       - name: Resolve version
@@ -635,6 +697,7 @@ jobs:
           cd distro
           ./build-distro.sh --stage image --suite trixie \
             --qt-dir "$GITHUB_WORKSPACE/qtui" \
+            --np-dir "$GITHUB_WORKSPACE/npout" \
             --app-version "${INPUT_VERSION#v}"
           ls -lh /mnt/image-out
       - uses: actions/upload-artifact@v4

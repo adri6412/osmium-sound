@@ -50,6 +50,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG="$SCRIPT_DIR/config"
 QT_DIR=""            # pacchetto dell'interfaccia Qt (vuoto → cercato da solo)
+NP_DIR=""            # build web Now Playing (/opt/hifi-np; vuoto → cercato da solo)
 APP_VERSION=""
 STAGE="all"          # all | chroot | binary
 CLEAN_CACHE=0        # 1 → also wipe the Debian package cache
@@ -61,6 +62,7 @@ die()  { printf '\033[1;31m[hifi-build ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 while [ $# -gt 0 ]; do
     case "$1" in
         --qt-dir) QT_DIR="$2"; shift 2 ;;
+        --np-dir) NP_DIR="$2"; shift 2 ;;
         --app-version) APP_VERSION="$2"; shift 2 ;;
         --lyrion-url) LYRION_DEB_URL="$2"; shift 2 ;;
         --suite) DEBIAN_SUITE="$2"; shift 2 ;;
@@ -363,6 +365,28 @@ if [ -f "$WEBUI_DIST_SRC/index.html" ]; then
     log "Injected web-admin build → /opt/hifi-webui/dist"
 else
     die "admin-webui/dist missing or empty (no index.html) — build it first: (cd admin-webui && npm ci && npm run build). Refusing to ship an ISO without the web-admin UI."
+fi
+
+# Now Playing web build (Qt→WebAssembly, built by CI's np-payload job from the
+# vendored sources in native-ui-np/). Served by webui_server.py at /np from
+# /opt/hifi-np. REQUIRED: without it a device installed from this image answers
+# /np with "Now Playing web build not installed" — fail the build instead of
+# shipping that silently. Build it with:
+#   (cd native-ui-np && OSMIUM=$PWD/.. bash scripts/build-np.sh)
+NP_DEST="$CONFIG/includes.chroot/opt/hifi-np"
+if [ -z "$NP_DIR" ]; then
+    for c in "$REPO_ROOT/npout" "$REPO_ROOT/native-ui-np/build/np" "$NP_DEST"; do
+        [ -f "$c/index.html" ] && NP_DIR="$c" && break
+    done
+fi
+if [ -n "$NP_DIR" ] && [ -f "$NP_DIR/index.html" ]; then
+    log "Injecting Now Playing web build → includes.chroot/opt/hifi-np (from $NP_DIR)"
+    if [ "$(cd "$NP_DIR" && pwd)" != "$(cd "$NP_DEST" 2>/dev/null && pwd)" ]; then
+        rm -rf "$NP_DEST"; mkdir -p "$NP_DEST"
+        cp -a "$NP_DIR/." "$NP_DEST/"
+    fi
+else
+    die "Now Playing web build not found: build it with native-ui-np/scripts/build-np.sh and pass --np-dir. Refusing to ship an image whose /np answers 'not installed'."
 fi
 
 log "Injecting helper scripts → includes.chroot/usr/local/sbin"
