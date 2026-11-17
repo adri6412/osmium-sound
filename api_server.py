@@ -12175,6 +12175,14 @@ def api_recommendations_unblock():
 
 
 @app.route('/recommendations/run', methods=['POST'])
+def api_recommendations_run():
+    # Thin HTTP wrapper: the helper returns a bool (it is also called internally
+    # at boot), and a bare bool is not a valid Flask response — returning it
+    # here would 500 the request, so the admin UI's "Compute now" always showed
+    # "The computation could not be started" even when the job did start.
+    return jsonify({'success': _recommend_start_manual()})
+
+
 def _recommend_start_manual():
     """Start the compute job at once, at the same low priority as the scheduled
     one. Returns True if it is now going (started here or already running)."""
