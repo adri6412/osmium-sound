@@ -29,7 +29,9 @@ rm -rf "$OUT"
 mkdir -p "$OUT/client"
 
 echo "== interface (Qt for WebAssembly)"
-./scripts/build-qt.sh
+# `bash …` not `./…`: git may store these vendored scripts without the
+# executable bit (core.fileMode=false), and the CI runner then can't exec them.
+bash ./scripts/build-qt.sh
 cp build/qt-build/hifi-qt.js build/qt-build/hifi-qt.wasm build/qt-build/qtloader.js "$OUT/"
 python3 scripts/build-payload.py "$OSMIUM" "$OUT"
 
