@@ -795,6 +795,27 @@ Item {
             else L.push({ icon: "disc-3", label: Tr.t("player.changer.putIn"), cb: function() {
                 Ui.app.changerPut({ title: it.text, artUrl: list.iconUrl(it.icon), url: it.url })
             } })
+            // issue #151: also offer Add to favourites and Go to artist, like
+            // the Albums grid. A local recommendation carries only its album id
+            // here, so look the album up for its favourites URL / artist id when
+            // the action is taken; a streaming one has its own stable play url,
+            // which is both its favourite and has no browsable library artist.
+            if (it.kind === 0) {
+                L.push({ icon: "heart", label: Tr.t("player.addToFavorites"), cb: function() {
+                    Player.query(["albums", "0", "1", "album_id:" + it.id, "tags:alSj"], function(ok, r) {
+                        var a = ok && r && r.albums_loop ? r.albums_loop[0] : null
+                        if (a && a.favorites_url) addFavorite(a.favorites_url, it.text, "playlist")
+                        else say("alert-triangle", "player.favoriteError")
+                    })
+                } })
+                L.push({ icon: "user", label: Tr.t("player.page.goToArtist"), cb: function() {
+                    Player.query(["albums", "0", "1", "album_id:" + it.id, "tags:alSj"], function(ok, r) {
+                        var a = ok && r && r.albums_loop ? r.albums_loop[0] : null
+                        if (a && a.artist_id) openArtist(a.artist_id, it.sub || String(a.artist || ""))
+                        else say("alert-triangle", "player.queueFailed")
+                    })
+                } })
+            } else fav(it.favUrl, "playlist")
             L.push({ icon: "eye-off", label: Tr.t("recommend.notInterested"), cb: function() { recDismiss(it) } })
             break
         case LibraryModel.Artists: case LibraryModel.Composers:
