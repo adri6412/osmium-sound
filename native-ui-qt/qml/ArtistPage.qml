@@ -108,7 +108,7 @@ Item {
                             var x = results[k][n], id = String(x.id)
                             if (seen[id]) continue
                             seen[id] = true
-                            al.push({ id: id, album: String(x.album || ""), year: Number(x.year || 0), art: String(x.artwork_track_id || ""), artist: String(x.artist || "") })
+                            al.push({ id: id, album: String(x.album || ""), year: Number(x.year || 0), art: String(x.artwork_track_id || ""), artist: String(x.artist || ""), favUrl: String(x.favorites_url || "") })
                         }
                         if (al.length) out.push({ title: wanted[k].title || Tr.t(wanted[k].key), albums: al })
                     }
@@ -232,12 +232,21 @@ Item {
         property string title: ""
         property string sub: ""
         property string art: ""
+        property string favUrl: ""          // the db: query an album favourite is saved from
         property real cw: 100
         property real devScale: 1
         property var mask: null
         property Flickable flick: null      // for RowTap: a flick must not leave the card lit
         signal open(string id, string title)
+        signal play()                       // the play circle: load and play the whole album
+        signal menu(real x, real y)         // long-press: the album context menu (x,y in card coords)
         width: cw; height: cw + 48
+        // the play circle, bottom-right of the cover, exactly like the Album
+        // grid (LibraryList) — issue #144. No touch area of its own: cTap
+        // decides the zone and the gold follows the press from there.
+        readonly property real playCx: card.cw - 6 - 15
+        readonly property bool playHit: Math.abs(cTap.pressX - playCx) <= 18 && Math.abs(cTap.pressY - playCx) <= 18
+        readonly property real playF: playHit ? cTap.pressAnim : 0
         // The scale goes on the drawing, not on the card: RowTap fills the
         // card, and scaling that would shrink the touch area under the finger.
         Item {
@@ -259,10 +268,24 @@ Item {
                 layer.textureSize: Qt.size(Math.ceil(card.cw * card.devScale), Math.ceil(card.cw * card.devScale))
             }
             ShaderImage { width: card.cw; height: card.cw; source: cImg; mask: card.mask; visible: cImg.status === Image.Ready }
+            // play circle over the cover (issue #144) — same look as the Album grid
+            Rectangle {
+                x: card.cw - 6 - 30; y: card.cw - 6 - 30; width: 30; height: 30; radius: 15
+                color: Theme.mix(Theme.blackA(0.6), Theme.gold, card.playF)
+                Icon { anchors.centerIn: parent; anchors.horizontalCenterOffset: 2; name: "play"; filled: true; size: 14; color: Theme.white; pressColor: Theme.black; press: card.playF }
+            }
             Text { x: 8; y: card.cw + 8; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.title; elide: Text.ElideRight; color: Theme.white; font.family: Theme.font; font.pixelSize: 12 }
             Text { x: 8; y: card.cw + 24; width: parent.width - 16; height: 16; verticalAlignment: Text.AlignVCenter; text: card.sub; elide: Text.ElideRight; color: Theme.silverA(0.7); font.family: Theme.font; font.pixelSize: 12 }
         }
-        RowTap { id: cTap; flick: card.flick; tap: 0.98; onClicked: card.open(card.albumId, card.title) }
+        RowTap {
+            id: cTap; flick: card.flick; tap: 0.98; holdRing: true
+            // a tap on the play circle plays the album; anywhere else opens it
+            onClicked: (m) => {
+                if (Math.abs(m.x - card.playCx) <= 18 && Math.abs(m.y - card.playCx) <= 18) card.play()
+                else card.open(card.albumId, card.title)
+            }
+            onLongPress: (x, y) => card.menu(x, y)
+        }
     }
 
     // for the test channel (eval app.main.browser.pageItem.scrollTo(900))
@@ -403,11 +426,19 @@ Item {
                         Repeater {
                             model: modelData.albums
                             AlbumCard {
+                                id: acard
                                 required property var modelData
                                 albumId: modelData.id; title: modelData.album; art: modelData.art
                                 sub: modelData.year > 0 ? String(modelData.year) : ""
+                                favUrl: modelData.favUrl || ""
                                 cw: root.cardW; devScale: root.devScale; mask: artMask; flick: page
                                 onOpen: (id, title) => { if (root.browser) root.browser.openAlbum(id, title) }
+                                onPlay: { if (root.browser) root.browser.playItem("album_id", acard.albumId, "load") }
+                                onMenu: (x, y) => {
+                                    if (!root.browser) return
+                                    var p = acard.mapToItem(root.browser, x, y)
+                                    root.browser.openMenu(root.browser.albumCtx(acard.albumId, acard.title, acard.favUrl), p.x, p.y)
+                                }
                             }
                         }
                     }

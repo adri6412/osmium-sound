@@ -522,6 +522,18 @@ Item {
     function openArtist(id, name) { if (!id) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, String(id)) }
     function openPerson(mbid, name) { if (!mbid) return; showMusicTab(); goView(LibraryModel.ArtistPage, name, "", "mbid:" + mbid) }
     function openMenu(items, x, y) { ctx.open(items, x, y) }
+    // The long-press menu for a library album addressed only by its id (the
+    // Artist page builds its own album tiles, outside the LibraryModel). Same
+    // actions as the Albums grid (Browser.qml ctxItems) — Add to queue, Play
+    // next, Add to favourites — minus Go to artist, which is where we already
+    // are. favUrl is the db: query Lyrion saves an album favourite from.
+    function albumCtx(id, title, favUrl) {
+        var L = []
+        L.push({ icon: "list-plus", label: Tr.t("player.addToQueue"), cb: function() { playItem("album_id", id, "add") } })
+        L.push({ icon: "list-start", label: Tr.t("player.playNext"), cb: function() { playItem("album_id", id, "insert") } })
+        if (favUrl) L.push({ icon: "heart", label: Tr.t("player.addToFavorites"), cb: function() { addFavorite(favUrl, title, "playlist") } })
+        return L
+    }
 
     // ── db: library favorites ─────────────────────────────────────────────
     // Lyrion saves an album/artist/genre favorite as a `db:` query URL
