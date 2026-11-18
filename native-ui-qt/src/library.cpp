@@ -1,6 +1,7 @@
 #include "library.h"
 #include "api.h"
 #include <QJsonDocument>
+#include <QUrl>
 #include <algorithm>
 
 LibraryModel::LibraryModel(QObject *parent) : QAbstractListModel(parent) {}
@@ -151,6 +152,32 @@ static QString menuIcon(const QVariantMap &it) {
     if (ic.isEmpty()) ic = it.value("icon").toString();
     if (ic.isEmpty()) ic = it.value("image").toString();
     return ic;
+}
+
+// 🚨 issue #150: the Favourites list carries each saved item's own cover in
+// `image`/`icon-id`, but Lyrion also sends a list-level `window.icon-id` that
+// menuIcon falls back to — so a favourite with no cover of its own would
+// inherit a sibling's/parent's art (one track showing another's thumbnail).
+// For favourites read only the item's OWN art, never the shared window icon.
+static QString favItemIcon(const QVariantMap &it) {
+    QString ic = it.value("icon-id").toString();
+    if (ic.isEmpty()) ic = it.value("icon").toString();
+    if (ic.isEmpty()) ic = it.value("image").toString();
+    return ic;
+}
+
+// issue #149: the artist of a db: library favourite is in the query Lyrion
+// stored it from (db:album.title=…&contributor.name=…). Pull it out so the
+// favourite tile can show the artist line like the Album view does.
+static QString dbFavContributor(const QString &url) {
+    if (!url.startsWith("db:")) return QString();
+    int i = url.indexOf(QLatin1String("contributor.name="));
+    if (i < 0) return QString();
+    i += 17;                                    // strlen("contributor.name=")
+    int e = url.indexOf('&', i);
+    QString v = (e < 0 ? url.mid(i) : url.mid(i, e - i));
+    v.replace('+', ' ');
+    return QUrl::fromPercentEncoding(v.toUtf8());
 }
 
 static QString str(const QVariantMap &m, const char *k) {
@@ -325,6 +352,7 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
     // metadata matches, CD-Text, raw tracks) plus Eject. Show the disc once:
     // keep only the first (best) album entry and the non-album actions (Eject).
     const bool cdMenu = view == PluginItems && cmd == "cdplayer";
+    const bool favMenu = view == PluginItems && cmd == "favorites";
     bool cdAlbumKept = false;
     for (const QVariant &v : loop) {
         QVariantMap it = v.toMap();
@@ -410,8 +438,10 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
             // not `icon`: album/track covers come as `/imageproxy/...` and menu
             // nodes as `html/images/*.png`, while `icon` is usually empty. Read
             // the same ladder as the Jive menus (menuIcon: icon-id, window
-            // icon-id, icon, image) or every plugin tile shows no art.
-            o.icon = menuIcon(it);
+            // icon-id, icon, image) or every plugin tile shows no art. In the
+            // Favourites list drop the shared window-level fallback so a
+            // favourite never borrows a sibling's cover (issue #150).
+            o.icon = favMenu ? favItemIcon(it) : menuIcon(it);
             QString type = str(it, "type"); o.ptype = type;
             // 🚨 Lyrion marca il nodo di ricerca con type:"search" ma gli mette
             // ANCHE hasitems:1 (il suo ripiego "Bug 7684"): non e' un vero
@@ -427,6 +457,14 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
             // nodes have none, which is how the long-press menu tells the two
             // apart. `url` alone only ever covered radio stations.
             o.favUrl = favUrlOf(it); if (o.favUrl.isEmpty()) o.favUrl = o.url;
+            // issue #149: show the artist under a favourite album/track, like
+            // the Album view. Lyrion keeps it in the db: query the favourite
+            // was saved from (contributor.name); a streaming/radio favourite
+            // has none and simply shows no second line.
+            if (favMenu && o.sub.isEmpty()) {
+                o.sub = dbFavContributor(o.url);
+                if (o.sub.isEmpty()) o.sub = dbFavContributor(o.favUrl);
+            }
             break;
         }
         default: break;
@@ -455,9 +493,19 @@ void LibraryModel::parse(int view, const QString &cmd, const QVariantMap &res) {
             // it apart from a plain track — a track leaf instead carries no type
             // even though it, too, is audio with a cover. Key on the type.
             const bool container = o.hasItems && !o.ptype.isEmpty() && o.ptype != QLatin1String("audio");
-            if (container && cover) albums++;
+            // 🚨 issue #148/#150: in the Favourites list a saved single track or
+            // radio station is a square cover card too, not just album
+            // containers — otherwise a couple of track favourites would fall
+            // back to the small landscape menu tiles.
+            if (cover && (container || (favMenu && o.isAudio))) albums++;
         }
-        m_pluginAlbumList = total >= 3 && albums * 5 >= total * 3;   // ≥60% album-like
+        // The Favourites list should look like the Album grid as soon as most
+        // entries have a cover, even with one or two of them (issue #148) and
+        // whatever the exact mix of albums/tracks (issue #150's "7th flips it
+        // back"). Other plugin lists keep the cautious ≥3-sample, ≥60% test so
+        // a stray covered node does not reshape a navigation menu.
+        m_pluginAlbumList = favMenu ? (total > 0 && albums * 2 >= total)
+                                    : (total >= 3 && albums * 5 >= total * 3);
     }
 }
 
