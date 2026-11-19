@@ -1741,6 +1741,15 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
             finally:
                 search.restore()      # un-pollute the owner's Qobuz history
 
+    # How many candidates each source put on the table, so an owner-reported
+    # imbalance (e.g. "almost only Tidal") can be traced to the gather stage
+    # rather than guessed at. This counts raw candidates, before ranking/caps.
+    cand_by_source = {}
+    for c in cands:
+        s = c.get('source') or '?'
+        cand_by_source[s] = cand_by_source.get(s, 0) + 1
+    summary['cand_by_source'] = cand_by_source
+
     if not cands:
         return dict(summary, outcome='no_candidates')
 
@@ -1766,6 +1775,13 @@ def run(db, rpc, http=None, settings=None, embedder=None, now=None, log=None,
     _capture_rec_tracks(rpc, player, rows, log)
     write_recommendations(db, rows, now)
     summary['items'] = len(rows)
+    # The source mix of the published list, next to cand_by_source above: the
+    # two together say whether an imbalance comes from the gather or the ranking.
+    picked_by_source = {}
+    for r in rows:
+        s = r.get('source') or '?'
+        picked_by_source[s] = picked_by_source.get(s, 0) + 1
+    summary['picked_by_source'] = picked_by_source
     return summary
 
 
