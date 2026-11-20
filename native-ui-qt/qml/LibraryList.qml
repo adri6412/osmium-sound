@@ -513,6 +513,17 @@ Item {
                 x: card.playCx - 18; y: card.playCx - 18; width: 36; height: 36
                 NavRing { radius: 18 }
             }
+            // the "–" circle as a remote stop of its own: OK on it blacklists
+            // the recommended album's artist, exactly as a finger on the "–"
+            // does (Nav taps its centre, cardTap hit-tests minus). Only drawn on
+            // recommended cards, so the spotlight can reach it with the remote —
+            // top-right (minusCy), above the play box it shares the card with.
+            Item {
+                property bool navigable: true
+                visible: card.minusBtn && !root.menuTile
+                x: card.minusCx - 18; y: card.minusCy - 18; width: 36; height: 36
+                NavRing { radius: 18 }
+            }
         }
         // la vista sborda di 12 a destra: la barra sta sul bordo VISIBILE
         ScrollBar_ { flick: gridView; x: gridView.width - 12 - 3 }
